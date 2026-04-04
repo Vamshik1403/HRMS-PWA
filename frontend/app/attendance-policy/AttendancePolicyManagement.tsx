@@ -247,6 +247,7 @@ export function AttendancePolicyManagement() {
         maxOvertimeHrs: p.maxOvertimeHrs ?? 0,
         overtimeTrimmingApply: p.overtimeTrimmingApply ?? false,
         checkoutGracePeriodForOvertimeTrimming: p.checkoutGracePeriodForOvertimeTrimming ?? 0,
+        breakTimeForOT: p.breakTimeForOT ?? 0,
       }));
 
       if (user?.role === "SUPERADMIN") {
