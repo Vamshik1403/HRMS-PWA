@@ -1,0 +1,492 @@
+import { Type } from "class-transformer";
+import {
+  IsOptional,
+  IsInt,
+  IsString,
+  IsEmail,
+  IsArray,
+  ValidateNested,
+  Matches,
+  Length,
+  IsBoolean
+} from "class-validator";
+
+// ---------- Promotion DTO ----------
+export class PromotionCreateDto {
+  @IsOptional() @IsInt() departmentNameID?: number;
+  @IsOptional() @IsInt() designationID?: number;
+  @IsOptional() @IsInt() managerID?: number;
+  @IsOptional() @IsString() employmentType?: string;
+  @IsOptional() @IsString() typeOfEmployee?: string;
+  @IsOptional() @IsString() employmentStatus?: string;
+  @IsOptional() @IsString() probationPeriod?: string;
+  @IsOptional() @IsInt() workShiftID?: number;
+  @IsOptional() @IsInt() attendancePolicyID?: number;
+  @IsOptional() @IsInt() leavePolicyID?: number;
+  @IsOptional() @IsString() salaryPayGradeType?: string;
+  @IsOptional() @IsInt() monthlyPayGradeID?: number;
+  @IsOptional() @IsInt() hourlyPayGradeID?: number;
+}
+
+// ---------- Bank Details DTO ----------
+export class BankDetailsCreateDto {
+  @IsOptional() @IsInt() id?: number;
+  @IsOptional() @IsString() bankName?: string;
+  @IsOptional() @IsString() bankBranchName?: string;
+  @IsOptional() @IsString() accNumber?: string;
+  @IsOptional() @IsString() ifscCode?: string;
+  @IsOptional() @IsString() upi?: string;
+}
+
+// ---------- Education DTO ----------
+export class EduCreateDto {
+  @IsOptional() @IsString() instituteType?: string;
+  @IsOptional() @IsString() instituteName?: string;
+  @IsOptional() @IsString() degree?: string;
+  @IsOptional() @IsString() pasingYear?: string;
+  @IsOptional() @IsString() marks?: string;
+  @IsOptional() @IsString() gpaCgpa?: string;
+  @IsOptional() @IsString() class?: string;
+}
+
+// ---------- Experience DTO ----------
+export class ExpCreateDto {
+  @IsOptional() @IsString() orgName?: string;
+  @IsOptional() @IsString() designation?: string;
+  @IsOptional() @IsString() fromDate?: string;
+  @IsOptional() @IsString() toDate?: string;
+  @IsOptional() @IsString() responsibility?: string;
+  @IsOptional() @IsString() skill?: string;
+}
+
+// ---------- Employee Designation DTO ----------
+export class EmpDesignationCreateDto {
+  @IsOptional() @IsInt() id?: number;
+  @IsOptional() @IsInt() designationID?: number;
+}
+
+// ---------- Employee Branch DTO ----------
+export class EmpBranchCreateDto {
+  @IsOptional() @IsInt() id?: number;
+  @IsOptional() @IsInt() branchesID?: number;
+}
+
+// ---------- Employee Department DTO ----------
+export class EmpDepartmentCreateDto {
+  @IsOptional() @IsInt() id?: number;
+  @IsOptional() @IsInt() departmentNameID?: number;
+}
+
+// ---------- Employee Employment Type DTO ----------
+export class EmpEmploymentTypeCreateDto {
+  @IsOptional() @IsInt() id?: number;
+  @IsOptional() @IsString() employmentType?: string;
+}
+
+// ---------- Employee Employment Status DTO ----------
+export class EmpEmploymentStatusCreateDto {
+  @IsOptional() @IsInt() id?: number;
+  @IsOptional() @IsString() employmentStatus?: string;
+  @IsOptional() @IsString() probationPeriod?: string;
+}
+
+// ---------- Employee Work Shift DTO ----------
+export class EmpWorkShiftCreateDto {
+  @IsOptional() @IsInt() id?: number;
+  @IsOptional() @IsInt() workShiftID?: number;
+}
+
+// ---------- Employee Attendance Policy DTO ----------
+export class EmpAttendancePolicyCreateDto {
+  @IsOptional() @IsInt() id?: number;
+  @IsOptional() @IsInt() attendancePolicyID?: number;
+}
+
+// ---------- Employee Leave Policy DTO ----------
+export class EmpLeavePolicyCreateDto {
+  @IsOptional() @IsInt() id?: number;
+  @IsOptional() @IsInt() leavePolicyID?: number;
+}
+
+// ---------- Employee Contractor DTO ----------
+export class EmpContractorCreateDto {
+  @IsOptional() @IsInt() id?: number;
+  @IsOptional() @IsInt() contractorID?: number;
+}
+
+// ---------- Device Mapping DTO ----------
+export class DevMapCreateDto {
+   @IsOptional() @IsInt() id?: number;
+  @IsInt() deviceID!: number;
+  @IsOptional() @IsString() deviceEmpCode?: string;
+}
+
+export class TokenDeviceMapCreateDto  {
+   @IsOptional() @IsInt() id?: number;
+  @IsInt() deviceID!: number;
+  @IsOptional() @IsString() deviceEmpCode?: string;
+}
+
+// ---------- Employee Credentials DTO ----------
+export class EmployeeCredentialsCreateDto {
+  @IsOptional() @IsString()
+  @Matches(/^[a-zA-Z0-9_-]+$/, {
+    message: 'Username can only contain letters, numbers, underscores, and hyphens'
+  })
+  username?: string;
+
+  @IsOptional() @IsString()
+  @Matches(/^[0-9+\-\s()]+$/, {
+    message: 'Password must be a valid phone number'
+  })
+  password?: string;
+
+  @IsOptional() @IsBoolean() isActive?: boolean;
+}
+
+export class EmployeeCredentialsUpdateDto {
+  @IsOptional() @IsString()
+  @Matches(/^[a-zA-Z0-9_-]+$/, {
+    message: 'Username can only contain letters, numbers, underscores, and hyphens'
+  })
+  username?: string;
+
+  @IsOptional() @IsString()
+  @Length(6, 100, { message: 'Password must be at least 6 characters long' })
+  password?: string;
+
+  @IsOptional() @IsBoolean()
+  isActive?: boolean;
+}
+
+// ---------- Login DTO ----------
+export class EmployeeLoginDto {
+  @IsString()
+  @Matches(/^[a-zA-Z0-9_-]+$/, {
+    message: 'Username can only contain letters, numbers, underscores, and hyphens'
+  })
+
+  username!: string;
+
+  @IsString()
+  @Length(1, 100, { message: 'Password is required' })
+  password!: string;
+}
+
+// ---------- Create Employee DTO ----------
+export class CreateManageEmployeeDto {
+  // FKs
+  @IsOptional() @IsInt() serviceProviderID?: number;
+  @IsOptional() @IsInt() companyID?: number;
+  @IsOptional() @IsInt() branchesID?: number;
+  @IsOptional() @IsInt() contractorID?: number;
+
+  // Scalars
+  @IsOptional() @IsString() employeeFirstName?: string;
+  @IsOptional() @IsString() employeeLastName?: string;
+
+
+
+
+  // Add validation for employeeID since it's used as username
+  @IsOptional()
+  @IsString()
+  employeeID?: string;
+
+  @IsOptional() @IsString() empType?: string;
+
+  @IsOptional() @IsString() pfMemberStatus?: string;
+
+  @IsOptional() @IsString() pfNumber?: string;
+
+  @IsOptional() @IsString() joiningDate?: string;
+
+  @IsOptional() @IsString() businessPhoneNo?: string;
+  @IsOptional() @IsEmail() businessEmail?: string;
+
+  @IsOptional()
+  @IsString()
+  personalPhoneNo?: string;
+
+  @IsOptional() @IsEmail() personalEmail?: string;
+  @IsOptional() @IsString() emergancyContact?: string;
+
+  @IsOptional() @IsString() presentAddress?: string;
+  @IsOptional() @IsString() permenantAddress?: string;
+
+  @IsOptional() @IsString() employeePhotoUrl?: string;
+  @IsOptional() @IsString() gender?: string;
+  @IsOptional() @IsString() dateOfBirth?: string;
+  @IsOptional() @IsString() bloodGroup?: string;
+  @IsOptional() @IsString() maritalStatus?: string;
+  @IsOptional() @IsString() employeeFatherName?: string;
+  @IsOptional() @IsString() employeeMotherName?: string;
+  @IsOptional() @IsString() employeeSpouseName?: string;
+
+  // Basic position fields (stored directly on ManageEmployee)
+  @IsOptional() @IsInt() departmentNameID?: number;
+  @IsOptional() @IsInt() designationID?: number;
+  @IsOptional() @IsString() employmentType?: string;
+  @IsOptional() @IsString() typeOfEmployee?: string;
+  @IsOptional() @IsString() employmentStatus?: string;
+  @IsOptional() @IsString() probationPeriod?: string;
+  @IsOptional() @IsInt() workShiftID?: number;
+  @IsOptional() @IsInt() attendancePolicyID?: number;
+  @IsOptional() @IsInt() leavePolicyID?: number;
+  @IsOptional() @IsString() salaryPayGradeType?: string;
+  @IsOptional() @IsInt() monthlyPayGradeID?: number;
+  @IsOptional() @IsInt() hourlyPayGradeID?: number;
+
+  @IsOptional()
+  @IsString()
+  shiftEligibility?: string;
+
+  @IsOptional()
+  @IsString()
+  nightShiftEligibility?: string;
+
+  @IsOptional()
+  @IsString()
+  maxHoursPerDay?: string;
+
+  @IsOptional()
+  @IsString()
+  weeklyOffPattern?: string;
+
+  @IsOptional()
+  @IsString()
+  noticePeriodDaysForResignation?: string;
+
+  @IsOptional()
+  @IsString()
+  noticePeriodDaysForTermination?: string;
+
+
+  // Nested arrays
+  @IsOptional() @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => EduCreateDto)
+  edu?: EduCreateDto[];
+
+  @IsOptional() @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => BankDetailsCreateDto)
+  bankDetails?: BankDetailsCreateDto[];
+
+  @IsOptional() @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => ExpCreateDto)
+  exp?: ExpCreateDto[];
+
+  @IsOptional() @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => DevMapCreateDto)
+  devices?: DevMapCreateDto[];
+
+  @IsOptional() @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => EmpDesignationCreateDto)
+  empDesignations?: EmpDesignationCreateDto[];
+
+   @IsOptional() @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => TokenDeviceMapCreateDto)
+  tokenDevices?: TokenDeviceMapCreateDto[];  
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => PromotionCreateDto)
+  promotion?: PromotionCreateDto;
+
+  // Multi-value junction table arrays
+  @IsOptional() @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => EmpBranchCreateDto)
+  empBranches?: EmpBranchCreateDto[];
+
+  @IsOptional() @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => EmpDepartmentCreateDto)
+  empDepartments?: EmpDepartmentCreateDto[];
+
+  @IsOptional() @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => EmpEmploymentTypeCreateDto)
+  empEmploymentTypes?: EmpEmploymentTypeCreateDto[];
+
+  @IsOptional() @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => EmpEmploymentStatusCreateDto)
+  empEmploymentStatuses?: EmpEmploymentStatusCreateDto[];
+
+  @IsOptional() @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => EmpWorkShiftCreateDto)
+  empWorkShifts?: EmpWorkShiftCreateDto[];
+
+  @IsOptional() @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => EmpAttendancePolicyCreateDto)
+  empAttendancePolicies?: EmpAttendancePolicyCreateDto[];
+
+  @IsOptional() @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => EmpLeavePolicyCreateDto)
+  empLeavePolicies?: EmpLeavePolicyCreateDto[];
+
+  @IsOptional() @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => EmpContractorCreateDto)
+  empContractors?: EmpContractorCreateDto[];
+}
+
+// ---------- Update Employee DTO ----------
+export class UpdateManageEmployeeDto {
+  // FKs
+  @IsOptional() @IsInt() serviceProviderID?: number;
+  @IsOptional() @IsInt() companyID?: number;
+  @IsOptional() @IsInt() branchesID?: number;
+  @IsOptional() @IsInt() contractorID?: number;
+
+  // Scalars
+  @IsOptional() @IsString() employeeFirstName?: string;
+  @IsOptional() @IsString() employeeLastName?: string;
+
+  @IsOptional()
+  @IsString()
+  employeeID?: string;
+
+  @IsOptional() @IsString() joiningDate?: string;
+
+  @IsOptional() @IsString() businessPhoneNo?: string;
+  @IsOptional() @IsEmail() businessEmail?: string;
+
+  @IsOptional()
+  @IsString()
+  @Matches(/^[0-9+\-\s()]+$/, {
+    message: 'Personal phone number must be a valid phone number'
+  })
+  personalPhoneNo?: string;
+
+  @IsOptional() @IsEmail() personalEmail?: string;
+  @IsOptional() @IsString() emergancyContact?: string;
+
+  @IsOptional() @IsString() presentAddress?: string;
+  @IsOptional() @IsString() permenantAddress?: string;
+
+  @IsOptional() @IsString() employeePhotoUrl?: string;
+  @IsOptional() @IsString() gender?: string;
+  @IsOptional() @IsString() dateOfBirth?: string;
+  @IsOptional() @IsString() bloodGroup?: string;
+  @IsOptional() @IsString() maritalStatus?: string;
+  @IsOptional() @IsString() employeeFatherName?: string;
+  @IsOptional() @IsString() employeeMotherName?: string;
+  @IsOptional() @IsString() employeeSpouseName?: string;
+
+  // Basic position fields (stored directly on ManageEmployee)
+  @IsOptional() @IsInt() departmentNameID?: number;
+  @IsOptional() @IsInt() designationID?: number;
+  @IsOptional() @IsString() employmentType?: string;
+  @IsOptional() @IsString() typeOfEmployee?: string;
+  @IsOptional() @IsString() employmentStatus?: string;
+  @IsOptional() @IsString() probationPeriod?: string;
+  @IsOptional() @IsInt() workShiftID?: number;
+  @IsOptional() @IsInt() attendancePolicyID?: number;
+  @IsOptional() @IsInt() leavePolicyID?: number;
+  @IsOptional() @IsString() salaryPayGradeType?: string;
+  @IsOptional() @IsInt() monthlyPayGradeID?: number;
+  @IsOptional() @IsInt() hourlyPayGradeID?: number;
+
+  // Nested arrays
+  @IsOptional() @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => EduCreateDto)
+  edu?: EduCreateDto[];
+
+  @IsOptional() @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => BankDetailsCreateDto)
+  bankDetails?: BankDetailsCreateDto[];
+
+  @IsOptional() @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => ExpCreateDto)
+  exp?: ExpCreateDto[];
+
+  @IsOptional() @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => DevMapCreateDto)
+  devices?: DevMapCreateDto[];
+
+  @IsOptional() @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => EmpDesignationCreateDto)
+  empDesignations?: EmpDesignationCreateDto[];
+
+    @IsOptional() @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => TokenDeviceMapCreateDto)
+  tokenDevices?: TokenDeviceMapCreateDto[];
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => PromotionCreateDto)
+  promotion?: PromotionCreateDto;
+
+  // Multi-value junction table arrays
+  @IsOptional() @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => EmpBranchCreateDto)
+  empBranches?: EmpBranchCreateDto[];
+
+  @IsOptional() @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => EmpDepartmentCreateDto)
+  empDepartments?: EmpDepartmentCreateDto[];
+
+  @IsOptional() @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => EmpEmploymentTypeCreateDto)
+  empEmploymentTypes?: EmpEmploymentTypeCreateDto[];
+
+  @IsOptional() @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => EmpEmploymentStatusCreateDto)
+  empEmploymentStatuses?: EmpEmploymentStatusCreateDto[];
+
+  @IsOptional() @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => EmpWorkShiftCreateDto)
+  empWorkShifts?: EmpWorkShiftCreateDto[];
+
+  @IsOptional() @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => EmpAttendancePolicyCreateDto)
+  empAttendancePolicies?: EmpAttendancePolicyCreateDto[];
+
+  @IsOptional() @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => EmpLeavePolicyCreateDto)
+  empLeavePolicies?: EmpLeavePolicyCreateDto[];
+
+  @IsOptional() @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => EmpContractorCreateDto)
+  empContractors?: EmpContractorCreateDto[];
+
+  // For deletion tracking
+  @IsOptional() @IsArray() @IsInt({ each: true }) eduIdsToDelete?: number[];
+  @IsOptional() @IsArray() @IsInt({ each: true }) expIdsToDelete?: number[];
+  @IsOptional() @IsArray() @IsInt({ each: true }) deviceMapIdsToDelete?: number[];
+    @IsOptional() @IsArray() @IsInt({ each: true }) tokenDeviceMapIdsToDelete?: number[];
+  @IsOptional() @IsArray() @IsInt({ each: true }) bankDetailsIdsToDelete?: number[];
+  @IsOptional() @IsArray() @IsInt({ each: true }) empDesignationIdsToDelete?: number[];
+  @IsOptional() @IsArray() @IsInt({ each: true }) empBranchIdsToDelete?: number[];
+  @IsOptional() @IsArray() @IsInt({ each: true }) empDepartmentIdsToDelete?: number[];
+  @IsOptional() @IsArray() @IsInt({ each: true }) empEmploymentTypeIdsToDelete?: number[];
+  @IsOptional() @IsArray() @IsInt({ each: true }) empEmploymentStatusIdsToDelete?: number[];
+  @IsOptional() @IsArray() @IsInt({ each: true }) empWorkShiftIdsToDelete?: number[];
+  @IsOptional() @IsArray() @IsInt({ each: true }) empAttendancePolicyIdsToDelete?: number[];
+  @IsOptional() @IsArray() @IsInt({ each: true }) empLeavePolicyIdsToDelete?: number[];
+  @IsOptional() @IsArray() @IsInt({ each: true }) empContractorIdsToDelete?: number[];
+}

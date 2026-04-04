@@ -1,0 +1,579 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card";
+import { Button } from "../../components/ui/button";
+import { Input } from "../../components/ui/input";
+import { Label } from "../../components/ui/label";
+import { Search, Download, FileText } from "lucide-react";
+import { useCurrentUser } from "../../hooks/useCurrentUser";
+import * as XLSX from "xlsx";
+
+const BACKEND_URL =
+  process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
+
+interface Company { id: number; companyName: string; }
+interface Branch { id: number; branchName: string; companyID: number; }
+interface Department { id: number; companyID: number; branchesID: number; departmentName: string; }
+interface Employee {
+  id: number; employeeID: string;
+  employeeFirstName: string; employeeLastName: string;
+  companyID: number; branchesID: number; departmentNameID?: number | null;
+}
+
+interface CanteenRecord {
+  manage_employee_id: number | null;
+  user_id: string;
+  username: string;
+  punch_time: string;
+  default_token?: boolean;
+}
+
+interface ReportRow {
+  sno: number;
+  employeeID: string;
+  employeeName: string;
+  companyName: string;
+  branchName: string;
+  departmentName: string;
+  date: string;
+  time: string;
+  defaultToken: string;
+}
+
+const getTodayStr = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+};
+
+const REPORT_TYPES = [
+  { value: "checkin", label: "Checkin" },
+  { value: "tokenAssigned", label: "Token Assigned" },
+  { value: "tokenCancel", label: "Token Cancel" },
+  { value: "tokenConsumed", label: "Token Consumed" },
+  { value: "tokenNotConsumed", label: "Token Not Consumed" },
+];
+
+export function CanteenReports() {
+  const user = useCurrentUser();
+
+  const [companies, setCompanies] = useState<Company[]>([]);
+  const [allBranches, setAllBranches] = useState<Branch[]>([]);
+  const [allDepartments, setAllDepartments] = useState<Department[]>([]);
+  const [branches, setBranches] = useState<Branch[]>([]);
+  const [departments, setDepartments] = useState<Department[]>([]);
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [defaultTokenEnabled, setDefaultTokenEnabled] = useState(false);
+
+  const [reportData, setReportData] = useState<ReportRow[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [employeeFilter, setEmployeeFilter] = useState("");
+
+  const [formData, setFormData] = useState({
+    companyID: null as number | null,
+    branchID: null as number | null,
+    departmentID: null as number | null,
+    reportType: "checkin",
+    dateFrom: "",
+    dateTo: getTodayStr(),
+  });
+
+  // ── Load master data ──
+
+  useEffect(() => {
+    Promise.all([
+      fetch(`${BACKEND_URL}/company`).then((r) => r.json()),
+      fetch(`${BACKEND_URL}/branches`, { cache: "no-store" }).then((r) => r.json()),
+      fetch(`${BACKEND_URL}/departments`, { cache: "no-store" }).then((r) => r.json()),
+      fetch(`${BACKEND_URL}/manage-emp`, { cache: "no-store" }).then((r) => r.json()),
+      fetch(`${BACKEND_URL}/canteen/setup`, { cache: "no-store" }).then((r) => r.json()),
+    ]).then(([cos, brs, depts, emps, setup]) => {
+      setCompanies(cos);
+      setAllBranches(brs);
+      setAllDepartments(depts);
+      setEmployees(emps);
+      setDefaultTokenEnabled(setup?.default_token_enabled ?? false);
+    });
+  }, []);
+
+  // ── Filter branches based on selected company ──
+
+  useEffect(() => {
+    if (!user) return;
+    let cid = formData.companyID;
+    if (user.role !== "SUPERADMIN" && user.companyID) {
+      cid = user.companyID;
+    }
+    let filtered = [...allBranches];
+    if (cid) filtered = filtered.filter((b) => b.companyID === cid);
+    setBranches(filtered);
+  }, [user, allBranches, formData.companyID]);
+
+  // ── Filter departments based on selected company + branch ──
+
+  useEffect(() => {
+    if (!user) return;
+    const cid = user.role !== "SUPERADMIN" && user.companyID ? user.companyID : formData.companyID;
+    let filtered = [...allDepartments];
+    if (cid) filtered = filtered.filter((d) => d.companyID === cid);
+    if (formData.branchID) filtered = filtered.filter((d) => d.branchesID === formData.branchID);
+    setDepartments(filtered);
+  }, [user, allDepartments, formData.companyID, formData.branchID]);
+
+  // ── Helpers ──
+
+  const formatPunchTime = (pt: string) => {
+    const raw = pt.replace("Z", "").replace(/[+-]\d{2}:\d{2}$/, "");
+    const d = new Date(raw);
+    return {
+      date: d.toLocaleDateString("en-IN", { day: "2-digit", month: "2-digit", year: "numeric" }),
+      time: d.toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit", second: "2-digit", hour12: true }),
+    };
+  };
+
+  const getReportTypeLabel = () =>
+    REPORT_TYPES.find((t) => t.value === formData.reportType)?.label || formData.reportType;
+
+  // ── Generate Report ──
+
+  const generateReport = async () => {
+    if (!formData.dateFrom || !formData.dateTo) {
+      alert("Please select both Date From and Date To");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const cid = user?.role !== "SUPERADMIN" && user?.companyID ? user.companyID : formData.companyID;
+
+      const params = new URLSearchParams({
+        dateFrom: formData.dateFrom,
+        dateTo: formData.dateTo,
+        type: formData.reportType,
+      });
+      if (cid) params.set("companyId", String(cid));
+      if (formData.branchID) params.set("branchId", String(formData.branchID));
+      if (formData.departmentID) params.set("departmentId", String(formData.departmentID));
+
+      const res = await fetch(`${BACKEND_URL}/canteen/reports?${params.toString()}`, { cache: "no-store" });
+      const records: CanteenRecord[] = await res.json();
+
+      // Build lookup maps
+      const empMap = new Map(employees.map((e) => [e.id, e]));
+      const companyMap = new Map(companies.map((c) => [c.id, c]));
+      const branchMap = new Map(allBranches.map((b) => [b.id, b]));
+      const deptMap = new Map(allDepartments.map((d) => [d.id, d]));
+
+      const rows: ReportRow[] = records.map((rec, i) => {
+        const emp = rec.manage_employee_id ? empMap.get(rec.manage_employee_id) : null;
+        const company = emp?.companyID ? companyMap.get(emp.companyID) : null;
+        const branch = emp?.branchesID ? branchMap.get(emp.branchesID) : null;
+        const dept = emp?.departmentNameID ? deptMap.get(emp.departmentNameID) : null;
+        const { date, time } = rec.punch_time
+          ? formatPunchTime(rec.punch_time)
+          : { date: "-", time: "-" };
+
+        return {
+          sno: i + 1,
+          employeeID: emp?.employeeID || rec.user_id || "-",
+          employeeName: emp
+            ? `${emp.employeeFirstName} ${emp.employeeLastName}`
+            : rec.username || "-",
+          companyName: company?.companyName || "-",
+          branchName: branch?.branchName || "-",
+          departmentName: dept?.departmentName || "-",
+          date,
+          time,
+          defaultToken: defaultTokenEnabled ? "Enabled" : "Disabled",
+        };
+      });
+
+      setReportData(rows);
+    } catch (err) {
+      console.error("Error generating canteen report:", err);
+      alert("Error generating report.");
+      setReportData([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const resetForm = () => {
+    setFormData((prev) => ({
+      ...prev,
+      dateFrom: "",
+      dateTo: getTodayStr(),
+      branchID: null,
+      departmentID: null,
+      companyID: user?.role === "SUPERADMIN" ? null : prev.companyID,
+      reportType: "checkin",
+    }));
+    setReportData([]);
+    setSearchTerm("");
+    setEmployeeFilter("");
+  };
+
+  // ── Compute employees filtered by selected company ──
+
+  const companyEmployees = employees.filter((emp) => {
+    const cid = user?.role !== "SUPERADMIN" && user?.companyID ? user.companyID : formData.companyID;
+    return !cid || emp.companyID === cid;
+  });
+
+  // ── Filter displayed data by search + employee filter ──
+
+  const filteredData = reportData.filter((row) => {
+    const term = searchTerm.toLowerCase();
+    const matchesSearch = !term || (
+      row.employeeID.toLowerCase().includes(term) ||
+      row.employeeName.toLowerCase().includes(term) ||
+      row.companyName.toLowerCase().includes(term) ||
+      row.branchName.toLowerCase().includes(term) ||
+      row.departmentName.toLowerCase().includes(term)
+    );
+    const matchesEmployee = !employeeFilter || row.employeeID === employeeFilter;
+    return matchesSearch && matchesEmployee;
+  });
+
+  // ── Download Excel ──
+
+  const downloadExcel = () => {
+    if (filteredData.length === 0) {
+      alert("No data to download");
+      return;
+    }
+
+    const excelRows = filteredData.map((row) => ({
+      "S.NO": row.sno,
+      "Employee ID": row.employeeID,
+      "Employee Name": row.employeeName,
+      "Company": row.companyName,
+      "Branch": row.branchName,
+      "Department": row.departmentName,
+      "Default Token": row.defaultToken,
+      "Date": row.date,
+      "Punch Time": row.time,
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(excelRows);
+
+    ws["!cols"] = [
+      { wch: 6 },
+      { wch: 14 },
+      { wch: 22 },
+      { wch: 24 },
+      { wch: 16 },
+      { wch: 16 },
+      { wch: 14 },
+      { wch: 12 },
+      { wch: 14 },
+    ];
+
+    // Apply header styles
+    const range = XLSX.utils.decode_range(ws["!ref"] || "A1");
+    for (let C = range.s.c; C <= range.e.c; C++) {
+      const ref = XLSX.utils.encode_cell({ r: 0, c: C });
+      if (ws[ref]) {
+        ws[ref].s = {
+          font: { name: "Arial", sz: 10, bold: true, color: { rgb: "FFFFFF" } },
+          fill: { fgColor: { rgb: "366092" } },
+          alignment: { horizontal: "center", vertical: "center" },
+          border: {
+            top: { style: "thin", color: { rgb: "000000" } },
+            left: { style: "thin", color: { rgb: "000000" } },
+            bottom: { style: "thin", color: { rgb: "000000" } },
+            right: { style: "thin", color: { rgb: "000000" } },
+          },
+        };
+      }
+    }
+
+    // Apply data cell styles
+    for (let R = 1; R <= range.e.r; R++) {
+      for (let C = range.s.c; C <= range.e.c; C++) {
+        const ref = XLSX.utils.encode_cell({ r: R, c: C });
+        if (ws[ref]) {
+          ws[ref].s = {
+            font: { name: "Arial", sz: 9 },
+            alignment: { horizontal: "center", vertical: "center" },
+            border: {
+              top: { style: "thin", color: { rgb: "000000" } },
+              left: { style: "thin", color: { rgb: "000000" } },
+              bottom: { style: "thin", color: { rgb: "000000" } },
+              right: { style: "thin", color: { rgb: "000000" } },
+            },
+          };
+        }
+      }
+    }
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Canteen Report");
+
+    const typeLabel = getReportTypeLabel().replace(/\s+/g, "_");
+    XLSX.writeFile(wb, `Canteen_${typeLabel}_${formData.dateFrom}_to_${formData.dateTo}.xlsx`);
+  };
+
+  // ── Branch change handler ──
+
+  const handleBranchChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const val = e.target.value ? Number(e.target.value) : null;
+    setFormData((prev) => ({ ...prev, branchID: val, departmentID: null }));
+  };
+
+  // ── Render ──
+
+  return (
+    <div className="space-y-6 w-full max-w-7xl mx-auto px-4">
+      {/* Header */}
+      <div className="flex items-center justify-between w-full">
+        <div className="min-w-0 flex-1">
+          <h1 className="text-2xl font-bold text-gray-900">Canteen Reports</h1>
+          <p className="text-gray-600 mt-1 text-sm">
+            Generate and view canteen reports by company, branch, department and date range.
+          </p>
+        </div>
+      </div>
+
+      {/* Filter Card */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">Canteen Filters</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+            {/* Company */}
+            {user?.role === "SUPERADMIN" && (
+              <div className="space-y-2">
+                <Label>Company</Label>
+                <select
+                  className="w-full px-3 py-2 border rounded-md bg-white"
+                  value={formData.companyID ?? ""}
+                  onChange={(e) => {
+                    const val = e.target.value ? Number(e.target.value) : null;
+                    setFormData((prev) => ({
+                      ...prev,
+                      companyID: val,
+                      branchID: null,
+                      departmentID: null,
+                    }));
+                  }}
+                >
+                  <option value="">Select company</option>
+                  {companies.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.companyName}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {/* Branch */}
+            <div className="space-y-2">
+              <Label>Branch</Label>
+              <select
+                className="w-full px-3 py-2 border rounded-md bg-white"
+                value={formData.branchID ?? ""}
+                onChange={handleBranchChange}
+              >
+                <option value="">All branches</option>
+                {branches.map((b) => (
+                  <option key={b.id} value={b.id}>
+                    {b.branchName}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Department */}
+            <div className="space-y-2">
+              <Label>Department</Label>
+              <select
+                className="w-full px-3 py-2 border rounded-md bg-white"
+                value={formData.departmentID ?? ""}
+                onChange={(e) =>
+                  setFormData((prev) => ({
+                    ...prev,
+                    departmentID: e.target.value ? Number(e.target.value) : null,
+                  }))
+                }
+              >
+                <option value="">All departments</option>
+                {departments.map((d) => (
+                  <option key={d.id} value={d.id}>
+                    {d.departmentName}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Report Type */}
+            <div className="space-y-2">
+              <Label>Report Type</Label>
+              <select
+                className="w-full px-3 py-2 border rounded-md bg-white"
+                value={formData.reportType}
+                onChange={(e) =>
+                  setFormData((prev) => ({ ...prev, reportType: e.target.value }))
+                }
+              >
+                {REPORT_TYPES.map((t) => (
+                  <option key={t.value} value={t.value}>
+                    {t.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+            {/* Date From */}
+            {/* Employee Dropdown */}
+            <div className="space-y-2">
+              <Label>Employee</Label>
+              <select
+                className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                value={employeeFilter}
+                onChange={(e) => setEmployeeFilter(e.target.value)}
+              >
+                <option value="">All Employees</option>
+                {companyEmployees.map((emp) => (
+                  <option key={emp.id} value={emp.employeeID}>
+                    {emp.employeeID} - {emp.employeeFirstName} {emp.employeeLastName}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Date From</Label>
+              <Input
+                type="date"
+                value={formData.dateFrom}
+                onChange={(e) =>
+                  setFormData((prev) => ({ ...prev, dateFrom: e.target.value }))
+                }
+              />
+            </div>
+
+            {/* Date To */}
+            <div className="space-y-2">
+              <Label>Date To</Label>
+              <Input
+                type="date"
+                value={formData.dateTo}
+                onChange={(e) =>
+                  setFormData((prev) => ({ ...prev, dateTo: e.target.value }))
+                }
+              />
+            </div>
+
+            <div className="flex items-end gap-3">
+              <Button
+                className="bg-blue-600 hover:bg-blue-700"
+                onClick={generateReport}
+                disabled={loading}
+              >
+                {loading ? "Generating..." : "Generate Report"}
+              </Button>
+              <Button variant="outline" onClick={resetForm}>
+                Reset
+              </Button>
+            </div>
+          </div>
+
+          <p className="text-xs text-gray-500 mt-2">
+            Reports are filtered by company, branch, department (if selected) and date range.
+          </p>
+        </CardContent>
+      </Card>
+
+      {/* No data */}
+      {reportData.length === 0 && !loading && (
+        <Card>
+          <CardContent className="py-6 text-center text-sm text-gray-500">
+            No records found for selected filters and date range.
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Results */}
+      {reportData.length > 0 && (
+        <Card className="mt-4">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle className="flex items-center gap-2 text-lg font-semibold">
+                <FileText className="w-5 h-5" />
+                {getReportTypeLabel()} – {filteredData.length} records
+              </CardTitle>
+              <div className="flex items-center gap-3">
+                <div className="relative w-64">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+                  <Input
+                    placeholder="Search employee, company, branch..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="pl-10"
+                  />
+                </div>
+                <Button
+                  variant="outline"
+                  onClick={downloadExcel}
+                  className="flex items-center gap-2"
+                >
+                  <Download className="w-4 h-4" />
+                  Download Excel
+                </Button>
+              </div>
+            </div>
+          </CardHeader>
+
+          <CardContent className="p-0">
+            <div className="overflow-x-auto w-full border-t border-gray-200">
+              <table className="min-w-full border-collapse text-xs">
+                <thead className="bg-blue-600 text-white">
+                  <tr>
+                    <th className="px-3 py-2 text-center">S.NO</th>
+                    <th className="px-3 py-2 text-left">EMPLOYEE ID</th>
+                    <th className="px-3 py-2 text-left">EMPLOYEE NAME</th>
+                    <th className="px-3 py-2 text-left">COMPANY</th>
+                    <th className="px-3 py-2 text-left">BRANCH</th>
+                    <th className="px-3 py-2 text-left">DEPARTMENT</th>
+                    <th className="px-3 py-2 text-center">DEFAULT TOKEN</th>
+                    <th className="px-3 py-2 text-center">DATE</th>
+                    <th className="px-3 py-2 text-center">PUNCH TIME</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredData.map((row, i) => (
+                    <tr key={i} className="odd:bg-gray-50 border-b">
+                      <td className="px-3 py-2 text-center text-[11px]">{row.sno}</td>
+                      <td className="px-3 py-2 text-[11px]">{row.employeeID}</td>
+                      <td className="px-3 py-2 text-[11px]">{row.employeeName}</td>
+                      <td className="px-3 py-2 text-[11px]">{row.companyName}</td>
+                      <td className="px-3 py-2 text-[11px]">{row.branchName}</td>
+                      <td className="px-3 py-2 text-[11px]">{row.departmentName}</td>
+                      <td className="px-3 py-2 text-center text-[11px]">
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-semibold ${
+                          row.defaultToken === "Enabled"
+                            ? "bg-green-100 text-green-700"
+                            : "bg-red-100 text-red-700"
+                        }`}>
+                          {row.defaultToken}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2 text-center text-[11px]">{row.date}</td>
+                      <td className="px-3 py-2 text-center text-[11px]">{row.time}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
+}

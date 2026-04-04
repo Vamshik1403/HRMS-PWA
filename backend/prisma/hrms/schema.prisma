@@ -1,0 +1,1647 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../../node_modules/.prisma/client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model AttendancePolicy {
+  id                                     Int              @id @default(autoincrement())
+  serviceProviderID                      Int?
+  companyID                              Int?
+  branchesID                             Int?
+  attendancePolicyName                   String?          @db.VarChar
+  workingHoursType                       String?          @db.VarChar
+  checkin_begin_before_min               Int?
+  checkout_end_after_min                 Int?
+  checkin_grace_time_min                 Int?
+  earlyCheckoutBeforeEndMin              Int?
+  min_work_hours_half_day_min            Int?
+  max_late_check_in_time                 Int?
+  markAs                                 String?
+  lateMarkCount                          String?
+  allow_self_mark_attendance             Boolean?         @default(false)
+  allow_manager_update_ot                Boolean?         @default(false)
+  max_ot_hours_per_day_min               Int?
+  checkoutGracePeriodForOvertimeTrimming Int?             @default(0)
+  maxOvertimeHrs                         Int?             @default(0)
+  minOvertimeHrs                         Int?             @default(0)
+  overtimeApplicable                     Boolean?         @default(false)
+  overtimeTrimmingApply                  Boolean?         @default(false)
+  breakTimeForOT                         Int?             @default(0)
+  branches                               Branches?        @relation(fields: [branchesID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  company                                Company?         @relation(fields: [companyID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  serviceProvider                        ServiceProvider? @relation(fields: [serviceProviderID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  empPromotion                           EmpPromotion[]
+  manageEmployees                        ManageEmployee[] @relation("EmployeeAttendancePolicy")
+  empAttendancePolicies                  EmpAttendancePolicy[] @relation("EmpAttendancePolicyLink")
+}
+
+model BankDetails {
+  id                Int              @id @default(autoincrement())
+  serviceProviderID Int?
+  companyID         Int?
+  branchesID        Int
+  bankName          String?          @db.VarChar
+  bankBranchName    String?          @db.VarChar
+  accountNo         String?          @db.VarChar
+  ifscCode          String?          @db.VarChar
+  branches          Branches         @relation(fields: [branchesID], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  company           Company?         @relation(fields: [companyID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  serviceProvider   ServiceProvider? @relation(fields: [serviceProviderID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([branchesID])
+}
+
+model BonusSetup {
+  id                Int               @id @default(autoincrement())
+  serviceProviderID Int?
+  companyID         Int?
+  branchesID        Int?
+  bonusName         String?           @db.VarChar
+  bonusType         String?           @db.VarChar
+  bonusDescription  String?           @db.VarChar
+  bonusBasedOn      String?           @db.VarChar
+  bonusPercentage   String?           @db.VarChar
+  bonusFixed        String?           @db.VarChar
+  bonusAllocation   BonusAllocation[]
+  branches          Branches?         @relation(fields: [branchesID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  company           Company?          @relation(fields: [companyID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  serviceProvider   ServiceProvider?  @relation(fields: [serviceProviderID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  genarateBonus     GenarateBonus[]
+}
+
+model BonusAllocation {
+  id             Int            @id @default(autoincrement())
+  bonusSetupID   Int
+  financialYear  Int?
+  salaryPeriod   Int?
+  employeeID     Int
+  bonusSetup     BonusSetup     @relation(fields: [bonusSetupID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  manageEmployee ManageEmployee @relation(fields: [employeeID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model Branches {
+  id                      Int                       @id @default(autoincrement())
+  serviceProviderID       Int?
+  companyID               Int?
+  branchName              String?                   @db.VarChar
+  address                 String?                   @db.VarChar
+  country                 String?                   @db.VarChar
+  state                   String?                   @db.VarChar
+  timeZone                String?                   @db.VarChar
+  currency                String?                   @db.VarChar
+  pfNo                    String?                   @db.VarChar
+  tanNo                   String?                   @db.VarChar
+  esiNo                   String?                   @db.VarChar
+  linNo                   String?                   @db.VarChar
+  gstNo                   String?                   @db.VarChar
+  shopRegNo               String?                   @db.VarChar
+  financialYearStart      String?                   @db.VarChar
+  contactNo               String?                   @db.VarChar
+  emailAdd                String?                   @db.VarChar
+  companyLogoUrl          String?                   @db.VarChar
+  SignatureUrl            String?                   @db.VarChar
+  branchType              String?                   @db.VarChar
+  attendancePolicy        AttendancePolicy[]
+  bankDetails             BankDetails[]
+  bonusSetup              BonusSetup[]
+  company                 Company?                  @relation(fields: [companyID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  serviceProvider         ServiceProvider?          @relation(fields: [serviceProviderID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  departments             Departments[]
+  designations            Designations[]
+  devices                 Devices[]
+  empAttendanceRegularise EmpAttendanceRegularise[]
+  empCurrentPosition      EmpCurrentPosition[]
+  empFieldSiteAttendance  EmpFieldSiteAttendance[]
+  empPromotion            EmpPromotion[]
+  employeeCredentials     EmployeeCredentials[]
+  genarateBonus           GenarateBonus[]
+  generateSalary          GenerateSalary[]
+  hourlyPayGrade          HourlyPayGrade[]
+  manageEmployee          ManageEmployee[]
+  empBranch               EmpBranch[]
+  manageHoliday           ManageHoliday[]
+  monthlyPayGrade         MonthlyPayGrade[]
+  ptCompliance            PTCompliance[]
+  publicHoliday           PublicHoliday[]
+  reimbursement           Reimbursement[]
+  roaster                 Roster[]
+  salaryAdvance           SalaryAdvance[]
+  salaryAllowance         SalaryAllowance[]
+  salaryCycle             SalaryCycle[]
+  salaryDeduction         SalaryDeduction[]
+  user                    User[]
+  workShift               WorkShift[]
+  leaveApplication        leaveApplication[]
+  leaveApplicationRequest leaveApplicationRequest[]
+  leavePolicy             leavePolicy[]
+  leavePolicyHoliday      leavePolicyHoliday[]
+}
+
+model Company {
+  id                             Int                       @id @default(autoincrement())
+  serviceProviderID              Int?
+  companyName                    String?                   @db.VarChar
+  address                        String?                   @db.VarChar
+  country                        String?                   @db.VarChar
+  state                          String?                   @db.VarChar
+  timeZone                       String?                   @db.VarChar
+  currency                       String?                   @db.VarChar
+  pfNo                           String?                   @db.VarChar
+  panNo                          String?                   @db.VarChar
+  tanNo                          String?                   @db.VarChar
+  esiNo                          String?                   @db.VarChar
+  linNo                          String?                   @db.VarChar
+  gstNo                          String?                   @db.VarChar
+  shopRegNo                      String?                   @db.VarChar
+  financialYearStart             String?                   @db.VarChar
+  contactNo                      String?                   @db.VarChar
+  emailAdd                       String?                   @db.VarChar
+  companyLogoUrl                 String?                   @db.VarChar
+  SignatureUrl                   String?                   @db.VarChar
+  companyType                    String?                   @db.VarChar
+  noticePeriodDaysForResignation String?                   @db.VarChar
+  noticePeriodDaysForTermination String?                   @db.VarChar
+  attendancePolicy               AttendancePolicy[]
+  bankDetails                    BankDetails[]
+  bonusSetup                     BonusSetup[]
+  branches                       Branches[]
+  serviceProvider                ServiceProvider?          @relation(fields: [serviceProviderID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  contractors                    Contractors[]
+  departments                    Departments[]
+  designations                   Designations[]
+  devices                        Devices[]
+  esicCompliance                 ESICCompliance?
+  empAttendanceRegularise        EmpAttendanceRegularise[]
+  empCurrentPosition             EmpCurrentPosition[]
+  empFieldSiteAttendance         EmpFieldSiteAttendance[]
+  empPromotion                   EmpPromotion[]
+  employeeCredentials            EmployeeCredentials[]
+  genarateBonus                  GenarateBonus[]
+  generateSalary                 GenerateSalary[]
+  hourlyPayGrade                 HourlyPayGrade[]
+  manageEmployee                 ManageEmployee[]
+  manageHoliday                  ManageHoliday[]
+  monthlyPayGrade                MonthlyPayGrade[]
+  pfCompliance                   PFCompliance?
+  ptCompliance                   PTCompliance[]
+  publicHoliday                  PublicHoliday[]
+  reimbursement                  Reimbursement[]
+  roaster                        Roster[]
+  salaryAdvance                  SalaryAdvance[]
+  salaryAllowance                SalaryAllowance[]
+  salaryCycle                    SalaryCycle[]
+  salaryDeduction                SalaryDeduction[]
+  user                           User[]
+  workShift                      WorkShift[]
+  leaveApplication               leaveApplication[]
+  leaveApplicationRequest        leaveApplicationRequest[]
+  leavePolicy                    leavePolicy[]
+  leavePolicyHoliday             leavePolicyHoliday[]
+}
+
+model Contractors {
+  id                 Int              @id @default(autoincrement())
+  serviceProviderID  Int?
+  companyID          Int?
+  contractorName     String?          @db.VarChar
+  address            String?          @db.VarChar
+  country            String?          @db.VarChar
+  state              String?          @db.VarChar
+  timeZone           String?          @db.VarChar
+  currency           String?          @db.VarChar
+  pfNo               String?          @db.VarChar
+  tanNo              String?          @db.VarChar
+  esiNo              String?          @db.VarChar
+  linNo              String?          @db.VarChar
+  gstNo              String?          @db.VarChar
+  shopRegNo          String?          @db.VarChar
+  financialYearStart String?          @db.VarChar
+  contactNo          String?          @db.VarChar
+  emailAdd           String?          @db.VarChar
+  companyLogoUrl     String?          @db.VarChar
+  SignatureUrl       String?          @db.VarChar
+  contractorType     String?          @db.VarChar
+  company            Company?         @relation(fields: [companyID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  serviceProvider    ServiceProvider? @relation(fields: [serviceProviderID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  manageEmployee     ManageEmployee[]
+  empContractor      EmpContractor[]     @relation("EmpContractorLink")
+  contractorRateCards ContractorRateCard[]
+}
+
+model ContractorRateCard {
+  id              Int          @id @default(autoincrement())
+  contractorID    Int
+  contractorName  String?      @db.VarChar
+  departmentName  String?      @db.VarChar
+  designation     String?      @db.VarChar
+  workShiftName   String?      @db.VarChar
+  perMinuteRate   Float?       @default(0)
+  perHourRate     Float?       @default(0)
+  perDayRate      Float?       @default(0)
+  perMonthRate    Float?       @default(0)
+  contractor      Contractors  @relation(fields: [contractorID], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([contractorID])
+}
+
+model Departments {
+  id                                                                  Int                  @id @default(autoincrement())
+  serviceProviderID                                                   Int?
+  companyID                                                           Int?
+  branchesID                                                          Int?
+  departmentName                                                      String?              @db.VarChar
+  branches                                                            Branches?            @relation(fields: [branchesID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  company                                                             Company?             @relation(fields: [companyID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  serviceProvider                                                     ServiceProvider?     @relation(fields: [serviceProviderID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  designations                                                        Designations[]
+  empCurrentPosition                                                  EmpCurrentPosition[]
+  empPromotion                                                        EmpPromotion[]
+  manageEmployees                                                     ManageEmployee[]     @relation("EmployeeDepartment")
+  empDepartment                                                       EmpDepartment[]      @relation("EmpDepartmentLink")
+  promotionRequest_promotionRequest_currentDepartmentIDTodepartments  PromotionRequest[]   @relation("promotionRequest_currentDepartmentIDTodepartments")
+  promotionRequest_promotionRequest_proposedDepartmentIDTodepartments PromotionRequest[]   @relation("promotionRequest_proposedDepartmentIDTodepartments")
+  roster                                                              Roster[]
+}
+
+model Designations {
+  id                                                                    Int                  @id @default(autoincrement())
+  serviceProviderID                                                     Int?
+  companyID                                                             Int?
+  branchesID                                                            Int?
+  designation                                                           String?              @db.VarChar
+  departmentID                                                          Int?
+  isManager                                                             Boolean?             @default(false)
+  maxHoursPerDay                                                        String?              @db.VarChar
+  nightShiftEligibility                                                 String?              @db.VarChar
+  noticePeriodDaysForResignation                                        String?              @db.VarChar
+  noticePeriodDaysForTermination                                        String?              @db.VarChar
+  shiftEligibility                                                      String?              @db.VarChar
+  weeklyOffPattern                                                      String?              @db.VarChar
+  otApplicable                                                          String?              @db.VarChar
+  branches                                                              Branches?            @relation(fields: [branchesID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  company                                                               Company?             @relation(fields: [companyID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  departments                                                           Departments?         @relation(fields: [departmentID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  serviceProvider                                                       ServiceProvider?     @relation(fields: [serviceProviderID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  empCurrentPosition                                                    EmpCurrentPosition[]
+  empDesignation                                                         EmpDesignation[]     @relation("EmpDesignationLink")
+  empPromotion                                                          EmpPromotion[]
+  manageEmployees                                                       ManageEmployee[]     @relation("EmployeeDesignation")
+  promotionRequest_promotionRequest_currentDesignationIDTodesignations  PromotionRequest[]   @relation("promotionRequest_currentDesignationIDTodesignations")
+  promotionRequest_promotionRequest_proposedDesignationIDTodesignations PromotionRequest[]   @relation("promotionRequest_proposedDesignationIDTodesignations")
+  roster                                                                Roster[]
+}
+
+model Devices {
+  id                 Int                  @id @default(autoincrement())
+  status             DeviceStatus         @default(Active)
+  serviceProviderID  Int?
+  companyID          Int?
+  branchesID         Int?
+  deviceName         String               @db.VarChar
+  deviceMake         String               @db.VarChar
+  deviceModel        String               @db.VarChar
+  deviceSN           String               @unique @db.VarChar
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+  deviceType         String?              @db.VarChar
+  attendanceLogs     AttendanceLogs[]
+  branches           Branches?            @relation(fields: [branchesID], references: [id], onUpdate: NoAction)
+  company            Company?             @relation(fields: [companyID], references: [id], onUpdate: NoAction)
+  serviceProvider    ServiceProvider?     @relation(fields: [serviceProviderID], references: [id], onUpdate: NoAction)
+  empDeviceMapping   EmpDeviceMapping[]
+  tokenDeviceMapping TokenDeviceMapping[]
+}
+
+model AttendanceLogs {
+  id        Int      @id @default(autoincrement())
+  deviceId  Int
+  deviceSN  String   @db.VarChar
+  userId    String   @db.VarChar
+  logTime   String   @db.VarChar
+  status    String   @default("0") @db.VarChar
+  workCode  String   @default("0") @db.VarChar
+  rawData   String
+  processed String   @default("0") @db.VarChar
+  createdAt DateTime @default(now())
+  device    Devices  @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+}
+
+model EmpAttendanceRegularise {
+  id                Int               @id @default(autoincrement())
+  serviceProviderID Int?
+  companyID         Int?
+  branchesID        Int?
+  manageEmployeeID  Int?
+  attendanceDate    DateTime?         @db.Date
+  day               String?
+  checkInTime       DateTime?         @db.Timestamp(6)
+  checkOutTime      DateTime?         @db.Timestamp(6)
+  actualStatus      AttendanceStatus?
+  requestedStatus   RegularizeAs?
+  reason            String?           @db.VarChar
+  remarks           String?           @db.VarChar
+  status            String?           @default("Pending") @db.VarChar
+  createdAt         DateTime?         @default(now())
+  updatedAt         DateTime?         @updatedAt
+  branches          Branches?         @relation(fields: [branchesID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  company           Company?          @relation(fields: [companyID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  manageEmployee    ManageEmployee?   @relation(fields: [manageEmployeeID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  serviceProvider   ServiceProvider?  @relation(fields: [serviceProviderID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([manageEmployeeID, attendanceDate], name: "unique_employee_date_regularise")
+}
+
+model EmpCurrentPosition {
+  id                        Int              @id @default(autoincrement())
+  serviceProviderID         Int?
+  companyID                 Int?
+  branchesID                Int?
+  manageEmployeeID          Int?
+  existingDepartmentID      Int?
+  existingDesignationID     Int?
+  existingMonthlyPayGradeID Int?
+  existingHourlyPayGradeID  Int?
+  existingSalaryCtc         Int?
+  existingEmploymentType    Int?
+  effectiveFrom             DateTime?        @db.Date
+  effectiveTo               DateTime?        @db.Date
+  createdAt                 DateTime?        @db.Timestamp(6)
+  branches                  Branches?        @relation(fields: [branchesID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  company                   Company?         @relation(fields: [companyID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  departments               Departments?     @relation(fields: [existingDepartmentID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  designations              Designations?    @relation(fields: [existingDesignationID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  hourlyPayGrade            HourlyPayGrade?  @relation(fields: [existingHourlyPayGradeID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  monthlyPayGrade           MonthlyPayGrade? @relation(fields: [existingMonthlyPayGradeID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  manageEmployee            ManageEmployee?  @relation(fields: [manageEmployeeID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  serviceProvider           ServiceProvider? @relation(fields: [serviceProviderID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model PromotionRequest {
+  id                                                                          Int              @id @default(autoincrement())
+  manageEmployeeID                                                            Int?
+  empID                                                                       String?          @db.VarChar
+  newDepartmentID                                                             Int?
+  newDesignationID                                                            Int?
+  newMonthlyPayGradeID                                                        Int?
+  newHourlyPayGradeID                                                         Int?
+  newSalaryCtc                                                                Int?
+  newEmploymentType                                                           Int?
+  newEmployementStatus                                                        String?          @db.VarChar
+  proposedDepartmentID                                                        Int?
+  proposedDesignationID                                                       Int?
+  proposedMonthlyPayGradeID                                                   Int?
+  proposedHourlyPayGradeID                                                    Int?
+  proposedSalaryCtc                                                           Int?
+  proposedEmploymentType                                                      Int?
+  description                                                                 String?          @db.VarChar
+  promotionDate                                                               DateTime?        @db.Date
+  status                                                                      String?          @db.VarChar
+  applied_at                                                                  DateTime?        @db.Timestamptz(6)
+  approved_at                                                                 DateTime?        @db.Timestamptz(6)
+  updated_at                                                                  DateTime?        @db.Timestamptz(6)
+  manageEmployee                                                              ManageEmployee?  @relation(fields: [manageEmployeeID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  departments_promotionRequest_currentDepartmentIDTodepartments               Departments?     @relation("promotionRequest_currentDepartmentIDTodepartments", fields: [newDepartmentID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  designations_promotionRequest_currentDesignationIDTodesignations            Designations?    @relation("promotionRequest_currentDesignationIDTodesignations", fields: [newDesignationID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  hourlyPayGrade_promotionRequest_currentHourlyPayGradeIDTohourlyPayGrade     HourlyPayGrade?  @relation("promotionRequest_currentHourlyPayGradeIDTohourlyPayGrade", fields: [newHourlyPayGradeID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  monthlyPayGrade_promotionRequest_currentMonthlyPayGradeIDTomonthlyPayGrade  MonthlyPayGrade? @relation("promotionRequest_currentMonthlyPayGradeIDTomonthlyPayGrade", fields: [newMonthlyPayGradeID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  departments_promotionRequest_proposedDepartmentIDTodepartments              Departments?     @relation("promotionRequest_proposedDepartmentIDTodepartments", fields: [proposedDepartmentID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  designations_promotionRequest_proposedDesignationIDTodesignations           Designations?    @relation("promotionRequest_proposedDesignationIDTodesignations", fields: [proposedDesignationID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  hourlyPayGrade_promotionRequest_proposedHourlyPayGradeIDTohourlyPayGrade    HourlyPayGrade?  @relation("promotionRequest_proposedHourlyPayGradeIDTohourlyPayGrade", fields: [proposedHourlyPayGradeID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  monthlyPayGrade_promotionRequest_proposedMonthlyPayGradeIDTomonthlyPayGrade MonthlyPayGrade? @relation("promotionRequest_proposedMonthlyPayGradeIDTomonthlyPayGrade", fields: [proposedMonthlyPayGradeID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model EmpAttendanceLogs {
+  id                Int      @id @default(autoincrement())
+  serviceProviderID Int
+  companyID         Int
+  branchesID        Int
+  deviceID          Int
+  employeeID        Int?
+  punchTimeStamp    String   @db.VarChar
+  latitude          Int?
+  longitude         Int?
+  googleMapLink     Int?
+  location          Int?
+  mobileDeviceID    Int?
+  mobileDeviceInfo  Int?
+  exported          Int      @default(0)
+  createdAt         DateTime @default(now())
+}
+
+model EmpFieldSiteAttendance {
+  id                Int              @id @default(autoincrement())
+  serviceProviderID Int?
+  companyID         Int?
+  branchesID        Int?
+  manageEmployeeID  Int?
+  siteName          String?          @db.VarChar
+  address           String?          @db.VarChar
+  latitude          String?          @db.VarChar
+  longitude         String?          @db.VarChar
+  fromDate          DateTime?
+  toDate            DateTime?
+  branches          Branches?        @relation(fields: [branchesID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  company           Company?         @relation(fields: [companyID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  manageEmployee    ManageEmployee?  @relation(fields: [manageEmployeeID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  serviceProvider   ServiceProvider? @relation(fields: [serviceProviderID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model GenarateBonus {
+  id                Int               @id @default(autoincrement())
+  serviceProviderID Int?
+  companyID         Int?
+  branchesID        Int?
+  manageEmployeeID  Int?
+  bonusSetupID      Int?
+  financialYear     Int?
+  salaryPeriod      Int?
+  bonusSetup        BonusSetup?       @relation(fields: [bonusSetupID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  branches          Branches?         @relation(fields: [branchesID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  company           Company?          @relation(fields: [companyID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  leaveApplication  leaveApplication? @relation(fields: [manageEmployeeID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  serviceProvider   ServiceProvider?  @relation(fields: [serviceProviderID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model HourlyPayGrade {
+  id                                                                         Int                  @id @default(autoincrement())
+  serviceProviderID                                                          Int?
+  companyID                                                                  Int?
+  branchesID                                                                 Int?
+  hourlyPayGradeName                                                         String?              @db.VarChar
+  hourlyRate                                                                 String?              @db.VarChar
+  empCurrentPosition                                                         EmpCurrentPosition[]
+  empPromotion                                                               EmpPromotion[]
+  branches                                                                   Branches?            @relation(fields: [branchesID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  company                                                                    Company?             @relation(fields: [companyID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  serviceProvider                                                            ServiceProvider?     @relation(fields: [serviceProviderID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  manageEmployees                                                            ManageEmployee[]     @relation("EmployeeHourlyPayGrade")
+  promotionRequest_promotionRequest_currentHourlyPayGradeIDTohourlyPayGrade  PromotionRequest[]   @relation("promotionRequest_currentHourlyPayGradeIDTohourlyPayGrade")
+  promotionRequest_promotionRequest_proposedHourlyPayGradeIDTohourlyPayGrade PromotionRequest[]   @relation("promotionRequest_proposedHourlyPayGradeIDTohourlyPayGrade")
+}
+
+model leaveApplication {
+  id                      Int                       @id @default(autoincrement())
+  serviceProviderID       Int?
+  companyID               Int?
+  branchesID              Int?
+  manageEmployeeID        Int?
+  remainingSickLeave      Int?
+  remainingCasualLeave    Int?
+  remainingEarnedLeave    Int?
+  dayStatuses             Json?
+  revokedAt               DateTime?
+  revokedReason           String?
+  appliedLeaveType        String?                   @db.VarChar
+  fromDate                DateTime?                 @db.Date
+  toDate                  DateTime?                 @db.Date
+  purpose                 String?                   @db.VarChar
+  status                  String?                   @default("Pending") @db.VarChar
+  genarateBonus           GenarateBonus[]
+  branches                Branches?                 @relation(fields: [branchesID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  company                 Company?                  @relation(fields: [companyID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  manageEmployee          ManageEmployee?           @relation(fields: [manageEmployeeID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  serviceProvider         ServiceProvider?          @relation(fields: [serviceProviderID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  leaveApplicationRequest leaveApplicationRequest[]
+}
+
+model leaveApplicationRequest {
+  id                     Int               @id @default(autoincrement())
+  serviceProviderID      Int?
+  companyID              Int?
+  branchesID             Int?
+  leaveApplicationID     Int?
+  leaveApplicationStatus String?           @db.VarChar
+  branches               Branches?         @relation(fields: [branchesID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  company                Company?          @relation(fields: [companyID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  leaveApplication       leaveApplication? @relation(fields: [leaveApplicationID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  serviceProvider        ServiceProvider?  @relation(fields: [serviceProviderID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model leavePolicy {
+  id                          Int                      @id @default(autoincrement())
+  serviceProviderID           Int?
+  companyID                   Int?
+  branchesID                  Int?
+  leavePolicyName             String?                  @db.VarChar
+  sickLeaveCount              String?                  @db.VarChar
+  casualLeaveCount            String?                  @db.VarChar
+  earnLeaveWorkingMonths      String?                  @db.VarChar
+  earnLeaveCount              Int?
+  isPrivilegedLeaveApplicable Boolean?                 @default(false)
+  privilegedLeaveRatio        String?                  @db.VarChar
+  weekOffConsideredInPL       Boolean?                 @default(false)
+  holidayConsideredInPL       Boolean?                 @default(false)
+  paidLeaveConsideredInPL     Boolean?                 @default(false)
+  plCarryForwardLimit         Int?                     @default(0)
+  lapseEncashmentDate         DateTime?                @db.Date
+  empPromotion                EmpPromotion[]
+  manageEmployees             ManageEmployee[]         @relation("EmployeeLeavePolicy")
+  empLeavePolicies            EmpLeavePolicy[]         @relation("EmpLeavePolicyLink")
+  branches                    Branches?                @relation(fields: [branchesID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  company                     Company?                 @relation(fields: [companyID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  serviceProvider             ServiceProvider?         @relation(fields: [serviceProviderID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  leavePolicyHoliday          leavePolicyHoliday[]
+  privilegedLeaveLedger       PrivilegedLeaveLedger[]
+  privilegedLeaveLapse        PrivilegedLeaveLapse[]
+}
+
+model leavePolicyHoliday {
+  id                Int              @id @default(autoincrement())
+  serviceProviderID Int?
+  companyID         Int?
+  branchesID        Int?
+  leavePolicyID     Int?
+  publicHolidayID   Int?
+  branches          Branches?        @relation(fields: [branchesID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  company           Company?         @relation(fields: [companyID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  leavePolicy       leavePolicy?     @relation(fields: [leavePolicyID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  publicHoliday     PublicHoliday?   @relation(fields: [publicHolidayID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  serviceProvider   ServiceProvider? @relation(fields: [serviceProviderID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model ManageEmployee {
+  id                             Int                       @id @default(autoincrement())
+  serviceProviderID              Int?
+  companyID                      Int?
+  branchesID                     Int?
+  employeeFirstName              String?                   @db.VarChar
+  employeeLastName               String?                   @db.VarChar
+  employeeID                     String?                   @db.VarChar
+  joiningDate                    String?                   @db.VarChar
+  contractorID                   Int?
+  businessPhoneNo                String?                   @db.VarChar
+  businessEmail                  String?                   @db.VarChar
+  personalPhoneNo                String?                   @db.VarChar
+  personalEmail                  String?                   @db.VarChar
+  emergancyContact               String?                   @db.VarChar
+  presentAddress                 String?                   @db.VarChar
+  permenantAddress               String?                   @db.VarChar
+  employeePhotoUrl               String?                   @db.VarChar
+  gender                         String?                   @db.VarChar
+  dateOfBirth                    String?                   @db.VarChar
+  bloodGroup                     String?                   @db.VarChar
+  maritalStatus                  String?                   @db.VarChar
+  employeeFatherName             String?                   @db.VarChar
+  employeeMotherName             String?                   @db.VarChar
+  employeeSpouseName             String?                   @db.VarChar
+  departmentNameID               Int?
+  designationID                  Int?
+  employmentType                 String?                   @db.VarChar
+  employmentStatus               String?                   @db.VarChar
+  probationPeriod                String?                   @db.VarChar
+  workShiftID                    Int?
+  attendancePolicyID             Int?
+  leavePolicyID                  Int?
+  salaryPayGradeType             String?                   @db.VarChar
+  monthlyPayGradeID              Int?
+  hourlyPayGradeID               Int?
+  empType                        String?                   @db.VarChar
+  exitDate                       DateTime?
+  isDeleted                      Boolean                   @default(false)
+  lifecycleStatus                EmployeeLifecycleStatus   @default(ACTIVE)
+  maxHoursPerDay                 String?                   @db.VarChar
+  nightShiftEligibility          String?                   @db.VarChar
+  noticePeriodDaysForResignation String?                   @db.VarChar
+  noticePeriodDaysForTermination String?                   @db.VarChar
+  pfMemberStatus                 String?                   @db.VarChar
+  pfNumber                       String?                   @db.VarChar
+  shiftEligibility               String?                   @db.VarChar
+  typeOfEmployee                 String?                   @db.VarChar
+  weeklyOffPattern               String?                   @db.VarChar
+  bonusAllocation                BonusAllocation[]
+  empAttendanceRegularise        EmpAttendanceRegularise[]
+  empCurrentPosition             EmpCurrentPosition[]
+  empDeviceMapping               EmpDeviceMapping[]
+  empEduQualification            EmpEduQualification[]
+  empFieldSiteAttendance         EmpFieldSiteAttendance[]
+  empProfExprience               EmpProfExprience[]
+  empDesignation                 EmpDesignation[]
+  empPromotion                   EmpPromotion[]
+  employeeCredentials            EmployeeCredentials?
+  terminations                   EmployeeTermination[]
+  generateSalary                 GenerateSalary[]
+  attendancePolicy               AttendancePolicy?         @relation("EmployeeAttendancePolicy", fields: [attendancePolicyID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  branches                       Branches?                 @relation(fields: [branchesID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  company                        Company?                  @relation(fields: [companyID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  contractors                    Contractors?              @relation(fields: [contractorID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  departments                    Departments?              @relation("EmployeeDepartment", fields: [departmentNameID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  designations                   Designations?             @relation("EmployeeDesignation", fields: [designationID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  hourlyPayGrade                 HourlyPayGrade?           @relation("EmployeeHourlyPayGrade", fields: [hourlyPayGradeID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  leavePolicy                    leavePolicy?              @relation("EmployeeLeavePolicy", fields: [leavePolicyID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  monthlyPayGrade                MonthlyPayGrade?          @relation("EmployeeMonthlyPayGrade", fields: [monthlyPayGradeID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  serviceProvider                ServiceProvider?          @relation(fields: [serviceProviderID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  workShift                      WorkShift?                @relation("EmployeeWorkShift", fields: [workShiftID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  overtime                       Overtime[]
+  promotionRequest               PromotionRequest[]
+  reimbursement                  Reimbursement[]
+  rosterEmployee                 RosterEmployee[]
+  salaryAdvance                  SalaryAdvance[]
+  tokenDeviceMapping             TokenDeviceMapping[]
+  employeeBankDetails            EmployeeBankDetails[]
+  leaveApplication               leaveApplication[]
+  employeeFieldHistory           EmployeeFieldHistory[]
+  employeeLinks                  EmployeeLink[]            @relation("EmployeeLinks")
+  linkedByEmployees              EmployeeLink[]            @relation("LinkedToEmployee")
+  privilegedLeaveLedger          PrivilegedLeaveLedger[]
+  employeeHolidayOverride        EmployeeHolidayOverride[]
+  employeeWeeklyOff              EmployeeWeeklyOff[]
+  privilegedLeaveLapse           PrivilegedLeaveLapse[]
+  empBranch                      EmpBranch[]
+  empDepartment                  EmpDepartment[]
+  empEmploymentType              EmpEmploymentType[]
+  empEmploymentStatus            EmpEmploymentStatus[]
+  empWorkShift                   EmpWorkShift[]
+  empAttendancePolicy            EmpAttendancePolicy[]
+  empLeavePolicy                 EmpLeavePolicy[]
+  empContractor                  EmpContractor[]
+}
+
+model EmployeeFieldHistory {
+  id               Int            @id @default(autoincrement())
+  employeeId       Int
+  fieldName        String         @db.VarChar
+  oldValue         String?        @db.VarChar
+  newValue         String?        @db.VarChar
+  oldLabel         String?        @db.VarChar
+  newLabel         String?        @db.VarChar
+  changedAt        DateTime       @default(now())
+  employee         ManageEmployee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@index([employeeId])
+  @@index([fieldName])
+}
+
+model EmployeeLink {
+  id               Int            @id @default(autoincrement())
+  employeeId       Int
+  linkedEmployeeId Int
+  employee         ManageEmployee @relation("EmployeeLinks", fields: [employeeId], references: [id], onDelete: Cascade)
+  linkedEmployee   ManageEmployee @relation("LinkedToEmployee", fields: [linkedEmployeeId], references: [id], onDelete: Cascade)
+
+  @@unique([employeeId, linkedEmployeeId])
+  @@index([employeeId])
+  @@index([linkedEmployeeId])
+}
+
+model EmployeeTermination {
+  id                Int            @id @default(autoincrement())
+  employeeId        Int
+  serviceProviderID Int
+  companyID         Int
+  branchesID        Int
+  exitType          ExitType
+  exitStatus        ExitStatus     @default(DRAFT)
+  reasonCategory    String?
+  reasonNote        String?
+  noticeDays        Int?
+  noticeStartDate   DateTime?
+  lastWorkingDay    DateTime?
+  resignationDate   DateTime?
+  approvalDate      DateTime?
+  disableLoginOn    DateTime?
+  isRehireEligible  Boolean        @default(true)
+  createdByUserId   Int?
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+  employee          ManageEmployee @relation(fields: [employeeId], references: [id])
+
+  @@index([serviceProviderID, companyID, branchesID])
+  @@index([employeeId, exitType])
+}
+
+model EmployeeCredentials {
+  id                Int              @id @default(autoincrement())
+  employeeID        Int              @unique
+  username          String           @unique @db.VarChar
+  password          String           @db.VarChar
+  serviceProviderID Int?
+  companyID         Int?
+  branchesID        Int?
+  isActive          Boolean          @default(true)
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  branches          Branches?        @relation(fields: [branchesID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  company           Company?         @relation(fields: [companyID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  employee          ManageEmployee   @relation(fields: [employeeID], references: [id], onDelete: Cascade)
+  serviceProvider   ServiceProvider? @relation(fields: [serviceProviderID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model EmployeeBankDetails {
+  id             Int            @id @default(autoincrement())
+  employeeID     Int
+  bankName       String?        @db.VarChar
+  bankBranchName String?        @db.VarChar
+  accNumber      String?        @db.VarChar
+  ifscCode       String?        @db.VarChar
+  upi            String?        @db.VarChar
+  employee       ManageEmployee @relation(fields: [employeeID], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@map("employee_bank_details")
+}
+
+model EmpPromotion {
+  id                 Int               @id @default(autoincrement())
+  manageEmployeeID   Int
+  serviceProviderID  Int?
+  companyID          Int?
+  branchesID         Int?
+  departmentNameID   Int?
+  designationID      Int?
+  managerID          Int?
+  employmentType     String?           @db.VarChar
+  employmentStatus   String?           @db.VarChar
+  probationPeriod    String?           @db.VarChar
+  workShiftID        Int?
+  attendancePolicyID Int?
+  leavePolicyID      Int?
+  salaryPayGradeType String?           @db.VarChar
+  monthlyPayGradeID  Int?
+  hourlyPayGradeID   Int?
+  promotedSalaryCtc  Int?
+  description        String?           @db.VarChar
+  promotionDate      DateTime?         @db.Date
+  status             String?           @db.VarChar
+  attendancePolicy   AttendancePolicy? @relation(fields: [attendancePolicyID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  branches           Branches?         @relation(fields: [branchesID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  company            Company?          @relation(fields: [companyID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  departments        Departments?      @relation(fields: [departmentNameID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  designations       Designations?     @relation(fields: [designationID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  hourlyPayGrade     HourlyPayGrade?   @relation(fields: [hourlyPayGradeID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  leavePolicy        leavePolicy?      @relation(fields: [leavePolicyID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  manageEmployee     ManageEmployee    @relation(fields: [manageEmployeeID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  monthlyPayGrade    MonthlyPayGrade?  @relation(fields: [monthlyPayGradeID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  serviceProvider    ServiceProvider?  @relation(fields: [serviceProviderID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  workShift          WorkShift?        @relation(fields: [workShiftID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([manageEmployeeID])
+}
+
+model EmpEduQualification {
+  id               Int             @id @default(autoincrement())
+  manageEmployeeID Int?
+  instituteType    String?         @db.VarChar
+  instituteName    String?         @db.VarChar
+  degree           String?         @db.VarChar
+  pasingYear       String?         @db.VarChar
+  marks            String?         @db.VarChar
+  gpaCgpa          String?         @db.VarChar
+  class            String?         @db.VarChar
+  manageEmployee   ManageEmployee? @relation(fields: [manageEmployeeID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([manageEmployeeID])
+}
+
+model EmpProfExprience {
+  id               Int             @id @default(autoincrement())
+  manageEmployeeID Int?
+  orgName          String?         @db.VarChar
+  designation      String?         @db.VarChar
+  fromDate         String?         @db.VarChar
+  toDate           String?         @db.VarChar
+  responsibility   String?         @db.VarChar
+  skill            String?         @db.VarChar
+  manageEmployee   ManageEmployee? @relation(fields: [manageEmployeeID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([manageEmployeeID])
+}
+
+model EmpDesignation {
+  id               Int             @id @default(autoincrement())
+  manageEmployeeID Int?
+  designationID    Int?
+  manageEmployee   ManageEmployee? @relation(fields: [manageEmployeeID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  designation      Designations?   @relation("EmpDesignationLink", fields: [designationID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([manageEmployeeID])
+  @@index([designationID])
+}
+
+model EmpBranch {
+  id               Int            @id @default(autoincrement())
+  manageEmployeeID Int
+  branchesID       Int
+  manageEmployee   ManageEmployee @relation(fields: [manageEmployeeID], references: [id], onDelete: Cascade)
+  branch           Branches       @relation(fields: [branchesID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([manageEmployeeID])
+}
+
+model EmpDepartment {
+  id               Int            @id @default(autoincrement())
+  manageEmployeeID Int
+  departmentNameID Int
+  manageEmployee   ManageEmployee @relation(fields: [manageEmployeeID], references: [id], onDelete: Cascade)
+  department       Departments    @relation("EmpDepartmentLink", fields: [departmentNameID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([manageEmployeeID])
+}
+
+model EmpEmploymentType {
+  id               Int            @id @default(autoincrement())
+  manageEmployeeID Int
+  employmentType   String         @db.VarChar
+  manageEmployee   ManageEmployee @relation(fields: [manageEmployeeID], references: [id], onDelete: Cascade)
+
+  @@index([manageEmployeeID])
+}
+
+model EmpEmploymentStatus {
+  id               Int            @id @default(autoincrement())
+  manageEmployeeID Int
+  employmentStatus String         @db.VarChar
+  probationPeriod  String?        @db.VarChar
+  manageEmployee   ManageEmployee @relation(fields: [manageEmployeeID], references: [id], onDelete: Cascade)
+
+  @@index([manageEmployeeID])
+}
+
+model EmpWorkShift {
+  id               Int            @id @default(autoincrement())
+  manageEmployeeID Int
+  workShiftID      Int
+  manageEmployee   ManageEmployee @relation(fields: [manageEmployeeID], references: [id], onDelete: Cascade)
+  workShift        WorkShift      @relation("EmpWorkShiftLink", fields: [workShiftID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([manageEmployeeID])
+}
+
+model EmpAttendancePolicy {
+  id                 Int              @id @default(autoincrement())
+  manageEmployeeID   Int
+  attendancePolicyID Int
+  manageEmployee     ManageEmployee   @relation(fields: [manageEmployeeID], references: [id], onDelete: Cascade)
+  attendancePolicy   AttendancePolicy @relation("EmpAttendancePolicyLink", fields: [attendancePolicyID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([manageEmployeeID])
+}
+
+model EmpLeavePolicy {
+  id               Int            @id @default(autoincrement())
+  manageEmployeeID Int
+  leavePolicyID    Int
+  manageEmployee   ManageEmployee @relation(fields: [manageEmployeeID], references: [id], onDelete: Cascade)
+  leavePolicy      leavePolicy    @relation("EmpLeavePolicyLink", fields: [leavePolicyID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([manageEmployeeID])
+}
+
+model EmpContractor {
+  id               Int            @id @default(autoincrement())
+  manageEmployeeID Int
+  contractorID     Int
+  manageEmployee   ManageEmployee @relation(fields: [manageEmployeeID], references: [id], onDelete: Cascade)
+  contractor       Contractors    @relation("EmpContractorLink", fields: [contractorID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([manageEmployeeID])
+}
+
+model EmpDeviceMapping {
+  id               Int             @id @default(autoincrement())
+  manageEmployeeID Int?
+  deviceID         Int
+  deviceEmpCode    String?         @db.VarChar
+  device           Devices         @relation(fields: [deviceID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  manageEmployee   ManageEmployee? @relation(fields: [manageEmployeeID], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([manageEmployeeID])
+  @@index([deviceID])
+}
+
+model TokenDeviceMapping {
+  id               Int             @id @default(autoincrement())
+  manageEmployeeID Int?
+  deviceID         Int?
+  deviceEmpCode    String?         @db.VarChar
+  device           Devices?        @relation(fields: [deviceID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  manageEmployee   ManageEmployee? @relation(fields: [manageEmployeeID], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([manageEmployeeID])
+  @@index([deviceID])
+}
+
+model ManageHoliday {
+  id                Int              @id @default(autoincrement())
+  serviceProviderID Int?
+  companyID         Int?
+  branchesID        Int?
+  holidayName       String?          @db.VarChar
+  monthPeriod       String?          @db.VarChar
+  branches          Branches?        @relation(fields: [branchesID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  company           Company?         @relation(fields: [companyID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  serviceProvider   ServiceProvider? @relation(fields: [serviceProviderID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  publicHoliday     PublicHoliday[]
+}
+
+model MonthlyPayGrade {
+  id                                                                           Int                            @id @default(autoincrement())
+  serviceProviderID                                                            Int?
+  companyID                                                                    Int?
+  branchesID                                                                   Int?
+  monthlyPayGradeName                                                          String?                        @db.VarChar
+  salType                                                                      String?                        @db.VarChar
+  grossSalary                                                                  String?                        @db.VarChar
+  percentageOfBasic                                                            String?                        @db.VarChar
+  basicSalary                                                                  Int?
+  miniOTTime                                                                   Int?
+  otRate                                                                       String?                        @db.VarChar
+  otStatus                                                                     Boolean?
+  payGradeType                                                                 String?                        @db.VarChar
+  empCurrentPosition                                                           EmpCurrentPosition[]
+  empPromotion                                                                 EmpPromotion[]
+  manageEmployees                                                              ManageEmployee[]               @relation("EmployeeMonthlyPayGrade")
+  branches                                                                     Branches?                      @relation(fields: [branchesID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  company                                                                      Company?                       @relation(fields: [companyID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  serviceProvider                                                              ServiceProvider?               @relation(fields: [serviceProviderID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  monthlyPayGradeAllowanceList                                                 MonthlyPayGradeAllowanceList[]
+  monthlyPayGradeDeductionList                                                 MonthlyPayGradeDeductionList[]
+  promotionRequest_promotionRequest_currentMonthlyPayGradeIDTomonthlyPayGrade  PromotionRequest[]             @relation("promotionRequest_currentMonthlyPayGradeIDTomonthlyPayGrade")
+  promotionRequest_promotionRequest_proposedMonthlyPayGradeIDTomonthlyPayGrade PromotionRequest[]             @relation("promotionRequest_proposedMonthlyPayGradeIDTomonthlyPayGrade")
+}
+
+model MonthlyPayGradeAllowanceList {
+  id                Int              @id @default(autoincrement())
+  monthlyPayGradeID Int?
+  salaryallowanceID Int?
+  monthlyPayGrade   MonthlyPayGrade? @relation(fields: [monthlyPayGradeID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  salaryAllowance   SalaryAllowance? @relation(fields: [salaryallowanceID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model MonthlyPayGradeDeductionList {
+  id                Int              @id @default(autoincrement())
+  salaryDeductionID Int?
+  monthlyPayGradeID Int?
+  monthlyPayGrade   MonthlyPayGrade? @relation(fields: [monthlyPayGradeID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  salaryDeduction   SalaryDeduction? @relation(fields: [salaryDeductionID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model PublicHoliday {
+  id                      Int                       @id @default(autoincrement())
+  serviceProviderID       Int?
+  companyID               Int?
+  branchesID              Int?
+  manageHolidayID         Int?
+  financialYear           String?                   @db.VarChar
+  startDate               DateTime?                 @db.Date
+  endDate                 DateTime?                 @db.Date
+  branches                Branches?                 @relation(fields: [branchesID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  company                 Company?                  @relation(fields: [companyID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  manageHoliday           ManageHoliday?            @relation(fields: [manageHolidayID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  serviceProvider         ServiceProvider?          @relation(fields: [serviceProviderID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  leavePolicyHoliday      leavePolicyHoliday[]
+  employeeHolidayOverride EmployeeHolidayOverride[]
+}
+
+model SalaryAllowance {
+  id                           Int                            @id @default(autoincrement())
+  serviceProviderID            Int?
+  companyID                    Int?
+  branchesID                   Int?
+  salaryAllowanceName          String?                        @db.VarChar
+  salaryAllowanceType          String?                        @db.VarChar
+  salaryAllowanceValue         String?                        @db.VarChar
+  salaryAllowanceMonthLimit    String?                        @db.VarChar
+  allowanceType                String?                        @db.VarChar
+  basedOn                      String?                        @db.VarChar
+  monthlyPayGradeAllowanceList MonthlyPayGradeAllowanceList[]
+  branches                     Branches?                      @relation(fields: [branchesID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  company                      Company?                       @relation(fields: [companyID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  serviceProvider              ServiceProvider?               @relation(fields: [serviceProviderID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model SalaryCycle {
+  id                Int              @id @default(autoincrement())
+  serviceProviderID Int?
+  companyID         Int?
+  branchesID        Int?
+  salaryCycleName   String?          @db.VarChar
+  monthStartDay     String?          @db.VarChar
+  branches          Branches?        @relation(fields: [branchesID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  company           Company?         @relation(fields: [companyID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  serviceProvider   ServiceProvider? @relation(fields: [serviceProviderID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model GenerateSalary {
+  id                Int              @id @default(autoincrement())
+  serviceProviderID Int?
+  companyID         Int?
+  branchesID        Int?
+  employeeID        Int
+  monthPeriod       String
+  paymentMode       String?
+  paymentType       String?
+  paymentDate       String?
+  paymentRemark     String?
+  paymentProof      String?
+  status            String?
+  branches          Branches?        @relation(fields: [branchesID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  company           Company?         @relation(fields: [companyID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  manageEmployee    ManageEmployee   @relation(fields: [employeeID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  serviceProvider   ServiceProvider? @relation(fields: [serviceProviderID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model SalaryDeduction {
+  id                           Int                            @id @default(autoincrement())
+  serviceProviderID            Int?
+  companyID                    Int?
+  branchesID                   Int?
+  salaryDeductionName          String?                        @db.VarChar
+  salaryDeductionType          String?                        @db.VarChar
+  salaryDeductionValue         String?                        @db.VarChar
+  salaryDeductionMonthLimit    String?                        @db.VarChar
+  basedOn                      String?                        @db.VarChar
+  monthlyPayGradeDeductionList MonthlyPayGradeDeductionList[]
+  branches                     Branches?                      @relation(fields: [branchesID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  company                      Company?                       @relation(fields: [companyID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  serviceProvider              ServiceProvider?               @relation(fields: [serviceProviderID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model ServiceProvider {
+  id                      Int                       @id @default(autoincrement())
+  companyName             String?                   @db.VarChar
+  companyAddress          String?                   @db.VarChar
+  country                 String?                   @db.VarChar
+  state                   String?                   @db.VarChar
+  gstNo                   String?                   @db.VarChar
+  contactNo               String?                   @db.VarChar
+  emailAdd                String?                   @db.VarChar
+  website                 String?                   @db.VarChar
+  companyLogoUrl          String?                   @db.VarChar
+  created_at              DateTime?                 @db.Timestamp(6)
+  updated_at              DateTime?                 @db.Timestamp(6)
+  attendancePolicy        AttendancePolicy[]
+  bankDetails             BankDetails[]
+  bonusSetup              BonusSetup[]
+  branches                Branches[]
+  company                 Company[]
+  contractors             Contractors[]
+  departments             Departments[]
+  designations            Designations[]
+  devices                 Devices[]
+  empAttendanceRegularise EmpAttendanceRegularise[]
+  empCurrentPosition      EmpCurrentPosition[]
+  empFieldSiteAttendance  EmpFieldSiteAttendance[]
+  empPromotion            EmpPromotion[]
+  employeeCredentials     EmployeeCredentials[]
+  genarateBonus           GenarateBonus[]
+  generateSalary          GenerateSalary[]
+  hourlyPayGrade          HourlyPayGrade[]
+  manageEmployee          ManageEmployee[]
+  manageHoliday           ManageHoliday[]
+  monthlyPayGrade         MonthlyPayGrade[]
+  publicHoliday           PublicHoliday[]
+  reimbursement           Reimbursement[]
+  roster                  Roster[]
+  salaryAdvance           SalaryAdvance[]
+  salaryAllowance         SalaryAllowance[]
+  salaryCycle             SalaryCycle[]
+  salaryDeduction         SalaryDeduction[]
+  user                    User[]
+  workShift               WorkShift[]
+  leaveApplication        leaveApplication[]
+  leaveApplicationRequest leaveApplicationRequest[]
+  leavePolicy             leavePolicy[]
+  leavePolicyHoliday      leavePolicyHoliday[]
+}
+
+model WorkShift {
+  id                Int              @id @default(autoincrement())
+  serviceProviderID Int?
+  companyID         Int?
+  branchesID        Int?
+  workShiftName     String?          @db.VarChar
+  isActive          String?          @db.VarChar
+  workShiftType     String?          @db.VarChar
+  isFlexible        Boolean?         @default(false)
+  isRotating        Boolean?         @default(false)
+  breakTimeMin      Int?             @default(0)
+  empPromotion      EmpPromotion[]
+  manageEmployees   ManageEmployee[] @relation("EmployeeWorkShift")
+  empWorkShifts     EmpWorkShift[]   @relation("EmpWorkShiftLink")
+  overtime          Overtime[]
+  rosterday         RosterDay[]
+  branches          Branches?        @relation(fields: [branchesID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  company           Company?         @relation(fields: [companyID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  serviceProvider   ServiceProvider? @relation(fields: [serviceProviderID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  workShiftDay      WorkShiftDay[]
+}
+
+model WorkShiftDay {
+  id           Int        @id @default(autoincrement())
+  workShiftID  Int?
+  weekDay      String?    @db.VarChar
+  weeklyOff    Boolean?
+  startTime    String?
+  endTime      String?
+  totalMinutes Int?
+  workShift    WorkShift? @relation(fields: [workShiftID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model CalendarDay {
+  id            Int            @id @default(autoincrement())
+  year          Int
+  month         Int
+  day           Int
+  isoDate       DateTime       @unique
+  weekday       String
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  holidayOnDays HolidayOnDay[]
+}
+
+model Holiday {
+  id            Int            @id @default(autoincrement())
+  name          String
+  slug          String         @unique
+  region        String?
+  type          String?
+  notes         String?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  holidayOnDays HolidayOnDay[]
+}
+
+model HolidayOnDay {
+  id            Int         @id @default(autoincrement())
+  calendarDayId Int
+  holidayId     Int
+  calendarDay   CalendarDay @relation(fields: [calendarDayId], references: [id])
+  holiday       Holiday     @relation(fields: [holidayId], references: [id])
+
+  @@unique([calendarDayId, holidayId])
+}
+
+model SalaryAdvance {
+  id                     Int                      @id @default(autoincrement())
+  serviceProviderID      Int?
+  companyID              Int?
+  branchesID             Int?
+  manageEmployeeID       Int?
+  previousAdvancesDue    String?
+  advanceAmount          String?
+  reason                 String?
+  status                 String?                  @default("Pending")
+  createdAt              DateTime                 @default(now())
+  updatedAt              DateTime                 @updatedAt
+  branches               Branches?                @relation(fields: [branchesID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  company                Company?                 @relation(fields: [companyID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  manageEmployee         ManageEmployee?          @relation(fields: [manageEmployeeID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  serviceProvider        ServiceProvider?         @relation(fields: [serviceProviderID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  salaryAdvanceRepayment SalaryAdvanceRepayment[]
+}
+
+model SalaryAdvanceRepayment {
+  id              Int           @id @default(autoincrement())
+  salaryAdvanceID Int
+  approvedAmount  String
+  startMonth      DateTime?
+  amount          String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  salaryAdvance   SalaryAdvance @relation(fields: [salaryAdvanceID], references: [id], onDelete: Cascade)
+}
+
+model Reimbursement {
+  id                Int                 @id @default(autoincrement())
+  serviceProviderID Int?
+  companyID         Int?
+  branchesID        Int?
+  manageEmployeeID  Int?
+  date              String?
+  reimbursementType String?
+  amount            String?
+  description       String?
+  status            String?             @default("Pending")
+  approvalType      String?
+  salaryPeriod      String?
+  voucherCode       String?
+  voucherDate       String?
+  paymentMode       String?
+  paymentType       String?
+  paymentDate       String?
+  paymentRemark     String?
+  paymentProof      String?
+  branches          Branches?           @relation(fields: [branchesID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  company           Company?            @relation(fields: [companyID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  manageEmployee    ManageEmployee?     @relation(fields: [manageEmployeeID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  serviceProvider   ServiceProvider?    @relation(fields: [serviceProviderID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  items             ReimbursementItem[]
+}
+
+model ReimbursementItem {
+  id                Int           @id @default(autoincrement())
+  reimbursementID   Int
+  reimbursementType String?
+  amount            String?
+  description       String?
+  reimbursement     Reimbursement @relation(fields: [reimbursementID], references: [id], onDelete: Cascade)
+}
+
+model User {
+  id                Int              @id @default(autoincrement())
+  username          String           @unique
+  passwordHash      String
+  role              UserRole         @default(EMPLOYEE)
+  serviceProviderID Int?
+  companyID         Int?
+  branchesID        Int?
+  isActive          Boolean          @default(true)
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  branches          Branches?        @relation(fields: [branchesID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  company           Company?         @relation(fields: [companyID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  serviceProvider   ServiceProvider? @relation(fields: [serviceProviderID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model Overtime {
+  id                Int            @id @default(autoincrement())
+  serviceProviderID Int
+  companyID         Int
+  branchesID        Int
+  employeeID        Int
+  workShiftID       Int
+  workDate          DateTime
+  shiftStartTime    DateTime
+  shiftEndTime      DateTime
+  punchOutTime      DateTime
+  otStartTime       DateTime
+  otEndTime         DateTime
+  otMinutes         Int
+  otHours           Float
+  otRate            String
+  status            OTStatus       @default(PENDING)
+  rejectionReason   String?
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+  employee          ManageEmployee @relation(fields: [employeeID], references: [id])
+  workShift         WorkShift      @relation(fields: [workShiftID], references: [id])
+
+  @@index([employeeID])
+  @@index([workDate])
+  @@index([status])
+}
+
+model Roster {
+  id                Int              @id @default(autoincrement())
+  serviceProviderID Int
+  companyID         Int
+  branchesID        Int
+  departmentID      Int
+  designationID     Int?
+  fromDate          DateTime
+  toDate            DateTime
+  rosterPeriod      String
+  status            String           @default("DRAFT")
+  createdBy         Int
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  branches          Branches         @relation(fields: [branchesID], references: [id])
+  company           Company          @relation(fields: [companyID], references: [id])
+  departments       Departments      @relation(fields: [departmentID], references: [id])
+  designations      Designations?    @relation(fields: [designationID], references: [id])
+  serviceProvider   ServiceProvider  @relation(fields: [serviceProviderID], references: [id])
+  employees         RosterEmployee[]
+}
+
+model RosterEmployee {
+  id             Int            @id @default(autoincrement())
+  rosterID       Int
+  employeeID     Int
+  days           RosterDay[]
+  manageEmployee ManageEmployee @relation(fields: [employeeID], references: [id])
+  roster         Roster         @relation(fields: [rosterID], references: [id])
+
+  @@unique([rosterID, employeeID])
+}
+
+model RosterDay {
+  id               Int            @id @default(autoincrement())
+  rosterEmployeeID Int
+  workDate         DateTime
+  workShiftID      Int?
+  dayType          String
+  leaveType        String?
+  isLocked         Boolean        @default(false)
+  rosterEmployee   RosterEmployee @relation(fields: [rosterEmployeeID], references: [id])
+  workShift        WorkShift?     @relation(fields: [workShiftID], references: [id])
+
+  @@unique([rosterEmployeeID, workDate])
+}
+
+model PFCompliance {
+  id                     Int       @id @default(autoincrement())
+  companyID              Int       @unique
+  epfThresholdCount      Int?      @default(20)
+  epfApplicable          Boolean?  @default(false)
+  voluntaryEnabled       Boolean?  @default(false)
+  wageCeiling            Int?      @default(15000)
+  basicValidationPercent Float?    @default(40)
+  compulsoryForAll       Boolean?  @default(false)
+  employeeRate           Float?    @default(12)
+  employerRate           Float?    @default(12)
+  epsRate                Float?    @default(8.33)
+  edliRate               Float?    @default(0.5)
+  adminChargeRate        Float?    @default(0.01)
+  edliMax                Int?      @default(75)
+  adminChargeMax         Int?      @default(2)
+  dueDate                Int?      @default(15)
+  createdAt              DateTime? @default(now())
+  updatedAt              DateTime? @updatedAt
+  company                Company   @relation(fields: [companyID], references: [id])
+}
+
+model ESICCompliance {
+  id                  Int      @id @default(autoincrement())
+  companyID           Int      @unique
+  esicThresholdCount  Int?     @default(10)
+  esicApplicable      Boolean? @default(false)
+  wageCeiling         Int?     @default(21000)
+  disabledWageCeiling Int?     @default(25000)
+  employeeRate        Float?   @default(0.75)
+  employerRate        Float?   @default(3.25)
+  dueDate             Int?     @default(15)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  company             Company  @relation(fields: [companyID], references: [id])
+}
+
+model PTCompliance {
+  id                       Int      @id @default(autoincrement())
+  companyID                Int
+  branchID                 Int
+  ptApplicable             Boolean? @default(false)
+  state                    String?
+  maxPTPersonPerYear       Int?     @default(2500)
+  monthlyDueDate           Int?     @default(15)
+  quarterlyDueDate         Int?     @default(15)
+  monthlyReturnThreshold   Int?     @default(20)
+  quarterlyReturnThreshold Int?     @default(19)
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+  branch                   Branches @relation(fields: [branchID], references: [id])
+  company                  Company  @relation(fields: [companyID], references: [id])
+  ptslab                   PTSlab[]
+
+  @@unique([companyID, branchID])
+}
+
+model PTSlab {
+  id               Int          @id @default(autoincrement())
+  ptComplianceID   Int
+  slabName         String?
+  monthlyGrossFrom Int?
+  monthlyGrossTo   Int?
+  amount           Int?
+  applicableMonths Json?
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+  ptCompliance     PTCompliance @relation(fields: [ptComplianceID], references: [id], onDelete: Cascade)
+}
+
+model essl_raw_attlog {
+  id           Int       @id @default(autoincrement())
+  device_sn    String
+  request_path String?
+  query_params String?
+  raw_body     String?
+  ip_address   String?
+  is_valid     Boolean?
+  created_at   DateTime? @default(now()) @db.Timestamp(6)
+  log_type     String?   @db.VarChar(20)
+  user_id      String?   @db.VarChar(20)
+  punch_time   String?   @db.VarChar(50)
+  export       Int?      @default(0)
+}
+
+model process_att_logs {
+  id                 Int       @id @default(autoincrement())
+  device_sn          String?   @db.VarChar(100)
+  user_id            String?   @db.VarChar(50)
+  username           String?   @db.VarChar(255)
+  punch_time         DateTime? @db.Timestamp(6)
+  company_name       String?   @db.VarChar(255)
+  branch_name        String?   @db.VarChar(255)
+  department_name    String?   @db.VarChar(255)
+  device_emp_code    String?   @db.VarChar(50)
+  manage_employee_id Int?
+  device_id          Int?
+  raw_body           String?
+  processed_at       DateTime? @default(now()) @db.Timestamp(6)
+  status             String?   @default("0") @db.VarChar(20)
+  device_name        String?   @db.VarChar(100)
+  device_type        String?   @db.VarChar(10)
+
+  @@index([device_sn], map: "idx_process_att_logs_device_sn")
+  @@index([processed_at], map: "idx_process_att_logs_processed_at")
+  @@index([punch_time], map: "idx_process_att_logs_punch_time")
+  @@index([user_id], map: "idx_process_att_logs_user_id")
+}
+
+model canteen_setup {
+  id                    Int      @id @default(autoincrement())
+  default_token_enabled Boolean  @default(false)
+  created_at            DateTime @default(now()) @db.Timestamp(6)
+  updated_at            DateTime @updatedAt @db.Timestamp(6)
+}
+
+model canteen_tr_logs {
+  id                 Int       @id @default(autoincrement())
+  device_sn          String?   @db.VarChar(100)
+  user_id            String?   @db.VarChar(50)
+  username           String?   @db.VarChar(255)
+  punch_time         DateTime? @db.Timestamp(6)
+  manage_employee_id Int?
+  device_id          Int?
+  default_token      Boolean   @default(false)
+  created_at         DateTime  @default(now()) @db.Timestamp(6)
+
+  @@index([user_id], map: "idx_canteen_tr_logs_user_id")
+  @@index([punch_time], map: "idx_canteen_tr_logs_punch_time")
+}
+
+model canteen_tv_logs {
+  id                 Int       @id @default(autoincrement())
+  device_sn          String?   @db.VarChar(100)
+  user_id            String?   @db.VarChar(50)
+  username           String?   @db.VarChar(255)
+  punch_time         DateTime? @db.Timestamp(6)
+  manage_employee_id Int?
+  device_id          Int?
+  default_token      Boolean   @default(false)
+  created_at         DateTime  @default(now()) @db.Timestamp(6)
+
+  @@index([user_id], map: "idx_canteen_tv_logs_user_id")
+  @@index([punch_time], map: "idx_canteen_tv_logs_punch_time")
+}
+
+model canteen_tv_not_logs {
+  id                 Int       @id @default(autoincrement())
+  device_sn          String?   @db.VarChar(100)
+  user_id            String?   @db.VarChar(50)
+  username           String?   @db.VarChar(255)
+  punch_time         DateTime? @db.Timestamp(6)
+  manage_employee_id Int?
+  device_id          Int?
+  default_token      Boolean   @default(false)
+  created_at         DateTime  @default(now()) @db.Timestamp(6)
+
+  @@index([user_id], map: "idx_canteen_tv_not_logs_user_id")
+  @@index([punch_time], map: "idx_canteen_tv_not_logs_punch_time")
+}
+
+enum DeviceStatus {
+  Active
+  Inactive
+}
+
+enum EmployeeLifecycleStatus {
+  ACTIVE
+  INACTIVE
+  EXITED
+}
+
+// === NEW LEAVE MANAGEMENT MODELS ===
+
+model PrivilegedLeaveLedger {
+  id                Int              @id @default(autoincrement())
+  serviceProviderID Int?
+  companyID         Int?
+  branchesID        Int?
+  employeeID        Int
+  leavePolicyID     Int
+  creditedLeaves    Float            @default(0)
+  usedLeaves        Float            @default(0)
+  balanceLeaves     Float            @default(0)
+  creditDate        DateTime         @db.Date
+  description       String?          @db.VarChar
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  manageEmployee    ManageEmployee   @relation(fields: [employeeID], references: [id], onDelete: Cascade)
+  leavePolicy       leavePolicy      @relation(fields: [leavePolicyID], references: [id], onDelete: Restrict)
+
+  @@index([employeeID])
+  @@index([leavePolicyID])
+  @@index([creditDate])
+}
+
+model EmployeeHolidayOverride {
+  id                Int              @id @default(autoincrement())
+  serviceProviderID Int?
+  companyID         Int?
+  branchesID        Int?
+  employeeID        Int
+  holidayId         Int
+  fromDate          DateTime         @db.Date
+  toDate            DateTime         @db.Date
+  reason            String?          @db.VarChar
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  manageEmployee    ManageEmployee   @relation(fields: [employeeID], references: [id], onDelete: Cascade)
+  publicHoliday     PublicHoliday    @relation(fields: [holidayId], references: [id], onDelete: Cascade)
+
+  @@index([employeeID])
+  @@index([holidayId])
+}
+
+model EmployeeWeeklyOff {
+  id                Int              @id @default(autoincrement())
+  serviceProviderID Int?
+  companyID         Int?
+  branchesID        Int?
+  employeeID        Int
+  date              DateTime         @db.Date
+  createdAt         DateTime         @default(now())
+  manageEmployee    ManageEmployee   @relation(fields: [employeeID], references: [id], onDelete: Cascade)
+
+  @@index([employeeID])
+  @@index([date])
+}
+
+model PrivilegedLeaveLapse {
+  id                Int              @id @default(autoincrement())
+  serviceProviderID Int?
+  companyID         Int?
+  branchesID        Int?
+  employeeID        Int
+  leavePolicyID     Int
+  leaveCount        Float            @default(0)
+  lapseDate         DateTime         @db.Date
+  reason            String?          @db.VarChar
+  createdAt         DateTime         @default(now())
+  manageEmployee    ManageEmployee   @relation(fields: [employeeID], references: [id], onDelete: Cascade)
+  leavePolicy       leavePolicy      @relation(fields: [leavePolicyID], references: [id], onDelete: Restrict)
+
+  @@index([employeeID])
+  @@index([leavePolicyID])
+  @@index([lapseDate])
+}
+
+// === ENUMS ===
+
+enum LeaveType {
+  SL
+  CL
+  PL
+  LOP
+}
+
+enum LeaveStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum ExitType {
+  RESIGNATION
+  TERMINATION
+  RETRENCHMENT
+  RETIREMENT
+  DEATH
+  ABSCONDING
+  CONTRACT_END
+}
+
+enum ExitStatus {
+  DRAFT
+  NOTICE_RUNNING
+  APPROVED
+  WITHDRAWN
+  CANCELLED
+  FINAL_SETTLED
+}
+
+enum UserRole {
+  SUPERADMIN
+  ADMIN
+  MANAGER
+  EXECUTIVE
+  EMPLOYEE
+}
+
+enum OTStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum AttendanceStatus {
+  LATE
+  HALFDAY
+  FULLDAY
+  ABSENT
+  LOP
+  WEEKOFF
+}
+
+enum RegularizeAs {
+  PRESENT
+  SL
+  CL
+  PL
+  LOP
+  WEEKOFF
+}

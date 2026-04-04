@@ -1,0 +1,4066 @@
+"use client";
+
+import { useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
+import { Button } from "../components/ui/button";
+import { Input } from "../components/ui/input";
+import { Label } from "../components/ui/label";
+import { Textarea } from "../components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../components/ui/select";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "../components/ui/table";
+import { Badge } from "../components/ui/badge";
+import { Icon } from "@iconify/react";
+import { Plus, Search, Edit, Trash2, Eye, X, Save, History } from "lucide-react";
+import { useCurrentUser } from "../hooks/useCurrentUser";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "../components/ui/dialog";
+
+/* =========================
+   Types aligned to backend
+   ========================= */
+type ID = number;
+
+interface SP { id: ID; companyName?: string | null; }
+interface CO { id: ID; companyName?: string | null; serviceProviderID?: ID | null; branchesID?: ID | null; }
+interface BR { id: ID; branchName?: string | null; companyID?: ID | null; branchesID?: ID | null; serviceProviderID?: ID | null; }
+interface Device { id: ID; deviceName?: string | null; companyID?: ID | null; branchesID?: ID | null; deviceType?: string | null; }
+interface MonthlyPG { id: ID; monthlyPayGradeName?: string | null; companyID?: ID | null; branchesID?: ID | null; }
+interface HourlyPG { id: ID; hourlyPayGradeName?: string | null; }
+
+
+type PromotionForm = {
+  id?: number;
+  departmentNameID: number | null;
+  designationID: number | null;
+  managerID: number | null;
+  employmentType: string;
+  employmentStatus: string;
+  probationPeriod: string;
+  workShiftID: number | null;
+  attendancePolicyID: number | null;
+  leavePolicyID: number | null;
+  salaryPayGradeType: string;
+  monthlyPayGradeID: number | null;
+  hourlyPayGradeID: number | null;
+};
+
+interface EduRead {
+  id: ID;
+  instituteType?: string | null;
+  instituteName?: string | null;
+  degree?: string | null;
+  pasingYear?: string | null;
+  marks?: string | null;
+  gpaCgpa?: string | null;
+  class?: string | null;
+}
+interface ExpRead {
+  id: ID;
+  orgName?: string | null;
+  designation?: string | null;
+  fromDate?: string | null;
+  toDate?: string | null;
+  responsibility?: string | null;
+  skill?: string | null;
+}
+interface DevMapRead {
+  id: ID;
+  manageEmployeeID?: number | null;
+  deviceName?: string | null;
+  deviceID?: number | null;
+  deviceEmpCode?: string | null;
+  device?: { id: ID; deviceName?: string | null; deviceType?: 'AT' | 'TR' | 'TV' } | null;
+  deviceType?: 'AT' | 'TR' | 'TV'; 
+}
+
+
+type DevMapForm = {
+  id?: ID;
+  _localId: string;
+  deviceID: string;
+  deviceEmpCode: string;
+  deviceName?: string;
+  deviceType?: string;
+  _devAutocomplete?: string;
+};
+
+type TokenDevMapForm = {
+  id?: ID;
+  _localId: string;
+  deviceID: string;
+  deviceEmpCode: string;
+  deviceName?: string;
+  deviceType: string; // 'TR' or 'TV'
+  _devAutocomplete?: string;
+};
+
+type BankDetailsForm = {
+  id?: ID;
+  _localId: string;
+  bankName: string;
+  bankBranchName: string;
+  accNumber: string;
+  ifscCode: string;
+  upi: string;
+};
+
+interface BankDetailsRead {
+  id: ID;
+  bankName?: string | null;
+  bankBranchName?: string | null;
+  accNumber?: string | null;
+  ifscCode?: string | null;
+  upi?: string | null;
+}
+
+interface ManageEmpRead {
+  id: ID;
+  // FKs
+  serviceProviderID?: ID | null;
+  companyID?: ID | null;
+  branchesID?: ID | null;
+  contractorID?: ID | null;
+
+  // Scalars
+  employeeFirstName?: string | null;
+  employeeLastName?: string | null;
+  deviceEmpCode?: string | null;
+  employeeID?: string | null;
+  joiningDate?: string | null;
+
+  empType?: string | null;
+  pfMemberStatus?: string | null;
+  pfNumber?: string | null;
+
+  // Basic position fields (now stored directly on ManageEmployee)
+  departmentNameID?: ID | null;
+  designationID?: ID | null;
+  managerID?: ID | null;
+  employmentType?: string | null;
+  employmentStatus?: string | null;
+  probationPeriod?: string | null;
+  workShiftID?: ID | null;
+  attendancePolicyID?: ID | null;
+  leavePolicyID?: ID | null;
+  salaryPayGradeType?: string | null;
+  monthlyPayGradeID?: ID | null;
+  hourlyPayGradeID?: ID | null;
+
+  shiftEligibility?: string | null;
+  nightShiftEligibility?: string | null;
+  maxHoursPerDay?: string | null;
+  weeklyOffPattern?: string | null;
+  noticePeriodDaysForResignation?: string | null;
+  noticePeriodDaysForTermination?: string | null;
+
+  typeOfEmployee?: string | null;
+
+  businessPhoneNo?: string | null;
+  businessEmail?: string | null;
+  personalPhoneNo?: string | null;
+  personalEmail?: string | null;
+  emergancyContact?: string | null;
+  presentAddress?: string | null;
+  permenantAddress?: string | null;
+  employeePhotoUrl?: string | null;
+
+  gender?: string | null;
+  dateOfBirth?: string | null;
+  bloodGroup?: string | null;
+  maritalStatus?: string | null;
+  employeeFatherName?: string | null;
+  employeeMotherName?: string | null;
+  employeeSpouseName?: string | null;
+
+  // Relations for display
+  serviceProvider?: { id: ID; companyName?: string | null } | null;
+  contractor?: { id: ID; contractorName?: string | null } | null;
+  company?: { id: ID; companyName?: string | null } | null;
+  branches?: { id: ID; branchName?: string | null } | null;
+
+  // Basic position relations
+  departments?: { id: ID; departmentName?: string | null } | null;
+  designations?: { id: ID; designation?: string | null } | null;
+  manager?: { id: ID; employeeFirstName?: string | null; employeeLastName?: string | null } | null;
+  workShift?: { id: ID; workShiftName?: string | null } | null;
+  attendancePolicy?: { id: ID; attendancePolicyName?: string | null } | null;
+  leavePolicy?: { id: ID; leavePolicyName?: string | null } | null;
+  monthlyPayGrade?: { id: ID; monthlyPayGradeName?: string | null } | null;
+  hourlyPayGrade?: { id: ID; hourlyPayGradeName?: string | null } | null;
+
+  // Nested arrays
+  empEduQualification?: EduRead[];
+  empProfExprience?: ExpRead[];
+  empDeviceMapping?: DevMapRead[];
+  tokenDeviceMapping?: DevMapRead[];
+  bankDetails?: BankDetailsRead[];
+  employeeBankDetails?: BankDetailsRead[];
+
+  createdAt?: string | null;
+
+  // Optional denormalized:
+  serviceProviderName?: string | null;
+  contractorName?: string | null;
+  companyName?: string | null;
+  branchName?: string | null;
+}
+
+/* =========================
+   Config & helpers
+   ========================= */
+const API = {
+  manageEmp: "http://localhost:8000/manage-emp",
+  serviceProviders: "http://localhost:8000/service-provider",
+  companies: "http://localhost:8000/company",
+  branches: "http://localhost:8000/branches",
+  upload: "http://localhost:8000/files/upload",
+
+  // NEW:
+  departments: "http://localhost:8000/departments",
+  designations: "http://localhost:8000/designations",
+  employees: "http://localhost:8000/manage-emp",
+  contractors: "http://localhost:8000/contractors",
+  workShifts: "http://localhost:8000/work-shift",
+  attendancePolicies: "http://localhost:8000/attendance-policy",
+  leavePolicies: "http://localhost:8000/leave-policy",
+  devices: "http://localhost:8000/devices",
+  monthlyGrades: "http://localhost:8000/monthly-pay-grade",
+  hourlyGrades: "http://localhost:8000/hourly-grade",
+};
+
+const MIN_CHARS = 1;
+const DEBOUNCE_MS = 250;
+
+async function fetchJSONSafe<T>(url: string, signal?: AbortSignal): Promise<T> {
+  const res = await fetch(url, { signal });
+  if (!res.ok) {
+    throw new Error(`${res.status} ${res.statusText} @ ${url}`);
+  }
+  const raw = await res.json();
+  return (raw?.data ?? raw) as T;
+}
+
+async function fetchFirstById<T extends { id: number }>(url: string, id?: number | null) {
+  if (!id) return null;
+  try {
+    const list = await fetchJSONSafe<T[]>(url);
+    return (list || []).find((x) => x.id === id) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+async function resolveLabelsForEdit(
+  r: ManageEmpRead,
+  setFormData: Dispatch<SetStateAction<any>>
+) {
+  const contractorId = (r as any)?.contractorID ?? (r as any)?.contractor?.id ?? null;
+  const results = await Promise.allSettled([
+    fetchFirstById<{ id: ID; departmentName?: string | null }>(API.departments, r.departmentNameID),
+    fetchFirstById<{ id: ID; designation?: string | null }>(API.designations, r.designationID),
+    fetchFirstById<{ id: ID; workShiftName?: string | null }>(API.workShifts, r.workShiftID),
+    fetchFirstById<{ id: ID; attendancePolicyName?: string | null }>(API.attendancePolicies, r.attendancePolicyID),
+    fetchFirstById<{ id: ID; leavePolicyName?: string | null }>(API.leavePolicies, r.leavePolicyID),
+    fetchJSONSafe<any[]>(API.devices),
+    fetchFirstById<{ id: ID; contractorName?: string | null }>(API.contractors, contractorId),
+  ]);
+
+  const get = <T,>(i: number, fallback: T | null = null): T | null =>
+    results[i].status === "fulfilled" ? (results[i] as PromiseFulfilledResult<any>).value as T : fallback;
+
+  const dept = get<{ departmentName?: string | null }>(0);
+  const desg = get<{ designation?: string | null }>(1);
+  const ws = get<{ workShiftName?: string | null }>(2);
+  const ap = get<{ attendancePolicyName?: string | null }>(3);
+  const lp = get<{ leavePolicyName?: string | null }>(4);
+  const devicesList = get<any[]>(5, []) || [];
+  const contractor = get<{ id: ID; contractorName?: string | null }>(6);
+
+  setFormData((prev: any) => {
+    const devMapForm = (prev.devMapForm || []).map((d: any) => {
+      if (d.deviceName) return d;
+      const match = devicesList.find((dv) => dv.id === Number(d.deviceID));
+      return {
+        ...d,
+        deviceName: match?.deviceName ?? "",
+        _devAutocomplete: match?.deviceName ?? "",
+        deviceEmpCode: d.deviceEmpCode ?? "",
+      };
+    });
+
+    return {
+      ...prev,
+      deptAutocomplete: dept?.departmentName ?? prev.deptAutocomplete,
+      contractorID: contractor?.id ?? prev.contractorID,
+      contrAutocomplete: contractor?.contractorName ?? prev.contrAutocomplete,
+      desgAutocomplete: desg?.designation ?? prev.desgAutocomplete,
+      wsAutocomplete: ws?.workShiftName ?? prev.wsAutocomplete,
+      apAutocomplete: ap?.attendancePolicyName ?? prev.apAutocomplete,
+      lpAutocomplete: lp?.leavePolicyName ?? prev.lpAutocomplete,
+      devMapForm,
+      // Sync multi-entry form autocompletes
+      empDepartmentForm: (prev.empDepartmentForm || []).map((entry: any, i: number, arr: any[]) =>
+        i === arr.length - 1 ? { ...entry, _deptAutocomplete: dept?.departmentName ?? entry._deptAutocomplete } : entry),
+      empWorkShiftForm: (prev.empWorkShiftForm || []).map((entry: any, i: number, arr: any[]) =>
+        i === arr.length - 1 ? { ...entry, _wsAutocomplete: ws?.workShiftName ?? entry._wsAutocomplete } : entry),
+      empAttendancePolicyForm: (prev.empAttendancePolicyForm || []).map((entry: any, i: number, arr: any[]) =>
+        i === arr.length - 1 ? { ...entry, _apAutocomplete: ap?.attendancePolicyName ?? entry._apAutocomplete } : entry),
+      empLeavePolicyForm: (prev.empLeavePolicyForm || []).map((entry: any, i: number, arr: any[]) =>
+        i === arr.length - 1 ? { ...entry, _lpAutocomplete: lp?.leavePolicyName ?? entry._lpAutocomplete } : entry),
+      empContractorForm: (prev.empContractorForm || []).map((entry: any, i: number, arr: any[]) =>
+        i === arr.length - 1 ? { ...entry, _contrAutocomplete: contractor?.contractorName ?? entry._contrAutocomplete } : entry),
+    };
+  });
+}
+
+const uid = () => Math.random().toString(36).slice(2, 10);
+
+/* =========================
+   Component
+   ========================= */
+export function ManageEmployeesManagement() {
+  // Data
+  const [rows, setRows] = useState<ManageEmpRead[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const user = useCurrentUser();
+  const canManage = user?.role === "SUPERADMIN" || user?.role === "MANAGER";
+  const isEmployee = user?.role === "EMPLOYEE";
+
+  // UI
+  const [searchTerm, setSearchTerm] = useState("");
+  const [isAddingNew, setIsAddingNew] = useState(false);
+  const [isViewing, setIsViewing] = useState(false);
+  const [editingRow, setEditingRow] = useState<ManageEmpRead | null>(null);
+  const [viewRow, setViewRow] = useState<ManageEmpRead | null>(null);
+
+  // Quick-add dialog states
+  const [quickAddOpen, setQuickAddOpen] = useState<string | null>(null);
+  const [quickAddValue, setQuickAddValue] = useState("");
+  const [quickAddSaving, setQuickAddSaving] = useState(false);
+  const [quickAddSuggestions, setQuickAddSuggestions] = useState<any[]>([]);
+  const [quickAddSearching, setQuickAddSearching] = useState(false);
+  const quickAddSearchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // History dialog
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [historyData, setHistoryData] = useState<any[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyEmployee, setHistoryEmployee] = useState<ManageEmpRead | null>(null);
+
+  // Suggestion states/refs (SP/CO/BR)
+  const spRef = useRef<HTMLDivElement>(null);
+  const coRef = useRef<HTMLDivElement>(null);
+  const brRef = useRef<HTMLDivElement>(null);
+
+  const monthlyPGRef = useRef<HTMLDivElement>(null);
+  const hourlyPGRef = useRef<HTMLDivElement>(null);
+
+  const [spList, setSpList] = useState<SP[]>([]);
+  const [coList, setCoList] = useState<CO[]>([]);
+  const [brList, setBrList] = useState<BR[]>([]);
+  const [monthlyPGList, setMonthlyPGList] = useState<MonthlyPG[]>([]);
+  const [hourlyPGList, setHourlyPGList] = useState<HourlyPG[]>([]);
+
+  const [spLoading, setSpLoading] = useState(false);
+  const [coLoading, setCoLoading] = useState(false);
+  const [brLoading, setBrLoading] = useState(false);
+  const [monthlyPGLoading, setMonthlyPGLoading] = useState(false);
+  const [hourlyPGLoading, setHourlyPGLoading] = useState(false);
+
+  const spAbortRef = useRef<AbortController | null>(null);
+  const coAbortRef = useRef<AbortController | null>(null);
+  const brAbortRef = useRef<AbortController | null>(null);
+  const monthlyPGAbortRef = useRef<AbortController | null>(null);
+  const hourlyPGAbortRef = useRef<AbortController | null>(null);
+
+  const spTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const coTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const brTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const monthlyPGTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const hourlyPGTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+
+
+  // Photo upload
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+
+  // refs/lists/loaders for device suggestions
+  const devRef = useRef<HTMLDivElement>(null);
+  const [devList, setDevList] = useState<Device[]>([]);
+  const [devLoading, setDevLoading] = useState(false);
+  const devAbortRef = useRef<AbortController | null>(null);
+  const devTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Nested repeaters form types
+  type EduForm = {
+    id?: ID;
+    _localId: string;
+    instituteType: string;
+    instituteName: string;
+    degree: string;
+    pasingYear: string;
+    marks: string;
+    gpaCgpa: string;
+    class: string;
+  };
+  type ExpForm = {
+    id?: ID;
+    _localId: string;
+    orgName: string;
+    designation: string;
+    fromDate: string;
+    toDate: string;
+    responsibility: string;
+    skill: string;
+  };
+  type DevMapForm = {
+    id?: ID;
+    _localId: string;
+    deviceID: string;
+    deviceEmpCode: string;
+    deviceName?: string;
+    deviceType?: string;
+    _devAutocomplete?: string;
+  };
+  type BankDetailsForm = {
+    id?: ID;
+    _localId: string;
+    bankName: string;
+    bankBranchName: string;
+    accNumber: string;
+    ifscCode: string;
+    upi: string;
+  };
+  type EmpDesignationForm = {
+    id?: ID;
+    _localId: string;
+    designationID: ID | null;
+    _desgAutocomplete: string;
+  };
+  type EmpDepartmentForm = {
+    id?: ID;
+    _localId: string;
+    departmentNameID: ID | null;
+    _deptAutocomplete: string;
+  };
+  type EmpBranchForm = {
+    id?: ID;
+    _localId: string;
+    branchesID: ID | null;
+    _brAutocomplete: string;
+  };
+  type EmpEmploymentTypeForm = {
+    id?: ID;
+    _localId: string;
+    employmentType: string;
+  };
+  type EmpEmploymentStatusForm = {
+    id?: ID;
+    _localId: string;
+    employmentStatus: string;
+    probationPeriod: string;
+  };
+  type EmpWorkShiftForm = {
+    id?: ID;
+    _localId: string;
+    workShiftID: ID | null;
+    _wsAutocomplete: string;
+  };
+  type EmpLeavePolicyForm = {
+    id?: ID;
+    _localId: string;
+    leavePolicyID: ID | null;
+    _lpAutocomplete: string;
+  };
+  type EmpAttendancePolicyForm = {
+    id?: ID;
+    _localId: string;
+    attendancePolicyID: ID | null;
+    _apAutocomplete: string;
+  };
+  type EmpContractorForm = {
+    id?: ID;
+    _localId: string;
+    contractorID: ID | null;
+    _contrAutocomplete: string;
+  };
+
+  // Track original child IDs to compute deletions on PATCH
+  const [originalEduIds, setOriginalEduIds] = useState<ID[]>([]);
+  const [originalExpIds, setOriginalExpIds] = useState<ID[]>([]);
+  const [originalDevMapIds, setOriginalDevMapIds] = useState<ID[]>([]);
+  const [originalBankDetailIds, setOriginalBankDetailIds] = useState<ID[]>([]);
+  const [originalEmpDesignationIds, setOriginalEmpDesignationIds] = useState<ID[]>([]);
+  const [originalEmpBranchIds, setOriginalEmpBranchIds] = useState<ID[]>([]);
+  const [originalEmpDepartmentIds, setOriginalEmpDepartmentIds] = useState<ID[]>([]);
+  const [originalEmpEmploymentTypeIds, setOriginalEmpEmploymentTypeIds] = useState<ID[]>([]);
+  const [originalEmpEmploymentStatusIds, setOriginalEmpEmploymentStatusIds] = useState<ID[]>([]);
+  const [originalEmpWorkShiftIds, setOriginalEmpWorkShiftIds] = useState<ID[]>([]);
+  const [originalEmpAttendancePolicyIds, setOriginalEmpAttendancePolicyIds] = useState<ID[]>([]);
+  const [originalEmpLeavePolicyIds, setOriginalEmpLeavePolicyIds] = useState<ID[]>([]);
+  const [originalEmpContractorIds, setOriginalEmpContractorIds] = useState<ID[]>([]);
+  // For Token Device Mapping
+  // For Token Device Mapping
+  const [tokenDevMapForm, setTokenDevMapForm] = useState<TokenDevMapForm[]>([]);
+  const [originalTokenDevMapIds, setOriginalTokenDevMapIds] = useState<ID[]>([]);
+  const [tokenDevList, setTokenDevList] = useState<Device[]>([]);
+  const [tokenDevLoading, setTokenDevLoading] = useState(false);
+  const tokenDevAbortRef = useRef<AbortController | null>(null);
+  const tokenDevTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const tokenDevRef = useRef<HTMLDivElement>(null); // Add this line
+
+  // Linked Employees state
+  const [linkedEmployees, setLinkedEmployees] = useState<{ id: ID; employeeFirstName?: string | null; employeeLastName?: string | null; employeeID?: string | null }[]>([]);
+  const [linkedEmpSearch, setLinkedEmpSearch] = useState("");
+  const [linkedEmpSuggestions, setLinkedEmpSuggestions] = useState<Mgr[]>([]);
+  const [linkedEmpLoading, setLinkedEmpLoading] = useState(false);
+  const linkedEmpRef = useRef<HTMLDivElement>(null);
+  const linkedEmpAbortRef = useRef<AbortController | null>(null);
+  const linkedEmpTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const runFetchLinkedEmpSuggestions = (q: string) => {
+    if (linkedEmpTimerRef.current) clearTimeout(linkedEmpTimerRef.current);
+    linkedEmpTimerRef.current = setTimeout(async () => {
+      if (!formData.companyID) {
+        setLinkedEmpSuggestions([]);
+        return;
+      }
+      linkedEmpAbortRef.current?.abort();
+      const ctrl = new AbortController();
+      linkedEmpAbortRef.current = ctrl;
+      setLinkedEmpLoading(true);
+      try {
+        let all = await fetchJSONSafe<Mgr[]>(API.employees, ctrl.signal);
+        all = all.filter(e => e.companyID === formData.companyID);
+        // Exclude already linked employees and the current employee being edited
+        const excludeIds = new Set(linkedEmployees.map(le => le.id));
+        if (editingRow) excludeIds.add(editingRow.id);
+        all = all.filter(e => !excludeIds.has(e.id));
+        const ql = q.trim().toLowerCase();
+        const filtered = ql.length >= MIN_CHARS
+          ? all.filter(m => {
+              const name = `${m.employeeFirstName ?? ""} ${m.employeeLastName ?? ""}`.trim().toLowerCase();
+              return name.includes(ql);
+            })
+          : all;
+        setLinkedEmpSuggestions(filtered.slice(0, 20));
+      } catch (e) {
+        if ((e as any)?.name !== "AbortError") console.error("Linked emp fetch error:", e);
+      } finally {
+        setLinkedEmpLoading(false);
+      }
+    }, DEBOUNCE_MS);
+  };
+
+  const addLinkedEmployee = (emp: Mgr) => {
+    if (!linkedEmployees.find(le => le.id === emp.id)) {
+      setLinkedEmployees(prev => [...prev, { id: emp.id, employeeFirstName: emp.employeeFirstName, employeeLastName: emp.employeeLastName }]);
+    }
+    setLinkedEmpSearch("");
+    setLinkedEmpSuggestions([]);
+  };
+
+  const removeLinkedEmployee = (id: ID) => {
+    setLinkedEmployees(prev => prev.filter(le => le.id !== id));
+  };
+
+  const [currentUserMapping, setCurrentUserMapping] = useState<any>(null);
+
+  useEffect(() => {
+    if (user?.role !== "MANAGER") return;
+
+    (async () => {
+      const res = await fetch("http://localhost:8000/users");
+      const list = await res.json();
+      const me = list.find((u: any) => u.username === user.username);
+      setCurrentUserMapping(me || null);
+    })();
+  }, [user]);
+
+  useEffect(() => {
+    if (user?.role === "MANAGER" && currentUserMapping) {
+      setFormData(p => ({
+        ...p,
+        serviceProviderID: currentUserMapping.serviceProviderID,
+        companyID: currentUserMapping.companyID,
+        branchesID: null,
+        coAutocomplete: currentUserMapping.companyName ?? "",
+        brAutocomplete: "",
+      }));
+    }
+  }, [user, currentUserMapping]);
+
+  // Form State
+  const [formData, setFormData] = useState({
+    // foreign keys + typed names for suggestions
+    serviceProviderID: null as ID | null,
+    companyID: null as ID | null,
+    branchesID: null as ID | null,
+    contractorID: null as ID | null,
+    spAutocomplete: "",
+    coAutocomplete: "",
+    brAutocomplete: "",
+
+    // main scalars
+    employeeFirstName: "",
+    employeeLastName: "",
+    deviceEmpCode: "",
+    employeeID: "",
+    departmentNameID: null as ID | null,
+    designationID: null as ID | null,
+    joiningDate: "",
+
+    empType: "",
+    pfMemberStatus: "",
+    pfNumber: "",
+
+    monthlyPGAutocomplete: "",
+    hourlyPGAutocomplete: "",
+
+    shiftEligibility: "",
+    nightShiftEligibility: "",
+    maxHoursPerDay: "",
+    weeklyOffPattern: "",
+    noticePeriodDaysForResignation: "",
+    noticePeriodDaysForTermination: "",
+
+    typeOfEmployee: "",
+
+
+
+    workShiftID: null as ID | null,
+    attendancePolicyID: null as ID | null,
+    leavePolicyID: null as ID | null,
+
+    businessPhoneNo: "",
+    businessEmail: "",
+    personalPhoneNo: "",
+    personalEmail: "",
+    emergancyContact: "",
+    presentAddress: "",
+    permenantAddress: "",
+    employeePhotoUrl: "",
+
+    gender: "",
+    dateOfBirth: "",
+    bloodGroup: "",
+    maritalStatus: "",
+    employeeFatherName: "",
+    employeeMotherName: "",
+    employeeSpouseName: "",
+
+    deptAutocomplete: "",
+    desgAutocomplete: "",
+    contrAutocomplete: "",
+    wsAutocomplete: "",
+    apAutocomplete: "",
+    lpAutocomplete: "",
+
+    promotion: {
+      id: undefined,
+      departmentNameID: null,
+      designationID: null,
+      employmentType: "",
+      employmentStatus: "",
+      probationPeriod: "",
+      workShiftID: null,
+      attendancePolicyID: null,
+      leavePolicyID: null,
+      salaryPayGradeType: "",
+      monthlyPayGradeID: null,
+      hourlyPayGradeID: null,
+    } as PromotionForm,
+
+    // nested arrays
+    eduForm: [] as EduForm[],
+    expForm: [] as ExpForm[],
+    devMapForm: [] as DevMapForm[],
+    bankDetailsForm: [] as BankDetailsForm[],
+    empDesignationForm: [] as EmpDesignationForm[],
+    empDepartmentForm: [] as EmpDepartmentForm[],
+    empBranchForm: [] as EmpBranchForm[],
+    empEmploymentTypeForm: [] as EmpEmploymentTypeForm[],
+    empEmploymentStatusForm: [] as EmpEmploymentStatusForm[],
+    empWorkShiftForm: [] as EmpWorkShiftForm[],
+    empLeavePolicyForm: [] as EmpLeavePolicyForm[],
+    empAttendancePolicyForm: [] as EmpAttendancePolicyForm[],
+    empContractorForm: [] as EmpContractorForm[],
+  });
+
+  /* ===========
+     Data load
+     =========== */
+ const fetchRows = async () => {
+  try {
+    setLoading(true);
+    const all = await fetchJSONSafe<ManageEmpRead[]>(API.manageEmp);
+    
+    // For each employee, fetch both device mappings
+    const enrichedEmployees = await Promise.all(
+      all.map(async (emp) => {
+        try {
+          // Fetch AT devices (from EmpDeviceMapping)
+          const atDevicesRes = await fetch(`${API.manageEmp}/${emp.id}/device-mappings?type=AT`);
+          const atDevices = atDevicesRes.ok ? await atDevicesRes.json() : [];
+          
+          // Fetch TR/TV devices (from TokenDeviceMapping)
+          const tokenDevicesRes = await fetch(`${API.manageEmp}/${emp.id}/token-device-mappings?type=TR,TV`);
+          const tokenDevices = tokenDevicesRes.ok ? await tokenDevicesRes.json() : [];
+          
+          return {
+            ...emp,
+          empDeviceMapping: atDevices,
+tokenDeviceMapping: tokenDevices,
+          };
+        } catch (error) {
+          console.error(`Error fetching devices for employee ${emp.id}:`, error);
+          return {
+            ...emp,
+            empDeviceMapping: [],
+            tokenDeviceMapping: []
+          };
+        }
+      })
+    );
+
+    let filteredRows = enrichedEmployees;
+
+    // SUPERADMIN → all
+    if (user?.role === "SUPERADMIN") {
+      filteredRows = enrichedEmployees;
+    }
+    // MANAGER → match companyID + branchesID from /users
+    else if (user?.role === "MANAGER") {
+      const usersRes = await fetch("http://localhost:8000/users");
+      const users = await usersRes.json();
+      const currentUser = users.find((u: any) => u.username === user.username);
+      if (currentUser) {
+        filteredRows = enrichedEmployees.filter(
+          (r: any) =>
+            r.companyID === currentUser.companyID &&
+            r.branchesID === currentUser.branchesID
+        );
+      }
+    }
+    // EMPLOYEE → match via manage-emp/credentials/all
+    else if (user?.role === "EMPLOYEE") {
+      const credsRes = await fetch("http://localhost:8000/manage-emp/credentials/all");
+      const creds = await credsRes.json();
+      const emp = creds.find((c: any) => c.username === user?.username);
+      if (emp) {
+        filteredRows = enrichedEmployees.filter(
+          (r: any) =>
+            r.companyID === emp.companyID &&
+            r.branchesID === emp.branchesID
+        );
+      } else {
+        filteredRows = [];
+      }
+    }
+    
+    setRows(filteredRows);
+  } catch (e) {
+    console.error("Failed to load employees:", e);
+    setRows([]);
+  } finally {
+    setLoading(false);
+  }
+};
+
+  useEffect(() => {
+    if (user) fetchRows();
+  }, [user]);
+
+
+  const addTokenDevMap = () => setTokenDevMapForm(p => [...p, {
+  _localId: uid(),
+  deviceID: "",
+  deviceEmpCode: "",
+  deviceName: "",
+  deviceType: "TR",
+  _devAutocomplete: "",
+}]);
+
+const removeTokenDevMap = (lid: string) => setTokenDevMapForm(p => p.filter(x => x._localId !== lid));
+
+const updateTokenDevMap = (lid: string, key: keyof TokenDevMapForm, val: string) =>
+  setTokenDevMapForm(p => p.map(x => x._localId === lid ? { ...x, [key]: val } : x));
+
+const runFetchTokenDevices = (q: string) => {
+  if (tokenDevTimerRef.current) clearTimeout(tokenDevTimerRef.current);
+  tokenDevTimerRef.current = setTimeout(async () => {
+    if (q.length < MIN_CHARS) {
+      setTokenDevList([]);
+      return;
+    }
+    tokenDevAbortRef.current?.abort();
+    const ctrl = new AbortController();
+    tokenDevAbortRef.current = ctrl;
+    setTokenDevLoading(true);
+    try {
+      let all = await fetchJSONSafe<Device[]>(API.devices, ctrl.signal);
+      if (user?.role === "MANAGER" && currentUserMapping) {
+        all = all.filter(d =>
+          d.companyID === currentUserMapping.companyID &&
+          d.branchesID === currentUserMapping.branchesID
+        );
+      }
+      // Filter for TR and TV devices only (ignore AT)
+      const tokenDevices = all.filter(d => d.deviceType === 'TR' || d.deviceType === 'TV');
+      
+      const filtered = tokenDevices.filter(d =>
+        (d.deviceName ?? "").toLowerCase().includes(q.toLowerCase())
+      );
+      setTokenDevList(filtered.slice(0, 20));
+    } catch (e) {
+      if ((e as any).name !== "AbortError") console.error("Token device fetch error:", e);
+    } finally {
+      setTokenDevLoading(false);
+    }
+  }, DEBOUNCE_MS);
+};
+
+  /* =======================
+     Debounced suggestions
+     ======================= */
+  const runFetchSP = (query: string) => {
+    if (spTimerRef.current) clearTimeout(spTimerRef.current);
+    spTimerRef.current = setTimeout(async () => {
+      if (query.length < MIN_CHARS) { setSpList([]); return; }
+      if (spAbortRef.current) spAbortRef.current.abort();
+      const ctrl = new AbortController();
+      spAbortRef.current = ctrl;
+      setSpLoading(true);
+      try {
+        const all = await fetchJSONSafe<SP[]>(API.serviceProviders, ctrl.signal);
+        const filtered = (all || []).filter(s => (s.companyName ?? "").toLowerCase().includes(query.toLowerCase()));
+        setSpList(filtered.slice(0, 20));
+      } catch (e) {
+        if ((e as any).name !== "AbortError") console.error("SP fetch error:", e);
+      } finally { setSpLoading(false); }
+    }, DEBOUNCE_MS);
+  };
+
+  const runFetchMonthlyPG = (q: string) => {
+    if (monthlyPGTimerRef.current) clearTimeout(monthlyPGTimerRef.current);
+    monthlyPGTimerRef.current = setTimeout(async () => {
+      if (q.length < MIN_CHARS) { setMonthlyPGList([]); return; }
+      monthlyPGAbortRef.current?.abort();
+      const ctrl = new AbortController(); monthlyPGAbortRef.current = ctrl;
+      setMonthlyPGLoading(true);
+      try {
+        let all = await fetchJSONSafe<MonthlyPG[]>(API.monthlyGrades, ctrl.signal);
+        if (user?.role === "MANAGER" && currentUserMapping) {
+          all = all.filter(x =>
+            x.companyID === currentUserMapping.companyID &&
+            x.branchesID === currentUserMapping.branchesID
+          );
+        }
+        const filtered = (all || []).filter(x =>
+          (x.monthlyPayGradeName ?? "").toLowerCase().includes(q.toLowerCase())
+        );
+        setMonthlyPGList(filtered.slice(0, 20));
+      } finally { setMonthlyPGLoading(false); }
+    }, DEBOUNCE_MS);
+  };
+
+  const runFetchDept = (q: string) => {
+    if (deptTimerRef.current) clearTimeout(deptTimerRef.current);
+
+    deptTimerRef.current = setTimeout(async () => {
+      if (q.length < MIN_CHARS) {
+        setDeptList([]);
+        return;
+      }
+
+      if (deptAbortRef.current) {
+        deptAbortRef.current.abort();
+      }
+
+      const ctrl = new AbortController();
+      deptAbortRef.current = ctrl;
+
+      setDeptLoading(true);
+
+      try {
+        let all = await fetchJSONSafe<Dept[]>(API.departments, ctrl.signal);
+
+        if (user?.role === "MANAGER" && currentUserMapping) {
+          all = all.filter(d =>
+            d.companyID === currentUserMapping.companyID &&
+            d.branchesID === currentUserMapping.branchesID
+          );
+        }
+
+        const filtered = all.filter(d =>
+          (d.departmentName ?? "").toLowerCase().includes(q.toLowerCase())
+        );
+
+        setDeptList(filtered.slice(0, 20));
+
+      } catch (e: any) {
+        if (e.name !== "AbortError") {
+          console.error("Dept fetch error:", e);
+        }
+      } finally {
+        setDeptLoading(false);
+      }
+
+    }, DEBOUNCE_MS);
+  };
+
+  const runFetchDesg = (q: string) => {
+    if (desgTimerRef.current) clearTimeout(desgTimerRef.current);
+    desgTimerRef.current = setTimeout(async () => {
+      if (q.length < MIN_CHARS) { setDesgList([]); return; }
+      desgAbortRef.current?.abort();
+      const ctrl = new AbortController(); desgAbortRef.current = ctrl;
+      setDesgLoading(true);
+      try {
+        let all = await fetchJSONSafe<Desg[]>(API.designations, ctrl.signal);
+        if (user?.role === "MANAGER" && currentUserMapping) {
+          all = all.filter(x =>
+            x.companyID === currentUserMapping.companyID &&
+            x.branchesID === currentUserMapping.branchesID
+          );
+        }
+        const filtered = (all || []).filter(d => (d.designation ?? "").toLowerCase().includes(q.toLowerCase()));
+        setDesgList(filtered.slice(0, 20));
+      } finally { setDesgLoading(false); }
+    }, DEBOUNCE_MS);
+  };
+
+  const runFetchContr = (q: string) => {
+    if (contrTimerRef.current) clearTimeout(contrTimerRef.current);
+    contrTimerRef.current = setTimeout(async () => {
+      if (q.length < MIN_CHARS) { setContrList([]); return; }
+      contrAbortRef.current?.abort();
+      const ctrl = new AbortController(); contrAbortRef.current = ctrl;
+      setContrLoading(true);
+      try {
+        const all = await fetchJSONSafe<Contr[]>(API.contractors, ctrl.signal);
+        const filtered = (all || []).filter(c => (c.contractorName ?? "").toLowerCase().includes(q.toLowerCase()));
+        setContrList(filtered.slice(0, 20));
+      } finally { setContrLoading(false); }
+    }, DEBOUNCE_MS);
+  };
+
+  const runFetchDev = (q: string) => {
+  if (devTimerRef.current) clearTimeout(devTimerRef.current);
+
+  devTimerRef.current = setTimeout(async () => {
+    if (q.length < MIN_CHARS) {
+      setDevList([]);
+      return;
+    }
+
+    devAbortRef.current?.abort();
+    const ctrl = new AbortController();
+    devAbortRef.current = ctrl;
+    setDevLoading(true);
+
+    try {
+      let all = await fetchJSONSafe<Device[]>(API.devices, ctrl.signal);
+
+      if (user?.role === "MANAGER" && currentUserMapping) {
+        all = all.filter(d =>
+          d.companyID === currentUserMapping.companyID &&
+          d.branchesID === currentUserMapping.branchesID
+        );
+      }
+
+      // Filter for AT devices only (biometric)
+      const atDevices = all.filter(d => d.deviceType === 'AT');
+      
+      const filtered = atDevices.filter(d =>
+        (d.deviceName ?? "").toLowerCase().includes(q.toLowerCase())
+      );
+
+      setDevList(filtered.slice(0, 20));
+
+    } catch (e) {
+      if ((e as any).name !== "AbortError")
+        console.error("Device fetch error:", e);
+    } finally {
+      setDevLoading(false);
+    }
+  }, DEBOUNCE_MS);
+};
+
+
+  const runFetchWS = (q: string) => {
+    if (wsTimerRef.current) clearTimeout(wsTimerRef.current);
+    wsTimerRef.current = setTimeout(async () => {
+      if (q.length < MIN_CHARS) { setWsList([]); return; }
+      wsAbortRef.current?.abort();
+      const ctrl = new AbortController(); wsAbortRef.current = ctrl;
+      setWsLoading(true);
+      try {
+        let all = await fetchJSONSafe<WS[]>(API.workShifts, ctrl.signal);
+        if (user?.role === "MANAGER" && currentUserMapping) {
+          all = all.filter(x =>
+            x.companyID === currentUserMapping.companyID &&
+            x.branchesID === currentUserMapping.branchesID
+          );
+        }
+        const filtered = (all || []).filter(w => (w.workShiftName ?? "").toLowerCase().includes(q.toLowerCase()));
+        setWsList(filtered.slice(0, 20));
+      } finally { setWsLoading(false); }
+    }, DEBOUNCE_MS);
+  };
+
+  const runFetchAP = (q: string) => {
+    if (apTimerRef.current) clearTimeout(apTimerRef.current);
+    apTimerRef.current = setTimeout(async () => {
+      if (q.length < MIN_CHARS) { setApList([]); return; }
+      apAbortRef.current?.abort();
+      const ctrl = new AbortController(); apAbortRef.current = ctrl;
+      setApLoading(true);
+      try {
+        let all = await fetchJSONSafe<AP[]>(API.attendancePolicies, ctrl.signal);
+        if (user?.role === "MANAGER" && currentUserMapping) {
+          all = all.filter(x =>
+            x.companyID === currentUserMapping.companyID &&
+            x.branchesID === currentUserMapping.branchesID
+          );
+        }
+        const filtered = (all || []).filter(a => (a.attendancePolicyName ?? "").toLowerCase().includes(q.toLowerCase()));
+        setApList(filtered.slice(0, 20));
+      } finally { setApLoading(false); }
+    }, DEBOUNCE_MS);
+  };
+
+  const runFetchLP = (q: string) => {
+    if (lpTimerRef.current) clearTimeout(lpTimerRef.current);
+    lpTimerRef.current = setTimeout(async () => {
+      if (q.length < MIN_CHARS) { setLpList([]); return; }
+      lpAbortRef.current?.abort();
+      const ctrl = new AbortController(); lpAbortRef.current = ctrl;
+      setLpLoading(true);
+      try {
+        let all = await fetchJSONSafe<LP[]>(API.leavePolicies, ctrl.signal);
+        if (user?.role === "MANAGER" && currentUserMapping) {
+          all = all.filter(x =>
+            x.companyID === currentUserMapping.companyID &&
+            x.branchesID === currentUserMapping.branchesID
+          );
+        }
+        const filtered = (all || []).filter(l => (l.leavePolicyName ?? "").toLowerCase().includes(q.toLowerCase()));
+        setLpList(filtered.slice(0, 20));
+      } finally { setLpLoading(false); }
+    }, DEBOUNCE_MS);
+  };
+
+  const runFetchCO = (query: string) => {
+    if (coTimerRef.current) clearTimeout(coTimerRef.current);
+
+    coTimerRef.current = setTimeout(async () => {
+      if (!formData.serviceProviderID || query.length < MIN_CHARS) {
+        setCoList([]);
+        return;
+      }
+
+      if (coAbortRef.current) coAbortRef.current.abort();
+      const ctrl = new AbortController();
+      coAbortRef.current = ctrl;
+      setCoLoading(true);
+
+      try {
+        let all = await fetchJSONSafe<CO[]>(API.companies, ctrl.signal);
+
+        all = (all || []).filter(
+          c => c.serviceProviderID === formData.serviceProviderID
+        );
+
+        const ql = query.toLowerCase();
+        const filtered = all.filter(c =>
+          (c.companyName ?? "").toLowerCase().includes(ql)
+        );
+
+        setCoList(filtered.slice(0, 20));
+      } catch (e) {
+        if ((e as any).name !== "AbortError") {
+          console.error("CO fetch error:", e);
+        }
+      } finally {
+        setCoLoading(false);
+      }
+    }, DEBOUNCE_MS);
+  };
+
+  const runFetchBR = (query: string) => {
+    if (brTimerRef.current) clearTimeout(brTimerRef.current);
+
+    brTimerRef.current = setTimeout(async () => {
+      const companyID =
+        user?.role === "MANAGER"
+          ? currentUserMapping?.companyID
+          : formData.companyID;
+
+      if (!companyID || query.length < MIN_CHARS) {
+        setBrList([]);
+        return;
+      }
+
+      brAbortRef.current?.abort();
+      const ctrl = new AbortController();
+      brAbortRef.current = ctrl;
+      setBrLoading(true);
+
+      try {
+        let all = await fetchJSONSafe<BR[]>(API.branches, ctrl.signal);
+
+        all = all.filter(b => b.companyID === companyID);
+
+        const ql = query.toLowerCase();
+        const filtered = all.filter(b =>
+          (b.branchName ?? "").toLowerCase().includes(ql)
+        );
+
+        setBrList(filtered.slice(0, 20));
+      } catch (e) {
+        if ((e as any).name !== "AbortError") {
+          console.error("BR fetch error:", e);
+        }
+      } finally {
+        setBrLoading(false);
+      }
+    }, DEBOUNCE_MS);
+  };
+
+  interface Dept { id: ID; departmentName?: string | null; companyID?: ID | null; branchesID?: ID | null; }
+  interface Desg { id: ID; designation?: string | null; companyID?: ID | null; branchesID?: ID | null; }
+  interface Contr { id: ID; contractorName?: string | null; companyID?: ID | null; branchesID?: ID | null; }
+  interface Mgr { id: ID; employeeFirstName?: string | null; employeeLastName?: string | null; companyID?: ID | null; branchesID?: ID | null; }
+  interface WS { id: ID; workShiftName?: string | null; companyID?: ID | null; branchesID?: ID | null; }
+  interface AP { id: ID; attendancePolicyName?: string | null; companyID?: ID | null; branchesID?: ID | null; }
+  interface LP { id: ID; leavePolicyName?: string | null; companyID?: ID | null; branchesID?: ID | null; }
+
+  // refs for outside-click close
+  const deptRef = useRef<HTMLDivElement>(null);
+  const desgRef = useRef<HTMLDivElement>(null);
+  const contrRef = useRef<HTMLDivElement>(null);
+  const wsRef = useRef<HTMLDivElement>(null);
+  const apRef = useRef<HTMLDivElement>(null);
+  const lpRef = useRef<HTMLDivElement>(null);
+
+  // data lists
+  const [deptList, setDeptList] = useState<Dept[]>([]);
+  const [desgList, setDesgList] = useState<Desg[]>([]);
+  const [contrList, setContrList] = useState<Contr[]>([]);
+  const [wsList, setWsList] = useState<WS[]>([]);
+  const [apList, setApList] = useState<AP[]>([]);
+  const [lpList, setLpList] = useState<LP[]>([]);
+
+  // loaders
+  const [deptLoading, setDeptLoading] = useState(false);
+  const [desgLoading, setDesgLoading] = useState(false);
+  const [activeDesgLocalId, setActiveDesgLocalId] = useState<string | null>(null);
+  const [activeDeptLocalId, setActiveDeptLocalId] = useState<string | null>(null);
+  const [activeBrLocalId, setActiveBrLocalId] = useState<string | null>(null);
+  const [activeWsLocalId, setActiveWsLocalId] = useState<string | null>(null);
+  const [activeApLocalId, setActiveApLocalId] = useState<string | null>(null);
+  const [activeLpLocalId, setActiveLpLocalId] = useState<string | null>(null);
+  const [activeContrLocalId, setActiveContrLocalId] = useState<string | null>(null);
+  const [contrLoading, setContrLoading] = useState(false);
+  const [wsLoading, setWsLoading] = useState(false);
+  const [apLoading, setApLoading] = useState(false);
+  const [lpLoading, setLpLoading] = useState(false);
+
+  // abort controllers
+  const deptAbortRef = useRef<AbortController | null>(null);
+  const desgAbortRef = useRef<AbortController | null>(null);
+  const contrAbortRef = useRef<AbortController | null>(null);
+  const wsAbortRef = useRef<AbortController | null>(null);
+  const apAbortRef = useRef<AbortController | null>(null);
+  const lpAbortRef = useRef<AbortController | null>(null);
+
+  // timers for debounce
+  const deptTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const desgTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const contrTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const wsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const apTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lpTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Close suggestion popovers on outside click
+  useEffect(() => {
+    const onDocClick = (e: MouseEvent) => {
+      if (spRef.current && !spRef.current.contains(e.target as any)) setSpList([]);
+      if (coRef.current && !coRef.current.contains(e.target as any)) setCoList([]);
+      if (brRef.current && !brRef.current.contains(e.target as any)) setBrList([]);
+      if (deptRef.current && !deptRef.current.contains(e.target as any)) setDeptList([]);
+      if (desgRef.current && !desgRef.current.contains(e.target as any)) setDesgList([]);
+      if (contrRef.current && !contrRef.current.contains(e.target as any)) setContrList([]);
+      if (wsRef.current && !wsRef.current.contains(e.target as any)) setWsList([]);
+      if (apRef.current && !apRef.current.contains(e.target as any)) setApList([]);
+      if (lpRef.current && !lpRef.current.contains(e.target as any)) setLpList([]);
+          if (devRef.current && !devRef.current.contains(e.target as any)) setDevList([]);
+      if (tokenDevRef.current && !tokenDevRef.current.contains(e.target as any)) setTokenDevList([]);
+      if (linkedEmpRef.current && !linkedEmpRef.current.contains(e.target as any)) setLinkedEmpSuggestions([]);
+      if (monthlyPGRef.current && !monthlyPGRef.current.contains(e.target as any)) setMonthlyPGList([]);
+      if (hourlyPGRef.current && !hourlyPGRef.current.contains(e.target as any)) setHourlyPGList([]);
+    };
+    document.addEventListener("mousedown", onDocClick);
+    return () => document.removeEventListener("mousedown", onDocClick);
+  }, []);
+
+  // Cleanup timers/aborts on unmount
+  useEffect(() => {
+    return () => {
+      if (spTimerRef.current) clearTimeout(spTimerRef.current);
+      if (coTimerRef.current) clearTimeout(coTimerRef.current);
+      if (brTimerRef.current) clearTimeout(brTimerRef.current);
+      if (deptTimerRef.current) clearTimeout(deptTimerRef.current);
+      if (desgTimerRef.current) clearTimeout(desgTimerRef.current);
+      if (contrTimerRef.current) clearTimeout(contrTimerRef.current);
+      if (wsTimerRef.current) clearTimeout(wsTimerRef.current);
+      if (apTimerRef.current) clearTimeout(apTimerRef.current);
+      if (lpTimerRef.current) clearTimeout(lpTimerRef.current);
+      if (devTimerRef.current) clearTimeout(devTimerRef.current);
+      if (tokenDevTimerRef.current) clearTimeout(tokenDevTimerRef.current);
+
+      spAbortRef.current?.abort();
+      coAbortRef.current?.abort();
+      brAbortRef.current?.abort();
+      deptAbortRef.current?.abort();
+      desgAbortRef.current?.abort();
+      contrAbortRef.current?.abort();
+      wsAbortRef.current?.abort();
+      apAbortRef.current?.abort();
+      lpAbortRef.current?.abort();
+      devAbortRef.current?.abort();
+      tokenDevAbortRef.current?.abort();
+    };
+  }, []);
+
+  /* ===============
+     Photo upload
+     =============== */
+  const onPickPhoto = (file: File | null) => {
+    setPhotoFile(file);
+    setPhotoPreview(file ? URL.createObjectURL(file) : null);
+  };
+
+  const uploadPhotoIfNeeded = async (): Promise<string | undefined> => {
+    if (!photoFile) return undefined;
+    const fd = new FormData();
+    fd.append("file", photoFile);
+    const res = await fetch(API.upload, { method: "POST", body: fd });
+    if (!res.ok) throw new Error(await res.text());
+    const data = await res.json();
+    const full = data?.url?.startsWith("http") ? data.url : `http://localhost:8000${data?.url ?? ""}`;
+    return full;
+  };
+
+  /* ==================
+     Nested repeaters
+     ================== */
+  const addEdu = () => setFormData(p => ({
+    ...p,
+    eduForm: [...p.eduForm, {
+      _localId: uid(),
+      instituteType: "", instituteName: "", degree: "", pasingYear: "", marks: "", gpaCgpa: "", class: "",
+    }]
+  }));
+  const addExp = () => setFormData(p => ({
+    ...p,
+    expForm: [...p.expForm, {
+      _localId: uid(),
+      orgName: "", designation: "", fromDate: "", toDate: "", responsibility: "", skill: "",
+    }]
+  }));
+const addDevMap = () => setFormData(p => ({
+  ...p,
+  devMapForm: [...p.devMapForm, {
+    _localId: uid(),
+    deviceID: "",
+    deviceEmpCode: "",
+    deviceName: "",
+    deviceType: "AT", // Set default type
+    _devAutocomplete: "",
+  }]
+}));
+  const addBankDetail = () => setFormData(p => ({
+    ...p,
+    bankDetailsForm: [...p.bankDetailsForm, {
+      _localId: uid(),
+      bankName: "", bankBranchName: "", accNumber: "", ifscCode: "", upi: "",
+    }]
+  }));
+  const addEmpDesignation = () => setFormData(p => ({
+    ...p,
+    empDesignationForm: [...p.empDesignationForm, {
+      _localId: uid(),
+      designationID: null,
+      _desgAutocomplete: "",
+    }]
+  }));
+
+  const removeEdu = (lid: string) => setFormData(p => ({ ...p, eduForm: p.eduForm.filter(x => x._localId !== lid) }));
+  const removeExp = (lid: string) => setFormData(p => ({ ...p, expForm: p.expForm.filter(x => x._localId !== lid) }));
+  const removeDevMap = (lid: string) => setFormData(p => ({ ...p, devMapForm: p.devMapForm.filter(x => x._localId !== lid) }));
+  const removeBankDetail = (lid: string) => setFormData(p => ({ ...p, bankDetailsForm: p.bankDetailsForm.filter(x => x._localId !== lid) }));
+  const removeEmpDesignation = (lid: string) => setFormData(p => ({ ...p, empDesignationForm: p.empDesignationForm.filter(x => x._localId !== lid) }));
+
+  const updateEdu = (lid: string, key: keyof EduForm, val: string) =>
+    setFormData(p => ({ ...p, eduForm: p.eduForm.map(x => x._localId === lid ? { ...x, [key]: val } : x) }));
+  const updateExp = (lid: string, key: keyof ExpForm, val: string) =>
+    setFormData(p => ({ ...p, expForm: p.expForm.map(x => x._localId === lid ? { ...x, [key]: val } : x) }));
+  const updateDevMap = (lid: string, key: keyof DevMapForm, val: string) =>
+    setFormData(p => ({ ...p, devMapForm: p.devMapForm.map(x => x._localId === lid ? { ...x, [key]: val } : x) }));
+  const updateBankDetail = (lid: string, key: keyof BankDetailsForm, val: string) =>
+    setFormData(p => ({ ...p, bankDetailsForm: p.bankDetailsForm.map(x => x._localId === lid ? { ...x, [key]: val } : x) }));
+  const updateEmpDesignation = (lid: string, patch: Partial<EmpDesignationForm>) =>
+    setFormData(p => ({ ...p, empDesignationForm: p.empDesignationForm.map(x => x._localId === lid ? { ...x, ...patch } : x) }));
+
+  // Department multi-entry helpers
+  const addEmpDepartment = () => setFormData(p => ({ ...p, empDepartmentForm: [...p.empDepartmentForm, { _localId: uid(), departmentNameID: null, _deptAutocomplete: "" }] }));
+  const removeEmpDepartment = (lid: string) => setFormData(p => {
+    const updated = p.empDepartmentForm.filter(x => x._localId !== lid);
+    const last = updated[updated.length - 1];
+    return { ...p, empDepartmentForm: updated, departmentNameID: last?.departmentNameID ?? null, deptAutocomplete: last?._deptAutocomplete ?? "", promotion: { ...p.promotion, departmentNameID: last?.departmentNameID ?? null } };
+  });
+  const updateEmpDepartment = (lid: string, patch: Partial<EmpDepartmentForm>) => setFormData(p => {
+    const updated = p.empDepartmentForm.map(x => x._localId === lid ? { ...x, ...patch } : x);
+    const last = updated[updated.length - 1];
+    return { ...p, empDepartmentForm: updated, departmentNameID: last?.departmentNameID ?? null, deptAutocomplete: last?._deptAutocomplete ?? "", promotion: { ...p.promotion, departmentNameID: last?.departmentNameID ?? null } };
+  });
+
+  // Branch multi-entry helpers
+  const addEmpBranch = () => setFormData(p => ({ ...p, empBranchForm: [...p.empBranchForm, { _localId: uid(), branchesID: null, _brAutocomplete: "" }] }));
+  const removeEmpBranch = (lid: string) => setFormData(p => {
+    const updated = p.empBranchForm.filter(x => x._localId !== lid);
+    const last = updated[updated.length - 1];
+    return { ...p, empBranchForm: updated, branchesID: last?.branchesID ?? null, brAutocomplete: last?._brAutocomplete ?? "" };
+  });
+  const updateEmpBranch = (lid: string, patch: Partial<EmpBranchForm>) => setFormData(p => {
+    const updated = p.empBranchForm.map(x => x._localId === lid ? { ...x, ...patch } : x);
+    const last = updated[updated.length - 1];
+    return { ...p, empBranchForm: updated, branchesID: last?.branchesID ?? null, brAutocomplete: last?._brAutocomplete ?? "" };
+  });
+
+  // Employment Type multi-entry helpers
+  const addEmpEmploymentType = () => setFormData(p => ({ ...p, empEmploymentTypeForm: [...p.empEmploymentTypeForm, { _localId: uid(), employmentType: "" }] }));
+  const removeEmpEmploymentType = (lid: string) => setFormData(p => {
+    const updated = p.empEmploymentTypeForm.filter(x => x._localId !== lid);
+    const last = updated[updated.length - 1];
+    return { ...p, empEmploymentTypeForm: updated, promotion: { ...p.promotion, employmentType: last?.employmentType ?? "" } };
+  });
+  const updateEmpEmploymentType = (lid: string, patch: Partial<EmpEmploymentTypeForm>) => setFormData(p => {
+    const updated = p.empEmploymentTypeForm.map(x => x._localId === lid ? { ...x, ...patch } : x);
+    const last = updated[updated.length - 1];
+    return { ...p, empEmploymentTypeForm: updated, promotion: { ...p.promotion, employmentType: last?.employmentType ?? "" } };
+  });
+
+  // Employment Status multi-entry helpers
+  const addEmpEmploymentStatus = () => setFormData(p => ({ ...p, empEmploymentStatusForm: [...p.empEmploymentStatusForm, { _localId: uid(), employmentStatus: "", probationPeriod: "" }] }));
+  const removeEmpEmploymentStatus = (lid: string) => setFormData(p => {
+    const updated = p.empEmploymentStatusForm.filter(x => x._localId !== lid);
+    const last = updated[updated.length - 1];
+    return { ...p, empEmploymentStatusForm: updated, promotion: { ...p.promotion, employmentStatus: last?.employmentStatus ?? "", probationPeriod: last?.probationPeriod ?? "" } };
+  });
+  const updateEmpEmploymentStatus = (lid: string, patch: Partial<EmpEmploymentStatusForm>) => setFormData(p => {
+    const updated = p.empEmploymentStatusForm.map(x => x._localId === lid ? { ...x, ...patch } : x);
+    const last = updated[updated.length - 1];
+    return { ...p, empEmploymentStatusForm: updated, promotion: { ...p.promotion, employmentStatus: last?.employmentStatus ?? "", probationPeriod: last?.probationPeriod ?? "" } };
+  });
+
+  // Work Shift multi-entry helpers
+  const addEmpWorkShift = () => setFormData(p => ({ ...p, empWorkShiftForm: [...p.empWorkShiftForm, { _localId: uid(), workShiftID: null, _wsAutocomplete: "" }] }));
+  const removeEmpWorkShift = (lid: string) => setFormData(p => {
+    const updated = p.empWorkShiftForm.filter(x => x._localId !== lid);
+    const last = updated[updated.length - 1];
+    return { ...p, empWorkShiftForm: updated, workShiftID: last?.workShiftID ?? null, wsAutocomplete: last?._wsAutocomplete ?? "" };
+  });
+  const updateEmpWorkShift = (lid: string, patch: Partial<EmpWorkShiftForm>) => setFormData(p => {
+    const updated = p.empWorkShiftForm.map(x => x._localId === lid ? { ...x, ...patch } : x);
+    const last = updated[updated.length - 1];
+    return { ...p, empWorkShiftForm: updated, workShiftID: last?.workShiftID ?? null, wsAutocomplete: last?._wsAutocomplete ?? "" };
+  });
+
+  // Leave Policy multi-entry helpers
+  const addEmpLeavePolicy = () => setFormData(p => ({ ...p, empLeavePolicyForm: [...p.empLeavePolicyForm, { _localId: uid(), leavePolicyID: null, _lpAutocomplete: "" }] }));
+  const removeEmpLeavePolicy = (lid: string) => setFormData(p => {
+    const updated = p.empLeavePolicyForm.filter(x => x._localId !== lid);
+    const last = updated[updated.length - 1];
+    return { ...p, empLeavePolicyForm: updated, leavePolicyID: last?.leavePolicyID ?? null, lpAutocomplete: last?._lpAutocomplete ?? "" };
+  });
+  const updateEmpLeavePolicy = (lid: string, patch: Partial<EmpLeavePolicyForm>) => setFormData(p => {
+    const updated = p.empLeavePolicyForm.map(x => x._localId === lid ? { ...x, ...patch } : x);
+    const last = updated[updated.length - 1];
+    return { ...p, empLeavePolicyForm: updated, leavePolicyID: last?.leavePolicyID ?? null, lpAutocomplete: last?._lpAutocomplete ?? "" };
+  });
+
+  // Attendance Policy multi-entry helpers
+  const addEmpAttendancePolicy = () => setFormData(p => ({ ...p, empAttendancePolicyForm: [...p.empAttendancePolicyForm, { _localId: uid(), attendancePolicyID: null, _apAutocomplete: "" }] }));
+  const removeEmpAttendancePolicy = (lid: string) => setFormData(p => {
+    const updated = p.empAttendancePolicyForm.filter(x => x._localId !== lid);
+    const last = updated[updated.length - 1];
+    return { ...p, empAttendancePolicyForm: updated, attendancePolicyID: last?.attendancePolicyID ?? null, apAutocomplete: last?._apAutocomplete ?? "" };
+  });
+  const updateEmpAttendancePolicy = (lid: string, patch: Partial<EmpAttendancePolicyForm>) => setFormData(p => {
+    const updated = p.empAttendancePolicyForm.map(x => x._localId === lid ? { ...x, ...patch } : x);
+    const last = updated[updated.length - 1];
+    return { ...p, empAttendancePolicyForm: updated, attendancePolicyID: last?.attendancePolicyID ?? null, apAutocomplete: last?._apAutocomplete ?? "" };
+  });
+
+  // Contractor multi-entry helpers
+  const addEmpContractor = () => setFormData(p => ({ ...p, empContractorForm: [...p.empContractorForm, { _localId: uid(), contractorID: null, _contrAutocomplete: "" }] }));
+  const removeEmpContractor = (lid: string) => setFormData(p => {
+    const updated = p.empContractorForm.filter(x => x._localId !== lid);
+    const last = updated[updated.length - 1];
+    return { ...p, empContractorForm: updated, contractorID: last?.contractorID ?? null, contrAutocomplete: last?._contrAutocomplete ?? "" };
+  });
+  const updateEmpContractor = (lid: string, patch: Partial<EmpContractorForm>) => setFormData(p => {
+    const updated = p.empContractorForm.map(x => x._localId === lid ? { ...x, ...patch } : x);
+    const last = updated[updated.length - 1];
+    return { ...p, empContractorForm: updated, contractorID: last?.contractorID ?? null, contrAutocomplete: last?._contrAutocomplete ?? "" };
+  });
+
+  /* ===============
+     Form helpers
+     =============== */
+  const resetForm = () => {
+     setFormData({
+      serviceProviderID: null,
+      companyID: null,
+      branchesID: null,
+      contractorID: null,
+
+      spAutocomplete: "",
+      coAutocomplete: "",
+      brAutocomplete: "",
+
+      employeeFirstName: "",
+      employeeLastName: "",
+      deviceEmpCode: "",
+      employeeID: "",
+      departmentNameID: null,
+      designationID: null,
+
+      joiningDate: "",
+      empType: "",
+      pfMemberStatus: "",
+      pfNumber: "",
+
+      monthlyPGAutocomplete: "",
+      hourlyPGAutocomplete: "",
+
+      shiftEligibility: "",
+      nightShiftEligibility: "",
+      maxHoursPerDay: "",
+      weeklyOffPattern: "",
+      noticePeriodDaysForResignation: "",
+      noticePeriodDaysForTermination: "",
+
+      typeOfEmployee: "",
+
+      workShiftID: null,
+      attendancePolicyID: null,
+      leavePolicyID: null,
+
+      businessPhoneNo: "",
+      businessEmail: "",
+      personalPhoneNo: "",
+      personalEmail: "",
+      emergancyContact: "",
+      presentAddress: "",
+      permenantAddress: "",
+      employeePhotoUrl: "",
+
+      gender: "",
+      dateOfBirth: "",
+      bloodGroup: "",
+      maritalStatus: "",
+      employeeFatherName: "",
+      employeeMotherName: "",
+      employeeSpouseName: "",
+
+      deptAutocomplete: "",
+      desgAutocomplete: "",
+      contrAutocomplete: "",
+      wsAutocomplete: "",
+      apAutocomplete: "",
+      lpAutocomplete: "",
+
+      promotion: {
+        id: undefined,
+        departmentNameID: null,
+        designationID: null,
+        managerID: null,
+        employmentType: "",
+        employmentStatus: "",
+        probationPeriod: "",
+        workShiftID: null,
+        attendancePolicyID: null,
+        leavePolicyID: null,
+        salaryPayGradeType: "",
+        monthlyPayGradeID: null,
+        hourlyPayGradeID: null,
+      },
+
+      eduForm: [],
+      expForm: [],
+      devMapForm: [],
+      bankDetailsForm: [],
+      empDesignationForm: [],
+      empDepartmentForm: [],
+      empBranchForm: [],
+      empEmploymentTypeForm: [],
+      empEmploymentStatusForm: [],
+      empWorkShiftForm: [],
+      empLeavePolicyForm: [],
+      empAttendancePolicyForm: [],
+      empContractorForm: [],
+    });
+    setTokenDevMapForm([]);
+    setLinkedEmployees([]);
+    setLinkedEmpSearch("");
+    setLinkedEmpSuggestions([]);
+    setPhotoFile(null);
+    setPhotoFile(null);
+    setPhotoPreview(null);
+    setOriginalEduIds([]);
+    setOriginalExpIds([]);
+    setOriginalDevMapIds([]);
+    setOriginalBankDetailIds([]);
+    setOriginalEmpDesignationIds([]);
+    setOriginalEmpBranchIds([]);
+    setOriginalEmpDepartmentIds([]);
+    setOriginalEmpEmploymentTypeIds([]);
+    setOriginalEmpEmploymentStatusIds([]);
+    setOriginalEmpWorkShiftIds([]);
+    setOriginalEmpAttendancePolicyIds([]);
+    setOriginalEmpLeavePolicyIds([]);
+    setOriginalEmpContractorIds([]);
+    setActiveDesgLocalId(null);
+    setActiveDeptLocalId(null);
+    setActiveBrLocalId(null);
+    setActiveWsLocalId(null);
+    setActiveApLocalId(null);
+    setActiveLpLocalId(null);
+    setActiveContrLocalId(null);
+    setOriginalDevMapIds([]);
+    setEditingRow(null);
+    setSpList([]);
+    setCoList([]);
+    setBrList([]);
+    setError(null);
+  };
+
+  // Helpers for rendering names in table
+  const spName = (r: ManageEmpRead) =>
+    r.serviceProvider?.companyName ?? r.serviceProviderName ?? "—";
+
+  const contrName = (r: ManageEmpRead) =>
+    r.contractor?.contractorName ?? r.contractorName ?? "—";
+
+  const coName = (r: ManageEmpRead) =>
+    r.company?.companyName ?? r.companyName ?? "—";
+  const brName = (r: ManageEmpRead) =>
+    r.branches?.branchName ?? r.branchName ?? "—";
+
+  /* ===============
+     Quick-Add handlers
+     =============== */
+  const searchQuickAdd = (query: string) => {
+    if (quickAddSearchTimerRef.current) clearTimeout(quickAddSearchTimerRef.current);
+    quickAddSearchTimerRef.current = setTimeout(async () => {
+      if (!quickAddOpen || query.length < 1) {
+        setQuickAddSuggestions([]);
+        return;
+      }
+      setQuickAddSearching(true);
+      try {
+        let url = "";
+        let displayField = "";
+        switch (quickAddOpen) {
+          case "department":
+            url = API.departments;
+            displayField = "departmentName";
+            break;
+          case "designation":
+            url = API.designations;
+            displayField = "designation";
+            break;
+          case "contractor":
+            url = API.contractors;
+            displayField = "contractorName";
+            break;
+          default:
+            return;
+        }
+        const all = await fetchJSONSafe<any[]>(url);
+        const ql = query.toLowerCase();
+        const filtered = all.filter((item: any) =>
+          (item[displayField] ?? "").toLowerCase().includes(ql)
+        );
+        setQuickAddSuggestions(filtered.slice(0, 10));
+      } catch (e) {
+        console.error("Quick-add search error:", e);
+      } finally {
+        setQuickAddSearching(false);
+      }
+    }, 250);
+  };
+
+  const handleQuickAddSelect = (item: any) => {
+    switch (quickAddOpen) {
+      case "department":
+        setFormData((p) => ({
+          ...p,
+          empDepartmentForm: [...p.empDepartmentForm, {
+            _localId: uid(),
+            departmentNameID: item.id,
+            _deptAutocomplete: item.departmentName ?? "",
+          }],
+          departmentNameID: item.id,
+          deptAutocomplete: item.departmentName ?? "",
+          promotion: { ...p.promotion, departmentNameID: item.id },
+        }));
+        break;
+      case "designation":
+        setFormData((p) => ({
+          ...p,
+          empDesignationForm: [...p.empDesignationForm, {
+            _localId: uid(),
+            designationID: item.id,
+            _desgAutocomplete: item.designation ?? "",
+          }],
+        }));
+        break;
+      case "contractor":
+        setFormData((p) => ({
+          ...p,
+          empContractorForm: [...p.empContractorForm, {
+            _localId: uid(),
+            contractorID: item.id,
+            _contrAutocomplete: item.contractorName ?? "",
+          }],
+          contractorID: item.id,
+          contrAutocomplete: item.contractorName ?? "",
+        }));
+        break;
+    }
+    setQuickAddOpen(null);
+    setQuickAddValue("");
+    setQuickAddSuggestions([]);
+  };
+
+  const handleQuickAdd = async () => {
+    if (!quickAddValue.trim() || !quickAddOpen) return;
+    setQuickAddSaving(true);
+    try {
+      const basePayload: any = {};
+      if (formData.serviceProviderID) basePayload.serviceProviderID = formData.serviceProviderID;
+      if (formData.companyID) basePayload.companyID = formData.companyID;
+      if (formData.branchesID) basePayload.branchesID = formData.branchesID;
+
+      let url = "";
+      let payload: any = {};
+
+      switch (quickAddOpen) {
+        case "department":
+          url = API.departments;
+          payload = { ...basePayload, departmentName: quickAddValue.trim() };
+          break;
+        case "designation":
+          url = API.designations;
+          payload = { ...basePayload, designation: quickAddValue.trim() };
+          break;
+        case "contractor":
+          url = API.contractors;
+          payload = { ...basePayload, contractorName: quickAddValue.trim() };
+          break;
+        default:
+          return;
+      }
+
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      const created = await res.json();
+      const item = created?.data ?? created;
+
+      // Auto-select the newly created item
+      switch (quickAddOpen) {
+        case "department":
+          setFormData((p) => ({
+            ...p,
+            empDepartmentForm: [...p.empDepartmentForm, {
+              _localId: uid(),
+              departmentNameID: item.id,
+              _deptAutocomplete: item.departmentName ?? quickAddValue,
+            }],
+            departmentNameID: item.id,
+            deptAutocomplete: item.departmentName ?? quickAddValue,
+            promotion: { ...p.promotion, departmentNameID: item.id },
+          }));
+          break;
+        case "designation":
+          setFormData((p) => ({
+            ...p,
+            empDesignationForm: [...p.empDesignationForm, {
+              _localId: uid(),
+              designationID: item.id,
+              _desgAutocomplete: item.designation ?? quickAddValue,
+            }],
+          }));
+          break;
+        case "contractor":
+          setFormData((p) => ({
+            ...p,
+            empContractorForm: [...p.empContractorForm, {
+              _localId: uid(),
+              contractorID: item.id,
+              _contrAutocomplete: item.contractorName ?? quickAddValue,
+            }],
+            contractorID: item.id,
+            contrAutocomplete: item.contractorName ?? quickAddValue,
+          }));
+          break;
+      }
+
+      setQuickAddOpen(null);
+      setQuickAddValue("");
+    } catch (e: any) {
+      console.error("Quick-add failed:", e);
+      setError(e?.message || "Quick-add failed");
+    } finally {
+      setQuickAddSaving(false);
+    }
+  };
+
+  const handleViewHistory = async (r: ManageEmpRead) => {
+    setHistoryEmployee(r);
+    setHistoryOpen(true);
+    setHistoryLoading(true);
+    try {
+      const res = await fetch(`${API.manageEmp}/${r.id}/field-history`);
+      if (!res.ok) throw new Error("Failed to fetch history");
+      const data = await res.json();
+      setHistoryData(Array.isArray(data) ? data : (data?.data ?? []));
+    } catch (e) {
+      console.error("Failed to load history:", e);
+      setHistoryData([]);
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
+
+  /* ===============
+     CRUD submit
+     =============== */
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSaving(true);
+    setError(null);
+
+    try {
+      const uploadedPhotoUrl = await uploadPhotoIfNeeded();
+
+      const edu = formData.eduForm.map(e => ({
+        id: e.id,
+        instituteType: e.instituteType || undefined,
+        instituteName: e.instituteName || undefined,
+        degree: e.degree || undefined,
+        pasingYear: e.pasingYear || undefined,
+        marks: e.marks || undefined,
+        gpaCgpa: e.gpaCgpa || undefined,
+        class: e.class || undefined,
+      }));
+
+      const exp = formData.expForm.map(x => ({
+        id: x.id,
+        orgName: x.orgName || undefined,
+        designation: x.designation || undefined,
+        fromDate: x.fromDate || undefined,
+        toDate: x.toDate || undefined,
+        responsibility: x.responsibility || undefined,
+        skill: x.skill || undefined,
+      }));
+
+           const devices = formData.devMapForm.map(d => ({
+        id: d.id,
+        deviceID: d.deviceID ? Number(d.deviceID) : undefined,
+        deviceEmpCode: d.deviceEmpCode || undefined,
+        deviceType: d.deviceType || "AT",
+      }));
+
+      const tokenDevices = tokenDevMapForm.map(d => ({
+        id: d.id,
+        deviceID: d.deviceID ? Number(d.deviceID) : undefined,
+        deviceEmpCode: d.deviceEmpCode || undefined,
+        deviceType: d.deviceType || "TR",
+      }));
+
+      const bankDetails = formData.bankDetailsForm.map(b => ({
+        id: b.id,
+        bankName: b.bankName || undefined,
+        bankBranchName: b.bankBranchName || undefined,
+        accNumber: b.accNumber || undefined,
+        ifscCode: b.ifscCode || undefined,
+        upi: b.upi || undefined,
+      }));
+
+      const empDesignations = formData.empDesignationForm
+        .filter(d => d.designationID != null)
+        .map(d => ({
+          id: d.id,
+          designationID: d.designationID!,
+        }));
+
+      const empBranches = formData.empBranchForm
+        .filter(b => b.branchesID != null)
+        .map(b => ({ id: b.id, branchesID: b.branchesID! }));
+
+      const empDepartments = formData.empDepartmentForm
+        .filter(d => d.departmentNameID != null)
+        .map(d => ({ id: d.id, departmentNameID: d.departmentNameID! }));
+
+      const empEmploymentTypes = formData.empEmploymentTypeForm
+        .filter(t => t.employmentType)
+        .map(t => ({ id: t.id, employmentType: t.employmentType }));
+
+      const empEmploymentStatuses = formData.empEmploymentStatusForm
+        .filter(s => s.employmentStatus)
+        .map(s => ({ id: s.id, employmentStatus: s.employmentStatus, probationPeriod: s.probationPeriod || undefined }));
+
+      const empWorkShifts = formData.empWorkShiftForm
+        .filter(w => w.workShiftID != null)
+        .map(w => ({ id: w.id, workShiftID: w.workShiftID! }));
+
+      const empAttendancePolicies = formData.empAttendancePolicyForm
+        .filter(a => a.attendancePolicyID != null)
+        .map(a => ({ id: a.id, attendancePolicyID: a.attendancePolicyID! }));
+
+      const empLeavePolicies = formData.empLeavePolicyForm
+        .filter(l => l.leavePolicyID != null)
+        .map(l => ({ id: l.id, leavePolicyID: l.leavePolicyID! }));
+
+      const empContractors = formData.empContractorForm
+        .filter(c => c.contractorID != null)
+        .map(c => ({ id: c.id, contractorID: c.contractorID! }));
+
+            const eduRemaining = new Set(edu.filter(e => e.id != null).map(e => e.id as number));
+      const expRemaining = new Set(exp.filter(x => x.id != null).map(x => x.id as number));
+      const devRemaining = new Set(devices.filter(d => d.id != null).map(d => d.id as number));
+      const tokenDevRemaining = new Set(tokenDevices.filter(d => d.id != null).map(d => d.id as number));
+      const bankRemaining = new Set(bankDetails.filter((b: { id?: number }) => b.id != null).map((b: { id?: number }) => b.id as number));
+      const empDesgRemaining = new Set(empDesignations.filter(d => d.id != null).map(d => d.id as number));
+      const empBranchRemaining = new Set(empBranches.filter(b => b.id != null).map(b => b.id as number));
+      const empDeptRemaining = new Set(empDepartments.filter(d => d.id != null).map(d => d.id as number));
+      const empEmpTypeRemaining = new Set(empEmploymentTypes.filter(t => t.id != null).map(t => t.id as number));
+      const empEmpStatusRemaining = new Set(empEmploymentStatuses.filter(s => s.id != null).map(s => s.id as number));
+      const empWSRemaining = new Set(empWorkShifts.filter(w => w.id != null).map(w => w.id as number));
+      const empAPRemaining = new Set(empAttendancePolicies.filter(a => a.id != null).map(a => a.id as number));
+      const empLPRemaining = new Set(empLeavePolicies.filter(l => l.id != null).map(l => l.id as number));
+      const empCtrRemaining = new Set(empContractors.filter(c => c.id != null).map(c => c.id as number));
+      const type = formData.promotion?.salaryPayGradeType;
+
+      const payload: any = {
+        serviceProviderID: formData.serviceProviderID ?? undefined,
+        companyID: formData.companyID ?? undefined,
+        branchesID: formData.branchesID ?? undefined,
+        contractorID:
+          formData.promotion?.employmentType === "Contract"
+            ? (formData.contractorID ?? undefined)
+            : null,
+
+        employeeFirstName: formData.employeeFirstName || undefined,
+        employeeLastName: formData.employeeLastName || undefined,
+        employeeID: formData.employeeID || undefined,
+        joiningDate: formData.joiningDate || undefined,
+
+        pfMemberStatus: formData.pfMemberStatus || undefined,
+        pfNumber: formData.pfNumber || undefined,
+
+        departmentNameID: formData.departmentNameID ?? undefined,
+        designationID: formData.empDesignationForm.length > 0
+          ? (formData.empDesignationForm[formData.empDesignationForm.length - 1].designationID ?? undefined)
+          : (formData.designationID ?? undefined),
+        employmentType: formData.promotion.employmentType || undefined,
+        empType: formData.promotion.employmentType || undefined,
+        employmentStatus: formData.promotion.employmentStatus || undefined,
+        probationPeriod: formData.promotion.probationPeriod || undefined,
+        workShiftID: formData.workShiftID ?? undefined,
+        attendancePolicyID: formData.attendancePolicyID ?? undefined,
+        leavePolicyID: formData.leavePolicyID ?? undefined,
+        salaryPayGradeType: formData.promotion.salaryPayGradeType || undefined,
+        monthlyPayGradeID: type === "Monthly" ? formData.promotion?.monthlyPayGradeID ?? undefined : undefined,
+        hourlyPayGradeID: type === "Hourly" ? formData.promotion?.hourlyPayGradeID ?? undefined : undefined,
+
+        shiftEligibility: formData.shiftEligibility || undefined,
+        nightShiftEligibility: formData.nightShiftEligibility || undefined,
+        maxHoursPerDay: formData.maxHoursPerDay || undefined,
+        weeklyOffPattern: formData.weeklyOffPattern || undefined,
+        noticePeriodDaysForResignation: formData.noticePeriodDaysForResignation || undefined,
+        noticePeriodDaysForTermination: formData.noticePeriodDaysForTermination || undefined,
+
+        typeOfEmployee: formData.typeOfEmployee || undefined,
+
+
+        businessPhoneNo: formData.businessPhoneNo || undefined,
+        businessEmail: formData.businessEmail || undefined,
+        personalPhoneNo: formData.personalPhoneNo || undefined,
+        personalEmail: formData.personalEmail || undefined,
+        emergancyContact: formData.emergancyContact || undefined,
+        presentAddress: formData.presentAddress || undefined,
+        permenantAddress: formData.permenantAddress || undefined,
+        employeePhotoUrl: uploadedPhotoUrl ?? (formData.employeePhotoUrl || undefined),
+
+        gender: formData.gender || undefined,
+        dateOfBirth: formData.dateOfBirth || undefined,
+        bloodGroup: formData.bloodGroup || undefined,
+        maritalStatus: formData.maritalStatus || undefined,
+        employeeFatherName: formData.employeeFatherName || undefined,
+        employeeMotherName: formData.employeeMotherName || undefined,
+        employeeSpouseName: formData.employeeSpouseName || undefined,
+
+        edu,
+        exp,
+        devices,
+        tokenDevices,
+        bankDetails,
+        empDesignations,
+        empBranches,
+        empDepartments,
+        empEmploymentTypes,
+        empEmploymentStatuses,
+        empWorkShifts,
+        empAttendancePolicies,
+        empLeavePolicies,
+        empContractors,
+
+        ...(editingRow ? {
+          eduIdsToDelete: originalEduIds.filter(id => !eduRemaining.has(id)),
+          expIdsToDelete: originalExpIds.filter(id => !expRemaining.has(id)),
+          deviceMapIdsToDelete: originalDevMapIds.filter(id => !devRemaining.has(id)),
+          tokenDeviceMapIdsToDelete: originalTokenDevMapIds.filter(id => !tokenDevRemaining.has(id)),
+          bankDetailsIdsToDelete: originalBankDetailIds.filter(id => !bankRemaining.has(id)),
+          empDesignationIdsToDelete: originalEmpDesignationIds.filter(id => !empDesgRemaining.has(id)),
+          empBranchIdsToDelete: originalEmpBranchIds.filter(id => !empBranchRemaining.has(id)),
+          empDepartmentIdsToDelete: originalEmpDepartmentIds.filter(id => !empDeptRemaining.has(id)),
+          empEmploymentTypeIdsToDelete: originalEmpEmploymentTypeIds.filter(id => !empEmpTypeRemaining.has(id)),
+          empEmploymentStatusIdsToDelete: originalEmpEmploymentStatusIds.filter(id => !empEmpStatusRemaining.has(id)),
+          empWorkShiftIdsToDelete: originalEmpWorkShiftIds.filter(id => !empWorkShiftRemaining.has(id)),
+          empAttendancePolicyIdsToDelete: originalEmpAttendancePolicyIds.filter(id => !empAttPolicyRemaining.has(id)),
+          empLeavePolicyIdsToDelete: originalEmpLeavePolicyIds.filter(id => !empLeavePolicyRemaining.has(id)),
+          empContractorIdsToDelete: originalEmpContractorIds.filter(id => !empContractorRemaining.has(id)),
+        } : {}),
+      };
+
+      if (editingRow) {
+        const res = await fetch(`${API.manageEmp}/${editingRow.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        if (!res.ok) throw new Error(await res.text());
+
+        // Save linked employees
+        await fetch(`${API.manageEmp}/${editingRow.id}/linked-employees`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ linkedEmployeeIds: linkedEmployees.map(le => le.id) }),
+        });
+      } else {
+        const res = await fetch(API.manageEmp, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        if (!res.ok) throw new Error(await res.text());
+
+        // Save linked employees for newly created employee
+        const created = await res.json().catch(() => null);
+        const newId = created?.id ?? created?.data?.id;
+        if (newId && linkedEmployees.length > 0) {
+          await fetch(`${API.manageEmp}/${newId}/linked-employees`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ linkedEmployeeIds: linkedEmployees.map(le => le.id) }),
+          });
+        }
+      }
+
+      await fetchRows();
+      resetForm();
+      setIsAddingNew(false);
+      setEditingRow(null);
+    } catch (e: any) {
+      setError(e?.message || "Save failed");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+ const handleEdit = async (r: ManageEmpRead) => {
+  setEditingRow(r);
+  setIsAddingNew(true);
+  setIsViewing(false);
+
+  try {
+    // ✅ Fetch fresh data for this specific employee
+    const response = await fetch(`${API.manageEmp}/${r.id}`);
+    if (!response.ok) throw new Error('Failed to fetch employee data');
+    const freshData = await response.json();
+
+    // Now use freshData instead of r for all mappings
+    const eduForm: EduForm[] = (freshData.empEduQualification ?? []).map((e: EduRead) => ({
+      id: e.id,
+      _localId: uid(),
+      instituteType: e.instituteType ?? "",
+      instituteName: e.instituteName ?? "",
+      degree: e.degree ?? "",
+      pasingYear: e.pasingYear ?? "",
+      marks: e.marks ?? "",
+      gpaCgpa: e.gpaCgpa ?? "",
+      class: e.class ?? "",
+    }));
+
+    const expForm: ExpForm[] = (freshData.empProfExprience ?? []).map((x: ExpRead) => ({
+      id: x.id,
+      _localId: uid(),
+      orgName: x.orgName ?? "",
+      designation: x.designation ?? "",
+      fromDate: x.fromDate ?? "",
+      toDate: x.toDate ?? "",
+      responsibility: x.responsibility ?? "",
+      skill: x.skill ?? "",
+    }));
+
+    // Biometric devices from empDeviceMapping
+    const devMapForm: DevMapForm[] = (freshData.empDeviceMapping ?? []).map((d: DevMapRead) => ({
+      id: d.id,
+      _localId: uid(),
+      deviceID: (d.deviceID ?? "").toString(),
+      deviceEmpCode: d.deviceEmpCode ?? "",
+      deviceName: d.device?.deviceName ?? d.deviceName ?? "",
+      deviceType: d.device?.deviceType ?? "AT",
+      _devAutocomplete: d.device?.deviceName ?? d.deviceName ?? "",
+    }));
+
+    // Token devices from tokenDeviceMapping
+    const tokenDevMapForm: TokenDevMapForm[] = (freshData.tokenDeviceMapping ?? []).map((d: any) => ({
+      id: d.id,
+      _localId: uid(),
+      deviceID: (d.deviceID ?? "").toString(),
+      deviceEmpCode: d.deviceEmpCode ?? "",
+      deviceName: d.device?.deviceName ?? d.deviceName ?? "",
+      deviceType: d.device?.deviceType ?? "TR",
+      _devAutocomplete: d.device?.deviceName ?? d.deviceName ?? "",
+    }));
+
+    // Bank details
+    const bankSource: BankDetailsRead[] = (freshData.employeeBankDetails ?? freshData.bankDetails ?? []) as BankDetailsRead[];
+    const bankDetailsForm: BankDetailsForm[] = bankSource.map((b): BankDetailsForm => ({
+      id: b.id,
+      _localId: uid(),
+      bankName: b.bankName ?? "",
+      bankBranchName: b.bankBranchName ?? "",
+      accNumber: b.accNumber ?? "",
+      ifscCode: b.ifscCode ?? "",
+      upi: b.upi ?? "",
+    }));
+
+    // Employee Designations
+    const empDesignationForm: EmpDesignationForm[] = (freshData.empDesignation ?? []).map((d: any) => ({
+      id: d.id,
+      _localId: uid(),
+      designationID: d.designationID ?? null,
+      _desgAutocomplete: d.designation?.designation ?? "",
+    }));
+
+    const latestPromotion = (freshData as any).empPromotion && (freshData as any).empPromotion.length
+      ? [...(freshData as any).empPromotion].sort((a: any, b: any) => (b.id ?? 0) - (a.id ?? 0))[0]
+      : null;
+
+    const effectiveDeptID = freshData.departmentNameID ?? null;
+    const effectiveDesgID = freshData.designationID ?? null;
+    const effectiveWorkShiftID = freshData.workShiftID ?? null;
+    const effectiveAttendancePolicyID = freshData.attendancePolicyID ?? null;
+    const effectiveLeavePolicyID = freshData.leavePolicyID ?? null;
+
+    // Set main form data
+    setFormData({
+      serviceProviderID: freshData.serviceProviderID ?? freshData.serviceProvider?.id ?? null,
+      companyID: freshData.companyID ?? freshData.company?.id ?? null,
+      branchesID: freshData.branchesID ?? freshData.branches?.id ?? null,
+      departmentNameID: effectiveDeptID,
+      designationID: effectiveDesgID,
+      contractorID: freshData.contractorID ?? freshData.contractor?.id ?? null,
+      spAutocomplete: freshData.serviceProvider?.companyName ?? freshData.serviceProviderName ?? "",
+      coAutocomplete: freshData.company?.companyName ?? freshData.companyName ?? "",
+      brAutocomplete: freshData.branches?.branchName ?? freshData.branchName ?? "",
+      employeeFirstName: freshData.employeeFirstName ?? "",
+      employeeLastName: freshData.employeeLastName ?? "",
+      deviceEmpCode: freshData.deviceEmpCode ?? "",
+      employeeID: freshData.employeeID ?? "",
+      joiningDate: freshData.joiningDate ?? "",
+      empType: freshData.empType ?? "",
+      pfMemberStatus: freshData.pfMemberStatus ?? "",
+      pfNumber: freshData.pfNumber ?? "",
+      monthlyPGAutocomplete: "",
+      hourlyPGAutocomplete: "",
+      shiftEligibility: freshData.shiftEligibility ?? "",
+      nightShiftEligibility: freshData.nightShiftEligibility ?? "",
+      maxHoursPerDay: freshData.maxHoursPerDay ?? "",
+      weeklyOffPattern: freshData.weeklyOffPattern ?? "",
+      noticePeriodDaysForResignation: freshData.noticePeriodDaysForResignation ?? "",
+      noticePeriodDaysForTermination: freshData.noticePeriodDaysForTermination ?? "",
+      typeOfEmployee: freshData.typeOfEmployee ?? "",
+      workShiftID: effectiveWorkShiftID,
+      attendancePolicyID: effectiveAttendancePolicyID,
+      leavePolicyID: effectiveLeavePolicyID,
+      businessPhoneNo: freshData.businessPhoneNo ?? "",
+      businessEmail: freshData.businessEmail ?? "",
+      personalPhoneNo: freshData.personalPhoneNo ?? "",
+      personalEmail: freshData.personalEmail ?? "",
+      emergancyContact: freshData.emergancyContact ?? "",
+      presentAddress: freshData.presentAddress ?? "",
+      permenantAddress: freshData.permenantAddress ?? "",
+      employeePhotoUrl: freshData.employeePhotoUrl ?? "",
+      gender: freshData.gender ?? "",
+      dateOfBirth: freshData.dateOfBirth ?? "",
+      bloodGroup: freshData.bloodGroup ?? "",
+      maritalStatus: freshData.maritalStatus ?? "",
+      employeeFatherName: freshData.employeeFatherName ?? "",
+      employeeMotherName: freshData.employeeMotherName ?? "",
+      employeeSpouseName: freshData.employeeSpouseName ?? "",
+      contrAutocomplete: "",
+      wsAutocomplete: "",
+      apAutocomplete: "",
+      lpAutocomplete: "",
+      promotion: latestPromotion ? {
+        id: latestPromotion.id,
+        departmentNameID: latestPromotion.departmentNameID ?? null,
+        designationID: latestPromotion.designationID ?? null,
+        managerID: latestPromotion.managerID ?? null,
+        employmentType: latestPromotion.employmentType ?? "",
+        employmentStatus: latestPromotion.employmentStatus ?? "",
+        probationPeriod: latestPromotion.probationPeriod ?? "",
+        workShiftID: latestPromotion.workShiftID ?? null,
+        attendancePolicyID: latestPromotion.attendancePolicyID ?? null,
+        leavePolicyID: latestPromotion.leavePolicyID ?? null,
+        salaryPayGradeType: latestPromotion.salaryPayGradeType ?? "",
+        monthlyPayGradeID: latestPromotion.monthlyPayGradeID ?? null,
+        hourlyPayGradeID: latestPromotion.hourlyPayGradeID ?? null,
+      } : {
+        id: undefined,
+        departmentNameID: effectiveDeptID,
+        designationID: effectiveDesgID,
+        managerID: freshData.managerID ?? null,
+        employmentType: freshData.employmentType ?? "",
+        employmentStatus: freshData.employmentStatus ?? "",
+        probationPeriod: freshData.probationPeriod ?? "",
+        workShiftID: effectiveWorkShiftID,
+        attendancePolicyID: effectiveAttendancePolicyID,
+        leavePolicyID: effectiveLeavePolicyID,
+        salaryPayGradeType: freshData.salaryPayGradeType ?? "",
+        monthlyPayGradeID: freshData.monthlyPayGradeID ?? null,
+        hourlyPayGradeID: freshData.hourlyPayGradeID ?? null,
+      },
+      deptAutocomplete: "",
+      desgAutocomplete: "",
+      eduForm,
+      expForm,
+      devMapForm,
+      bankDetailsForm,
+      empDesignationForm,
+      // Multi-entry form arrays (populated from junction tables)
+      empDepartmentForm: (freshData.empDepartment ?? []).map((d: any) => ({ id: d.id, _localId: uid(), departmentNameID: d.departmentNameID ?? null, _deptAutocomplete: d.department?.departmentName ?? "" })),
+      empBranchForm: (freshData.empBranch ?? []).map((d: any) => ({ id: d.id, _localId: uid(), branchesID: d.branchesID ?? null, _brAutocomplete: d.branch?.branchName ?? "" })),
+      empEmploymentTypeForm: (freshData.empEmploymentType ?? []).map((d: any) => ({ id: d.id, _localId: uid(), employmentType: d.employmentType ?? "" })),
+      empEmploymentStatusForm: (freshData.empEmploymentStatus ?? []).map((d: any) => ({ id: d.id, _localId: uid(), employmentStatus: d.employmentStatus ?? "", probationPeriod: d.probationPeriod ?? "" })),
+      empWorkShiftForm: (freshData.empWorkShift ?? []).map((d: any) => ({ id: d.id, _localId: uid(), workShiftID: d.workShiftID ?? null, _wsAutocomplete: d.workShift?.workShiftName ?? "" })),
+      empLeavePolicyForm: (freshData.empLeavePolicy ?? []).map((d: any) => ({ id: d.id, _localId: uid(), leavePolicyID: d.leavePolicyID ?? null, _lpAutocomplete: d.leavePolicy?.leavePolicyName ?? "" })),
+      empAttendancePolicyForm: (freshData.empAttendancePolicy ?? []).map((d: any) => ({ id: d.id, _localId: uid(), attendancePolicyID: d.attendancePolicyID ?? null, _apAutocomplete: d.attendancePolicy?.attendancePolicyName ?? "" })),
+      empContractorForm: (freshData.empContractor ?? []).map((d: any) => ({ id: d.id, _localId: uid(), contractorID: d.contractorID ?? null, _contrAutocomplete: d.contractor?.contractorName ?? "" })),
+    });
+
+    // Set token device mapping state
+    setTokenDevMapForm(tokenDevMapForm);
+    setOriginalTokenDevMapIds(tokenDevMapForm.filter(x => x.id != null).map(x => x.id!));
+
+    // Async calls for monthly/hourly pay grades
+    (async () => {
+      const mpId = freshData.monthlyPayGradeID ?? null;
+      const hpId = freshData.hourlyPayGradeID ?? null;
+      if (mpId) {
+        const m = await fetchFirstById<MonthlyPG>(API.monthlyGrades, mpId);
+        setFormData((p) => ({ ...p, monthlyPGAutocomplete: m?.monthlyPayGradeName ?? String(mpId) }));
+      }
+      if (hpId) {
+        const h = await fetchFirstById<HourlyPG>(API.hourlyGrades, hpId);
+        setFormData((p) => ({ ...p, hourlyPGAutocomplete: h?.hourlyPayGradeName ?? String(hpId) }));
+      }
+    })();
+
+    resolveLabelsForEdit({
+      ...freshData,
+      departmentNameID: effectiveDeptID,
+      designationID: effectiveDesgID,
+      contractorID: freshData.contractorID,
+      attendancePolicyID: effectiveAttendancePolicyID,
+      leavePolicyID: effectiveLeavePolicyID,
+      workShiftID: effectiveWorkShiftID,
+    } as any, setFormData);
+
+    // Set original IDs for deletion tracking
+    setOriginalEduIds(eduForm.filter(x => x.id != null).map(x => x.id!));
+    setOriginalExpIds(expForm.filter(x => x.id != null).map(x => x.id!));
+    setOriginalDevMapIds(devMapForm.filter(x => x.id != null).map(x => x.id!));
+    setOriginalBankDetailIds(bankDetailsForm.filter(x => x.id != null).map(x => x.id!));
+    setOriginalEmpDesignationIds(empDesignationForm.filter(x => x.id != null).map(x => x.id!));
+
+    // Set original IDs for junction table deletion tracking
+    const empBranchForm = (freshData.empBranch ?? []).map((d: any) => d);
+    const empDepartmentForm2 = (freshData.empDepartment ?? []).map((d: any) => d);
+    const empEmploymentTypeForm = (freshData.empEmploymentType ?? []).map((d: any) => d);
+    const empEmploymentStatusForm = (freshData.empEmploymentStatus ?? []).map((d: any) => d);
+    const empWorkShiftForm = (freshData.empWorkShift ?? []).map((d: any) => d);
+    const empAttendancePolicyForm = (freshData.empAttendancePolicy ?? []).map((d: any) => d);
+    const empLeavePolicyForm = (freshData.empLeavePolicy ?? []).map((d: any) => d);
+    const empContractorForm = (freshData.empContractor ?? []).map((d: any) => d);
+    setOriginalEmpBranchIds(empBranchForm.filter((x: any) => x.id != null).map((x: any) => x.id));
+    setOriginalEmpDepartmentIds(empDepartmentForm2.filter((x: any) => x.id != null).map((x: any) => x.id));
+    setOriginalEmpEmploymentTypeIds(empEmploymentTypeForm.filter((x: any) => x.id != null).map((x: any) => x.id));
+    setOriginalEmpEmploymentStatusIds(empEmploymentStatusForm.filter((x: any) => x.id != null).map((x: any) => x.id));
+    setOriginalEmpWorkShiftIds(empWorkShiftForm.filter((x: any) => x.id != null).map((x: any) => x.id));
+    setOriginalEmpAttendancePolicyIds(empAttendancePolicyForm.filter((x: any) => x.id != null).map((x: any) => x.id));
+    setOriginalEmpLeavePolicyIds(empLeavePolicyForm.filter((x: any) => x.id != null).map((x: any) => x.id));
+    setOriginalEmpContractorIds(empContractorForm.filter((x: any) => x.id != null).map((x: any) => x.id));
+
+    // Load linked employees
+    try {
+      const linkedRes = await fetch(`${API.manageEmp}/${r.id}/linked-employees`);
+      if (linkedRes.ok) {
+        const linkedData = await linkedRes.json();
+        setLinkedEmployees(linkedData || []);
+      } else {
+        setLinkedEmployees([]);
+      }
+    } catch {
+      setLinkedEmployees([]);
+    }
+
+    setPhotoFile(null);
+    setPhotoPreview(null);
+    
+  } catch (error) {
+    console.error('Failed to fetch employee data:', error);
+    setError('Failed to load employee data for editing');
+  }
+};
+
+
+  const handleView = (r: ManageEmpRead) => {
+    setViewRow(r);
+    setIsViewing(true);
+    setIsAddingNew(false);
+  };
+
+  const handleDelete = async (id: ID) => {
+    if (!confirm("Delete this employee?")) return;
+    try {
+      const res = await fetch(`${API.manageEmp}/${id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error(await res.text());
+      await fetchRows();
+    } catch (e: any) {
+      alert(e?.message || "Delete failed");
+    }
+  };
+
+  const handleCancel = () => {
+    resetForm();
+    setIsAddingNew(false);
+    setIsViewing(false);
+    setViewRow(null);
+  };
+
+  /* ==========
+     Search
+     ========== */
+  const filteredRows = useMemo(() => {
+    const t = searchTerm.trim().toLowerCase();
+    if (!t) return rows;
+    return rows.filter((r) =>
+      [
+        r.employeeFirstName,
+        r.employeeLastName,
+        r.employeeID,
+        r.businessEmail,
+        spName(r),
+        contrName(r),
+        coName(r),
+        brName(r),
+      ]
+        .filter(Boolean)
+        .map((x) => (x ?? "").toLowerCase())
+        .some((f) => f.includes(t))
+    );
+  }, [rows, searchTerm]);
+
+  /* ==========
+     UI Render
+     ========== */
+  return (
+    <div className="space-y-6 w-full max-w-7xl mx-auto px-4">
+      {/* Header */}
+      <div className="flex items-center justify-between w-full">
+        <div className="min-w-0 flex-1">
+          <h1 className="text-2xl font-bold text-gray-900">Manage Employees</h1>
+          <p className="text-gray-600 mt-1 text-sm">Create, read, update and delete employees</p>
+        </div>
+
+        <div className="flex items-center gap-3">
+          {!isAddingNew && !isViewing && canManage && (
+            <Button
+              onClick={() => { resetForm(); setIsAddingNew(true); }}
+              className="bg-blue-600 hover:bg-blue-700 flex-shrink-0 text-sm px-3 py-2"
+            >
+              <Plus className="w-4 h-4 mr-1" /> Add Employee
+            </Button>
+          )}
+          {(isAddingNew || isViewing) && (
+            <Button
+              variant="outline"
+              onClick={handleCancel}
+              className="text-sm"
+            >
+              <X className="w-4 h-4 mr-1" /> Cancel
+            </Button>
+          )}
+        </div>
+      </div>
+
+      {/* Add/Edit Form - Inline */}
+      {isAddingNew && (
+        <Card className="border-2 border-blue-200">
+          <CardHeader className="bg-blue-50">
+            <CardTitle className="text-lg flex items-center gap-2">
+              <Icon icon="mdi:account-group" className="w-5 h-5 text-blue-600" />
+              {editingRow ? "Edit Employee" : "Add New Employee"}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-6">
+            {error && (
+              <div className="rounded-md border border-red-200 bg-red-50 text-red-700 px-3 py-2 text-sm mb-4">
+                {error}
+              </div>
+            )}
+
+            <form onSubmit={handleSubmit} className="space-y-6">
+              {/* SP / Company / Branch (autocomplete) */}
+              <div className="grid grid-cols-1 gap-6">
+                {/* SUPERADMIN can choose SP + Company manually */}
+                {user?.role === "SUPERADMIN" && (
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    {/* SERVICE PROVIDER — visible only for SUPERADMIN */}
+                    {user?.role === "SUPERADMIN" && (
+                      <div ref={spRef} className="space-y-2 relative">
+                        <Label>Service Provider *</Label>
+                        <Input
+                          value={formData.spAutocomplete}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setFormData((p) => ({ ...p, spAutocomplete: val, serviceProviderID: null }));
+                            runFetchSP(val);
+                          }}
+                          placeholder="Start typing service provider…"
+                          autoComplete="off"
+                        />
+
+                        {spList.length > 0 && (
+                          <div className="absolute z-10 bg-white border rounded w-full shadow max-h-48 overflow-y-auto">
+                            {spLoading && <div className="px-3 py-2 text-sm text-gray-500">Loading…</div>}
+                            {spList.map((sp) => (
+                              <div
+                                key={sp.id}
+                                className="px-3 py-2 hover:bg-gray-100 cursor-pointer"
+                                onMouseDown={(e) => e.preventDefault()}
+                                onClick={() => {
+                                  setFormData((p) => ({
+                                    ...p,
+                                    serviceProviderID: sp.id,
+                                    spAutocomplete: sp.companyName ?? "",
+                                  }));
+                                  setSpList([]);
+                                }}
+                              >
+                                {sp.companyName}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* COMPANY — visible only for SUPERADMIN */}
+                    {user?.role === "SUPERADMIN" && (
+                      <div ref={coRef} className="space-y-2 relative">
+                        <Label>Company *</Label>
+                        <Input
+                          value={formData.coAutocomplete}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setFormData((p) => ({ ...p, coAutocomplete: val, companyID: null }));
+                            runFetchCO(val);
+                          }}
+                          placeholder="Start typing company…"
+                          autoComplete="off"
+                        />
+
+                        {coList.length > 0 && (
+                          <div className="absolute z-10 bg-white border rounded w-full shadow max-h-48 overflow-y-auto">
+                            {coLoading && <div className="px-3 py-2 text-sm text-gray-500">Loading…</div>}
+                            {coList.map((co) => (
+                              <div
+                                key={co.id}
+                                className="px-3 py-2 hover:bg-gray-100 cursor-pointer"
+                                onMouseDown={(e) => e.preventDefault()}
+                                onClick={() => {
+                                  setFormData((p) => ({
+                                    ...p,
+                                    companyID: co.id,
+                                    coAutocomplete: co.companyName ?? "",
+                                  }));
+                                  setCoList([]);
+                                }}
+                              >
+                                {co.companyName}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Branch - Multi-entry repeater */}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-lg font-semibold">Branch *</h3>
+                    <div className="flex gap-2">
+                      {canManage && <Button type="button" variant="outline" size="sm" onClick={() => window.open('/branches', '_blank')}><Plus className="w-4 h-4 mr-1" /> Manage Branches</Button>}
+                      <Button variant="outline" size="sm" type="button" onClick={addEmpBranch}>
+                        <Plus className="w-4 h-4 mr-1" /> Add Branch
+                      </Button>
+                    </div>
+                  </div>
+                  {formData.empBranchForm.length === 0 ? (
+                    <div className="text-center py-6 text-gray-500 border border-gray-200 rounded-lg">
+                      <Icon icon="mdi:office-building-marker" className="w-10 h-10 text-gray-300 mx-auto mb-2" />
+                      <p>No branch entries added yet</p>
+                    </div>
+                  ) : (
+                    formData.empBranchForm.map((eb) => (
+                      <div key={eb._localId} className="border border-gray-200 rounded-lg p-4 space-y-3">
+                        <div className="flex items-center justify-between">
+                          <span className="font-medium text-gray-900">Branch</span>
+                          <Button type="button" variant="ghost" size="sm" onClick={() => removeEmpBranch(eb._localId)} className="text-red-600 hover:text-red-700 hover:bg-red-50"><X className="w-4 h-4" /></Button>
+                        </div>
+                        <div ref={brRef} className="space-y-2 relative">
+                          <Label>Branch</Label>
+                          <Input
+                            value={eb._brAutocomplete}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              updateEmpBranch(eb._localId, { _brAutocomplete: val, branchesID: null });
+                              runFetchBR(val);
+                              setActiveBrLocalId(eb._localId);
+                            }}
+                            onFocus={(e) => {
+                              setActiveBrLocalId(eb._localId);
+                              if (e.target.value.length >= MIN_CHARS) runFetchBR(e.target.value);
+                            }}
+                            placeholder="Start typing branch…"
+                            autoComplete="off"
+                          />
+                          {brList.length > 0 && activeBrLocalId === eb._localId && (
+                            <div className="absolute z-10 bg-white border rounded w-full shadow max-h-48 overflow-y-auto">
+                              {brLoading && <div className="px-3 py-2 text-sm text-gray-500">Loading…</div>}
+                              {brList.map((br) => (
+                                <div key={br.id} className="px-3 py-2 hover:bg-gray-100 cursor-pointer" onMouseDown={(e) => e.preventDefault()} onClick={() => {
+                                  updateEmpBranch(eb._localId, { branchesID: br.id, _brAutocomplete: br.branchName ?? "" });
+                                  if (user?.role === "MANAGER") {
+                                    setFormData((p) => ({ ...p, companyID: br.companyID ?? p.companyID, serviceProviderID: br.serviceProviderID ?? p.serviceProviderID }));
+                                  }
+                                  setBrList([]);
+                                  setActiveBrLocalId(null);
+                                }}>{br.branchName}</div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Employee Type</Label>
+                  <select className="w-full rounded-md border px-3 py-2" value={formData.typeOfEmployee || ""} onChange={(e) => setFormData((p) => ({ ...p, typeOfEmployee: e.target.value }))}>
+                    <option value="">-- Select Employee Type --</option>
+                    <option value="employee">Employee</option>
+                    <option value="trustee">Trustee</option>
+                    <option value="owner">Owner</option>
+                    <option value="proprietor">Proprietor</option>
+                    <option value="manager">Director</option>
+                    <option value="contractor">Contractor</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Basic info */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <Label>First Name</Label>
+                  <Input
+                    value={formData.employeeFirstName}
+                    onChange={(e) => setFormData((p) => ({ ...p, employeeFirstName: e.target.value }))}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Last Name</Label>
+                  <Input
+                    value={formData.employeeLastName}
+                    onChange={(e) => setFormData((p) => ({ ...p, employeeLastName: e.target.value }))}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Employee ID</Label>
+                  <Input
+                    value={formData.employeeID}
+                    onChange={(e) => setFormData((p) => ({ ...p, employeeID: e.target.value }))}
+                  />
+                </div>
+              </div>
+
+              {/* Codes / Date */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <Label>Joining Date</Label>
+                  <Input
+                    type="date"
+                    value={formData.joiningDate}
+                    onChange={(e) => setFormData((p) => ({ ...p, joiningDate: e.target.value }))}
+                  />
+                </div>
+
+                <div className="space-y-2 mt-3">
+                  <label>PF Member</label>
+                  <div className="flex items-center space-x-4">
+                    <label className="flex items-center space-x-2">
+                      <input
+                        type="checkbox"
+                        checked={formData.pfMemberStatus === "Yes"}
+                        onChange={(e) => setFormData((p) => ({ ...p, pfMemberStatus: e.target.checked ? "Yes" : "No" }))}
+                      />
+                      <span>Yes</span>
+                    </label>
+                    <label className="flex items-center space-x-2">
+                      <input
+                        type="checkbox"
+                        checked={formData.pfMemberStatus === "No"}
+                        onChange={(e) => setFormData((p) => ({ ...p, pfMemberStatus: e.target.checked ? "No" : "Yes" }))}
+                      />
+                      <span>No</span>
+                    </label>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label>PF Number</label>
+                <Input
+                  value={formData.pfNumber}
+                  onChange={(e) => setFormData((p) => ({ ...p, pfNumber: e.target.value }))}
+                />
+              </div>
+
+              {/* Department - Multi-entry repeater */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-semibold">Department</h3>
+                  <div className="flex gap-2">
+                    {canManage && <Button type="button" variant="outline" size="sm" onClick={() => { setQuickAddOpen('department'); setQuickAddValue(''); setQuickAddSuggestions([]); }}><Plus className="w-4 h-4 mr-1" /> Quick Add</Button>}
+                    <Button variant="outline" size="sm" type="button" onClick={addEmpDepartment}>
+                      <Plus className="w-4 h-4 mr-1" /> Add Department
+                    </Button>
+                  </div>
+                </div>
+                {formData.empDepartmentForm.length === 0 ? (
+                  <div className="text-center py-6 text-gray-500 border border-gray-200 rounded-lg">
+                    <Icon icon="mdi:domain" className="w-10 h-10 text-gray-300 mx-auto mb-2" />
+                    <p>No department entries added yet</p>
+                  </div>
+                ) : (
+                  formData.empDepartmentForm.map((ed) => (
+                    <div key={ed._localId} className="border border-gray-200 rounded-lg p-4 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="font-medium text-gray-900">Department</span>
+                        <Button type="button" variant="ghost" size="sm" onClick={() => removeEmpDepartment(ed._localId)} className="text-red-600 hover:text-red-700 hover:bg-red-50"><X className="w-4 h-4" /></Button>
+                      </div>
+                      <div ref={deptRef} className="space-y-2 relative">
+                        <Label>Department</Label>
+                        <Input
+                          value={ed._deptAutocomplete}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            updateEmpDepartment(ed._localId, { _deptAutocomplete: val, departmentNameID: null });
+                            runFetchDept(val);
+                            setActiveDeptLocalId(ed._localId);
+                          }}
+                          onFocus={(e) => {
+                            setActiveDeptLocalId(ed._localId);
+                            if (e.target.value.length >= MIN_CHARS) runFetchDept(e.target.value);
+                          }}
+                          placeholder="Start typing department…"
+                          autoComplete="off"
+                        />
+                        {deptList.length > 0 && activeDeptLocalId === ed._localId && (
+                          <div className="absolute z-10 bg-white border rounded w-full shadow max-h-48 overflow-y-auto">
+                            {deptLoading && <div className="px-3 py-2 text-sm text-gray-500">Loading…</div>}
+                            {deptList.map((d) => (
+                              <div key={d.id} className="px-3 py-2 hover:bg-gray-100 cursor-pointer" onMouseDown={(e) => e.preventDefault()} onClick={() => {
+                                updateEmpDepartment(ed._localId, { departmentNameID: d.id, _deptAutocomplete: d.departmentName ?? String(d.id) });
+                                setDeptList([]);
+                                setActiveDeptLocalId(null);
+                              }}>{d.departmentName}</div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+
+              {/* Designation - Multi-entry repeater */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-semibold">Designation</h3>
+                  <div className="flex gap-2">
+                    {canManage && <Button type="button" variant="outline" size="sm" onClick={() => { setQuickAddOpen('designation'); setQuickAddValue(''); setQuickAddSuggestions([]); }}><Plus className="w-4 h-4 mr-1" /> Quick Add</Button>}
+                    <Button variant="outline" size="sm" type="button" onClick={addEmpDesignation}>
+                      <Plus className="w-4 h-4 mr-1" /> Add Designation
+                    </Button>
+                  </div>
+                </div>
+
+                {formData.empDesignationForm.length === 0 ? (
+                  <div className="text-center py-6 text-gray-500 border border-gray-200 rounded-lg">
+                    <Icon icon="mdi:badge-account" className="w-10 h-10 text-gray-300 mx-auto mb-2" />
+                    <p>No designation rows added yet</p>
+                  </div>
+                ) : (
+                  formData.empDesignationForm.map((ed) => (
+                    <div key={ed._localId} className="border border-gray-200 rounded-lg p-4 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="font-medium text-gray-900">Designation</span>
+                        <Button type="button" variant="ghost" size="sm" onClick={() => removeEmpDesignation(ed._localId)} className="text-red-600 hover:text-red-700 hover:bg-red-50"><X className="w-4 h-4" /></Button>
+                      </div>
+                      <div ref={desgRef} className="space-y-2 relative">
+                        <Label>Designation</Label>
+                        <Input
+                          value={ed._desgAutocomplete}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            updateEmpDesignation(ed._localId, { _desgAutocomplete: val, designationID: null });
+                            runFetchDesg(val);
+                            setActiveDesgLocalId(ed._localId);
+                          }}
+                          onFocus={(e) => {
+                            setActiveDesgLocalId(ed._localId);
+                            if (e.target.value.length >= MIN_CHARS) runFetchDesg(e.target.value);
+                          }}
+                          placeholder="Start typing designation…"
+                          autoComplete="off"
+                        />
+                        {desgList.length > 0 && activeDesgLocalId === ed._localId && (
+                          <div className="absolute z-10 bg-white border rounded w-full shadow max-h-48 overflow-y-auto">
+                            {desgLoading && <div className="px-3 py-2 text-sm text-gray-500">Loading…</div>}
+                            {desgList.map((d) => (
+                              <div key={d.id} className="px-3 py-2 hover:bg-gray-100 cursor-pointer" onMouseDown={(e) => e.preventDefault()} onClick={() => {
+                                updateEmpDesignation(ed._localId, { designationID: d.id, _desgAutocomplete: d.designation ?? String(d.id) });
+                                setDesgList([]);
+                                setActiveDesgLocalId(null);
+                              }}>{d.designation}</div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+
+              {/* Linked Employees (Approvers) */}
+              <div ref={linkedEmpRef} className="space-y-2 relative">
+                <Label>Linked Employees (Approvers / Managers / Higher Authority)</Label>
+                <p className="text-xs text-gray-500">Search and select employees who can approve requests for this employee. These can be managers, higher authorities, or any approver.</p>
+                <Input
+                  value={linkedEmpSearch}
+                  onChange={(e) => {
+                    setLinkedEmpSearch(e.target.value);
+                    runFetchLinkedEmpSuggestions(e.target.value);
+                  }}
+                  onFocus={() => {
+                    runFetchLinkedEmpSuggestions(linkedEmpSearch);
+                  }}
+                  placeholder="Search employees to link..."
+                  autoComplete="off"
+                />
+                {linkedEmpSuggestions.length > 0 && (
+                  <div className="absolute z-10 bg-white border rounded w-full shadow max-h-48 overflow-y-auto">
+                    {linkedEmpLoading && <div className="px-3 py-2 text-sm text-gray-500">Loading…</div>}
+                    {linkedEmpSuggestions.map((m) => {
+                      const full = `${m.employeeFirstName ?? ""} ${m.employeeLastName ?? ""}`.trim() || `#${m.id}`;
+                      return (
+                        <div
+                          key={m.id}
+                          className="px-3 py-2 hover:bg-gray-100 cursor-pointer"
+                          onMouseDown={(e) => e.preventDefault()}
+                          onClick={() => addLinkedEmployee(m)}
+                        >
+                          {full}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+                {linkedEmployees.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    {linkedEmployees.map((le) => {
+                      const name = `${le.employeeFirstName ?? ""} ${le.employeeLastName ?? ""}`.trim() || `#${le.id}`;
+                      return (
+                        <Badge key={le.id} variant="secondary" className="flex items-center gap-1 px-2 py-1">
+                          {name}
+                          <button
+                            type="button"
+                            onClick={() => removeLinkedEmployee(le.id)}
+                            className="ml-1 text-gray-500 hover:text-red-600"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        </Badge>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* Employment Type - Multi-entry repeater */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-semibold">Employment Type</h3>
+                  <Button variant="outline" size="sm" type="button" onClick={addEmpEmploymentType}>
+                    <Plus className="w-4 h-4 mr-1" /> Add Employment Type
+                  </Button>
+                </div>
+                {formData.empEmploymentTypeForm.length === 0 ? (
+                  <div className="text-center py-6 text-gray-500 border border-gray-200 rounded-lg">
+                    <Icon icon="mdi:briefcase-variant" className="w-10 h-10 text-gray-300 mx-auto mb-2" />
+                    <p>No employment type entries added yet</p>
+                  </div>
+                ) : (
+                  formData.empEmploymentTypeForm.map((et) => (
+                    <div key={et._localId} className="border border-gray-200 rounded-lg p-4 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="font-medium text-gray-900">Employment Type</span>
+                        <Button type="button" variant="ghost" size="sm" onClick={() => removeEmpEmploymentType(et._localId)} className="text-red-600 hover:text-red-700 hover:bg-red-50"><X className="w-4 h-4" /></Button>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Type</Label>
+                        <Select value={et.employmentType || ""} onValueChange={(val) => updateEmpEmploymentType(et._localId, { employmentType: val })}>
+                          <SelectTrigger className="w-full"><SelectValue placeholder="Select employment type…" /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="Company">Company</SelectItem>
+                            <SelectItem value="Contract">Contract</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+
+              {/* Employment Status - Multi-entry repeater */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-semibold">Employment Status</h3>
+                  <Button variant="outline" size="sm" type="button" onClick={addEmpEmploymentStatus}>
+                    <Plus className="w-4 h-4 mr-1" /> Add Employment Status
+                  </Button>
+                </div>
+                {formData.empEmploymentStatusForm.length === 0 ? (
+                  <div className="text-center py-6 text-gray-500 border border-gray-200 rounded-lg">
+                    <Icon icon="mdi:clipboard-check" className="w-10 h-10 text-gray-300 mx-auto mb-2" />
+                    <p>No employment status entries added yet</p>
+                  </div>
+                ) : (
+                  formData.empEmploymentStatusForm.map((es) => (
+                    <div key={es._localId} className="border border-gray-200 rounded-lg p-4 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="font-medium text-gray-900">Employment Status</span>
+                        <Button type="button" variant="ghost" size="sm" onClick={() => removeEmpEmploymentStatus(es._localId)} className="text-red-600 hover:text-red-700 hover:bg-red-50"><X className="w-4 h-4" /></Button>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label>Status</Label>
+                          <Select value={es.employmentStatus || ""} onValueChange={(val) => updateEmpEmploymentStatus(es._localId, { employmentStatus: val })}>
+                            <SelectTrigger className="w-full"><SelectValue placeholder="Select status…" /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="Permanent">Permanent</SelectItem>
+                              <SelectItem value="Probation">Probation</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        {es.employmentStatus === "Probation" && (
+                          <div className="space-y-2">
+                            <Label>Probation Period</Label>
+                            <Input value={es.probationPeriod} onChange={(e) => updateEmpEmploymentStatus(es._localId, { probationPeriod: e.target.value })} placeholder="e.g. 6 months" />
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+
+              {/* Contractor - Multi-entry repeater */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-semibold">Contractor</h3>
+                  <div className="flex gap-2">
+                    {canManage && <Button type="button" variant="outline" size="sm" onClick={() => { setQuickAddOpen('contractor'); setQuickAddValue(''); setQuickAddSuggestions([]); }}><Plus className="w-4 h-4 mr-1" /> Quick Add</Button>}
+                    <Button variant="outline" size="sm" type="button" onClick={addEmpContractor}>
+                      <Plus className="w-4 h-4 mr-1" /> Add Contractor
+                    </Button>
+                  </div>
+                </div>
+                {formData.empContractorForm.length === 0 ? (
+                  <div className="text-center py-6 text-gray-500 border border-gray-200 rounded-lg">
+                    <Icon icon="mdi:account-hard-hat" className="w-10 h-10 text-gray-300 mx-auto mb-2" />
+                    <p>No contractor entries added yet</p>
+                  </div>
+                ) : (
+                  formData.empContractorForm.map((ec) => (
+                    <div key={ec._localId} className="border border-gray-200 rounded-lg p-4 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="font-medium text-gray-900">Contractor</span>
+                        <Button type="button" variant="ghost" size="sm" onClick={() => removeEmpContractor(ec._localId)} className="text-red-600 hover:text-red-700 hover:bg-red-50"><X className="w-4 h-4" /></Button>
+                      </div>
+                      <div ref={contrRef} className="space-y-2 relative">
+                        <Label>Contractor</Label>
+                        <Input
+                          value={ec._contrAutocomplete}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            updateEmpContractor(ec._localId, { _contrAutocomplete: val, contractorID: null });
+                            runFetchContr(val);
+                            setActiveContrLocalId(ec._localId);
+                          }}
+                          onFocus={(e) => {
+                            setActiveContrLocalId(ec._localId);
+                            if (e.target.value.length >= MIN_CHARS) runFetchContr(e.target.value);
+                          }}
+                          placeholder="Start typing contractor…"
+                          autoComplete="off"
+                        />
+                        {contrList.length > 0 && activeContrLocalId === ec._localId && (
+                          <div className="absolute z-10 bg-white border rounded w-full shadow max-h-48 overflow-y-auto">
+                            {contrLoading && <div className="px-3 py-2 text-sm text-gray-500">Loading…</div>}
+                            {contrList.map((c) => (
+                              <div key={c.id} className="px-3 py-2 hover:bg-gray-100 cursor-pointer" onMouseDown={(e) => e.preventDefault()} onClick={() => {
+                                updateEmpContractor(ec._localId, { contractorID: c.id, _contrAutocomplete: c.contractorName ?? String(c.id) });
+                                setContrList([]);
+                                setActiveContrLocalId(null);
+                              }}>{c.contractorName}</div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+
+              {/* Policy / Shift IDs */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* Salary Pay Grade Type + conditional autocompletes */}
+                <div className="space-y-3">
+                  <div className="space-y-2">
+                    <Label>Salary Pay Grade Type</Label>
+                    <Select
+                      value={formData.promotion.salaryPayGradeType || ""}
+                      onValueChange={(val) =>
+                        setFormData((p) => ({
+                          ...p,
+                          salaryPayGradeType: val,
+                          promotion: {
+                            ...p.promotion,
+                            salaryPayGradeType: val,
+                            monthlyPayGradeID: val === "Monthly" ? p.promotion.monthlyPayGradeID : null,
+                          },
+                          monthlyPGAutocomplete: val === "Monthly" ? p.monthlyPGAutocomplete : "",
+                        }))
+                      }
+                    >
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Select type…" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Monthly">Monthly</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Monthly PG (only when Monthly is selected) */}
+                  <div ref={monthlyPGRef} className="space-y-2 relative">
+                    <div className="flex items-center justify-between">
+                      <Label>Pay Grade</Label>
+                      {canManage && <Button type="button" variant="ghost" size="sm" className="h-6 w-6 p-0" title="Manage Pay Grades" onClick={() => window.open('/monthly-pay-grade', '_blank')}><Plus className="w-3 h-3" /></Button>}
+                    </div>
+                    <Input
+                      value={formData.monthlyPGAutocomplete}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setFormData((p) => ({
+                          ...p,
+                          monthlyPGAutocomplete: val,
+                          promotion: { ...p.promotion, monthlyPayGradeID: null },
+                        }));
+                        runFetchMonthlyPG(val);
+                      }}
+                      onFocus={(e) => {
+                        const val = e.target.value;
+                        if (val.length >= MIN_CHARS) runFetchMonthlyPG(val);
+                      }}
+                      placeholder="Start typing pay grade…"
+                      autoComplete="off"
+                    />
+                    {monthlyPGList.length > 0 && (
+                      <div className="absolute z-10 bg-white border rounded w-full shadow max-h-48 overflow-y-auto">
+                        {monthlyPGLoading && (
+                          <div className="px-3 py-2 text-sm text-gray-500">Loading…</div>
+                        )}
+                        {monthlyPGList.map((g) => (
+                          <div
+                            key={g.id}
+                            className="px-3 py-2 hover:bg-gray-100 cursor-pointer"
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={() => {
+                              setFormData((p) => ({
+                                ...p,
+                                monthlyPGAutocomplete: g.monthlyPayGradeName ?? String(g.id),
+                                promotion: { ...p.promotion, monthlyPayGradeID: g.id },
+                              }));
+                              setMonthlyPGList([]);
+                            }}
+                          >
+                            {g.monthlyPayGradeName}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Attendance Policy - Multi-entry repeater */}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-lg font-semibold">Attendance Policy</h3>
+                    <div className="flex gap-2">
+                      {canManage && <Button type="button" variant="outline" size="sm" onClick={() => window.open('/attendance-policy', '_blank')}><Plus className="w-4 h-4 mr-1" /> Manage Policies</Button>}
+                      <Button variant="outline" size="sm" type="button" onClick={addEmpAttendancePolicy}>
+                        <Plus className="w-4 h-4 mr-1" /> Add Attendance Policy
+                      </Button>
+                    </div>
+                  </div>
+                  {formData.empAttendancePolicyForm.length === 0 ? (
+                    <div className="text-center py-6 text-gray-500 border border-gray-200 rounded-lg">
+                      <Icon icon="mdi:calendar-check" className="w-10 h-10 text-gray-300 mx-auto mb-2" />
+                      <p>No attendance policy entries added yet</p>
+                    </div>
+                  ) : (
+                    formData.empAttendancePolicyForm.map((ea) => (
+                      <div key={ea._localId} className="border border-gray-200 rounded-lg p-4 space-y-3">
+                        <div className="flex items-center justify-between">
+                          <span className="font-medium text-gray-900">Attendance Policy</span>
+                          <Button type="button" variant="ghost" size="sm" onClick={() => removeEmpAttendancePolicy(ea._localId)} className="text-red-600 hover:text-red-700 hover:bg-red-50"><X className="w-4 h-4" /></Button>
+                        </div>
+                        <div ref={apRef} className="space-y-2 relative">
+                          <Label>Attendance Policy</Label>
+                          <Input
+                            value={ea._apAutocomplete}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              updateEmpAttendancePolicy(ea._localId, { _apAutocomplete: val, attendancePolicyID: null });
+                              runFetchAP(val);
+                              setActiveApLocalId(ea._localId);
+                            }}
+                            onFocus={(e) => {
+                              setActiveApLocalId(ea._localId);
+                              if (e.target.value.length >= MIN_CHARS) runFetchAP(e.target.value);
+                            }}
+                            placeholder="Start typing attendance policy…"
+                            autoComplete="off"
+                          />
+                          {apList.length > 0 && activeApLocalId === ea._localId && (
+                            <div className="absolute z-10 bg-white border rounded w-full shadow max-h-48 overflow-y-auto">
+                              {apLoading && <div className="px-3 py-2 text-sm text-gray-500">Loading…</div>}
+                              {apList.map((a) => (
+                                <div key={a.id} className="px-3 py-2 hover:bg-gray-100 cursor-pointer" onMouseDown={(e) => e.preventDefault()} onClick={() => {
+                                  updateEmpAttendancePolicy(ea._localId, { attendancePolicyID: a.id, _apAutocomplete: a.attendancePolicyName ?? String(a.id) });
+                                  setApList([]);
+                                  setActiveApLocalId(null);
+                                }}>{a.attendancePolicyName}</div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              {/* Leave Policy - Multi-entry repeater */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-semibold">Leave Policy</h3>
+                  <div className="flex gap-2">
+                    {canManage && <Button type="button" variant="outline" size="sm" onClick={() => window.open('/leave-policy', '_blank')}><Plus className="w-4 h-4 mr-1" /> Manage Policies</Button>}
+                    <Button variant="outline" size="sm" type="button" onClick={addEmpLeavePolicy}>
+                      <Plus className="w-4 h-4 mr-1" /> Add Leave Policy
+                    </Button>
+                  </div>
+                </div>
+                {formData.empLeavePolicyForm.length === 0 ? (
+                  <div className="text-center py-6 text-gray-500 border border-gray-200 rounded-lg">
+                    <Icon icon="mdi:calendar-remove" className="w-10 h-10 text-gray-300 mx-auto mb-2" />
+                    <p>No leave policy entries added yet</p>
+                  </div>
+                ) : (
+                  formData.empLeavePolicyForm.map((el) => (
+                    <div key={el._localId} className="border border-gray-200 rounded-lg p-4 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="font-medium text-gray-900">Leave Policy</span>
+                        <Button type="button" variant="ghost" size="sm" onClick={() => removeEmpLeavePolicy(el._localId)} className="text-red-600 hover:text-red-700 hover:bg-red-50"><X className="w-4 h-4" /></Button>
+                      </div>
+                      <div ref={lpRef} className="space-y-2 relative">
+                        <Label>Leave Policy</Label>
+                        <Input
+                          value={el._lpAutocomplete}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            updateEmpLeavePolicy(el._localId, { _lpAutocomplete: val, leavePolicyID: null });
+                            runFetchLP(val);
+                            setActiveLpLocalId(el._localId);
+                          }}
+                          onFocus={(e) => {
+                            setActiveLpLocalId(el._localId);
+                            if (e.target.value.length >= MIN_CHARS) runFetchLP(e.target.value);
+                          }}
+                          placeholder="Start typing leave policy…"
+                          autoComplete="off"
+                        />
+                        {lpList.length > 0 && activeLpLocalId === el._localId && (
+                          <div className="absolute z-10 bg-white border rounded w-full shadow max-h-48 overflow-y-auto">
+                            {lpLoading && <div className="px-3 py-2 text-sm text-gray-500">Loading…</div>}
+                            {lpList.map((l) => (
+                              <div key={l.id} className="px-3 py-2 hover:bg-gray-100 cursor-pointer" onMouseDown={(e) => e.preventDefault()} onClick={() => {
+                                updateEmpLeavePolicy(el._localId, { leavePolicyID: l.id, _lpAutocomplete: l.leavePolicyName ?? String(l.id) });
+                                setLpList([]);
+                                setActiveLpLocalId(null);
+                              }}>{l.leavePolicyName}</div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+
+              {/* Work Shift - Multi-entry repeater */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-semibold">Work Shift</h3>
+                  <div className="flex gap-2">
+                    {canManage && <Button type="button" variant="outline" size="sm" onClick={() => window.open('/work-shifts', '_blank')}><Plus className="w-4 h-4 mr-1" /> Manage Shifts</Button>}
+                    <Button variant="outline" size="sm" type="button" onClick={addEmpWorkShift}>
+                      <Plus className="w-4 h-4 mr-1" /> Add Work Shift
+                    </Button>
+                  </div>
+                </div>
+                {formData.empWorkShiftForm.length === 0 ? (
+                  <div className="text-center py-6 text-gray-500 border border-gray-200 rounded-lg">
+                    <Icon icon="mdi:clock-outline" className="w-10 h-10 text-gray-300 mx-auto mb-2" />
+                    <p>No work shift entries added yet</p>
+                  </div>
+                ) : (
+                  formData.empWorkShiftForm.map((ew) => (
+                    <div key={ew._localId} className="border border-gray-200 rounded-lg p-4 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="font-medium text-gray-900">Work Shift</span>
+                        <Button type="button" variant="ghost" size="sm" onClick={() => removeEmpWorkShift(ew._localId)} className="text-red-600 hover:text-red-700 hover:bg-red-50"><X className="w-4 h-4" /></Button>
+                      </div>
+                      <div ref={wsRef} className="space-y-2 relative">
+                        <Label>Work Shift</Label>
+                        <Input
+                          value={ew._wsAutocomplete}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            updateEmpWorkShift(ew._localId, { _wsAutocomplete: val, workShiftID: null });
+                            runFetchWS(val);
+                            setActiveWsLocalId(ew._localId);
+                          }}
+                          onFocus={(e) => {
+                            setActiveWsLocalId(ew._localId);
+                            if (e.target.value.length >= MIN_CHARS) runFetchWS(e.target.value);
+                          }}
+                          placeholder="Start typing work shift…"
+                          autoComplete="off"
+                        />
+                        {wsList.length > 0 && activeWsLocalId === ew._localId && (
+                          <div className="absolute z-10 bg-white border rounded w-full shadow max-h-48 overflow-y-auto">
+                            {wsLoading && <div className="px-3 py-2 text-sm text-gray-500">Loading…</div>}
+                            {wsList.map((w) => (
+                              <div key={w.id} className="px-3 py-2 hover:bg-gray-100 cursor-pointer" onMouseDown={(e) => e.preventDefault()} onClick={() => {
+                                updateEmpWorkShift(ew._localId, { workShiftID: w.id, _wsAutocomplete: w.workShiftName ?? String(w.id) });
+                                setWsList([]);
+                                setActiveWsLocalId(null);
+                              }}>{w.workShiftName}</div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+
+
+              {/* Contacts */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Business Phone</Label>
+                  <Input
+                    value={formData.businessPhoneNo}
+                    onChange={(e) => setFormData((p) => ({ ...p, businessPhoneNo: e.target.value }))}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Business Email</Label>
+                  <Input
+                    type="email"
+                    value={formData.businessEmail}
+                    onChange={(e) => setFormData((p) => ({ ...p, businessEmail: e.target.value }))}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Personal Phone</Label>
+                  <Input
+                    value={formData.personalPhoneNo}
+                    onChange={(e) => setFormData((p) => ({ ...p, personalPhoneNo: e.target.value }))}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Personal Email</Label>
+                  <Input
+                    type="email"
+                    value={formData.personalEmail}
+                    onChange={(e) => setFormData((p) => ({ ...p, personalEmail: e.target.value }))}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Emergency Contact</Label>
+                  <Input
+                    value={formData.emergancyContact}
+                    onChange={(e) => setFormData((p) => ({ ...p, emergancyContact: e.target.value }))}
+                  />
+                </div>
+              </div>
+
+              {/* Addresses */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Present Address</Label>
+                  <Textarea
+                    value={formData.presentAddress}
+                    onChange={(e) => setFormData((p) => ({ ...p, presentAddress: e.target.value }))}
+                    rows={3}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Permanent Address</Label>
+                  <Textarea
+                    value={formData.permenantAddress}
+                    onChange={(e) => setFormData((p) => ({ ...p, permenantAddress: e.target.value }))}
+                    rows={3}
+                  />
+                </div>
+              </div>
+
+              {/* Personal */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <Label>Gender</Label>
+                  <Select
+                    value={formData.gender || ""}
+                    onValueChange={(val) =>
+                      setFormData((p) => ({
+                        ...p,
+                        gender: val,
+                      }))
+                    }
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Select gender…" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Male">Male</SelectItem>
+                      <SelectItem value="Female">Female</SelectItem>
+                      <SelectItem value="Transgender">Transgender</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Date of Birth</Label>
+                  <Input
+                    type="date"
+                    value={formData.dateOfBirth}
+                    onChange={(e) => setFormData((p) => ({ ...p, dateOfBirth: e.target.value }))}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Blood Group</Label>
+                  <Input
+                    value={formData.bloodGroup}
+                    onChange={(e) => setFormData((p) => ({ ...p, bloodGroup: e.target.value }))}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <Label>Marital Status</Label>
+                  <Select
+                    value={formData.maritalStatus || ""}
+                    onValueChange={(val) =>
+                      setFormData((p) => ({
+                        ...p,
+                        maritalStatus: val,
+                      }))
+                    }
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Select marital status…" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Single">Single</SelectItem>
+                      <SelectItem value="Married">Married</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Father's Name</Label>
+                  <Input
+                    value={formData.employeeFatherName}
+                    onChange={(e) => setFormData((p) => ({ ...p, employeeFatherName: e.target.value }))}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Mother's Name</Label>
+                  <Input
+                    value={formData.employeeMotherName}
+                    onChange={(e) => setFormData((p) => ({ ...p, employeeMotherName: e.target.value }))}
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Spouse Name</Label>
+                <Input
+                  value={formData.employeeSpouseName}
+                  onChange={(e) => setFormData((p) => ({ ...p, employeeSpouseName: e.target.value }))}
+                />
+              </div>
+
+              {/* Photo upload */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Photo</Label>
+                  <Input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => onPickPhoto(e.target.files?.[0] ?? null)}
+                  />
+                  {photoPreview ? (
+                    <img src={photoPreview} className="h-20 w-20 rounded object-cover mt-2" alt="preview" />
+                  ) : formData.employeePhotoUrl ? (
+                    <img src={formData.employeePhotoUrl} className="h-20 w-20 rounded object-cover mt-2" alt="photo" />
+                  ) : null}
+                </div>
+              </div>
+
+              {/* ==========================
+                  EDUCATION (repeater)
+                  ========================== */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-semibold">Education</h3>
+                  <Button variant="outline" size="sm" type="button" onClick={addEdu}>
+                    <Plus className="w-4 h-4 mr-1" /> Add Education
+                  </Button>
+                </div>
+
+                {formData.eduForm.length === 0 ? (
+                  <div className="text-center py-6 text-gray-500 border border-gray-200 rounded-lg">
+                    <Icon icon="mdi:school" className="w-10 h-10 text-gray-300 mx-auto mb-2" />
+                    <p>No education rows added yet</p>
+                  </div>
+                ) : (
+                  formData.eduForm.map((ed) => (
+                    <div key={ed._localId} className="border border-gray-200 rounded-lg p-4 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="font-medium text-gray-900">Education</span>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => removeEdu(ed._localId)}
+                          className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                        >
+                          <X className="w-4 h-4" />
+                        </Button>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                        <div className="space-y-2">
+                          <Label>Institute Type</Label>
+                          <Input value={ed.instituteType} onChange={(e) => updateEdu(ed._localId, "instituteType", e.target.value)} />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Institute Name</Label>
+                          <Input value={ed.instituteName} onChange={(e) => updateEdu(ed._localId, "instituteName", e.target.value)} />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Degree</Label>
+                          <Input value={ed.degree} onChange={(e) => updateEdu(ed._localId, "degree", e.target.value)} />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                        <div className="space-y-2">
+                          <Label>Passing Year</Label>
+                          <Input value={ed.pasingYear} onChange={(e) => updateEdu(ed._localId, "pasingYear", e.target.value)} />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Marks</Label>
+                          <Input value={ed.marks} onChange={(e) => updateEdu(ed._localId, "marks", e.target.value)} />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>GPA/CGPA</Label>
+                          <Input value={ed.gpaCgpa} onChange={(e) => updateEdu(ed._localId, "gpaCgpa", e.target.value)} />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Class</Label>
+                          <Input value={ed.class} onChange={(e) => updateEdu(ed._localId, "class", e.target.value)} />
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+
+              {/* ==========================
+                  EXPERIENCE (repeater)
+                  ========================== */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-semibold">Experience</h3>
+                  <Button variant="outline" size="sm" type="button" onClick={addExp}>
+                    <Plus className="w-4 h-4 mr-1" /> Add Experience
+                  </Button>
+                </div>
+
+                {formData.expForm.length === 0 ? (
+                  <div className="text-center py-6 text-gray-500 border border-gray-200 rounded-lg">
+                    <Icon icon="mdi:briefcase" className="w-10 h-10 text-gray-300 mx-auto mb-2" />
+                    <p>No experience rows added yet</p>
+                  </div>
+                ) : (
+                  formData.expForm.map((xp) => (
+                    <div key={xp._localId} className="border border-gray-200 rounded-lg p-4 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="font-medium text-gray-900">Experience</span>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => removeExp(xp._localId)}
+                          className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                        >
+                          <X className="w-4 h-4" />
+                        </Button>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                        <div className="space-y-2">
+                          <Label>Organisation</Label>
+                          <Input value={xp.orgName} onChange={(e) => updateExp(xp._localId, "orgName", e.target.value)} />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>designation</Label>
+                          <Input value={xp.designation} onChange={(e) => updateExp(xp._localId, "designation", e.target.value)} />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Skill</Label>
+                          <Input value={xp.skill} onChange={(e) => updateExp(xp._localId, "skill", e.target.value)} />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                        <div className="space-y-2">
+                          <Label>From</Label>
+                          <Input type="date" value={xp.fromDate} onChange={(e) => updateExp(xp._localId, "fromDate", e.target.value)} />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>To</Label>
+                          <Input type="date" value={xp.toDate} onChange={(e) => updateExp(xp._localId, "toDate", e.target.value)} />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Responsibility</Label>
+                          <Input value={xp.responsibility} onChange={(e) => updateExp(xp._localId, "responsibility", e.target.value)} />
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+
+              {/* ==========================
+                  BANK DETAILS (repeater)
+                  ========================== */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-semibold">Bank Details</h3>
+                  <Button variant="outline" size="sm" type="button" onClick={addBankDetail}>
+                    <Plus className="w-4 h-4 mr-1" /> Add Bank
+                  </Button>
+                </div>
+
+                {formData.bankDetailsForm.length === 0 ? (
+                  <div className="text-center py-6 text-gray-500 border border-gray-200 rounded-lg">
+                    <Icon icon="mdi:bank" className="w-10 h-10 text-gray-300 mx-auto mb-2" />
+                    <p>No bank details added yet</p>
+                  </div>
+                ) : (
+                  formData.bankDetailsForm.map((bk) => (
+                    <div key={bk._localId} className="border border-gray-200 rounded-lg p-4 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="font-medium text-gray-900">Bank</span>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => removeBankDetail(bk._localId)}
+                          className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                        >
+                          <X className="w-4 h-4" />
+                        </Button>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+                        <div className="space-y-2">
+                          <Label>Bank Name</Label>
+                          <Input value={bk.bankName} onChange={(e) => updateBankDetail(bk._localId, "bankName", e.target.value)} />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Branch Name</Label>
+                          <Input value={bk.bankBranchName} onChange={(e) => updateBankDetail(bk._localId, "bankBranchName", e.target.value)} />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Account Number</Label>
+                          <Input value={bk.accNumber} onChange={(e) => updateBankDetail(bk._localId, "accNumber", e.target.value)} />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>IFSC Code</Label>
+                          <Input value={bk.ifscCode} onChange={(e) => updateBankDetail(bk._localId, "ifscCode", e.target.value)} />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>UPI</Label>
+                          <Input value={bk.upi} onChange={(e) => updateBankDetail(bk._localId, "upi", e.target.value)} />
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+
+          {/* ==========================
+    BIOMETRIC DEVICE MAPPING 
+    ========================== */}
+<div className="space-y-3">
+  <div className="flex items-center justify-between">
+    <h3 className="text-lg font-semibold">Biometric Device Mapping </h3>
+    <Button variant="outline" size="sm" type="button" onClick={addDevMap}>
+      <Plus className="w-4 h-4 mr-1" /> Add Biometric Device
+    </Button>
+  </div>
+
+  {formData.devMapForm.filter(dm => dm.deviceType === 'AT').length === 0 ? (
+    <div className="text-center py-6 text-gray-500 border border-gray-200 rounded-lg">
+      <Icon icon="mdi:fingerprint" className="w-10 h-10 text-gray-300 mx-auto mb-2" />
+      <p>No biometric device mappings added yet</p>
+    </div>
+  ) : (
+    formData.devMapForm.filter(dm => dm.deviceType === 'AT').map((dm) => (
+      <div key={dm._localId} className="border border-gray-200 rounded-lg p-4 space-y-3">
+        <div className="flex items-center justify-between">
+        
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() => removeDevMap(dm._localId)}
+            className="text-red-600 hover:text-red-700 hover:bg-red-50"
+          >
+            <X className="w-4 h-4" />
+          </Button>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div ref={devRef} className="space-y-2 relative">
+            <Label>Biometric Device</Label>
+            <Input
+              value={dm._devAutocomplete ?? dm.deviceName ?? ""}
+              onChange={(e) => {
+                const val = e.target.value;
+                updateDevMap(dm._localId, "_devAutocomplete", val);
+                updateDevMap(dm._localId, "deviceID", "");
+                updateDevMap(dm._localId, "deviceType", "AT");
+                runFetchDev(val);
+              }}
+              placeholder="Type biometric device name…"
+              autoComplete="off"
+            />
+            {devList.length > 0 && (
+              <div className="absolute z-10 bg-white border rounded w-full shadow max-h-48 overflow-y-auto">
+                {devLoading && <div className="px-3 py-2 text-sm text-gray-500">Loading…</div>}
+                {devList.map((dv) => (
+                  <div
+                    key={dv.id}
+                    className="px-3 py-2 hover:bg-gray-100 cursor-pointer"
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => {
+                      updateDevMap(dm._localId, "deviceID", String(dv.id));
+                      updateDevMap(dm._localId, "deviceName", dv.deviceName ?? "");
+                      updateDevMap(dm._localId, "_devAutocomplete", dv.deviceName ?? "");
+                      updateDevMap(dm._localId, "deviceType", "AT");
+                      setDevList([]);
+                    }}
+                  >
+                    {dv.deviceName ?? `#${dv.id}`}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="space-y-2">
+            <Label>DeviceEmployee Code</Label>
+            <Input
+              value={dm.deviceEmpCode}
+              onChange={(e) =>
+                updateDevMap(dm._localId, "deviceEmpCode", e.target.value)
+              }
+              placeholder="Device Employee Code"
+              autoComplete="off"
+            />
+          </div>
+        </div>
+      </div>
+    ))
+  )}
+</div>
+
+{/* ==========================
+    TOKEN DEVICE MAPPING 
+    ========================== */}
+<div className="space-y-3 mt-6">
+  <div className="flex items-center justify-between">
+    <h3 className="text-lg font-semibold">Token Device Mapping </h3>
+    <Button variant="outline" size="sm" type="button" onClick={addTokenDevMap}>
+      <Plus className="w-4 h-4 mr-1" /> Add Token Device
+    </Button>
+  </div>
+
+  {tokenDevMapForm.filter(dm => dm.deviceType === 'TR' || dm.deviceType === 'TV').length === 0 ? (
+    <div className="text-center py-6 text-gray-500 border border-gray-200 rounded-lg">
+      <Icon icon="mdi:credit-card" className="w-10 h-10 text-gray-300 mx-auto mb-2" />
+      <p>No token device mappings added yet</p>
+    </div>
+  ) : (
+    tokenDevMapForm.filter(dm => dm.deviceType === 'TR' || dm.deviceType === 'TV').map((dm) => (
+      <div key={dm._localId} className="border border-gray-200 rounded-lg p-4 space-y-3">
+        <div className="flex items-center justify-between">
+          
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() => removeTokenDevMap(dm._localId)}
+            className="text-red-600 hover:text-red-700 hover:bg-red-50"
+          >
+            <X className="w-4 h-4" />
+          </Button>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div ref={tokenDevRef} className="space-y-2 relative">
+            <Label>Token Device</Label>
+            <Input
+              value={dm._devAutocomplete ?? dm.deviceName ?? ""}
+              onChange={(e) => {
+                const val = e.target.value;
+                updateTokenDevMap(dm._localId, "_devAutocomplete", val);
+                updateTokenDevMap(dm._localId, "deviceID", "");
+                runFetchTokenDevices(val);
+              }}
+              placeholder="Type token device name…"
+              autoComplete="off"
+            />
+            {tokenDevList.length > 0 && (
+              <div className="absolute z-10 bg-white border rounded w-full shadow max-h-48 overflow-y-auto">
+                {tokenDevLoading && <div className="px-3 py-2 text-sm text-gray-500">Loading…</div>}
+                {tokenDevList.map((dv) => (
+                  <div
+                    key={dv.id}
+                    className="px-3 py-2 hover:bg-gray-100 cursor-pointer"
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => {
+                      updateTokenDevMap(dm._localId, "deviceID", String(dv.id));
+                      updateTokenDevMap(dm._localId, "deviceName", dv.deviceName ?? "");
+                      updateTokenDevMap(dm._localId, "_devAutocomplete", dv.deviceName ?? "");
+                      setTokenDevList([]);
+                    }}
+                  >
+                    {dv.deviceName ?? `#${dv.id}`}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="space-y-2">
+            <Label>Device Employee Code</Label>
+            <Input
+              value={dm.deviceEmpCode}
+              onChange={(e) =>
+                updateTokenDevMap(dm._localId, "deviceEmpCode", e.target.value)
+              }
+              placeholder="Device Employee Code"
+              autoComplete="off"
+            />
+          </div>
+        </div>
+      </div>
+    ))
+  )}
+</div>
+
+              <div className="flex justify-end gap-2 pt-4 border-t border-gray-200">
+                <Button type="button" variant="outline" onClick={handleCancel}>
+                  Cancel
+                </Button>
+                <Button type="submit" className="bg-blue-600 hover:bg-blue-700" disabled={saving}>
+                  <Save className="w-4 h-4 mr-1" />
+                  {saving ? "Saving..." : editingRow ? "Update Employee" : "Add Employee"}
+                </Button>
+              </div>
+            </form>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* View Details - Inline */}
+      {isViewing && viewRow && (
+        <Card className="border-2 border-gray-200">
+          <CardHeader className="bg-gray-50">
+            <CardTitle className="text-lg flex items-center gap-2">
+              <Icon icon="mdi:account-group" className="w-5 h-5 text-gray-600" />
+              Employee Details
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-6">
+            <div className="space-y-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="p-3 bg-gray-50 rounded-lg"><strong>Name:</strong> {viewRow.employeeFirstName} {viewRow.employeeLastName}</div>
+                <div className="p-3 bg-gray-50 rounded-lg"><strong>Employee ID:</strong> {viewRow.employeeID}</div>
+                <div className="p-3 bg-gray-50 rounded-lg"><strong>Service Provider:</strong> {spName(viewRow)}</div>
+                <div className="p-3 bg-gray-50 rounded-lg"><strong>Company:</strong> {coName(viewRow)}</div>
+                <div className="p-3 bg-gray-50 rounded-lg"><strong>Branch:</strong> {brName(viewRow)}</div>
+                <div className="p-3 bg-gray-50 rounded-lg"><strong>Business Email:</strong> {viewRow.businessEmail}</div>
+                <div className="p-3 bg-gray-50 rounded-lg"><strong>Business Phone:</strong> {viewRow.businessPhoneNo}</div>
+                <div className="p-3 bg-gray-50 rounded-lg"><strong>Present Address:</strong> {viewRow.presentAddress}</div>
+                <div className="p-3 bg-gray-50 rounded-lg col-span-2"><strong>Permanent Address:</strong> {viewRow.permenantAddress}</div>
+              </div>
+
+              {(viewRow.empEduQualification?.length ?? 0) > 0 && (
+                <div className="mt-4">
+                  <p className="font-semibold mb-2">Education:</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {viewRow.empEduQualification!.map(e => (
+                      <div key={e.id} className="border rounded-lg p-3 bg-gray-50">
+                        <div><strong>{e.degree}</strong> — {e.instituteName}</div>
+                        <div className="text-sm">{e.pasingYear} • {e.class} • {e.gpaCgpa}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {(viewRow.empProfExprience?.length ?? 0) > 0 && (
+                <div className="mt-4">
+                  <p className="font-semibold mb-2">Experience:</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {viewRow.empProfExprience!.map(x => (
+                      <div key={x.id} className="border rounded-lg p-3 bg-gray-50">
+                        <div><strong>{x.orgName}</strong> — {x.designation}</div>
+                        <div className="text-sm">{x.fromDate} → {x.toDate}</div>
+                        <div className="text-sm">{x.responsibility}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {(viewRow.empDeviceMapping?.length ?? 0) > 0 && (
+                <div className="mt-4">
+                  <p className="font-semibold mb-2">Device Mapping:</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {viewRow.empDeviceMapping!.map(d => (
+                      <div key={d.id} className="border rounded-lg p-3 bg-gray-50">
+                        <div><strong>Device:</strong> {d.device?.deviceName ?? `#${d.deviceID}`}</div>
+                        <div className="text-sm"><strong>Emp Code:</strong> {d.deviceEmpCode ?? "—"}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {(((viewRow.employeeBankDetails?.length ?? 0) > 0) || ((viewRow.bankDetails?.length ?? 0) > 0)) && (
+                <div className="mt-4">
+                  <p className="font-semibold mb-2">Bank Details:</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {((viewRow.employeeBankDetails ?? viewRow.bankDetails ?? []) as BankDetailsRead[]).map((b: BankDetailsRead) => (
+                      <div key={b.id} className="border rounded-lg p-3 bg-gray-50">
+                        <div><strong>{b.bankName}</strong> {b.bankBranchName ? `— ${b.bankBranchName}` : ""}</div>
+                        <div className="text-sm"><strong>Account:</strong> {b.accNumber ?? ""}</div>
+                        <div className="text-sm"><strong>IFSC:</strong> {b.ifscCode ?? ""}</div>
+                        <div className="text-sm"><strong>UPI:</strong> {b.upi ?? ""}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {viewRow.employeePhotoUrl && (
+                <div className="mt-4">
+                  <img src={viewRow.employeePhotoUrl} className="h-24 w-24 rounded object-cover border" alt="employee" />
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Search & Table - Hide when adding/editing/viewing */}
+      {!isAddingNew && !isViewing && (
+        <>
+          <Card>
+            <CardContent className="p-6">
+              <div className="flex items-center space-x-4 w-full">
+                <div className="relative flex-1 min-w-0">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                  <Input
+                    placeholder="Search employees…"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="pl-10 w-full"
+                  />
+                </div>
+                <Badge variant="secondary" className="px-3 py-1 flex-shrink-0">
+                  {filteredRows.length} employees
+                </Badge>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="w-full">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Icon icon="mdi:account-group" className="w-5 h-5" />
+                Employee List
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-0 w-full">
+              <div className="overflow-x-auto w-full">
+                <Table className="w-full">
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-[110px]">Service Provider</TableHead>
+                      <TableHead className="w-[120px]">Company</TableHead>
+                      <TableHead className="w-[110px]">Branch</TableHead>
+                      <TableHead className="w-[140px]">Department</TableHead>
+                      <TableHead className="w-[140px]">Designation</TableHead>
+                      <TableHead className="w-[180px]">Name</TableHead>
+                      <TableHead className="w-[120px] text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {loading ? (
+                      <TableRow>
+                        <TableCell colSpan={7} className="text-center py-8 text-gray-500">
+                          Loading...
+                        </TableCell>
+                      </TableRow>
+                    ) : filteredRows.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={7} className="text-center py-8 text-gray-500">
+                          <div className="flex flex-col items-center gap-2">
+                            <Icon icon="mdi:account-group-outline" className="w-12 h-12 text-gray-300" />
+                            <p>No employees found</p>
+                            <p className="text-sm">Try adjusting your search criteria</p>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      filteredRows.map((r) => (
+                        <TableRow key={r.id}>
+                          <TableCell className="whitespace-nowrap">{spName(r)}</TableCell>
+                          <TableCell className="whitespace-nowrap">{coName(r)}</TableCell>
+                          <TableCell className="whitespace-nowrap">{brName(r)}</TableCell>
+                          <TableCell className="whitespace-nowrap">{r.departments?.departmentName ?? "—"}</TableCell>
+                          <TableCell className="whitespace-nowrap">
+                            {(r as any).empDesignation?.length > 0
+                              ? (r as any).empDesignation.map((d: any) => d.designation?.designation).filter(Boolean).join(", ") || r.designations?.designation || "—"
+                              : r.designations?.designation ?? "—"}
+                          </TableCell>
+                          <TableCell className="whitespace-nowrap">{r.employeeFirstName} {r.employeeLastName}</TableCell>
+                          <TableCell className="text-right whitespace-nowrap">
+                            <div className="flex items-center justify-end gap-1">
+                              {/* 👁 Everyone can view */}
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleView(r)}
+                                className="h-7 w-7 p-0"
+                                title="View"
+                              >
+                                <Eye className="w-3 h-3" />
+                              </Button>
+
+                              {/* ✏️ SUPERADMIN and MANAGER can edit */}
+                              {canManage && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleEdit(r)}
+                                  className="h-7 w-7 p-0"
+                                  title="Edit"
+                                >
+                                  <Edit className="w-3 h-3" />
+                                </Button>
+                              )}
+
+                              {/* 🗑️ SUPERADMIN and MANAGER can delete */}
+                              {canManage && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleDelete(r.id)}
+                                  className="h-7 w-7 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+                                  title="Delete"
+                                >
+                                  <Trash2 className="w-3 h-3" />
+                                </Button>
+                              )}
+
+                              {/* 📜 History */}
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleViewHistory(r)}
+                                className="h-7 w-7 p-0 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                                title="History"
+                              >
+                                <History className="w-3 h-3" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+            </CardContent>
+          </Card>
+        </>
+      )}
+
+      {/* Quick-Add Dialog */}
+      <Dialog open={!!quickAddOpen} onOpenChange={(open) => { if (!open) { setQuickAddOpen(null); setQuickAddSuggestions([]); } }}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle>
+              {quickAddOpen === "department" ? "Department" : quickAddOpen === "designation" ? "Designation" : quickAddOpen === "contractor" ? "Contractor" : ""}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>
+                Search or create {quickAddOpen === "department" ? "department" : quickAddOpen === "designation" ? "designation" : "contractor"}
+              </Label>
+              <Input
+                value={quickAddValue}
+                onChange={(e) => {
+                  setQuickAddValue(e.target.value);
+                  searchQuickAdd(e.target.value);
+                }}
+                placeholder={`Type to search or enter new ${quickAddOpen === "department" ? "department" : quickAddOpen === "designation" ? "designation" : "contractor"} name…`}
+                autoFocus
+                onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleQuickAdd(); } }}
+              />
+            </div>
+            {/* Existing items matching search */}
+            {(quickAddSuggestions.length > 0 || quickAddSearching) && (
+              <div className="border rounded max-h-40 overflow-y-auto">
+                {quickAddSearching && (
+                  <div className="px-3 py-2 text-sm text-gray-500">Searching…</div>
+                )}
+                {quickAddSuggestions.map((item) => {
+                  const displayName = quickAddOpen === "department"
+                    ? item.departmentName
+                    : quickAddOpen === "designation"
+                      ? item.designation
+                      : item.contractorName;
+                  return (
+                    <div
+                      key={item.id}
+                      className="px-3 py-2 hover:bg-gray-100 cursor-pointer text-sm border-b last:border-b-0"
+                      onClick={() => handleQuickAddSelect(item)}
+                    >
+                      {displayName}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="outline" onClick={() => { setQuickAddOpen(null); setQuickAddSuggestions([]); }}>Cancel</Button>
+              <Button type="button" onClick={handleQuickAdd} disabled={quickAddSaving || !quickAddValue.trim()}>
+                {quickAddSaving ? "Saving…" : "Create New"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* History Dialog */}
+      <Dialog open={historyOpen} onOpenChange={setHistoryOpen}>
+        <DialogContent className="sm:max-w-[700px] max-h-[80vh] overflow-hidden flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <History className="w-5 h-5" />
+              Field Change History — {historyEmployee?.employeeFirstName} {historyEmployee?.employeeLastName}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="overflow-y-auto flex-1 py-2">
+            {historyLoading ? (
+              <div className="text-center py-8 text-gray-500">Loading history…</div>
+            ) : historyData.length === 0 ? (
+              <div className="text-center py-8 text-gray-500">
+                <History className="w-10 h-10 text-gray-300 mx-auto mb-2" />
+                <p>No field change history found</p>
+                <p className="text-sm">Changes will appear here when employee fields are updated</p>
+              </div>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Field</TableHead>
+                    <TableHead>Old Value</TableHead>
+                    <TableHead>New Value</TableHead>
+                    <TableHead>Changed At</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {historyData.map((h: any) => (
+                    <TableRow key={h.id}>
+                      <TableCell className="font-medium">{h.fieldName}</TableCell>
+                      <TableCell>
+                        <span className="text-red-600 bg-red-50 px-2 py-0.5 rounded text-sm">
+                          {h.oldLabel || h.oldValue || "—"}
+                        </span>
+                      </TableCell>
+                      <TableCell>
+                        <span className="text-green-600 bg-green-50 px-2 py-0.5 rounded text-sm">
+                          {h.newLabel || h.newValue || "—"}
+                        </span>
+                      </TableCell>
+                      <TableCell className="text-sm text-gray-500">
+                        {h.changedAt ? new Date(h.changedAt).toLocaleString() : "—"}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
