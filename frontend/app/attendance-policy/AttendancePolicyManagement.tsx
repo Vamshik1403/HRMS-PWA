@@ -105,7 +105,7 @@ export function AttendancePolicyManagement() {
   });
 
   const BACKEND_URL =
-    process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
+    process.env.NEXT_PUBLIC_BACKEND_URL || "/backend";
 
   const resolvedServiceProviderID =
     user?.role === "MANAGER"
@@ -477,7 +477,6 @@ export function AttendancePolicyManagement() {
       {/* Header */}
       <div className="flex items-center justify-between w-full">
         <div className="min-w-0 flex-1">
-          <h1 className="text-2xl font-bold text-gray-900">Attendance Policy</h1>
           <p className="text-gray-600 mt-1 text-sm">
             Manage attendance policies and rules
           </p>
@@ -485,7 +484,7 @@ export function AttendancePolicyManagement() {
         {canManage && (
               <Button
                 onClick={() => { resetForm(); setIsDialogOpen(true); }}
-                className="bg-blue-600 hover:bg-blue-700 flex-shrink-0 text-sm px-3 py-2"
+                className="bg-gray-900 hover:bg-gray-800 flex-shrink-0 text-sm px-3 py-2"
               >
                 <Plus className="w-4 h-4 mr-1" />
                 Add Attendance Policy
@@ -921,7 +920,7 @@ export function AttendancePolicyManagement() {
                 >
                   Cancel
                 </Button>
-                <Button type="submit" className="bg-blue-600 hover:bg-blue-700">
+                <Button type="submit" className="bg-gray-900 hover:bg-gray-800">
                   {editingPolicy ? "Update Attendance Policy" : "Add Attendance Policy"}
                 </Button>
               </div>

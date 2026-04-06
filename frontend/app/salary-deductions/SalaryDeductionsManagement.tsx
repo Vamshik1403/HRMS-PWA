@@ -59,10 +59,10 @@ type BR = { id: number; branchName?: string | null; companyID: number; branchesI
 
 // ---- API endpoints ----
 const API = {
-  deduction: "http://localhost:8000/salary-deduction",
-  serviceProviders: "http://localhost:8000/service-provider",
-  companies: "http://localhost:8000/company",
-  branches: "http://localhost:8000/branches",
+  deduction: "/backend/salary-deduction",
+  serviceProviders: "/backend/service-provider",
+  companies: "/backend/company",
+  branches: "/backend/branches",
 };
 
 const MIN_CHARS = 1;
@@ -85,7 +85,7 @@ useEffect(() => {
   if (user?.role !== "MANAGER") return;
 
   (async () => {
-    const res = await fetch("http://localhost:8000/users");
+    const res = await fetch("/backend/users");
     const list = await res.json();
     const me = list.find((u: any) => u.username === user.username);
     setCurrentUserMapping(me || null);
@@ -178,7 +178,7 @@ const loadDeductions = async () => {
 
     // 🟡 MANAGER — filter via /users
     if (user?.role === "MANAGER") {
-      const usersRes = await fetch("http://localhost:8000/users");
+      const usersRes = await fetch("/backend/users");
       const users = await usersRes.json();
       const currentUser = users.find((u: any) => u.username === user.username);
       if (currentUser) {
@@ -193,7 +193,7 @@ const loadDeductions = async () => {
     }
 
     // 🔵 EMPLOYEE — filter via /manage-emp/credentials/all
-    const credsRes = await fetch("http://localhost:8000/manage-emp/credentials/all");
+    const credsRes = await fetch("/backend/manage-emp/credentials/all");
     const creds = await credsRes.json();
     const emp = creds.find((c: any) => c.username === user?.username);
 
@@ -371,7 +371,7 @@ const loadDeductions = async () => {
       }
       resetForm();
       setIsDialogOpen(false);
-      toast.success(editing ? "Updated successfully" : "Created successfully");
+      toast.success(editingDeduction ? "Updated successfully" : "Created successfully");
     } catch (e) {
       console.error("Save failed", e);
       toast.error("Failed to save. Please try again.");
@@ -443,13 +443,12 @@ const loadDeductions = async () => {
       {/* Header */}
       <div className="flex items-center justify-between w-full">
         <div className="min-w-0 flex-1">
-          <h1 className="text-2xl font-bold text-gray-900">Salary Deductions</h1>
           <p className="text-gray-600 mt-1 text-sm">Manage salary deductions and withholdings</p>
         </div>
         {canManage && (
   <Button
     onClick={() => { resetForm(); setIsDialogOpen(true); }}
-    className="bg-blue-600 hover:bg-blue-700 flex-shrink-0 text-sm px-3 py-2"
+    className="bg-gray-900 hover:bg-gray-800 flex-shrink-0 text-sm px-3 py-2"
   >
     <Plus className="w-4 h-4 mr-1" />
     Add Salary Deduction
@@ -690,7 +689,7 @@ const loadDeductions = async () => {
                 <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
                   Cancel
                 </Button>
-                <Button type="submit" className="bg-blue-600 hover:bg-blue-700">
+                <Button type="submit" className="bg-gray-900 hover:bg-gray-800">
                   {editingDeduction ? "Update Salary Deduction" : "Add Salary Deduction"}
                 </Button>
               </div>

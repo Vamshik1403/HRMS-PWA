@@ -74,10 +74,10 @@ interface Branch {
 // ---------------------------
 
 const API = {
-  devices: "http://localhost:8000/devices",
-  serviceProviders: "http://localhost:8000/service-provider",
-  companies: "http://localhost:8000/company",
-  branches: "http://localhost:8000/branches",
+  devices: "/backend/devices",
+  serviceProviders: "/backend/service-provider",
+  companies: "/backend/company",
+  branches: "/backend/branches",
 };
 
 const MIN_CHARS = 1;
@@ -164,7 +164,7 @@ export function DeviceManagement() {
       }
 
       // 🟡 MANAGER & EMPLOYEE → Get user mapping first
-      const usersRes = await fetch("http://localhost:8000/users");
+      const usersRes = await fetch("/backend/users");
       const users = await usersRes.json();
       const currentUser = users.find((u: any) => u.username === user?.username);
 

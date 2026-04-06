@@ -50,7 +50,7 @@ interface SelectedItem {
   item: any
 }
 
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000"
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "/backend"
 
 const monthsFull = [
   "January","February","March","April","May","June",

@@ -124,25 +124,25 @@ type SalaryCycleRow = {
    Constants / helpers
    ======================= */
 
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "/backend";
 
 const API = {
-  sp: "http://localhost:8000/service-provider",
-  co: "http://localhost:8000/company",
-  br: "http://localhost:8000/branches",
-  emp: "http://localhost:8000/manage-emp",
-  salaryCycleByCompany: (companyId: number) => `http://localhost:8000/salary-cycle/company/${companyId}`,
-  generateSalary: "http://localhost:8000/generate-salary",
-  salaryAdvanceRepayment: "http://localhost:8000/salary-advance-repayment",
-  reimbursement: "http://localhost:8000/reimbursement",
-  users: "http://localhost:8000/users",
-  monthlyPayGrade: "http://localhost:8000/monthly-pay-grade",
-  workShift: "http://localhost:8000/work-shift",
-  attendancePolicy: "http://localhost:8000/attendance-policy",
-  publicHoliday: "http://localhost:8000/public-holiday",
-  leaveApplication: "http://localhost:8000/leave-application",
-  empAttendanceRegularise: "http://localhost:8000/emp-attendance-regularise",
-  empAttendanceLogs: "http://localhost:8000/emp-attendance-logs",
+  sp: "/backend/service-provider",
+  co: "/backend/company",
+  br: "/backend/branches",
+  emp: "/backend/manage-emp",
+  salaryCycleByCompany: (companyId: number) => `/backend/salary-cycle/company/${companyId}`,
+  generateSalary: "/backend/generate-salary",
+  salaryAdvanceRepayment: "/backend/salary-advance-repayment",
+  reimbursement: "/backend/reimbursement",
+  users: "/backend/users",
+  monthlyPayGrade: "/backend/monthly-pay-grade",
+  workShift: "/backend/work-shift",
+  attendancePolicy: "/backend/attendance-policy",
+  publicHoliday: "/backend/public-holiday",
+  leaveApplication: "/backend/leave-application",
+  empAttendanceRegularise: "/backend/emp-attendance-regularise",
+  empAttendanceLogs: "/backend/emp-attendance-logs",
 };
 
 const MIN_CHARS = 1;
@@ -1714,7 +1714,7 @@ export function GenerateSalaryManagement() {
     delete payload.branches;
 
     try {
-      const res = await fetch(`http://localhost:8000/generate-salary/${selectedSalaryRow.id}`, {
+      const res = await fetch(`/backend/generate-salary/${selectedSalaryRow.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -2556,12 +2556,11 @@ export function GenerateSalaryManagement() {
       <div className="space-y-6 w-full max-w-7xl mx-auto px-4">
         <div className="flex items-center justify-between w-full">
           <div className="min-w-0 flex-1">
-            <h1 className="text-2xl font-bold text-gray-900">Generate Salary</h1>
             <p className="text-gray-600 mt-1 text-sm">Generate and manage employee salary payments</p>
           </div>
 
           {canManage && (
-            <Button onClick={() => { resetForm(); setIsDialogOpen(true); }} className="bg-blue-600 hover:bg-blue-700 flex-shrink-0 text-sm px-3 py-2">
+            <Button onClick={() => { resetForm(); setIsDialogOpen(true); }} className="bg-gray-900 hover:bg-gray-800 flex-shrink-0 text-sm px-3 py-2">
               <Plus className="w-4 h-4 mr-1" />
               Add Salary Generation
             </Button>
@@ -2831,7 +2830,7 @@ export function GenerateSalaryManagement() {
                   <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
                     Cancel
                   </Button>
-                  <Button type="submit" className="bg-blue-600 hover:bg-blue-700">
+                  <Button type="submit" className="bg-gray-900 hover:bg-gray-800">
                     {editing ? "Update Salary Generation" : "Add Salary Generation"}
                   </Button>
                 </div>

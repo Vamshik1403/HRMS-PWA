@@ -18,11 +18,11 @@ import { useCurrentUser } from "../hooks/useCurrentUser";
 
 /* ---------------- API endpoints ---------------- */
 const API = {
-  allocations: "http://localhost:8000/bonus-allocation",
-  employees: "http://localhost:8000/manage-emp",
-  bonusSetups: "http://localhost:8000/bonus-setup",
-  companies: "http://localhost:8000/company",
-  salaryCycle: "http://localhost:8000/salary-cycle",
+  allocations: "/backend/bonus-allocation",
+  employees: "/backend/manage-emp",
+  bonusSetups: "/backend/bonus-setup",
+  companies: "/backend/company",
+  salaryCycle: "/backend/salary-cycle",
 };
 const MIN_CHARS = 1;
 
@@ -209,7 +209,7 @@ export function BonusAllocationsManagement() {
 
     (async () => {
       try {
-        const res = await fetch("http://localhost:8000/users");
+        const res = await fetch("/backend/users");
         const list = await res.json();
         const me = list.find((u: any) => u.username === user.username);
         setCurrentUserMapping(me || null);
@@ -317,7 +317,7 @@ export function BonusAllocationsManagement() {
 
       // 🟡 MANAGER — filter from /users
       if (user?.role === "MANAGER") {
-        const usersRes = await fetch("http://localhost:8000/users");
+        const usersRes = await fetch("/backend/users");
         const users = await usersRes.json();
         const currentUser = users.find((u: any) => u.username === user.username);
         if (currentUser) {
@@ -332,7 +332,7 @@ export function BonusAllocationsManagement() {
       }
 
       // 🔵 EMPLOYEE — filter from /manage-emp/credentials/all
-      const credsRes = await fetch("http://localhost:8000/manage-emp/credentials/all");
+      const credsRes = await fetch("/backend/manage-emp/credentials/all");
       const creds = await credsRes.json();
       const emp = creds.find((c: any) => c.username === user?.username);
       if (emp) {

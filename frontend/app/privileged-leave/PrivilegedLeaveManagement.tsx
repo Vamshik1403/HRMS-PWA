@@ -20,7 +20,7 @@ import { Plus, Search, Edit, Trash2 } from "lucide-react"
 import { useCurrentUser } from "../hooks/useCurrentUser"
 import { toast } from "sonner";
 
-const BACKEND_URL = "http://localhost:8000"
+const BACKEND_URL = "/backend"
 
 interface LedgerEntry {
   id: number
@@ -165,7 +165,7 @@ export function PrivilegedLeaveManagement() {
       }
       await loadLedger()
       setIsDialogOpen(false)
-      toast.success(editing ? "Updated successfully" : "Created successfully");
+      toast.success(editingEntry ? "Updated successfully" : "Created successfully");
       resetForm()
     } catch (err) {
       console.error("Error saving PL entry:", err)
@@ -258,7 +258,6 @@ export function PrivilegedLeaveManagement() {
       {/* Header */}
       <div className="flex items-center justify-between w-full">
         <div className="min-w-0 flex-1">
-          <h1 className="text-2xl font-bold text-gray-900">Privileged Leave</h1>
           <p className="text-gray-600 mt-1 text-sm">Track PL credits, balances, and lapse history</p>
         </div>
         <div className="flex gap-2">
@@ -434,7 +433,7 @@ export function PrivilegedLeaveManagement() {
                     </div>
                     <div className="flex justify-end gap-3 pt-4">
                       <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
-                      <Button type="submit" className="bg-blue-600 hover:bg-blue-700">
+                      <Button type="submit" className="bg-gray-900 hover:bg-gray-800">
                         {editingEntry ? "Update" : "Add Entry"}
                       </Button>
                     </div>

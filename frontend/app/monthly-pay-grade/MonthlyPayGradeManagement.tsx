@@ -117,13 +117,13 @@ type BR = { id: number; branchName?: string | null; companyID: number | null; br
 
 /* ---------- API endpoints ---------- */
 const API = {
-  mpg: "http://localhost:8000/monthly-pay-grade",
-  allowances: "http://localhost:8000/salary-allowance",
-  deductions: "http://localhost:8000/salary-deduction",
-  bonusAllocations: "http://localhost:8000/bonus-allocation", // New endpoint for bonuses
-  serviceProviders: "http://localhost:8000/service-provider",
-  companies: "http://localhost:8000/company",
-  branches: "http://localhost:8000/branches",
+  mpg: "/backend/monthly-pay-grade",
+  allowances: "/backend/salary-allowance",
+  deductions: "/backend/salary-deduction",
+  bonusAllocations: "/backend/bonus-allocation", // New endpoint for bonuses
+  serviceProviders: "/backend/service-provider",
+  companies: "/backend/company",
+  branches: "/backend/branches",
 };
 
 const MIN_CHARS = 1;
@@ -148,7 +148,7 @@ export function MonthlyPayGradeManagement() {
 
     (async () => {
       try {
-        const res = await fetch("http://localhost:8000/users");
+        const res = await fetch("/backend/users");
         const list = await res.json();
         const me = list.find((u: any) => u.username === user.username);
         setCurrentUserMapping(me || null);
@@ -633,7 +633,7 @@ miniOTTime: x.miniOTTime ?? 0,
       }
       resetForm();
       setIsDialogOpen(false);
-      toast.success(editing ? "Updated successfully" : "Created successfully");
+      toast.success(editingPayGrade ? "Updated successfully" : "Created successfully");
     } catch (e) {
       console.error("Save failed", e);
       toast.error("Failed to save. Please try again.");
@@ -738,13 +738,12 @@ miniOTTime: x.miniOTTime ?? 0,
       {/* Header */}
       <div className="flex items-center justify-between w-full">
         <div className="min-w-0 flex-1">
-          <h1 className="text-2xl font-bold text-gray-900">Monthly Pay Grade</h1>
           <p className="text-gray-600 mt-1 text-sm">Manage monthly pay grades and salary structures</p>
         </div>
         {canManage && (
               <Button
                 onClick={() => { resetForm(); setIsDialogOpen(true); }}
-                className="bg-blue-600 hover:bg-blue-700 flex-shrink-0 text-sm px-3 py-2"
+                className="bg-gray-900 hover:bg-gray-800 flex-shrink-0 text-sm px-3 py-2"
               >
                 <Plus className="w-4 h-4 mr-1" />
                 Add Monthly Pay Grade
@@ -1286,7 +1285,7 @@ miniOTTime: x.miniOTTime ?? 0,
                 <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
                   Cancel
                 </Button>
-                <Button type="submit" className="bg-blue-600 hover:bg-blue-700">
+                <Button type="submit" className="bg-gray-900 hover:bg-gray-800">
                   {editingPayGrade ? "Update Monthly Pay Grade" : "Add Monthly Pay Grade"}
                 </Button>
               </div>

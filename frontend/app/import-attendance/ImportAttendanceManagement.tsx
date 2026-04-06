@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card"
 import { Button } from "../components/ui/button";
 import { Upload, Download, Trash2, FileSpreadsheet, CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
 
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "/backend";
 
 interface ImportResult {
   success: boolean;

@@ -42,7 +42,7 @@ interface User {
 }
 
 export default function UserManagement() {
-  const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000"
+  const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "/backend"
   const USERS_API = `${BACKEND_URL}/users`
   const REGISTER_API = `${BACKEND_URL}/auth/register`
 

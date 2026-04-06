@@ -99,7 +99,7 @@ const DEFAULT_COMPLIANCE: Omit<PTCompliance, 'companyID' | 'branchID' | 'ptslab'
 };
 
 export default function PTCompliancePage() {
-  const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
+  const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL || "/backend";
   const currentUser = useCurrentUser();
  const router = useRouter();
   const [companies, setCompanies] = useState<Company[]>([]);

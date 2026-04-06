@@ -148,29 +148,29 @@ interface empPromotion {
 /** ========= API endpoints ========= */
 /** ========= API endpoints ========= */
 const API = {
-  serviceProviders: "http://localhost:8000/service-provider",
-  companies: "http://localhost:8000/company",
-  branches: "http://localhost:8000/branches",
-  manageEmp: "http://localhost:8000/manage-emp",
-  managers: "http://localhost:8000/manage-emp",
+  serviceProviders: "/backend/service-provider",
+  companies: "/backend/company",
+  branches: "/backend/branches",
+  manageEmp: "/backend/manage-emp",
+  managers: "/backend/manage-emp",
 
   // ✅ fix typo + keep same path
-  workShifts: "http://localhost:8000/work-shift",
+  workShifts: "/backend/work-shift",
 
 
   // ✅ add these three if your backend exposes them as below
-  attendancePolicies: "http://localhost:8000/attendance-policy",
-  leavePolicies: "http://localhost:8000/leave-policy",
-  empPromotion: "http://localhost:8000/emp-promotion",
+  attendancePolicies: "/backend/attendance-policy",
+  leavePolicies: "/backend/leave-policy",
+  empPromotion: "/backend/emp-promotion",
 
 
   // ✅ add monthly/hourly grade endpoints (you mentioned these names earlier)
-  monthlyGrades: "http://localhost:8000/monthly-pay-grade",
-  hourlyGrades: "http://localhost:8000/hourly-grade",
+  monthlyGrades: "/backend/monthly-pay-grade",
+  hourlyGrades: "/backend/hourly-grade",
 
-  empCurrent: "http://localhost:8000/emp-current-position",
-  departments: "http://localhost:8000/departments",
-  designations: "http://localhost:8000/designations",
+  empCurrent: "/backend/emp-current-position",
+  departments: "/backend/departments",
+  designations: "/backend/designations",
 };
 
 
@@ -206,7 +206,7 @@ export function EmployeesPromotionsManagement() {
     if (user?.role !== "MANAGER") return;
 
     (async () => {
-      const res = await fetch("http://localhost:8000/users");
+      const res = await fetch("/backend/users");
       const list = await res.json();
 
       const me = list.find((u: any) => u.username === user.username);
@@ -601,7 +601,7 @@ export function EmployeesPromotionsManagement() {
 
       // 🟡 MANAGER → Filter by /users mapping
       if (user?.role === "MANAGER") {
-        const usersRes = await fetch("http://localhost:8000/users");
+        const usersRes = await fetch("/backend/users");
         const users = await usersRes.json();
         const currentUser = users.find((u: any) => u.username === user.username);
 
@@ -617,7 +617,7 @@ export function EmployeesPromotionsManagement() {
       }
 
       // 🔵 EMPLOYEE → Filter by /manage-emp/credentials/all mapping
-      const credsRes = await fetch("http://localhost:8000/manage-emp/credentials/all");
+      const credsRes = await fetch("/backend/manage-emp/credentials/all");
       const creds = await credsRes.json();
       const emp = creds.find((c: any) => c.username === user?.username);
 

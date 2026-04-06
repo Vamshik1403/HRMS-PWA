@@ -54,10 +54,10 @@ type BR = { id: number; branchName?: string | null; companyID: number | null };
 
 // ---- Config your API base here ----
 const API = {
-  salaryCycle: "http://localhost:8000/salary-cycle",
-  serviceProviders: "http://localhost:8000/service-provider",
-  companies: "http://localhost:8000/company",
-  branches: "http://localhost:8000/branches",
+  salaryCycle: "/backend/salary-cycle",
+  serviceProviders: "/backend/service-provider",
+  companies: "/backend/company",
+  branches: "/backend/branches",
 };
 
 const MIN_CHARS = 1;
@@ -83,7 +83,7 @@ export function MonthlySalaryCycleManagement() {
 
     (async () => {
       try {
-        const res = await fetch("http://localhost:8000/users");
+        const res = await fetch("/backend/users");
         const list = await res.json();
         const me = list.find((u: any) => u.username === user.username);
         setCurrentUserMapping(me || null);
@@ -162,7 +162,7 @@ const resolvedCompanyID =
 
       // 🟡 MANAGER → filter using /users
       if (user?.role === "MANAGER") {
-        const usersRes = await fetch("http://localhost:8000/users");
+        const usersRes = await fetch("/backend/users");
         const users = await usersRes.json();
         const currentUser = users.find((u: any) => u.username === user.username);
         if (currentUser) {
@@ -177,7 +177,7 @@ const resolvedCompanyID =
       }
 
       // 🔵 EMPLOYEE → filter using /manage-emp/credentials/all
-      const credsRes = await fetch("http://localhost:8000/manage-emp/credentials/all");
+      const credsRes = await fetch("/backend/manage-emp/credentials/all");
       const creds = await credsRes.json();
       const emp = creds.find((c: any) => c.username === user?.username);
       if (emp) {
@@ -340,7 +340,7 @@ const runFetchBR = debounce(async (val: string) => {
       }
       resetForm();
       setIsDialogOpen(false);
-      toast.success(editing ? "Updated successfully" : "Created successfully");
+      toast.success(editingCycle ? "Updated successfully" : "Created successfully");
     } catch (e) {
       console.error("Save failed", e);
       toast.error("Failed to save. Please try again.");
@@ -410,13 +410,12 @@ const runFetchBR = debounce(async (val: string) => {
       {/* Header */}
       <div className="flex items-center justify-between w-full">
         <div className="min-w-0 flex-1">
-          <h1 className="text-2xl font-bold text-gray-900">Monthly Salary Cycle</h1>
           <p className="text-gray-600 mt-1 text-sm">Manage monthly salary cycle configurations</p>
         </div>
         {canManage && (
               <Button
                 onClick={() => { resetForm(); setIsDialogOpen(true); }}
-                className="bg-blue-600 hover:bg-blue-700 flex-shrink-0 text-sm px-3 py-2"
+                className="bg-gray-900 hover:bg-gray-800 flex-shrink-0 text-sm px-3 py-2"
               >
                 <Plus className="w-4 h-4 mr-1" />
                 Add Salary Cycle
@@ -612,7 +611,7 @@ const runFetchBR = debounce(async (val: string) => {
                 <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
                   Cancel
                 </Button>
-                <Button type="submit" className="bg-blue-600 hover:bg-blue-700">
+                <Button type="submit" className="bg-gray-900 hover:bg-gray-800">
                   {editingCycle ? "Update Salary Cycle" : "Add Salary Cycle"}
                 </Button>
               </div>

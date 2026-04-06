@@ -60,8 +60,8 @@ interface Termination {
 }
 
 const API = {
-  employees: "http://localhost:8000/manage-emp",
-  terminations: "http://localhost:8000/termination",
+  employees: "/backend/manage-emp",
+  terminations: "/backend/termination",
 };
 
 export default function TerminationManagement() {

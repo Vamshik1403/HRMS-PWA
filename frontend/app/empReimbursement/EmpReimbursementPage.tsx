@@ -65,7 +65,7 @@ interface Reimbursement {
   paymentProof?: string
 }
 
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000"
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "/backend"
 
 // Helper function for amount in words
 const convertNumberToWords = (num: number): string => {

@@ -1,4 +1,4 @@
-import EmpLayout from "@/components/layout/EmpLayout";
+import EmpLayout from "../components/layout/EmpLayout";
 import { EmpPublicHoliday } from "./EmpPublicHoliday";
 
 export default function EmpPublicHolidayPage() {

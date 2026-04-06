@@ -1,4 +1,4 @@
-import EmpLayout from "@/components/layout/EmpLayout";
+import EmpLayout from "../components/layout/EmpLayout";
 import { EmpGenerateSalary } from "./EmpGenerateSalaryPage";
 
 export default function EmpGenerateSalaryPage() {

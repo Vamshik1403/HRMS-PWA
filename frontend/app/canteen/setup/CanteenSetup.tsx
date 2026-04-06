@@ -6,7 +6,7 @@ import { Button } from "../../components/ui/button";
 import { Icon } from "@iconify/react";
 
 const BACKEND_URL =
-  process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
+  process.env.NEXT_PUBLIC_BACKEND_URL || "/backend";
 
 export function CanteenSetup() {
   const [enabled, setEnabled] = useState(false);

@@ -95,7 +95,7 @@ interface LeaveApplication {
 }
 
 // ==================== CONSTANTS ====================
-const BASE = "http://localhost:8000"
+const BASE = "/backend"
 const API = {
   sp: `${BASE}/service-provider`,
   company: `${BASE}/company`,

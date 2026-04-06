@@ -88,10 +88,10 @@ interface ContractorRateCard {
 // Config & helpers
 // ---------------------------
 const API = {
-  contractors: "http://localhost:8000/contractors",
-  serviceProviders: "http://localhost:8000/service-provider",
-  companies: "http://localhost:8000/company",
-  upload: "http://localhost:8000/files/upload",
+  contractors: "/backend/contractors",
+  serviceProviders: "/backend/service-provider",
+  companies: "/backend/company",
+  upload: "/backend/files/upload",
 };
 
 const MIN_CHARS = 1;
@@ -111,7 +111,7 @@ async function uploadFile(file: File): Promise<string> {
   if (!res.ok) throw new Error(await res.text());
   const data = await res.json();
   // return absolute URL if backend returns relative
-  return data.url?.startsWith("http") ? data.url : `http://localhost:8000${data.url}`;
+  return data.url?.startsWith("http") ? data.url : `/backend${data.url}`;
 }
 
 // ---------------------------
@@ -159,9 +159,9 @@ export function ContractorManagement() {
     // Fetch departments, designations, and work shifts for dropdowns
     try {
       const [deptRes, desigRes, wsRes] = await Promise.all([
-        fetchJSONSafe<any[]>("http://localhost:8000/departments"),
-        fetchJSONSafe<any[]>("http://localhost:8000/designations"),
-        fetchJSONSafe<any[]>("http://localhost:8000/work-shift"),
+        fetchJSONSafe<any[]>("/backend/departments"),
+        fetchJSONSafe<any[]>("/backend/designations"),
+        fetchJSONSafe<any[]>("/backend/work-shift"),
       ]);
       // Filter by contractor's company context if available
       const cid = contractor.companyID;
@@ -275,7 +275,7 @@ export function ContractorManagement() {
       }
 
       // 🟡 MANAGER & EMPLOYEE → Get user mapping first
-      const usersRes = await fetch("http://localhost:8000/users");
+      const usersRes = await fetch("/backend/users");
       const users = await usersRes.json();
       const currentUser = users.find((u: any) => u.username === user?.username);
 

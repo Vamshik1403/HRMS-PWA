@@ -59,7 +59,7 @@ interface LeaveBalance {
 }
 
 // Backend URL
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000"
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "/backend"
 
 export function LeaveApplicationsManagement() {
   const [leaveApplications, setLeaveApplications] = useState<LeaveApplication[]>([])
@@ -1108,7 +1108,7 @@ export function LeaveApplicationsManagement() {
       await loadLeaveApplications()
       resetForm()
       setIsDialogOpen(false)
-      toast.success(editing ? "Updated successfully" : "Created successfully");
+      toast.success(editingApplication ? "Updated successfully" : "Created successfully");
     } catch (error) {
       console.error("Error saving leave application:", error)
       toast.error("Failed to save. Please try again.");
@@ -1185,7 +1185,6 @@ export function LeaveApplicationsManagement() {
       {/* Header */}
       <div className="flex items-center justify-between w-full">
         <div className="min-w-0 flex-1">
-          <h1 className="text-2xl font-bold text-gray-900">Leave Applications</h1>
           <p className="text-gray-600 mt-1 text-sm">Manage employee leave applications and approvals</p>
         </div>
         <div className="flex items-center gap-3">
@@ -1387,7 +1386,7 @@ export function LeaveApplicationsManagement() {
                   <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
                     Cancel
                   </Button>
-                  <Button type="submit" className="bg-blue-600 hover:bg-blue-700">
+                  <Button type="submit" className="bg-gray-900 hover:bg-gray-800">
                     {editingApplication ? "Update Application" : "Submit Application"}
                   </Button>
                 </div>

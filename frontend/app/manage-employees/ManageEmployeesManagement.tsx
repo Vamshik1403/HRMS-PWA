@@ -227,23 +227,23 @@ interface ManageEmpRead {
    Config & helpers
    ========================= */
 const API = {
-  manageEmp: "http://localhost:8000/manage-emp",
-  serviceProviders: "http://localhost:8000/service-provider",
-  companies: "http://localhost:8000/company",
-  branches: "http://localhost:8000/branches",
-  upload: "http://localhost:8000/files/upload",
+  manageEmp: "/backend/manage-emp",
+  serviceProviders: "/backend/service-provider",
+  companies: "/backend/company",
+  branches: "/backend/branches",
+  upload: "/backend/files/upload",
 
   // NEW:
-  departments: "http://localhost:8000/departments",
-  designations: "http://localhost:8000/designations",
-  employees: "http://localhost:8000/manage-emp",
-  contractors: "http://localhost:8000/contractors",
-  workShifts: "http://localhost:8000/work-shift",
-  attendancePolicies: "http://localhost:8000/attendance-policy",
-  leavePolicies: "http://localhost:8000/leave-policy",
-  devices: "http://localhost:8000/devices",
-  monthlyGrades: "http://localhost:8000/monthly-pay-grade",
-  hourlyGrades: "http://localhost:8000/hourly-grade",
+  departments: "/backend/departments",
+  designations: "/backend/designations",
+  employees: "/backend/manage-emp",
+  contractors: "/backend/contractors",
+  workShifts: "/backend/work-shift",
+  attendancePolicies: "/backend/attendance-policy",
+  leavePolicies: "/backend/leave-policy",
+  devices: "/backend/devices",
+  monthlyGrades: "/backend/monthly-pay-grade",
+  hourlyGrades: "/backend/hourly-grade",
 };
 
 const MIN_CHARS = 1;
@@ -592,7 +592,7 @@ export function ManageEmployeesManagement() {
     if (user?.role !== "MANAGER") return;
 
     (async () => {
-      const res = await fetch("http://localhost:8000/users");
+      const res = await fetch("/backend/users");
       const list = await res.json();
       const me = list.find((u: any) => u.username === user.username);
       setCurrentUserMapping(me || null);
@@ -753,7 +753,7 @@ tokenDeviceMapping: tokenDevices,
     }
     // MANAGER → match companyID + branchesID from /users
     else if (user?.role === "MANAGER") {
-      const usersRes = await fetch("http://localhost:8000/users");
+      const usersRes = await fetch("/backend/users");
       const users = await usersRes.json();
       const currentUser = users.find((u: any) => u.username === user.username);
       if (currentUser) {
@@ -766,7 +766,7 @@ tokenDeviceMapping: tokenDevices,
     }
     // EMPLOYEE → match via manage-emp/credentials/all
     else if (user?.role === "EMPLOYEE") {
-      const credsRes = await fetch("http://localhost:8000/manage-emp/credentials/all");
+      const credsRes = await fetch("/backend/manage-emp/credentials/all");
       const creds = await credsRes.json();
       const emp = creds.find((c: any) => c.username === user?.username);
       if (emp) {
@@ -1271,7 +1271,7 @@ const runFetchTokenDevices = (q: string) => {
     const res = await fetch(API.upload, { method: "POST", body: fd });
     if (!res.ok) throw new Error(await res.text());
     const data = await res.json();
-    const full = data?.url?.startsWith("http") ? data.url : `http://localhost:8000${data?.url ?? ""}`;
+    const full = data?.url?.startsWith("http") ? data.url : `/backend${data?.url ?? ""}`;
     return full;
   };
 

@@ -10,7 +10,7 @@ import { useCurrentUser } from "../../hooks/useCurrentUser";
 import * as XLSX from "xlsx";
 
 const BACKEND_URL =
-  process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
+  process.env.NEXT_PUBLIC_BACKEND_URL || "/backend";
 
 interface Company { id: number; companyName: string; }
 interface Branch { id: number; branchName: string; companyID: number; }

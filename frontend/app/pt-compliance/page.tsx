@@ -1,4 +1,4 @@
-import { PageLayout } from "@/components/layout/PageLayout";
+import { PageLayout } from "../components/layout/PageLayout";
 import PTCompliancePage from "./PTComplainceView";
 
 export default function Page() {

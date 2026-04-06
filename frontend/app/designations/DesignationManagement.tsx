@@ -83,11 +83,11 @@ interface Department {
 /* Config & helpers */
 // ---------------------------
 const API = {
-  designations: "http://localhost:8000/designations",
-  serviceProviders: "http://localhost:8000/service-provider",
-  companies: "http://localhost:8000/company",
-  branches: "http://localhost:8000/branches",
-  departments: "http://localhost:8000/departments",
+  designations: "/backend/designations",
+  serviceProviders: "/backend/service-provider",
+  companies: "/backend/company",
+  branches: "/backend/branches",
+  departments: "/backend/departments",
 };
 
 const MIN_CHARS = 1;
@@ -117,7 +117,7 @@ export function DesignationManagement() {
 
     const loadMapping = async () => {
       try {
-        const res = await fetch("http://localhost:8000/users");
+        const res = await fetch("/backend/users");
         const allUsers = await res.json();
         const found = allUsers.find((u: any) => u.username === user.username);
         if (found) {
@@ -285,7 +285,7 @@ export function DesignationManagement() {
 
       // 🟡 MANAGER → match companyID + branchesID from /users
       if (user?.role === "MANAGER") {
-        const usersRes = await fetch("http://localhost:8000/users");
+        const usersRes = await fetch("/backend/users");
         const users = await usersRes.json();
         const currentUser = users.find((u: any) => u.username === user.username);
 
@@ -301,7 +301,7 @@ export function DesignationManagement() {
       }
 
       // 🔵 EMPLOYEE → match companyID + branchesID from credentials
-      const credsRes = await fetch("http://localhost:8000/manage-emp/credentials/all");
+      const credsRes = await fetch("/backend/manage-emp/credentials/all");
       const creds = await credsRes.json();
       const emp = creds.find((c: any) => c.username === user?.username);
 

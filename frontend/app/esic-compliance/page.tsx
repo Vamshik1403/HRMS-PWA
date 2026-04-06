@@ -1,4 +1,4 @@
-import { PageLayout } from "@/components/layout/PageLayout";
+import { PageLayout } from "../components/layout/PageLayout";
 import ESICCompliancePage from "./EsicPageView";
 
 export default function EsicPage() {

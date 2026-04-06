@@ -113,17 +113,17 @@ type SalaryCycleRow = {
    Constants / helpers
    ======================= */
 
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "/backend";
 
 const API = {
-  sp: "http://localhost:8000/service-provider",
-  co: "http://localhost:8000/company",
-  br: "http://localhost:8000/branches",
-  emp: "http://localhost:8000/manage-emp",
-  salaryCycleByCompany: (companyId: number) => `http://localhost:8000/salary-cycle/company/${companyId}`,
-  generateSalary: "http://localhost:8000/generate-salary",
-  salaryAdvanceRepayment: "http://localhost:8000/salary-advance-repayment", // Add this
-  reimbursement: "http://localhost:8000/reimbursement", // Add this
+  sp: "/backend/service-provider",
+  co: "/backend/company",
+  br: "/backend/branches",
+  emp: "/backend/manage-emp",
+  salaryCycleByCompany: (companyId: number) => `/backend/salary-cycle/company/${companyId}`,
+  generateSalary: "/backend/generate-salary",
+  salaryAdvanceRepayment: "/backend/salary-advance-repayment", // Add this
+  reimbursement: "/backend/reimbursement", // Add this
 };
 
 const MIN_CHARS = 1;
@@ -343,7 +343,7 @@ async function getSalaryAdvanceRepayments(
 
 /** Find a monthly pay grade for company + branch (or by emp.monthlyPayGradeID if present) */
 async function getMonthlyPayGrade(companyId: number, branchId: number, emp?: any) {
-  const grades: any[] = await robustGet("http://localhost:8000/monthly-pay-grade");
+  const grades: any[] = await robustGet("/backend/monthly-pay-grade");
   if (emp?.monthlyPayGradeID) {
     const g = grades.find(x => x.id === emp.monthlyPayGradeID);
     if (g) return g;
@@ -355,8 +355,8 @@ async function getMonthlyPayGrade(companyId: number, branchId: number, emp?: any
 
 /** Get company + branch names */
 async function getCompanyAndBranch(companyId: number, branchId: number) {
-  const companies: any[] = await robustGet("http://localhost:8000/company");
-  const branches: any[] = await robustGet("http://localhost:8000/branches");
+  const companies: any[] = await robustGet("/backend/company");
+  const branches: any[] = await robustGet("/backend/branches");
   const company = companies.find((c: any) => c.id === companyId) || {};
   const branch = branches.find((b: any) => b.id === branchId) || {};
   return {
@@ -367,7 +367,7 @@ async function getCompanyAndBranch(companyId: number, branchId: number) {
 
 /** Get shift-days for an employee (to count weekly-off occurrences) */
 async function getShiftDays(emp: any) {
-  const workShifts: any[] = await robustGet("http://localhost:8000/work-shift");
+  const workShifts: any[] = await robustGet("/backend/work-shift");
   const empShift = workShifts.find(ws => ws.id === emp.workShiftID);
   return empShift?.workShiftDay || [];
 }
@@ -385,7 +385,7 @@ function countWeeklyOffOccurrences(shiftDays: any[], start: Date, end: Date) {
 
 /** Public holiday days for branch within cycle */
 async function getHolidayCount(branchId: number, start: Date, end: Date) {
-  const holidays: any[] = await robustGet("http://localhost:8000/public-holiday");
+  const holidays: any[] = await robustGet("/backend/public-holiday");
   const branchHolidays = holidays.filter((h: any) => h.branchesID === branchId);
   let set = new Set<string>();
   branchHolidays.forEach((h: any) => {
@@ -399,7 +399,7 @@ async function getHolidayCount(branchId: number, start: Date, end: Date) {
 
 /** Split approved leaves to Non-LoP vs LoP (in days) within cycle */
 async function getLeaveBreakdown(employeeId: number, start: Date, end: Date) {
-  const leaves: any[] = await robustGet("http://localhost:8000/leave-application");
+  const leaves: any[] = await robustGet("/backend/leave-application");
   const empLeaves = leaves.filter(l => l.manageEmployeeID === employeeId && l.status === "Approved");
   let nonLoP = 0, lop = 0;
   empLeaves.forEach(l => {
@@ -605,7 +605,7 @@ async function computeDeductions(
 async function fetchAllLogs(): Promise<any[]> {
   const all: any[] = [];
   try {
-    const res: any[] = await robustGet(`http://localhost:8000/emp-attendance-logs`);
+    const res: any[] = await robustGet(`/backend/emp-attendance-logs`);
     all.push(...res);
   } catch (err) {
     console.error("Failed to fetch /emp-attendance-logs", err);
@@ -671,7 +671,7 @@ async function calculateSalaryCounts(
     }
 
     // === ATTENDANCE POLICY ===
-    const policies: any[] = await robustGet("http://localhost:8000/attendance-policy");
+    const policies: any[] = await robustGet("/backend/attendance-policy");
     const policy = policies.find((p: any) => p.id === emp.attendancePolicyID) ?? {};
     const workingType = (policy?.workingHoursType ?? "").toLowerCase();
     const isFlexible = workingType.includes("flex");
@@ -685,7 +685,7 @@ async function calculateSalaryCounts(
     const markAsAction = (policy?.markAs ?? "Half Day").toString().toLowerCase();
 
     // === SHIFT ===
-    const workShifts: any[] = await robustGet("http://localhost:8000/work-shift");
+    const workShifts: any[] = await robustGet("/backend/work-shift");
     const empShift = workShifts.find((ws: any) => ws.id === emp.workShiftID);
     if (!empShift) return null;
     const shiftDays: any[] = empShift.workShiftDay ?? [];
@@ -709,7 +709,7 @@ async function calculateSalaryCounts(
     };
 
     // === HOLIDAY / LEAVE / REGULARISE MAPS ===
-    const holidays: any[] = await robustGet("http://localhost:8000/public-holiday");
+    const holidays: any[] = await robustGet("/backend/public-holiday");
     const branchHolidays = holidays.filter((h: any) => h.branchesID === branchId);
     const holidaySet = new Set<string>();
     for (const h of branchHolidays) {
@@ -717,7 +717,7 @@ async function calculateSalaryCounts(
       for (let d = new Date(hs); d <= he; d.setDate(d.getDate() + 1)) if (d >= startDate && d <= endDate) holidaySet.add(ymd(d));
     }
 
-    const leaves: any[] = await robustGet("http://localhost:8000/leave-application");
+    const leaves: any[] = await robustGet("/backend/leave-application");
     const empLeaves = leaves.filter((l) => l.manageEmployeeID === employeeId);
     const leaveMap = new Map<string, any>();
     for (const lv of empLeaves) {
@@ -725,7 +725,7 @@ async function calculateSalaryCounts(
       for (let d = new Date(ls); d <= le; d.setDate(d.getDate() + 1))leaveMap.set(ymd(d), lv);
     }
 
-    const regs: any[] = await robustGet("http://localhost:8000/emp-attendance-regularise");
+    const regs: any[] = await robustGet("/backend/emp-attendance-regularise");
     const empRegs = regs.filter((r) => r.manageEmployeeID === employeeId && r.status === "Approved");
     const regulariseMap = new Map<string, any>();
     for (const r of empRegs) regulariseMap.set(ymd(new Date(r.attendanceDate)), r);
@@ -1170,7 +1170,7 @@ const canManage = user?.role === "SUPERADMIN" || user?.role === "MANAGER"
       setIsLoadingBankDetails(true);
 
       // ✅ Fetch from manage-emp and find employee by ID
-      const allEmployees = await robustGet("http://localhost:8000/manage-emp");
+      const allEmployees = await robustGet("/backend/manage-emp");
       const employee = allEmployees.find((e: any) => e.id === row.manageEmployee?.id);
 
       // Extract the first bank details entry if exists
@@ -1217,7 +1217,7 @@ const canManage = user?.role === "SUPERADMIN" || user?.role === "MANAGER"
   delete payload.branches;
 
   try {
-    const res = await fetch(`http://localhost:8000/generate-salary/${selectedSalaryRow.id}`, {
+    const res = await fetch(`/backend/generate-salary/${selectedSalaryRow.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
@@ -1263,7 +1263,7 @@ const canManage = user?.role === "SUPERADMIN" || user?.role === "MANAGER"
   useEffect(() => {
     if (formData.companyID) {
       (async () => {
-        const res = await robustGet("http://localhost:8000/salary-cycle");
+        const res = await robustGet("/backend/salary-cycle");
         const filtered = res
           .filter((c: any) => c.companyID === Number(formData.companyID))
           .map((c: any) => `${c.startDay} ${c.startMonth} ${c.startYear} to ${c.endDay} ${c.endMonth} ${c.endYear}`);
@@ -1747,7 +1747,7 @@ useEffect(() => {
                   if (selectedSalaryRow.manageEmployee?.id) {
                     try {
                       setIsLoadingBankDetails(true);
-                      const allEmployees = await robustGet("http://localhost:8000/manage-emp");
+                      const allEmployees = await robustGet("/backend/manage-emp");
                       const employee = allEmployees.find(
                         (e: any) => e.id === selectedSalaryRow.manageEmployee?.id
                       );

@@ -95,7 +95,7 @@ interface ManagerData {
   companyName:string
 }
 
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000"
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "/backend"
 
 export function SalaryAdvanceManagement() {
   const [advances, setAdvances] = useState<SalaryAdvance[]>([])

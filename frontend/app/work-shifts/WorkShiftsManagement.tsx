@@ -120,7 +120,7 @@ export function WorkShiftsManagement() {
 
   // API functions for search and suggest
   const BACKEND_URL =
-    process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
+    process.env.NEXT_PUBLIC_BACKEND_URL || "/backend";
 
 
   // Load mapping for MANAGER
@@ -128,7 +128,7 @@ export function WorkShiftsManagement() {
     if (user?.role !== "MANAGER") return;
 
     (async () => {
-      const res = await fetch("http://localhost:8000/users");
+      const res = await fetch("/backend/users");
       const list = await res.json();
       const me = list.find((u: any) => u.username === user.username);
       setCurrentUserMapping(me || null);

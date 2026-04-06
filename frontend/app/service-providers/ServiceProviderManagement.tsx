@@ -59,7 +59,7 @@ export function ServiceProviderManagement() {
 
   const fetchProviders = async () => {
     try {
-      const res = await fetch("http://localhost:8000/service-provider")
+      const res = await fetch("/backend/service-provider")
       const data = await res.json()
       setServiceProviders(Array.isArray(data) ? data : [])
     } catch (error) {
@@ -75,13 +75,13 @@ const handleSubmit = async (e: React.FormEvent) => {
 
     let res
   if (editingProvider) {
-  res = await fetch(`http://localhost:8000/service-provider/${editingProvider.id}`, {
+  res = await fetch(`/backend/service-provider/${editingProvider.id}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(formData),
   })
 } else {
-  res = await fetch("http://localhost:8000/service-provider", {
+  res = await fetch("/backend/service-provider", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(formData),
@@ -108,7 +108,7 @@ const handleSubmit = async (e: React.FormEvent) => {
   const handleDelete = async (id: number) => {
     if (confirm("Are you sure you want to delete this service provider?")) {
       try {
-        await fetch(`http://localhost:8000/service-provider/${id}`, {
+        await fetch(`/backend/service-provider/${id}`, {
           method: "DELETE",
         })
         await fetchProviders()

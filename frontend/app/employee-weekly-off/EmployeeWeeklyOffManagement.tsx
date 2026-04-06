@@ -27,7 +27,7 @@ import { Icon } from "@iconify/react"
 import { Plus, Search, Trash2 } from "lucide-react"
 import { useCurrentUser } from "../hooks/useCurrentUser"
 
-const BACKEND_URL = "http://localhost:8000"
+const BACKEND_URL = "/backend"
 
 interface WeeklyOff {
   id: number

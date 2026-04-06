@@ -34,7 +34,7 @@ const DEFAULT_COMPLIANCE: Omit<ESICCompliance, 'companyID'> = {
 };
 
 export default function ESICCompliancePage() {
-  const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
+  const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL || "/backend";
   const currentUser = useCurrentUser();
   const router = useRouter()
 

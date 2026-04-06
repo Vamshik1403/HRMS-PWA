@@ -122,7 +122,7 @@ export function CompanyManagement() {
 
   const fetchCompanies = async () => {
     try {
-      const res = await fetch("http://localhost:8000/company")
+      const res = await fetch("/backend/company")
       const json = await res.json()
       const all = Array.isArray(json) ? json : json.data ?? []
 
@@ -132,7 +132,7 @@ export function CompanyManagement() {
       }
 
       if (user?.role === "MANAGER") {
-        const usersRes = await fetch("http://localhost:8000/users")
+        const usersRes = await fetch("/backend/users")
         const users = await usersRes.json()
         const currentUser = users.find((u: any) => u.username === user.username)
 
@@ -147,7 +147,7 @@ export function CompanyManagement() {
         }
       }
 
-      const credsRes = await fetch("http://localhost:8000/manage-emp/credentials/all")
+      const credsRes = await fetch("/backend/manage-emp/credentials/all")
       const creds = await credsRes.json()
       const emp = creds.find((c: any) => c.username === user?.username)
 
@@ -170,7 +170,7 @@ export function CompanyManagement() {
   // Fetch service providers for autocomplete
   const fetchServiceProviders = async (query: string) => {
     try {
-      const res = await fetch("http://localhost:8000/service-provider")
+      const res = await fetch("/backend/service-provider")
       const data = await res.json()
       const filtered = data.filter((sp: ServiceProvider) =>
         sp.companyName.toLowerCase().includes(query.toLowerCase())
@@ -187,7 +187,7 @@ export function CompanyManagement() {
     }
   }, [formData.companyName])
 
-  const UPLOAD_URL = "http://localhost:8000/files/upload";
+  const UPLOAD_URL = "/backend/files/upload";
 
   async function uploadImage(file: File): Promise<string> {
     const fd = new FormData();
@@ -224,12 +224,12 @@ export function CompanyManagement() {
       };
 
       const res = editingCompany
-        ? await fetch(`http://localhost:8000/company/${editingCompany.id}`, {
+        ? await fetch(`/backend/company/${editingCompany.id}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(finalData),
         })
-        : await fetch("http://localhost:8000/company", {
+        : await fetch("/backend/company", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(finalData),
@@ -266,7 +266,7 @@ export function CompanyManagement() {
   const handleDelete = async (id: number) => {
     if (confirm("Are you sure you want to delete this company?")) {
       try {
-        await fetch(`http://localhost:8000/company/${id}`, { method: "DELETE" })
+        await fetch(`/backend/company/${id}`, { method: "DELETE" })
         await fetchCompanies()
       } catch (error) {
         console.error("Error deleting company:", error)

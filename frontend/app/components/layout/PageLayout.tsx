@@ -43,19 +43,19 @@ const sbRow =
   "flex w-full items-center gap-3 rounded-[4px] px-3 h-12 min-h-[48px] max-h-12 shrink-0 transition-all duration-150";
 
 const sbActive =
-  "!bg-white text-gray-900 font-semibold shadow-[0_1px_3px_rgba(0,0,0,0.08),0_4px_12px_rgba(0,0,0,0.06)] ring-1 ring-black/[0.06]";
+  "!bg-gray-900 text-white font-semibold shadow-[0_2px_8px_rgba(0,0,0,0.15),0_4px_16px_rgba(0,0,0,0.1)] ring-1 ring-gray-900/10";
 
 const sbIdle =
-  "text-gray-600 hover:bg-white/70 hover:text-gray-900 !bg-transparent";
+  "text-gray-600 hover:bg-gray-100 hover:text-gray-900 !bg-transparent";
 
 const sbSubRow =
   "flex w-full items-center rounded-[4px] px-3 min-h-10 h-10 max-h-10 text-[13px] font-medium transition-all duration-150";
 
 const sbSubActive =
-  "!bg-white text-gray-900 font-semibold shadow-[0_1px_2px_rgba(0,0,0,0.06),0_3px_8px_rgba(0,0,0,0.05)] ring-1 ring-black/[0.06]";
+  "!bg-gray-900 text-white font-semibold shadow-[0_1px_4px_rgba(0,0,0,0.12),0_3px_10px_rgba(0,0,0,0.08)] ring-1 ring-gray-900/10";
 
 const sbSubIdle =
-  "text-gray-600 hover:bg-white/60 hover:text-gray-900 !bg-transparent";
+  "text-gray-600 hover:bg-gray-100 hover:text-gray-900 !bg-transparent";
 
 export function PageLayout({ children }: PageLayoutProps) {
   const pathname = usePathname()
@@ -258,7 +258,7 @@ export function PageLayout({ children }: PageLayoutProps) {
                         className={cn(
                           "w-5 h-5 shrink-0",
                           isActiveLink("/dashboard")
-                            ? "text-gray-900"
+                            ? "text-white"
                             : "text-gray-500"
                         )}
                       />
@@ -281,7 +281,7 @@ export function PageLayout({ children }: PageLayoutProps) {
                           className={cn(
                             "w-5 h-5 shrink-0",
                             isActiveLink("/service-providers")
-                              ? "text-gray-900"
+                              ? "text-white"
                               : "text-gray-500"
                           )}
                         />
@@ -318,7 +318,7 @@ export function PageLayout({ children }: PageLayoutProps) {
                             className={cn(
                               "w-5 h-5 shrink-0",
                               setupSectionActive
-                                ? "text-gray-900"
+                                ? "text-white"
                                 : "text-gray-500"
                             )}
                           />
@@ -419,7 +419,7 @@ export function PageLayout({ children }: PageLayoutProps) {
                             className={cn(
                               "w-5 h-5 shrink-0",
                               employeeSectionActive
-                                ? "text-gray-900"
+                                ? "text-white"
                                 : "text-gray-500"
                             )}
                           />
@@ -522,7 +522,7 @@ export function PageLayout({ children }: PageLayoutProps) {
                             className={cn(
                               "w-5 h-5 shrink-0",
                               payrollSectionActive
-                                ? "text-gray-900"
+                                ? "text-white"
                                 : "text-gray-500"
                             )}
                           />
@@ -604,7 +604,7 @@ export function PageLayout({ children }: PageLayoutProps) {
                             className={cn(
                               "w-5 h-5 shrink-0",
                               salarySectionActive
-                                ? "text-gray-900"
+                                ? "text-white"
                                 : "text-gray-500"
                             )}
                           />
@@ -759,7 +759,7 @@ export function PageLayout({ children }: PageLayoutProps) {
                             className={cn(
                               "w-5 h-5 shrink-0",
                               leaveSectionActive
-                                ? "text-gray-900"
+                                ? "text-white"
                                 : "text-gray-500"
                             )}
                           />
@@ -903,7 +903,7 @@ export function PageLayout({ children }: PageLayoutProps) {
                             className={cn(
                               "w-5 h-5 shrink-0",
                               shiftSectionActive
-                                ? "text-gray-900"
+                                ? "text-white"
                                 : "text-gray-500"
                             )}
                           />
@@ -995,7 +995,7 @@ export function PageLayout({ children }: PageLayoutProps) {
                             className={cn(
                               "w-5 h-5 shrink-0",
                               attendanceSectionActive
-                                ? "text-gray-900"
+                                ? "text-white"
                                 : "text-gray-500"
                             )}
                           />
@@ -1078,7 +1078,7 @@ export function PageLayout({ children }: PageLayoutProps) {
                             className={cn(
                               "w-5 h-5 shrink-0",
                               reportsSectionActive
-                                ? "text-gray-900"
+                                ? "text-white"
                                 : "text-gray-500"
                             )}
                           />
@@ -1170,7 +1170,7 @@ export function PageLayout({ children }: PageLayoutProps) {
                             className={cn(
                               "w-5 h-5 shrink-0",
                               canteenSectionActive
-                                ? "text-gray-900"
+                                ? "text-white"
                                 : "text-gray-500"
                             )}
                           />
