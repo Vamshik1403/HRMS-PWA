@@ -27,6 +27,7 @@ import { Icon } from "@iconify/react"
 import { Plus, Search, Edit, Trash2, Clock, Check, X } from "lucide-react"
 import { SearchSuggestInput } from "../components/SearchSuggestInput"
 import { useCurrentUser } from "../hooks/useCurrentUser"
+import { toast } from "sonner";
 
 interface AttendanceRegularisation {
   id: string
@@ -420,7 +421,7 @@ export function AttendanceRegularisationManagement() {
 
     // Ensure we have the required IDs
     if (!companyID || !formData.branchesID || !formData.manageEmployeeID) {
-      alert("Please make sure all required fields are selected: Branch and Employee");
+      toast.error("Please make sure all required fields are selected: Branch and Employee");
       return;
     }
 
@@ -453,15 +454,17 @@ export function AttendanceRegularisationManagement() {
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({}))
         const message = errorData?.message || `Failed to save attendance regularisation: ${res.status}`
-        alert(message)
+        toast.error(message)
         return
       }
 
       await loadAttendanceRegularisations()
       resetForm()
       setIsDialogOpen(false)
+      toast.success("Attendance regularisation saved successfully")
     } catch (error) {
       console.error("Error saving attendance regularisation:", error)
+      toast.error((error as any)?.message || "Something went wrong")
     }
   }
 
@@ -525,8 +528,10 @@ export function AttendanceRegularisationManagement() {
         throw new Error(`Failed to delete attendance regularisation: ${res.status}`)
       }
       await loadAttendanceRegularisations()
+      toast.success("Record deleted successfully")
     } catch (error) {
       console.error("Error deleting attendance regularisation:", error)
+      toast.error((error as any)?.message || "Something went wrong")
     }
   }
 
@@ -541,8 +546,10 @@ export function AttendanceRegularisationManagement() {
         throw new Error(`Failed to approve attendance regularisation: ${res.status}`)
       }
       await loadAttendanceRegularisations()
+      toast.success("Approved successfully")
     } catch (error) {
       console.error("Error approving attendance regularisation:", error)
+      toast.error((error as any)?.message || "Something went wrong")
     }
   }
 
@@ -557,8 +564,10 @@ export function AttendanceRegularisationManagement() {
         throw new Error(`Failed to reject attendance regularisation: ${res.status}`)
       }
       await loadAttendanceRegularisations()
+      toast.success("Rejected successfully")
     } catch (error) {
       console.error("Error rejecting attendance regularisation:", error)
+      toast.error((error as any)?.message || "Something went wrong")
     }
   }
 

@@ -26,6 +26,7 @@ import { Badge } from "../components/ui/badge"
 import { Icon } from "@iconify/react"
 import { Plus, Search, Trash2 } from "lucide-react"
 import { useCurrentUser } from "../hooks/useCurrentUser"
+import { toast } from "sonner"
 
 const BACKEND_URL = "/backend"
 
@@ -93,8 +94,10 @@ export function EmployeeWeeklyOffManagement() {
       await loadWeeklyOffs()
       setIsDialogOpen(false)
       setFormData({ employeeID: 0, date: "" })
+      toast.success("Weekly off saved successfully")
     } catch (err) {
       console.error("Error saving weekly off:", err)
+      toast.error((err as any)?.message || "Failed to save weekly off")
     }
   }
 
@@ -102,8 +105,10 @@ export function EmployeeWeeklyOffManagement() {
     try {
       await fetch(`${BACKEND_URL}/employee-weekly-off/${id}`, { method: "DELETE" })
       await loadWeeklyOffs()
+      toast.success("Weekly off deleted successfully")
     } catch (err) {
       console.error("Error deleting weekly off:", err)
+      toast.error((err as any)?.message || "Failed to delete weekly off")
     }
   }
 

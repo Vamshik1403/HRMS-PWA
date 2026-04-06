@@ -18,6 +18,7 @@ import { SearchSuggestInput } from "../components/SearchSuggestInput"
 import jsPDF from "jspdf"
 import html2canvas from "html2canvas"
 import { useCurrentUser } from "../hooks/useCurrentUser"
+import { toast } from "sonner"
 
 
 interface ReimbursementItem {
@@ -641,7 +642,7 @@ const resolvedBranchID = formData.branchesID;
       pdf.save(fileName);
     } catch (error) {
       console.error('Error generating PDF:', error);
-      alert('Error generating PDF. Please try again.');
+      toast.error('Error generating PDF. Please try again.');
     } finally {
       document.body.removeChild(element);
     }
@@ -1011,15 +1012,16 @@ const handleSubmit = async (e: React.FormEvent) => {
   await loadReimbursements();
   resetForm();
   setIsDialogOpen(false);
+  toast.success("Reimbursement saved successfully");
 };
 
 
   const handleSettingsSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!settingsReimbursement) return
-    if (!approvalType) { alert("Please select Approval Type"); return }
-    if (approvalType === "Salary" && !selectedSalaryPeriod) { alert("Please select Salary Period"); return }
-    if (approvalType === "Voucher" && (!voucherCode || !voucherDate)) { alert("Please fill all voucher fields"); return }
+    if (!approvalType) { toast.error("Please select Approval Type"); return }
+    if (approvalType === "Salary" && !selectedSalaryPeriod) { toast.error("Please select Salary Period"); return }
+    if (approvalType === "Voucher" && (!voucherCode || !voucherDate)) { toast.error("Please fill all voucher fields"); return }
 
     const payload = {
       approvalType,
@@ -1043,17 +1045,18 @@ const handleSubmit = async (e: React.FormEvent) => {
     await loadReimbursements()
     resetSettingsForm()
     setIsSettingsDialogOpen(false)
+    toast.success("Settings saved successfully")
   }
 
   const handlePaymentSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!paymentReimbursement) return
-    if (!paymentMode) { alert("Please select Payment Mode"); return }
-    if (paymentMode === "Bank" && !paymentType) { alert("Please select Payment Type"); return }
-    if (!paymentDate) { alert("Please select Payment Date"); return }
-    if (paymentMode === "Bank" && paymentType === "Cheque" && !paymentProof) { alert("Please enter Cheque Number"); return }
-    if (paymentMode === "Bank" && paymentType === "UPI" && !paymentProof) { alert("Please enter UTR Number"); return }
-    if (paymentMode === "Bank" && paymentType === "Bank Transfer" && !paymentProof) { alert("Please enter Transaction Reference Number"); return }
+    if (!paymentMode) { toast.error("Please select Payment Mode"); return }
+    if (paymentMode === "Bank" && !paymentType) { toast.error("Please select Payment Type"); return }
+    if (!paymentDate) { toast.error("Please select Payment Date"); return }
+    if (paymentMode === "Bank" && paymentType === "Cheque" && !paymentProof) { toast.error("Please enter Cheque Number"); return }
+    if (paymentMode === "Bank" && paymentType === "UPI" && !paymentProof) { toast.error("Please enter UTR Number"); return }
+    if (paymentMode === "Bank" && paymentType === "Bank Transfer" && !paymentProof) { toast.error("Please enter Transaction Reference Number"); return }
 
     const payload = {
       paymentMode,
@@ -1073,6 +1076,7 @@ const handleSubmit = async (e: React.FormEvent) => {
     await loadReimbursements()
     resetPaymentForm()
     setIsPaymentDialogOpen(false)
+    toast.success("Payment recorded successfully")
   }
 
   const handleDelete = async (id: string) => {
@@ -1163,7 +1167,7 @@ const handleSubmit = async (e: React.FormEvent) => {
     })
 
     await loadReimbursements()
-    alert("Reimbursement rejected successfully!")
+    toast.success("Reimbursement rejected successfully")
   }
 
   const filteredReimbursements = reimbursements.filter((r) =>

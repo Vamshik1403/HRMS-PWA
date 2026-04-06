@@ -14,6 +14,7 @@ import { Badge } from "../components/ui/badge";
 import { Icon } from "@iconify/react";
 import { Plus, Search, Edit, Trash2 } from "lucide-react";
 import { useCurrentUser } from "../hooks/useCurrentUser";
+import { toast } from "sonner";
 
 
 /* ---------------- API endpoints ---------------- */
@@ -383,8 +384,10 @@ const runFetchBR = debounce(async (val: string) => {
       }
       resetForm();
       setIsDialogOpen(false);
+      toast.success("Bonus setup saved successfully");
     } catch (e) {
       console.error("Save failed", e);
+      toast.error((e as any)?.message || "Failed to save bonus setup");
     }
   };
 
@@ -411,8 +414,10 @@ const runFetchBR = debounce(async (val: string) => {
     try {
       await fetch(`${API.bonus}/${id}`, { method: "DELETE" });
       setBonuses((prev) => prev.filter((b) => b.id !== id));
+      toast.success("Bonus setup deleted successfully");
     } catch (e) {
       console.error("Delete failed", e);
+      toast.error((e as any)?.message || "Failed to delete bonus setup");
     }
   };
 

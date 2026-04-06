@@ -4,6 +4,7 @@ import { useState, useRef, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
 import { Button } from "../components/ui/button";
 import { Upload, Download, Trash2, FileSpreadsheet, CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
+import { toast } from "sonner";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "/backend";
 
@@ -56,8 +57,10 @@ export function ImportAttendanceManagement() {
       setResult(data);
       setFile(null);
       if (fileInputRef.current) fileInputRef.current.value = "";
+      toast.success("Attendance imported successfully");
     } catch (err: any) {
       setError(err.message || "Upload failed");
+      toast.error(err.message || "Upload failed");
     } finally {
       setUploading(false);
     }
@@ -78,6 +81,7 @@ export function ImportAttendanceManagement() {
       window.URL.revokeObjectURL(url);
     } catch (err: any) {
       setError(err.message || "Failed to download template");
+      toast.error(err.message || "Failed to download template");
     }
   }, []);
 
@@ -98,6 +102,7 @@ export function ImportAttendanceManagement() {
       );
     } catch (err: any) {
       setError(err.message || "Delete failed");
+      toast.error(err.message || "Delete failed");
     } finally {
       setDeleting(false);
     }

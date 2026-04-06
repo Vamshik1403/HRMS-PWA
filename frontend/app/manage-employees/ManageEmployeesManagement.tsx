@@ -32,6 +32,7 @@ import {
   DialogTitle,
 } from "../components/ui/dialog";
 import { FormDrawer } from "../components/ui/form-drawer";
+import { toast } from "sonner";
 
 /* =========================
    Types aligned to backend
@@ -2014,6 +2015,7 @@ const addDevMap = () => setFormData(p => ({
       resetForm();
       setIsAddingNew(false);
       setEditingRow(null);
+      toast.success("Employee saved successfully");
     } catch (e: any) {
       setError(e?.message || "Save failed");
     } finally {
@@ -2293,8 +2295,9 @@ const addDevMap = () => setFormData(p => ({
       const res = await fetch(`${API.manageEmp}/${id}`, { method: "DELETE" });
       if (!res.ok) throw new Error(await res.text());
       await fetchRows();
+      toast.success("Employee deleted successfully");
     } catch (e: any) {
-      alert(e?.message || "Delete failed");
+      toast.error(e?.message || "Delete failed");
     }
   };
 

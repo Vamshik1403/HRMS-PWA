@@ -16,6 +16,7 @@ import { Badge } from "../components/ui/badge"
 import { Search, Edit, Trash2, Check, X, Plus, Settings, PlusCircle, MinusCircle, AlertCircle, Loader2 } from "lucide-react"
 import { SearchSuggestInput } from "../components/SearchSuggestInput"
 import { useCurrentUser } from "../hooks/useCurrentUser"
+import { toast } from "sonner"
 
 // ============ Type Definitions ============
 type AdvanceStatus = "Pending" | "Approved" | "Rejected" | "Paid"
@@ -559,7 +560,7 @@ const fetchCompanies = useCallback(
     e.preventDefault()
     
     if (!validateForm()) {
-      alert("Please fill all required fields with valid data")
+      toast.error("Please fill all required fields with valid data")
       return
     }
 
@@ -592,9 +593,10 @@ const fetchCompanies = useCallback(
       await loadAdvances()
       resetForm()
       setIsDialogOpen(false)
+      toast.success("Salary advance saved successfully")
     } catch (error) {
       console.error("Failed to save advance:", error)
-      alert("Failed to save salary advance. Please try again.")
+      toast.error("Failed to save salary advance. Please try again.")
     } finally {
       setSubmitting(false)
     }
@@ -645,9 +647,10 @@ const fetchCompanies = useCallback(
     try {
       await robustFetch(`${BACKEND_URL}/salary-advance/${id}`, { method: "DELETE" })
       await loadAdvances()
+      toast.success("Salary advance deleted successfully")
     } catch (error) {
       console.error("Failed to delete advance:", error)
-      alert("Failed to delete salary advance. Please try again.")
+      toast.error("Failed to delete salary advance. Please try again.")
     }
   }, [robustFetch, loadAdvances])
 
@@ -669,7 +672,7 @@ const fetchCompanies = useCallback(
       await loadAdvances()
     } catch (error) {
       console.error("Failed to reject advance:", error)
-      alert("Failed to reject salary advance. Please try again.")
+      toast.error("Failed to reject salary advance. Please try again.")
     }
   }, [robustFetch, loadAdvances])
 
@@ -780,17 +783,17 @@ const fetchCompanies = useCallback(
 
   const addRepaymentRow = useCallback(() => {
     if (!selectedSalaryPeriod) {
-      alert("Please select a salary period first")
+      toast.error("Please select a salary period first")
       return
     }
     
     if (getUsedSalaryPeriods().includes(selectedSalaryPeriod)) {
-      alert("This salary period is already selected. Please choose a different one.")
+      toast.error("This salary period is already selected. Please choose a different one.")
       return
     }
     
     if (!canAddMoreRows()) {
-      alert("Cannot add more repayment entries. Either all periods are used or approved amount is fully allocated.")
+      toast.error("Cannot add more repayment entries. Either all periods are used or approved amount is fully allocated.")
       return
     }
     
@@ -807,7 +810,7 @@ const fetchCompanies = useCallback(
 
   const saveRepayment = useCallback(async () => {
     if (!isRepaymentFormValid()) {
-      alert("Please fix all validation errors before saving.")
+      toast.error("Please fix all validation errors before saving.")
       return
     }
 
@@ -827,9 +830,10 @@ const fetchCompanies = useCallback(
 
       await loadAdvances()
       setIsRepaymentOpen(false)
+      toast.success("Repayment plan saved successfully")
     } catch (error) {
       console.error("Error saving repayment plan:", error)
-      alert("Error saving repayment plan. Please try again.")
+      toast.error("Error saving repayment plan. Please try again.")
     }
   }, [isRepaymentFormValid, repaymentAdvance, saveRepaymentPlan, approvedAmount, repaymentRows, robustFetch, loadAdvances])
 

@@ -23,6 +23,7 @@ import {
 } from "../components/ui/dropdown-menu"
 import { SelectTrigger, SelectValue, SelectContent, SelectItem } from "@radix-ui/react-select"
 import { Select } from "react-day-picker"
+import { toast } from "sonner"
 
 interface Company {
   id: number
@@ -241,8 +242,10 @@ export function CompanyManagement() {
       resetForm();
       setIsAddingNew(false);
       setEditingCompany(null);
+      toast.success("Company saved successfully");
     } catch (err) {
       console.error(err);
+      toast.error((err as any)?.message || "Failed to save company");
     }
   };
 
@@ -268,8 +271,10 @@ export function CompanyManagement() {
       try {
         await fetch(`/backend/company/${id}`, { method: "DELETE" })
         await fetchCompanies()
+        toast.success("Company deleted successfully")
       } catch (error) {
         console.error("Error deleting company:", error)
+        toast.error((error as any)?.message || "Failed to delete company")
       }
     }
   }

@@ -26,6 +26,7 @@ import { Badge } from "../components/ui/badge"
 import { Icon } from "@iconify/react"
 import { Plus, Search, Edit, Trash2, MapPin } from "lucide-react"
 import { SearchSuggestInput } from "../components/SearchSuggestInput"
+import { toast } from "sonner"
 
 interface FieldAttendanceSchedule {
   id: string
@@ -276,8 +277,10 @@ createdAt: schedule.createdAt
       await loadFieldAttendanceSchedules()
       resetForm()
       setIsDialogOpen(false)
+      toast.success("Schedule saved successfully")
     } catch (error) {
       console.error("Error saving field attendance schedule:", error)
+      toast.error((error as any)?.message || "Failed to save schedule")
     }
   }
 
@@ -337,8 +340,10 @@ createdAt: schedule.createdAt
         throw new Error(`Failed to delete field attendance schedule: ${res.status}`)
       }
       await loadFieldAttendanceSchedules()
+      toast.success("Schedule deleted successfully")
     } catch (error) {
       console.error("Error deleting field attendance schedule:", error)
+      toast.error((error as any)?.message || "Failed to delete schedule")
     }
   }
 

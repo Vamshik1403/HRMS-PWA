@@ -21,6 +21,7 @@ import {
   DropdownMenuTrigger,
 } from "../components/ui/dropdown-menu";
 import { FormDrawer } from "../components/ui/form-drawer";
+import { toast } from "sonner";
 
 // ---------------------------
 // Types aligned to backend
@@ -466,6 +467,7 @@ export function BranchManagement() {
       resetForm();
       setIsAddingNew(false);
       setEditingBranch(null);
+      toast.success("Branch saved successfully");
     } catch (e: any) {
       setError(e?.message || "Save failed");
     } finally {
@@ -570,8 +572,9 @@ export function BranchManagement() {
       const res = await fetch(`${API.branches}/${id}`, { method: "DELETE" });
       if (!res.ok) throw new Error(await res.text());
       await fetchBranches();
+      toast.success("Branch deleted successfully");
     } catch (e: any) {
-      alert(e?.message || "Delete failed");
+      toast.error(e?.message || "Delete failed");
     }
   };
 

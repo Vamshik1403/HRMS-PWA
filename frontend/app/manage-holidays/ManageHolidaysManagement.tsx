@@ -27,6 +27,7 @@ import { Icon } from "@iconify/react"
 import { Plus, Search, Edit, Trash2 } from "lucide-react"
 import { SearchSuggestInput } from "../components/SearchSuggestInput"
 import { useCurrentUser } from "../hooks/useCurrentUser";
+import { toast } from "sonner";
 
 interface Holiday {
   id: string
@@ -335,9 +336,10 @@ export function ManageHolidaysManagement() {
       await loadHolidays()
       resetForm()
       setIsDialogOpen(false)
+      toast.success("Holiday saved successfully")
     } catch (error) {
       console.error("Error saving holiday:", error)
-      alert(`Error saving holiday: ${error}`);
+      toast.error(`Error saving holiday: ${error}`);
     }
   }
 
@@ -412,9 +414,10 @@ export function ManageHolidaysManagement() {
       const res = await fetch(`${BACKEND_URL}/manage-holiday/${id}`, { method: "DELETE" })
       if (!res.ok) throw new Error(`Failed to delete holiday: ${res.status}`)
       await loadHolidays()
+      toast.success("Holiday deleted successfully")
     } catch (error) {
       console.error("Error deleting holiday:", error)
-      alert(`Error deleting holiday: ${error}`);
+      toast.error(`Error deleting holiday: ${error}`);
     }
   }
 

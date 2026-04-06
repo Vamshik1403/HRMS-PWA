@@ -37,25 +37,25 @@ interface PageLayoutProps {
 
 /** shadcn SidebarMenuButton defaults conflict with pill nav; reset and fixed row height */
 const sbMenuBtnReset =
-  "!h-12 !min-h-[48px] !max-h-12 !rounded-lg !p-0 w-full max-w-full border-0 !bg-transparent !shadow-none hover:!bg-transparent hover:!text-inherit active:!bg-transparent data-[active=true]:!bg-transparent data-[state=open]:!bg-transparent focus-visible:ring-1 focus-visible:ring-gray-900/10";
+  "!h-11 !min-h-[44px] !max-h-11 !rounded-md !p-0 w-full max-w-full border-0 !bg-transparent !shadow-none hover:!bg-transparent hover:!text-inherit active:!bg-transparent data-[active=true]:!bg-transparent data-[state=open]:!bg-transparent focus-visible:ring-1 focus-visible:ring-gray-900/10";
 
 const sbRow =
-  "flex w-full items-center gap-3 rounded-lg px-3 h-12 min-h-[48px] max-h-12 shrink-0 transition-all duration-150";
+  "flex w-full items-center gap-3 rounded-md px-3 h-11 min-h-[44px] max-h-11 shrink-0 transition-colors duration-150";
 
 const sbActive =
-  "!bg-[#e7edf4] text-gray-900 font-semibold shadow-[0_3px_8px_rgba(15,23,42,0.08),0_8px_18px_rgba(15,23,42,0.06),inset_0_1px_0_rgba(255,255,255,0.9)] ring-1 ring-[#d8e1ea] relative before:absolute before:left-2 before:top-1/2 before:-translate-y-1/2 before:h-4 before:w-[2px] before:rounded-none before:bg-slate-500 scale-[1.01] -translate-y-[1px] [&_svg]:!text-slate-700";
+  "!bg-[#eef1f6] text-[#1a1a2e] font-medium !shadow-none ring-0 relative before:absolute before:left-0 before:top-[25%] before:h-[50%] before:w-[3px] before:rounded-r-sm before:bg-[#4f7df3] [&_svg]:!text-[#1a1a2e]";
 
 const sbIdle =
-  "text-gray-600 hover:bg-white/70 hover:text-gray-900 !bg-transparent";
+  "text-[#6b7280] hover:bg-[#f3f4f6] hover:text-[#1a1a2e] !bg-transparent";
 
 const sbSubRow =
-  "flex w-full items-center !rounded-none !px-3 min-h-10 h-10 max-h-10 text-[13px] font-medium transition-all duration-150";
+  "flex w-full items-center rounded-md !px-3 min-h-9 h-9 max-h-9 text-[13px] font-normal transition-colors duration-150";
 
 const sbSubActive =
-  "!bg-[#eef2f6] text-gray-900 font-semibold !rounded-none shadow-none ring-1 ring-[#e2e8f0] relative !pl-6 before:absolute before:left-2 before:top-1/2 before:-translate-y-1/2 before:h-3 before:w-[2px] before:rounded-none before:bg-slate-400";
+  "!bg-[#eef1f6] text-[#1a1a2e] font-medium !shadow-none ring-0 relative !pl-6 before:absolute before:left-3 before:top-[30%] before:h-[40%] before:w-[2px] before:rounded-full before:bg-[#4f7df3]";
 
 const sbSubIdle =
-  "text-gray-600 hover:bg-white/60 hover:text-gray-900 !bg-transparent";
+  "text-[#6b7280] hover:bg-[#f3f4f6] hover:text-[#1a1a2e] !bg-transparent";
 
 export function PageLayout({ children }: PageLayoutProps) {
   const pathname = usePathname()
@@ -1230,14 +1230,7 @@ export function PageLayout({ children }: PageLayoutProps) {
             </SidebarGroup>
           </SidebarContent>
 
-          <div className="mt-auto border-t border-[#e8e8e8] p-4 flex flex-col items-center gap-3">
-            <button
-              type="button"
-              className="w-11 h-11 rounded-full bg-white shadow-[0_2px_10px_rgba(0,0,0,0.06)] border border-[#ececec] flex items-center justify-center text-gray-500 hover:text-gray-800 hover:bg-[#fafafa] transition-colors"
-              aria-label="Support"
-            >
-              <Icon icon="mdi:message-outline" className="w-[22px] h-[22px]" />
-            </button>
+          <div className="mt-auto border-t border-[#e8e8e8] p-4 flex flex-col items-center">
             <p className="text-[10px] text-gray-400 font-medium">v1.0.0</p>
           </div>
         </Sidebar>

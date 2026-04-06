@@ -27,6 +27,7 @@ import { Badge } from "../components/ui/badge"
 import { Icon } from "@iconify/react"
 import { Plus, Search, Edit, Trash2 } from "lucide-react"
 import { SearchSuggestInput } from "../components/SearchSuggestInput"
+import { toast } from "sonner";
 
 interface PublicHoliday {
   id: string
@@ -463,7 +464,7 @@ export function PublicHolidayManagement() {
 
     // Ensure we have the required IDs
     if (!companyID || !branchesID || !formData.manageHolidayID) {
-      alert("Please make sure all required fields are selected: Branch and Holiday Name");
+      toast.error("Please make sure all required fields are selected: Branch and Holiday Name");
       return;
     }
 
@@ -498,9 +499,10 @@ export function PublicHolidayManagement() {
       await loadPublicHolidays()
       resetForm(); 
       setIsDialogOpen(false)
+      toast.success("Public holiday saved successfully")
     } catch (error) {
       console.error('Error submitting form:', error)
-      alert('Error saving holiday. Check console for details.')
+      toast.error('Error saving holiday. Check console for details.')
     }
   }
 
@@ -577,7 +579,8 @@ export function PublicHolidayManagement() {
   const handleDelete = async (id: string) => { 
     if (confirm("Are you sure you want to delete this holiday?")) {
       await fetch(`${BACKEND_URL}/public-holiday/${id}`, { method: "DELETE" })
-      await loadPublicHolidays() 
+      await loadPublicHolidays()
+      toast.success("Public holiday deleted successfully")
     }
   }
 

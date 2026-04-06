@@ -17,6 +17,7 @@ import { Search, Edit, Trash2, Plus, Download, User, Building, MapPin, Calendar 
 import jsPDF from "jspdf"
 import html2canvas from "html2canvas"
 import { useCurrentUser } from "../hooks/useCurrentUser"
+import { toast } from "sonner"
 
 interface ReimbursementItem {
   id?: number
@@ -327,7 +328,7 @@ const emp = allEmp.find((e: any) =>
 
 
   if (!emp) {
-    alert("Employee mapping not found");
+    toast.error("Employee mapping not found");
     return;
   }
 
@@ -617,7 +618,7 @@ const filtered = data
       pdf.save(fileName);
     } catch (error) {
       console.error('Error generating PDF:', error);
-      alert('Error generating PDF. Please try again.');
+      toast.error('Error generating PDF. Please try again.');
     } finally {
       document.body.removeChild(element);
     }
@@ -674,9 +675,10 @@ manageEmployeeID: employee?.id,
 if (employee) await loadReimbursements(employee.id)
       resetForm()
       setIsDialogOpen(false)
+      toast.success("Reimbursement submitted successfully")
     } catch (error) {
       console.error("Error submitting reimbursement:", error)
-      alert("Error submitting reimbursement. Please try again.")
+      toast.error("Error submitting reimbursement. Please try again.")
     }
   }
 
@@ -690,7 +692,7 @@ if (employee) await loadReimbursements(employee.id)
 if (employee) await loadReimbursements(employee.employeeID)
     } catch (error) {
       console.error("Error deleting reimbursement:", error)
-      alert("Error deleting reimbursement. Please try again.")
+      toast.error("Error deleting reimbursement. Please try again.")
     }
   }
 

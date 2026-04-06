@@ -15,6 +15,7 @@ import { Badge } from "../components/ui/badge";
 import { Icon } from "@iconify/react";
 import { Plus, Search, Edit, Trash2, Play } from "lucide-react";
 import { useCurrentUser } from "../hooks/useCurrentUser";
+import { toast } from "sonner";
 
 /* ---------------- API endpoints ---------------- */
 const API = {
@@ -515,8 +516,10 @@ export function BonusAllocationsManagement() {
       }
       resetForm();
       setIsDialogOpen(false);
+      toast.success("Bonus allocation saved successfully");
     } catch (e) {
       console.error("Save failed", e);
+      toast.error((e as any)?.message || "Failed to save bonus allocation");
     }
   };
 
@@ -538,8 +541,10 @@ export function BonusAllocationsManagement() {
     try {
       await fetch(`${API.allocations}/${id}`, { method: "DELETE" });
       setAllocations((prev) => prev.filter((a) => a.id !== id));
+      toast.success("Bonus allocation deleted successfully");
     } catch (e) {
       console.error("Delete failed", e);
+      toast.error((e as any)?.message || "Failed to delete bonus allocation");
     }
   };
 

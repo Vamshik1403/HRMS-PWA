@@ -19,6 +19,7 @@ import { Plus, Search, Edit, Trash2, ArrowLeft, X, Save } from "lucide-react";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import { useRouter } from "next/navigation";
 import { FormDrawer } from "../components/ui/form-drawer";
+import { toast } from "sonner";
 
 // ---------------------------
 // Types aligned to backend
@@ -403,6 +404,7 @@ export function DeviceManagement() {
       resetForm();
       setIsAddingNew(false);
       setEditingDevice(null);
+      toast.success("Device saved successfully");
     } catch (e: any) {
       setError(e?.message || "Save failed");
     } finally {
@@ -459,8 +461,9 @@ export function DeviceManagement() {
       const res = await fetch(`${API.devices}/${id}`, { method: "DELETE" });
       if (!res.ok) throw new Error(await res.text());
       await fetchDevices();
+      toast.success("Device deleted successfully");
     } catch (e: any) {
-      alert(e?.message || "Delete failed");
+      toast.error(e?.message || "Delete failed");
     }
   };
 

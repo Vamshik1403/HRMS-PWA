@@ -26,6 +26,7 @@ import { Badge } from "../components/ui/badge"
 import { Icon } from "@iconify/react"
 import { Plus, Search, Edit, Trash2 } from "lucide-react"
 import { useCurrentUser } from "../hooks/useCurrentUser"
+import { toast } from "sonner"
 
 const BACKEND_URL = "/backend"
 
@@ -123,8 +124,10 @@ export function EmployeeHolidayOverrideManagement() {
       await loadOverrides()
       setIsDialogOpen(false)
       resetForm()
+      toast.success("Holiday override saved successfully")
     } catch (err) {
       console.error("Error saving override:", err)
+      toast.error((err as any)?.message || "Failed to save holiday override")
     }
   }
 
@@ -149,8 +152,10 @@ export function EmployeeHolidayOverrideManagement() {
     try {
       await fetch(`${BACKEND_URL}/employee-holiday-override/${id}`, { method: "DELETE" })
       await loadOverrides()
+      toast.success("Holiday override deleted successfully")
     } catch (err) {
       console.error("Error deleting override:", err)
+      toast.error((err as any)?.message || "Failed to delete holiday override")
     }
   }
 

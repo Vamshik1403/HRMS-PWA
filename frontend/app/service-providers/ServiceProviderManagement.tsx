@@ -18,6 +18,7 @@ import {
 import { Badge } from "../components/ui/badge"
 import { Icon } from "@iconify/react"
 import { Plus, Search, Edit, Trash2, Eye } from "lucide-react"
+import { toast } from "sonner"
 
 interface ServiceProvider {
   id: number
@@ -99,8 +100,10 @@ const handleSubmit = async (e: React.FormEvent) => {
     await fetchProviders()
     resetForm()
     setIsDialogOpen(false)
+    toast.success("Service provider saved successfully")
   } catch (error) {
     console.error("Error saving service provider:", error)
+    toast.error((error as any)?.message || "Failed to save service provider")
   }
 }
 
@@ -112,8 +115,10 @@ const handleSubmit = async (e: React.FormEvent) => {
           method: "DELETE",
         })
         await fetchProviders()
+        toast.success("Service provider deleted successfully")
       } catch (error) {
         console.error("Error deleting service provider:", error)
+        toast.error((error as any)?.message || "Failed to delete service provider")
       }
     }
   }

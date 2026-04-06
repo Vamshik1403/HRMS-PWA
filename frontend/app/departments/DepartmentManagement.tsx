@@ -18,6 +18,7 @@ import { Icon } from "@iconify/react";
 import { Plus, Search, Edit, Trash2, Eye, X, Save } from "lucide-react";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import { FormDrawer } from "../components/ui/form-drawer";
+import { toast } from "sonner";
 
 // ---------------------------
 // Types aligned to backend
@@ -390,8 +391,9 @@ export function DepartmentManagement() {
       const res = await fetch(`${API.departments}/${id}`, { method: "DELETE" });
       if (!res.ok) throw new Error(await res.text());
       await fetchRows();
+      toast.success("Department deleted successfully");
     } catch (e: any) {
-      alert(e?.message || "Delete failed");
+      toast.error(e?.message || "Delete failed");
     }
   };
 
@@ -440,6 +442,7 @@ export function DepartmentManagement() {
       resetForm();
       setIsAddingNew(false);
       setEditing(null);
+      toast.success("Department saved successfully");
     } catch (e: any) {
       setError(e?.message || "Save failed");
     } finally {

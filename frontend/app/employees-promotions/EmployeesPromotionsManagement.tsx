@@ -28,6 +28,7 @@ import { Icon } from "@iconify/react";
 import { Plus, Search, Edit, Trash2, Eye, CheckCircle, History } from "lucide-react";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "../components/ui/select";
 import { useCurrentUser } from "../hooks/useCurrentUser";
+import { toast } from "sonner";
 
 /** ========= Types aligned to backend ========= */
 type ID = number;
@@ -1468,8 +1469,10 @@ const runFetchBR = (query: string) => {
       await fetchRows();
       resetForm();
       setIsDialogOpen(false);
+      toast.success("Promotion saved successfully");
     } catch (e: any) {
       setError(e?.message || "Save failed");
+      toast.error(e?.message || "Failed to save promotion");
     } finally {
       setSaving(false);
     }
@@ -1571,6 +1574,7 @@ const runFetchBR = (query: string) => {
     try {
       const res = await fetch(`${API.empPromotion}/${id}`, { method: "DELETE" });
       if (!res.ok) throw new Error(await res.text());
+      toast.success("Promotion deleted successfully");
     } finally {
       // Refresh list once so the deleted row disappears immediately (no multi-click)
       await fetchRows();
@@ -1678,7 +1682,7 @@ const runFetchBR = (query: string) => {
 
           </DialogTrigger>
 
-          <DialogContent className="sm:max-w-[980px] max-h-[90vh] overflow-y-auto">
+          <DialogContent>
             <DialogHeader>
               <DialogTitle>{editingRow ? "Edit Promotion / Current Position" : "Add New Promotion"}</DialogTitle>
               <DialogDescription>
