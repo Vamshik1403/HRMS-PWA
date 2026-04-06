@@ -961,125 +961,117 @@ export function ContractorManagement() {
         description="Define rate cards for this contractor by designation."
       >
           <div className="space-y-4">
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Contractor Name</TableHead>
-                    <TableHead>Department</TableHead>
-                    <TableHead>Designation</TableHead>
-                    <TableHead>Work Shift</TableHead>
-                    <TableHead>Per Minute Rate (₹)</TableHead>
-                    <TableHead>Per Hour Rate (₹)</TableHead>
-                    <TableHead>Per Day Rate (₹)</TableHead>
-                    <TableHead>Per Month Rate (₹)</TableHead>
-                    <TableHead className="w-10"></TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {rateCards.map((rc) => (
-                    <TableRow key={rc._localId}>
-                      <TableCell>
-                        <Input
-                          value={rc.contractorName}
-                          onChange={(e) => updateRateCardRow(rc._localId, "contractorName", e.target.value)}
-                          placeholder="Contractor name"
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <select
-                          className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                          value={rc.departmentName}
-                          onChange={(e) => updateRateCardRow(rc._localId, "departmentName", e.target.value)}
-                        >
-                          <option value="">Select Department</option>
-                          {rcDepartments.map((d) => (
-                            <option key={d.id} value={d.departmentName || ""}>{d.departmentName}</option>
-                          ))}
-                        </select>
-                      </TableCell>
-                      <TableCell>
-                        <select
-                          className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                          value={rc.designation}
-                          onChange={(e) => updateRateCardRow(rc._localId, "designation", e.target.value)}
-                        >
-                          <option value="">Select Designation</option>
-                          {rcDesignations.map((d) => (
-                            <option key={d.id} value={d.designation || ""}>{d.designation}</option>
-                          ))}
-                        </select>
-                      </TableCell>
-                      <TableCell>
-                        <select
-                          className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                          value={rc.workShiftName}
-                          onChange={(e) => updateRateCardRow(rc._localId, "workShiftName", e.target.value)}
-                        >
-                          <option value="">Select Work Shift</option>
-                          {rcWorkShifts.map((w) => (
-                            <option key={w.id} value={w.workShiftName || ""}>{w.workShiftName}</option>
-                          ))}
-                        </select>
-                      </TableCell>
-                      <TableCell>
-                        <Input
-                          type="number"
-                          value={rc.perMinuteRate}
-                          onChange={(e) => updateRateCardRow(rc._localId, "perMinuteRate", e.target.value)}
-                          placeholder="0"
-                          min="0"
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <Input
-                          type="number"
-                          value={rc.perHourRate}
-                          onChange={(e) => updateRateCardRow(rc._localId, "perHourRate", e.target.value)}
-                          placeholder="0"
-                          min="0"
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <Input
-                          type="number"
-                          value={rc.perDayRate}
-                          onChange={(e) => updateRateCardRow(rc._localId, "perDayRate", e.target.value)}
-                          placeholder="0"
-                          min="0"
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <Input
-                          type="number"
-                          value={rc.perMonthRate}
-                          onChange={(e) => updateRateCardRow(rc._localId, "perMonthRate", e.target.value)}
-                          placeholder="0"
-                          min="0"
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => removeRateCardRow(rc._localId)}
-                          className="h-7 w-7 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
-                        >
-                          <Trash2 className="w-3 h-3" />
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                  {rateCards.length === 0 && (
-                    <TableRow>
-                      <TableCell colSpan={9} className="text-center py-4 text-gray-400 text-sm">
-                        No rate entries. Click "Add Row" to begin.
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
-            </div>
+            {rateCards.map((rc, idx) => (
+              <div key={rc._localId} className="border rounded-lg p-4 space-y-3 relative bg-gray-50/50">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-sm font-medium text-gray-500">Entry {idx + 1}</span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => removeRateCardRow(rc._localId)}
+                    className="h-7 w-7 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+                  >
+                    <Trash2 className="w-3 h-3" />
+                  </Button>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs font-medium text-gray-500 mb-1 block">Contractor Name</label>
+                    <Input
+                      value={rc.contractorName}
+                      onChange={(e) => updateRateCardRow(rc._localId, "contractorName", e.target.value)}
+                      placeholder="Contractor name"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-gray-500 mb-1 block">Department</label>
+                    <select
+                      className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                      value={rc.departmentName}
+                      onChange={(e) => updateRateCardRow(rc._localId, "departmentName", e.target.value)}
+                    >
+                      <option value="">Select Department</option>
+                      {rcDepartments.map((d) => (
+                        <option key={d.id} value={d.departmentName || ""}>{d.departmentName}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-gray-500 mb-1 block">Designation</label>
+                    <select
+                      className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                      value={rc.designation}
+                      onChange={(e) => updateRateCardRow(rc._localId, "designation", e.target.value)}
+                    >
+                      <option value="">Select Designation</option>
+                      {rcDesignations.map((d) => (
+                        <option key={d.id} value={d.designation || ""}>{d.designation}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-gray-500 mb-1 block">Work Shift</label>
+                    <select
+                      className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                      value={rc.workShiftName}
+                      onChange={(e) => updateRateCardRow(rc._localId, "workShiftName", e.target.value)}
+                    >
+                      <option value="">Select Work Shift</option>
+                      {rcWorkShifts.map((w) => (
+                        <option key={w.id} value={w.workShiftName || ""}>{w.workShiftName}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <div>
+                    <label className="text-xs font-medium text-gray-500 mb-1 block">Per Minute (₹)</label>
+                    <Input
+                      type="number"
+                      value={rc.perMinuteRate}
+                      onChange={(e) => updateRateCardRow(rc._localId, "perMinuteRate", e.target.value)}
+                      placeholder="0"
+                      min="0"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-gray-500 mb-1 block">Per Hour (₹)</label>
+                    <Input
+                      type="number"
+                      value={rc.perHourRate}
+                      onChange={(e) => updateRateCardRow(rc._localId, "perHourRate", e.target.value)}
+                      placeholder="0"
+                      min="0"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-gray-500 mb-1 block">Per Day (₹)</label>
+                    <Input
+                      type="number"
+                      value={rc.perDayRate}
+                      onChange={(e) => updateRateCardRow(rc._localId, "perDayRate", e.target.value)}
+                      placeholder="0"
+                      min="0"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-gray-500 mb-1 block">Per Month (₹)</label>
+                    <Input
+                      type="number"
+                      value={rc.perMonthRate}
+                      onChange={(e) => updateRateCardRow(rc._localId, "perMonthRate", e.target.value)}
+                      placeholder="0"
+                      min="0"
+                    />
+                  </div>
+                </div>
+              </div>
+            ))}
+            {rateCards.length === 0 && (
+              <div className="text-center py-8 text-gray-400 text-sm border rounded-lg">
+                No rate entries. Click &quot;Add Row&quot; to begin.
+              </div>
+            )}
 
             <Button type="button" variant="outline" size="sm" onClick={addRateCardRow}>
               <Plus className="w-4 h-4 mr-1" /> Add Row

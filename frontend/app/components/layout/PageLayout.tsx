@@ -37,25 +37,25 @@ interface PageLayoutProps {
 
 /** shadcn SidebarMenuButton defaults conflict with pill nav; reset and fixed row height */
 const sbMenuBtnReset =
-  "!h-12 !min-h-[48px] !max-h-12 !rounded-[4px] !p-0 w-full max-w-full border-0 !bg-transparent !shadow-none hover:!bg-transparent hover:!text-inherit active:!bg-transparent data-[active=true]:!bg-transparent data-[state=open]:!bg-transparent focus-visible:ring-1 focus-visible:ring-gray-900/10";
+  "!h-12 !min-h-[48px] !max-h-12 !rounded-lg !p-0 w-full max-w-full border-0 !bg-transparent !shadow-none hover:!bg-transparent hover:!text-inherit active:!bg-transparent data-[active=true]:!bg-transparent data-[state=open]:!bg-transparent focus-visible:ring-1 focus-visible:ring-gray-900/10";
 
 const sbRow =
-  "flex w-full items-center gap-3 rounded-[4px] px-3 h-12 min-h-[48px] max-h-12 shrink-0 transition-all duration-150";
+  "flex w-full items-center gap-3 rounded-lg px-3 h-12 min-h-[48px] max-h-12 shrink-0 transition-all duration-150";
 
 const sbActive =
-  "!bg-gray-900 text-white font-semibold shadow-[0_2px_8px_rgba(0,0,0,0.15),0_4px_16px_rgba(0,0,0,0.1)] ring-1 ring-gray-900/10";
+  "!bg-[#e7edf4] text-gray-900 font-semibold shadow-[0_3px_8px_rgba(15,23,42,0.08),0_8px_18px_rgba(15,23,42,0.06),inset_0_1px_0_rgba(255,255,255,0.9)] ring-1 ring-[#d8e1ea] relative before:absolute before:left-2 before:top-1/2 before:-translate-y-1/2 before:h-4 before:w-[2px] before:rounded-none before:bg-slate-500 scale-[1.01] -translate-y-[1px] [&_svg]:!text-slate-700";
 
 const sbIdle =
-  "text-gray-600 hover:bg-gray-100 hover:text-gray-900 !bg-transparent";
+  "text-gray-600 hover:bg-white/70 hover:text-gray-900 !bg-transparent";
 
 const sbSubRow =
-  "flex w-full items-center rounded-[4px] px-3 min-h-10 h-10 max-h-10 text-[13px] font-medium transition-all duration-150";
+  "flex w-full items-center !rounded-none !px-3 min-h-10 h-10 max-h-10 text-[13px] font-medium transition-all duration-150";
 
 const sbSubActive =
-  "!bg-gray-900 text-white font-semibold shadow-[0_1px_4px_rgba(0,0,0,0.12),0_3px_10px_rgba(0,0,0,0.08)] ring-1 ring-gray-900/10";
+  "!bg-[#eef2f6] text-gray-900 font-semibold !rounded-none shadow-none ring-1 ring-[#e2e8f0] relative !pl-6 before:absolute before:left-2 before:top-1/2 before:-translate-y-1/2 before:h-3 before:w-[2px] before:rounded-none before:bg-slate-400";
 
 const sbSubIdle =
-  "text-gray-600 hover:bg-gray-100 hover:text-gray-900 !bg-transparent";
+  "text-gray-600 hover:bg-white/60 hover:text-gray-900 !bg-transparent";
 
 export function PageLayout({ children }: PageLayoutProps) {
   const pathname = usePathname()
@@ -258,7 +258,7 @@ export function PageLayout({ children }: PageLayoutProps) {
                         className={cn(
                           "w-5 h-5 shrink-0",
                           isActiveLink("/dashboard")
-                            ? "text-white"
+                            ? "text-gray-900"
                             : "text-gray-500"
                         )}
                       />
@@ -281,7 +281,7 @@ export function PageLayout({ children }: PageLayoutProps) {
                           className={cn(
                             "w-5 h-5 shrink-0",
                             isActiveLink("/service-providers")
-                              ? "text-white"
+                              ? "text-gray-900"
                               : "text-gray-500"
                           )}
                         />
@@ -318,7 +318,7 @@ export function PageLayout({ children }: PageLayoutProps) {
                             className={cn(
                               "w-5 h-5 shrink-0",
                               setupSectionActive
-                                ? "text-white"
+                                ? "text-gray-900"
                                 : "text-gray-500"
                             )}
                           />
@@ -419,7 +419,7 @@ export function PageLayout({ children }: PageLayoutProps) {
                             className={cn(
                               "w-5 h-5 shrink-0",
                               employeeSectionActive
-                                ? "text-white"
+                                ? "text-gray-900"
                                 : "text-gray-500"
                             )}
                           />
@@ -522,7 +522,7 @@ export function PageLayout({ children }: PageLayoutProps) {
                             className={cn(
                               "w-5 h-5 shrink-0",
                               payrollSectionActive
-                                ? "text-white"
+                                ? "text-gray-900"
                                 : "text-gray-500"
                             )}
                           />
@@ -604,7 +604,7 @@ export function PageLayout({ children }: PageLayoutProps) {
                             className={cn(
                               "w-5 h-5 shrink-0",
                               salarySectionActive
-                                ? "text-white"
+                                ? "text-gray-900"
                                 : "text-gray-500"
                             )}
                           />
@@ -759,7 +759,7 @@ export function PageLayout({ children }: PageLayoutProps) {
                             className={cn(
                               "w-5 h-5 shrink-0",
                               leaveSectionActive
-                                ? "text-white"
+                                ? "text-gray-900"
                                 : "text-gray-500"
                             )}
                           />
@@ -903,7 +903,7 @@ export function PageLayout({ children }: PageLayoutProps) {
                             className={cn(
                               "w-5 h-5 shrink-0",
                               shiftSectionActive
-                                ? "text-white"
+                                ? "text-gray-900"
                                 : "text-gray-500"
                             )}
                           />
@@ -995,7 +995,7 @@ export function PageLayout({ children }: PageLayoutProps) {
                             className={cn(
                               "w-5 h-5 shrink-0",
                               attendanceSectionActive
-                                ? "text-white"
+                                ? "text-gray-900"
                                 : "text-gray-500"
                             )}
                           />
@@ -1078,7 +1078,7 @@ export function PageLayout({ children }: PageLayoutProps) {
                             className={cn(
                               "w-5 h-5 shrink-0",
                               reportsSectionActive
-                                ? "text-white"
+                                ? "text-gray-900"
                                 : "text-gray-500"
                             )}
                           />
@@ -1170,7 +1170,7 @@ export function PageLayout({ children }: PageLayoutProps) {
                             className={cn(
                               "w-5 h-5 shrink-0",
                               canteenSectionActive
-                                ? "text-white"
+                                ? "text-gray-900"
                                 : "text-gray-500"
                             )}
                           />

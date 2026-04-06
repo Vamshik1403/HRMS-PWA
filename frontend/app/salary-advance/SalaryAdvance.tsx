@@ -848,7 +848,7 @@ const fetchCompanies = useCallback(
               Add Advance
             </Button>
           </DialogTrigger>
-          <DialogContent className="sm:max-w-[650px] max-h-[90vh] overflow-y-auto">
+          <DialogContent>
             <DialogHeader>
               <DialogTitle>{editingAdvance ? "Edit" : "Add"} Salary Advance</DialogTitle>
             </DialogHeader>
@@ -1127,7 +1127,7 @@ const fetchCompanies = useCallback(
 
       {/* Repayment Modal */}
       <Dialog open={isRepaymentOpen} onOpenChange={setIsRepaymentOpen}>
-        <DialogContent className="sm:max-w-[650px] max-h-[90vh] overflow-y-auto">
+        <DialogContent>
           <DialogHeader>
             <DialogTitle>Set Repayment Plan</DialogTitle>
           </DialogHeader>

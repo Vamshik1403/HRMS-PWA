@@ -1421,13 +1421,13 @@ onClick={async () => {
 
       {/* Create/Edit Dialog */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col p-0">
-          <DialogHeader className="px-6 py-4 border-b bg-white sticky top-0 z-10">
+        <DialogContent>
+          <DialogHeader>
             <DialogTitle className="text-xl font-semibold">
               {editing ? "Edit Reimbursement" : "Create New Reimbursement"}
             </DialogTitle>
           </DialogHeader>
-          <div className="flex-1 overflow-y-auto px-6 py-4">
+          <div>
             <form onSubmit={handleSubmit} className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-1 gap-6">
                {/* SUPERADMIN → show SP + Company + Branch normally */}
@@ -1665,13 +1665,13 @@ fetchData={(q) => fetchBranches(q)}
 
       {/* Settings/Approve Dialog */}
       <Dialog open={isSettingsDialogOpen} onOpenChange={setIsSettingsDialogOpen}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col p-0">
-          <DialogHeader className="px-6 py-4 border-b bg-white sticky top-0 z-10">
+        <DialogContent>
+          <DialogHeader>
             <DialogTitle className="text-xl font-semibold text-green-800">
               Approve Reimbursement
             </DialogTitle>
           </DialogHeader>
-          <div className="flex-1 overflow-y-auto px-6 py-4">
+          <div>
             <form onSubmit={handleSettingsSubmit} className="space-y-6">
               {settingsReimbursement && (
                 <>
@@ -1862,13 +1862,13 @@ fetchData={(q) => fetchBranches(q)}
 
       {/* Payment Dialog - UPDATED with Bank Transfer */}
       <Dialog open={isPaymentDialogOpen} onOpenChange={setIsPaymentDialogOpen}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-hidden flex flex-col p-0">
-          <DialogHeader className="px-6 py-4 border-b bg-white sticky top-0 z-10">
+        <DialogContent>
+          <DialogHeader>
             <DialogTitle className="text-xl font-semibold text-green-800">
               Make Payment
             </DialogTitle>
           </DialogHeader>
-          <div className="flex-1 overflow-y-auto px-6 py-4">
+          <div>
             <form onSubmit={handlePaymentSubmit} className="space-y-6">
               {paymentReimbursement && (
                 <>

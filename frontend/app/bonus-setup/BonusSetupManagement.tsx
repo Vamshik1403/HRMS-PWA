@@ -472,7 +472,7 @@ const runFetchBR = debounce(async (val: string) => {
             )}
 
           </DialogTrigger>
-          <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
+          <DialogContent>
             <DialogHeader>
               <DialogTitle>{editingBonus ? "Edit Bonus Setup" : "Add New Bonus Setup"}</DialogTitle>
               <DialogDescription>

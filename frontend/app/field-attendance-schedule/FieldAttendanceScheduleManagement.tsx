@@ -373,8 +373,7 @@ createdAt: schedule.createdAt
                 Add Field Schedule
               </Button>
             </DialogTrigger>
-                      <DialogContent    onOpenAutoFocus={(e) => e.preventDefault()}
-className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto">
+                      <DialogContent onOpenAutoFocus={(e) => e.preventDefault()}>
               <DialogHeader>
                 <DialogTitle>
                   {editingSchedule ? "Edit Field Attendance Schedule" : "Add New Field Attendance Schedule"}

@@ -577,7 +577,7 @@ export function AttendanceRegularisationManagement() {
                 Submit Regularisation
               </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
+            <DialogContent>
               <DialogHeader>
                 <DialogTitle>
                   {editingRegularisation ? "Edit Attendance Regularisation" : "Submit Attendance Regularisation"}

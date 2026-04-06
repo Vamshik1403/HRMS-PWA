@@ -572,7 +572,7 @@ export function ManageHolidaysManagement() {
               </Button>
             )}
             </DialogTrigger>
-            <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
+            <DialogContent>
               <DialogHeader>
                 <DialogTitle>{editingHoliday ? "Edit Holiday" : "Add New Holiday"}</DialogTitle>
                 <DialogDescription>{editingHoliday ? "Update the holiday information below." : "Fill in the details to add a new holiday."}</DialogDescription>

@@ -589,7 +589,7 @@ export function BonusAllocationsManagement() {
               )}
 
             </DialogTrigger>
-            <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
+            <DialogContent>
               <DialogHeader>
                 <DialogTitle>{editingAllocation ? "Edit Bonus Allocation" : "Add New Bonus Allocation"}</DialogTitle>
                 <DialogDescription>
