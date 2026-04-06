@@ -116,13 +116,12 @@ export function EmployeeWeeklyOffManagement() {
     <div className="space-y-6 w-full max-w-6xl mx-auto px-4">
       <div className="flex items-center justify-between w-full">
         <div className="min-w-0 flex-1">
-          <h1 className="text-2xl font-bold text-gray-900">Employee Weekly Off</h1>
           <p className="text-gray-600 mt-1 text-sm">Track and manage employee weekly off days</p>
         </div>
         {canManage && (
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>
-              <Button className="bg-blue-600 hover:bg-blue-700 text-sm px-3 py-2">
+              <Button className="bg-gray-900 hover:bg-gray-800 text-sm px-3 py-2">
                 <Plus className="w-4 h-4 mr-1" />
                 Add Weekly Off
               </Button>
@@ -160,7 +159,7 @@ export function EmployeeWeeklyOffManagement() {
                 </div>
                 <DialogFooter>
                   <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
-                  <Button type="submit" className="bg-blue-600 hover:bg-blue-700">Add Weekly Off</Button>
+                  <Button type="submit" className="bg-gray-900 hover:bg-gray-800">Add Weekly Off</Button>
                 </DialogFooter>
               </form>
             </DialogContent>

@@ -5,15 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card"
 import { Button } from "../components/ui/button"
 import { Input } from "../components/ui/input"
 import { Label } from "../components/ui/label"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "../components/ui/dialog"
+import { FormDrawer } from "../components/ui/form-drawer";
 import {
   Table,
   TableBody,
@@ -27,6 +19,7 @@ import { Icon } from "@iconify/react"
 import { Plus, Search, Edit, Trash2, Check, X } from "lucide-react"
 import { useCurrentUser } from "../hooks/useCurrentUser"
 import { SearchSuggestInput } from "../components/SearchSuggestInput"
+import { toast } from "sonner";
 
 interface LeaveApplication {
   id: string
@@ -155,6 +148,7 @@ export function LeaveApplicationsManagement() {
         }
       } catch (error) {
         console.error("Error loading user data:", error);
+        toast.error("Failed to load data.");
       }
     };
 
@@ -247,6 +241,7 @@ export function LeaveApplicationsManagement() {
 
     } catch (error) {
       console.error("Error calculating leave balance:", error);
+      toast.error("Operation failed. Please try again.");
       return {
         sick: { used: 0, total: 0, remaining: 0 },
         casual: { used: 0, total: 0, remaining: 0 }
@@ -277,6 +272,7 @@ export function LeaveApplicationsManagement() {
 
     } catch (error) {
       console.error("Error loading employee leave types:", error);
+      toast.error("Failed to load data.");
       // Fallback to only LoP if there's an error
       setAvailableLeaveTypes(["LoP"]);
     }
@@ -303,10 +299,10 @@ export function LeaveApplicationsManagement() {
 
       await loadLeaveApplications()
       setIsRevokeDialogOpen(false)
-      alert("Revoke request submitted for approval.")
+      toast.success("Revoke request submitted for approval.")
     } catch (error) {
       console.error("Error revoking leave application:", error)
-      alert("Error submitting revoke request. Please try again.")
+      toast.error("Error submitting revoke request. Please try again.")
     }
   }
 
@@ -411,7 +407,7 @@ export function LeaveApplicationsManagement() {
     try {
       // Check if all days have status assigned
       if (pendingDaysCount > 0) {
-        alert("Please assign leave types for all days before approving.")
+        toast.error("Please assign leave types for all days before approving.")
         return
       }
 
@@ -467,10 +463,10 @@ export function LeaveApplicationsManagement() {
 
       await loadLeaveApplications()
       setIsManagerApprovalDialogOpen(false)
-      alert("Leave application approved successfully.")
+      toast.success("Leave application approved successfully.")
     } catch (error) {
       console.error("Error approving leave application:", error)
-      alert("Error approving leave application. Please try again.")
+      toast.error("Error approving leave application. Please try again.")
     }
   }
 
@@ -499,8 +495,10 @@ export function LeaveApplicationsManagement() {
         throw new Error(`Failed to accept ${isRevokeRequest ? 'revoke request' : 'leave application'}: ${res.status}`)
       }
       await loadLeaveApplications()
+      toast.success(isRevokeRequest ? "Revoke request accepted" : "Leave application accepted");
     } catch (error) {
       console.error(`Error accepting ${isRevokeRequest ? 'revoke request' : 'leave application'}:`, error)
+      toast.error("Operation failed. Please try again.");
     }
   }
 
@@ -529,8 +527,10 @@ export function LeaveApplicationsManagement() {
         throw new Error(`Failed to reject ${isRevokeRequest ? 'revoke request' : 'leave application'}: ${res.status}`)
       }
       await loadLeaveApplications()
+      toast.success(isRevokeRequest ? "Revoke request rejected" : "Leave application rejected");
     } catch (error) {
       console.error(`Error rejecting ${isRevokeRequest ? 'revoke request' : 'leave application'}:`, error)
+      toast.error("Operation failed. Please try again.");
     }
   }
 
@@ -549,6 +549,7 @@ export function LeaveApplicationsManagement() {
         : []
     } catch (error) {
       console.error("Error fetching service providers:", error)
+      toast.error("Failed to load data.");
       return []
     }
   }
@@ -585,6 +586,7 @@ export function LeaveApplicationsManagement() {
         }))
     } catch (error) {
       console.error("Error fetching companies:", error)
+      toast.error("Failed to load data.");
       return []
     }
   }
@@ -642,6 +644,7 @@ export function LeaveApplicationsManagement() {
       return []
     } catch (error) {
       console.error("Error fetching branches:", error)
+      toast.error("Failed to load data.");
       return []
     }
   }
@@ -721,6 +724,7 @@ export function LeaveApplicationsManagement() {
       return []
     } catch (error) {
       console.error("Error fetching employees:", error)
+      toast.error("Failed to load data.");
       return []
     }
   }
@@ -904,6 +908,7 @@ export function LeaveApplicationsManagement() {
       }
     } catch (error) {
       console.error("Error loading leave applications:", error)
+      toast.error("Failed to load data.");
     }
   }
 
@@ -1039,6 +1044,7 @@ export function LeaveApplicationsManagement() {
 
     } catch (error) {
       console.error("Error selecting employee:", error);
+      toast.error("Operation failed. Please try again.");
       // Fallback to only LoP if there's an error
       setAvailableLeaveTypes(["LoP"]);
     }
@@ -1067,7 +1073,7 @@ export function LeaveApplicationsManagement() {
 
     // Ensure we have the required IDs
     if (!companyID || !formData.branchesID || !formData.manageEmployeeID) {
-      alert("Please make sure all required fields are selected: Branch and Employee");
+      toast.error("Please make sure all required fields are selected: Branch and Employee");
       return;
     }
 
@@ -1102,8 +1108,10 @@ export function LeaveApplicationsManagement() {
       await loadLeaveApplications()
       resetForm()
       setIsDialogOpen(false)
+      toast.success(editing ? "Updated successfully" : "Created successfully");
     } catch (error) {
       console.error("Error saving leave application:", error)
+      toast.error("Failed to save. Please try again.");
     }
   }
 
@@ -1165,8 +1173,10 @@ export function LeaveApplicationsManagement() {
         throw new Error(`Failed to delete leave application: ${res.status}`)
       }
       await loadLeaveApplications()
+      toast.success("Deleted successfully");
     } catch (error) {
       console.error("Error deleting leave application:", error)
+      toast.error("Failed to delete. Please try again.");
     }
   }
 
@@ -1179,26 +1189,9 @@ export function LeaveApplicationsManagement() {
           <p className="text-gray-600 mt-1 text-sm">Manage employee leave applications and approvals</p>
         </div>
         <div className="flex items-center gap-3">
-          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-            <DialogTrigger asChild>
-              <Button onClick={resetForm} className="bg-blue-600 hover:bg-blue-700 flex-shrink-0 text-sm px-3 py-2">
-                <Plus className="w-4 h-4 mr-1" />
-                Submit Application
-              </Button>
-            </DialogTrigger>
-                      <DialogContent    onOpenAutoFocus={(e) => e.preventDefault()}
-className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto">
-              <DialogHeader>
-                <DialogTitle>
-                  {editingApplication ? "Edit Leave Application" : "Submit Leave Application"}
-                </DialogTitle>
-                <DialogDescription>
-                  {editingApplication 
+          <FormDrawer open={isDialogOpen} onOpenChange={setIsDialogOpen} title={editingApplication ? "Edit Leave Application" : "Submit Leave Application"} description={editingApplication 
                     ? "Update the leave application information below." 
-                    : "Fill in the details to submit a new leave application."
-                  }
-                </DialogDescription>
-              </DialogHeader>
+                    : "Fill in the details to submit a new leave application."}>
               <form onSubmit={handleSubmit} className="space-y-6">
                 {/* Organization Selection */}
                 <div className="space-y-4">
@@ -1390,29 +1383,22 @@ className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto">
                   </div>
                 </div>
 
-                <DialogFooter>
+                <div className="flex justify-end gap-3 pt-4">
                   <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
                     Cancel
                   </Button>
                   <Button type="submit" className="bg-blue-600 hover:bg-blue-700">
                     {editingApplication ? "Update Application" : "Submit Application"}
                   </Button>
-                </DialogFooter>
+                </div>
               </form>
-            </DialogContent>
-          </Dialog>
+            
+          </FormDrawer>
         </div>
       </div>
 
       {/* Revoke Leave Modal */}
-      <Dialog open={isRevokeDialogOpen} onOpenChange={setIsRevokeDialogOpen}>
-        <DialogContent className="sm:max-w-[500px]">
-          <DialogHeader>
-            <DialogTitle>Revoke Leave Application</DialogTitle>
-            <DialogDescription>
-              Please provide a reason for revoking this leave. It will go for manager approval.
-            </DialogDescription>
-          </DialogHeader>
+      <FormDrawer open={isRevokeDialogOpen} onOpenChange={setIsRevokeDialogOpen} title={"Revoke Leave Application"} description={"Please provide a reason for revoking this leave. It will go for manager approval."}>
           <div className="space-y-4 mt-4">
             <div>
               <Label htmlFor="revokedReason">Revoked Reason</Label>
@@ -1432,26 +1418,19 @@ className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto">
               </div>
             </div>
           </div>
-          <DialogFooter className="mt-4">
+          <div className="flex justify-end gap-3 pt-4">
             <Button variant="outline" onClick={() => setIsRevokeDialogOpen(false)}>
               Cancel
             </Button>
             <Button onClick={handleRevokeSubmit} className="bg-yellow-600 hover:bg-yellow-700 text-white">
               Submit Revoke Request
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </div>
+        
+      </FormDrawer>
 
       {/* Manager Approval Modal */}
-      <Dialog open={isManagerApprovalDialogOpen} onOpenChange={setIsManagerApprovalDialogOpen}>
-        <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Manage Leave Approval</DialogTitle>
-            <DialogDescription>
-              Assign leave types for each day. {pendingDaysCount} day(s) pending assignment.
-            </DialogDescription>
-          </DialogHeader>
+      <FormDrawer open={isManagerApprovalDialogOpen} onOpenChange={setIsManagerApprovalDialogOpen} title={"Manage Leave Approval"} description={`Assign leave types for each day. {pendingDaysCount} day(s) pending assignment.`}>
           <div className="space-y-4 mt-4">
             {managerApprovalApplication && (
               <>
@@ -1569,7 +1548,7 @@ className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto">
               })}
             </div>
           </div>
-          <DialogFooter className="mt-6">
+          <div className="flex justify-end gap-3 pt-4">
             <Button variant="outline" onClick={() => setIsManagerApprovalDialogOpen(false)}>
               Cancel
             </Button>
@@ -1580,9 +1559,9 @@ className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto">
             >
               Approve Leave ({pendingDaysCount} pending)
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </div>
+        
+      </FormDrawer>
 
       {/* Search and Filters */}
       <Card>

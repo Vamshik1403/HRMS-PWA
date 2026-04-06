@@ -329,7 +329,7 @@ export function EmpPublicHoliday() {
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           {canManage && (
             <DialogTrigger asChild>
-              <Button onClick={resetForm} className="bg-blue-600">
+              <Button onClick={resetForm} className="bg-gray-900">
                 <Plus className="w-4 h-4 mr-2" />
                 Add Public Holiday
               </Button>
@@ -437,7 +437,7 @@ export function EmpPublicHoliday() {
                 >
                   Cancel
                 </Button>
-                <Button type="submit" className="bg-blue-600">
+                <Button type="submit" className="bg-gray-900">
                   {editingHoliday?"Update":"Add"} Public Holiday
                 </Button>
               </DialogFooter>

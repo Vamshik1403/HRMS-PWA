@@ -20,6 +20,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "../components/ui/dropdown-menu";
+import { FormDrawer } from "../components/ui/form-drawer";
 
 // ---------------------------
 // Types aligned to backend
@@ -611,7 +612,6 @@ export function BranchManagement() {
       {/* Header */}
       <div className="flex items-center justify-between w-full">
         <div className="min-w-0 flex-1">
-          <h1 className="text-2xl font-bold text-gray-900">Branches</h1>
           <p className="text-gray-600 mt-1 text-sm">Manage branch records</p>
         </div>
 
@@ -622,7 +622,7 @@ export function BranchManagement() {
                 resetForm();
                 setIsAddingNew(true);
               }}
-              className="bg-blue-600 hover:bg-blue-700 text-sm px-3 py-2"
+              className="bg-gray-900 hover:bg-gray-800 text-sm px-3 py-2"
             >
               <Plus className="w-4 h-4 mr-1" /> Add Branch
             </Button>
@@ -639,29 +639,27 @@ export function BranchManagement() {
         </div>
       </div>
 
-      {/* Add/Edit Form - Inline */}
-      {isAddingNew && (
-        <Card className="border-2 border-blue-200">
-          <CardHeader className="bg-blue-50 flex flex-row items-center justify-between">
-            <CardTitle className="text-lg flex items-center gap-2">
-              <Icon icon="mdi:office-building-plus" className="w-5 h-5 text-blue-600" />
-              {editingBranch ? "Edit Branch" : "Add New Branch"}
-            </CardTitle>
-            
-            {/* PT Compliance Dropdown - Inside Edit Form Header */}
+      {/* Add/Edit Form - Drawer */}
+      <FormDrawer
+        open={isAddingNew}
+        onOpenChange={function handleDrawerChange(v: boolean) { if (!v) handleCancel(); }}
+        title={editingBranch ? "Edit Branch" : "Add New Branch"}
+      >
+        <div>
+          <div className="flex items-center justify-end mb-4">
+            {/* PT Compliance Dropdown */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button 
-                  variant="outline" 
+                <Button
+                  variant="outline"
                   size="sm"
                   className="bg-gradient-to-r from-purple-50 to-indigo-50 hover:from-purple-100 hover:to-indigo-100 border-purple-200 text-purple-700 font-medium"
                 >
                   <Shield className="w-4 h-4 mr-2" />
-                  Compliance 
+                  Compliance
                   <ChevronDown className="w-4 h-4 ml-2" />
                 </Button>
               </DropdownMenuTrigger>
-              
               <DropdownMenuContent align="end" className="w-56">
                 <DropdownMenuLabel>Quick Navigation</DropdownMenuLabel>
                 <DropdownMenuSeparator />
@@ -674,9 +672,8 @@ export function BranchManagement() {
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
-          </CardHeader>
-          
-          <CardContent className="p-6">
+          </div>
+          <div>
             {error && (
               <div className="rounded-md border border-red-200 bg-red-50 text-red-700 px-3 py-2 text-sm mb-4">
                 {error}
@@ -973,26 +970,24 @@ export function BranchManagement() {
                 <Button type="button" variant="outline" onClick={handleCancel}>
                   Cancel
                 </Button>
-                <Button type="submit" className="bg-blue-600 hover:bg-blue-700" disabled={saving}>
+                <Button type="submit" className="bg-gray-900 hover:bg-gray-800" disabled={saving}>
                   <Save className="w-4 h-4 mr-1" />
                   {saving ? "Saving..." : editingBranch ? "Update Branch" : "Add Branch"}
                 </Button>
               </div>
             </form>
-          </CardContent>
-        </Card>
-      )}
+          </div>
+        </div>
+      </FormDrawer>
 
-      {/* View Details - Inline */}
-      {isViewing && viewBranch && (
-        <Card className="border-2 border-gray-200">
-          <CardHeader className="bg-gray-50">
-            <CardTitle className="text-lg flex items-center gap-2">
-              <Icon icon="mdi:office-building" className="w-5 h-5 text-gray-600" />
-              Branch Details
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-6">
+      {/* View Details - Drawer */}
+      <FormDrawer
+        open={Boolean(isViewing && viewBranch)}
+        onOpenChange={function handleViewClose(v: boolean) { if (!v) handleCancel(); }}
+        title="Branch Details"
+      >
+        {viewBranch && (
+        <div>
             <div className="space-y-3">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="p-3 bg-gray-50 rounded-lg"><strong>Name:</strong> {viewBranch.branchName}</div>
@@ -1028,14 +1023,12 @@ export function BranchManagement() {
                 </div>
               )}
             </div>
-          </CardContent>
-        </Card>
-      )}
+        </div>
+        )}
+      </FormDrawer>
 
-      {/* Search & Table - Hide when adding/editing/viewing */}
-      {!isAddingNew && !isViewing && (
-        <>
-          <Card>
+      {/* Search & Table */}
+      <Card>
             <CardContent className="p-6 flex items-center space-x-4">
               <div className="relative flex-1 min-w-0">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
@@ -1142,8 +1135,6 @@ export function BranchManagement() {
               )}
             </CardContent>
           </Card>
-        </>
-      )}
     </div>
   );
 }

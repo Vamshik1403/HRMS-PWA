@@ -837,11 +837,13 @@ const fetchCompanies = useCallback(
   return (
     <div className="space-y-6 w-full max-w-6xl mx-auto px-4">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Salary Advances</h1>
+      <div className="flex items-center justify-between w-full flex-wrap gap-4">
+        <p className="text-gray-600 text-sm min-w-0 flex-1">
+          Track advances, approvals, and repayments for your organization.
+        </p>
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
-            <Button onClick={resetForm} className="bg-blue-600 hover:bg-blue-700">
+            <Button onClick={resetForm} className="bg-gray-900 hover:bg-gray-800">
               <Plus className="w-4 h-4 mr-1" />
               Add Advance
             </Button>
@@ -964,7 +966,7 @@ const fetchCompanies = useCallback(
               <DialogFooter>
                 <Button 
                   type="submit" 
-                  className="bg-blue-600 hover:bg-blue-700" 
+                  className="bg-gray-900 hover:bg-gray-800" 
                   disabled={submitting}
                 >
                   {submitting && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
@@ -1303,7 +1305,7 @@ const fetchCompanies = useCallback(
                 Cancel
               </Button>
               <Button 
-                className="bg-blue-600 hover:bg-blue-700 flex-1" 
+                className="bg-gray-900 hover:bg-gray-800 flex-1" 
                 onClick={saveRepayment}
                 disabled={!isRepaymentFormValid()}
               >

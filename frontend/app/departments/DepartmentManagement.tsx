@@ -17,6 +17,7 @@ import { Badge } from "../components/ui/badge";
 import { Icon } from "@iconify/react";
 import { Plus, Search, Edit, Trash2, Eye, X, Save } from "lucide-react";
 import { useCurrentUser } from "../hooks/useCurrentUser";
+import { FormDrawer } from "../components/ui/form-drawer";
 
 // ---------------------------
 // Types aligned to backend
@@ -501,7 +502,6 @@ export function DepartmentManagement() {
       {/* Header */}
       <div className="flex items-center justify-between w-full">
         <div className="min-w-0 flex-1">
-          <h1 className="text-2xl font-bold text-gray-900">Departments</h1>
           <p className="text-gray-600 mt-1 text-sm">Manage department records</p>
         </div>
 
@@ -509,7 +509,7 @@ export function DepartmentManagement() {
           {!isAddingNew && !isViewing && canManage && (
             <Button
               onClick={() => { resetForm(); setIsAddingNew(true); }}
-              className="bg-blue-600 hover:bg-blue-700 text-sm px-3 py-2"
+              className="bg-gray-900 hover:bg-gray-800 text-sm px-3 py-2"
             >
               <Plus className="w-4 h-4 mr-1" /> Add Department
             </Button>
@@ -526,16 +526,13 @@ export function DepartmentManagement() {
         </div>
       </div>
 
-      {/* Add/Edit Form - Inline */}
-      {isAddingNew && (
-        <Card className="border-2 border-blue-200">
-          <CardHeader className="bg-blue-50">
-            <CardTitle className="text-lg flex items-center gap-2">
-              <Icon icon="mdi:account-group" className="w-5 h-5 text-blue-600" />
-              {editing ? "Edit Department" : "Add New Department"}
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-6">
+      {/* Add/Edit Form - Drawer */}
+      <FormDrawer
+        open={isAddingNew}
+        onOpenChange={(v) => { if (!v) handleCancel(); }}
+        title={editing ? "Edit Department" : "Add New Department"}
+      >
+        <div>
             {error && (
               <div className="rounded-md border border-red-200 bg-red-50 text-red-700 px-3 py-2 text-sm mb-4">
                 {error}
@@ -690,39 +687,34 @@ export function DepartmentManagement() {
                 <Button type="button" variant="outline" onClick={handleCancel}>
                   Cancel
                 </Button>
-                <Button type="submit" className="bg-blue-600 hover:bg-blue-700" disabled={saving}>
+                <Button type="submit" className="bg-gray-900 hover:bg-gray-800" disabled={saving}>
                   <Save className="w-4 h-4 mr-1" />
                   {saving ? "Saving..." : editing ? "Update Department" : "Add Department"}
                 </Button>
               </div>
             </form>
-          </CardContent>
-        </Card>
-      )}
+        </div>
+      </FormDrawer>
 
-      {/* View Details - Inline */}
-      {isViewing && viewRow && (
-        <Card className="border-2 border-gray-200">
-          <CardHeader className="bg-gray-50">
-            <CardTitle className="text-lg flex items-center gap-2">
-              <Icon icon="mdi:account-group" className="w-5 h-5 text-gray-600" />
-              Department Details
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-6">
+      {/* View Details - Drawer */}
+      <FormDrawer
+        open={!!(isViewing && viewRow)}
+        onOpenChange={(v) => { if (!v) handleCancel(); }}
+        title="Department Details"
+      >
+        {viewRow && (
+        <div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="p-3 bg-gray-50 rounded-lg"><strong>Department:</strong> {viewRow.departmentName || "—"}</div>
               <div className="p-3 bg-gray-50 rounded-lg"><strong>Service Provider:</strong> {spName(viewRow)}</div>
               <div className="p-3 bg-gray-50 rounded-lg"><strong>Company:</strong> {coName(viewRow)}</div>
               <div className="p-3 bg-gray-50 rounded-lg"><strong>Branch:</strong> {brName(viewRow)}</div>
             </div>
-          </CardContent>
-        </Card>
-      )}
+        </div>
+        )}
+      </FormDrawer>
 
-      {/* Search & Table - Hide when adding/editing/viewing */}
-      {!isAddingNew && !isViewing && (
-        <>
+      {/* Search & Table */}
           <Card>
             <CardContent className="p-6 flex items-center space-x-4">
               <div className="relative flex-1 min-w-0">
@@ -826,8 +818,6 @@ export function DepartmentManagement() {
               )}
             </CardContent>
           </Card>
-        </>
-      )}
     </div>
   );
 }

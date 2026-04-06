@@ -52,8 +52,6 @@ export function CanteenSetup() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-gray-900">Canteen Setup</h1>
-
       <Card className="max-w-lg">
         <CardHeader>
           <CardTitle className="text-lg">Default Assigned Token</CardTitle>

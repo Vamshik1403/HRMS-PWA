@@ -26,6 +26,11 @@ export class DepartmentsController {
     return this.departmentsService.findAll();
   }
 
+  @Get('with-headcount')
+  withHeadcount() {
+    return this.departmentsService.findAllWithHeadcount();
+  }
+
   @Get(':id')
   findOne(@Param('id', ParseIntPipe) id: number) {
     return this.departmentsService.findOne(id);

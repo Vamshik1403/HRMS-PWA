@@ -5,15 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card"
 import { Button } from "../components/ui/button"
 import { Input } from "../components/ui/input"
 import { Label } from "../components/ui/label"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "../components/ui/dialog"
+import { FormDrawer } from "../components/ui/form-drawer";
 import {
   Table,
   TableBody,
@@ -26,6 +18,7 @@ import { Badge } from "../components/ui/badge"
 import { Icon } from "@iconify/react"
 import { Plus, Search, Edit, Trash2 } from "lucide-react"
 import { useCurrentUser } from "../hooks/useCurrentUser"
+import { toast } from "sonner";
 
 const BACKEND_URL = "http://localhost:8000"
 
@@ -100,6 +93,7 @@ export function PrivilegedLeaveManagement() {
       setLedgerEntries(Array.isArray(data) ? data : [])
     } catch (err) {
       console.error("Error loading PL ledger:", err)
+      toast.error("Failed to load data.");
       setLedgerEntries([])
     }
   }
@@ -110,6 +104,7 @@ export function PrivilegedLeaveManagement() {
       setLapseEntries([])
     } catch (err) {
       console.error("Error loading lapses:", err)
+      toast.error("Failed to load data.");
     }
   }
 
@@ -120,6 +115,7 @@ export function PrivilegedLeaveManagement() {
       setEmployees(Array.isArray(data) ? data : [])
     } catch (err) {
       console.error("Error loading employees:", err)
+      toast.error("Failed to load data.");
     }
   }
 
@@ -133,6 +129,7 @@ export function PrivilegedLeaveManagement() {
       setPolicies(plPolicies)
     } catch (err) {
       console.error("Error loading policies:", err)
+      toast.error("Failed to load data.");
     }
   }
 
@@ -168,9 +165,11 @@ export function PrivilegedLeaveManagement() {
       }
       await loadLedger()
       setIsDialogOpen(false)
+      toast.success(editing ? "Updated successfully" : "Created successfully");
       resetForm()
     } catch (err) {
       console.error("Error saving PL entry:", err)
+      toast.error("Failed to save. Please try again.");
     }
   }
 
@@ -184,9 +183,11 @@ export function PrivilegedLeaveManagement() {
       })
       await loadLedger()
       setIsCreditDialogOpen(false)
+      toast.success("Privileged leave credited successfully");
       setCreditData({ employeeID: 0, leavePolicyID: 0 })
     } catch (err) {
       console.error("Error crediting PL:", err)
+      toast.error("Failed to update. Please try again.");
     }
   }
 
@@ -199,12 +200,13 @@ export function PrivilegedLeaveManagement() {
         body: JSON.stringify(lapseData),
       })
       const result = await res.json()
-      alert(result.message || "Lapse processed")
+      toast.success(result.message || "Lapse processed")
       await loadLedger()
       setIsLapseDialogOpen(false)
       setLapseData({ employeeID: 0, leavePolicyID: 0 })
     } catch (err) {
       console.error("Error processing lapse:", err)
+      toast.error("Lapse processing failed.");
     }
   }
 
@@ -239,8 +241,10 @@ export function PrivilegedLeaveManagement() {
     try {
       await fetch(`${BACKEND_URL}/privileged-leave/${id}`, { method: "DELETE" })
       await loadLedger()
+      toast.success("Deleted successfully");
     } catch (err) {
       console.error("Error deleting PL entry:", err)
+      toast.error("Failed to delete. Please try again.");
     }
   }
 
@@ -260,18 +264,7 @@ export function PrivilegedLeaveManagement() {
         <div className="flex gap-2">
           {canManage && (
             <>
-              <Dialog open={isCreditDialogOpen} onOpenChange={setIsCreditDialogOpen}>
-                <DialogTrigger asChild>
-                  <Button className="bg-green-600 hover:bg-green-700 text-sm px-3 py-2">
-                    <Icon icon="mdi:plus-circle" className="w-4 h-4 mr-1" />
-                    Credit PL
-                  </Button>
-                </DialogTrigger>
-                <DialogContent className="sm:max-w-[500px]">
-                  <DialogHeader>
-                    <DialogTitle>Credit Privileged Leave</DialogTitle>
-                    <DialogDescription>Auto-credit PL based on policy ratio</DialogDescription>
-                  </DialogHeader>
+              <FormDrawer open={isCreditDialogOpen} onOpenChange={setIsCreditDialogOpen} title={"Credit Privileged Leave"} description={"Auto-credit PL based on policy ratio"}>
                   <form onSubmit={handleCreditPL} className="space-y-4">
                     <div className="space-y-2">
                       <Label>Employee</Label>
@@ -305,26 +298,15 @@ export function PrivilegedLeaveManagement() {
                         ))}
                       </select>
                     </div>
-                    <DialogFooter>
+                    <div className="flex justify-end gap-3 pt-4">
                       <Button type="button" variant="outline" onClick={() => setIsCreditDialogOpen(false)}>Cancel</Button>
                       <Button type="submit" className="bg-green-600 hover:bg-green-700">Credit PL</Button>
-                    </DialogFooter>
+                    </div>
                   </form>
-                </DialogContent>
-              </Dialog>
+                
+              </FormDrawer>
 
-              <Dialog open={isLapseDialogOpen} onOpenChange={setIsLapseDialogOpen}>
-                <DialogTrigger asChild>
-                  <Button variant="outline" className="text-sm px-3 py-2 border-orange-300 text-orange-700 hover:bg-orange-50">
-                    <Icon icon="mdi:timer-sand" className="w-4 h-4 mr-1" />
-                    Process Lapse
-                  </Button>
-                </DialogTrigger>
-                <DialogContent className="sm:max-w-[500px]">
-                  <DialogHeader>
-                    <DialogTitle>Process PL Lapse</DialogTitle>
-                    <DialogDescription>Lapse excess PL beyond carry-forward limit</DialogDescription>
-                  </DialogHeader>
+              <FormDrawer open={isLapseDialogOpen} onOpenChange={setIsLapseDialogOpen} title={"Process PL Lapse"} description={"Lapse excess PL beyond carry-forward limit"}>
                   <form onSubmit={handleProcessLapse} className="space-y-4">
                     <div className="space-y-2">
                       <Label>Employee</Label>
@@ -358,26 +340,15 @@ export function PrivilegedLeaveManagement() {
                         ))}
                       </select>
                     </div>
-                    <DialogFooter>
+                    <div className="flex justify-end gap-3 pt-4">
                       <Button type="button" variant="outline" onClick={() => setIsLapseDialogOpen(false)}>Cancel</Button>
                       <Button type="submit" className="bg-orange-600 hover:bg-orange-700">Process Lapse</Button>
-                    </DialogFooter>
+                    </div>
                   </form>
-                </DialogContent>
-              </Dialog>
+                
+              </FormDrawer>
 
-              <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-                <DialogTrigger asChild>
-                  <Button onClick={resetForm} className="bg-blue-600 hover:bg-blue-700 text-sm px-3 py-2">
-                    <Plus className="w-4 h-4 mr-1" />
-                    Manual Entry
-                  </Button>
-                </DialogTrigger>
-                <DialogContent className="sm:max-w-[600px]">
-                  <DialogHeader>
-                    <DialogTitle>{editingEntry ? "Edit PL Entry" : "Add PL Ledger Entry"}</DialogTitle>
-                    <DialogDescription>Manually add or edit a privileged leave ledger record</DialogDescription>
-                  </DialogHeader>
+              <FormDrawer open={isDialogOpen} onOpenChange={setIsDialogOpen} title={editingEntry ? "Edit PL Entry" : "Add PL Ledger Entry"} description={"Manually add or edit a privileged leave ledger record"}>
                   <form onSubmit={handleSubmit} className="space-y-4">
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
@@ -461,15 +432,15 @@ export function PrivilegedLeaveManagement() {
                         />
                       </div>
                     </div>
-                    <DialogFooter>
+                    <div className="flex justify-end gap-3 pt-4">
                       <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
                       <Button type="submit" className="bg-blue-600 hover:bg-blue-700">
                         {editingEntry ? "Update" : "Add Entry"}
                       </Button>
-                    </DialogFooter>
+                    </div>
                   </form>
-                </DialogContent>
-              </Dialog>
+                
+              </FormDrawer>
             </>
           )}
         </div>

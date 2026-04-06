@@ -433,9 +433,7 @@ export default function PTCompliancePage() {
       </Button>
   
       {/* Header Section */}
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-gray-800">PT Compliance Management</h1>
-        
+      <div className="flex items-center justify-end flex-wrap gap-4">
         <div className="flex items-center gap-4">
           {currentUser?.role === "SUPERADMIN" && (
             <>
@@ -604,7 +602,7 @@ export default function PTCompliancePage() {
                     <button
                       onClick={handleSave}
                       disabled={isLoading}
-                      className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2.5 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+                      className="flex items-center gap-2 bg-gray-900 text-white px-4 py-2.5 rounded-lg hover:bg-gray-800 transition-colors disabled:opacity-50"
                     >
                       <Save size={18} /> 
                       {isLoading ? 'Saving...' : isNewRecord ? 'Create Settings' : 'Save Changes'}
@@ -652,7 +650,7 @@ export default function PTCompliancePage() {
                     {editMode && (
                       <button
                         onClick={addSlab}
-                        className="flex items-center gap-1 text-sm bg-blue-600 text-white px-3 py-1.5 rounded-lg hover:bg-blue-700"
+                        className="flex items-center gap-1 text-sm bg-gray-900 text-white px-3 py-1.5 rounded-lg hover:bg-gray-800"
                       >
                         <Plus size={16} /> Add Slab
                       </button>

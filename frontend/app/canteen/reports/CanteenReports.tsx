@@ -329,7 +329,6 @@ export function CanteenReports() {
       {/* Header */}
       <div className="flex items-center justify-between w-full">
         <div className="min-w-0 flex-1">
-          <h1 className="text-2xl font-bold text-gray-900">Canteen Reports</h1>
           <p className="text-gray-600 mt-1 text-sm">
             Generate and view canteen reports by company, branch, department and date range.
           </p>
@@ -472,7 +471,7 @@ export function CanteenReports() {
 
             <div className="flex items-end gap-3">
               <Button
-                className="bg-blue-600 hover:bg-blue-700"
+                className="bg-gray-900 hover:bg-gray-800"
                 onClick={generateReport}
                 disabled={loading}
               >
@@ -533,7 +532,7 @@ export function CanteenReports() {
           <CardContent className="p-0">
             <div className="overflow-x-auto w-full border-t border-gray-200">
               <table className="min-w-full border-collapse text-xs">
-                <thead className="bg-blue-600 text-white">
+                <thead className="bg-gray-900 text-white">
                   <tr>
                     <th className="px-3 py-2 text-center">S.NO</th>
                     <th className="px-3 py-2 text-left">EMPLOYEE ID</th>

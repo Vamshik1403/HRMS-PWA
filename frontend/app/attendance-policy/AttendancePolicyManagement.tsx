@@ -10,15 +10,7 @@ import {
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "../components/ui/dialog";
+import { FormDrawer } from "../components/ui/form-drawer";
 import {
   Table,
   TableBody,
@@ -32,6 +24,7 @@ import { Icon } from "@iconify/react";
 import { Plus, Search, Edit, Trash2 } from "lucide-react";
 import { SearchSuggestInput } from "../components/SearchSuggestInput";
 import { useCurrentUser } from "../hooks/useCurrentUser";
+import { toast } from "sonner";
 
 
 interface AttendancePolicy {
@@ -162,6 +155,7 @@ export function AttendancePolicyManagement() {
         : [];
     } catch (error) {
       console.error("Error fetching service providers:", error);
+      toast.error("Failed to load data.");
       return [];
     }
   };
@@ -183,6 +177,7 @@ export function AttendancePolicyManagement() {
         : [];
     } catch (error) {
       console.error("Error fetching companies:", error);
+      toast.error("Failed to load data.");
       return [];
     }
   };
@@ -204,6 +199,7 @@ export function AttendancePolicyManagement() {
         : [];
     } catch (error) {
       console.error("Error fetching branches:", error);
+      toast.error("Failed to load data.");
       return [];
     }
   };
@@ -285,6 +281,7 @@ export function AttendancePolicyManagement() {
       }
     } catch (err) {
       console.error("Error loading attendance policies:", err);
+      toast.error("Failed to load data.");
       setPolicies([]);
     }
   };
@@ -359,8 +356,10 @@ export function AttendancePolicyManagement() {
       await loadAttendancePolicies();
       resetForm();
       setIsDialogOpen(false);
+      toast.success(editingPolicy ? "Updated successfully" : "Created successfully");
     } catch (error) {
       console.error("Error saving attendance policy:", error);
+      toast.error("Failed to save. Please try again.");
     }
   };
 
@@ -466,8 +465,10 @@ export function AttendancePolicyManagement() {
         throw new Error(`Failed to delete attendance policy: ${res.status}`);
       }
       await loadAttendancePolicies();
+      toast.success("Deleted successfully");
     } catch (error) {
       console.error("Error deleting attendance policy:", error);
+      toast.error("Failed to delete. Please try again.");
     }
   };
 
@@ -481,32 +482,18 @@ export function AttendancePolicyManagement() {
             Manage attendance policies and rules
           </p>
         </div>
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogTrigger asChild>
-            {canManage && (
+        {canManage && (
               <Button
-                onClick={resetForm}
+                onClick={() => { resetForm(); setIsDialogOpen(true); }}
                 className="bg-blue-600 hover:bg-blue-700 flex-shrink-0 text-sm px-3 py-2"
               >
                 <Plus className="w-4 h-4 mr-1" />
                 Add Attendance Policy
               </Button>
             )}
-          </DialogTrigger>
-          <DialogContent
-            onOpenAutoFocus={(e) => e.preventDefault()}
-            className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto"
-          >
-            <DialogHeader>
-              <DialogTitle>
-                {editingPolicy ? "Edit Attendance Policy" : "Add New Attendance Policy"}
-              </DialogTitle>
-              <DialogDescription>
-                {editingPolicy
-                  ? "Update the attendance policy information below."
-                  : "Fill in the details to add a new attendance policy."}
-              </DialogDescription>
-            </DialogHeader>
+      </div>
+
+      <FormDrawer open={isDialogOpen} onOpenChange={setIsDialogOpen} title={editingPolicy ? "Edit Attendance Policy" : "Add New Attendance Policy"} description={editingPolicy ? "Update the attendance policy information below." : "Fill in the details to add a new attendance policy."}>
             <form
               onSubmit={(e) => {
                 e.preventDefault();
@@ -926,7 +913,7 @@ export function AttendancePolicyManagement() {
                 </div>
               </div>
 
-              <DialogFooter>
+              <div className="flex justify-end gap-3 pt-4">
                 <Button
                   type="button"
                   variant="outline"
@@ -937,11 +924,9 @@ export function AttendancePolicyManagement() {
                 <Button type="submit" className="bg-blue-600 hover:bg-blue-700">
                   {editingPolicy ? "Update Attendance Policy" : "Add Attendance Policy"}
                 </Button>
-              </DialogFooter>
+              </div>
             </form>
-          </DialogContent>
-        </Dialog>
-      </div>
+      </FormDrawer>
 
       {/* Search and Filters */}
       <Card>

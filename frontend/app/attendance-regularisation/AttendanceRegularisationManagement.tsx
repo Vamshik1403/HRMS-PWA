@@ -567,13 +567,12 @@ export function AttendanceRegularisationManagement() {
       {/* Header */}
       <div className="flex items-center justify-between w-full">
         <div className="min-w-0 flex-1">
-          <h1 className="text-2xl font-bold text-gray-900">Attendance Regularisation</h1>
           <p className="text-gray-600 mt-1 text-sm">Manage attendance corrections and time adjustments</p>
         </div>
         <div className="flex items-center gap-3">
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>
-              <Button onClick={resetForm} className="bg-blue-600 hover:bg-blue-700 flex-shrink-0 text-sm px-3 py-2">
+              <Button onClick={resetForm} className="bg-gray-900 hover:bg-gray-800 flex-shrink-0 text-sm px-3 py-2">
                 <Plus className="w-4 h-4 mr-1" />
                 Submit Regularisation
               </Button>
@@ -766,7 +765,7 @@ export function AttendanceRegularisationManagement() {
                   <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
                     Cancel
                   </Button>
-                  <Button type="submit" className="bg-blue-600 hover:bg-blue-700">
+                  <Button type="submit" className="bg-gray-900 hover:bg-gray-800">
                     {editingRegularisation ? "Update Regularisation" : "Submit Regularisation"}
                   </Button>
                 </DialogFooter>

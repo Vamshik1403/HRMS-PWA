@@ -12,6 +12,7 @@ import { Icon } from "@iconify/react"
 import { Plus, Search, Edit, Trash2, Eye, ArrowLeft, X, Save, ChevronDown, FileText, Shield } from "lucide-react"
 import { useCurrentUser } from "../hooks/useCurrentUser"
 import { useRouter } from "next/navigation"
+import { FormDrawer } from "../components/ui/form-drawer"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -335,7 +336,6 @@ export function CompanyManagement() {
       {/* Header with Dropdown */}
       <div className="flex items-center justify-between w-full">
         <div className="min-w-0 flex-1">
-          <h1 className="text-2xl font-bold text-gray-900">Companies</h1>
           <p className="text-gray-600 mt-1 text-sm">Manage registered companies</p>
         </div>
         
@@ -348,7 +348,7 @@ export function CompanyManagement() {
                 resetForm()
                 setIsAddingNew(true)
               }}
-              className="bg-blue-600 hover:bg-blue-700 text-sm px-3 py-2"
+              className="bg-gray-900 hover:bg-gray-800 text-sm px-3 py-2"
             >
               <Plus className="w-4 h-4 mr-1" /> Add Company
             </Button>
@@ -365,50 +365,13 @@ export function CompanyManagement() {
         </div>
       </div>
 
-      {/* Add/Edit Form - Inline */}
-      {isAddingNew && (
-        <Card className="border-2 border-blue-200">
-          <CardHeader className="bg-blue-50 flex flex-row items-center justify-between">
-  <CardTitle className="text-lg flex items-center gap-2">
-    <Icon icon="mdi:office-building-plus" className="w-5 h-5 text-blue-600" />
-    {editingCompany ? "Edit Company" : "Add New Company"}
-  </CardTitle>
-  
-  {/* Compliance Dropdown - Inside Edit Form Header */}
-  <DropdownMenu>
-    <DropdownMenuTrigger asChild>
-      <Button 
-        variant="outline" 
-        size="sm"
-        className="bg-gradient-to-r from-purple-50 to-indigo-50 hover:from-purple-100 hover:to-indigo-100 border-purple-200 text-purple-700 font-medium"
+      {/* Add/Edit Form - Drawer */}
+      <FormDrawer
+        open={isAddingNew}
+        onOpenChange={(v) => { if (!v) handleCancel(); }}
+        title={editingCompany ? "Edit Company" : "Add New Company"}
       >
-        <Shield className="w-4 h-4 mr-2" />
-        Compliance 
-        <ChevronDown className="w-4 h-4 ml-2" />
-      </Button>
-    </DropdownMenuTrigger>
-    
-    <DropdownMenuContent align="end" className="w-56">
-      <DropdownMenuLabel>Quick Navigation</DropdownMenuLabel>
-      <DropdownMenuSeparator />
-      <DropdownMenuItem onClick={handlePFCompliance} className="cursor-pointer">
-        <FileText className="w-4 h-4 mr-2 text-blue-600" />
-        <div className="flex flex-col">
-          <span>PF Configuration</span>
-          <span className="text-xs text-gray-500">Provident Fund</span>
-        </div>
-      </DropdownMenuItem>
-      <DropdownMenuItem onClick={handleESICCompliance} className="cursor-pointer">
-        <Shield className="w-4 h-4 mr-2 text-green-600" />
-        <div className="flex flex-col">
-          <span>ESIC Configuration</span>
-          <span className="text-xs text-gray-500">Employee Insurance</span>
-        </div>
-      </DropdownMenuItem>
-    </DropdownMenuContent>
-  </DropdownMenu>
-</CardHeader>
-          <CardContent className="p-6">
+        <div>
             <form onSubmit={handleSubmit} className="space-y-4">
               {/* Company Name with Service Provider Autocomplete */}
               <div ref={wrapperRef} className="space-y-2 relative">
@@ -571,26 +534,23 @@ export function CompanyManagement() {
                 <Button type="button" variant="outline" onClick={handleCancel}>
                   BACK
                 </Button>
-                <Button type="submit" className="bg-blue-600 hover:bg-blue-700">
+                <Button type="submit" className="bg-gray-900 hover:bg-gray-800">
                   <Save className="w-4 h-4 mr-1" />
                   {editingCompany ? "Update Company" : "Add Company"}
                 </Button>
               </div>
             </form>
-          </CardContent>
-        </Card>
-      )}
+        </div>
+      </FormDrawer>
 
-      {/* View Details - Inline */}
-      {isViewing && viewCompany && (
-        <Card className="border-2 border-gray-200">
-          <CardHeader className="bg-gray-50">
-            <CardTitle className="text-lg flex items-center gap-2">
-              <Icon icon="mdi:office-building" className="w-5 h-5 text-gray-600" />
-              Company Details
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-6">
+      {/* View Details - Drawer */}
+      <FormDrawer
+        open={!!(isViewing && viewCompany)}
+        onOpenChange={(v) => { if (!v) handleCancel(); }}
+        title="Company Details"
+      >
+        {viewCompany && (
+        <div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div><strong>Name:</strong> {viewCompany.companyName}</div>
               <div><strong>Type:</strong> {viewCompany.companyType}</div>
@@ -625,13 +585,11 @@ export function CompanyManagement() {
                 </div>
               )}
             </div>
-          </CardContent>
-        </Card>
-      )}
+        </div>
+        )}
+      </FormDrawer>
 
-      {/* Search & Table - Hide when adding/editing/viewing */}
-      {!isAddingNew && !isViewing && (
-        <>
+      {/* Search & Table */}
           <Card>
             <CardContent className="p-6 flex items-center space-x-4">
               <div className="relative flex-1 min-w-0">
@@ -729,8 +687,6 @@ export function CompanyManagement() {
               </Table>
             </CardContent>
           </Card>
-        </>
-      )}
     </div>
   )
 }

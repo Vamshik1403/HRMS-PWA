@@ -6,15 +6,7 @@ import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 import { Textarea } from "../components/ui/textarea";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "../components/ui/dialog";
+import { FormDrawer } from "../components/ui/form-drawer";
 import {
   Table,
   TableBody,
@@ -27,6 +19,7 @@ import { Badge } from "../components/ui/badge";
 import { Icon } from "@iconify/react";
 import { Plus, Search, Edit, Trash2, Eye, IndianRupee } from "lucide-react";
 import { useCurrentUser } from "../hooks/useCurrentUser";
+import { toast } from "sonner";
 
 
 // ---------------------------
@@ -309,6 +302,7 @@ export function ContractorManagement() {
       }
     } catch (e: any) {
       console.error("Failed to load contractors:", e);
+      toast.error("Failed to load data.");
       setRows([]);
     } finally {
       setLoading(false);
@@ -327,6 +321,7 @@ export function ContractorManagement() {
         setAllCompanies(companies || []);
       } catch (e) {
         console.error("Failed to load companies:", e);
+        toast.error("Failed to load data.");
       }
     };
     fetchAllCompanies();
@@ -543,8 +538,9 @@ export function ContractorManagement() {
       const res = await fetch(`${API.contractors}/${id}`, { method: "DELETE" });
       if (!res.ok) throw new Error(await res.text());
       await fetchRows();
+      toast.success("Contractor deleted successfully");
     } catch (e: any) {
-      alert(e?.message || "Delete failed");
+      toast.error(e?.message || "Delete failed");
     }
   };
 
@@ -614,6 +610,7 @@ export function ContractorManagement() {
       await fetchRows();
       resetForm();
       setIsDialogOpen(false);
+      toast.success(editing ? "Updated successfully" : "Created successfully");
     } catch (e: any) {
       setError(e?.message || "Save failed");
     } finally {
@@ -662,30 +659,25 @@ export function ContractorManagement() {
       {/* Header */}
       <div className="flex items-center justify-between w-full">
         <div className="min-w-0 flex-1">
-          <h1 className="text-2xl font-bold text-gray-900">Contractors</h1>
           <p className="text-gray-600 mt-1 text-sm">Manage contractor records</p>
         </div>
 
-        <Dialog open={isDialogOpen} onOpenChange={(v) => { setIsDialogOpen(v); if (!v) resetForm(); }}>
-          <DialogTrigger asChild>
-            {canManage && (
+        {canManage && (
               <Button
                 onClick={() => { resetForm(); setIsDialogOpen(true); }}
-                className="bg-blue-600 hover:bg-blue-700 text-sm px-3 py-2"
+                className="bg-gray-900 hover:bg-gray-800 text-sm px-3 py-2"
               >
                 <Plus className="w-4 h-4 mr-1" /> Add Contractor
               </Button>
             )}
+      </div>
 
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-[760px] max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>{editing ? "Edit Contractor" : "Add New Contractor"}</DialogTitle>
-              <DialogDescription>
-                {editing ? "Update contractor details below." : "Fill in details to add a new contractor."}
-              </DialogDescription>
-            </DialogHeader>
-
+      <FormDrawer
+        open={isDialogOpen}
+        onOpenChange={(v) => { setIsDialogOpen(v); if (!v) resetForm(); }}
+        title={editing ? "Edit Contractor" : "Add New Contractor"}
+        description={editing ? "Update contractor details below." : "Fill in details to add a new contractor."}
+      >
             {error && (
               <div className="rounded-md border border-red-200 bg-red-50 text-red-700 px-3 py-2 text-sm">
                 {error}
@@ -919,24 +911,22 @@ export function ContractorManagement() {
                   </Button>
                   <div className="flex gap-2">
                     <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
-                    <Button type="submit" className="bg-blue-600 hover:bg-blue-700" disabled={saving}>
+                    <Button type="submit" className="bg-gray-900 hover:bg-gray-800" disabled={saving}>
                       {saving ? "Saving..." : editing ? "Update Contractor" : "Add Contractor"}
                     </Button>
                   </div>
                 </div>
               </div>
             </form>
-          </DialogContent>
-        </Dialog>
-      </div>
+      </FormDrawer>
 
-      {/* View Dialog */}
-      <Dialog open={isViewDialogOpen} onOpenChange={setIsViewDialogOpen}>
-        <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Contractor Details</DialogTitle>
-            <DialogDescription>Read-only details</DialogDescription>
-          </DialogHeader>
+      {/* View Drawer */}
+      <FormDrawer
+        open={isViewDialogOpen}
+        onOpenChange={setIsViewDialogOpen}
+        title="Contractor Details"
+        description="Read-only details"
+      >
           {viewRow && (
             <div className="space-y-3">
               <p><strong>Name:</strong> {viewRow.contractorName || "—"}</p>
@@ -958,23 +948,18 @@ export function ContractorManagement() {
               {viewRow.SignatureUrl && <p><strong>Signature:</strong> <a className="text-blue-600 underline" href={viewRow.SignatureUrl} target="_blank">Open</a></p>}
             </div>
           )}
-          <DialogFooter>
+          <div className="flex justify-end pt-4">
             <Button onClick={() => setIsViewDialogOpen(false)} variant="outline">Close</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </div>
+      </FormDrawer>
 
-      {/* Rate Card Dialog */}
-      <Dialog open={isRateCardOpen} onOpenChange={setIsRateCardOpen}>
-        <DialogContent className="sm:max-w-[1200px] max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <IndianRupee className="w-5 h-5 text-blue-600" />
-              Contractor Rate Card — {rateCardContractor?.contractorName || ""}
-            </DialogTitle>
-            <DialogDescription>Define rate cards for this contractor by designation.</DialogDescription>
-          </DialogHeader>
-
+      {/* Rate Card Drawer */}
+      <FormDrawer
+        open={isRateCardOpen}
+        onOpenChange={setIsRateCardOpen}
+        title={`Contractor Rate Card — ${rateCardContractor?.contractorName || ""}`}
+        description="Define rate cards for this contractor by designation."
+      >
           <div className="space-y-4">
             <div className="overflow-x-auto">
               <Table>
@@ -1101,10 +1086,10 @@ export function ContractorManagement() {
             </Button>
           </div>
 
-          <DialogFooter>
+          <div className="flex justify-end gap-3 pt-4">
             <Button variant="outline" onClick={() => setIsRateCardOpen(false)}>Close</Button>
             <Button
-              className="bg-blue-600 hover:bg-blue-700"
+              className="bg-gray-900 hover:bg-gray-800"
               onClick={async () => {
                 if (!rateCardContractor) return;
                 try {
@@ -1127,16 +1112,16 @@ export function ContractorManagement() {
                   });
                   if (!res.ok) throw new Error(await res.text());
                   setIsRateCardOpen(false);
+                  toast.success("Rate card saved successfully");
                 } catch (e: any) {
-                  alert(e?.message || "Failed to save rate cards");
+                  toast.error(e?.message || "Failed to save rate cards");
                 }
               }}
             >
               Save Rate Card
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </div>
+      </FormDrawer>
 
       {/* Search */}
       <Card>

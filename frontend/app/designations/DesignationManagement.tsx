@@ -24,6 +24,7 @@ import { Badge } from "../components/ui/badge";
 import { Icon } from "@iconify/react";
 import { Plus, Search, Edit, Trash2, Eye, X, Save } from "lucide-react";
 import { useCurrentUser } from "../hooks/useCurrentUser";
+import { FormDrawer } from "../components/ui/form-drawer";
 
 // ---------------------------
 // Types aligned to backend
@@ -649,7 +650,6 @@ export function DesignationManagement() {
       {/* Header */}
       <div className="flex items-center justify-between w-full">
         <div className="min-w-0 flex-1">
-          <h1 className="text-2xl font-bold text-gray-900">Designations</h1>
           <p className="text-gray-600 mt-1 text-sm">Manage designation records</p>
         </div>
 
@@ -657,7 +657,7 @@ export function DesignationManagement() {
           {!isAddingNew && !isViewing && canManage && (
             <Button
               onClick={() => { resetForm(); setIsAddingNew(true); }}
-              className="bg-blue-600 hover:bg-blue-700 text-sm px-3 py-2"
+              className="bg-gray-900 hover:bg-gray-800 text-sm px-3 py-2"
             >
               <Plus className="w-4 h-4 mr-1" /> Add Designation
             </Button>
@@ -674,16 +674,13 @@ export function DesignationManagement() {
         </div>
       </div>
 
-      {/* Add/Edit Form - Inline */}
-      {isAddingNew && (
-        <Card className="border-2 border-blue-200">
-          <CardHeader className="bg-blue-50">
-            <CardTitle className="text-lg flex items-center gap-2">
-              <Icon icon="mdi:id-card" className="w-5 h-5 text-blue-600" />
-              {editing ? "Edit Designation" : "Add New Designation"}
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-6">
+      {/* Add/Edit Form - Drawer */}
+      <FormDrawer
+        open={isAddingNew}
+        onOpenChange={(v) => { if (!v) handleCancel(); }}
+        title={editing ? "Edit Designation" : "Add New Designation"}
+      >
+        <div>
             {error && (
               <div className="rounded-md border border-red-200 bg-red-50 text-red-700 px-3 py-2 text-sm mb-4">
                 {error}
@@ -949,26 +946,23 @@ export function DesignationManagement() {
                 <Button type="button" variant="outline" onClick={handleCancel}>
                   Cancel
                 </Button>
-                <Button type="submit" className="bg-blue-600 hover:bg-blue-700" disabled={saving}>
+                <Button type="submit" className="bg-gray-900 hover:bg-gray-800" disabled={saving}>
                   <Save className="w-4 h-4 mr-1" />
                   {saving ? "Saving..." : editing ? "Update Designation" : "Add Designation"}
                 </Button>
               </div>
             </form>
-          </CardContent>
-        </Card>
-      )}
+        </div>
+      </FormDrawer>
 
-      {/* View Details - Inline */}
-      {isViewing && viewRow && (
-        <Card className="border-2 border-gray-200">
-          <CardHeader className="bg-gray-50">
-            <CardTitle className="text-lg flex items-center gap-2">
-              <Icon icon="mdi:id-card" className="w-5 h-5 text-gray-600" />
-              Designation Details
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-6">
+      {/* View Details - Drawer */}
+      <FormDrawer
+        open={!!(isViewing && viewRow)}
+        onOpenChange={(v) => { if (!v) handleCancel(); }}
+        title="Designation Details"
+      >
+        {viewRow && (
+        <div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="p-3 bg-gray-50 rounded-lg"><strong>Designation:</strong> {viewRow.designation || "—"}</div>
               <div className="p-3 bg-gray-50 rounded-lg"><strong>Service Provider:</strong> {spName(viewRow)}</div>
@@ -979,13 +973,11 @@ export function DesignationManagement() {
               <div className="p-3 bg-gray-50 rounded-lg"><strong>Notice Period (Resignation):</strong> {viewRow.noticePeriodDaysForResignation || "—"}</div>
               <div className="p-3 bg-gray-50 rounded-lg"><strong>Notice Period (Termination):</strong> {viewRow.noticePeriodDaysForTermination || "—"}</div>
             </div>
-          </CardContent>
-        </Card>
-      )}
+        </div>
+        )}
+      </FormDrawer>
 
       {/* Search & Table */}
-      {!isAddingNew && !isViewing && (
-        <>
           <Card>
             <CardContent className="p-6 flex items-center space-x-4">
               <div className="relative flex-1 min-w-0">
@@ -1091,8 +1083,6 @@ export function DesignationManagement() {
               )}
             </CardContent>
           </Card>
-        </>
-      )}
     </div>
   );
 }

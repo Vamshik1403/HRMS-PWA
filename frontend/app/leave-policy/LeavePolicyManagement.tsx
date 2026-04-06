@@ -5,15 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card"
 import { Button } from "../components/ui/button"
 import { Input } from "../components/ui/input"
 import { Label } from "../components/ui/label"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "../components/ui/dialog"
+import { FormDrawer } from "../components/ui/form-drawer";
 import {
   Table,
   TableBody,
@@ -27,6 +19,7 @@ import { Icon } from "@iconify/react"
 import { Plus, Search, Edit, Trash2 } from "lucide-react"
 import { SearchSuggestInput } from "../components/SearchSuggestInput"
 import { useCurrentUser } from "../hooks/useCurrentUser";
+import { toast } from "sonner";
 
 interface Holiday {
   id: string
@@ -206,6 +199,7 @@ const loadAvailableHolidays = async () => {
     setAvailableHolidays(mapped);
   } catch (err) {
     console.error("Error fetching holidays:", err);
+    toast.error("Failed to load data.");
     setAvailableHolidays([]);
   }
 };
@@ -220,6 +214,7 @@ const loadAvailableHolidays = async () => {
       )
     } catch (error) {
       console.error('Error fetching service providers:', error)
+      toast.error("Operation failed. Please try again.");
       return []
     }
   }
@@ -244,6 +239,7 @@ const fetchCompanies = async (query: string) => {
       : [];
   } catch (error) {
     console.error("Error fetching companies:", error);
+    toast.error("Failed to load data.");
     return [];
   }
 };
@@ -268,6 +264,7 @@ const fetchBranches = async (query: string) => {
       : [];
   } catch (error) {
     console.error("Error fetching branches:", error);
+    toast.error("Failed to load data.");
     return [];
   }
 };
@@ -339,6 +336,7 @@ const fetchBranches = async (query: string) => {
       }
     } catch (error) {
       console.error("Error loading leave policies:", error);
+      toast.error("Failed to load data.");
       setPolicies([]);
     }
   };
@@ -432,8 +430,10 @@ const fetchBranches = async (query: string) => {
 
       resetForm()
       setIsDialogOpen(false)
+      toast.success(editingPolicy ? "Leave policy updated successfully" : "Leave policy created successfully");
     } catch (error) {
       console.error('Error saving leave policy:', error)
+      toast.error("Operation failed. Please try again.");
     }
   }
 
@@ -496,9 +496,11 @@ const fetchBranches = async (query: string) => {
 
       if (response.ok) {
         await loadLeavePolicies()
+        toast.success("Leave policy deleted successfully");
       }
     } catch (error) {
       console.error('Error deleting leave policy:', error)
+      toast.error("Operation failed. Please try again.");
     }
   }
 
@@ -558,31 +560,18 @@ const handleCompanySelect = (selected: SelectedItem) => {
           <h1 className="text-2xl font-bold text-gray-900">Leave Policy</h1>
           <p className="text-gray-600 mt-1 text-sm">Manage leave policies and holiday configurations</p>
         </div>
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogTrigger asChild>
-            {canManage && (
+        {canManage && (
               <Button
-                onClick={resetForm}
+                onClick={() => { resetForm(); setIsDialogOpen(true); }}
                 className="bg-blue-600 hover:bg-blue-700 flex-shrink-0 text-sm px-3 py-2"
               >
                 <Plus className="w-4 h-4 mr-1" />
                 Add Leave Policy
               </Button>
             )}
+      </div>
 
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-[800px] max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>
-                {editingPolicy ? "Edit Leave Policy" : "Add New Leave Policy"}
-              </DialogTitle>
-              <DialogDescription>
-                {editingPolicy
-                  ? "Update the leave policy information below."
-                  : "Fill in the details to add a new leave policy."
-                }
-              </DialogDescription>
-            </DialogHeader>
+      <FormDrawer open={isDialogOpen} onOpenChange={setIsDialogOpen} title={editingPolicy ? "Edit Leave Policy" : "Add New Leave Policy"} description={editingPolicy ? "Update the leave policy information below." : "Fill in the details to add a new leave policy."}>
             <form onSubmit={handleSubmit} className="space-y-6">
               {/* Basic Information */}
 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -869,18 +858,16 @@ const handleCompanySelect = (selected: SelectedItem) => {
                 </div>
               </div>
 
-              <DialogFooter>
+              <div className="flex justify-end gap-3 pt-4">
                 <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
                   Cancel
                 </Button>
                 <Button type="submit" className="bg-blue-600 hover:bg-blue-700">
                   {editingPolicy ? "Update Leave Policy" : "Add Leave Policy"}
                 </Button>
-              </DialogFooter>
+              </div>
             </form>
-          </DialogContent>
-        </Dialog>
-      </div>
+      </FormDrawer>
 
       {/* Search and Filters */}
       <Card>

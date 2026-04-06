@@ -163,13 +163,12 @@ export function EmployeeHolidayOverrideManagement() {
     <div className="space-y-6 w-full max-w-6xl mx-auto px-4">
       <div className="flex items-center justify-between w-full">
         <div className="min-w-0 flex-1">
-          <h1 className="text-2xl font-bold text-gray-900">Employee Holiday Override</h1>
           <p className="text-gray-600 mt-1 text-sm">Assign custom holiday overrides per employee</p>
         </div>
         {canManage && (
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>
-              <Button onClick={resetForm} className="bg-blue-600 hover:bg-blue-700 text-sm px-3 py-2">
+              <Button onClick={resetForm} className="bg-gray-900 hover:bg-gray-800 text-sm px-3 py-2">
                 <Plus className="w-4 h-4 mr-1" />
                 Add Override
               </Button>
@@ -244,7 +243,7 @@ export function EmployeeHolidayOverrideManagement() {
                 </div>
                 <DialogFooter>
                   <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
-                  <Button type="submit" className="bg-blue-600 hover:bg-blue-700">
+                  <Button type="submit" className="bg-gray-900 hover:bg-gray-800">
                     {editingOverride ? "Update" : "Add Override"}
                   </Button>
                 </DialogFooter>

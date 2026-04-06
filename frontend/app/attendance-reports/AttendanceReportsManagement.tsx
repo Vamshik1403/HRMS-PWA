@@ -1033,7 +1033,7 @@ export function AttendanceReportsManagement() {
               {punches.map((time, idx) => (
                 <span
                   key={idx}
-                  className="inline-block px-2 py-1 bg-blue-600 text-white text-[10px] font-semibold rounded-full"
+                  className="inline-block px-2 py-1 bg-gray-900 text-white text-[10px] font-semibold rounded-full"
                 >
                   {time}
                 </span>
@@ -1087,7 +1087,6 @@ export function AttendanceReportsManagement() {
     <div className="space-y-6 w-full max-w-7xl mx-auto px-4">
       <div className="flex items-center justify-between w-full">
         <div className="min-w-0 flex-1">
-          <h1 className="text-2xl font-bold text-gray-900">Attendance Reports</h1>
           <p className="text-gray-600 mt-1 text-sm">
             Generate and view attendance logs by company, branch, department and date range.
           </p>
@@ -1203,7 +1202,7 @@ export function AttendanceReportsManagement() {
 
             <div className="col-span-2 flex items-end gap-3">
               <Button
-                className="bg-blue-600 hover:bg-blue-700"
+                className="bg-gray-900 hover:bg-gray-800"
                 onClick={generateReport}
                 disabled={loading}
               >
@@ -1297,16 +1296,16 @@ export function AttendanceReportsManagement() {
           <CardContent className="p-0">
             <div className="overflow-x-auto w-full border-t border-gray-200">
               <table className="min-w-full border-collapse text-xs">
-                <thead className="bg-blue-600 text-white">
+                <thead className="bg-gray-900 text-white">
                   <tr>
                     <th
-                      className="sticky z-30 bg-blue-600 px-3 py-2 text-center"
+                      className="sticky z-30 bg-gray-900 px-3 py-2 text-center"
                       style={{ left: 0, width: LEFT_WIDTHS.sno, minWidth: LEFT_WIDTHS.sno }}
                     >
                       S.NO
                     </th>
                     <th
-                      className="sticky z-30 bg-blue-600 px-3 py-2 text-left"
+                      className="sticky z-30 bg-gray-900 px-3 py-2 text-left"
                       style={{
                         left: LEFT_WIDTHS.sno,
                         width: LEFT_WIDTHS.company,
@@ -1316,7 +1315,7 @@ export function AttendanceReportsManagement() {
                       COMPANY
                     </th>
                     <th
-                      className="sticky z-30 bg-blue-600 px-3 py-2 text-left"
+                      className="sticky z-30 bg-gray-900 px-3 py-2 text-left"
                       style={{
                         left: LEFT_WIDTHS.sno + LEFT_WIDTHS.company,
                         width: LEFT_WIDTHS.branch,
@@ -1326,7 +1325,7 @@ export function AttendanceReportsManagement() {
                       BRANCH
                     </th>
                     <th
-                      className="sticky z-30 bg-blue-600 px-3 py-2 text-left"
+                      className="sticky z-30 bg-gray-900 px-3 py-2 text-left"
                       style={{
                         left: LEFT_WIDTHS.sno + LEFT_WIDTHS.company + LEFT_WIDTHS.branch,
                         width: LEFT_WIDTHS.dept,
@@ -1336,7 +1335,7 @@ export function AttendanceReportsManagement() {
                       DEPT
                     </th>
                     <th
-                      className="sticky z-30 bg-blue-600 px-3 py-2 text-left"
+                      className="sticky z-30 bg-gray-900 px-3 py-2 text-left"
                       style={{
                         left:
                           LEFT_WIDTHS.sno +

@@ -21,6 +21,38 @@ export class DepartmentsService {
     });
   }
 
+  /** Departments with active employee counts (primary departmentNameID on ManageEmployee). */
+  async findAllWithHeadcount() {
+    const depts = await this.prisma.departments.findMany({
+      select: {
+        id: true,
+        departmentName: true,
+        companyID: true,
+        branchesID: true,
+      },
+    });
+    const counts = await this.prisma.manageEmployee.groupBy({
+      by: ['departmentNameID'],
+      where: {
+        isDeleted: false,
+        departmentNameID: { not: null },
+      },
+      _count: { id: true },
+    });
+    const countMap = new Map(
+      counts
+        .filter((c) => c.departmentNameID != null)
+        .map((c) => [c.departmentNameID as number, c._count.id]),
+    );
+    return depts.map((d) => ({
+      id: d.id,
+      departmentName: d.departmentName ?? 'Unnamed',
+      companyID: d.companyID,
+      branchesID: d.branchesID,
+      employeeCount: countMap.get(d.id) ?? 0,
+    }));
+  }
+
   findOne(id: number) {
     return this.prisma.departments.findUnique({
       where: { id },

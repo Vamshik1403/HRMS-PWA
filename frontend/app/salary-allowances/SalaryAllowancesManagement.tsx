@@ -5,15 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card"
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "../components/ui/dialog";
+import { FormDrawer } from "../components/ui/form-drawer";
 import {
   Table,
   TableBody,
@@ -26,6 +18,7 @@ import { Badge } from "../components/ui/badge";
 import { Icon } from "@iconify/react";
 import { Plus, Search, Edit, Trash2 } from "lucide-react";
 import { useCurrentUser } from "../hooks/useCurrentUser";
+import { toast } from "sonner";
 
 
 interface SalaryAllowance {
@@ -95,6 +88,7 @@ useEffect(() => {
       setCurrentUserMapping(me || null);
     } catch (err) {
       console.error("Failed to load manager mapping", err);
+      toast.error("Failed to load data.");
     }
   })();
 }, [user]);
@@ -200,6 +194,7 @@ const resolvedCompanyID =
       }
     } catch (e) {
       console.error("Failed to load allowances", e);
+      toast.error("Failed to load data.");
       setAllowances([]);
     }
   };
@@ -266,6 +261,7 @@ const resolvedCompanyID =
       setSpList(filtered.slice(0, 50));
     } catch (e) {
       console.error("SP fetch error", e);
+      toast.error("Failed to load data.");
       setSpList([]);
     } finally {
       setSpLoading(false);
@@ -293,6 +289,7 @@ const resolvedCompanyID =
     setCoList(filtered.slice(0, 50));
   } catch (e) {
     console.error("CO fetch error", e);
+    toast.error("Failed to load data.");
     setCoList([]);
   } finally {
     setCoLoading(false);
@@ -322,6 +319,7 @@ const resolvedCompanyID =
     setBrList(filtered.slice(0, 50));
   } catch (e) {
     console.error("BR fetch error:", e);
+    toast.error("Failed to load data.");
     setBrList([]);
   } finally {
     setBrLoading(false);
@@ -356,8 +354,10 @@ const resolvedCompanyID =
       }
       resetForm();
       setIsDialogOpen(false);
+      toast.success(editing ? "Updated successfully" : "Created successfully");
     } catch (e) {
       console.error("Save failed", e);
+      toast.error("Failed to save. Please try again.");
     }
   };
 
@@ -385,8 +385,10 @@ const resolvedCompanyID =
     try {
       await fetch(`${API.allowance}/${id}`, { method: "DELETE" });
       setAllowances((prev) => prev.filter((a) => a.id !== id));
+      toast.success("Allowance deleted successfully");
     } catch (e) {
       console.error("Delete failed", e);
+      toast.error("Failed to delete. Please try again.");
     }
   };
 
@@ -431,30 +433,18 @@ const resolvedCompanyID =
           <h1 className="text-2xl font-bold text-gray-900">Salary Allowances</h1>
           <p className="text-gray-600 mt-1 text-sm">Manage salary allowances and benefits</p>
         </div>
-        <Dialog open={isDialogOpen} onOpenChange={(o) => { setIsDialogOpen(o); if (!o) resetForm(); }}>
-          <DialogTrigger asChild>
-            {canManage && (
+        {canManage && (
               <Button
-                onClick={resetForm}
+                onClick={() => { resetForm(); setIsDialogOpen(true); }}
                 className="bg-blue-600 hover:bg-blue-700 flex-shrink-0 text-sm px-3 py-2"
               >
                 <Plus className="w-4 h-4 mr-1" />
                 Add Salary Allowance
               </Button>
             )}
+      </div>
 
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>
-                {editingAllowance ? "Edit Salary Allowance" : "Add New Salary Allowance"}
-              </DialogTitle>
-              <DialogDescription>
-                {editingAllowance
-                  ? "Update the salary allowance information below."
-                  : "Fill in the details to add a new salary allowance."}
-              </DialogDescription>
-            </DialogHeader>
+      <FormDrawer open={isDialogOpen} onOpenChange={(o) => { setIsDialogOpen(o); if (!o) resetForm(); }} title={editingAllowance ? "Edit Salary Allowance" : "Add New Salary Allowance"} description={editingAllowance ? "Update the salary allowance information below." : "Fill in the details to add a new salary allowance."}>
 
             <form onSubmit={handleSubmit} className="space-y-6">
               
@@ -708,18 +698,16 @@ const resolvedCompanyID =
   </div>
 </div>
 
-<DialogFooter>
+<div className="flex justify-end gap-3 pt-4">
   <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
     Cancel
   </Button>
   <Button type="submit" className="bg-blue-600 hover:bg-blue-700">
     {editingAllowance ? "Update Salary Allowance" : "Add Salary Allowance"}
   </Button>
-</DialogFooter>
+</div>
             </form>
-          </DialogContent>
-        </Dialog>
-      </div>
+      </FormDrawer>
 
       {/* Search and Filters */}
       <Card>

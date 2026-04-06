@@ -457,7 +457,6 @@ const runFetchBR = debounce(async (val: string) => {
       {/* Header */}
       <div className="flex items-center justify-between w-full">
         <div className="min-w-0 flex-1">
-          <h1 className="text-2xl font-bold text-gray-900">Bonus Setup</h1>
           <p className="text-gray-600 mt-1 text-sm">Manage bonus configurations and calculations</p>
         </div>
         <Dialog open={isDialogOpen} onOpenChange={(o) => { setIsDialogOpen(o); if (!o) resetForm(); }}>
@@ -465,7 +464,7 @@ const runFetchBR = debounce(async (val: string) => {
             {canManage && (
               <Button
                 onClick={resetForm}
-                className="bg-blue-600 hover:bg-blue-700 flex-shrink-0 text-sm px-3 py-2"
+                className="bg-gray-900 hover:bg-gray-800 flex-shrink-0 text-sm px-3 py-2"
               >
                 <Plus className="w-4 h-4 mr-1" />
                 Add Bonus Setup
@@ -773,7 +772,7 @@ const runFetchBR = debounce(async (val: string) => {
                 <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
                   Cancel
                 </Button>
-                <Button type="submit" className="bg-blue-600 hover:bg-blue-700">
+                <Button type="submit" className="bg-gray-900 hover:bg-gray-800">
                   {editingBonus ? "Update Bonus Setup" : "Add Bonus Setup"}
                 </Button>
               </DialogFooter>

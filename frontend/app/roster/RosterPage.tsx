@@ -964,7 +964,6 @@ export function RosterManagement() {
       {/* HEADER */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Employee Roster</h1>
           <p className="text-sm text-gray-600 mt-1">
             {isManager ? (
               `👨‍💼 Manager: ${user?.username || "Unknown"} - Role: ${userRole}`
@@ -1173,7 +1172,7 @@ export function RosterManagement() {
 
             <div className="space-y-2">
               <Button
-                className="w-full h-10 bg-blue-600 hover:bg-blue-700"
+                className="w-full h-10 bg-gray-900 hover:bg-gray-800"
                 onClick={fetchEmployees}
                 disabled={!canLoadEmployees || isLoading.employees}
               >
@@ -1576,7 +1575,7 @@ export function RosterManagement() {
               <div className="space-y-2">
                 <Label className="text-sm font-medium opacity-0">Apply</Label>
                 <Button
-                  className="w-full h-10 bg-blue-600 hover:bg-blue-700"
+                  className="w-full h-10 bg-gray-900 hover:bg-gray-800"
                   onClick={handleBulkApply}
                   disabled={isLoading.bulk || selectedEmpIds.size === 0}
                 >

@@ -727,7 +727,7 @@ if (employee) await loadReimbursements(employee.employeeID)
         </div>
         <Button 
           onClick={() => { resetForm(); setIsDialogOpen(true); }} 
-          className="bg-blue-600 hover:bg-blue-700 px-6 py-2 rounded-lg shadow-sm"
+          className="bg-gray-900 hover:bg-gray-800 px-6 py-2 rounded-lg shadow-sm"
         >
           <Plus className="w-4 h-4 mr-2" />
           Create Reimbursement
@@ -1018,7 +1018,7 @@ if (employee) await loadReimbursements(employee.employeeID)
               <Button 
                 type="submit" 
                 onClick={handleSubmit}
-                className="flex-1 bg-blue-600 hover:bg-blue-700 rounded-lg"
+                className="flex-1 bg-gray-900 hover:bg-gray-800 rounded-lg"
               >
                 {editing ? "Update Reimbursement" : "Create Reimbursement"}
               </Button>

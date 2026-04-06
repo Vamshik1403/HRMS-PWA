@@ -5,15 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card"
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "../components/ui/dialog";
+import { FormDrawer } from "../components/ui/form-drawer";
 import {
   Table,
   TableBody,
@@ -26,6 +18,7 @@ import { Badge } from "../components/ui/badge";
 import { Icon } from "@iconify/react";
 import { Plus, Search, Edit, Trash2 } from "lucide-react";
 import { useCurrentUser } from "../hooks/useCurrentUser";
+import { toast } from "sonner";
 
 
 interface MonthlySalaryCycle {
@@ -96,6 +89,7 @@ export function MonthlySalaryCycleManagement() {
         setCurrentUserMapping(me || null);
       } catch (e) {
         console.error("Failed to load manager mapping", e);
+        toast.error("Failed to load data.");
       }
     })();
   }, [user]);
@@ -198,6 +192,7 @@ const resolvedCompanyID =
       }
     } catch (e) {
       console.error("Failed to load salary cycles", e);
+      toast.error("Failed to load data.");
       setCycles([]);
     }
   };
@@ -244,6 +239,7 @@ const resolvedCompanyID =
       setSpList(filtered.slice(0, 50));
     } catch (e) {
       console.error("SP fetch error", e);
+      toast.error("Failed to load data.");
       setSpList([]);
     } finally {
       setSpLoading(false);
@@ -272,6 +268,7 @@ const runFetchCO = debounce(async (val: string) => {
     setCoList(filtered.slice(0, 50));
   } catch (e) {
     console.error("CO fetch error", e);
+    toast.error("Failed to load data.");
     setCoList([]);
   } finally {
     setCoLoading(false);
@@ -301,6 +298,7 @@ const runFetchBR = debounce(async (val: string) => {
     setBrList(filtered.slice(0, 50));
   } catch (e) {
     console.error("BR fetch error:", e);
+    toast.error("Failed to load data.");
     setBrList([]);
   } finally {
     setBrLoading(false);
@@ -342,8 +340,10 @@ const runFetchBR = debounce(async (val: string) => {
       }
       resetForm();
       setIsDialogOpen(false);
+      toast.success(editing ? "Updated successfully" : "Created successfully");
     } catch (e) {
       console.error("Save failed", e);
+      toast.error("Failed to save. Please try again.");
     }
   };
 
@@ -368,8 +368,10 @@ const runFetchBR = debounce(async (val: string) => {
     try {
       await fetch(`${API.salaryCycle}/${id}`, { method: "DELETE" });
       setCycles(prev => prev.filter(c => c.id !== id));
+      toast.success("Salary cycle deleted successfully");
     } catch (e) {
       console.error("Delete failed", e);
+      toast.error("Failed to delete. Please try again.");
     }
   };
 
@@ -411,30 +413,18 @@ const runFetchBR = debounce(async (val: string) => {
           <h1 className="text-2xl font-bold text-gray-900">Monthly Salary Cycle</h1>
           <p className="text-gray-600 mt-1 text-sm">Manage monthly salary cycle configurations</p>
         </div>
-        <Dialog open={isDialogOpen} onOpenChange={(o) => { setIsDialogOpen(o); if (!o) resetForm(); }}>
-          <DialogTrigger asChild>
-            {canManage && (
+        {canManage && (
               <Button
-                onClick={resetForm}
+                onClick={() => { resetForm(); setIsDialogOpen(true); }}
                 className="bg-blue-600 hover:bg-blue-700 flex-shrink-0 text-sm px-3 py-2"
               >
                 <Plus className="w-4 h-4 mr-1" />
                 Add Salary Cycle
               </Button>
             )}
+      </div>
 
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>
-                {editingCycle ? "Edit Monthly Salary Cycle" : "Add New Monthly Salary Cycle"}
-              </DialogTitle>
-              <DialogDescription>
-                {editingCycle
-                  ? "Update the monthly salary cycle information below."
-                  : "Fill in the details to add a new monthly salary cycle."}
-              </DialogDescription>
-            </DialogHeader>
+      <FormDrawer open={isDialogOpen} onOpenChange={(o) => { setIsDialogOpen(o); if (!o) resetForm(); }} title={editingCycle ? "Edit Monthly Salary Cycle" : "Add New Monthly Salary Cycle"} description={editingCycle ? "Update the monthly salary cycle information below." : "Fill in the details to add a new monthly salary cycle."}>
 
             <form onSubmit={handleSubmit} className="space-y-6">
               {/* Basic Information */}
@@ -618,18 +608,16 @@ const runFetchBR = debounce(async (val: string) => {
                 </div>
               </div>
 
-              <DialogFooter>
+              <div className="flex justify-end gap-3 pt-4">
                 <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
                   Cancel
                 </Button>
                 <Button type="submit" className="bg-blue-600 hover:bg-blue-700">
                   {editingCycle ? "Update Salary Cycle" : "Add Salary Cycle"}
                 </Button>
-              </DialogFooter>
+              </div>
             </form>
-          </DialogContent>
-        </Dialog>
-      </div>
+      </FormDrawer>
 
       {/* Search and Filters */}
       <Card>

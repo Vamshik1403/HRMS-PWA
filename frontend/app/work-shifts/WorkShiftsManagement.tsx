@@ -10,15 +10,7 @@ import {
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "../components/ui/dialog";
+import { FormDrawer } from "../components/ui/form-drawer";
 import {
   Table,
   TableBody,
@@ -32,6 +24,7 @@ import { Icon } from "@iconify/react";
 import { Plus, Search, Edit, Trash2 } from "lucide-react";
 import { SearchSuggestInput } from "../components/SearchSuggestInput";
 import { useCurrentUser } from "../hooks/useCurrentUser";
+import { toast } from "sonner";
 
 interface DaySchedule {
   day: string;
@@ -168,6 +161,7 @@ export function WorkShiftsManagement() {
         : [];
     } catch (error) {
       console.error("Error fetching service providers:", error);
+      toast.error("Failed to load data.");
       return [];
     }
   };
@@ -194,6 +188,7 @@ export function WorkShiftsManagement() {
         : [];
     } catch (error) {
       console.error("Error fetching companies:", error);
+      toast.error("Failed to load data.");
       return [];
     }
   };
@@ -221,6 +216,7 @@ export function WorkShiftsManagement() {
         : [];
     } catch (error) {
       console.error("Error fetching branches:", error);
+      toast.error("Failed to load data.");
       return [];
     }
   };
@@ -305,6 +301,7 @@ export function WorkShiftsManagement() {
       }
     } catch (error) {
       console.error("Error loading work shifts:", error);
+      toast.error("Failed to load data.");
       setWorkShifts([]);
     }
   };
@@ -458,8 +455,10 @@ export function WorkShiftsManagement() {
       await loadWorkShifts();
       resetForm();
       setIsDialogOpen(false);
+      toast.success(editingWorkShift ? "Updated successfully" : "Created successfully");
     } catch (error) {
       console.error("Error saving work shift:", error);
+      toast.error("Failed to save. Please try again.");
     }
   };
 
@@ -556,8 +555,10 @@ export function WorkShiftsManagement() {
         throw new Error(`Failed to delete work shift: ${res.status}`);
       }
       await loadWorkShifts();
+      toast.success("Deleted successfully");
     } catch (error) {
       console.error("Error deleting work shift:", error);
+      toast.error("Failed to delete. Please try again.");
     }
   };
 
@@ -566,34 +567,29 @@ export function WorkShiftsManagement() {
       {/* Header */}
       <div className="flex items-center justify-between w-full">
         <div className="min-w-0 flex-1">
-          <h1 className="text-2xl font-bold text-gray-900">Work Shifts</h1>
           <p className="text-gray-600 mt-1 text-sm">
             Manage work shifts and schedules
           </p>
         </div>
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogTrigger asChild>
-            {canManage && (
+        {canManage && (
               <Button
-                onClick={resetForm}
-                className="bg-blue-600 hover:bg-blue-700 flex-shrink-0 text-sm px-3 py-2"
+                onClick={() => { resetForm(); setIsDialogOpen(true); }}
+                className="bg-gray-900 hover:bg-gray-800 flex-shrink-0 text-sm px-3 py-2"
               >
                 <Plus className="w-4 h-4 mr-1" />
                 Add Work Shift
               </Button>
             )}
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-[800px] max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>
-                {editingWorkShift ? "Edit Work Shift" : "Add New Work Shift"}
-              </DialogTitle>
-              <DialogDescription>
-                {editingWorkShift
+      </div>
+
+      <FormDrawer
+        open={isDialogOpen}
+        onOpenChange={setIsDialogOpen}
+        title={editingWorkShift ? "Edit Work Shift" : "Add New Work Shift"}
+        description={editingWorkShift
                   ? "Update the work shift information below."
                   : "Fill in the details to add a new work shift."}
-              </DialogDescription>
-            </DialogHeader>
+      >
             <form
               onSubmit={(e) => {
                 e.preventDefault();
@@ -862,7 +858,7 @@ export function WorkShiftsManagement() {
                 </div>
               </div>
 
-              <DialogFooter>
+              <div className="flex justify-end gap-3 pt-4">
                 <Button
                   type="button"
                   variant="outline"
@@ -870,14 +866,12 @@ export function WorkShiftsManagement() {
                 >
                   Cancel
                 </Button>
-                <Button type="submit" className="bg-blue-600 hover:bg-blue-700">
+                <Button type="submit" className="bg-gray-900 hover:bg-gray-800">
                   {editingWorkShift ? "Update Work Shift" : "Add Work Shift"}
                 </Button>
-              </DialogFooter>
+              </div>
             </form>
-          </DialogContent>
-        </Dialog>
-      </div>
+      </FormDrawer>
 
       {/* Search and Filters */}
       <Card>

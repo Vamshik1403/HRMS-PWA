@@ -5,14 +5,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card"
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
-import {
-  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger,
-} from "../components/ui/dialog";
+import { FormDrawer } from "../components/ui/form-drawer";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../components/ui/table";
 import { Badge } from "../components/ui/badge";
 import { Icon } from "@iconify/react";
 import { Plus, Search, Edit, Trash2 } from "lucide-react";
 import { useCurrentUser } from "../hooks/useCurrentUser";
+import { toast } from "sonner";
 
 
 /* ---------- Types ---------- */
@@ -155,6 +154,7 @@ export function MonthlyPayGradeManagement() {
         setCurrentUserMapping(me || null);
       } catch (e) {
         console.error("Mapping fetch failed", e);
+        toast.error("Failed to load data.");
       }
     })();
   }, [user]);
@@ -250,6 +250,7 @@ useEffect(() => {
       }
     } catch (e) {
       console.error("Monthly pay grade fetch failed", e);
+      toast.error("Failed to load data.");
       setPayGrades([]);
     }
   })();
@@ -414,6 +415,7 @@ const resolvedBranchID =
       );
     } catch (e) {
       console.error("Modal allowance/deduction fetch failed", e);
+      toast.error("Failed to load data.");
     }
   })();
 }, [isDialogOpen, resolvedCompanyID, resolvedBranchID]);
@@ -519,6 +521,7 @@ miniOTTime: x.miniOTTime ?? 0,
       setSpList(filtered.slice(0, 50));
     } catch (e) {
       console.error("SP fetch error", e);
+      toast.error("Failed to load data.");
       setSpList([]);
     } finally {
       setSpLoading(false);
@@ -549,6 +552,7 @@ miniOTTime: x.miniOTTime ?? 0,
     setCoList(filtered.slice(0, 50));
   } catch (e) {
     console.error("CO fetch error", e);
+    toast.error("Failed to load data.");
     setCoList([]);
   } finally {
     setCoLoading(false);
@@ -578,6 +582,7 @@ miniOTTime: x.miniOTTime ?? 0,
     setBrList(filtered.slice(0, 50));
   } catch (e) {
     console.error("BR fetch error:", e);
+    toast.error("Failed to load data.");
     setBrList([]);
   } finally {
     setBrLoading(false);
@@ -593,7 +598,7 @@ miniOTTime: x.miniOTTime ?? 0,
 
     const mismatch = Math.abs(formData.grossSalary - expectedGrossFromBasicPlusAllowances) > EPS;
     if (mismatch) {
-      alert(
+      toast.error(
         `Gross Salary must equal Basic + Selected Allowances.\n\n` +
         `Gross Salary: ₹${formData.grossSalary.toFixed(2)}\n` +
         `Basic + Allowances: ₹${expectedGrossFromBasicPlusAllowances.toFixed(2)}`
@@ -602,7 +607,7 @@ miniOTTime: x.miniOTTime ?? 0,
     }
 
     if (deductionTotal <= 0) {
-      alert(`Total deductions must be greater than 0.`);
+      toast.error(`Total deductions must be greater than 0.`);
       return;
     }
 
@@ -628,8 +633,10 @@ miniOTTime: x.miniOTTime ?? 0,
       }
       resetForm();
       setIsDialogOpen(false);
+      toast.success(editing ? "Updated successfully" : "Created successfully");
     } catch (e) {
       console.error("Save failed", e);
+      toast.error("Failed to save. Please try again.");
     }
   };
 
@@ -660,8 +667,10 @@ miniOTTime: x.miniOTTime ?? 0,
     try {
       await fetch(`${API.mpg}/${id}`, { method: "DELETE" });
       setPayGrades((prev) => prev.filter((p) => p.id !== id));
+      toast.success("Pay grade deleted successfully");
     } catch (e) {
       console.error("Delete failed", e);
+      toast.error("Failed to delete. Please try again.");
     }
   };
 
@@ -732,28 +741,18 @@ miniOTTime: x.miniOTTime ?? 0,
           <h1 className="text-2xl font-bold text-gray-900">Monthly Pay Grade</h1>
           <p className="text-gray-600 mt-1 text-sm">Manage monthly pay grades and salary structures</p>
         </div>
-        <Dialog open={isDialogOpen} onOpenChange={(o) => { setIsDialogOpen(o); if (!o) resetForm(); }}>
-          <DialogTrigger asChild>
-            {canManage && (
+        {canManage && (
               <Button
-                onClick={resetForm}
+                onClick={() => { resetForm(); setIsDialogOpen(true); }}
                 className="bg-blue-600 hover:bg-blue-700 flex-shrink-0 text-sm px-3 py-2"
               >
                 <Plus className="w-4 h-4 mr-1" />
                 Add Monthly Pay Grade
               </Button>
             )}
+      </div>
 
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-[900px] max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>{editingPayGrade ? "Edit Monthly Pay Grade" : "Add New Monthly Pay Grade"}</DialogTitle>
-              <DialogDescription>
-                {editingPayGrade
-                  ? "Update the monthly pay grade information below."
-                  : "Fill in the details to add a new monthly pay grade."}
-              </DialogDescription>
-            </DialogHeader>
+      <FormDrawer open={isDialogOpen} onOpenChange={(o) => { setIsDialogOpen(o); if (!o) resetForm(); }} title={editingPayGrade ? "Edit Monthly Pay Grade" : "Add New Monthly Pay Grade"} description={editingPayGrade ? "Update the monthly pay grade information below." : "Fill in the details to add a new monthly pay grade."}>
 
             <form onSubmit={handleSubmit} className="space-y-6">
               {/* Basic Information with AUTOCOMPLETE */}
@@ -1283,18 +1282,16 @@ miniOTTime: x.miniOTTime ?? 0,
                 </div>
               </div>
 
-              <DialogFooter>
+              <div className="flex justify-end gap-3 pt-4">
                 <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
                   Cancel
                 </Button>
                 <Button type="submit" className="bg-blue-600 hover:bg-blue-700">
                   {editingPayGrade ? "Update Monthly Pay Grade" : "Add Monthly Pay Grade"}
                 </Button>
-              </DialogFooter>
+              </div>
             </form>
-          </DialogContent>
-        </Dialog>
-      </div>
+      </FormDrawer>
 
       {/* Search */}
       <Card>

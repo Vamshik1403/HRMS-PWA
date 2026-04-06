@@ -592,13 +592,12 @@ export function PublicHolidayManagement() {
       {/* Header */}
       <div className="flex items-center justify-between w-full">
         <div className="min-w-0 flex-1">
-          <h1 className="text-2xl font-bold text-gray-900">Public Holiday</h1>
           <p className="text-gray-600 mt-1 text-sm">Manage public holidays for companies and branches</p>
         </div>
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           {canManage && (
             <DialogTrigger asChild>
-              <Button onClick={resetForm} className="bg-blue-600 hover:bg-blue-700">
+              <Button onClick={resetForm} className="bg-gray-900 hover:bg-gray-800">
                 <Plus className="w-4 h-4 mr-2" />
                 Add Public Holiday
               </Button>
@@ -745,7 +744,7 @@ export function PublicHolidayManagement() {
                 >
                   Cancel
                 </Button>
-                <Button type="submit" className="bg-blue-600 hover:bg-blue-700">
+                <Button type="submit" className="bg-gray-900 hover:bg-gray-800">
                   {editingHoliday?"Update":"Add"} Public Holiday
                 </Button>
               </DialogFooter>

@@ -1182,7 +1182,6 @@ return (
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-gray-900">Reimbursement Management</h1>
           <p className="text-gray-600 mt-2">Manage employee reimbursements and approvals efficiently</p>
         </div>
         <Button 
@@ -1225,7 +1224,7 @@ onClick={async () => {
 
   setIsDialogOpen(true);
 }}
-          className="bg-blue-600 hover:bg-blue-700 px-6 py-2 rounded-lg shadow-sm"
+          className="bg-gray-900 hover:bg-gray-800 px-6 py-2 rounded-lg shadow-sm"
         >
           <Plus className="w-4 h-4 mr-2" />
           Create Reimbursement
@@ -1655,7 +1654,7 @@ fetchData={(q) => fetchBranches(q)}
               <Button 
                 type="submit" 
                 onClick={handleSubmit}
-                className="flex-1 bg-blue-600 hover:bg-blue-700 rounded-lg"
+                className="flex-1 bg-gray-900 hover:bg-gray-800 rounded-lg"
               >
                 {editing ? "Update Reimbursement" : "Create Reimbursement"}
               </Button>
@@ -1707,7 +1706,7 @@ fetchData={(q) => fetchBranches(q)}
                       <Button
                         type="button"
                         variant={approvalType === "Salary" ? "default" : "outline"}
-                        className={`flex-1 py-3 rounded-lg ${approvalType === "Salary" ? "bg-blue-600 hover:bg-blue-700" : "border-gray-300 hover:bg-gray-50"}`}
+                        className={`flex-1 py-3 rounded-lg ${approvalType === "Salary" ? "bg-gray-900 hover:bg-gray-800" : "border-gray-300 hover:bg-gray-50"}`}
                         onClick={() => setApprovalType("Salary")}
                       >
                         Salary
@@ -1715,7 +1714,7 @@ fetchData={(q) => fetchBranches(q)}
                       <Button
                         type="button"
                         variant={approvalType === "Voucher" ? "default" : "outline"}
-                        className={`flex-1 py-3 rounded-lg ${approvalType === "Voucher" ? "bg-blue-600 hover:bg-blue-700" : "border-gray-300 hover:bg-gray-50"}`}
+                        className={`flex-1 py-3 rounded-lg ${approvalType === "Voucher" ? "bg-gray-900 hover:bg-gray-800" : "border-gray-300 hover:bg-gray-50"}`}
                         onClick={() => setApprovalType("Voucher")}
                       >
                         Voucher
@@ -1912,7 +1911,7 @@ fetchData={(q) => fetchBranches(q)}
                       <Button
                         type="button"
                         variant={paymentMode === "Cash" ? "default" : "outline"}
-                        className={`flex-1 py-3 rounded-lg ${paymentMode === "Cash" ? "bg-blue-600 hover:bg-blue-700" : "border-gray-300 hover:bg-gray-50"}`}
+                        className={`flex-1 py-3 rounded-lg ${paymentMode === "Cash" ? "bg-gray-900 hover:bg-gray-800" : "border-gray-300 hover:bg-gray-50"}`}
                         onClick={() => {
                           setPaymentMode("Cash")
                           setPaymentType("Cash")
@@ -1923,7 +1922,7 @@ fetchData={(q) => fetchBranches(q)}
                       <Button
                         type="button"
                         variant={paymentMode === "Bank" ? "default" : "outline"}
-                        className={`flex-1 py-3 rounded-lg ${paymentMode === "Bank" ? "bg-blue-600 hover:bg-blue-700" : "border-gray-300 hover:bg-gray-50"}`}
+                        className={`flex-1 py-3 rounded-lg ${paymentMode === "Bank" ? "bg-gray-900 hover:bg-gray-800" : "border-gray-300 hover:bg-gray-50"}`}
                         onClick={() => setPaymentMode("Bank")}
                       >
                         Bank
@@ -1939,7 +1938,7 @@ fetchData={(q) => fetchBranches(q)}
                         <Button
                           type="button"
                           variant={paymentType === "Cheque" ? "default" : "outline"}
-                          className={`py-3 rounded-lg ${paymentType === "Cheque" ? "bg-blue-600 hover:bg-blue-700" : "border-gray-300 hover:bg-gray-50"}`}
+                          className={`py-3 rounded-lg ${paymentType === "Cheque" ? "bg-gray-900 hover:bg-gray-800" : "border-gray-300 hover:bg-gray-50"}`}
                           onClick={() => setPaymentType("Cheque")}
                         >
                           Cheque
@@ -1947,7 +1946,7 @@ fetchData={(q) => fetchBranches(q)}
                         <Button
                           type="button"
                           variant={paymentType === "UPI" ? "default" : "outline"}
-                          className={`py-3 rounded-lg ${paymentType === "UPI" ? "bg-blue-600 hover:bg-blue-700" : "border-gray-300 hover:bg-gray-50"}`}
+                          className={`py-3 rounded-lg ${paymentType === "UPI" ? "bg-gray-900 hover:bg-gray-800" : "border-gray-300 hover:bg-gray-50"}`}
                           onClick={() => setPaymentType("UPI")}
                         >
                           UPI
@@ -1955,7 +1954,7 @@ fetchData={(q) => fetchBranches(q)}
                         <Button
                           type="button"
                           variant={paymentType === "Bank Transfer" ? "default" : "outline"}
-                          className={`py-3 rounded-lg ${paymentType === "Bank Transfer" ? "bg-blue-600 hover:bg-blue-700" : "border-gray-300 hover:bg-gray-50"}`}
+                          className={`py-3 rounded-lg ${paymentType === "Bank Transfer" ? "bg-gray-900 hover:bg-gray-800" : "border-gray-300 hover:bg-gray-50"}`}
                           onClick={() => setPaymentType("Bank Transfer")}
                         >
                           Bank Transfer

@@ -1939,14 +1939,13 @@ useEffect(() => {
         {/* Header */}
         <div className="flex items-center justify-between w-full">
           <div className="min-w-0 flex-1">
-            <h1 className="text-2xl font-bold text-gray-900">Generate Salary</h1>
             <p className="text-gray-600 mt-1 text-sm">Generate and manage employee salary payments</p>
           </div>
 
           <Dialog open={isDialogOpen} onOpenChange={(o) => { setIsDialogOpen(o); if (!o) resetForm(); }}>
             {canManage && (
   <DialogTrigger asChild>
-    <Button onClick={resetForm} className="bg-blue-600 hover:bg-blue-700 flex-shrink-0 text-sm px-3 py-2">
+    <Button onClick={resetForm} className="bg-gray-900 hover:bg-gray-800 flex-shrink-0 text-sm px-3 py-2">
       <Plus className="w-4 h-4 mr-1" />
       Add Salary Generation
     </Button>
@@ -2167,7 +2166,7 @@ useEffect(() => {
                   <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
                     Cancel
                   </Button>
-                  <Button type="submit" className="bg-blue-600 hover:bg-blue-700">
+                  <Button type="submit" className="bg-gray-900 hover:bg-gray-800">
                     {editing ? "Update Salary Generation" : "Add Salary Generation"}
                   </Button>
                 </DialogFooter>

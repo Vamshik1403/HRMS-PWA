@@ -5,15 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card"
 import { Button } from "../components/ui/button"
 import { Input } from "../components/ui/input"
 import { Label } from "../components/ui/label"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "../components/ui/dialog"
+import { FormDrawer } from "../components/ui/form-drawer";
 import {
   Table,
   TableBody,
@@ -25,6 +17,7 @@ import {
 import { Badge } from "../components/ui/badge"
 import { Icon } from "@iconify/react"
 import { Plus, Search, Edit, Trash2, Download, FileText } from "lucide-react"
+import { toast } from "sonner";
 
 interface LeaveReport {
   id: string
@@ -196,25 +189,13 @@ export function LeaveReportsManagement() {
           <p className="text-gray-600 mt-1 text-sm">Generate and manage comprehensive leave reports</p>
         </div>
         <div className="flex items-center gap-3">
-          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-            <DialogTrigger asChild>
-              <Button onClick={resetForm} className="bg-blue-600 hover:bg-blue-700 flex-shrink-0 text-sm px-3 py-2">
+          <Button onClick={() => { resetForm(); setIsDialogOpen(true); }} className="bg-blue-600 hover:bg-blue-700 flex-shrink-0 text-sm px-3 py-2">
                 <Plus className="w-4 h-4 mr-1" />
                 Generate Report
               </Button>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
-              <DialogHeader>
-                <DialogTitle>
-                  {editingReport ? "Edit Leave Report" : "Generate Leave Report"}
-                </DialogTitle>
-                <DialogDescription>
-                  {editingReport 
-                    ? "Update the leave report configuration below." 
-                    : "Configure the parameters to generate a new leave report."
-                  }
-                </DialogDescription>
-              </DialogHeader>
+      </div>
+
+      <FormDrawer open={isDialogOpen} onOpenChange={setIsDialogOpen} title={editingReport ? "Edit Leave Report" : "Generate Leave Report"} description={editingReport ? "Update the leave report configuration below." : "Configure the parameters to generate a new leave report."}>
               <form onSubmit={handleSubmit} className="space-y-6">
                 {/* Organization Selection */}
                 <div className="space-y-4">
@@ -315,18 +296,16 @@ export function LeaveReportsManagement() {
                   )}
                 </div>
 
-                <DialogFooter>
+                <div className="flex justify-end gap-3 pt-4">
                   <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
                     Cancel
                   </Button>
                   <Button type="submit" className="bg-blue-600 hover:bg-blue-700">
                     {editingReport ? "Update Report" : "Generate Report"}
                   </Button>
-                </DialogFooter>
+                </div>
               </form>
-            </DialogContent>
-          </Dialog>
-        </div>
+      </FormDrawer>
       </div>
 
       {/* Search and Filters */}

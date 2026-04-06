@@ -6,15 +6,7 @@ import { Button } from "../components/ui/button"
 import { Input } from "../components/ui/input"
 import { Label } from "../components/ui/label"
 import { Textarea } from "../components/ui/textarea"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "../components/ui/dialog"
+import { FormDrawer } from "../components/ui/form-drawer"
 import {
   Table,
   TableBody,
@@ -174,32 +166,26 @@ const handleSubmit = async (e: React.FormEvent) => {
       {/* Header */}
       <div className="flex items-center justify-between w-full">
         <div className="min-w-0 flex-1">
-          <h1 className="text-2xl font-bold text-gray-900">Service Providers</h1>
-          <p className="text-gray-600 mt-1 text-sm">Manage your service provider relationships</p>
+          <p className="text-gray-600 text-sm">Manage your service provider relationships</p>
         </div>
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogTrigger asChild>
-            <Button
-              onClick={resetForm}
-              className="bg-blue-600 hover:bg-blue-700 flex-shrink-0 text-sm px-3 py-2"
+        <Button
+              onClick={() => { resetForm(); setIsDialogOpen(true); }}
+              className="flex-shrink-0 text-sm px-3 py-2"
             >
               <Plus className="w-4 h-4 mr-1" />
               Add Service Provider
             </Button>
-          </DialogTrigger>
-          <DialogContent   onOpenAutoFocus={(e) => e.preventDefault()}
- className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
-            
-            <DialogHeader>
-              <DialogTitle>
-                {editingProvider ? "Edit Service Provider" : "Add New Service Provider"}
-              </DialogTitle>
-              <DialogDescription>
-                {editingProvider
+      </div>
+
+      {/* Add/Edit Drawer */}
+      <FormDrawer
+        open={isDialogOpen}
+        onOpenChange={setIsDialogOpen}
+        title={editingProvider ? "Edit Service Provider" : "Add New Service Provider"}
+        description={editingProvider
                   ? "Update the service provider information below."
                   : "Fill in the details to add a new service provider."}
-              </DialogDescription>
-            </DialogHeader>
+      >
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="companyName">Company Name *</Label>
@@ -279,26 +265,24 @@ const handleSubmit = async (e: React.FormEvent) => {
                   onChange={(e) => setFormData((prev) => ({ ...prev, website: e.target.value }))}
                 />
               </div>
-              <DialogFooter>
+              <div className="flex justify-end gap-3 pt-4">
                 <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
                   Cancel
                 </Button>
-                <Button type="submit" className="bg-blue-600 hover:bg-blue-700">
+                <Button type="submit">
                   {editingProvider ? "Update Provider" : "Add Provider"}
                 </Button>
-              </DialogFooter>
+              </div>
             </form>
-          </DialogContent>
-        </Dialog>
-      </div>
+      </FormDrawer>
 
-      {/* View Dialog */}
-      <Dialog open={isViewDialogOpen} onOpenChange={setIsViewDialogOpen}>
-        <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Service Provider Details</DialogTitle>
-            <DialogDescription>All information is read-only.</DialogDescription>
-          </DialogHeader>
+      {/* View Drawer */}
+      <FormDrawer
+        open={isViewDialogOpen}
+        onOpenChange={setIsViewDialogOpen}
+        title="Service Provider Details"
+        description="All information is read-only."
+      >
           {viewProvider && (
             <div className="space-y-3">
               <p><strong>Company:</strong> {viewProvider.companyName}</p>
@@ -310,11 +294,10 @@ const handleSubmit = async (e: React.FormEvent) => {
               <p><strong>Email:</strong> {viewProvider.emailAdd}</p>
             </div>
           )}
-          <DialogFooter>
+          <div className="flex justify-end pt-4">
             <Button onClick={() => setIsViewDialogOpen(false)} variant="outline">Close</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </div>
+      </FormDrawer>
 
       {/* Search */}
       <Card>

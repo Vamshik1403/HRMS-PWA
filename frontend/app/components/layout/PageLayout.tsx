@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import {
   SidebarProvider,
   Sidebar,
@@ -28,21 +28,48 @@ import {
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useCurrentUser } from "../../hooks/useCurrentUser";
+import { Input } from "../ui/input";
+import { cn } from "@/app/utils/cn";
 
 interface PageLayoutProps {
   children: React.ReactNode;
 }
 
+/** shadcn SidebarMenuButton defaults conflict with pill nav; reset and fixed row height */
+const sbMenuBtnReset =
+  "!h-12 !min-h-[48px] !max-h-12 !rounded-[4px] !p-0 w-full max-w-full border-0 !bg-transparent !shadow-none hover:!bg-transparent hover:!text-inherit active:!bg-transparent data-[active=true]:!bg-transparent data-[state=open]:!bg-transparent focus-visible:ring-1 focus-visible:ring-gray-900/10";
+
+const sbRow =
+  "flex w-full items-center gap-3 rounded-[4px] px-3 h-12 min-h-[48px] max-h-12 shrink-0 transition-all duration-150";
+
+const sbActive =
+  "!bg-white text-gray-900 font-semibold shadow-[0_1px_3px_rgba(0,0,0,0.08),0_4px_12px_rgba(0,0,0,0.06)] ring-1 ring-black/[0.06]";
+
+const sbIdle =
+  "text-gray-600 hover:bg-white/70 hover:text-gray-900 !bg-transparent";
+
+const sbSubRow =
+  "flex w-full items-center rounded-[4px] px-3 min-h-10 h-10 max-h-10 text-[13px] font-medium transition-all duration-150";
+
+const sbSubActive =
+  "!bg-white text-gray-900 font-semibold shadow-[0_1px_2px_rgba(0,0,0,0.06),0_3px_8px_rgba(0,0,0,0.05)] ring-1 ring-black/[0.06]";
+
+const sbSubIdle =
+  "text-gray-600 hover:bg-white/60 hover:text-gray-900 !bg-transparent";
+
 export function PageLayout({ children }: PageLayoutProps) {
   const pathname = usePathname()
   const router = useRouter()
   const currentUser = useCurrentUser()
+  const [sidebarOpen, setSidebarOpen] = useState(true)
+  const sidebarBeforeDrawerRef = useRef(true)
   const [openSections, setOpenSections] = useState<{ [key: string]: boolean }>({
     setup: false,
     employee: false,
     payroll: false,
     salary: false,
     leave: false,
+    shift: false,
     attendance: false,
     reports: false,
     canteen: false
@@ -61,13 +88,14 @@ export function PageLayout({ children }: PageLayoutProps) {
       payroll: false,
       salary: false,
       leave: false,
+      shift: false,
       attendance: false,
       reports: false,
       canteen: false
     }
 
     // Setup section paths
-    if (['/service-providers', '/company', '/branches', '/devices', '/contractors'].includes(pathname)) {
+    if (['/company', '/branches', '/devices', '/contractors'].includes(pathname)) {
       newOpenSections.setup = true
     }
     // Employee Management section paths
@@ -85,6 +113,10 @@ export function PageLayout({ children }: PageLayoutProps) {
     // Leave Management section paths
     else if (['/manage-holidays', '/public-holiday', '/leave-applications', '/privileged-leave', '/employee-holiday-override', '/employee-weekly-off'].includes(pathname)) {
       newOpenSections.leave = true
+    }
+    // Shift Management section paths
+    else if (['/roster'].includes(pathname)) {
+      newOpenSections.shift = true
     }
     // Attendance Management section paths
     else if (['/attendance-logs', '/field-attendance-schedule', '/attendance-regularisation', '/import-attendance'].includes(pathname)) {
@@ -110,63 +142,194 @@ export function PageLayout({ children }: PageLayoutProps) {
     setOpenSections(newOpenSections)
   }, [pathname, isSuperAdmin, isManager, isRegularUser])
 
+  // Collapse sidebar when a form drawer opens, restore when it closes
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const { open } = (e as CustomEvent).detail;
+      if (open) {
+        sidebarBeforeDrawerRef.current = sidebarOpen;
+        setSidebarOpen(false);
+      } else {
+        setSidebarOpen(sidebarBeforeDrawerRef.current);
+      }
+    };
+    window.addEventListener("form-drawer-toggle", handler);
+    return () => window.removeEventListener("form-drawer-toggle", handler);
+  }, [sidebarOpen]);
+
   // Function to check if a link is active
   const isActiveLink = (href: string) => pathname === href
 
+  const pageTitle = (() => {
+    if (pathname === "/dashboard") return "Dashboard";
+    const parts = pathname.split("/").filter(Boolean);
+    if (parts.length === 0) return "Dashboard";
+    const raw = parts[parts.length - 1];
+    return raw
+      .split("-")
+      .map((s) => s.charAt(0).toUpperCase() + s.slice(1))
+      .join(" ");
+  })();
+
+  const setupSectionActive = [
+    "/company",
+    "/branches",
+    "/devices",
+    "/contractors",
+  ].includes(pathname);
+  const employeeSectionActive = [
+    "/departments",
+    "/designations",
+    "/manage-employees",
+    "/employees-promotions",
+  ].includes(pathname);
+  const payrollSectionActive = [
+    "/work-shifts",
+    "/attendance-policy",
+    "/leave-policy",
+  ].includes(pathname);
+  const salarySectionActive = [
+    "/monthly-salary-cycle",
+    "/salary-allowances",
+    "/salary-deductions",
+    "/monthly-pay-grade",
+    "/salary-advance",
+    "/reimbursement",
+    "/bonus-setup",
+    "/bonus-allocations",
+    "/generate-salary",
+  ].includes(pathname);
+  const leaveSectionActive = [
+    "/manage-holidays",
+    "/public-holiday",
+    "/leave-applications",
+    "/privileged-leave",
+    "/employee-holiday-override",
+    "/employee-weekly-off",
+  ].includes(pathname);
+  const shiftSectionActive = ["/roster"].includes(pathname);
+  const attendanceSectionActive = [
+    "/attendance-logs",
+    "/field-attendance-schedule",
+    "/attendance-regularisation",
+    "/import-attendance",
+  ].includes(pathname);
+  const reportsSectionActive = [
+    "/attendance-reports",
+    "/leave-reports",
+    "/salary-statements",
+    "/canteen/reports",
+  ].includes(pathname);
+  const canteenSectionActive =
+    pathname === "/canteen" || pathname === "/canteen/setup";
+
   return (
-    <div className="min-h-screen bg-background">
-      <SidebarProvider>
-        <Sidebar className="bg-gradient-to-b from-blue-900 via-blue-800 to-blue-900 border-r border-blue-700 shadow-2xl">
-          <SidebarHeader className="p-4 border-b border-blue-700 bg-gradient-to-r from-blue-800 to-blue-700">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 bg-gradient-to-r from-blue-400 to-blue-500 rounded-lg flex items-center justify-center text-white font-bold text-sm shadow-lg">
+    <div className="min-h-screen bg-[#f4f4f4]">
+      <SidebarProvider open={sidebarOpen} onOpenChange={setSidebarOpen}>
+        <Sidebar className="border-r border-[#e5e5e5] bg-sidebar text-sidebar-foreground">
+          <SidebarHeader className="px-4 py-6 border-0">
+            <Link href="/dashboard" className="flex items-center gap-3">
+              <div className="w-11 h-11 rounded-full bg-gray-900 flex items-center justify-center text-white text-sm font-bold shadow-[0_4px_14px_rgba(0,0,0,0.12)] shrink-0">
                 HR
               </div>
-              <span className="text-white font-semibold text-sm tracking-wide">OpenHRM</span>
-            </div>
+              <div className="min-w-0">
+                <span className="text-gray-900 font-bold text-sm tracking-tight block truncate">
+                  OpenHRM
+                </span>
+                <p className="text-[11px] text-gray-400">Human resources</p>
+              </div>
+            </Link>
           </SidebarHeader>
-          <SidebarContent className="py-4">
+          <SidebarContent className="px-2.5 py-2 flex-1 overflow-y-auto">
             <SidebarGroup>
-              <SidebarMenu className="space-y-2">
+              <SidebarMenu className="gap-1.5 flex flex-col">
                 {/* Dashboard - Show to all users */}
-                <SidebarMenuItem>
-                  <SidebarMenuButton asChild>
-                    <Link href="/dashboard" className={`text-blue-100 hover:text-white hover:bg-gradient-to-r hover:from-blue-700 hover:to-blue-600 transition-all duration-300 rounded-lg mx-2 px-3 py-2.5 shadow-sm hover:shadow-md block ${
-                      isActiveLink('/dashboard') 
-                        ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-md' 
-                        : ''
-                    }`}>
-                      <Icon icon="mdi:view-dashboard" className="w-5 h-5" />
-                      <span className="font-medium">Dashboard</span>
+                <SidebarMenuItem className="mx-0">
+                  <SidebarMenuButton asChild size="lg" className={sbMenuBtnReset}>
+                    <Link
+                      href="/dashboard"
+                      className={cn(
+                        sbRow,
+                        isActiveLink("/dashboard") ? sbActive : sbIdle
+                      )}
+                    >
+                      <Icon
+                        icon="mdi:view-dashboard-outline"
+                        className={cn(
+                          "w-5 h-5 shrink-0",
+                          isActiveLink("/dashboard")
+                            ? "text-gray-900"
+                            : "text-gray-500"
+                        )}
+                      />
+                      <span className="truncate font-semibold">Dashboard</span>
                     </Link>
                   </SidebarMenuButton>
-                     {/* Service Providers - Only for SUPERADMIN */}
-                        {isSuperAdmin && (
-                            <SidebarMenuButton asChild>
-                              <Link href="/service-providers" className={`text-blue-100 hover:text-white hover:bg-gradient-to-r hover:from-blue-700 hover:to-blue-600 transition-all duration-300 rounded-lg mx-2 px-3 py-2.5 shadow-sm hover:shadow-md block ${
-                                isActiveLink('/service-providers') 
-                                  ? 'bg-gradient-to-r to-blue-500 text-white shadow-md' 
-                                  : 'text-blue-200 hover:text-white hover:bg-blue-700/50'
-                              }`}>
-
-                               <Icon icon="mdi:account-group-outline" className="w-5 h-5 mt-2" />
-
-                                <span className="font-medium mt-2">Service Providers</span>
-                              </Link>
-                            </SidebarMenuButton>
-                        )}
                 </SidebarMenuItem>
+                {isSuperAdmin && (
+                  <SidebarMenuItem className="mx-0">
+                    <SidebarMenuButton asChild size="lg" className={sbMenuBtnReset}>
+                      <Link
+                        href="/service-providers"
+                        className={cn(
+                          sbRow,
+                          isActiveLink("/service-providers") ? sbActive : sbIdle
+                        )}
+                      >
+                        <Icon
+                          icon="mdi:account-supervisor-outline"
+                          className={cn(
+                            "w-5 h-5 shrink-0",
+                            isActiveLink("/service-providers")
+                              ? "text-gray-900"
+                              : "text-gray-500"
+                          )}
+                        />
+                        <span className="truncate font-semibold">
+                          Service Providers
+                        </span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                )}
 
                 {/* Setup Section - Only for SUPERADMIN and MANAGER (with restrictions for MANAGER) */}
                 {(isSuperAdmin || isManager) && (
                   <Collapsible open={openSections.setup} onOpenChange={(open) => setOpenSections(prev => ({ ...prev, setup: open }))}>
                     <CollapsibleTrigger asChild>
-                      <SidebarMenuButton className="text-blue-100 hover:text-white hover:bg-gradient-to-r hover:from-blue-700 hover:to-blue-600 transition-all duration-300 rounded-lg mx-2 px-3 py-2.5 shadow-sm hover:shadow-md">
-                        <Icon icon="mdi:cog-outline" className="w-5 h-5" />
-                        <span className="font-medium">Setup</span>
-                        <Icon 
-                          icon="mdi:chevron-right" 
-                          className={`w-4 h-4 ml-auto transition-transform duration-300 ${openSections.setup ? 'rotate-90' : ''}`} 
+                      <SidebarMenuButton
+                        size="lg"
+                        className={cn(
+                          sbMenuBtnReset,
+                          sbRow,
+                          "mx-0 justify-between",
+                          setupSectionActive
+                            ? sbActive
+                            : cn(
+                                sbIdle,
+                                openSections.setup &&
+                                  "font-semibold text-gray-900"
+                              )
+                        )}
+                      >
+                        <span className="flex items-center gap-3 min-w-0">
+                          <Icon
+                            icon="mdi:cog-outline"
+                            className={cn(
+                              "w-5 h-5 shrink-0",
+                              setupSectionActive
+                                ? "text-gray-900"
+                                : "text-gray-500"
+                            )}
+                          />
+                          <span className="truncate font-semibold">Setup</span>
+                        </span>
+                        <Icon
+                          icon="mdi:chevron-down"
+                          className={cn(
+                            "w-4 h-4 shrink-0 text-gray-500 transition-transform duration-300",
+                            openSections.setup && "rotate-180"
+                          )}
                         />
                       </SidebarMenuButton>
                     </CollapsibleTrigger>
@@ -176,17 +339,17 @@ export function PageLayout({ children }: PageLayoutProps) {
                   
 
                     <CollapsibleContent>
-                      <SidebarMenuSub className="ml-4 mt-2 space-y-1">
+                      <SidebarMenuSub className="ml-5 mt-1 space-y-0.5 border-l border-[#f0f0f0] pl-3">
                        
                         {/* Company - Only for SUPERADMIN */}
                         {isSuperAdmin && (
                           <SidebarMenuSubItem>
                             <SidebarMenuSubButton asChild>
-                              <Link href="/company" className={`transition-all duration-200 rounded-md px-3 py-2 ${
+                              <Link href="/company" className={cn(sbSubRow,
                                 isActiveLink('/company') 
-                                  ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-md' 
-                                  : 'text-blue-200 hover:text-white hover:bg-blue-700/50'
-                              }`}>
+                                  ? sbSubActive
+                                  : sbSubIdle
+                              )}>
                                 <span className="font-medium">Company</span>
                               </Link>
                             </SidebarMenuSubButton>
@@ -195,33 +358,33 @@ export function PageLayout({ children }: PageLayoutProps) {
                         {/* Branches, Devices, Contractors - For both SUPERADMIN and MANAGER */}
                         <SidebarMenuSubItem>
                           <SidebarMenuSubButton asChild>
-                            <Link href="/branches" className={`transition-all duration-200 rounded-md px-3 py-2 ${
+                            <Link href="/branches" className={cn(sbSubRow,
                               isActiveLink('/branches') 
-                                ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-md' 
-                                : 'text-blue-200 hover:text-white hover:bg-blue-700/50'
-                            }`}>
+                                ? sbSubActive
+                                : sbSubIdle
+                            )}>
                               <span className="font-medium">Branches</span>
                             </Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
                         <SidebarMenuSubItem>
                           <SidebarMenuSubButton asChild>
-                            <Link href="/devices" className={`transition-all duration-200 rounded-md px-3 py-2 ${
+                            <Link href="/devices" className={cn(sbSubRow,
                               isActiveLink('/devices') 
-                                ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-md' 
-                                : 'text-blue-200 hover:text-white hover:bg-blue-700/50'
-                            }`}>
+                                ? sbSubActive
+                                : sbSubIdle
+                            )}>
                               <span className="font-medium">Devices</span>
                             </Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
                         <SidebarMenuSubItem>
                           <SidebarMenuSubButton asChild>
-                            <Link href="/contractors" className={`transition-all duration-200 rounded-md px-3 py-2 ${
+                            <Link href="/contractors" className={cn(sbSubRow,
                               isActiveLink('/contractors') 
-                                ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-md' 
-                                : 'text-blue-200 hover:text-white hover:bg-blue-700/50'
-                            }`}>
+                                ? sbSubActive
+                                : sbSubIdle
+                            )}>
                               <span className="font-medium">Contractors</span>
                             </Link>
                           </SidebarMenuSubButton>
@@ -235,68 +398,97 @@ export function PageLayout({ children }: PageLayoutProps) {
                 {(isSuperAdmin || isManager) && (
                   <Collapsible open={openSections.employee} onOpenChange={(open) => setOpenSections(prev => ({ ...prev, employee: open }))}>
                     <CollapsibleTrigger asChild>
-                      <SidebarMenuButton className="text-blue-100 hover:text-white hover:bg-gradient-to-r hover:from-blue-700 hover:to-blue-600 transition-all duration-300 rounded-lg mx-2 px-3 py-2.5 shadow-sm hover:shadow-md">
-                        <Icon icon="mdi:account-group-outline" className="w-5 h-5" />
-                        <span className="font-medium">Employee Management</span>
-                        <Icon 
-                          icon="mdi:chevron-right" 
-                          className={`w-4 h-4 ml-auto transition-transform duration-300 ${openSections.employee ? 'rotate-90' : ''}`} 
+                      <SidebarMenuButton
+                        size="lg"
+                        className={cn(
+                          sbMenuBtnReset,
+                          sbRow,
+                          "mx-0 justify-between",
+                          employeeSectionActive
+                            ? sbActive
+                            : cn(
+                                sbIdle,
+                                openSections.employee &&
+                                  "font-semibold text-gray-900"
+                              )
+                        )}
+                      >
+                        <span className="flex items-center gap-3 min-w-0">
+                          <Icon
+                            icon="mdi:account-group-outline"
+                            className={cn(
+                              "w-5 h-5 shrink-0",
+                              employeeSectionActive
+                                ? "text-gray-900"
+                                : "text-gray-500"
+                            )}
+                          />
+                          <span className="truncate font-semibold">
+                            Employee Management
+                          </span>
+                        </span>
+                        <Icon
+                          icon="mdi:chevron-down"
+                          className={cn(
+                            "w-4 h-4 shrink-0 text-gray-500 transition-transform duration-300",
+                            openSections.employee && "rotate-180"
+                          )}
                         />
                       </SidebarMenuButton>
                     </CollapsibleTrigger>
                     <CollapsibleContent>
-                      <SidebarMenuSub className="ml-4 mt-2 space-y-1">
+                      <SidebarMenuSub className="ml-5 mt-1 space-y-0.5 border-l border-[#f0f0f0] pl-3">
                         <SidebarMenuSubItem>
                           <SidebarMenuSubButton asChild>
-                            <Link href="/departments" className={`transition-all duration-200 rounded-md px-3 py-2 ${
+                            <Link href="/departments" className={cn(sbSubRow,
                               isActiveLink('/departments') 
-                                ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-md' 
-                                : 'text-blue-200 hover:text-white hover:bg-blue-700/50'
-                            }`}>
+                                ? sbSubActive
+                                : sbSubIdle
+                            )}>
                               <span className="font-medium">Departments</span>
                             </Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
                         <SidebarMenuSubItem>
                           <SidebarMenuSubButton asChild>
-                            <Link href="/designations" className={`transition-all duration-200 rounded-md px-3 py-2 ${
+                            <Link href="/designations" className={cn(sbSubRow,
                               isActiveLink('/designations') 
-                                ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-md' 
-                                : 'text-blue-200 hover:text-white hover:bg-blue-700/50'
-                            }`}>
+                                ? sbSubActive
+                                : sbSubIdle
+                            )}>
                               <span className="font-medium">Designations</span>
                             </Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
                         <SidebarMenuSubItem>
                           <SidebarMenuSubButton asChild>
-                            <Link href="/manage-employees" className={`transition-all duration-200 rounded-md px-3 py-2 ${
+                            <Link href="/manage-employees" className={cn(sbSubRow,
                               isActiveLink('/manage-employees') 
-                                ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-md' 
-                                : 'text-blue-200 hover:text-white hover:bg-blue-700/50'
-                            }`}>
+                                ? sbSubActive
+                                : sbSubIdle
+                            )}>
                               <span className="font-medium">Manage Employees</span>
                             </Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
                         <SidebarMenuSubItem>
                           <SidebarMenuSubButton asChild>
-                            <Link href="/employees-promotions" className={`transition-all duration-200 rounded-md px-3 py-2 ${
+                            <Link href="/employees-promotions" className={cn(sbSubRow,
                               isActiveLink('/employees-promotions') 
-                                ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-md' 
-                                : 'text-blue-200 hover:text-white hover:bg-blue-700/50'
-                            }`}>
+                                ? sbSubActive
+                                : sbSubIdle
+                            )}>
                               <span className="font-medium">Employees Promotions</span>
                             </Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
                         <SidebarMenuSubItem>
-                          <SidebarMenuSubButton className="text-blue-200 hover:text-white hover:bg-blue-700/50 transition-all duration-200 rounded-md px-3 py-2">
+                          <SidebarMenuSubButton className={cn(sbSubRow, sbSubIdle, "cursor-default opacity-70")}>
                             <span className="font-medium">Employees Notices</span>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
                         <SidebarMenuSubItem>
-                          <SidebarMenuSubButton className="text-blue-200 hover:text-white hover:bg-blue-700/50 transition-all duration-200 rounded-md px-3 py-2">
+                          <SidebarMenuSubButton className={cn(sbSubRow, sbSubIdle, "cursor-default opacity-70")}>
                             <span className="font-medium">Employees Terminations</span>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
@@ -309,46 +501,75 @@ export function PageLayout({ children }: PageLayoutProps) {
                 {(isSuperAdmin || isManager) && (
                   <Collapsible open={openSections.payroll} onOpenChange={(open) => setOpenSections(prev => ({ ...prev, payroll: open }))}>
                     <CollapsibleTrigger asChild>
-                      <SidebarMenuButton className="text-blue-100 hover:text-white hover:bg-gradient-to-r hover:from-blue-700 hover:to-blue-600 transition-all duration-300 rounded-lg mx-2 px-3 py-2.5 shadow-sm hover:shadow-md">
-                        <Icon icon="mdi:account-cash-outline" className="w-5 h-5" />
-                        <span className="font-medium">Payroll Management</span>
-                        <Icon 
-                          icon="mdi:chevron-right" 
-                          className={`w-4 h-4 ml-auto transition-transform duration-300 ${openSections.payroll ? 'rotate-90' : ''}`} 
+                      <SidebarMenuButton
+                        size="lg"
+                        className={cn(
+                          sbMenuBtnReset,
+                          sbRow,
+                          "mx-0 justify-between",
+                          payrollSectionActive
+                            ? sbActive
+                            : cn(
+                                sbIdle,
+                                openSections.payroll &&
+                                  "font-semibold text-gray-900"
+                              )
+                        )}
+                      >
+                        <span className="flex items-center gap-3 min-w-0">
+                          <Icon
+                            icon="mdi:account-cash-outline"
+                            className={cn(
+                              "w-5 h-5 shrink-0",
+                              payrollSectionActive
+                                ? "text-gray-900"
+                                : "text-gray-500"
+                            )}
+                          />
+                          <span className="truncate font-semibold">
+                            Payroll Management
+                          </span>
+                        </span>
+                        <Icon
+                          icon="mdi:chevron-down"
+                          className={cn(
+                            "w-4 h-4 shrink-0 text-gray-500 transition-transform duration-300",
+                            openSections.payroll && "rotate-180"
+                          )}
                         />
                       </SidebarMenuButton>
                     </CollapsibleTrigger>
                     <CollapsibleContent>
-                      <SidebarMenuSub className="ml-4 mt-2 space-y-1">
+                      <SidebarMenuSub className="ml-5 mt-1 space-y-0.5 border-l border-[#f0f0f0] pl-3">
                         <SidebarMenuSubItem>
                           <SidebarMenuSubButton asChild>
-                            <Link href="/work-shifts" className={`transition-all duration-200 rounded-md px-3 py-2 ${
+                            <Link href="/work-shifts" className={cn(sbSubRow,
                               isActiveLink('/work-shifts') 
-                                ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-md' 
-                                : 'text-blue-200 hover:text-white hover:bg-blue-700/50'
-                            }`}>
+                                ? sbSubActive
+                                : sbSubIdle
+                            )}>
                               <span className="font-medium">Work Shifts</span>
                             </Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
                         <SidebarMenuSubItem>
                           <SidebarMenuSubButton asChild>
-                            <Link href="/attendance-policy" className={`transition-all duration-200 rounded-md px-3 py-2 ${
+                            <Link href="/attendance-policy" className={cn(sbSubRow,
                               isActiveLink('/attendance-policy') 
-                                ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-md' 
-                                : 'text-blue-200 hover:text-white hover:bg-blue-700/50'
-                            }`}>
+                                ? sbSubActive
+                                : sbSubIdle
+                            )}>
                               <span className="font-medium">Attendance Policy</span>
                             </Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
                         <SidebarMenuSubItem>
                           <SidebarMenuSubButton asChild>
-                            <Link href="/leave-policy" className={`transition-all duration-200 rounded-md px-3 py-2 ${
+                            <Link href="/leave-policy" className={cn(sbSubRow,
                               isActiveLink('/leave-policy') 
-                                ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-md' 
-                                : 'text-blue-200 hover:text-white hover:bg-blue-700/50'
-                            }`}>
+                                ? sbSubActive
+                                : sbSubIdle
+                            )}>
                               <span className="font-medium">Leave Policy</span>
                             </Link>
                           </SidebarMenuSubButton>
@@ -362,82 +583,111 @@ export function PageLayout({ children }: PageLayoutProps) {
                 {(isSuperAdmin || isManager || isRegularUser) && (
                   <Collapsible open={openSections.salary} onOpenChange={(open) => setOpenSections(prev => ({ ...prev, salary: open }))}>
                     <CollapsibleTrigger asChild>
-                      <SidebarMenuButton className="text-blue-100 hover:text-white hover:bg-gradient-to-r hover:from-blue-700 hover:to-blue-600 transition-all duration-300 rounded-lg mx-2 px-3 py-2.5 shadow-sm hover:shadow-md">
-                        <Icon icon="mdi:currency-usd" className="w-5 h-5" />
-                        <span className="font-medium">Salary Management</span>
-                        <Icon 
-                          icon="mdi:chevron-right" 
-                          className={`w-4 h-4 ml-auto transition-transform duration-300 ${openSections.salary ? 'rotate-90' : ''}`} 
+                      <SidebarMenuButton
+                        size="lg"
+                        className={cn(
+                          sbMenuBtnReset,
+                          sbRow,
+                          "mx-0 justify-between",
+                          salarySectionActive
+                            ? sbActive
+                            : cn(
+                                sbIdle,
+                                openSections.salary &&
+                                  "font-semibold text-gray-900"
+                              )
+                        )}
+                      >
+                        <span className="flex items-center gap-3 min-w-0">
+                          <Icon
+                            icon="mdi:currency-usd"
+                            className={cn(
+                              "w-5 h-5 shrink-0",
+                              salarySectionActive
+                                ? "text-gray-900"
+                                : "text-gray-500"
+                            )}
+                          />
+                          <span className="truncate font-semibold">
+                            Salary Management
+                          </span>
+                        </span>
+                        <Icon
+                          icon="mdi:chevron-down"
+                          className={cn(
+                            "w-4 h-4 shrink-0 text-gray-500 transition-transform duration-300",
+                            openSections.salary && "rotate-180"
+                          )}
                         />
                       </SidebarMenuButton>
                     </CollapsibleTrigger>
                     <CollapsibleContent>
-                      <SidebarMenuSub className="ml-4 mt-2 space-y-1">
+                      <SidebarMenuSub className="ml-5 mt-1 space-y-0.5 border-l border-[#f0f0f0] pl-3">
                         {/* Full access for SUPERADMIN and MANAGER */}
                         {(isSuperAdmin || isManager) && (
                           <>
                             <SidebarMenuSubItem>
                               <SidebarMenuSubButton asChild>
-                                <Link href="/monthly-salary-cycle" className={`transition-all duration-200 rounded-md px-3 py-2 ${
+                                <Link href="/monthly-salary-cycle" className={cn(sbSubRow,
                                   isActiveLink('/monthly-salary-cycle') 
-                                    ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-md' 
-                                    : 'text-blue-200 hover:text-white hover:bg-blue-700/50'
-                                }`}>
+                                    ? sbSubActive
+                                    : sbSubIdle
+                                )}>
                                   <span className="font-medium">Monthly Salary Cycle</span>
                                 </Link>
                               </SidebarMenuSubButton>
                             </SidebarMenuSubItem>
                             <SidebarMenuSubItem>
                               <SidebarMenuSubButton asChild>
-                                <Link href="/salary-allowances" className={`transition-all duration-200 rounded-md px-3 py-2 ${
+                                <Link href="/salary-allowances" className={cn(sbSubRow,
                                   isActiveLink('/salary-allowances') 
-                                    ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-md' 
-                                    : 'text-blue-200 hover:text-white hover:bg-blue-700/50'
-                                }`}>
+                                    ? sbSubActive
+                                    : sbSubIdle
+                                )}>
                                   <span className="font-medium">Salary Allowances</span>
                                 </Link>
                               </SidebarMenuSubButton>
                             </SidebarMenuSubItem>
                             <SidebarMenuSubItem>
                               <SidebarMenuSubButton asChild>
-                                <Link href="/salary-deductions" className={`transition-all duration-200 rounded-md px-3 py-2 ${
+                                <Link href="/salary-deductions" className={cn(sbSubRow,
                                   isActiveLink('/salary-deductions') 
-                                    ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-md' 
-                                    : 'text-blue-200 hover:text-white hover:bg-blue-700/50'
-                                }`}>
+                                    ? sbSubActive
+                                    : sbSubIdle
+                                )}>
                                   <span className="font-medium">Salary Deductions</span>
                                 </Link>
                               </SidebarMenuSubButton>
                             </SidebarMenuSubItem>
                             <SidebarMenuSubItem>
                               <SidebarMenuSubButton asChild>
-                                <Link href="/monthly-pay-grade" className={`transition-all duration-200 rounded-md px-3 py-2 ${
+                                <Link href="/monthly-pay-grade" className={cn(sbSubRow,
                                   isActiveLink('/monthly-pay-grade') 
-                                    ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-md' 
-                                    : 'text-blue-200 hover:text-white hover:bg-blue-700/50'
-                                }`}>
+                                    ? sbSubActive
+                                    : sbSubIdle
+                                )}>
                                   <span className="font-medium">Monthly Pay Grade</span>
                                 </Link>
                               </SidebarMenuSubButton>
                             </SidebarMenuSubItem>
                             <SidebarMenuSubItem>
                               <SidebarMenuSubButton asChild>
-                                <Link href="/bonus-setup" className={`transition-all duration-200 rounded-md px-3 py-2 ${
+                                <Link href="/bonus-setup" className={cn(sbSubRow,
                                   isActiveLink('/bonus-setup') 
-                                    ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-md' 
-                                    : 'text-blue-200 hover:text-white hover:bg-blue-700/50'
-                                }`}>
+                                    ? sbSubActive
+                                    : sbSubIdle
+                                )}>
                                   <span className="font-medium">Bonus Setup</span>
                                 </Link>
                               </SidebarMenuSubButton>
                             </SidebarMenuSubItem>
                             <SidebarMenuSubItem>
                               <SidebarMenuSubButton asChild>
-                                <Link href="/bonus-allocations" className={`transition-all duration-200 rounded-md px-3 py-2 ${
+                                <Link href="/bonus-allocations" className={cn(sbSubRow,
                                   isActiveLink('/bonus-allocations') 
-                                    ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-md' 
-                                    : 'text-blue-200 hover:text-white hover:bg-blue-700/50'
-                                }`}>
+                                    ? sbSubActive
+                                    : sbSubIdle
+                                )}>
                                   <span className="font-medium">Bonus Allocations</span>
                                 </Link>
                               </SidebarMenuSubButton>
@@ -448,33 +698,33 @@ export function PageLayout({ children }: PageLayoutProps) {
                         {/* Common links for all users - Salary Advance, Reimbursement, Generate Salary */}
                         <SidebarMenuSubItem>
                           <SidebarMenuSubButton asChild>
-                            <Link href="/salary-advance" className={`transition-all duration-200 rounded-md px-3 py-2 ${
+                            <Link href="/salary-advance" className={cn(sbSubRow,
                               isActiveLink('/salary-advance') 
-                                ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-md' 
-                                : 'text-blue-200 hover:text-white hover:bg-blue-700/50'
-                            }`}>
+                                ? sbSubActive
+                                : sbSubIdle
+                            )}>
                               <span className="font-medium">Salary Advance</span>
                             </Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
                         <SidebarMenuSubItem>
                           <SidebarMenuSubButton asChild>
-                            <Link href="/reimbursement" className={`transition-all duration-200 rounded-md px-3 py-2 ${
+                            <Link href="/reimbursement" className={cn(sbSubRow,
                               isActiveLink('/reimbursement') 
-                                ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-md' 
-                                : 'text-blue-200 hover:text-white hover:bg-blue-700/50'
-                            }`}>
+                                ? sbSubActive
+                                : sbSubIdle
+                            )}>
                               <span className="font-medium">Reimbursement</span>
                             </Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
                         <SidebarMenuSubItem>
                           <SidebarMenuSubButton asChild>
-                            <Link href="/generate-salary" className={`transition-all duration-200 rounded-md px-3 py-2 ${
+                            <Link href="/generate-salary" className={cn(sbSubRow,
                               isActiveLink('/generate-salary') 
-                                ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-md' 
-                                : 'text-blue-200 hover:text-white hover:bg-blue-700/50'
-                            }`}>
+                                ? sbSubActive
+                                : sbSubIdle
+                            )}>
                               <span className="font-medium">Generate Salary</span>
                             </Link>
                           </SidebarMenuSubButton>
@@ -488,26 +738,55 @@ export function PageLayout({ children }: PageLayoutProps) {
                 {(isSuperAdmin || isManager || isRegularUser) && (
                   <Collapsible open={openSections.leave} onOpenChange={(open) => setOpenSections(prev => ({ ...prev, leave: open }))}>
                     <CollapsibleTrigger asChild>
-                      <SidebarMenuButton className="text-blue-100 hover:text-white hover:bg-gradient-to-r hover:from-blue-700 hover:to-blue-600 transition-all duration-300 rounded-lg mx-2 px-3 py-2.5 shadow-sm hover:shadow-md">
-                        <Icon icon="mdi:calendar-clock-outline" className="w-5 h-5" />
-                        <span className="font-medium">Leave Management</span>
-                        <Icon 
-                          icon="mdi:chevron-right" 
-                          className={`w-4 h-4 ml-auto transition-transform duration-300 ${openSections.leave ? 'rotate-90' : ''}`} 
+                      <SidebarMenuButton
+                        size="lg"
+                        className={cn(
+                          sbMenuBtnReset,
+                          sbRow,
+                          "mx-0 justify-between",
+                          leaveSectionActive
+                            ? sbActive
+                            : cn(
+                                sbIdle,
+                                openSections.leave &&
+                                  "font-semibold text-gray-900"
+                              )
+                        )}
+                      >
+                        <span className="flex items-center gap-3 min-w-0">
+                          <Icon
+                            icon="mdi:calendar-clock-outline"
+                            className={cn(
+                              "w-5 h-5 shrink-0",
+                              leaveSectionActive
+                                ? "text-gray-900"
+                                : "text-gray-500"
+                            )}
+                          />
+                          <span className="truncate font-semibold">
+                            Leave Management
+                          </span>
+                        </span>
+                        <Icon
+                          icon="mdi:chevron-down"
+                          className={cn(
+                            "w-4 h-4 shrink-0 text-gray-500 transition-transform duration-300",
+                            openSections.leave && "rotate-180"
+                          )}
                         />
                       </SidebarMenuButton>
                     </CollapsibleTrigger>
                     <CollapsibleContent>
-                      <SidebarMenuSub className="ml-4 mt-2 space-y-1">
+                      <SidebarMenuSub className="ml-5 mt-1 space-y-0.5 border-l border-[#f0f0f0] pl-3">
                         {/* Manage Holidays only for SUPERADMIN and MANAGER */}
                         {(isSuperAdmin || isManager) && (
                           <SidebarMenuSubItem>
                             <SidebarMenuSubButton asChild>
-                              <Link href="/manage-holidays" className={`transition-all duration-200 rounded-md px-3 py-2 ${
+                              <Link href="/manage-holidays" className={cn(sbSubRow,
                                 isActiveLink('/manage-holidays') 
-                                  ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-md' 
-                                  : 'text-blue-200 hover:text-white hover:bg-blue-700/50'
-                              }`}>
+                                  ? sbSubActive
+                                  : sbSubIdle
+                              )}>
                                 <span className="font-medium">Manage Holiday</span>
                               </Link>
                             </SidebarMenuSubButton>
@@ -517,22 +796,22 @@ export function PageLayout({ children }: PageLayoutProps) {
                         {/* Common links for all users - Public Holiday and Leave Applications */}
                         <SidebarMenuSubItem>
                           <SidebarMenuSubButton asChild>
-                            <Link href="/public-holiday" className={`transition-all duration-200 rounded-md px-3 py-2 ${
+                            <Link href="/public-holiday" className={cn(sbSubRow,
                               isActiveLink('/public-holiday') 
-                                ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-md' 
-                                : 'text-blue-200 hover:text-white hover:bg-blue-700/50'
-                            }`}>
+                                ? sbSubActive
+                                : sbSubIdle
+                            )}>
                               <span className="font-medium">Public Holiday</span>
                             </Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
                         <SidebarMenuSubItem>
                           <SidebarMenuSubButton asChild>
-                            <Link href="/leave-applications" className={`transition-all duration-200 rounded-md px-3 py-2 ${
+                            <Link href="/leave-applications" className={cn(sbSubRow,
                               isActiveLink('/leave-applications') 
-                                ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-md' 
-                                : 'text-blue-200 hover:text-white hover:bg-blue-700/50'
-                            }`}>
+                                ? sbSubActive
+                                : sbSubIdle
+                            )}>
                               <span className="font-medium">Leave Applications</span>
                             </Link>
                           </SidebarMenuSubButton>
@@ -541,33 +820,33 @@ export function PageLayout({ children }: PageLayoutProps) {
                           <>
                             <SidebarMenuSubItem>
                               <SidebarMenuSubButton asChild>
-                                <Link href="/privileged-leave" className={`transition-all duration-200 rounded-md px-3 py-2 ${
+                                <Link href="/privileged-leave" className={cn(sbSubRow,
                                   isActiveLink('/privileged-leave') 
-                                    ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-md' 
-                                    : 'text-blue-200 hover:text-white hover:bg-blue-700/50'
-                                }`}>
+                                    ? sbSubActive
+                                    : sbSubIdle
+                                )}>
                                   <span className="font-medium">Privileged Leave</span>
                                 </Link>
                               </SidebarMenuSubButton>
                             </SidebarMenuSubItem>
                             <SidebarMenuSubItem>
                               <SidebarMenuSubButton asChild>
-                                <Link href="/employee-holiday-override" className={`transition-all duration-200 rounded-md px-3 py-2 ${
+                                <Link href="/employee-holiday-override" className={cn(sbSubRow,
                                   isActiveLink('/employee-holiday-override') 
-                                    ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-md' 
-                                    : 'text-blue-200 hover:text-white hover:bg-blue-700/50'
-                                }`}>
+                                    ? sbSubActive
+                                    : sbSubIdle
+                                )}>
                                   <span className="font-medium">Holiday Override</span>
                                 </Link>
                               </SidebarMenuSubButton>
                             </SidebarMenuSubItem>
                             <SidebarMenuSubItem>
                               <SidebarMenuSubButton asChild>
-                                <Link href="/employee-weekly-off" className={`transition-all duration-200 rounded-md px-3 py-2 ${
+                                <Link href="/employee-weekly-off" className={cn(sbSubRow,
                                   isActiveLink('/employee-weekly-off') 
-                                    ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-md' 
-                                    : 'text-blue-200 hover:text-white hover:bg-blue-700/50'
-                                }`}>
+                                    ? sbSubActive
+                                    : sbSubIdle
+                                )}>
                                   <span className="font-medium">Weekly Off</span>
                                 </Link>
                               </SidebarMenuSubButton>
@@ -603,26 +882,55 @@ export function PageLayout({ children }: PageLayoutProps) {
                 {(isSuperAdmin || isManager || isRegularUser) && (
                   <Collapsible open={openSections.shift} onOpenChange={(open) => setOpenSections(prev => ({ ...prev, shift: open }))}>
                     <CollapsibleTrigger asChild>
-                      <SidebarMenuButton className="text-blue-100 hover:text-white hover:bg-gradient-to-r hover:from-blue-700 hover:to-blue-600 transition-all duration-300 rounded-lg mx-2 px-3 py-2.5 shadow-sm hover:shadow-md">
-                        <Icon icon="mdi:calendar-clock-outline" className="w-5 h-5" />
-                        <span className="font-medium">Shift Management</span>
-                        <Icon 
-                          icon="mdi:chevron-right" 
-                          className={`w-4 h-4 ml-auto transition-transform duration-300 ${openSections.leave ? 'rotate-90' : ''}`} 
+                      <SidebarMenuButton
+                        size="lg"
+                        className={cn(
+                          sbMenuBtnReset,
+                          sbRow,
+                          "mx-0 justify-between",
+                          shiftSectionActive
+                            ? sbActive
+                            : cn(
+                                sbIdle,
+                                openSections.shift &&
+                                  "font-semibold text-gray-900"
+                              )
+                        )}
+                      >
+                        <span className="flex items-center gap-3 min-w-0">
+                          <Icon
+                            icon="mdi:calendar-month-outline"
+                            className={cn(
+                              "w-5 h-5 shrink-0",
+                              shiftSectionActive
+                                ? "text-gray-900"
+                                : "text-gray-500"
+                            )}
+                          />
+                          <span className="truncate font-semibold">
+                            Shift Management
+                          </span>
+                        </span>
+                        <Icon
+                          icon="mdi:chevron-down"
+                          className={cn(
+                            "w-4 h-4 shrink-0 text-gray-500 transition-transform duration-300",
+                            openSections.shift && "rotate-180"
+                          )}
                         />
                       </SidebarMenuButton>
                     </CollapsibleTrigger>
                     <CollapsibleContent>
-                      <SidebarMenuSub className="ml-4 mt-2 space-y-1">
+                      <SidebarMenuSub className="ml-5 mt-1 space-y-0.5 border-l border-[#f0f0f0] pl-3">
                         {/* Manage Holidays only for SUPERADMIN and MANAGER */}
                         {(isSuperAdmin || isManager) && (
                           <SidebarMenuSubItem>
                             <SidebarMenuSubButton asChild>
-                              <Link href="/roster" className={`transition-all duration-200 rounded-md px-3 py-2 ${
+                              <Link href="/roster" className={cn(sbSubRow,
                                 isActiveLink('/roster') 
-                                  ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-md' 
-                                  : 'text-blue-200 hover:text-white hover:bg-blue-700/50'
-                              }`}>
+                                  ? sbSubActive
+                                  : sbSubIdle
+                              )}>
                                 <span className="font-medium">Manage Roster</span>
                               </Link>
                             </SidebarMenuSubButton>
@@ -632,11 +940,11 @@ export function PageLayout({ children }: PageLayoutProps) {
 
                         {/* <SidebarMenuSubItem>
                           <SidebarMenuSubButton asChild>
-                            <Link href="/leave-applications" className={`transition-all duration-200 rounded-md px-3 py-2 ${
+                            <Link href="/leave-applications" className={cn(sbSubRow,
                               isActiveLink('/leave-applications') 
-                                ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-md' 
-                                : 'text-blue-200 hover:text-white hover:bg-blue-700/50'
-                            }`}>
+                                ? sbSubActive
+                                : sbSubIdle
+                            )}>
                               <span className="font-medium">Leave Applications</span>
                             </Link>
                           </SidebarMenuSubButton>
@@ -666,47 +974,76 @@ export function PageLayout({ children }: PageLayoutProps) {
                 {(isSuperAdmin || isManager) && (
                   <Collapsible open={openSections.attendance} onOpenChange={(open) => setOpenSections(prev => ({ ...prev, attendance: open }))}>
                     <CollapsibleTrigger asChild>
-                      <SidebarMenuButton className="text-blue-100 hover:text-white hover:bg-gradient-to-r hover:from-blue-700 hover:to-blue-600 transition-all duration-300 rounded-lg mx-2 px-3 py-2.5 shadow-sm hover:shadow-md">
-                        <Icon icon="mdi:clock-check-outline" className="w-5 h-5" />
-                        <span className="font-medium">Attendance Management</span>
-                        <Icon 
-                          icon="mdi:chevron-right" 
-                          className={`w-4 h-4 ml-auto transition-transform duration-300 ${openSections.attendance ? 'rotate-90' : ''}`} 
+                      <SidebarMenuButton
+                        size="lg"
+                        className={cn(
+                          sbMenuBtnReset,
+                          sbRow,
+                          "mx-0 justify-between",
+                          attendanceSectionActive
+                            ? sbActive
+                            : cn(
+                                sbIdle,
+                                openSections.attendance &&
+                                  "font-semibold text-gray-900"
+                              )
+                        )}
+                      >
+                        <span className="flex items-center gap-3 min-w-0">
+                          <Icon
+                            icon="mdi:clock-check-outline"
+                            className={cn(
+                              "w-5 h-5 shrink-0",
+                              attendanceSectionActive
+                                ? "text-gray-900"
+                                : "text-gray-500"
+                            )}
+                          />
+                          <span className="truncate font-semibold">
+                            Attendance Management
+                          </span>
+                        </span>
+                        <Icon
+                          icon="mdi:chevron-down"
+                          className={cn(
+                            "w-4 h-4 shrink-0 text-gray-500 transition-transform duration-300",
+                            openSections.attendance && "rotate-180"
+                          )}
                         />
                       </SidebarMenuButton>
                     </CollapsibleTrigger>
                     <CollapsibleContent>
-                      <SidebarMenuSub className="ml-4 mt-2 space-y-1">
+                      <SidebarMenuSub className="ml-5 mt-1 space-y-0.5 border-l border-[#f0f0f0] pl-3">
                         
                         <SidebarMenuSubItem>
                           <SidebarMenuSubButton asChild>
-                            <Link href="/field-attendance-schedule" className={`transition-all duration-200 rounded-md px-3 py-2 ${
+                            <Link href="/field-attendance-schedule" className={cn(sbSubRow,
                               isActiveLink('/field-attendance-schedule') 
-                                ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-md' 
-                                : 'text-blue-200 hover:text-white hover:bg-blue-700/50'
-                            }`}>
+                                ? sbSubActive
+                                : sbSubIdle
+                            )}>
                               <span className="font-medium">Field Attendance Schedule</span>
                             </Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
                         <SidebarMenuSubItem>
                           <SidebarMenuSubButton asChild>
-                            <Link href="/attendance-regularisation" className={`transition-all duration-200 rounded-md px-3 py-2 ${
+                            <Link href="/attendance-regularisation" className={cn(sbSubRow,
                               isActiveLink('/attendance-regularisation') 
-                                ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-md' 
-                                : 'text-blue-200 hover:text-white hover:bg-blue-700/50'
-                            }`}>
+                                ? sbSubActive
+                                : sbSubIdle
+                            )}>
                               <span className="font-medium">Attendance Regularisation</span>
                             </Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
                         <SidebarMenuSubItem>
                           <SidebarMenuSubButton asChild>
-                            <Link href="/import-attendance" className={`transition-all duration-200 rounded-md px-3 py-2 ${
+                            <Link href="/import-attendance" className={cn(sbSubRow,
                               isActiveLink('/import-attendance') 
-                                ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-md' 
-                                : 'text-blue-200 hover:text-white hover:bg-blue-700/50'
-                            }`}>
+                                ? sbSubActive
+                                : sbSubIdle
+                            )}>
                               <span className="font-medium">Import Attendance</span>
                             </Link>
                           </SidebarMenuSubButton>
@@ -720,57 +1057,86 @@ export function PageLayout({ children }: PageLayoutProps) {
                 {(isSuperAdmin || isManager) && (
                   <Collapsible open={openSections.reports} onOpenChange={(open) => setOpenSections(prev => ({ ...prev, reports: open }))}>
                     <CollapsibleTrigger asChild>
-                      <SidebarMenuButton className="text-blue-100 hover:text-white hover:bg-gradient-to-r hover:from-blue-700 hover:to-blue-600 transition-all duration-300 rounded-lg mx-2 px-3 py-2.5 shadow-sm hover:shadow-md">
-                        <Icon icon="mdi:chart-line" className="w-5 h-5" />
-                        <span className="font-medium">Reports</span>
-                        <Icon 
-                          icon="mdi:chevron-right" 
-                          className={`w-4 h-4 ml-auto transition-transform duration-300 ${openSections.reports ? 'rotate-90' : ''}`} 
+                      <SidebarMenuButton
+                        size="lg"
+                        className={cn(
+                          sbMenuBtnReset,
+                          sbRow,
+                          "mx-0 justify-between",
+                          reportsSectionActive
+                            ? sbActive
+                            : cn(
+                                sbIdle,
+                                openSections.reports &&
+                                  "font-semibold text-gray-900"
+                              )
+                        )}
+                      >
+                        <span className="flex items-center gap-3 min-w-0">
+                          <Icon
+                            icon="mdi:chart-line"
+                            className={cn(
+                              "w-5 h-5 shrink-0",
+                              reportsSectionActive
+                                ? "text-gray-900"
+                                : "text-gray-500"
+                            )}
+                          />
+                          <span className="truncate font-semibold">
+                            Reports
+                          </span>
+                        </span>
+                        <Icon
+                          icon="mdi:chevron-down"
+                          className={cn(
+                            "w-4 h-4 shrink-0 text-gray-500 transition-transform duration-300",
+                            openSections.reports && "rotate-180"
+                          )}
                         />
                       </SidebarMenuButton>
                     </CollapsibleTrigger>
                     <CollapsibleContent>
-                      <SidebarMenuSub className="ml-4 mt-2 space-y-1">
+                      <SidebarMenuSub className="ml-5 mt-1 space-y-0.5 border-l border-[#f0f0f0] pl-3">
                         <SidebarMenuSubItem>
                           <SidebarMenuSubButton asChild>
-                            <Link href="/attendance-reports" className={`transition-all duration-200 rounded-md px-3 py-2 ${
+                            <Link href="/attendance-reports" className={cn(sbSubRow,
                               isActiveLink('/attendance-reports') 
-                                ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-md' 
-                                : 'text-blue-200 hover:text-white hover:bg-blue-700/50'
-                            }`}>
+                                ? sbSubActive
+                                : sbSubIdle
+                            )}>
                               <span className="font-medium">Attendance Reports</span>
                             </Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
                         <SidebarMenuSubItem>
                           <SidebarMenuSubButton asChild>
-                            <Link href="/leave-reports" className={`transition-all duration-200 rounded-md px-3 py-2 ${
+                            <Link href="/leave-reports" className={cn(sbSubRow,
                               isActiveLink('/leave-reports') 
-                                ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-md' 
-                                : 'text-blue-200 hover:text-white hover:bg-blue-700/50'
-                            }`}>
+                                ? sbSubActive
+                                : sbSubIdle
+                            )}>
                               <span className="font-medium">Leave Reports</span>
                             </Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
                         <SidebarMenuSubItem>
                           <SidebarMenuSubButton asChild>
-                            <Link href="/salary-statements" className={`transition-all duration-200 rounded-md px-3 py-2 ${
+                            <Link href="/salary-statements" className={cn(sbSubRow,
                               isActiveLink('/salary-statements') 
-                                ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-md' 
-                                : 'text-blue-200 hover:text-white hover:bg-blue-700/50'
-                            }`}>
+                                ? sbSubActive
+                                : sbSubIdle
+                            )}>
                               <span className="font-medium">Salary Statements</span>
                             </Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
                         <SidebarMenuSubItem>
                           <SidebarMenuSubButton asChild>
-                            <Link href="/canteen/reports" className={`transition-all duration-200 rounded-md px-3 py-2 ${
+                            <Link href="/canteen/reports" className={cn(sbSubRow,
                               isActiveLink('/canteen/reports') 
-                                ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-md' 
-                                : 'text-blue-200 hover:text-white hover:bg-blue-700/50'
-                            }`}>
+                                ? sbSubActive
+                                : sbSubIdle
+                            )}>
                               <span className="font-medium">Canteen Reports</span>
                             </Link>
                           </SidebarMenuSubButton>
@@ -783,46 +1149,75 @@ export function PageLayout({ children }: PageLayoutProps) {
                 {(isSuperAdmin || isManager) && (
                   <Collapsible open={openSections.canteen} onOpenChange={(open) => setOpenSections(prev => ({ ...prev, canteen: open }))}>
                     <CollapsibleTrigger asChild>
-                      <SidebarMenuButton className="text-blue-100 hover:text-white hover:bg-gradient-to-r hover:from-blue-700 hover:to-blue-600 transition-all duration-300 rounded-lg mx-2 px-3 py-2.5 shadow-sm hover:shadow-md">
-                        <Icon icon="mdi:silverware-fork-knife" className="w-5 h-5" />
-                        <span className="font-medium">Canteen Management</span>
-                        <Icon 
-                          icon="mdi:chevron-right" 
-                          className={`w-4 h-4 ml-auto transition-transform duration-300 ${openSections.canteen ? 'rotate-90' : ''}`} 
+                      <SidebarMenuButton
+                        size="lg"
+                        className={cn(
+                          sbMenuBtnReset,
+                          sbRow,
+                          "mx-0 justify-between",
+                          canteenSectionActive
+                            ? sbActive
+                            : cn(
+                                sbIdle,
+                                openSections.canteen &&
+                                  "font-semibold text-gray-900"
+                              )
+                        )}
+                      >
+                        <span className="flex items-center gap-3 min-w-0">
+                          <Icon
+                            icon="mdi:silverware-fork-knife"
+                            className={cn(
+                              "w-5 h-5 shrink-0",
+                              canteenSectionActive
+                                ? "text-gray-900"
+                                : "text-gray-500"
+                            )}
+                          />
+                          <span className="truncate font-semibold">
+                            Canteen Management
+                          </span>
+                        </span>
+                        <Icon
+                          icon="mdi:chevron-down"
+                          className={cn(
+                            "w-4 h-4 shrink-0 text-gray-500 transition-transform duration-300",
+                            openSections.canteen && "rotate-180"
+                          )}
                         />
                       </SidebarMenuButton>
                     </CollapsibleTrigger>
                     <CollapsibleContent>
-                      <SidebarMenuSub className="ml-4 mt-2 space-y-1">
+                      <SidebarMenuSub className="ml-5 mt-1 space-y-0.5 border-l border-[#f0f0f0] pl-3">
                         <SidebarMenuSubItem>
                           <SidebarMenuSubButton asChild>
-                            <Link href="/canteen" className={`transition-all duration-200 rounded-md px-3 py-2 ${
+                            <Link href="/canteen" className={cn(sbSubRow,
                               isActiveLink('/canteen') 
-                                ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-md' 
-                                : 'text-blue-200 hover:text-white hover:bg-blue-700/50'
-                            }`}>
+                                ? sbSubActive
+                                : sbSubIdle
+                            )}>
                               <span className="font-medium">Dashboard</span>
                             </Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
                         <SidebarMenuSubItem>
                           <SidebarMenuSubButton asChild>
-                            <Link href="/canteen/setup" className={`transition-all duration-200 rounded-md px-3 py-2 ${
+                            <Link href="/canteen/setup" className={cn(sbSubRow,
                               isActiveLink('/canteen/setup') 
-                                ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-md' 
-                                : 'text-blue-200 hover:text-white hover:bg-blue-700/50'
-                            }`}>
+                                ? sbSubActive
+                                : sbSubIdle
+                            )}>
                               <span className="font-medium">Setup</span>
                             </Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
                         <SidebarMenuSubItem>
                           <SidebarMenuSubButton asChild>
-                            <Link href="/canteen/reports" className={`transition-all duration-200 rounded-md px-3 py-2 ${
+                            <Link href="/canteen/reports" className={cn(sbSubRow,
                               isActiveLink('/canteen/reports') 
-                                ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-md' 
-                                : 'text-blue-200 hover:text-white hover:bg-blue-700/50'
-                            }`}>
+                                ? sbSubActive
+                                : sbSubIdle
+                            )}>
                               <span className="font-medium">Reports</span>
                             </Link>
                           </SidebarMenuSubButton>
@@ -834,35 +1229,93 @@ export function PageLayout({ children }: PageLayoutProps) {
               </SidebarMenu>
             </SidebarGroup>
           </SidebarContent>
+
+          <div className="mt-auto border-t border-[#e8e8e8] p-4 flex flex-col items-center gap-3">
+            <button
+              type="button"
+              className="w-11 h-11 rounded-full bg-white shadow-[0_2px_10px_rgba(0,0,0,0.06)] border border-[#ececec] flex items-center justify-center text-gray-500 hover:text-gray-800 hover:bg-[#fafafa] transition-colors"
+              aria-label="Support"
+            >
+              <Icon icon="mdi:message-outline" className="w-[22px] h-[22px]" />
+            </button>
+            <p className="text-[10px] text-gray-400 font-medium">v1.0.0</p>
+          </div>
         </Sidebar>
         <SidebarInset>
-          <div className="min-h-screen bg-gray-50 overflow-x-hidden">
-            <header className="bg-gradient-to-r from-blue-800 to-blue-700 border-b border-blue-600 px-3 sm:px-6 py-3 sm:py-4 shadow-lg">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                  <SidebarTrigger className="text-white hover:bg-blue-600/50 transition-colors duration-200" />
+          <div className="min-h-screen bg-[#f4f4f4] overflow-x-hidden">
+            <header className="sticky top-0 z-30 bg-[#f4f4f4]/95 backdrop-blur-sm px-4 sm:px-8 pt-5 pb-4">
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                <div className="flex items-center gap-3 min-w-0">
+                  <SidebarTrigger className="text-gray-500 hover:text-gray-800 hover:bg-white rounded-full h-10 w-10 shrink-0 border border-[#e8e8e8] shadow-sm" />
+                  <h1 className="text-2xl sm:text-[1.65rem] font-bold text-gray-900 tracking-tight truncate">
+                    {pageTitle}
+                  </h1>
                 </div>
-                <div className="flex items-center gap-4">
+                <div className="flex flex-1 flex-col sm:flex-row items-stretch sm:items-center gap-3 lg:max-w-2xl lg:mx-6">
+                  <div className="flex flex-1 items-center gap-2.5 bg-white rounded-full border border-[#e8e8e8] shadow-[0_2px_12px_rgba(0,0,0,0.04)] px-4 py-2.5 min-w-0">
+                    <Icon icon="mdi:magnify" className="w-5 h-5 text-gray-400 shrink-0" />
+                    <Input
+                      type="search"
+                      placeholder="Search anything..."
+                      className="border-0 bg-transparent shadow-none focus-visible:ring-0 h-8 px-0 text-sm placeholder:text-gray-400"
+                    />
+                  </div>
+                </div>
+                <div className="flex items-center justify-end gap-2 sm:gap-2 shrink-0">
+                  {(isSuperAdmin || isManager) && (
+                    <Link
+                      href="/manage-employees"
+                      title="Employees"
+                      className="p-2.5 rounded-full bg-white border border-[#e8e8e8] shadow-sm text-gray-600 hover:bg-[#fafafa] hover:text-gray-900 transition-colors"
+                      aria-label="Manage employees"
+                    >
+                      <Icon
+                        icon="mdi:account-group-outline"
+                        className="w-[22px] h-[22px]"
+                      />
+                    </Link>
+                  )}
+                  <Link
+                    href="/attendance-logs"
+                    title="Attendance logs"
+                    className="p-2.5 rounded-full bg-white border border-[#e8e8e8] shadow-sm text-gray-600 hover:bg-[#fafafa] hover:text-gray-900 transition-colors hidden sm:flex"
+                    aria-label="Attendance logs"
+                  >
+                    <Icon
+                      icon="mdi:clipboard-text-clock-outline"
+                      className="w-[22px] h-[22px]"
+                    />
+                  </Link>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                      <button className="flex items-center gap-3 cursor-pointer focus:outline-none">
-                        <Avatar className="w-8 h-8 ring-2 ring-blue-300">
-                          <AvatarImage src="https://wqnmyfkavrotpmupbtou.supabase.co/storage/v1/object/public/reweb/blocks/placeholder.png" />
-                          <AvatarFallback className="bg-blue-500 text-white">
+                      <button
+                        type="button"
+                        className="flex items-center gap-2 cursor-pointer focus:outline-none rounded-full pl-1 pr-1 py-1 hover:bg-white/80 transition-colors"
+                      >
+                        <Avatar className="w-10 h-10 ring-[3px] ring-white shadow-md">
+                          <AvatarImage src="" />
+                          <AvatarFallback className="bg-gray-900 text-white text-sm font-bold">
                             {currentUser?.username?.[0]?.toUpperCase() || "A"}
                           </AvatarFallback>
                         </Avatar>
-                        <span className="text-white font-medium">{currentUser?.username || "admin"}</span>
-                        <Icon icon="mdi:chevron-down" className="w-4 h-4 text-white" />
                       </button>
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-48">
+                    <DropdownMenuContent align="end" className="w-52 rounded-2xl">
+                      <div className="px-3 py-2 border-b border-gray-100">
+                        <p className="text-sm font-semibold text-gray-900 truncate">
+                          {currentUser?.username || "User"}
+                        </p>
+                        <p className="text-[11px] text-gray-400 font-medium mt-0.5">
+                          {currentUser?.role || "—"}
+                        </p>
+                      </div>
                       <DropdownMenuItem
-                        className="cursor-pointer text-red-600 focus:text-red-600"
+                        className="cursor-pointer text-red-600 focus:text-red-600 rounded-xl m-1"
                         onClick={() => {
                           localStorage.removeItem("accessToken");
                           localStorage.removeItem("user");
-                          document.cookie = "accessToken=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+                          document.cookie =
+                            "accessToken=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
                           router.push("/login");
                         }}
                       >
@@ -874,9 +1327,7 @@ export function PageLayout({ children }: PageLayoutProps) {
                 </div>
               </div>
             </header>
-            <main className="p-3 sm:p-6 overflow-x-hidden">
-              {children}
-            </main>
+            <main className="px-4 sm:px-8 pb-8 pt-0 overflow-x-hidden">{children}</main>
           </div>
         </SidebarInset>
       </SidebarProvider>

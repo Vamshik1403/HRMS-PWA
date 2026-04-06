@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card"
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "../components/ui/dialog";
+import { FormDrawer } from "../components/ui/form-drawer";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../components/ui/table";
 import { Badge } from "../components/ui/badge";
 import { Icon } from "@iconify/react";
@@ -13,6 +13,7 @@ import { Plus, Search, Edit, Trash2, Download } from "lucide-react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { useCurrentUser } from "../hooks/useCurrentUser"
+import { toast } from "sonner";
 
 /* =======================
    Types (aligned to API)
@@ -300,6 +301,7 @@ async function getManagerAssignedScope(username: string): Promise<ManagerScope |
     return null;
   } catch (error) {
     console.error("Error fetching manager scope:", error);
+    toast.error("Failed to load data.");
     return null;
   }
 }
@@ -358,6 +360,7 @@ async function getSalaryAdvanceRepayments(
 
   } catch (error) {
     console.error("Error fetching salary advance repayments:", error);
+    toast.error("Failed to load data.");
     return [];
   }
 }
@@ -530,6 +533,7 @@ async function getReimbursementAmount(employeeId: number, selectedMonthLabel: st
         return overlaps;
       } catch (error) {
         console.error("Error parsing reimbursement date:", reimbursement.date, error);
+        toast.error("Operation failed. Please try again.");
         return false;
       }
     });
@@ -552,6 +556,7 @@ async function getReimbursementAmount(employeeId: number, selectedMonthLabel: st
 
   } catch (error) {
     console.error("Error fetching reimbursements:", error);
+    toast.error("Failed to load data.");
     return 0;
   }
 }
@@ -567,6 +572,7 @@ async function fetchAllLogs(): Promise<any[]> {
     all.push(...res);
   } catch (err) {
     console.error("Failed to fetch /emp-attendance-logs", err);
+    toast.error("Failed to load data.");
   }
   return all;
 }
@@ -903,6 +909,7 @@ async function calculateSalaryCounts(
     };
   } catch (err) {
     console.error("Error in calculateSalaryCounts:", err);
+    toast.error("Operation failed. Please try again.");
     return null;
   }
 }
@@ -1188,7 +1195,7 @@ function downloadSalarySlipPDF(payload: {
   }
   catch (err) {
     console.error("Error generating salary slip:", err);
-    alert("Error generating salary slip. Please check console for details.");
+    toast.error("Error generating salary slip. Please check console for details.");
   }
 }
 
@@ -1531,6 +1538,7 @@ export function GenerateSalaryManagement() {
               }
             } catch (error) {
               console.error("Error fetching company name:", error);
+              toast.error("Failed to load data.");
             }
           }
 
@@ -1564,6 +1572,7 @@ export function GenerateSalaryManagement() {
               }
             } catch (error) {
               console.error("Error fetching branch name:", error);
+              toast.error("Failed to load data.");
             }
           }
         }
@@ -1641,6 +1650,7 @@ export function GenerateSalaryManagement() {
 
     } catch (e) {
       console.error("Failed to load GenerateSalary:", e)
+      toast.error("Failed to load data.");
     }
   }
 
@@ -1678,6 +1688,7 @@ export function GenerateSalaryManagement() {
         }
       } catch (err) {
         console.error("Error fetching employee bank details from manage-emp:", err);
+        toast.error("Failed to load data.");
       } finally {
         setIsLoadingBankDetails(false);
       }
@@ -1710,12 +1721,12 @@ export function GenerateSalaryManagement() {
       });
 
       if (!res.ok) throw new Error(await res.text());
-      alert("✅ Payment marked successfully!");
+      toast.success("Payment marked successfully!");
       setIsPaymentDialogOpen(false);
       fetchAll();
     } catch (error) {
       console.error("Payment update failed:", error);
-      alert("❌ Payment update failed: " + (error as any).message);
+      toast.error("Payment update failed: " + (error as any).message);
     }
   }
 
@@ -1744,8 +1755,10 @@ export function GenerateSalaryManagement() {
       await fetchAll();
       resetForm();
       setIsDialogOpen(false);
+      toast.success(editing ? "Updated successfully" : "Created successfully");
     } catch (err) {
       console.error("Save failed:", err);
+      toast.error("Failed to save. Please try again.");
     }
   }
 
@@ -1755,8 +1768,10 @@ export function GenerateSalaryManagement() {
       const res = await fetch(`${API.generateSalary}/${id}`, { method: "DELETE" });
       if (!res.ok) throw new Error(await res.text());
       await fetchAll();
+      toast.success("Deleted successfully");
     } catch (e) {
       console.error("Delete failed:", e);
+      toast.error("Failed to delete. Please try again.");
     }
   }
 
@@ -1812,6 +1827,7 @@ export function GenerateSalaryManagement() {
         await refreshCompanyDrivenOptions(row.companyID);
       } catch (error) {
         console.error("Failed to refresh company options:", error);
+        toast.error("Operation failed. Please try again.");
       }
     } else {
       setSelectedCompanyFYStart(null);
@@ -2010,6 +2026,7 @@ export function GenerateSalaryManagement() {
       setFormData((p) => (opts.includes(p.monthLabel) ? p : { ...p, monthLabel: "" }));
     } catch (e) {
       console.error("Failed to refresh company options:", e);
+      toast.error("Operation failed. Please try again.");
       setSelectedCompanyFYStart(null);
       setSelectedCompanyStartDay("1");
       setSalaryPeriodOptions([]);
@@ -2068,6 +2085,7 @@ export function GenerateSalaryManagement() {
       setBrList([]);
     } catch (error) {
       console.error("Error handling branch selection:", error);
+      toast.error("Operation failed. Please try again.");
     }
   };
 
@@ -2083,7 +2101,7 @@ export function GenerateSalaryManagement() {
       })
     } catch (err) {
       console.error(err)
-      alert("❌ Error generating salary slip")
+      toast.error("Error generating salary slip")
     }
   }
 
@@ -2094,7 +2112,7 @@ export function GenerateSalaryManagement() {
       setViewSlipOpen(true)
     } catch (err) {
       console.error(err)
-      alert("❌ Unable to preview salary slip")
+      toast.error("Unable to preview salary slip")
     }
   }
 
@@ -2298,17 +2316,13 @@ export function GenerateSalaryManagement() {
 
   return (
     <>
-      <Dialog open={viewSlipOpen} onOpenChange={setViewSlipOpen}>
-        <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Salary Slip Preview</DialogTitle>
-          </DialogHeader>
+      <FormDrawer open={viewSlipOpen} onOpenChange={setViewSlipOpen} title={"Salary Slip Preview"} description={""}>
           {viewSlipData ? (
             <SalarySlipPreview data={viewSlipData} />
           ) : (
             <div className="text-sm text-gray-500">Loading…</div>
           )}
-          <DialogFooter>
+          <div className="flex justify-end gap-3 pt-4">
             <Button variant="outline" onClick={() => setViewSlipOpen(false)}>
               Close
             </Button>
@@ -2318,17 +2332,11 @@ export function GenerateSalaryManagement() {
                 Download PDF
               </Button>
             )}
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </div>
+        
+      </FormDrawer>
 
-      <Dialog open={isPaymentDialogOpen} onOpenChange={setIsPaymentDialogOpen}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-hidden flex flex-col p-0">
-          <DialogHeader className="px-6 py-4 border-b bg-white sticky top-0 z-10">
-            <DialogTitle className="text-xl font-semibold text-green-800">
-              Make Payment
-            </DialogTitle>
-          </DialogHeader>
+      <FormDrawer open={isPaymentDialogOpen} onOpenChange={setIsPaymentDialogOpen} title={"Make Payment"} description={""}>
 
           <div className="flex-1 overflow-y-auto px-6 py-4">
             {selectedSalaryRow && (
@@ -2385,6 +2393,7 @@ export function GenerateSalaryManagement() {
                             }
                           } catch (err) {
                             console.error("Error fetching employee bank details:", err);
+                            toast.error("Failed to load data.");
                           } finally {
                             setIsLoadingBankDetails(false);
                           }
@@ -2524,7 +2533,7 @@ export function GenerateSalaryManagement() {
             )}
           </div>
 
-          <DialogFooter className="px-6 py-4 border-t bg-gray-50 sticky bottom-0">
+          <div className="flex justify-end gap-3 pt-4">
             <Button
               variant="outline"
               onClick={() => setIsPaymentDialogOpen(false)}
@@ -2540,9 +2549,9 @@ export function GenerateSalaryManagement() {
               <Icon icon="mdi:check-circle" className="w-4 h-4 mr-2" />
               Mark as Paid
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </div>
+        
+      </FormDrawer>
 
       <div className="space-y-6 w-full max-w-7xl mx-auto px-4">
         <div className="flex items-center justify-between w-full">
@@ -2551,23 +2560,14 @@ export function GenerateSalaryManagement() {
             <p className="text-gray-600 mt-1 text-sm">Generate and manage employee salary payments</p>
           </div>
 
-          <Dialog open={isDialogOpen} onOpenChange={(o) => { setIsDialogOpen(o); if (!o) resetForm(); }}>
-            {canManage && (
-              <DialogTrigger asChild>
-                <Button onClick={resetForm} className="bg-blue-600 hover:bg-blue-700 flex-shrink-0 text-sm px-3 py-2">
-                  <Plus className="w-4 h-4 mr-1" />
-                  Add Salary Generation
-                </Button>
-              </DialogTrigger>
-            )}
+          {canManage && (
+            <Button onClick={() => { resetForm(); setIsDialogOpen(true); }} className="bg-blue-600 hover:bg-blue-700 flex-shrink-0 text-sm px-3 py-2">
+              <Plus className="w-4 h-4 mr-1" />
+              Add Salary Generation
+            </Button>
+          )}
 
-            <DialogContent className="sm:max-w-[720px] max-h-[90vh] overflow-y-auto">
-              <DialogHeader>
-                <DialogTitle>{editing ? "Edit Salary Generation" : "Add New Salary Generation"}</DialogTitle>
-                <DialogDescription>
-                  {editing ? "Update the salary generation information below." : "Fill in the details to add a new salary generation."}
-                </DialogDescription>
-              </DialogHeader>
+          <FormDrawer open={isDialogOpen} onOpenChange={(o) => { setIsDialogOpen(o); if (!o) resetForm(); }} title={editing ? "Edit Salary Generation" : "Add New Salary Generation"} description={editing ? "Update the salary generation information below." : "Fill in the details to add a new salary generation."}>
 
               <form onSubmit={handleSubmit} className="space-y-6">
                 <div className="space-y-4">
@@ -2827,17 +2827,17 @@ export function GenerateSalaryManagement() {
                   </div>
                 </div>
 
-                <DialogFooter>
+                <div className="flex justify-end gap-3 pt-4">
                   <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
                     Cancel
                   </Button>
                   <Button type="submit" className="bg-blue-600 hover:bg-blue-700">
                     {editing ? "Update Salary Generation" : "Add Salary Generation"}
                   </Button>
-                </DialogFooter>
+                </div>
               </form>
-            </DialogContent>
-          </Dialog>
+            
+          </FormDrawer>
         </div>
 
         <Card>

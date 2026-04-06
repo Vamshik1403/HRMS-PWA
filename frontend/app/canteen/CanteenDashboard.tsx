@@ -113,7 +113,6 @@ export function CanteenDashboard() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Canteen Management</h1>
           <p className="text-sm text-gray-500 mt-1">
             {dashboard?.defaultTokenEnabled
               ? "Default Token: Enabled — All check-in employees are assigned tokens by default"
@@ -134,23 +133,23 @@ export function CanteenDashboard() {
         <>
           <div className={`grid grid-cols-1 sm:grid-cols-2 ${dashboard?.defaultTokenEnabled ? 'lg:grid-cols-5' : 'lg:grid-cols-4'} gap-4`}>
             {cards.map((c) => (
-              <Card
+              <div
                 key={c.label}
-                className="cursor-pointer hover:shadow-lg transition-shadow"
+                className={`relative overflow-hidden rounded-2xl bg-gradient-to-br ${c.color} p-5 text-white cursor-pointer hover:shadow-lg transition-shadow`}
                 onClick={() => fetchDetail(c.type)}
               >
-                <CardContent className="p-6">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium text-gray-500">{c.label}</p>
-                      <p className="text-3xl font-bold text-gray-900 mt-1">{c.value}</p>
-                    </div>
-                    <div className={`w-12 h-12 rounded-full bg-gradient-to-r ${c.color} flex items-center justify-center`}>
-                      <Icon icon={c.icon} className="w-6 h-6 text-white" />
+                <div className="absolute top-0 right-0 w-20 h-20 bg-white/5 rounded-full -translate-y-8 translate-x-8" />
+                <div className="absolute bottom-0 left-0 w-14 h-14 bg-white/5 rounded-full translate-y-6 -translate-x-6" />
+                <div className="relative">
+                  <div className="flex items-center justify-between mb-3">
+                    <p className="text-sm font-medium text-white/80">{c.label}</p>
+                    <div className="w-10 h-10 rounded-lg bg-white/15 flex items-center justify-center backdrop-blur-sm">
+                      <Icon icon={c.icon} className="w-5 h-5 text-white" />
                     </div>
                   </div>
-                </CardContent>
-              </Card>
+                  <p className="text-3xl font-extrabold tracking-tight tabular-nums">{c.value}</p>
+                </div>
+              </div>
             ))}
           </div>
 

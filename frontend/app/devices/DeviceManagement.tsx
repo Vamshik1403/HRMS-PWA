@@ -18,6 +18,7 @@ import { Icon } from "@iconify/react";
 import { Plus, Search, Edit, Trash2, ArrowLeft, X, Save } from "lucide-react";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import { useRouter } from "next/navigation";
+import { FormDrawer } from "../components/ui/form-drawer";
 
 // ---------------------------
 // Types aligned to backend
@@ -516,7 +517,6 @@ export function DeviceManagement() {
       {/* Header */}
       <div className="flex items-center justify-between w-full">
         <div className="min-w-0 flex-1">
-          <h1 className="text-2xl font-bold text-gray-900">Devices</h1>
           <p className="text-gray-600 mt-1 text-sm">Manage your devices</p>
         </div>
 
@@ -524,7 +524,7 @@ export function DeviceManagement() {
           {!isAddingNew && canManage && (
             <Button
               onClick={() => { resetForm(); setIsAddingNew(true); }}
-              className="bg-blue-600 hover:bg-blue-700 flex-shrink-0 text-sm px-3 py-2"
+              className="bg-gray-900 hover:bg-gray-800 flex-shrink-0 text-sm px-3 py-2"
             >
               <Plus className="w-4 h-4 mr-1" />
               Add Device
@@ -542,16 +542,13 @@ export function DeviceManagement() {
         </div>
       </div>
 
-      {/* Add/Edit Form - Inline */}
-      {isAddingNew && (
-        <Card className="border-2 border-blue-200">
-          <CardHeader className="bg-blue-50">
-            <CardTitle className="text-lg flex items-center gap-2">
-              <Icon icon="mdi:devices" className="w-5 h-5 text-blue-600" />
-              {editingDevice ? "Edit Device" : "Add New Device"}
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-6">
+      {/* Add/Edit Form - Drawer */}
+      <FormDrawer
+        open={isAddingNew}
+        onOpenChange={(v) => { if (!v) handleCancel(); }}
+        title={editingDevice ? "Edit Device" : "Add New Device"}
+      >
+        <div>
             {error && (
               <div className="rounded-md border border-red-200 bg-red-50 text-red-700 px-3 py-2 text-sm mb-4">
                 {error}
@@ -767,18 +764,16 @@ export function DeviceManagement() {
                 <Button type="button" variant="outline" onClick={handleCancel}>
                   Cancel
                 </Button>
-                <Button type="submit" className="bg-blue-600 hover:bg-blue-700" disabled={saving}>
+                <Button type="submit" className="bg-gray-900 hover:bg-gray-800" disabled={saving}>
                   <Save className="w-4 h-4 mr-1" />
                   {saving ? "Saving..." : editingDevice ? "Update Device" : "Add Device"}
                 </Button>
               </div>
             </form>
-          </CardContent>
-        </Card>
-      )}
+        </div>
+      </FormDrawer>
 
-      {/* Search and Filters - Hide when adding/editing */}
-      {!isAddingNew && (
+      {/* Search and Filters */}
         <Card>
           <CardContent className="p-6">
             <div className="flex items-center space-x-4 w-full">
@@ -797,10 +792,8 @@ export function DeviceManagement() {
             </div>
           </CardContent>
         </Card>
-      )}
 
-      {/* Device Table - Hide when adding/editing */}
-      {!isAddingNew && (
+      {/* Device Table */}
         <Card className="w-full">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -887,7 +880,6 @@ export function DeviceManagement() {
             </div>
           </CardContent>
         </Card>
-      )}
     </div>
   );
 }

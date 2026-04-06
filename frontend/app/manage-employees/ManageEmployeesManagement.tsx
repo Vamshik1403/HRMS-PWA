@@ -31,6 +31,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "../components/ui/dialog";
+import { FormDrawer } from "../components/ui/form-drawer";
 
 /* =========================
    Types aligned to backend
@@ -1968,10 +1969,10 @@ const addDevMap = () => setFormData(p => ({
           empDepartmentIdsToDelete: originalEmpDepartmentIds.filter(id => !empDeptRemaining.has(id)),
           empEmploymentTypeIdsToDelete: originalEmpEmploymentTypeIds.filter(id => !empEmpTypeRemaining.has(id)),
           empEmploymentStatusIdsToDelete: originalEmpEmploymentStatusIds.filter(id => !empEmpStatusRemaining.has(id)),
-          empWorkShiftIdsToDelete: originalEmpWorkShiftIds.filter(id => !empWorkShiftRemaining.has(id)),
-          empAttendancePolicyIdsToDelete: originalEmpAttendancePolicyIds.filter(id => !empAttPolicyRemaining.has(id)),
-          empLeavePolicyIdsToDelete: originalEmpLeavePolicyIds.filter(id => !empLeavePolicyRemaining.has(id)),
-          empContractorIdsToDelete: originalEmpContractorIds.filter(id => !empContractorRemaining.has(id)),
+          empWorkShiftIdsToDelete: originalEmpWorkShiftIds.filter(id => !empWSRemaining.has(id)),
+          empAttendancePolicyIdsToDelete: originalEmpAttendancePolicyIds.filter(id => !empAPRemaining.has(id)),
+          empLeavePolicyIdsToDelete: originalEmpLeavePolicyIds.filter(id => !empLPRemaining.has(id)),
+          empContractorIdsToDelete: originalEmpContractorIds.filter(id => !empCtrRemaining.has(id)),
         } : {}),
       };
 
@@ -2335,7 +2336,6 @@ const addDevMap = () => setFormData(p => ({
       {/* Header */}
       <div className="flex items-center justify-between w-full">
         <div className="min-w-0 flex-1">
-          <h1 className="text-2xl font-bold text-gray-900">Manage Employees</h1>
           <p className="text-gray-600 mt-1 text-sm">Create, read, update and delete employees</p>
         </div>
 
@@ -2343,7 +2343,7 @@ const addDevMap = () => setFormData(p => ({
           {!isAddingNew && !isViewing && canManage && (
             <Button
               onClick={() => { resetForm(); setIsAddingNew(true); }}
-              className="bg-blue-600 hover:bg-blue-700 flex-shrink-0 text-sm px-3 py-2"
+              className="bg-gray-900 hover:bg-gray-800 flex-shrink-0 text-sm px-3 py-2"
             >
               <Plus className="w-4 h-4 mr-1" /> Add Employee
             </Button>
@@ -2360,16 +2360,13 @@ const addDevMap = () => setFormData(p => ({
         </div>
       </div>
 
-      {/* Add/Edit Form - Inline */}
-      {isAddingNew && (
-        <Card className="border-2 border-blue-200">
-          <CardHeader className="bg-blue-50">
-            <CardTitle className="text-lg flex items-center gap-2">
-              <Icon icon="mdi:account-group" className="w-5 h-5 text-blue-600" />
-              {editingRow ? "Edit Employee" : "Add New Employee"}
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-6">
+      {/* Add/Edit Form - Drawer */}
+      <FormDrawer
+        open={isAddingNew}
+        onOpenChange={(v) => { if (!v) handleCancel(); }}
+        title={editingRow ? "Edit Employee" : "Add New Employee"}
+      >
+        <div>
             {error && (
               <div className="rounded-md border border-red-200 bg-red-50 text-red-700 px-3 py-2 text-sm mb-4">
                 {error}
@@ -3713,26 +3710,23 @@ const addDevMap = () => setFormData(p => ({
                 <Button type="button" variant="outline" onClick={handleCancel}>
                   Cancel
                 </Button>
-                <Button type="submit" className="bg-blue-600 hover:bg-blue-700" disabled={saving}>
+                <Button type="submit" className="bg-gray-900 hover:bg-gray-800" disabled={saving}>
                   <Save className="w-4 h-4 mr-1" />
                   {saving ? "Saving..." : editingRow ? "Update Employee" : "Add Employee"}
                 </Button>
               </div>
             </form>
-          </CardContent>
-        </Card>
-      )}
+        </div>
+      </FormDrawer>
 
-      {/* View Details - Inline */}
-      {isViewing && viewRow && (
-        <Card className="border-2 border-gray-200">
-          <CardHeader className="bg-gray-50">
-            <CardTitle className="text-lg flex items-center gap-2">
-              <Icon icon="mdi:account-group" className="w-5 h-5 text-gray-600" />
-              Employee Details
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-6">
+      {/* View Details - Drawer */}
+      <FormDrawer
+        open={!!(isViewing && viewRow)}
+        onOpenChange={(v) => { if (!v) handleCancel(); }}
+        title="Employee Details"
+      >
+        {viewRow && (
+        <div>
             <div className="space-y-3">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="p-3 bg-gray-50 rounded-lg"><strong>Name:</strong> {viewRow.employeeFirstName} {viewRow.employeeLastName}</div>
@@ -3811,12 +3805,11 @@ const addDevMap = () => setFormData(p => ({
                 </div>
               )}
             </div>
-          </CardContent>
-        </Card>
-      )}
+        </div>
+        )}
+      </FormDrawer>
 
-      {/* Search & Table - Hide when adding/editing/viewing */}
-      {!isAddingNew && !isViewing && (
+      {/* Search & Table */}
         <>
           <Card>
             <CardContent className="p-6">
@@ -3948,7 +3941,6 @@ const addDevMap = () => setFormData(p => ({
             </CardContent>
           </Card>
         </>
-      )}
 
       {/* Quick-Add Dialog */}
       <Dialog open={!!quickAddOpen} onOpenChange={(open) => { if (!open) { setQuickAddOpen(null); setQuickAddSuggestions([]); } }}>
