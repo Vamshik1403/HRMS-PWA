@@ -61,7 +61,7 @@ export function ServiceProviderManagement() {
     try {
       const res = await fetch("http://localhost:8000/service-provider")
       const data = await res.json()
-      setServiceProviders(data)
+      setServiceProviders(Array.isArray(data) ? data : [])
     } catch (error) {
       console.error("Error fetching service providers:", error)
     }

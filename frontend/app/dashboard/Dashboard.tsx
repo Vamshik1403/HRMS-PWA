@@ -112,9 +112,12 @@ export default function DashboardPage() {
         }),
       ]);
 
-      const allEmployees: Employee[] = await empRes.json();
-      const allDepartments: Department[] = await deptRes.json();
-      const allAttendance: AttendanceLog[] = await attRes.json();
+      const empJson = await empRes.json();
+      const allEmployees: Employee[] = Array.isArray(empJson) ? empJson : [];
+      const deptJson = await deptRes.json();
+      const allDepartments: Department[] = Array.isArray(deptJson) ? deptJson : [];
+      const attJson = await attRes.json();
+      const allAttendance: AttendanceLog[] = Array.isArray(attJson) ? attJson : [];
       const allHeadcounts: DepartmentHeadcount[] = hcRes.ok
         ? await hcRes.json()
         : [];
