@@ -884,7 +884,7 @@ if (employee) await loadReimbursements(employee.employeeID)
 
       {/* Create/Edit Dialog */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col p-0">
+        <DialogContent className="max-h-[90vh] overflow-hidden flex flex-col p-0">
           <DialogHeader className="px-6 py-4 border-b bg-white sticky top-0 z-10">
             <DialogTitle className="text-xl font-semibold">
               {editing ? "Edit Reimbursement" : "Create New Reimbursement"}

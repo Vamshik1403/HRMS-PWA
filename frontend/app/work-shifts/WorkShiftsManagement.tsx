@@ -30,6 +30,7 @@ interface DaySchedule {
   day: string;
   startTime: string;
   endTime: string;
+  breakTimeMin: number;
   totalHours: number;
   isWeeklyOff: boolean;
 }
@@ -91,11 +92,11 @@ export function WorkShiftsManagement() {
     serviceProviderID: undefined as number | undefined,
     companyID: undefined as number | undefined,
     branchesID: undefined as number | undefined,
-    breakTimeMin: 0,
     weeklySchedule: DAYS_OF_WEEK.map((day) => ({
       day,
       startTime: "10:00",
       endTime: "18:00",
+      breakTimeMin: 0,
       totalHours: 8,
       isWeeklyOff: false,
     })),
@@ -249,15 +250,25 @@ export function WorkShiftsManagement() {
         workShiftType: shift.workShiftType || "",
         breakTimeMin: shift.breakTimeMin || 0,
         weeklySchedule:
-          shift.workShiftDay?.map((day: any) => ({
-            day: day.weekDay,
-            startTime: formatDbTime(day.startTime) || "10:00",
-            endTime: formatDbTime(day.endTime) || "18:00",
-            totalHours: day.totalMinutes
-              ? Math.round((day.totalMinutes / 60) * 10) / 10
-              : 8,
-            isWeeklyOff: day.weeklyOff || false,
-          })) || [],
+          shift.workShiftDay?.map((day: any) => {
+            const st = formatDbTime(day.startTime) || "10:00";
+            const et = formatDbTime(day.endTime) || "18:00";
+            const [sh, sm] = st.split(":").map(Number);
+            const [eh, em] = et.split(":").map(Number);
+            const rawDiffMin = (eh * 60 + em) - (sh * 60 + sm);
+            const storedTotalMin = day.totalMinutes || 0;
+            const derivedBreak = day.weeklyOff ? 0 : Math.max(0, rawDiffMin - storedTotalMin);
+            return {
+              day: day.weekDay,
+              startTime: st,
+              endTime: et,
+              breakTimeMin: derivedBreak,
+              totalHours: storedTotalMin
+                ? Math.round((storedTotalMin / 60) * 10) / 10
+                : 8,
+              isWeeklyOff: day.weeklyOff || false,
+            };
+          }) || [],
         createdAt: shift.createdAt
           ? new Date(shift.createdAt).toISOString().split("T")[0]
           : new Date().toISOString().split("T")[0],
@@ -355,7 +366,7 @@ export function WorkShiftsManagement() {
     const totalHours = calculateTotalHours(
       updatedSchedule[dayIndex].startTime,
       updatedSchedule[dayIndex].endTime,
-      formData.breakTimeMin
+      updatedSchedule[dayIndex].breakTimeMin
     );
     updatedSchedule[dayIndex].totalHours = totalHours;
 
@@ -381,6 +392,23 @@ export function WorkShiftsManagement() {
       ...prev,
       weeklySchedule: updatedSchedule,
     }));
+  };
+
+  const handleBreakTimeChange = (dayIndex: number, value: string) => {
+    const breakMin = parseInt(value.replace(/\D/g, "")) || 0;
+    const updatedSchedule = [...formData.weeklySchedule];
+    updatedSchedule[dayIndex] = {
+      ...updatedSchedule[dayIndex],
+      breakTimeMin: breakMin,
+      totalHours: updatedSchedule[dayIndex].isWeeklyOff
+        ? 0
+        : calculateTotalHours(
+            updatedSchedule[dayIndex].startTime,
+            updatedSchedule[dayIndex].endTime,
+            breakMin
+          ),
+    };
+    setFormData((prev) => ({ ...prev, weeklySchedule: updatedSchedule }));
   };
 
   // New function to handle isRotating change and reset weekly off checkboxes
@@ -434,7 +462,7 @@ export function WorkShiftsManagement() {
         isRotating: formData.isRotating,
         workShiftType: formData.workShiftType,
         isActive: "1",
-        breakTimeMin: formData.breakTimeMin || 0,
+        breakTimeMin: 0,
         workShiftDays,
       };
 
@@ -475,11 +503,11 @@ export function WorkShiftsManagement() {
       serviceProviderID: undefined,
       companyID: undefined,
       branchesID: undefined,
-      breakTimeMin: 0,
       weeklySchedule: DAYS_OF_WEEK.map((day) => ({
         day,
         startTime: "10:00",
         endTime: "18:00",
+        breakTimeMin: 0,
         totalHours: 8,
         isWeeklyOff: false,
       })),
@@ -518,7 +546,6 @@ export function WorkShiftsManagement() {
   };
 
   const handleEdit = (workShift: WorkShift) => {
-    const breakMin = (workShift as any).breakTimeMin || 0;
     setFormData({
       serviceProvider: workShift.serviceProvider || "",
       companyName: workShift.companyName || "",
@@ -530,15 +557,16 @@ export function WorkShiftsManagement() {
       serviceProviderID: workShift.serviceProviderID,
       companyID: workShift.companyID,
       branchesID: workShift.branchesID,
-      breakTimeMin: breakMin,
       weeklySchedule: workShift.weeklySchedule.map((day) => {
         const st = formatDbTime(day.startTime) || "10:00";
         const et = formatDbTime(day.endTime) || "18:00";
+        const dayBreak = day.breakTimeMin || 0;
         return {
           ...day,
           startTime: st,
           endTime: et,
-          totalHours: day.isWeeklyOff ? 0 : calculateTotalHours(st, et, breakMin),
+          breakTimeMin: dayBreak,
+          totalHours: day.isWeeklyOff ? 0 : calculateTotalHours(st, et, dayBreak),
         };
       }),
     });
@@ -698,32 +726,6 @@ export function WorkShiftsManagement() {
                 />
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="breakTimeMin">Break Time (Minutes)</Label>
-                <div className="flex items-center space-x-2">
-                  <Input
-                    id="breakTimeMin"
-                    type="text"
-                    value={(formData as any).breakTimeMin ?? 0}
-                    onChange={(e) => {
-                      const value = e.target.value.replace(/\D/g, "");
-                      const breakMin = parseInt(value) || 0;
-                      setFormData((prev) => ({
-                        ...prev,
-                        breakTimeMin: breakMin,
-                        weeklySchedule: prev.weeklySchedule.map((day) => ({
-                          ...day,
-                          totalHours: day.isWeeklyOff ? 0 : calculateTotalHours(day.startTime, day.endTime, breakMin),
-                        })),
-                      } as any));
-                    }}
-                    className="flex-1"
-                    placeholder="0"
-                  />
-                  <span className="text-sm text-gray-500">Min</span>
-                </div>
-              </div>
-
               {/* New Checkboxes Section */}
               <div className="space-y-4 border rounded-lg p-4 bg-gray-50">
                 <h3 className="text-md font-semibold">Shift Configuration</h3>
@@ -782,7 +784,7 @@ export function WorkShiftsManagement() {
                           End Time
                         </th>
                         <th className="border border-gray-300 px-3 py-2 text-left font-medium">
-                          Break Time
+                          Break Time (Min)
                         </th>
                         <th className="border border-gray-300 px-3 py-2 text-left font-medium">
                           Total Hours
@@ -830,10 +832,17 @@ export function WorkShiftsManagement() {
                               className="w-full"
                             />
                            </td>
-                          <td className="border border-gray-300 px-3 py-2 text-center">
-                            <span className="text-sm text-gray-600">
-                              {daySchedule.isWeeklyOff ? "—" : `${formData.breakTimeMin || 0}m`}
-                            </span>
+                          <td className="border border-gray-300 px-3 py-2">
+                            <Input
+                              type="text"
+                              value={daySchedule.breakTimeMin || 0}
+                              onChange={(e) =>
+                                handleBreakTimeChange(index, e.target.value)
+                              }
+                              disabled={daySchedule.isWeeklyOff || formData.isRotating}
+                              className="w-full text-center"
+                              placeholder="0"
+                            />
                            </td>
                           <td className="border border-gray-300 px-3 py-2 text-center">
                             <span className="font-medium">
@@ -943,12 +952,7 @@ export function WorkShiftsManagement() {
                   filteredWorkShifts.map((workShift) => {
                     const totalWeeklyHours = workShift.weeklySchedule
                       .filter((day) => !day.isWeeklyOff)
-                      .reduce((sum, day) => {
-                        const breakHours = ((workShift as any).breakTimeMin || 0) / 60;
-                        return sum + Math.max(0, day.totalHours - breakHours);
-                      }, 0);
-
-                    const breakTimeMin = (workShift as any).breakTimeMin || 0;
+                      .reduce((sum, day) => sum + day.totalHours, 0);
 
                     const scheduleSummary = workShift.weeklySchedule
                       .filter((day) => !day.isWeeklyOff)
@@ -986,7 +990,11 @@ export function WorkShiftsManagement() {
                           </div>
                         </TableCell>
                         <TableCell className="whitespace-nowrap text-center">
-                          <Badge variant="outline">{breakTimeMin > 0 ? `${breakTimeMin}m` : "—"}</Badge>
+                          <Badge variant="outline">
+                            {workShift.weeklySchedule.filter(d => !d.isWeeklyOff).some(d => (d.breakTimeMin || 0) > 0)
+                              ? workShift.weeklySchedule.filter(d => !d.isWeeklyOff).map(d => `${d.breakTimeMin || 0}`).join("/") + "m"
+                              : "—"}
+                          </Badge>
                         </TableCell>
                         <TableCell className="whitespace-nowrap text-center">
                           <Badge variant="outline">{Math.round(totalWeeklyHours * 10) / 10}h</Badge>

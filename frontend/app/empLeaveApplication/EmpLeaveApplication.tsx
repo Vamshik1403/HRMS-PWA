@@ -419,7 +419,7 @@ export function EmpLeaveApplication() {
               </Button>
             </DialogTrigger>
                       <DialogContent    onOpenAutoFocus={(e) => e.preventDefault()}
-className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto">
+className="max-h-[90vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>
                   {editingApplication ? "Edit Leave Application" : "Submit Leave Application"}
@@ -532,7 +532,7 @@ className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto">
         
         {/* === Revoke Leave Modal === */}
         <Dialog open={isRevokeDialogOpen} onOpenChange={setIsRevokeDialogOpen}>
-          <DialogContent className="sm:max-w-[500px]">
+          <DialogContent>
             <DialogHeader>
               <DialogTitle>Revoke Leave Application</DialogTitle>
               <DialogDescription>

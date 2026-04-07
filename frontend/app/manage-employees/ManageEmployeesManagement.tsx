@@ -3947,7 +3947,7 @@ const addDevMap = () => setFormData(p => ({
 
       {/* Quick-Add Dialog */}
       <Dialog open={!!quickAddOpen} onOpenChange={(open) => { if (!open) { setQuickAddOpen(null); setQuickAddSuggestions([]); } }}>
-        <DialogContent className="sm:max-w-[400px]">
+        <DialogContent>
           <DialogHeader>
             <DialogTitle>
               {quickAddOpen === "department" ? "Department" : quickAddOpen === "designation" ? "Designation" : quickAddOpen === "contractor" ? "Contractor" : ""}
@@ -4005,7 +4005,7 @@ const addDevMap = () => setFormData(p => ({
 
       {/* History Dialog */}
       <Dialog open={historyOpen} onOpenChange={setHistoryOpen}>
-        <DialogContent className="sm:max-w-[700px] max-h-[80vh] overflow-hidden flex flex-col">
+        <DialogContent className="overflow-hidden flex flex-col">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <History className="w-5 h-5" />

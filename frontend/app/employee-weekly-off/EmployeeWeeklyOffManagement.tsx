@@ -131,7 +131,7 @@ export function EmployeeWeeklyOffManagement() {
                 Add Weekly Off
               </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-[500px]">
+            <DialogContent>
               <DialogHeader>
                 <DialogTitle>Add Weekly Off</DialogTitle>
                 <DialogDescription>Assign a weekly off day to an employee</DialogDescription>

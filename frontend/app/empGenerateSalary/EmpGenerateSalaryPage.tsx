@@ -1700,7 +1700,7 @@ useEffect(() => {
 
 
 <Dialog open={isPaymentDialogOpen} onOpenChange={setIsPaymentDialogOpen}>
-  <DialogContent className="max-w-2xl max-h-[90vh] overflow-hidden flex flex-col p-0">
+  <DialogContent className="max-h-[90vh] overflow-hidden flex flex-col p-0">
     <DialogHeader className="px-6 py-4 border-b bg-white sticky top-0 z-10">
       <DialogTitle className="text-xl font-semibold text-green-800">
         Make Payment
@@ -1953,7 +1953,7 @@ useEffect(() => {
 )}
 
 
-            <DialogContent className="sm:max-w-[720px] max-h-[90vh] overflow-y-auto">
+            <DialogContent className="max-h-[90vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>{editing ? "Edit Salary Generation" : "Add New Salary Generation"}</DialogTitle>
                 <DialogDescription>

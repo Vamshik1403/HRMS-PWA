@@ -405,7 +405,7 @@ export default function TerminationManagement() {
 
       {/* Approval Modal */}
       <Dialog open={approveModalOpen} onOpenChange={setApproveModalOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent>
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-red-600">
               <CheckCircle2 className="w-5 h-5" />

@@ -178,7 +178,7 @@ export function EmployeeHolidayOverrideManagement() {
                 Add Override
               </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-[600px]">
+            <DialogContent>
               <DialogHeader>
                 <DialogTitle>{editingOverride ? "Edit Override" : "Add Holiday Override"}</DialogTitle>
                 <DialogDescription>Override default holidays for a specific employee</DialogDescription>

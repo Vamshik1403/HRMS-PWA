@@ -1188,6 +1188,13 @@ export function LeaveApplicationsManagement() {
           <p className="text-gray-600 mt-1 text-sm">Manage employee leave applications and approvals</p>
         </div>
         <div className="flex items-center gap-3">
+          <Button
+            onClick={() => { resetForm(); setIsDialogOpen(true); }}
+            className="bg-gray-900 hover:bg-gray-800 flex-shrink-0 text-sm px-3 py-2"
+          >
+            <Plus className="w-4 h-4 mr-1" />
+            Add Leave Application
+          </Button>
           <FormDrawer open={isDialogOpen} onOpenChange={setIsDialogOpen} title={editingApplication ? "Edit Leave Application" : "Submit Leave Application"} description={editingApplication 
                     ? "Update the leave application information below." 
                     : "Fill in the details to submit a new leave application."}>

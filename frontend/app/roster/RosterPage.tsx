@@ -9,7 +9,7 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "../components/ui/table"
 import { Badge } from "../components/ui/badge"
-import { RefreshCw, Save, Users, Calendar, Filter, Trash2, AlertCircle, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react"
+import { RefreshCw, Save, Users, Calendar, Filter, Trash2, AlertCircle } from "lucide-react"
 import { Skeleton } from "../components/ui/skeleton"
 import { toast } from "sonner"
 
@@ -225,10 +225,6 @@ export function RosterManagement() {
   const [openFromCalendar, setOpenFromCalendar] = useState(false)
   const [openToCalendar, setOpenToCalendar] = useState(false)
 
-  // Pagination states
-  const [currentPage, setCurrentPage] = useState(1)
-  const [itemsPerPage] = useState(7)
-
   // Get user from localStorage
   const [user, setUser] = useState<any>(null)
   const [userRole, setUserRole] = useState<"SUPERADMIN" | "MANAGER" | "EMPLOYEE" | null>(null)
@@ -336,14 +332,6 @@ export function RosterManagement() {
       return []
     }
   }, [fromDate, toDate])
-
-  const paginatedDates = useMemo(() => {
-    const startIndex = (currentPage - 1) * itemsPerPage
-    const endIndex = startIndex + itemsPerPage
-    return dates.slice(startIndex, endIndex)
-  }, [dates, currentPage, itemsPerPage])
-
-  const totalPages = Math.ceil(dates.length / itemsPerPage)
 
   const canLoadEmployees = useMemo(() => {
     if (isSuperAdmin) {
@@ -456,7 +444,6 @@ export function RosterManagement() {
       setEmployees(response)
       setSelectedEmpIds(new Set())
       setSelectAll(false)
-      setCurrentPage(1)
 
       await Promise.all([
         fetchRosterData(response.map(e => e.id)),
@@ -941,13 +928,6 @@ export function RosterManagement() {
     setSelectAll(!selectAll)
   }
 
-  // Pagination handlers
-  const goToFirstPage = () => setCurrentPage(1)
-  const goToLastPage = () => setCurrentPage(totalPages)
-  const goToPrevPage = () => setCurrentPage(prev => Math.max(1, prev - 1))
-  const goToNextPage = () => setCurrentPage(prev => Math.min(totalPages, prev + 1))
-  const goToPage = (page: number) => setCurrentPage(Math.max(1, Math.min(totalPages, page)))
-
   // ==================== RENDER ====================
   if (isLoading.initial) {
     return (
@@ -1242,69 +1222,13 @@ export function RosterManagement() {
             </CardTitle>
             <div className="flex items-center gap-4">
               <div className="text-sm text-gray-600">
-                Showing {paginatedDates.length} of {dates.length} days
-                {paginatedDates.length > 0 && (
+                Total {dates.length} days
+                {dates.length > 0 && (
                   <span className="ml-2">
-                    ({formatDateForDisplay(paginatedDates[0])} → {formatDateForDisplay(paginatedDates[paginatedDates.length - 1])})
+                    ({formatDateForDisplay(dates[0])} → {formatDateForDisplay(dates[dates.length - 1])})
                   </span>
                 )}
               </div>
-
-              {/* Pagination Controls */}
-              {dates.length > itemsPerPage && (
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={goToFirstPage}
-                    disabled={currentPage === 1}
-                    className="h-8 w-8 p-0"
-                  >
-                    <ChevronsLeft className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={goToPrevPage}
-                    disabled={currentPage === 1}
-                    className="h-8 w-8 p-0"
-                  >
-                    <ChevronLeft className="h-4 w-4" />
-                  </Button>
-
-                  <div className="flex items-center gap-1">
-                    <span className="text-sm text-gray-600">Page</span>
-                    <Input
-                      type="number"
-                      min="1"
-                      max={totalPages}
-                      value={currentPage}
-                      onChange={(e) => goToPage(parseInt(e.target.value) || 1)}
-                      className="w-12 h-8 text-center"
-                    />
-                    <span className="text-sm text-gray-600">of {totalPages}</span>
-                  </div>
-
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={goToNextPage}
-                    disabled={currentPage === totalPages}
-                    className="h-8 w-8 p-0"
-                  >
-                    <ChevronRight className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={goToLastPage}
-                    disabled={currentPage === totalPages}
-                    className="h-8 w-8 p-0"
-                  >
-                    <ChevronsRight className="h-4 w-4" />
-                  </Button>
-                </div>
-              )}
             </div>
           </CardHeader>
 
@@ -1325,7 +1249,7 @@ export function RosterManagement() {
                       <TableHead className="min-w-[200px] sticky left-[50px] bg-white z-30 border-r shadow-sm">
                         Employee
                       </TableHead>
-                      {paginatedDates.map((d) => (
+                      {dates.map((d) => (
                         <TableHead key={d} className="min-w-[120px] text-center px-1">
                           <div className="flex flex-col items-center">
                             <span className="text-xs font-medium truncate">
@@ -1365,7 +1289,7 @@ export function RosterManagement() {
                             </div>
                           </TableCell>
 
-                          {paginatedDates.map((d) => {
+                          {dates.map((d) => {
                             const cellData = getCellDisplay(emp.id, d)
                             const day = getDayForDate(emp.id, d)
                             const isDeleting = deletingDays.has(day?.id || 0)

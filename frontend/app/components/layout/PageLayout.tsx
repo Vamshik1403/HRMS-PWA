@@ -43,16 +43,16 @@ const sbRow =
   "flex w-full items-center gap-3 rounded-md px-3 h-11 min-h-[44px] max-h-11 shrink-0 transition-colors duration-150";
 
 const sbActive =
-  "!bg-[#eef1f6] text-[#1a1a2e] font-medium !shadow-none ring-0 relative before:absolute before:left-0 before:top-[25%] before:h-[50%] before:w-[3px] before:rounded-r-sm before:bg-[#4f7df3] [&_svg]:!text-[#1a1a2e]";
+  "!bg-[#eef1f6] text-[#1a1a2e] font-medium !shadow-none ring-0 relative overflow-visible before:absolute before:-left-3 before:top-[20%] before:h-[60%] before:w-[3px] before:rounded-r-sm before:bg-[#4f7df3] [&_svg]:!text-[#1a1a2e]";
 
 const sbIdle =
   "text-[#6b7280] hover:bg-[#f3f4f6] hover:text-[#1a1a2e] !bg-transparent";
 
 const sbSubRow =
-  "flex w-full items-center rounded-md !px-3 min-h-9 h-9 max-h-9 text-[13px] font-normal transition-colors duration-150";
+  "flex w-full items-center rounded-md !px-3 min-h-9 h-9 max-h-9 text-[12px] font-normal transition-colors duration-150";
 
 const sbSubActive =
-  "!bg-[#eef1f6] text-[#1a1a2e] font-medium !shadow-none ring-0 relative !pl-6 before:absolute before:left-3 before:top-[30%] before:h-[40%] before:w-[2px] before:rounded-full before:bg-[#4f7df3]";
+  "!bg-[#eef1f6] text-[#1a1a2e] font-medium !shadow-none ring-0 relative !pl-6 before:absolute before:left-0 before:top-[30%] before:h-[40%] before:w-[2px] before:rounded-full before:bg-[#4f7df3]";
 
 const sbSubIdle =
   "text-[#6b7280] hover:bg-[#f3f4f6] hover:text-[#1a1a2e] !bg-transparent";
@@ -471,7 +471,7 @@ export function PageLayout({ children }: PageLayoutProps) {
                             </Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
-                        <SidebarMenuSubItem>
+                        {/* <SidebarMenuSubItem>
                           <SidebarMenuSubButton asChild>
                             <Link href="/employees-promotions" className={cn(sbSubRow,
                               isActiveLink('/employees-promotions') 
@@ -491,7 +491,7 @@ export function PageLayout({ children }: PageLayoutProps) {
                           <SidebarMenuSubButton className={cn(sbSubRow, sbSubIdle, "cursor-default opacity-70")}>
                             <span className="font-medium">Employees Terminations</span>
                           </SidebarMenuSubButton>
-                        </SidebarMenuSubItem>
+                        </SidebarMenuSubItem> */}
                       </SidebarMenuSub>
                     </CollapsibleContent>
                   </Collapsible>

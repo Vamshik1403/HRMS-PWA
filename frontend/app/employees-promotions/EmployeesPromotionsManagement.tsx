@@ -2569,7 +2569,7 @@ const runFetchBR = (query: string) => {
 
       {/* View Dialog */}
       <Dialog open={isViewOpen} onOpenChange={setIsViewOpen}>
-        <DialogContent className="sm:max-w-[640px] max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Promotion Request</DialogTitle>
             <DialogDescription>Read-only details</DialogDescription>
@@ -2737,7 +2737,7 @@ const runFetchBR = (query: string) => {
       </Card>
       {/* History Dialog */}
       <Dialog open={isHistoryOpen} onOpenChange={setIsHistoryOpen}>
-        <DialogContent className="sm:max-w-[800px] max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Promotion History</DialogTitle>
             <DialogDescription>All promotions for this employee</DialogDescription>

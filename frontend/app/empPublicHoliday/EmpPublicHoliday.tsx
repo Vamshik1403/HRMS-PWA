@@ -335,7 +335,7 @@ export function EmpPublicHoliday() {
               </Button>
             </DialogTrigger>
           )}
-          <DialogContent className="sm:max-w-[600px]">
+          <DialogContent>
             <DialogHeader>
               <DialogTitle>{editingHoliday?"Edit":"Add New"} Public Holiday</DialogTitle>
               <DialogDescription>

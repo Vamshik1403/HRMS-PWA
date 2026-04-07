@@ -395,7 +395,7 @@ export function EmpSalaryAdvancePage() {
             </Button>
           </DialogTrigger>
 
-          <DialogContent className="sm:max-w-[650px] max-h-[90vh] overflow-y-auto">
+          <DialogContent className="max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>{editingAdvance ? "Edit" : "Add"} Salary Advance</DialogTitle>
             </DialogHeader>
