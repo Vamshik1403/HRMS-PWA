@@ -1119,7 +1119,7 @@ export function PageLayout({ children }: PageLayoutProps) {
                             </Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
-                        <SidebarMenuSubItem>
+                        {/* <SidebarMenuSubItem>
                           <SidebarMenuSubButton asChild>
                             <Link href="/salary-statements" className={cn(sbSubRow,
                               isActiveLink('/salary-statements') 
@@ -1129,7 +1129,7 @@ export function PageLayout({ children }: PageLayoutProps) {
                               <span className="font-medium">Salary Statements</span>
                             </Link>
                           </SidebarMenuSubButton>
-                        </SidebarMenuSubItem>
+                        </SidebarMenuSubItem> */}
                         <SidebarMenuSubItem>
                           <SidebarMenuSubButton asChild>
                             <Link href="/canteen/reports" className={cn(sbSubRow,
