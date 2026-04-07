@@ -142,20 +142,8 @@ export function PageLayout({ children }: PageLayoutProps) {
     setOpenSections(newOpenSections)
   }, [pathname, isSuperAdmin, isManager, isRegularUser])
 
-  // Collapse sidebar when a form drawer opens, restore when it closes
-  useEffect(() => {
-    const handler = (e: Event) => {
-      const { open } = (e as CustomEvent).detail;
-      if (open) {
-        sidebarBeforeDrawerRef.current = sidebarOpen;
-        setSidebarOpen(false);
-      } else {
-        setSidebarOpen(sidebarBeforeDrawerRef.current);
-      }
-    };
-    window.addEventListener("form-drawer-toggle", handler);
-    return () => window.removeEventListener("form-drawer-toggle", handler);
-  }, [sidebarOpen]);
+  // Sidebar stays open when form drawers are active
+  // (no collapse behavior needed)
 
   // Function to check if a link is active
   const isActiveLink = (href: string) => pathname === href

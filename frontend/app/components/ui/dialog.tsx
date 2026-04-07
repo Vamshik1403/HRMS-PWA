@@ -11,17 +11,6 @@ const Dialog: React.FC<React.ComponentProps<typeof DialogPrimitive.Root>> = ({
   onOpenChange,
   ...props
 }) => {
-  const prevOpenRef = React.useRef(open);
-
-  React.useEffect(() => {
-    if (open && !prevOpenRef.current) {
-      window.dispatchEvent(new CustomEvent("form-drawer-toggle", { detail: { open: true } }));
-    } else if (!open && prevOpenRef.current) {
-      window.dispatchEvent(new CustomEvent("form-drawer-toggle", { detail: { open: false } }));
-    }
-    prevOpenRef.current = open;
-  }, [open]);
-
   return <DialogPrimitive.Root open={open} onOpenChange={onOpenChange} {...props} />;
 };
 
@@ -55,7 +44,7 @@ const DialogContent = React.forwardRef<
     <DialogPrimitive.Content
       ref={ref}
       className={cn(
-        "fixed z-50 top-0 right-0 bottom-0 h-screen w-[100vw] bg-white border-l border-[#e5e5e5] shadow-[-8px_0_30px_rgba(0,0,0,0.1)] p-6 pb-24 overflow-y-auto",
+        "fixed z-50 top-0 right-0 bottom-0 h-screen w-[calc(100vw-18rem)] bg-white border-l border-[#e5e5e5] shadow-[-8px_0_30px_rgba(0,0,0,0.1)] p-6 pb-24 overflow-y-auto",
         "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:duration-300 data-[state=open]:duration-300",
         "data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right",
         className
