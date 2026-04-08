@@ -390,12 +390,12 @@ export function EmpSalaryAdvancePage() {
 
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
-            <Button onClick={resetForm} className="bg-gray-900 hover:bg-gray-800">
+            <Button onClick={resetForm} className="">
               <Plus className="w-4 h-4 mr-1" /> Add Advance
             </Button>
           </DialogTrigger>
 
-          <DialogContent className="max-h-[90vh] overflow-y-auto">
+          <DialogContent>
             <DialogHeader>
               <DialogTitle>{editingAdvance ? "Edit" : "Add"} Salary Advance</DialogTitle>
             </DialogHeader>
@@ -484,7 +484,7 @@ export function EmpSalaryAdvancePage() {
               <DialogFooter>
                 <Button
                   type="submit"
-                  className="bg-gray-900 hover:bg-gray-800"
+                  className=""
                   disabled={!formData.advanceAmount || !formData.reason}
                 >
                   {editingAdvance ? "Update" : "Submit"} Advance

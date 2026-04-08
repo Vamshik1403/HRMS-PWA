@@ -216,7 +216,7 @@ export default function UserManagement() {
                 resetForm()
                 setIsDialogOpen(true)
               }}
-              className="bg-gray-900 hover:bg-gray-800 text-sm px-3 py-2"
+              className="text-sm px-3 py-2"
             >
               <Plus className="w-4 h-4 mr-1" /> Register User
             </Button>
@@ -319,7 +319,7 @@ export default function UserManagement() {
                 <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
                   Cancel
                 </Button>
-                <Button type="submit" className="bg-gray-900 hover:bg-gray-800" disabled={saving}>
+                <Button type="submit" className="" disabled={saving}>
                   {saving ? "Saving..." : editingUser ? "Update User" : "Register User"}
                 </Button>
               </DialogFooter>

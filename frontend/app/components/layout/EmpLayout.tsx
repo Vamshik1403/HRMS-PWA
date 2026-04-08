@@ -54,35 +54,40 @@ export default function EmpLayout({ children }: EmpLayoutProps) {
   const isActive = (href: string) => pathname === href;
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-[#f8fafc]">
       <SidebarProvider>
         {/* Sidebar */}
-        <Sidebar className="bg-gradient-to-b from-blue-900 via-blue-800 to-blue-900 border-r border-blue-700 shadow-2xl">
-          <SidebarHeader className="p-4 border-b border-blue-700 bg-gradient-to-r from-blue-800 to-blue-700">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 bg-gradient-to-r from-blue-400 to-blue-500 rounded-lg flex items-center justify-center text-white font-bold text-sm shadow-lg">
+        <Sidebar collapsible="icon" className="border-r border-[#d1d5db] bg-sidebar text-sidebar-foreground">
+          <SidebarHeader className="px-4 py-6 border-0">
+            <Link href="/empdashboard" className="flex items-center gap-3">
+              <div className="w-11 h-11 rounded-full bg-[#4f46e5] flex items-center justify-center text-white text-sm font-bold shadow-[0_6px_16px_rgba(79,70,229,0.35)] shrink-0">
                 HR
               </div>
-              <span className="text-white font-semibold text-sm tracking-wide">OpenHRM</span>
-            </div>
+              <div className="min-w-0">
+                <span className="text-gray-900 font-bold text-sm tracking-tight block truncate">
+                  OpenHRM
+                </span>
+                <p className="text-[11px] text-gray-400">Employee Portal</p>
+              </div>
+            </Link>
           </SidebarHeader>
 
-          <SidebarContent className="py-4">
+          <SidebarContent className="px-2.5 py-2 flex-1 overflow-y-auto">
             <SidebarGroup>
-              <SidebarMenu className="space-y-2">
+              <SidebarMenu className="gap-1.5 flex flex-col">
                 {/* Dashboard */}
-                <SidebarMenuItem>
+                <SidebarMenuItem className="mx-0">
                   <SidebarMenuButton asChild>
                     <Link
                       href="/empdashboard"
-                      className={`text-blue-100 hover:text-white hover:bg-gradient-to-r hover:from-blue-700 hover:to-blue-600 transition-all duration-300 rounded-lg mx-2 px-3 py-2.5 shadow-sm hover:shadow-md flex items-center gap-3 ${
+                      className={`flex w-full items-center gap-3 rounded-md px-3 h-11 min-h-[44px] max-h-11 shrink-0 transition-colors duration-150 ${
                         isActive("/empdashboard")
-                          ? "bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-md"
-                          : ""
+                          ? "!bg-[#eef2ff] text-[#4f46e5] font-medium relative overflow-visible before:absolute before:-left-3 before:top-[20%] before:h-[60%] before:w-[3px] before:rounded-r-sm before:bg-[#4f46e5]"
+                          : "text-[#6b7280] hover:bg-[#f3f4f6] hover:text-[#1a1a2e]"
                       }`}
                     >
-                      <Icon icon="mdi:view-dashboard" className="w-5 h-5" />
-                      <span className="font-medium">Dashboard</span>
+                      <Icon icon="mdi:view-dashboard-outline" className={`w-5 h-5 shrink-0 ${isActive("/empdashboard") ? "text-[#4f46e5]" : "text-gray-400"}`} />
+                      <span className="text-[13px]">Dashboard</span>
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
@@ -94,21 +99,27 @@ export default function EmpLayout({ children }: EmpLayoutProps) {
                     setOpenSections((prev) => ({ ...prev, salary: open }))
                   }
                 >
-                  <CollapsibleTrigger asChild>
-                    <SidebarMenuButton className="text-blue-100 hover:text-white hover:bg-gradient-to-r hover:from-blue-700 hover:to-blue-600 transition-all duration-300 rounded-lg mx-2 px-3 py-2.5 shadow-sm hover:shadow-md">
-                      <Icon icon="mdi:currency-usd" className="w-5 h-5" />
-                      <span className="font-medium">Salary Management</span>
-                      <Icon
-                        icon="mdi:chevron-right"
-                        className={`w-4 h-4 ml-auto transition-transform duration-300 ${
-                          openSections.salary ? "rotate-90" : ""
-                        }`}
-                      />
-                    </SidebarMenuButton>
-                  </CollapsibleTrigger>
+                  <SidebarMenuItem className="mx-0">
+                    <CollapsibleTrigger asChild>
+                      <SidebarMenuButton className={`flex w-full items-center gap-3 rounded-md px-3 h-11 min-h-[44px] max-h-11 shrink-0 transition-colors duration-150 ${
+                        ["/empSalaryAdvance", "/empReimbursement", "/empGenerateSalary"].includes(pathname)
+                          ? "!bg-[#eef2ff] text-[#4f46e5] font-medium"
+                          : "text-[#6b7280] hover:bg-[#f3f4f6] hover:text-[#1a1a2e]"
+                      }`}>
+                        <Icon icon="mdi:currency-usd" className={`w-5 h-5 shrink-0 ${["/empSalaryAdvance", "/empReimbursement", "/empGenerateSalary"].includes(pathname) ? "text-[#4f46e5]" : "text-gray-400"}`} />
+                        <span className="text-[13px]">Salary Management</span>
+                        <Icon
+                          icon="mdi:chevron-right"
+                          className={`w-4 h-4 ml-auto transition-transform duration-200 text-gray-400 ${
+                            openSections.salary ? "rotate-90" : ""
+                          }`}
+                        />
+                      </SidebarMenuButton>
+                    </CollapsibleTrigger>
+                  </SidebarMenuItem>
 
                   <CollapsibleContent>
-                    <SidebarMenuSub className="ml-4 mt-2 space-y-1">
+                    <SidebarMenuSub className="ml-4 mt-1 space-y-0.5">
                       {[
                         { href: "/empSalaryAdvance", label: "Salary Advance" },
                         { href: "/empReimbursement", label: "Reimbursement" },
@@ -118,13 +129,13 @@ export default function EmpLayout({ children }: EmpLayoutProps) {
                           <SidebarMenuSubButton asChild>
                             <Link
                               href={item.href}
-                              className={`transition-all duration-200 rounded-md px-3 py-2 ${
+                              className={`flex w-full items-center rounded-md !px-3 min-h-9 h-9 max-h-9 text-[12px] font-normal transition-colors duration-150 ${
                                 isActive(item.href)
-                                  ? "bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-md"
-                                  : "text-blue-200 hover:text-white hover:bg-blue-700/50"
+                                  ? "!bg-[#eef2ff] text-[#4f46e5] font-medium relative !pl-6 before:absolute before:left-0 before:top-[30%] before:h-[40%] before:w-[2px] before:rounded-full before:bg-[#4f46e5]"
+                                  : "text-[#6b7280] hover:bg-[#f3f4f6] hover:text-[#1a1a2e]"
                               }`}
                             >
-                              <span className="font-medium">{item.label}</span>
+                              <span>{item.label}</span>
                             </Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
@@ -140,21 +151,27 @@ export default function EmpLayout({ children }: EmpLayoutProps) {
                     setOpenSections((prev) => ({ ...prev, leave: open }))
                   }
                 >
-                  <CollapsibleTrigger asChild>
-                    <SidebarMenuButton className="text-blue-100 hover:text-white hover:bg-gradient-to-r hover:from-blue-700 hover:to-blue-600 transition-all duration-300 rounded-lg mx-2 px-3 py-2.5 shadow-sm hover:shadow-md">
-                      <Icon icon="mdi:calendar-clock-outline" className="w-5 h-5" />
-                      <span className="font-medium">Leave Management</span>
-                      <Icon
-                        icon="mdi:chevron-right"
-                        className={`w-4 h-4 ml-auto transition-transform duration-300 ${
-                          openSections.leave ? "rotate-90" : ""
-                        }`}
-                      />
-                    </SidebarMenuButton>
-                  </CollapsibleTrigger>
+                  <SidebarMenuItem className="mx-0">
+                    <CollapsibleTrigger asChild>
+                      <SidebarMenuButton className={`flex w-full items-center gap-3 rounded-md px-3 h-11 min-h-[44px] max-h-11 shrink-0 transition-colors duration-150 ${
+                        ["/empPublicHoliday", "/empLeaveApplication"].includes(pathname)
+                          ? "!bg-[#eef2ff] text-[#4f46e5] font-medium"
+                          : "text-[#6b7280] hover:bg-[#f3f4f6] hover:text-[#1a1a2e]"
+                      }`}>
+                        <Icon icon="mdi:calendar-clock-outline" className={`w-5 h-5 shrink-0 ${["/empPublicHoliday", "/empLeaveApplication"].includes(pathname) ? "text-[#4f46e5]" : "text-gray-400"}`} />
+                        <span className="text-[13px]">Leave Management</span>
+                        <Icon
+                          icon="mdi:chevron-right"
+                          className={`w-4 h-4 ml-auto transition-transform duration-200 text-gray-400 ${
+                            openSections.leave ? "rotate-90" : ""
+                          }`}
+                        />
+                      </SidebarMenuButton>
+                    </CollapsibleTrigger>
+                  </SidebarMenuItem>
 
                   <CollapsibleContent>
-                    <SidebarMenuSub className="ml-4 mt-2 space-y-1">
+                    <SidebarMenuSub className="ml-4 mt-1 space-y-0.5">
                       {[
                         { href: "/empPublicHoliday", label: "Public Holiday" },
                         { href: "/empLeaveApplication", label: "Leave Applications" },
@@ -163,13 +180,13 @@ export default function EmpLayout({ children }: EmpLayoutProps) {
                           <SidebarMenuSubButton asChild>
                             <Link
                               href={item.href}
-                              className={`transition-all duration-200 rounded-md px-3 py-2 ${
+                              className={`flex w-full items-center rounded-md !px-3 min-h-9 h-9 max-h-9 text-[12px] font-normal transition-colors duration-150 ${
                                 isActive(item.href)
-                                  ? "bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-md"
-                                  : "text-blue-200 hover:text-white hover:bg-blue-700/50"
+                                  ? "!bg-[#eef2ff] text-[#4f46e5] font-medium relative !pl-6 before:absolute before:left-0 before:top-[30%] before:h-[40%] before:w-[2px] before:rounded-full before:bg-[#4f46e5]"
+                                  : "text-[#6b7280] hover:bg-[#f3f4f6] hover:text-[#1a1a2e]"
                               }`}
                             >
-                              <span className="font-medium">{item.label}</span>
+                              <span>{item.label}</span>
                             </Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
@@ -184,19 +201,19 @@ export default function EmpLayout({ children }: EmpLayoutProps) {
 
         {/* Content Area */}
         <SidebarInset>
-          <div className="min-h-screen bg-gray-50 overflow-x-hidden">
-            <header className="bg-gradient-to-r from-blue-800 to-blue-700 border-b border-blue-600 px-3 sm:px-6 py-3 sm:py-4 shadow-lg flex justify-between items-center">
-              <SidebarTrigger className="text-white hover:bg-blue-600/50 transition-colors duration-200" />
+          <div className="min-h-screen bg-[#f8fafc] overflow-x-hidden">
+            <header className="bg-[#f8fafc] border-b border-[#d1d5db] px-3 sm:px-6 py-3 sm:py-4 flex justify-between items-center">
+              <SidebarTrigger className="text-gray-600 hover:bg-gray-100 transition-colors duration-150" />
               <div className="flex items-center gap-4">
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <button className="flex items-center gap-3 cursor-pointer focus:outline-none">
-                      <Avatar className="w-8 h-8 ring-2 ring-blue-300">
+                      <Avatar className="w-8 h-8 ring-2 ring-gray-200">
                         <AvatarImage src="https://wqnmyfkavrotpmupbtou.supabase.co/storage/v1/object/public/reweb/blocks/placeholder.png" />
-                        <AvatarFallback className="bg-blue-500 text-white">U</AvatarFallback>
+                        <AvatarFallback className="bg-gray-900 text-white">U</AvatarFallback>
                       </Avatar>
-                      <span className="text-white font-medium">User</span>
-                      <Icon icon="mdi:chevron-down" className="w-4 h-4 text-white" />
+                      <span className="text-gray-900 font-medium text-sm">User</span>
+                      <Icon icon="mdi:chevron-down" className="w-4 h-4 text-gray-500" />
                     </button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-48">

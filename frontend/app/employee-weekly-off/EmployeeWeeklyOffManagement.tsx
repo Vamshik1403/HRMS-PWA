@@ -126,7 +126,7 @@ export function EmployeeWeeklyOffManagement() {
         {canManage && (
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>
-              <Button className="bg-gray-900 hover:bg-gray-800 text-sm px-3 py-2">
+              <Button className="text-sm px-3 py-2">
                 <Plus className="w-4 h-4 mr-1" />
                 Add Weekly Off
               </Button>
@@ -164,7 +164,7 @@ export function EmployeeWeeklyOffManagement() {
                 </div>
                 <DialogFooter>
                   <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
-                  <Button type="submit" className="bg-gray-900 hover:bg-gray-800">Add Weekly Off</Button>
+                  <Button type="submit" className="">Add Weekly Off</Button>
                 </DialogFooter>
               </form>
             </DialogContent>

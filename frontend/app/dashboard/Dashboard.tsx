@@ -59,7 +59,7 @@ interface ActivityComment {
 }
 
 const cardShell =
-  "bg-white rounded-[1.35rem] shadow-[0_2px_16px_rgba(0,0,0,0.04)] border border-[#efefef]";
+  "bg-white rounded-xl shadow-[0_1px_3px_rgba(0,0,0,0.04),0_4px_12px_rgba(0,0,0,0.03)] border border-[#e5e7eb]";
 
 export default function DashboardPage() {
   const user = useCurrentUser();
@@ -294,11 +294,11 @@ export default function DashboardPage() {
 
   const commentFeed: ActivityComment[] = useMemo(() => {
     const avatarColors = [
-      "bg-sky-500",
-      "bg-emerald-500",
+      "bg-[#4f46e5]",
+      "bg-[#4338ca]",
+      "bg-indigo-500",
+      "bg-blue-500",
       "bg-violet-500",
-      "bg-amber-500",
-      "bg-rose-500",
     ];
     const sorted = [...attendanceLogs].sort(
       (a, b) =>
@@ -354,7 +354,7 @@ export default function DashboardPage() {
               <h2 className="text-lg font-bold text-gray-900 tracking-tight">
                 Overview
               </h2>
-              <div className="flex items-center gap-2 rounded-full bg-[#f4f4f4] px-3 py-1.5 text-xs font-medium text-gray-600 border border-[#ebebeb]">
+              <div className="flex items-center gap-2 rounded-full bg-[#eef2ff] px-3 py-1.5 text-xs font-medium text-[#4338ca] border border-[#e5e7eb]">
                 <span>Last month</span>
                 <Icon icon="mdi:chevron-down" className="w-4 h-4" />
               </div>
@@ -362,50 +362,46 @@ export default function DashboardPage() {
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
               {/* All Employees */}
-              <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-slate-800 to-slate-900 p-5 text-white">
-                <div className="absolute top-0 right-0 w-24 h-24 bg-white/5 rounded-full -translate-y-8 translate-x-8" />
-                <div className="absolute bottom-0 left-0 w-16 h-16 bg-white/5 rounded-full translate-y-6 -translate-x-6" />
+              <div className="rounded-xl border border-[#e5e7eb] bg-white p-5">
                 <div className="relative">
                   <div className="flex items-center justify-between mb-3">
-                    <div className="w-10 h-10 rounded-lg bg-white/15 flex items-center justify-center backdrop-blur-sm">
-                      <Icon icon="mdi:account-group" className="w-5 h-5 text-white" />
+                    <div className="w-10 h-10 rounded-lg bg-[#eef2ff] flex items-center justify-center">
+                      <Icon icon="mdi:account-group" className="w-5 h-5 text-[#4f46e5]" />
                     </div>
-                    <span className="text-[11px] font-medium text-white/60 bg-white/10 px-2.5 py-1 rounded-full">Total</span>
+                    <span className="text-[11px] font-medium text-[#4338ca] bg-[#eef2ff] px-2.5 py-1 rounded-full">Total</span>
                   </div>
-                  <p className="text-4xl font-extrabold tracking-tight tabular-nums">
+                  <p className="text-3xl font-bold tracking-tight tabular-nums text-[#111827]">
                     {employees.length.toLocaleString()}
                   </p>
-                  <p className="text-[13px] font-medium text-white/70 mt-1">
+                  <p className="text-[13px] font-medium text-gray-500 mt-1">
                     All employees
                   </p>
-                  <div className="mt-3 h-1.5 w-full rounded-full bg-white/15 overflow-hidden">
-                    <div className="h-full rounded-full bg-white/80 transition-[width] duration-500" style={{ width: "100%" }} />
+                  <div className="mt-3 h-1 w-full rounded-full bg-[#eef2ff] overflow-hidden">
+                    <div className="h-full rounded-full bg-[#4f46e5] transition-[width] duration-500" style={{ width: "100%" }} />
                   </div>
                 </div>
               </div>
 
               {/* Present Employees */}
-              <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 p-5 text-white">
-                <div className="absolute top-0 right-0 w-24 h-24 bg-white/5 rounded-full -translate-y-8 translate-x-8" />
-                <div className="absolute bottom-0 left-0 w-16 h-16 bg-white/5 rounded-full translate-y-6 -translate-x-6" />
+              <div className="rounded-xl border border-[#e5e7eb] bg-white p-5">
                 <div className="relative">
                   <div className="flex items-center justify-between mb-3">
-                    <div className="w-10 h-10 rounded-lg bg-white/15 flex items-center justify-center backdrop-blur-sm">
-                      <Icon icon="mdi:account-check" className="w-5 h-5 text-white" />
+                    <div className="w-10 h-10 rounded-lg bg-[#eef2ff] flex items-center justify-center">
+                      <Icon icon="mdi:account-check" className="w-5 h-5 text-[#4f46e5]" />
                     </div>
-                    <span className="text-[11px] font-medium text-white/60 bg-white/10 px-2.5 py-1 rounded-full">{attRate}%</span>
+                    <span className="text-[11px] font-medium text-[#4338ca] bg-[#eef2ff] px-2.5 py-1 rounded-full">{attRate}%</span>
                   </div>
-                  <p className="text-4xl font-extrabold tracking-tight tabular-nums">
+                  <p className="text-3xl font-bold tracking-tight tabular-nums text-[#111827]">
                     {presentCount.toLocaleString()}
                   </p>
-                  <p className="text-[13px] font-medium text-white/70 mt-1">
+                  <p className="text-[13px] font-medium text-gray-500 mt-1">
                     Present today
                   </p>
                   <div className="mt-3 flex items-center gap-2">
-                    <div className="flex-1 h-1.5 rounded-full bg-white/15 overflow-hidden">
-                      <div className="h-full rounded-full bg-white/80 transition-[width] duration-500" style={{ width: `${attRate}%` }} />
+                    <div className="flex-1 h-1 rounded-full bg-[#eef2ff] overflow-hidden">
+                      <div className="h-full rounded-full bg-[#4f46e5] transition-[width] duration-500" style={{ width: `${attRate}%` }} />
                     </div>
-                    <span className={`text-[11px] font-bold ${presentTrendVsYesterday >= 0 ? "text-white" : "text-rose-200"}`}>
+                    <span className={`text-[11px] font-bold ${presentTrendVsYesterday >= 0 ? "text-[#4f46e5]" : "text-rose-500"}`}>
                       {presentTrendVsYesterday >= 0 ? "+" : ""}{presentTrendVsYesterday}%
                     </span>
                   </div>
@@ -413,30 +409,28 @@ export default function DashboardPage() {
               </div>
 
               {/* Absent Employees */}
-              <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-rose-400 to-pink-600 p-5 text-white">
-                <div className="absolute top-0 right-0 w-24 h-24 bg-white/5 rounded-full -translate-y-8 translate-x-8" />
-                <div className="absolute bottom-0 left-0 w-16 h-16 bg-white/5 rounded-full translate-y-6 -translate-x-6" />
+              <div className="rounded-xl border border-[#e5e7eb] bg-white p-5">
                 <div className="relative">
                   <div className="flex items-center justify-between mb-3">
-                    <div className="w-10 h-10 rounded-lg bg-white/15 flex items-center justify-center backdrop-blur-sm">
-                      <Icon icon="mdi:account-remove" className="w-5 h-5 text-white" />
+                    <div className="w-10 h-10 rounded-lg bg-[#eef2ff] flex items-center justify-center">
+                      <Icon icon="mdi:account-remove" className="w-5 h-5 text-[#4f46e5]" />
                     </div>
-                    <span className="text-[11px] font-medium text-white/60 bg-white/10 px-2.5 py-1 rounded-full">{employees.length > 0 ? Math.round((absentCount / employees.length) * 100) : 0}%</span>
+                    <span className="text-[11px] font-medium text-[#4338ca] bg-[#eef2ff] px-2.5 py-1 rounded-full">{employees.length > 0 ? Math.round((absentCount / employees.length) * 100) : 0}%</span>
                   </div>
-                  <p className="text-4xl font-extrabold tracking-tight tabular-nums">
+                  <p className="text-3xl font-bold tracking-tight tabular-nums text-[#111827]">
                     {absentCount.toLocaleString()}
                   </p>
-                  <p className="text-[13px] font-medium text-white/70 mt-1">
+                  <p className="text-[13px] font-medium text-gray-500 mt-1">
                     Absent today
                   </p>
-                  <div className="mt-3 h-1.5 w-full rounded-full bg-white/15 overflow-hidden">
-                    <div className="h-full rounded-full bg-white/80 transition-[width] duration-500" style={{ width: `${employees.length > 0 ? Math.round((absentCount / employees.length) * 100) : 0}%`, minWidth: absentCount > 0 ? "4px" : undefined }} />
+                  <div className="mt-3 h-1 w-full rounded-full bg-[#eef2ff] overflow-hidden">
+                    <div className="h-full rounded-full bg-[#4f46e5] transition-[width] duration-500" style={{ width: `${employees.length > 0 ? Math.round((absentCount / employees.length) * 100) : 0}%`, minWidth: absentCount > 0 ? "4px" : undefined }} />
                   </div>
                 </div>
               </div>
             </div>
 
-            <div className="rounded-2xl border border-[#ececec] bg-[#fafafa]/80 p-4 sm:p-5 mb-8">
+            <div className="rounded-xl border border-[#e5e7eb] bg-[#fafafa]/60 p-4 sm:p-5 mb-6">
               <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-4">
                 Workforce mix
               </p>
@@ -518,7 +512,7 @@ export default function DashboardPage() {
             </ul>
             <Link
               href="/departments"
-              className="mt-6 w-full inline-flex items-center justify-center rounded-full border border-[#e0e0e0] py-3 text-sm font-semibold text-gray-800 hover:bg-[#fafafa] transition-colors"
+              className="mt-6 w-full inline-flex items-center justify-center rounded-full border border-[#e5e7eb] py-3 text-sm font-semibold text-gray-800 hover:bg-[#fafafa] transition-colors"
             >
               All departments
             </Link>

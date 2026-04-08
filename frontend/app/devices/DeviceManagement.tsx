@@ -527,7 +527,7 @@ export function DeviceManagement() {
           {!isAddingNew && canManage && (
             <Button
               onClick={() => { resetForm(); setIsAddingNew(true); }}
-              className="bg-gray-900 hover:bg-gray-800 flex-shrink-0 text-sm px-3 py-2"
+              className="flex-shrink-0 text-sm px-3 py-2"
             >
               <Plus className="w-4 h-4 mr-1" />
               Add Device
@@ -570,7 +570,7 @@ export function DeviceManagement() {
                       status: e.target.value as "Active" | "Inactive",
                     }))
                   }
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-sm border-[#d0d0d0] focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-900/15 focus-visible:border-[#b0b0b0]"
                   required
                 >
                   <option value="Active">Active</option>
@@ -723,7 +723,7 @@ export function DeviceManagement() {
                <select
                   value={formData.deviceType}
                   onChange={(e) => setFormData((p) => ({ ...p, deviceType: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-sm border-[#d0d0d0] focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-900/15 focus-visible:border-[#b0b0b0]"
                 >
                   <option value="">Select device type</option>
                   <option value="AT">Attendance</option>
@@ -767,7 +767,7 @@ export function DeviceManagement() {
                 <Button type="button" variant="outline" onClick={handleCancel}>
                   Cancel
                 </Button>
-                <Button type="submit" className="bg-gray-900 hover:bg-gray-800" disabled={saving}>
+                <Button type="submit" className="" disabled={saving}>
                   <Save className="w-4 h-4 mr-1" />
                   {saving ? "Saving..." : editingDevice ? "Update Device" : "Add Device"}
                 </Button>

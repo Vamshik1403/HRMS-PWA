@@ -188,7 +188,7 @@ export function LeaveReportsManagement() {
           <p className="text-gray-600 mt-1 text-sm">Generate and manage comprehensive leave reports</p>
         </div>
         <div className="flex items-center gap-3">
-          <Button onClick={() => { resetForm(); setIsDialogOpen(true); }} className="bg-gray-900 hover:bg-gray-800 flex-shrink-0 text-sm px-3 py-2">
+          <Button onClick={() => { resetForm(); setIsDialogOpen(true); }} className="flex-shrink-0 text-sm px-3 py-2">
                 <Plus className="w-4 h-4 mr-1" />
                 Generate Report
               </Button>
@@ -206,7 +206,7 @@ export function LeaveReportsManagement() {
                         id="serviceProvider"
                         value={formData.serviceProvider}
                         onChange={(e) => setFormData(prev => ({ ...prev, serviceProvider: e.target.value }))}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-sm border-[#d0d0d0] focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-900/15 focus-visible:border-[#b0b0b0]"
                         required
                       >
                         <option value="">Select Service Provider</option>
@@ -221,7 +221,7 @@ export function LeaveReportsManagement() {
                         id="companyName"
                         value={formData.companyName}
                         onChange={(e) => setFormData(prev => ({ ...prev, companyName: e.target.value }))}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-sm border-[#d0d0d0] focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-900/15 focus-visible:border-[#b0b0b0]"
                         required
                       >
                         <option value="">Select Company</option>
@@ -236,7 +236,7 @@ export function LeaveReportsManagement() {
                         id="branchName"
                         value={formData.branchName}
                         onChange={(e) => setFormData(prev => ({ ...prev, branchName: e.target.value }))}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-sm border-[#d0d0d0] focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-900/15 focus-visible:border-[#b0b0b0]"
                         required
                       >
                         <option value="">Select Branch</option>
@@ -258,7 +258,7 @@ export function LeaveReportsManagement() {
                         id="department"
                         value={formData.department}
                         onChange={(e) => setFormData(prev => ({ ...prev, department: e.target.value }))}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-sm border-[#d0d0d0] focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-900/15 focus-visible:border-[#b0b0b0]"
                         required
                       >
                         <option value="">Select Department</option>
@@ -274,7 +274,7 @@ export function LeaveReportsManagement() {
                         id="employeeId"
                         value={formData.employeeId}
                         onChange={(e) => setFormData(prev => ({ ...prev, employeeId: e.target.value }))}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-sm border-[#d0d0d0] focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-900/15 focus-visible:border-[#b0b0b0]"
                         required
                       >
                         <option value="">Select Employee</option>
@@ -299,7 +299,7 @@ export function LeaveReportsManagement() {
                   <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
                     Cancel
                   </Button>
-                  <Button type="submit" className="bg-gray-900 hover:bg-gray-800">
+                  <Button type="submit" className="">
                     {editingReport ? "Update Report" : "Generate Report"}
                   </Button>
                 </div>

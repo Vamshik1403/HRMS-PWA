@@ -173,7 +173,7 @@ export function EmployeeHolidayOverrideManagement() {
         {canManage && (
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>
-              <Button onClick={resetForm} className="bg-gray-900 hover:bg-gray-800 text-sm px-3 py-2">
+              <Button onClick={resetForm} className="text-sm px-3 py-2">
                 <Plus className="w-4 h-4 mr-1" />
                 Add Override
               </Button>
@@ -248,7 +248,7 @@ export function EmployeeHolidayOverrideManagement() {
                 </div>
                 <DialogFooter>
                   <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
-                  <Button type="submit" className="bg-gray-900 hover:bg-gray-800">
+                  <Button type="submit" className="">
                     {editingOverride ? "Update" : "Add Override"}
                   </Button>
                 </DialogFooter>

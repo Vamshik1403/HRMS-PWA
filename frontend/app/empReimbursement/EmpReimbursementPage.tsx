@@ -729,7 +729,7 @@ if (employee) await loadReimbursements(employee.employeeID)
         </div>
         <Button 
           onClick={() => { resetForm(); setIsDialogOpen(true); }} 
-          className="bg-gray-900 hover:bg-gray-800 px-6 py-2 rounded-lg shadow-sm"
+          className="px-6 py-2 rounded-lg shadow-sm"
         >
           <Plus className="w-4 h-4 mr-2" />
           Create Reimbursement
@@ -884,7 +884,7 @@ if (employee) await loadReimbursements(employee.employeeID)
 
       {/* Create/Edit Dialog */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="max-h-[90vh] overflow-hidden flex flex-col p-0">
+        <DialogContent>
           <DialogHeader className="px-6 py-4 border-b bg-white sticky top-0 z-10">
             <DialogTitle className="text-xl font-semibold">
               {editing ? "Edit Reimbursement" : "Create New Reimbursement"}
@@ -1020,7 +1020,7 @@ if (employee) await loadReimbursements(employee.employeeID)
               <Button 
                 type="submit" 
                 onClick={handleSubmit}
-                className="flex-1 bg-gray-900 hover:bg-gray-800 rounded-lg"
+                className="flex-1 rounded-lg"
               >
                 {editing ? "Update Reimbursement" : "Create Reimbursement"}
               </Button>

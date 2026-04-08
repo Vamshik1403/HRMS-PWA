@@ -20,7 +20,7 @@ export default function Button({
   const baseClasses = 'font-medium rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2'
   
   const variantClasses = {
-    primary: 'bg-gray-900 hover:bg-gray-800 text-white focus:ring-gray-500',
+    primary: 'bg-[#4f46e5] hover:bg-[#4338ca] text-white focus:ring-[#4f46e5]',
     secondary: 'bg-gray-600 hover:bg-gray-700 text-white focus:ring-gray-500',
     danger: 'bg-red-600 hover:bg-red-700 text-white focus:ring-red-500',
     success: 'bg-green-600 hover:bg-green-700 text-white focus:ring-green-500'

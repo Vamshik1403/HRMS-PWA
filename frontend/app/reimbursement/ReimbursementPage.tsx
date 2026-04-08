@@ -1182,7 +1182,7 @@ const getTotalAmount = (reimbursement: Reimbursement) => {
 }
 
 return (
-    <div className="space-y-6 p-6 bg-gray-50 min-h-screen">
+    <div className="space-y-6 p-6 bg-[#f8fafc] min-h-screen">
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
@@ -1228,7 +1228,7 @@ onClick={async () => {
 
   setIsDialogOpen(true);
 }}
-          className="bg-gray-900 hover:bg-gray-800 px-6 py-2 rounded-lg shadow-sm"
+          className="bg-[#4f46e5] hover:bg-[#4338ca] px-6 py-2 rounded-lg shadow-sm"
         >
           <Plus className="w-4 h-4 mr-2" />
           Create Reimbursement
@@ -1252,11 +1252,11 @@ onClick={async () => {
         </Card>
         
         {/* Stats Card */}
-        <Card className="bg-blue-50 border-blue-200">
+        <Card className="bg-[#eef2ff] border-[#d1d5db]">
           <CardContent className="pt-6">
             <div className="text-center">
-              <div className="text-2xl font-bold text-blue-800">{filteredReimbursements.length}</div>
-              <div className="text-sm text-blue-600 mt-1">Total Reimbursements</div>
+              <div className="text-2xl font-bold text-[#4f46e5]">{filteredReimbursements.length}</div>
+              <div className="text-sm text-[#4338ca] mt-1">Total Reimbursements</div>
             </div>
           </CardContent>
         </Card>
@@ -1268,7 +1268,7 @@ onClick={async () => {
           <div className="overflow-x-auto">
             <Table>
               <TableHeader>
-                <TableRow className="bg-gray-50 hover:bg-gray-50">
+                <TableRow className="bg-[#eef2ff]/50 hover:bg-[#eef2ff]/50">
                   <TableHead className="font-semibold text-gray-900">Employee</TableHead>
                   <TableHead className="font-semibold text-gray-900">Company</TableHead>
                   <TableHead className="font-semibold text-gray-900">Branch</TableHead>
@@ -1282,7 +1282,7 @@ onClick={async () => {
                 {filteredReimbursements.map((r) => {
                   const totalAmount = getTotalAmount(r)
                   return (
-                    <TableRow key={r.id} className="hover:bg-gray-50 border-b border-gray-100">
+                    <TableRow key={r.id} className="hover:bg-[#eef2ff]/40 border-b border-[#e5e7eb]">
                       <TableCell className="font-medium">
                         <div className="flex items-center gap-2">
                           <User className="w-4 h-4 text-gray-400" />
@@ -1382,7 +1382,7 @@ onClick={async () => {
     variant="ghost"
     size="icon"
     onClick={() => generatePDF(r)}
-    className="h-8 w-8 text-gray-600 hover:text-gray-800 hover:bg-gray-50 rounded-lg"
+    className="h-8 w-8 text-gray-600 hover:text-[#4f46e5] hover:bg-[#eef2ff] rounded-lg"
     title="Download PDF"
   >
     <Download className="h-4 w-4" />
@@ -1395,7 +1395,7 @@ onClick={async () => {
         variant="ghost"
         size="icon"
         onClick={() => handleEdit(r)}
-        className="h-8 w-8 text-gray-600 hover:text-gray-800 hover:bg-gray-50 rounded-lg"
+        className="h-8 w-8 text-gray-600 hover:text-[#4f46e5] hover:bg-[#eef2ff] rounded-lg"
         title="Edit"
       >
         <Edit className="h-4 w-4" />
@@ -1645,20 +1645,20 @@ fetchData={(q) => fetchBranches(q)}
               </div>
             </form>
           </div>
-          <DialogFooter className="px-6 py-4 border-t bg-gray-50 sticky bottom-0">
+          <DialogFooter className="px-6 py-4 border-t bg-[#f8fafc] sticky bottom-0">
             <div className="flex gap-3 w-full">
               <Button 
                 type="button" 
                 variant="outline" 
                 onClick={() => setIsDialogOpen(false)}
-                className="flex-1 border-gray-300 hover:bg-gray-50 rounded-lg"
+                className="flex-1 border-[#d1d5db] hover:bg-[#eef2ff] rounded-lg"
               >
                 Cancel
               </Button>
               <Button 
                 type="submit" 
                 onClick={handleSubmit}
-                className="flex-1 bg-gray-900 hover:bg-gray-800 rounded-lg"
+                className="flex-1 bg-[#4f46e5] hover:bg-[#4338ca] rounded-lg"
               >
                 {editing ? "Update Reimbursement" : "Create Reimbursement"}
               </Button>
@@ -1680,7 +1680,7 @@ fetchData={(q) => fetchBranches(q)}
               {settingsReimbursement && (
                 <>
                   {/* Basic Info */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-[#f8fafc] rounded-lg border border-[#d1d5db]">
                     <div>
                       <Label className="text-sm font-medium text-gray-500">Employee</Label>
                       <p className="text-sm font-semibold text-gray-900">{settingsReimbursement.employeeName}</p>
@@ -1710,7 +1710,7 @@ fetchData={(q) => fetchBranches(q)}
                       <Button
                         type="button"
                         variant={approvalType === "Salary" ? "default" : "outline"}
-                        className={`flex-1 py-3 rounded-lg ${approvalType === "Salary" ? "bg-gray-900 hover:bg-gray-800" : "border-gray-300 hover:bg-gray-50"}`}
+                        className={`flex-1 py-3 rounded-lg ${approvalType === "Salary" ? "bg-[#4f46e5] hover:bg-[#4338ca]" : "border-[#d1d5db] hover:bg-[#eef2ff]"}`}
                         onClick={() => setApprovalType("Salary")}
                       >
                         Salary
@@ -1718,7 +1718,7 @@ fetchData={(q) => fetchBranches(q)}
                       <Button
                         type="button"
                         variant={approvalType === "Voucher" ? "default" : "outline"}
-                        className={`flex-1 py-3 rounded-lg ${approvalType === "Voucher" ? "bg-gray-900 hover:bg-gray-800" : "border-gray-300 hover:bg-gray-50"}`}
+                        className={`flex-1 py-3 rounded-lg ${approvalType === "Voucher" ? "" : "border-gray-300 hover:bg-gray-50"}`}
                         onClick={() => setApprovalType("Voucher")}
                       >
                         Voucher
@@ -1915,7 +1915,7 @@ fetchData={(q) => fetchBranches(q)}
                       <Button
                         type="button"
                         variant={paymentMode === "Cash" ? "default" : "outline"}
-                        className={`flex-1 py-3 rounded-lg ${paymentMode === "Cash" ? "bg-gray-900 hover:bg-gray-800" : "border-gray-300 hover:bg-gray-50"}`}
+                        className={`flex-1 py-3 rounded-lg ${paymentMode === "Cash" ? "" : "border-gray-300 hover:bg-gray-50"}`}
                         onClick={() => {
                           setPaymentMode("Cash")
                           setPaymentType("Cash")
@@ -1926,7 +1926,7 @@ fetchData={(q) => fetchBranches(q)}
                       <Button
                         type="button"
                         variant={paymentMode === "Bank" ? "default" : "outline"}
-                        className={`flex-1 py-3 rounded-lg ${paymentMode === "Bank" ? "bg-gray-900 hover:bg-gray-800" : "border-gray-300 hover:bg-gray-50"}`}
+                        className={`flex-1 py-3 rounded-lg ${paymentMode === "Bank" ? "" : "border-gray-300 hover:bg-gray-50"}`}
                         onClick={() => setPaymentMode("Bank")}
                       >
                         Bank
@@ -1942,7 +1942,7 @@ fetchData={(q) => fetchBranches(q)}
                         <Button
                           type="button"
                           variant={paymentType === "Cheque" ? "default" : "outline"}
-                          className={`py-3 rounded-lg ${paymentType === "Cheque" ? "bg-gray-900 hover:bg-gray-800" : "border-gray-300 hover:bg-gray-50"}`}
+                          className={`py-3 rounded-lg ${paymentType === "Cheque" ? "" : "border-gray-300 hover:bg-gray-50"}`}
                           onClick={() => setPaymentType("Cheque")}
                         >
                           Cheque
@@ -1950,7 +1950,7 @@ fetchData={(q) => fetchBranches(q)}
                         <Button
                           type="button"
                           variant={paymentType === "UPI" ? "default" : "outline"}
-                          className={`py-3 rounded-lg ${paymentType === "UPI" ? "bg-gray-900 hover:bg-gray-800" : "border-gray-300 hover:bg-gray-50"}`}
+                          className={`py-3 rounded-lg ${paymentType === "UPI" ? "" : "border-gray-300 hover:bg-gray-50"}`}
                           onClick={() => setPaymentType("UPI")}
                         >
                           UPI
@@ -1958,7 +1958,7 @@ fetchData={(q) => fetchBranches(q)}
                         <Button
                           type="button"
                           variant={paymentType === "Bank Transfer" ? "default" : "outline"}
-                          className={`py-3 rounded-lg ${paymentType === "Bank Transfer" ? "bg-gray-900 hover:bg-gray-800" : "border-gray-300 hover:bg-gray-50"}`}
+                          className={`py-3 rounded-lg ${paymentType === "Bank Transfer" ? "" : "border-gray-300 hover:bg-gray-50"}`}
                           onClick={() => setPaymentType("Bank Transfer")}
                         >
                           Bank Transfer

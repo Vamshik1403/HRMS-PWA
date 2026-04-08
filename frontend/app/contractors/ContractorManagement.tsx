@@ -665,7 +665,7 @@ export function ContractorManagement() {
         {canManage && (
               <Button
                 onClick={() => { resetForm(); setIsDialogOpen(true); }}
-                className="bg-gray-900 hover:bg-gray-800 text-sm px-3 py-2"
+                className="text-sm px-3 py-2"
               >
                 <Plus className="w-4 h-4 mr-1" /> Add Contractor
               </Button>
@@ -911,7 +911,7 @@ export function ContractorManagement() {
                   </Button>
                   <div className="flex gap-2">
                     <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
-                    <Button type="submit" className="bg-gray-900 hover:bg-gray-800" disabled={saving}>
+                    <Button type="submit" className="" disabled={saving}>
                       {saving ? "Saving..." : editing ? "Update Contractor" : "Add Contractor"}
                     </Button>
                   </div>
@@ -1081,7 +1081,7 @@ export function ContractorManagement() {
           <div className="flex justify-end gap-3 pt-4">
             <Button variant="outline" onClick={() => setIsRateCardOpen(false)}>Close</Button>
             <Button
-              className="bg-gray-900 hover:bg-gray-800"
+              className=""
               onClick={async () => {
                 if (!rateCardContractor) return;
                 try {

@@ -28,11 +28,13 @@ export function FormDrawer({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className={className}>
-        <DialogHeader>
+        <DialogHeader className="pb-5 border-b border-[#f1f5f9]">
           <DialogTitle>{title}</DialogTitle>
           {description && <DialogDescription>{description}</DialogDescription>}
         </DialogHeader>
-        {children}
+        <div className="form-drawer-body">
+          {children}
+        </div>
       </DialogContent>
     </Dialog>
   );

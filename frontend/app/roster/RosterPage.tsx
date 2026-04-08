@@ -969,7 +969,7 @@ export function RosterManagement() {
       </div>
 
       {/* From Date and To Date Display */}
-      <div className="flex items-center gap-4 p-4 bg-gray-50 rounded-lg border">
+      <div className="flex items-center gap-4 p-4 bg-[#eef2ff]/40 rounded-lg border border-[#d1d5db]">
         <div className="flex items-center gap-2">
           <Calendar className="w-4 h-4 text-gray-600" />
           <span className="font-medium">From Date:</span>
@@ -1006,7 +1006,7 @@ export function RosterManagement() {
 
       {/* FILTERS CARD */}
       <Card className="shadow-sm">
-        <CardHeader className="bg-gray-50">
+        <CardHeader className="bg-[#eef2ff]/40 border-b border-[#d1d5db]">
           <div className="flex items-center gap-2">
             <Filter className="w-5 h-5 text-gray-600" />
             <CardTitle className="text-lg">Filters & Selection</CardTitle>
@@ -1152,7 +1152,7 @@ export function RosterManagement() {
 
             <div className="space-y-2">
               <Button
-                className="w-full h-10 bg-gray-900 hover:bg-gray-800"
+                className="w-full h-10 bg-[#4f46e5] hover:bg-[#4338ca]"
                 onClick={fetchEmployees}
                 disabled={!canLoadEmployees || isLoading.employees}
               >
@@ -1182,7 +1182,7 @@ export function RosterManagement() {
               Days: {dates.length}
             </Badge>
             {selectedEmpIds.size > 0 && (
-              <Badge className="px-3 py-1 bg-blue-100 text-blue-700">
+              <Badge className="px-3 py-1 bg-[#eef2ff] text-[#4338ca] border border-[#d1d5db]">
                 Selected: {selectedEmpIds.size}
               </Badge>
             )}
@@ -1199,7 +1199,7 @@ export function RosterManagement() {
               </Badge>
             )}
             {isManager && (
-              <Badge variant="outline" className="px-3 py-1 bg-blue-100 text-blue-700 border-blue-300">
+              <Badge variant="outline" className="px-3 py-1 bg-[#eef2ff] text-[#4338ca] border-[#d1d5db]">
                 <Users className="w-3 h-3 mr-1" />
                 Manager Mode
               </Badge>
@@ -1268,7 +1268,7 @@ export function RosterManagement() {
                     {employees.map((emp) => {
                       const checked = selectedEmpIds.has(emp.id)
                       return (
-                        <TableRow key={emp.id} className="hover:bg-gray-50">
+                        <TableRow key={emp.id} className="hover:bg-[#eef2ff]/40">
                           <TableCell className="sticky left-0 bg-white z-20 border-r shadow-sm">
                             <input
                               type="checkbox"
@@ -1499,7 +1499,7 @@ export function RosterManagement() {
               <div className="space-y-2">
                 <Label className="text-sm font-medium opacity-0">Apply</Label>
                 <Button
-                  className="w-full h-10 bg-gray-900 hover:bg-gray-800"
+                  className="w-full h-10 "
                   onClick={handleBulkApply}
                   disabled={isLoading.bulk || selectedEmpIds.size === 0}
                 >

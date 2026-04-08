@@ -373,7 +373,7 @@ createdAt: schedule.createdAt
         <div className="flex items-center gap-3">
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>
-              <Button onClick={resetForm} className="bg-gray-900 hover:bg-gray-800 flex-shrink-0 text-sm px-3 py-2">
+              <Button onClick={resetForm} className="flex-shrink-0 text-sm px-3 py-2">
                 <Plus className="w-4 h-4 mr-1" />
                 Add Field Schedule
               </Button>
@@ -573,7 +573,7 @@ createdAt: schedule.createdAt
                   <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
                     Cancel
                   </Button>
-                  <Button type="submit" className="bg-gray-900 hover:bg-gray-800">
+                  <Button type="submit" className="">
                     {editingSchedule ? "Update Field Schedule" : "Add Field Schedule"}
                   </Button>
                 </DialogFooter>

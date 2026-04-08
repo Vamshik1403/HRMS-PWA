@@ -1700,7 +1700,7 @@ useEffect(() => {
 
 
 <Dialog open={isPaymentDialogOpen} onOpenChange={setIsPaymentDialogOpen}>
-  <DialogContent className="max-h-[90vh] overflow-hidden flex flex-col p-0">
+  <DialogContent>
     <DialogHeader className="px-6 py-4 border-b bg-white sticky top-0 z-10">
       <DialogTitle className="text-xl font-semibold text-green-800">
         Make Payment
@@ -1945,7 +1945,7 @@ useEffect(() => {
           <Dialog open={isDialogOpen} onOpenChange={(o) => { setIsDialogOpen(o); if (!o) resetForm(); }}>
             {canManage && (
   <DialogTrigger asChild>
-    <Button onClick={resetForm} className="bg-gray-900 hover:bg-gray-800 flex-shrink-0 text-sm px-3 py-2">
+    <Button onClick={resetForm} className="flex-shrink-0 text-sm px-3 py-2">
       <Plus className="w-4 h-4 mr-1" />
       Add Salary Generation
     </Button>
@@ -1953,7 +1953,7 @@ useEffect(() => {
 )}
 
 
-            <DialogContent className="max-h-[90vh] overflow-y-auto">
+            <DialogContent>
               <DialogHeader>
                 <DialogTitle>{editing ? "Edit Salary Generation" : "Add New Salary Generation"}</DialogTitle>
                 <DialogDescription>
@@ -2137,7 +2137,7 @@ useEffect(() => {
                       id="month"
                       value={formData.monthLabel}
                       onChange={(e) => setFormData((p) => ({ ...p, monthLabel: e.target.value }))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full h-10 px-3 py-2 border border-[#d0d0d0] bg-white rounded-sm text-sm text-gray-900 shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-900/15 focus-visible:border-[#b0b0b0]"
                       required
                       disabled={!formData.companyID} // ✅ only disable when company not selected
                     >
@@ -2166,7 +2166,7 @@ useEffect(() => {
                   <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
                     Cancel
                   </Button>
-                  <Button type="submit" className="bg-gray-900 hover:bg-gray-800">
+                  <Button type="submit" className="">
                     {editing ? "Update Salary Generation" : "Add Salary Generation"}
                   </Button>
                 </DialogFooter>

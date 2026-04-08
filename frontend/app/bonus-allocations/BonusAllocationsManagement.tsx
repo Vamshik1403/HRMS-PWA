@@ -586,7 +586,7 @@ export function BonusAllocationsManagement() {
               {canManage && (
                 <Button
                   onClick={resetForm}
-                  className="bg-gray-900 hover:bg-gray-800 flex-shrink-0 text-sm px-3 py-2"
+                  className="flex-shrink-0 text-sm px-3 py-2"
                 >
                   <Plus className="w-4 h-4 mr-1" />
                   Add Bonus Allocation
@@ -656,7 +656,7 @@ export function BonusAllocationsManagement() {
                         id="financialYear"
                         value={formData.financialYearLabel}
                         onChange={(e) => setFormData((p) => ({ ...p, financialYearLabel: e.target.value }))}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-sm border-[#d0d0d0] focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-900/15 focus-visible:border-[#b0b0b0]"
                         required
                       >
                         <option value="">Select Financial Year</option>
@@ -671,7 +671,7 @@ export function BonusAllocationsManagement() {
                         id="salaryPeriod"
                         value={formData.salaryPeriodLabel}
                         onChange={(e) => setFormData((p) => ({ ...p, salaryPeriodLabel: e.target.value }))}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-sm border-[#d0d0d0] focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-900/15 focus-visible:border-[#b0b0b0]"
                         required
                       >
                         <option value="">Select Salary Period</option>
@@ -734,7 +734,7 @@ export function BonusAllocationsManagement() {
                   <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
                     Cancel
                   </Button>
-                  <Button type="submit" className="bg-gray-900 hover:bg-gray-800">
+                  <Button type="submit" className="">
                     {editingAllocation ? "Update Bonus Allocation" : "Add Bonus Allocation"}
                   </Button>
                 </DialogFooter>

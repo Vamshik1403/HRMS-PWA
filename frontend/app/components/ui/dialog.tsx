@@ -5,12 +5,26 @@ import * as DialogPrimitive from "@radix-ui/react-dialog"
 import { X } from "lucide-react"
 
 import { cn } from "@/app/utils/cn"
+import { useSidebarSafe } from "@/app/components/ui/sidebar"
 
 const Dialog: React.FC<React.ComponentProps<typeof DialogPrimitive.Root>> = ({
   open,
   onOpenChange,
   ...props
 }) => {
+  const sidebar = useSidebarSafe();
+  const prevSidebarOpen = React.useRef(true);
+
+  React.useEffect(() => {
+    if (!sidebar) return;
+    if (open) {
+      prevSidebarOpen.current = sidebar.open;
+      sidebar.setOpen(false);
+    } else {
+      sidebar.setOpen(prevSidebarOpen.current);
+    }
+  }, [open]);
+
   return <DialogPrimitive.Root open={open} onOpenChange={onOpenChange} {...props} />;
 };
 
@@ -27,7 +41,7 @@ const DialogOverlay = React.forwardRef<
   <DialogPrimitive.Overlay
     ref={ref}
     className={cn(
-      "fixed inset-0 z-50 bg-black/40 backdrop-blur-[2px] data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
+      "fixed inset-0 z-50 bg-black/30 backdrop-blur-[6px] data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
       className
     )}
     {...props}
@@ -44,7 +58,7 @@ const DialogContent = React.forwardRef<
     <DialogPrimitive.Content
       ref={ref}
       className={cn(
-        "fixed z-50 top-0 right-0 bottom-0 h-screen w-[calc(100vw-18rem)] bg-white border-l border-[#e5e5e5] shadow-[-8px_0_30px_rgba(0,0,0,0.1)] p-6 pb-24 overflow-y-auto",
+        "fixed z-50 top-0 right-0 bottom-0 h-screen w-[calc(100vw-4.5rem)] bg-white border-l border-[#e8ecf1] shadow-[-12px_0_40px_rgba(0,0,0,0.08)] p-6 pb-24 overflow-y-auto",
         "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:duration-300 data-[state=open]:duration-300",
         "data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right",
         className
@@ -52,7 +66,7 @@ const DialogContent = React.forwardRef<
       {...props}
     >
       {children}
-      <DialogPrimitive.Close className="absolute right-4 top-4 rounded-lg p-1 opacity-70 ring-offset-background transition-opacity hover:opacity-100 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground">
+      <DialogPrimitive.Close className="absolute right-5 top-5 rounded-[3px] p-1.5 text-gray-400 transition-all hover:text-gray-600 hover:bg-gray-100/80 focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/25 focus:ring-offset-1 disabled:pointer-events-none">
         <X className="h-4 w-4" />
         <span className="sr-only">Close</span>
       </DialogPrimitive.Close>
@@ -96,7 +110,7 @@ const DialogTitle = React.forwardRef<
   <DialogPrimitive.Title
     ref={ref}
     className={cn(
-      "text-lg font-semibold leading-none tracking-tight",
+      "text-[17px] font-semibold leading-none tracking-[-0.01em] text-gray-900",
       className
     )}
     {...props}
@@ -110,7 +124,7 @@ const DialogDescription = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <DialogPrimitive.Description
     ref={ref}
-    className={cn("text-sm text-muted-foreground", className)}
+    className={cn("text-[13px] text-[#6b7280] leading-relaxed", className)}
     {...props}
   />
 ))

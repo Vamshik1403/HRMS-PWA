@@ -433,7 +433,7 @@ export function PrivilegedLeaveManagement() {
                     </div>
                     <div className="flex justify-end gap-3 pt-4">
                       <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
-                      <Button type="submit" className="bg-gray-900 hover:bg-gray-800">
+                      <Button type="submit" className="">
                         {editingEntry ? "Update" : "Add Entry"}
                       </Button>
                     </div>

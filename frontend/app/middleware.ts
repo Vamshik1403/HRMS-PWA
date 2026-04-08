@@ -18,14 +18,16 @@ export function middleware(req: NextRequest) {
     req.headers.get('Authorization')?.replace('Bearer ', '') ||
     null
 
-  const isAuthPage = pathname.startsWith('/login')
+  const isAuthPage = pathname.startsWith('/login') || pathname === '/'
 
   if (!token && !isAuthPage) {
     return NextResponse.redirect(new URL('/login', req.url))
   }
 
+  // Don't redirect authenticated users from auth pages - let client-side routing handle it
+  // based on their role (employee vs admin)
   if (token && isAuthPage) {
-    return NextResponse.redirect(new URL('/', req.url))
+    return NextResponse.next()
   }
 
   return NextResponse.next()

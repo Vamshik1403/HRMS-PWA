@@ -471,7 +471,7 @@ export function CanteenReports() {
 
             <div className="flex items-end gap-3">
               <Button
-                className="bg-gray-900 hover:bg-gray-800"
+                className=""
                 onClick={generateReport}
                 disabled={loading}
               >

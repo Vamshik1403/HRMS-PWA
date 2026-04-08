@@ -1190,7 +1190,7 @@ export function LeaveApplicationsManagement() {
         <div className="flex items-center gap-3">
           <Button
             onClick={() => { resetForm(); setIsDialogOpen(true); }}
-            className="bg-gray-900 hover:bg-gray-800 flex-shrink-0 text-sm px-3 py-2"
+            className="flex-shrink-0 text-sm px-3 py-2"
           >
             <Plus className="w-4 h-4 mr-1" />
             Add Leave Application
@@ -1327,7 +1327,7 @@ export function LeaveApplicationsManagement() {
                         id="leaveType"
                         value={formData.leaveType}
                         onChange={(e) => setFormData(prev => ({ ...prev, leaveType: e.target.value }))}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-sm border-[#d0d0d0] focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-900/15 focus-visible:border-[#b0b0b0]"
                         required
                       >
                         <option value="">Select Leave Type</option>
@@ -1346,7 +1346,7 @@ export function LeaveApplicationsManagement() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label>Calculated Days</Label>
-                      <div className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50 text-gray-600">
+                      <div className="w-full px-3 py-2 border border-[#d0d0d0] rounded-sm bg-gray-50 text-gray-600">
                         {calculateDays(formData.fromDate, formData.toDate)} days
                       </div>
                     </div>
@@ -1393,7 +1393,7 @@ export function LeaveApplicationsManagement() {
                   <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
                     Cancel
                   </Button>
-                  <Button type="submit" className="bg-gray-900 hover:bg-gray-800">
+                  <Button type="submit" className="">
                     {editingApplication ? "Update Application" : "Submit Application"}
                   </Button>
                 </div>
@@ -1521,7 +1521,7 @@ export function LeaveApplicationsManagement() {
                       <select
                         value={day.status}
                         onChange={(e) => handleDayStatusChange(index, e.target.value as DayStatus["status"])}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-sm border-[#d0d0d0] focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-900/15 focus-visible:border-[#b0b0b0]"
                       >
                         <option value="">Select Type</option>
                         {availableTypesForThisDay.map((type) => {

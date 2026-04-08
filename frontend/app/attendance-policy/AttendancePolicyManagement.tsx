@@ -484,7 +484,7 @@ export function AttendancePolicyManagement() {
         {canManage && (
               <Button
                 onClick={() => { resetForm(); setIsDialogOpen(true); }}
-                className="bg-gray-900 hover:bg-gray-800 flex-shrink-0 text-sm px-3 py-2"
+                className="flex-shrink-0 text-sm px-3 py-2"
               >
                 <Plus className="w-4 h-4 mr-1" />
                 Add Attendance Policy
@@ -740,7 +740,7 @@ export function AttendancePolicyManagement() {
                       markAs: e.target.value as "Absent" | "Half Day" | "",
                     }))
                   }
-                  className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="px-3 py-2 border border-gray-300 rounded-sm border-[#d0d0d0] focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-900/15 focus-visible:border-[#b0b0b0]"
                 >
                   <option value="">Select</option>
                   <option value="Absent">Absent</option>
@@ -920,7 +920,7 @@ export function AttendancePolicyManagement() {
                 >
                   Cancel
                 </Button>
-                <Button type="submit" className="bg-gray-900 hover:bg-gray-800">
+                <Button type="submit" className="">
                   {editingPolicy ? "Update Attendance Policy" : "Add Attendance Policy"}
                 </Button>
               </div>

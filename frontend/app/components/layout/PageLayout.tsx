@@ -43,19 +43,19 @@ const sbRow =
   "flex w-full items-center gap-3 rounded-md px-3 h-11 min-h-[44px] max-h-11 shrink-0 transition-colors duration-150";
 
 const sbActive =
-  "!bg-[#eef1f6] text-[#1a1a2e] font-medium !shadow-none ring-0 relative overflow-visible before:absolute before:-left-3 before:top-[20%] before:h-[60%] before:w-[3px] before:rounded-r-sm before:bg-[#4f7df3] [&_svg]:!text-[#1a1a2e]";
+  "!bg-[#eef2ff] text-[#4f46e5] font-medium !shadow-none ring-0 relative overflow-visible before:absolute before:-left-3 before:top-[20%] before:h-[60%] before:w-[3px] before:rounded-r-sm before:bg-[#4f46e5] [&_svg]:!text-[#4f46e5]";
 
 const sbIdle =
-  "text-[#6b7280] hover:bg-[#f3f4f6] hover:text-[#1a1a2e] !bg-transparent";
+  "text-[#6b7280] hover:bg-[#eef2ff] hover:text-[#4f46e5] !bg-transparent";
 
 const sbSubRow =
   "flex w-full items-center rounded-md !px-3 min-h-9 h-9 max-h-9 text-[12px] font-normal transition-colors duration-150";
 
 const sbSubActive =
-  "!bg-[#eef1f6] text-[#1a1a2e] font-medium !shadow-none ring-0 relative !pl-6 before:absolute before:left-0 before:top-[30%] before:h-[40%] before:w-[2px] before:rounded-full before:bg-[#4f7df3]";
+  "!bg-[#eef2ff] text-[#4f46e5] font-medium !shadow-none ring-0 relative !pl-6 before:absolute before:left-0 before:top-[30%] before:h-[40%] before:w-[2px] before:rounded-full before:bg-[#4f46e5]";
 
 const sbSubIdle =
-  "text-[#6b7280] hover:bg-[#f3f4f6] hover:text-[#1a1a2e] !bg-transparent";
+  "text-[#6b7280] hover:bg-[#eef2ff] hover:text-[#4f46e5] !bg-transparent";
 
 export function PageLayout({ children }: PageLayoutProps) {
   const pathname = usePathname()
@@ -212,16 +212,16 @@ export function PageLayout({ children }: PageLayoutProps) {
     pathname === "/canteen" || pathname === "/canteen/setup";
 
   return (
-    <div className="min-h-screen bg-[#f4f4f4]">
+    <div className="min-h-screen bg-[#f8fafc]">
       <SidebarProvider open={sidebarOpen} onOpenChange={setSidebarOpen}>
-        <Sidebar className="border-r border-[#e5e5e5] bg-sidebar text-sidebar-foreground">
+        <Sidebar collapsible="icon" className="border-r border-[#d1d5db] bg-sidebar text-sidebar-foreground">
           <SidebarHeader className="px-4 py-6 border-0">
             <Link href="/dashboard" className="flex items-center gap-3">
-              <div className="w-11 h-11 rounded-full bg-gray-900 flex items-center justify-center text-white text-sm font-bold shadow-[0_4px_14px_rgba(0,0,0,0.12)] shrink-0">
+              <div className="w-11 h-11 rounded-full bg-[#4f46e5] flex items-center justify-center text-white text-sm font-bold shadow-[0_6px_16px_rgba(79,70,229,0.35)] shrink-0">
                 HR
               </div>
               <div className="min-w-0">
-                <span className="text-gray-900 font-bold text-sm tracking-tight block truncate">
+                <span className="text-[#111827] font-bold text-sm tracking-tight block truncate">
                   OpenHRM
                 </span>
                 <p className="text-[11px] text-gray-400">Human resources</p>
@@ -246,8 +246,7 @@ export function PageLayout({ children }: PageLayoutProps) {
                         className={cn(
                           "w-5 h-5 shrink-0",
                           isActiveLink("/dashboard")
-                            ? "text-gray-900"
-                            : "text-gray-500"
+                            ? "text-[#4f46e5]" : "text-gray-400"
                         )}
                       />
                       <span className="truncate font-semibold">Dashboard</span>
@@ -269,8 +268,7 @@ export function PageLayout({ children }: PageLayoutProps) {
                           className={cn(
                             "w-5 h-5 shrink-0",
                             isActiveLink("/service-providers")
-                              ? "text-gray-900"
-                              : "text-gray-500"
+                              ? "text-[#4f46e5]" : "text-gray-400"
                           )}
                         />
                         <span className="truncate font-semibold">
@@ -296,7 +294,7 @@ export function PageLayout({ children }: PageLayoutProps) {
                             : cn(
                                 sbIdle,
                                 openSections.setup &&
-                                  "font-semibold text-gray-900"
+                                  "font-semibold text-[#4f46e5]"
                               )
                         )}
                       >
@@ -306,8 +304,7 @@ export function PageLayout({ children }: PageLayoutProps) {
                             className={cn(
                               "w-5 h-5 shrink-0",
                               setupSectionActive
-                                ? "text-gray-900"
-                                : "text-gray-500"
+                                ? "text-[#4f46e5]" : "text-gray-400"
                             )}
                           />
                           <span className="truncate font-semibold">Setup</span>
@@ -397,7 +394,7 @@ export function PageLayout({ children }: PageLayoutProps) {
                             : cn(
                                 sbIdle,
                                 openSections.employee &&
-                                  "font-semibold text-gray-900"
+                                  "font-semibold text-[#4f46e5]"
                               )
                         )}
                       >
@@ -407,8 +404,7 @@ export function PageLayout({ children }: PageLayoutProps) {
                             className={cn(
                               "w-5 h-5 shrink-0",
                               employeeSectionActive
-                                ? "text-gray-900"
-                                : "text-gray-500"
+                                ? "text-[#4f46e5]" : "text-gray-400"
                             )}
                           />
                           <span className="truncate font-semibold">
@@ -500,7 +496,7 @@ export function PageLayout({ children }: PageLayoutProps) {
                             : cn(
                                 sbIdle,
                                 openSections.payroll &&
-                                  "font-semibold text-gray-900"
+                                  "font-semibold text-[#4f46e5]"
                               )
                         )}
                       >
@@ -510,8 +506,7 @@ export function PageLayout({ children }: PageLayoutProps) {
                             className={cn(
                               "w-5 h-5 shrink-0",
                               payrollSectionActive
-                                ? "text-gray-900"
-                                : "text-gray-500"
+                                ? "text-[#4f46e5]" : "text-gray-400"
                             )}
                           />
                           <span className="truncate font-semibold">
@@ -582,7 +577,7 @@ export function PageLayout({ children }: PageLayoutProps) {
                             : cn(
                                 sbIdle,
                                 openSections.salary &&
-                                  "font-semibold text-gray-900"
+                                  "font-semibold text-[#4f46e5]"
                               )
                         )}
                       >
@@ -592,8 +587,7 @@ export function PageLayout({ children }: PageLayoutProps) {
                             className={cn(
                               "w-5 h-5 shrink-0",
                               salarySectionActive
-                                ? "text-gray-900"
-                                : "text-gray-500"
+                                ? "text-[#4f46e5]" : "text-gray-400"
                             )}
                           />
                           <span className="truncate font-semibold">
@@ -737,7 +731,7 @@ export function PageLayout({ children }: PageLayoutProps) {
                             : cn(
                                 sbIdle,
                                 openSections.leave &&
-                                  "font-semibold text-gray-900"
+                                  "font-semibold text-[#4f46e5]"
                               )
                         )}
                       >
@@ -747,8 +741,7 @@ export function PageLayout({ children }: PageLayoutProps) {
                             className={cn(
                               "w-5 h-5 shrink-0",
                               leaveSectionActive
-                                ? "text-gray-900"
-                                : "text-gray-500"
+                                ? "text-[#4f46e5]" : "text-gray-400"
                             )}
                           />
                           <span className="truncate font-semibold">
@@ -881,7 +874,7 @@ export function PageLayout({ children }: PageLayoutProps) {
                             : cn(
                                 sbIdle,
                                 openSections.shift &&
-                                  "font-semibold text-gray-900"
+                                  "font-semibold text-[#4f46e5]"
                               )
                         )}
                       >
@@ -891,8 +884,7 @@ export function PageLayout({ children }: PageLayoutProps) {
                             className={cn(
                               "w-5 h-5 shrink-0",
                               shiftSectionActive
-                                ? "text-gray-900"
-                                : "text-gray-500"
+                                ? "text-[#4f46e5]" : "text-gray-400"
                             )}
                           />
                           <span className="truncate font-semibold">
@@ -973,7 +965,7 @@ export function PageLayout({ children }: PageLayoutProps) {
                             : cn(
                                 sbIdle,
                                 openSections.attendance &&
-                                  "font-semibold text-gray-900"
+                                  "font-semibold text-[#4f46e5]"
                               )
                         )}
                       >
@@ -983,8 +975,7 @@ export function PageLayout({ children }: PageLayoutProps) {
                             className={cn(
                               "w-5 h-5 shrink-0",
                               attendanceSectionActive
-                                ? "text-gray-900"
-                                : "text-gray-500"
+                                ? "text-[#4f46e5]" : "text-gray-400"
                             )}
                           />
                           <span className="truncate font-semibold">
@@ -1056,7 +1047,7 @@ export function PageLayout({ children }: PageLayoutProps) {
                             : cn(
                                 sbIdle,
                                 openSections.reports &&
-                                  "font-semibold text-gray-900"
+                                  "font-semibold text-[#4f46e5]"
                               )
                         )}
                       >
@@ -1066,8 +1057,7 @@ export function PageLayout({ children }: PageLayoutProps) {
                             className={cn(
                               "w-5 h-5 shrink-0",
                               reportsSectionActive
-                                ? "text-gray-900"
-                                : "text-gray-500"
+                                ? "text-[#4f46e5]" : "text-gray-400"
                             )}
                           />
                           <span className="truncate font-semibold">
@@ -1148,7 +1138,7 @@ export function PageLayout({ children }: PageLayoutProps) {
                             : cn(
                                 sbIdle,
                                 openSections.canteen &&
-                                  "font-semibold text-gray-900"
+                                  "font-semibold text-[#4f46e5]"
                               )
                         )}
                       >
@@ -1158,8 +1148,7 @@ export function PageLayout({ children }: PageLayoutProps) {
                             className={cn(
                               "w-5 h-5 shrink-0",
                               canteenSectionActive
-                                ? "text-gray-900"
-                                : "text-gray-500"
+                                ? "text-[#4f46e5]" : "text-gray-400"
                             )}
                           />
                           <span className="truncate font-semibold">
@@ -1223,11 +1212,11 @@ export function PageLayout({ children }: PageLayoutProps) {
           </div>
         </Sidebar>
         <SidebarInset>
-          <div className="min-h-screen bg-[#f4f4f4] overflow-x-hidden">
-            <header className="sticky top-0 z-30 bg-[#f4f4f4]/95 backdrop-blur-sm px-4 sm:px-8 pt-5 pb-4">
+          <div className="min-h-screen bg-[#f8fafc] overflow-x-hidden">
+            <header className="sticky top-0 z-30 bg-[#f8fafc]/95 backdrop-blur-sm px-4 sm:px-8 pt-5 pb-4">
               <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                 <div className="flex items-center gap-3 min-w-0">
-                  <SidebarTrigger className="text-gray-500 hover:text-gray-800 hover:bg-white rounded-full h-10 w-10 shrink-0 border border-[#e8e8e8] shadow-sm" />
+                  <SidebarTrigger className="text-gray-500 hover:text-[#4f46e5] hover:bg-[#eef2ff] rounded-full h-10 w-10 shrink-0 border border-[#d1d5db] shadow-sm" />
                   <h1 className="text-2xl sm:text-[1.65rem] font-bold text-gray-900 tracking-tight truncate">
                     {pageTitle}
                   </h1>

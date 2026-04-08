@@ -25,45 +25,50 @@ export default function LoginPage() {
       
       const { accessToken, user: basicUser } = loginRes.data
 
-      // Save token 
+      // Save token in localStorage and cookie (middleware reads the cookie)
       localStorage.setItem('accessToken', accessToken)
+      document.cookie = `accessToken=${accessToken}; path=/; max-age=${60 * 60 * 24};`
 
-      // Step 2: Fetch complete user details with all relations
-      try {
-        const userDetailsRes = await axios.get(`/backend/users/${basicUser.id}`, {
-          headers: {
-            'Authorization': `Bearer ${accessToken}`
-          }
-        })
-        
-        // This should return the complete user object with all relations
-        const completeUser = userDetailsRes.data
-        
-        // Log the complete user data to verify
-        console.log('Complete user data:', completeUser)
-        
-        // Save complete user info
-        localStorage.setItem('user', JSON.stringify(completeUser))
-
-        // ✅ Role-based redirection
-        if (completeUser.role === 'SUPERADMIN') {
-          router.push('/dashboard')
-        } else if (completeUser.role === 'MANAGER') {
-          router.push('/dashboard')
-        } else {
-          router.push('/empdashboard')
-        }
-      } catch (detailsError) {
-        console.error('Error fetching user details:', detailsError)
-        // Fallback to basic user if details fetch fails
+      // Step 2: For employees, use login response directly (no /users/:id lookup)
+      // Employee IDs can collide with user IDs in the Users table, so skip the fetch.
+      if (basicUser.type === 'employee' || basicUser.role === 'EMPLOYEE') {
         localStorage.setItem('user', JSON.stringify(basicUser))
-        
-        if (basicUser.role === 'SUPERADMIN') {
-          router.push('/dashboard')
-        } else if (basicUser.role === 'MANAGER') {
-          router.push('/dashboard')
-        } else {
+        setTimeout(() => {
           router.push('/empdashboard')
+        }, 100)
+      } else {
+        // For admin/manager users, fetch complete user details with all relations
+        try {
+          const userDetailsRes = await axios.get(`/backend/users/${basicUser.id}`, {
+            headers: {
+              'Authorization': `Bearer ${accessToken}`
+            }
+          })
+          
+          const completeUser = userDetailsRes.data
+          console.log('Complete user data:', completeUser)
+          localStorage.setItem('user', JSON.stringify(completeUser))
+
+          setTimeout(() => {
+            if (completeUser.role === 'SUPERADMIN' || completeUser.role === 'MANAGER') {
+              router.push('/dashboard')
+            } else {
+              router.push('/empdashboard')
+            }
+          }, 100)
+        } catch (detailsError) {
+          console.error('Error fetching user details:', detailsError)
+          localStorage.setItem('user', JSON.stringify(basicUser))
+          
+          setTimeout(() => {
+            if (basicUser.role === 'SUPERADMIN' || basicUser.role === 'MANAGER') {
+              router.push('/dashboard')
+            } else {
+              router.push('/empdashboard')
+            }
+          }, 100)
+          
+          return
         }
       }
       
@@ -153,7 +158,7 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-2.5 bg-gray-900 hover:bg-gray-800 text-white font-semibold rounded-xl transition-all duration-200 disabled:bg-gray-300 disabled:cursor-not-allowed text-sm flex items-center justify-center gap-2 shadow-[0_1px_3px_rgba(0,0,0,0.1),0_4px_12px_rgba(0,0,0,0.08)] hover:shadow-[0_2px_6px_rgba(0,0,0,0.15),0_8px_24px_rgba(0,0,0,0.12)] active:scale-[0.98]"
+              className="w-full py-2.5 bg-[#4f46e5] hover:bg-[#4338ca] text-white font-semibold rounded-xl transition-all duration-200 disabled:bg-gray-300 disabled:cursor-not-allowed text-sm flex items-center justify-center gap-2 shadow-[0_1px_3px_rgba(0,0,0,0.1),0_4px_12px_rgba(0,0,0,0.08)] hover:shadow-[0_2px_6px_rgba(0,0,0,0.15),0_8px_24px_rgba(0,0,0,0.12)] active:scale-[0.98]"
             >
               {loading ? (
                 <>

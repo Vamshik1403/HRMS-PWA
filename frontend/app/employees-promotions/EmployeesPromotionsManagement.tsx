@@ -1674,7 +1674,7 @@ const runFetchBR = (query: string) => {
             {canManage && (
               <Button
                 onClick={() => { resetForm(); setIsDialogOpen(true); }}
-                className="bg-gray-900 hover:bg-gray-800 flex-shrink-0 text-sm px-3 py-2"
+                className="flex-shrink-0 text-sm px-3 py-2"
               >
                 <Plus className="w-4 h-4 mr-1" /> Add Promotion
               </Button>
@@ -2545,7 +2545,7 @@ const runFetchBR = (query: string) => {
                     <select
                       value={formData.status}
                       onChange={(e) => setFormData((p) => ({ ...p, status: e.target.value }))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-sm border-[#d0d0d0] focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-900/15 focus-visible:border-[#b0b0b0]"
                     >
                       <option value="Not Applied">Not Applied</option>
                       <option value="Applied">Applied</option>
@@ -2558,7 +2558,7 @@ const runFetchBR = (query: string) => {
                 <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
                   Cancel
                 </Button>
-                <Button type="submit" className="bg-gray-900 hover:bg-gray-800" disabled={saving}>
+                <Button type="submit" className="" disabled={saving}>
                   {saving ? "Saving..." : editingRow ? "Update" : "Create"}
                 </Button>
               </DialogFooter>

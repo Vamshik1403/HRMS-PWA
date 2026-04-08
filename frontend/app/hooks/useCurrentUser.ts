@@ -35,6 +35,10 @@ export function useCurrentUser() {
       try {
         const parsed = JSON.parse(data)
         console.log("Raw user data from localStorage:", parsed) // Debug log
+        // Normalize role to uppercase for consistent checks
+        if (parsed.role) {
+          parsed.role = parsed.role.toUpperCase()
+        }
         setUser(parsed)
       } catch {
         setUser(null)

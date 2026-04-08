@@ -413,13 +413,13 @@ export function EmpLeaveApplication() {
         <div className="flex items-center gap-3">
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>
-              <Button onClick={resetForm} className="bg-gray-900 hover:bg-gray-800 flex-shrink-0 text-sm px-3 py-2">
+              <Button onClick={resetForm} className="flex-shrink-0 text-sm px-3 py-2">
                 <Plus className="w-4 h-4 mr-1" />
                 Submit Application
               </Button>
             </DialogTrigger>
                       <DialogContent    onOpenAutoFocus={(e) => e.preventDefault()}
-className="max-h-[90vh] overflow-y-auto">
+>
               <DialogHeader>
                 <DialogTitle>
                   {editingApplication ? "Edit Leave Application" : "Submit Leave Application"}
@@ -474,7 +474,7 @@ className="max-h-[90vh] overflow-y-auto">
                    
                     <div className="space-y-2">
                       <Label>Calculated Days</Label>
-                      <div className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50 text-gray-600">
+                      <div className="w-full px-3 py-2 border border-[#d0d0d0] rounded-sm bg-gray-50 text-gray-600">
                         {calculateDays(formData.fromDate, formData.toDate)} days
                       </div>
                     </div>
@@ -521,7 +521,7 @@ className="max-h-[90vh] overflow-y-auto">
                   <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
                     Cancel
                   </Button>
-                  <Button type="submit" className="bg-gray-900 hover:bg-gray-800">
+                  <Button type="submit" className="">
                     {editingApplication ? "Update Application" : "Submit Application"}
                   </Button>
                 </DialogFooter>

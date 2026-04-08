@@ -118,7 +118,7 @@ export class AuthService {
       payload = {
         sub: user.employeeID,
         username: user.username,
-        role: 'employee',
+        role: 'EMPLOYEE',
         type: 'employee',
         employeeId: user.employeeID,
         serviceProviderID: user.serviceProviderID,
@@ -128,7 +128,7 @@ export class AuthService {
       userData = {
         id: user.employeeID,
         username: user.username,
-        role: 'employee',
+        role: 'EMPLOYEE',
         type: 'employee',
         employee: {
           id: user.employee.id,

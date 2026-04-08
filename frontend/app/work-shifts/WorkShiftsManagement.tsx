@@ -602,7 +602,7 @@ export function WorkShiftsManagement() {
         {canManage && (
               <Button
                 onClick={() => { resetForm(); setIsDialogOpen(true); }}
-                className="bg-gray-900 hover:bg-gray-800 flex-shrink-0 text-sm px-3 py-2"
+                className="flex-shrink-0 text-sm px-3 py-2"
               >
                 <Plus className="w-4 h-4 mr-1" />
                 Add Work Shift
@@ -875,7 +875,7 @@ export function WorkShiftsManagement() {
                 >
                   Cancel
                 </Button>
-                <Button type="submit" className="bg-gray-900 hover:bg-gray-800">
+                <Button type="submit" className="">
                   {editingWorkShift ? "Update Work Shift" : "Add Work Shift"}
                 </Button>
               </div>

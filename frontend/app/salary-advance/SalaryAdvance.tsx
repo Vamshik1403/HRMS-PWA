@@ -847,7 +847,7 @@ const fetchCompanies = useCallback(
         </p>
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
-            <Button onClick={resetForm} className="bg-gray-900 hover:bg-gray-800">
+            <Button onClick={resetForm} className="">
               <Plus className="w-4 h-4 mr-1" />
               Add Advance
             </Button>
@@ -970,7 +970,7 @@ const fetchCompanies = useCallback(
               <DialogFooter>
                 <Button 
                   type="submit" 
-                  className="bg-gray-900 hover:bg-gray-800" 
+                  className="" 
                   disabled={submitting}
                 >
                   {submitting && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
@@ -1309,7 +1309,7 @@ const fetchCompanies = useCallback(
                 Cancel
               </Button>
               <Button 
-                className="bg-gray-900 hover:bg-gray-800 flex-1" 
+                className="flex-1" 
                 onClick={saveRepayment}
                 disabled={!isRepaymentFormValid()}
               >

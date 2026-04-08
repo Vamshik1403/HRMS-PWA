@@ -1202,7 +1202,7 @@ export function AttendanceReportsManagement() {
 
             <div className="col-span-2 flex items-end gap-3">
               <Button
-                className="bg-gray-900 hover:bg-gray-800"
+                className=""
                 onClick={generateReport}
                 disabled={loading}
               >

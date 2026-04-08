@@ -581,7 +581,7 @@ export function AttendanceRegularisationManagement() {
         <div className="flex items-center gap-3">
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>
-              <Button onClick={resetForm} className="bg-gray-900 hover:bg-gray-800 flex-shrink-0 text-sm px-3 py-2">
+              <Button onClick={resetForm} className="flex-shrink-0 text-sm px-3 py-2">
                 <Plus className="w-4 h-4 mr-1" />
                 Submit Regularisation
               </Button>
@@ -714,7 +714,7 @@ export function AttendanceRegularisationManagement() {
                         id="actualStatus"
                         value={formData.actualStatus}
                         onChange={(e) => setFormData(prev => ({ ...prev, actualStatus: e.target.value }))}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-sm border-[#d0d0d0] focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-900/15 focus-visible:border-[#b0b0b0] bg-gray-50"
                         required
                       >
                         <option value="">Select Actual Status</option>
@@ -732,7 +732,7 @@ export function AttendanceRegularisationManagement() {
                         id="requestedStatus"
                         value={formData.requestedStatus}
                         onChange={(e) => setFormData(prev => ({ ...prev, requestedStatus: e.target.value }))}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-sm border-[#d0d0d0] focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-900/15 focus-visible:border-[#b0b0b0]"
                         required
                       >
                         <option value="">Select Requested Status</option>
@@ -753,7 +753,7 @@ export function AttendanceRegularisationManagement() {
                       value={formData.reason}
                       onChange={(e) => setFormData(prev => ({ ...prev, reason: e.target.value }))}
                       placeholder="Explain the reason for attendance regularisation"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-[80px] resize-y"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-sm border-[#d0d0d0] focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-900/15 focus-visible:border-[#b0b0b0] min-h-[80px] resize-y"
                       required
                     />
                   </div>
@@ -774,7 +774,7 @@ export function AttendanceRegularisationManagement() {
                   <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
                     Cancel
                   </Button>
-                  <Button type="submit" className="bg-gray-900 hover:bg-gray-800">
+                  <Button type="submit" className="">
                     {editingRegularisation ? "Update Regularisation" : "Submit Regularisation"}
                   </Button>
                 </DialogFooter>
