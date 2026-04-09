@@ -1,5 +1,4 @@
 import { Module } from '@nestjs/common';
-import { PrismaService } from 'src/prisma/prisma.service';
 
 import { RosterController } from './roster.controller';
 import { RosterService } from './roster.service';
@@ -12,7 +11,7 @@ import { RosterDayService } from './roster-day.service';
 
 @Module({
   controllers: [RosterController, RosterEmployeeController, RosterDayController],
-  providers: [PrismaService, RosterService, RosterEmployeeService, RosterDayService],
+  providers: [RosterService, RosterEmployeeService, RosterDayService],
   exports: [RosterService],
 })
 export class RosterModule {}

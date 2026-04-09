@@ -5,7 +5,7 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
+  url      = env("DATABASE_URL_HRMS")
 }
 
 model AttendancePolicy {
@@ -1416,6 +1416,7 @@ model essl_raw_attlog {
   log_type     String?   @db.VarChar(20)
   user_id      String?   @db.VarChar(20)
   punch_time   String?   @db.VarChar(50)
+  auth_type    String?   @db.VarChar(20)
   export       Int?      @default(0)
 }
 

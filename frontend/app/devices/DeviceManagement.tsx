@@ -472,6 +472,8 @@ export function DeviceManagement() {
     }
   };
 
+
+
   const handleCancel = () => {
     resetForm();
     setIsAddingNew(false);
@@ -725,59 +727,106 @@ export function DeviceManagement() {
               </div>
               <div className="space-y-2">
                 <Label>Device Type</Label>
-               <select
-                  value={formData.deviceType}
-                  onChange={(e) => setFormData((p) => ({ ...p, deviceType: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-sm border-[#d0d0d0] focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-900/15 focus-visible:border-[#b0b0b0]"
-                >
-                  <option value="">Select device type</option>
-                  <option value="AT">Attendance</option>
-                  <option value="TR">Token Registration</option>
-                  <option value="TV">Token Verifier</option>
-                
-                </select>
+                <p className="text-xs text-gray-500">
+                  Select one or more device types.
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {[
+                    { value: "AT", label: "Attendance" },
+                    { value: "TR", label: "Token Registration" },
+                    { value: "TV", label: "Token Verifier" },
+                  ].map((opt) => {
+                    const selectedTypes = formData.deviceType
+                      ? formData.deviceType.split("+")
+                      : [];
+                    const isSelected = selectedTypes.includes(opt.value);
+                    return (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => {
+                          const current = formData.deviceType
+                            ? formData.deviceType.split("+")
+                            : [];
+                          let updated: string[];
+                          if (isSelected) {
+                            updated = current.filter((t) => t !== opt.value);
+                          } else {
+                            updated = [...current, opt.value];
+                          }
+                          const newDeviceType = updated.join("+");
+                          // Clear authTypes if no longer in a verify-mode combo
+                          const hasVerifyCombo =
+                            updated.includes("AT") &&
+                            (updated.includes("TR") || updated.includes("TV"));
+                          setFormData((p) => ({
+                            ...p,
+                            deviceType: newDeviceType,
+                            authTypes: hasVerifyCombo ? p.authTypes : [],
+                          }));
+                        }}
+                        className={`px-3 py-1.5 rounded-md text-sm font-medium border transition-colors ${
+                          isSelected
+                            ? "bg-gray-900 text-white border-gray-900"
+                            : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50"
+                        }`}
+                      >
+                        {opt.label}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
 
-              {/* Auth Types Multi-select (shown for AT devices to enable single-device multi-purpose) */}
-              {formData.deviceType === "AT" && (
-                <div className="space-y-2">
-                  <Label>Auth Types</Label>
-                  <p className="text-xs text-gray-500 mb-1">
-                    Select which authentication methods this device uses. When configured, FACE = Attendance and PIN/FINGER = Canteen Token.
-                  </p>
-                  <div className="flex flex-wrap gap-2">
-                    {[
-                      { value: "FACE", label: "Face" },
-                      { value: "FINGER", label: "Fingerprint" },
-                      { value: "PIN", label: "PIN / Password" },
-                      { value: "CARD", label: "Card" },
-                    ].map((opt) => {
-                      const isSelected = formData.authTypes.includes(opt.value);
-                      return (
-                        <button
-                          key={opt.value}
-                          type="button"
-                          onClick={() => {
-                            setFormData((p) => ({
-                              ...p,
-                              authTypes: isSelected
-                                ? p.authTypes.filter((t) => t !== opt.value)
-                                : [...p.authTypes, opt.value],
-                            }));
-                          }}
-                          className={`px-3 py-1.5 rounded-md text-sm font-medium border transition-colors ${
-                            isSelected
-                              ? "bg-gray-900 text-white border-gray-900"
-                              : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50"
-                          }`}
-                        >
-                          {opt.label}
-                        </button>
-                      );
-                    })}
+              {/* Auth Types - shown when device type includes AT + TR or AT + TV */}
+              {(() => {
+                const selectedTypes = formData.deviceType
+                  ? formData.deviceType.split("+")
+                  : [];
+                const hasVerifyCombo =
+                  selectedTypes.includes("AT") &&
+                  (selectedTypes.includes("TR") || selectedTypes.includes("TV"));
+                if (!hasVerifyCombo) return null;
+                return (
+                  <div className="space-y-2 rounded-lg border border-gray-200 p-4 bg-gray-50">
+                    <Label>Auth Types</Label>
+                    <p className="text-xs text-gray-500 mb-1">
+                      Select which authentication methods this device uses. FACE = Attendance, PIN/FINGER/CARD = Canteen Token.
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {[
+                        { value: "FACE", label: "Face" },
+                        { value: "FINGER", label: "Fingerprint" },
+                        { value: "PIN", label: "PIN / Password" },
+                        { value: "CARD", label: "Card" },
+                      ].map((opt) => {
+                        const isSelected = formData.authTypes.includes(opt.value);
+                        return (
+                          <button
+                            key={opt.value}
+                            type="button"
+                            onClick={() => {
+                              setFormData((p) => ({
+                                ...p,
+                                authTypes: isSelected
+                                  ? p.authTypes.filter((t) => t !== opt.value)
+                                  : [...p.authTypes, opt.value],
+                              }));
+                            }}
+                            className={`px-3 py-1.5 rounded-md text-sm font-medium border transition-colors ${
+                              isSelected
+                                ? "bg-gray-900 text-white border-gray-900"
+                                : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50"
+                            }`}
+                          >
+                            {opt.label}
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
-                </div>
-              )}
+                );
+              })()}
 
               <div className="space-y-2">
                 <Label>Device Make *</Label>
@@ -892,9 +941,13 @@ export function DeviceManagement() {
                         <TableCell className="whitespace-nowrap">{brName(device)}</TableCell>
                         <TableCell className="font-medium whitespace-nowrap">{device.deviceName}</TableCell>
                         <TableCell className="whitespace-nowrap">
-                          <Badge variant="secondary" className="text-xs">
-                            {device.deviceType === 'AT' ? 'Attendance' : device.deviceType === 'TR' ? 'Token Reg' : device.deviceType === 'TV' ? 'Token Ver' : device.deviceType || '—'}
-                          </Badge>
+                          <div className="flex flex-wrap gap-1">
+                            {device.deviceType ? device.deviceType.split('+').map((t) => (
+                              <Badge key={t} variant="secondary" className="text-xs">
+                                {t === 'AT' ? 'Attendance' : t === 'TR' ? 'Token Reg' : t === 'TV' ? 'Token Ver' : t}
+                              </Badge>
+                            )) : <span>—</span>}
+                          </div>
                         </TableCell>
                         <TableCell className="whitespace-nowrap">
                           {device.authTypes && device.authTypes.length > 0 ? (

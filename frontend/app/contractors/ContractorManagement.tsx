@@ -893,22 +893,7 @@ export function ContractorManagement() {
               </div>
 
               <div className="border-t border-gray-200 pt-4">
-                <div className="flex items-center justify-between">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="text-blue-600 border-blue-300 hover:bg-blue-50 flex items-center gap-1"
-                    onClick={() => {
-                      if (editing) {
-                        setIsDialogOpen(false);
-                        handleOpenRateCard(editing);
-                      }
-                    }}
-                    disabled={!editing}
-                    title={!editing ? "Save the contractor first, then add rate card" : "Open rate card"}
-                  >
-                    <IndianRupee className="w-4 h-4" /> Contractor Rate Card
-                  </Button>
+                <div className="flex items-center justify-end">
                   <div className="flex gap-2">
                     <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
                     <Button type="submit" className="" disabled={saving}>
@@ -950,168 +935,6 @@ export function ContractorManagement() {
           )}
           <div className="flex justify-end pt-4">
             <Button onClick={() => setIsViewDialogOpen(false)} variant="outline">Close</Button>
-          </div>
-      </FormDrawer>
-
-      {/* Rate Card Drawer */}
-      <FormDrawer
-        open={isRateCardOpen}
-        onOpenChange={setIsRateCardOpen}
-        title={`Contractor Rate Card — ${rateCardContractor?.contractorName || ""}`}
-        description="Define rate cards for this contractor by designation."
-      >
-          <div className="space-y-4">
-            {rateCards.map((rc, idx) => (
-              <div key={rc._localId} className="border rounded-lg p-4 space-y-3 relative bg-gray-50/50">
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-sm font-medium text-gray-500">Entry {idx + 1}</span>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => removeRateCardRow(rc._localId)}
-                    className="h-7 w-7 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
-                  >
-                    <Trash2 className="w-3 h-3" />
-                  </Button>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-xs font-medium text-gray-500 mb-1 block">Contractor Name</label>
-                    <Input
-                      value={rc.contractorName}
-                      onChange={(e) => updateRateCardRow(rc._localId, "contractorName", e.target.value)}
-                      placeholder="Contractor name"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs font-medium text-gray-500 mb-1 block">Department</label>
-                    <select
-                      className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                      value={rc.departmentName}
-                      onChange={(e) => updateRateCardRow(rc._localId, "departmentName", e.target.value)}
-                    >
-                      <option value="">Select Department</option>
-                      {rcDepartments.map((d) => (
-                        <option key={d.id} value={d.departmentName || ""}>{d.departmentName}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="text-xs font-medium text-gray-500 mb-1 block">Designation</label>
-                    <select
-                      className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                      value={rc.designation}
-                      onChange={(e) => updateRateCardRow(rc._localId, "designation", e.target.value)}
-                    >
-                      <option value="">Select Designation</option>
-                      {rcDesignations.map((d) => (
-                        <option key={d.id} value={d.designation || ""}>{d.designation}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="text-xs font-medium text-gray-500 mb-1 block">Work Shift</label>
-                    <select
-                      className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                      value={rc.workShiftName}
-                      onChange={(e) => updateRateCardRow(rc._localId, "workShiftName", e.target.value)}
-                    >
-                      <option value="">Select Work Shift</option>
-                      {rcWorkShifts.map((w) => (
-                        <option key={w.id} value={w.workShiftName || ""}>{w.workShiftName}</option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                  <div>
-                    <label className="text-xs font-medium text-gray-500 mb-1 block">Per Minute (₹)</label>
-                    <Input
-                      type="number"
-                      value={rc.perMinuteRate}
-                      onChange={(e) => updateRateCardRow(rc._localId, "perMinuteRate", e.target.value)}
-                      placeholder="0"
-                      min="0"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs font-medium text-gray-500 mb-1 block">Per Hour (₹)</label>
-                    <Input
-                      type="number"
-                      value={rc.perHourRate}
-                      onChange={(e) => updateRateCardRow(rc._localId, "perHourRate", e.target.value)}
-                      placeholder="0"
-                      min="0"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs font-medium text-gray-500 mb-1 block">Per Day (₹)</label>
-                    <Input
-                      type="number"
-                      value={rc.perDayRate}
-                      onChange={(e) => updateRateCardRow(rc._localId, "perDayRate", e.target.value)}
-                      placeholder="0"
-                      min="0"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs font-medium text-gray-500 mb-1 block">Per Month (₹)</label>
-                    <Input
-                      type="number"
-                      value={rc.perMonthRate}
-                      onChange={(e) => updateRateCardRow(rc._localId, "perMonthRate", e.target.value)}
-                      placeholder="0"
-                      min="0"
-                    />
-                  </div>
-                </div>
-              </div>
-            ))}
-            {rateCards.length === 0 && (
-              <div className="text-center py-8 text-gray-400 text-sm border rounded-lg">
-                No rate entries. Click &quot;Add Row&quot; to begin.
-              </div>
-            )}
-
-            <Button type="button" variant="outline" size="sm" onClick={addRateCardRow}>
-              <Plus className="w-4 h-4 mr-1" /> Add Row
-            </Button>
-          </div>
-
-          <div className="flex justify-end gap-3 pt-4">
-            <Button variant="outline" onClick={() => setIsRateCardOpen(false)}>Close</Button>
-            <Button
-              className=""
-              onClick={async () => {
-                if (!rateCardContractor) return;
-                try {
-                  const payload = {
-                    rateCards: rateCards.map(rc => ({
-                      contractorName: rc.contractorName || undefined,
-                      departmentName: rc.departmentName || undefined,
-                      designation: rc.designation || undefined,
-                      workShiftName: rc.workShiftName || undefined,
-                      perMinuteRate: rc.perMinuteRate ? parseFloat(rc.perMinuteRate) : 0,
-                      perHourRate: rc.perHourRate ? parseFloat(rc.perHourRate) : 0,
-                      perDayRate: rc.perDayRate ? parseFloat(rc.perDayRate) : 0,
-                      perMonthRate: rc.perMonthRate ? parseFloat(rc.perMonthRate) : 0,
-                    })),
-                  };
-                  const res = await fetch(`${API.contractors}/${rateCardContractor.id}/rate-cards`, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify(payload),
-                  });
-                  if (!res.ok) throw new Error(await res.text());
-                  setIsRateCardOpen(false);
-                  toast.success("Rate card saved successfully");
-                } catch (e: any) {
-                  toast.error(e?.message || "Failed to save rate cards");
-                }
-              }}
-            >
-              Save Rate Card
-            </Button>
           </div>
       </FormDrawer>
 
@@ -1188,19 +1011,6 @@ export function ContractorManagement() {
                           >
                             <Eye className="w-3 h-3" />
                           </Button>
-
-                          {/* Rate Card button */}
-                          {canManage && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleOpenRateCard(r)}
-                              className="h-7 px-2 text-xs text-blue-600 hover:text-blue-700 hover:bg-blue-50 flex items-center gap-1"
-                              title="Contractor Rate"
-                            >
-                              <IndianRupee className="w-3 h-3" /> Rate
-                            </Button>
-                          )}
 
                           {/* ✏️ Only SUPERADMIN and MANAGER can edit */}
                           {canManage && (

@@ -414,6 +414,14 @@ export function ManageEmployeesManagement() {
   const devAbortRef = useRef<AbortController | null>(null);
   const devTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Multi-type device detection
+  const [hasMultiTypeDevices, setHasMultiTypeDevices] = useState(false);
+  const combinedDevRef = useRef<HTMLDivElement>(null);
+  const [combinedDevList, setCombinedDevList] = useState<Device[]>([]);
+  const [combinedDevLoading, setCombinedDevLoading] = useState(false);
+  const combinedDevAbortRef = useRef<AbortController | null>(null);
+  const combinedDevTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   // Nested repeaters form types
   type EduForm = {
     id?: ID;
@@ -839,6 +847,60 @@ const runFetchTokenDevices = (q: string) => {
       if ((e as any).name !== "AbortError") console.error("Token device fetch error:", e);
     } finally {
       setTokenDevLoading(false);
+    }
+  }, DEBOUNCE_MS);
+};
+
+// Check for multi-type devices when form opens
+useEffect(() => {
+  if (!isAddingNew) return;
+  (async () => {
+    try {
+      let all = await fetchJSONSafe<Device[]>(API.devices);
+      if (user?.role === "MANAGER" && currentUserMapping) {
+        all = all.filter(d =>
+          d.companyID === currentUserMapping.companyID &&
+          d.branchesID === currentUserMapping.branchesID
+        );
+      }
+      const hasMulti = all.some(d => d.deviceType && d.deviceType.includes('+'));
+      setHasMultiTypeDevices(hasMulti);
+    } catch {
+      setHasMultiTypeDevices(false);
+    }
+  })();
+}, [isAddingNew]);
+
+// Fetch combined (multi-type) devices
+const runFetchCombinedDev = (q: string) => {
+  if (combinedDevTimerRef.current) clearTimeout(combinedDevTimerRef.current);
+  combinedDevTimerRef.current = setTimeout(async () => {
+    if (q.length < MIN_CHARS) {
+      setCombinedDevList([]);
+      return;
+    }
+    combinedDevAbortRef.current?.abort();
+    const ctrl = new AbortController();
+    combinedDevAbortRef.current = ctrl;
+    setCombinedDevLoading(true);
+    try {
+      let all = await fetchJSONSafe<Device[]>(API.devices, ctrl.signal);
+      if (user?.role === "MANAGER" && currentUserMapping) {
+        all = all.filter(d =>
+          d.companyID === currentUserMapping.companyID &&
+          d.branchesID === currentUserMapping.branchesID
+        );
+      }
+      // Filter for multi-type devices (devices that have '+' in deviceType)
+      const multiTypeDevices = all.filter(d => d.deviceType && d.deviceType.includes('+'));
+      const filtered = multiTypeDevices.filter(d =>
+        (d.deviceName ?? "").toLowerCase().includes(q.toLowerCase())
+      );
+      setCombinedDevList(filtered.slice(0, 20));
+    } catch (e) {
+      if ((e as any).name !== "AbortError") console.error("Combined device fetch error:", e);
+    } finally {
+      setCombinedDevLoading(false);
     }
   }, DEBOUNCE_MS);
 };
@@ -1304,6 +1366,22 @@ const addDevMap = () => setFormData(p => ({
     _devAutocomplete: "",
   }]
 }));
+
+// Add combined device mapping (for multi-type devices like AT+TR)
+const addCombinedDevMap = () => {
+  const localId = uid();
+  setFormData(p => ({
+    ...p,
+    devMapForm: [...p.devMapForm, {
+      _localId: localId,
+      deviceID: "",
+      deviceEmpCode: "",
+      deviceName: "",
+      deviceType: "", // Will be set when device is selected
+      _devAutocomplete: "",
+    }]
+  }));
+};
   const addBankDetail = () => setFormData(p => ({
     ...p,
     bankDetailsForm: [...p.bankDetailsForm, {
@@ -1538,6 +1616,8 @@ const addDevMap = () => setFormData(p => ({
       empContractorForm: [],
     });
     setTokenDevMapForm([]);
+    setHasMultiTypeDevices(false);
+    setCombinedDevList([]);
     setLinkedEmployees([]);
     setLinkedEmpSearch("");
     setLinkedEmpSuggestions([]);
@@ -1807,19 +1887,41 @@ const addDevMap = () => setFormData(p => ({
         skill: x.skill || undefined,
       }));
 
-           const devices = formData.devMapForm.map(d => ({
-        id: d.id,
-        deviceID: d.deviceID ? Number(d.deviceID) : undefined,
-        deviceEmpCode: d.deviceEmpCode || undefined,
-        deviceType: d.deviceType || "AT",
-      }));
+           const devices = formData.devMapForm
+        .filter(d => {
+          const dt = d.deviceType || "AT";
+          // Include pure AT devices and the AT part of multi-type devices
+          return dt === "AT" || dt.includes("AT");
+        })
+        .map(d => ({
+          id: (d.deviceType && d.deviceType.includes('+')) ? undefined : d.id,
+          deviceID: d.deviceID ? Number(d.deviceID) : undefined,
+          deviceEmpCode: d.deviceEmpCode || undefined,
+          deviceType: "AT",
+        }));
 
-      const tokenDevices = tokenDevMapForm.map(d => ({
+      // For token devices: include from tokenDevMapForm + multi-type devices from devMapForm
+      const tokenDevicesFromForm = tokenDevMapForm.map(d => ({
         id: d.id,
         deviceID: d.deviceID ? Number(d.deviceID) : undefined,
         deviceEmpCode: d.deviceEmpCode || undefined,
         deviceType: d.deviceType || "TR",
       }));
+
+      const tokenDevicesFromCombined = formData.devMapForm
+        .filter(d => d.deviceType && d.deviceType.includes('+') && (d.deviceType.includes('TR') || d.deviceType.includes('TV')))
+        .map(d => {
+          const types = d.deviceType!.split('+');
+          const tokenType = types.find(t => t === 'TR' || t === 'TV') || 'TR';
+          return {
+            id: d.id as number | undefined,
+            deviceID: d.deviceID ? Number(d.deviceID) : undefined,
+            deviceEmpCode: d.deviceEmpCode || undefined,
+            deviceType: tokenType,
+          };
+        });
+
+      const tokenDevices = [...tokenDevicesFromForm, ...tokenDevicesFromCombined];
 
       const bankDetails = formData.bankDetailsForm.map(b => ({
         id: b.id,
@@ -2534,7 +2636,7 @@ const addDevMap = () => setFormData(p => ({
                     <option value="owner">Owner</option>
                     <option value="proprietor">Proprietor</option>
                     <option value="manager">Director</option>
-                    <option value="contractor">Contractor</option>
+                    <option value="freelancer">Freelancer</option>
                   </select>
                 </div>
               </div>
@@ -2723,59 +2825,64 @@ const addDevMap = () => setFormData(p => ({
                 )}
               </div>
 
-              {/* Linked Employees (Approvers) */}
-              <div ref={linkedEmpRef} className="space-y-2 relative">
-                <Label>Linked Employees (Approvers / Managers / Higher Authority)</Label>
-                <p className="text-xs text-gray-500">Search and select employees who can approve requests for this employee. These can be managers, higher authorities, or any approver.</p>
-                <Input
-                  value={linkedEmpSearch}
-                  onChange={(e) => {
-                    setLinkedEmpSearch(e.target.value);
-                    runFetchLinkedEmpSuggestions(e.target.value);
-                  }}
-                  onFocus={() => {
-                    runFetchLinkedEmpSuggestions(linkedEmpSearch);
-                  }}
-                  placeholder="Search employees to link..."
-                  autoComplete="off"
-                />
-                {linkedEmpSuggestions.length > 0 && (
-                  <div className="absolute z-10 bg-white border rounded w-full shadow max-h-48 overflow-y-auto">
-                    {linkedEmpLoading && <div className="px-3 py-2 text-sm text-gray-500">Loading…</div>}
-                    {linkedEmpSuggestions.map((m) => {
-                      const full = `${m.employeeFirstName ?? ""} ${m.employeeLastName ?? ""}`.trim() || `#${m.id}`;
-                      return (
-                        <div
-                          key={m.id}
-                          className="px-3 py-2 hover:bg-gray-100 cursor-pointer"
-                          onMouseDown={(e) => e.preventDefault()}
-                          onClick={() => addLinkedEmployee(m)}
-                        >
-                          {full}
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
+              {/* Manager - Multi-entry repeater */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-semibold">Manager</h3>
+                </div>
+                <p className="text-xs text-gray-500">Search and select managers who can approve requests for this employee.</p>
                 {linkedEmployees.length > 0 && (
-                  <div className="flex flex-wrap gap-2 mt-2">
-                    {linkedEmployees.map((le) => {
-                      const name = `${le.employeeFirstName ?? ""} ${le.employeeLastName ?? ""}`.trim() || `#${le.id}`;
-                      return (
-                        <Badge key={le.id} variant="secondary" className="flex items-center gap-1 px-2 py-1">
-                          {name}
-                          <button
-                            type="button"
-                            onClick={() => removeLinkedEmployee(le.id)}
-                            className="ml-1 text-gray-500 hover:text-red-600"
-                          >
-                            <X className="w-3 h-3" />
-                          </button>
-                        </Badge>
-                      );
-                    })}
+                  linkedEmployees.map((le) => {
+                    const name = `${le.employeeFirstName ?? ""} ${le.employeeLastName ?? ""}`.trim() || `#${le.id}`;
+                    return (
+                      <div key={le.id} className="border border-gray-200 rounded-lg p-4 space-y-3">
+                        <div className="flex items-center justify-between">
+                          <span className="font-medium text-gray-900">{name}</span>
+                          <Button type="button" variant="ghost" size="sm" onClick={() => removeLinkedEmployee(le.id)} className="text-red-600 hover:text-red-700 hover:bg-red-50"><X className="w-4 h-4" /></Button>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+                {linkedEmployees.length === 0 && (
+                  <div className="text-center py-6 text-gray-500 border border-gray-200 rounded-lg">
+                    <Icon icon="mdi:account-supervisor" className="w-10 h-10 text-gray-300 mx-auto mb-2" />
+                    <p>No managers added yet</p>
                   </div>
                 )}
+                <div ref={linkedEmpRef} className="space-y-2 relative">
+                  <Label>Add Manager</Label>
+                  <Input
+                    value={linkedEmpSearch}
+                    onChange={(e) => {
+                      setLinkedEmpSearch(e.target.value);
+                      runFetchLinkedEmpSuggestions(e.target.value);
+                    }}
+                    onFocus={() => {
+                      runFetchLinkedEmpSuggestions(linkedEmpSearch);
+                    }}
+                    placeholder="Search managers to add..."
+                    autoComplete="off"
+                  />
+                  {linkedEmpSuggestions.length > 0 && (
+                    <div className="absolute z-10 bg-white border rounded w-full shadow max-h-48 overflow-y-auto">
+                      {linkedEmpLoading && <div className="px-3 py-2 text-sm text-gray-500">Loading…</div>}
+                      {linkedEmpSuggestions.map((m) => {
+                        const full = `${m.employeeFirstName ?? ""} ${m.employeeLastName ?? ""}`.trim() || `#${m.id}`;
+                        return (
+                          <div
+                            key={m.id}
+                            className="px-3 py-2 hover:bg-gray-100 cursor-pointer"
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={() => addLinkedEmployee(m)}
+                          >
+                            {full}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
               </div>
 
               {/* Employment Type - Multi-entry repeater */}
@@ -3540,6 +3647,114 @@ const addDevMap = () => setFormData(p => ({
           {/* ==========================
     BIOMETRIC DEVICE MAPPING 
     ========================== */}
+{hasMultiTypeDevices ? (
+  /* ===================================
+     COMBINED BIOMETRIC & TOKEN MAPPING
+     (shown when multi-type devices exist)
+     =================================== */
+  <div className="space-y-3">
+    <div className="flex items-center justify-between">
+      <h3 className="text-lg font-semibold">Biometric &amp; Token Device Mapping</h3>
+      <Button variant="outline" size="sm" type="button" onClick={addCombinedDevMap}>
+        <Plus className="w-4 h-4 mr-1" /> Add Device
+      </Button>
+    </div>
+
+    {formData.devMapForm.filter(dm => !dm.deviceType || dm.deviceType === '' || (dm.deviceType && dm.deviceType.includes('+'))).length === 0 ? (
+      <div className="text-center py-6 text-gray-500 border border-gray-200 rounded-lg">
+        <Icon icon="mdi:devices" className="w-10 h-10 text-gray-300 mx-auto mb-2" />
+        <p>No combined device mappings added yet</p>
+      </div>
+    ) : (
+      formData.devMapForm.filter(dm => !dm.deviceType || dm.deviceType === '' || (dm.deviceType && dm.deviceType.includes('+'))).map((dm) => (
+        <div key={dm._localId} className="border border-gray-200 rounded-lg p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex gap-1">
+              {dm.deviceType && dm.deviceType.split('+').map(t => (
+                <Badge key={t} variant="secondary" className="text-xs">
+                  {t === 'AT' ? 'Attendance' : t === 'TR' ? 'Token Reg' : t === 'TV' ? 'Token Ver' : t}
+                </Badge>
+              ))}
+            </div>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => removeDevMap(dm._localId)}
+              className="text-red-600 hover:text-red-700 hover:bg-red-50"
+            >
+              <X className="w-4 h-4" />
+            </Button>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div ref={combinedDevRef} className="space-y-2 relative">
+              <Label>Device</Label>
+              <Input
+                value={dm._devAutocomplete ?? dm.deviceName ?? ""}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  updateDevMap(dm._localId, "_devAutocomplete", val);
+                  updateDevMap(dm._localId, "deviceID", "");
+                  runFetchCombinedDev(val);
+                }}
+                placeholder="Type device name…"
+                autoComplete="off"
+              />
+              {combinedDevList.length > 0 && (
+                <div className="absolute z-10 bg-white border rounded w-full shadow max-h-48 overflow-y-auto">
+                  {combinedDevLoading && <div className="px-3 py-2 text-sm text-gray-500">Loading…</div>}
+                  {combinedDevList.map((dv) => (
+                    <div
+                      key={dv.id}
+                      className="px-3 py-2 hover:bg-gray-100 cursor-pointer"
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => {
+                        updateDevMap(dm._localId, "deviceID", String(dv.id));
+                        updateDevMap(dm._localId, "deviceName", dv.deviceName ?? "");
+                        updateDevMap(dm._localId, "_devAutocomplete", dv.deviceName ?? "");
+                        updateDevMap(dm._localId, "deviceType", dv.deviceType ?? "");
+                        setCombinedDevList([]);
+                      }}
+                    >
+                      <div className="flex items-center gap-2">
+                        <span>{dv.deviceName ?? `#${dv.id}`}</span>
+                        <div className="flex gap-1">
+                          {dv.deviceType && dv.deviceType.split('+').map(t => (
+                            <Badge key={t} variant="secondary" className="text-xs">
+                              {t === 'AT' ? 'Attendance' : t === 'TR' ? 'Token Reg' : t === 'TV' ? 'Token Ver' : t}
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <Label>Device Employee Code</Label>
+              <Input
+                value={dm.deviceEmpCode}
+                onChange={(e) =>
+                  updateDevMap(dm._localId, "deviceEmpCode", e.target.value)
+                }
+                placeholder="Device Employee Code"
+                autoComplete="off"
+              />
+            </div>
+          </div>
+        </div>
+      ))
+    )}
+  </div>
+) : (
+  /* ===================================
+     SEPARATE BIOMETRIC & TOKEN SECTIONS
+     (shown when no multi-type devices)
+     =================================== */
+  <>
 <div className="space-y-3">
   <div className="flex items-center justify-between">
     <h3 className="text-lg font-semibold">Biometric Device Mapping </h3>
@@ -3708,6 +3923,8 @@ const addDevMap = () => setFormData(p => ({
     ))
   )}
 </div>
+  </>
+)}
 
               <div className="flex justify-end gap-2 pt-4 border-t border-gray-200">
                 <Button type="button" variant="outline" onClick={handleCancel}>

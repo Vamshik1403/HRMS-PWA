@@ -272,9 +272,9 @@ async function processAttendanceLogs() {
       const authType = logEntry.auth_type || parseAuthTypeFromRawBody(logEntry.raw_body);
 
       // Auth-type routing: single device with authTypes configured
-      const useAuthTypeRouting = deviceType === 'AT' && deviceAuthTypes.length > 0 && authType;
+      const useAuthTypeRouting = (deviceType === 'AT' || deviceType === 'AT+TR') && deviceAuthTypes.length > 0 && authType;
 
-      if (deviceType === 'TR' || (useAuthTypeRouting && (authType === 'PIN' || authType === 'FINGER'))) {
+      if (deviceType === 'TR' || (useAuthTypeRouting && (authType === 'PIN' || authType === 'FINGER' || authType === 'CARD'))) {
         // Token Register → canteen_tr_logs
         // For dedicated TR devices: use TokenDeviceMapping
         // For auth-type routed AT devices: use EmpDeviceMapping
@@ -368,11 +368,11 @@ async function processAttendanceLogs() {
           const key = `${logEntry.device_sn}:${logEntry.user_id}`;
           const dt = di.deviceType || 'AT';
           const logAuthType = logEntry.auth_type || parseAuthTypeFromRawBody(logEntry.raw_body);
-          const useAuthRouting = dt === 'AT' && (di.authTypes || []).length > 0 && logAuthType;
+          const useAuthRouting = (dt === 'AT' || dt === 'AT+TR') && (di.authTypes || []).length > 0 && logAuthType;
           // Check if any mapping exists for this log
           if (dt === 'TV') return tokenMap.has(key);
           if (dt === 'TR') return tokenMap.has(key);
-          if (useAuthRouting && (logAuthType === 'PIN' || logAuthType === 'FINGER')) return empMap.has(key);
+          if (useAuthRouting && (logAuthType === 'PIN' || logAuthType === 'FINGER' || logAuthType === 'CARD')) return empMap.has(key);
           return empMap.has(key);
         })
         .map(logEntry => logEntry.id);

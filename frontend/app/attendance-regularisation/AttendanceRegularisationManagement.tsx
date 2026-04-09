@@ -88,6 +88,7 @@ export function AttendanceRegularisationManagement() {
   const [selectedEmployee, setSelectedEmployee] = useState<any | null>(null)
   const [managerData, setManagerData] = useState<any>(null)
   const [empCreds, setEmpCreds] = useState<any>(null)
+  const [holidays, setHolidays] = useState<any[]>([])
   
   const user = useCurrentUser()
   const canManage = user?.role === "SUPERADMIN" || user?.role === "MANAGER"
@@ -120,6 +121,21 @@ export function AttendanceRegularisationManagement() {
 
     loadUserData();
   }, [user]);
+
+  // Fetch holidays
+  useEffect(() => {
+    const loadHolidays = async () => {
+      try {
+        const res = await fetch(`${BACKEND_URL}/manage-holiday`, { cache: "no-store" });
+        const data = await res.json();
+        setHolidays(Array.isArray(data) ? data : []);
+      } catch (error) {
+        console.error("Error fetching holidays:", error);
+        setHolidays([]);
+      }
+    };
+    loadHolidays();
+  }, []);
 
   // API functions for search and suggest
   const fetchServiceProviders = async (query: string) => {
@@ -742,6 +758,12 @@ export function AttendanceRegularisationManagement() {
                         <option value="PL">Privilege Leave (PL)</option>
                         <option value="LOP">Loss of Pay (LOP)</option>
                         <option value="WEEKOFF">Week Off</option>
+                        <option value="HOLIDAY">Mark as Holiday</option>
+                        {holidays.map((h: any) => (
+                          <option key={h.id} value={`HOLIDAY:${h.holidayName || h.name || ''}`}>
+                            Holiday - {h.holidayName || h.name || `#${h.id}`}
+                          </option>
+                        ))}
                       </select>
                     </div>
                   </div>

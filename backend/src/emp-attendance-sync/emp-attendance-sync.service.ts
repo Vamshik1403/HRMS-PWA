@@ -85,8 +85,8 @@ for (const log of logs) {
   const deviceAuthTypes = dev.authTypes || [];
 
   // Determine routing: does this log represent attendance or canteen action?
-  // If device has authTypes configured AND deviceType is AT, use auth-type routing
-  const useAuthTypeRouting = deviceType === 'AT' && deviceAuthTypes.length > 0 && authType;
+  // If device has authTypes configured AND deviceType is AT or AT+TR, use auth-type routing
+  const useAuthTypeRouting = (deviceType === 'AT' || deviceType === 'AT+TR') && deviceAuthTypes.length > 0 && authType;
 
   if (deviceType === 'TV') {
     // Token Verifier → canteen_tv_logs (use TokenDeviceMapping)
@@ -124,7 +124,7 @@ for (const log of logs) {
     continue;
   }
 
-  if (deviceType === 'TR' || (useAuthTypeRouting && (authType === 'PIN' || authType === 'FINGER'))) {
+  if (deviceType === 'TR' || (useAuthTypeRouting && (authType === 'PIN' || authType === 'FINGER' || authType === 'CARD'))) {
     // Token Register / Canteen action
     // Use TokenDeviceMapping for dedicated TR devices, EmpDeviceMapping for auth-type routed
     let empId: number | null = null;
