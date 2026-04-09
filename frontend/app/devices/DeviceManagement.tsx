@@ -38,6 +38,7 @@ interface DeviceRead {
   // Scalars
   deviceName: string;
   deviceType?: string;
+  authTypes?: string[];
   deviceMake: string;
   deviceModel: string;
   deviceSN: string;
@@ -145,6 +146,7 @@ export function DeviceManagement() {
 
     deviceName: "",
     deviceType: "",
+    authTypes: [] as string[],
     deviceMake: "",
     deviceModel: "",
     deviceSN: "",
@@ -331,6 +333,7 @@ export function DeviceManagement() {
       brAutocomplete: "",
       deviceName: "",
       deviceType: "",
+      authTypes: [] as string[],
       deviceMake: "",
       deviceModel: "",
       deviceSN: "",
@@ -374,6 +377,7 @@ export function DeviceManagement() {
       status: formData.status,
       deviceName: formData.deviceName || undefined,
       deviceType: formData.deviceType || undefined,
+      authTypes: formData.authTypes.length > 0 ? formData.authTypes : [],
       deviceMake: formData.deviceMake || undefined,
       deviceModel: formData.deviceModel || undefined,
       deviceSN: formData.deviceSN || undefined,
@@ -449,6 +453,7 @@ export function DeviceManagement() {
       brAutocomplete: brName,
       deviceName: d.deviceName ?? "",
       deviceType: d.deviceType ?? "",
+      authTypes: d.authTypes ?? [],
       deviceMake: d.deviceMake ?? "",
       deviceModel: d.deviceModel ?? "",
       deviceSN: d.deviceSN ?? "",
@@ -733,6 +738,47 @@ export function DeviceManagement() {
                 </select>
               </div>
 
+              {/* Auth Types Multi-select (shown for AT devices to enable single-device multi-purpose) */}
+              {formData.deviceType === "AT" && (
+                <div className="space-y-2">
+                  <Label>Auth Types</Label>
+                  <p className="text-xs text-gray-500 mb-1">
+                    Select which authentication methods this device uses. When configured, FACE = Attendance and PIN/FINGER = Canteen Token.
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {[
+                      { value: "FACE", label: "Face" },
+                      { value: "FINGER", label: "Fingerprint" },
+                      { value: "PIN", label: "PIN / Password" },
+                      { value: "CARD", label: "Card" },
+                    ].map((opt) => {
+                      const isSelected = formData.authTypes.includes(opt.value);
+                      return (
+                        <button
+                          key={opt.value}
+                          type="button"
+                          onClick={() => {
+                            setFormData((p) => ({
+                              ...p,
+                              authTypes: isSelected
+                                ? p.authTypes.filter((t) => t !== opt.value)
+                                : [...p.authTypes, opt.value],
+                            }));
+                          }}
+                          className={`px-3 py-1.5 rounded-md text-sm font-medium border transition-colors ${
+                            isSelected
+                              ? "bg-gray-900 text-white border-gray-900"
+                              : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50"
+                          }`}
+                        >
+                          {opt.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
               <div className="space-y-2">
                 <Label>Device Make *</Label>
                 <Input
@@ -813,6 +859,8 @@ export function DeviceManagement() {
                     <TableHead className="w-[120px]">Company Name</TableHead>
                     <TableHead className="w-[120px]">Branch Name</TableHead>
                     <TableHead className="w-[120px]">Device Name</TableHead>
+                    <TableHead className="w-[80px]">Type</TableHead>
+                    <TableHead className="w-[120px]">Auth Types</TableHead>
                     <TableHead className="w-[100px]">Device Make</TableHead>
                     <TableHead className="w-[100px]">Device Model</TableHead>
                     <TableHead className="w-[120px]">Device SN</TableHead>
@@ -822,13 +870,13 @@ export function DeviceManagement() {
                 <TableBody>
                   {loading ? (
                     <TableRow>
-                      <TableCell colSpan={8} className="text-center py-8 text-gray-500">
+                      <TableCell colSpan={10} className="text-center py-8 text-gray-500">
                         Loading...
                       </TableCell>
                     </TableRow>
                   ) : filteredDevices.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={8} className="text-center py-8 text-gray-500">
+                      <TableCell colSpan={10} className="text-center py-8 text-gray-500">
                         <div className="flex flex-col items-center gap-2">
                           <Icon icon="mdi:devices" className="w-12 h-12 text-gray-300" />
                           <p>No devices found</p>
@@ -843,6 +891,20 @@ export function DeviceManagement() {
                         <TableCell className="whitespace-nowrap">{coName(device)}</TableCell>
                         <TableCell className="whitespace-nowrap">{brName(device)}</TableCell>
                         <TableCell className="font-medium whitespace-nowrap">{device.deviceName}</TableCell>
+                        <TableCell className="whitespace-nowrap">
+                          <Badge variant="secondary" className="text-xs">
+                            {device.deviceType === 'AT' ? 'Attendance' : device.deviceType === 'TR' ? 'Token Reg' : device.deviceType === 'TV' ? 'Token Ver' : device.deviceType || '—'}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="whitespace-nowrap">
+                          {device.authTypes && device.authTypes.length > 0 ? (
+                            <div className="flex flex-wrap gap-1">
+                              {device.authTypes.map((at) => (
+                                <Badge key={at} variant="outline" className="text-xs">{at}</Badge>
+                              ))}
+                            </div>
+                          ) : '—'}
+                        </TableCell>
                         <TableCell className="whitespace-nowrap">{device.deviceMake}</TableCell>
                         <TableCell className="whitespace-nowrap">{device.deviceModel}</TableCell>
                         <TableCell className="whitespace-nowrap">{device.deviceSN}</TableCell>

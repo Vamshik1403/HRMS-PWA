@@ -27,6 +27,9 @@ export class EmpAttendanceSyncService {
               companyID: true,
               branchesID: true,
               deviceSN: true,
+              deviceType: true,
+              authTypes: true,
+              deviceName: true,
             },
           },
         },
@@ -54,7 +57,13 @@ const insertRows: Prisma.EmpAttendanceLogsCreateManyInput[] = [];
 let skippedNoDevice = 0;
 let skippedInactiveDevice = 0;
 let skippedNoMapping = 0;
+let canteenTrInserted = 0;
+let canteenTvInserted = 0;
 const details: any[] = [];
+
+// Fetch canteen setup for default_token flag
+const canteenSetup = await tx.canteen_setup.findFirst();
+const defaultTokenEnabled = canteenSetup?.default_token_enabled ?? false;
 
 for (const log of logs) {
   const dev = log.device;
@@ -71,6 +80,102 @@ for (const log of logs) {
     continue;
   }
 
+  const deviceType = dev.deviceType || 'AT';
+  const authType = log.authType || null;
+  const deviceAuthTypes = dev.authTypes || [];
+
+  // Determine routing: does this log represent attendance or canteen action?
+  // If device has authTypes configured AND deviceType is AT, use auth-type routing
+  const useAuthTypeRouting = deviceType === 'AT' && deviceAuthTypes.length > 0 && authType;
+
+  if (deviceType === 'TV') {
+    // Token Verifier → canteen_tv_logs (use TokenDeviceMapping)
+    const tokenMapping = await tx.tokenDeviceMapping.findFirst({
+      where: { deviceID: dev.id, deviceEmpCode: log.userId },
+      select: { manageEmployeeID: true },
+    });
+    if (!tokenMapping) {
+      skippedNoMapping++;
+      details.push({ logId: log.id, reason: 'token_mapping_not_found', deviceId: dev.id, userId: log.userId });
+      continue;
+    }
+    const emp = await tx.manageEmployee.findUnique({
+      where: { id: tokenMapping.manageEmployeeID! },
+      select: { employeeFirstName: true, employeeLastName: true },
+    });
+    const username = `${emp?.employeeFirstName || ''} ${emp?.employeeLastName || ''}`.trim();
+    if (!dryRun) {
+      await tx.canteen_tv_logs.create({
+        data: {
+          device_sn: dev.deviceSN,
+          user_id: log.userId,
+          username,
+          punch_time: log.logTime ? new Date(log.logTime) : null,
+          manage_employee_id: tokenMapping.manageEmployeeID,
+          device_id: dev.id,
+          default_token: defaultTokenEnabled,
+          auth_type: authType,
+        },
+      });
+      canteenTvInserted++;
+    }
+    successIds.push(log.id);
+    details.push({ logId: log.id, queued: true, route: 'canteen_tv', deviceId: dev.id, employeeId: tokenMapping.manageEmployeeID });
+    continue;
+  }
+
+  if (deviceType === 'TR' || (useAuthTypeRouting && (authType === 'PIN' || authType === 'FINGER'))) {
+    // Token Register / Canteen action
+    // Use TokenDeviceMapping for dedicated TR devices, EmpDeviceMapping for auth-type routed
+    let empId: number | null = null;
+    if (deviceType === 'TR') {
+      const tokenMapping = await tx.tokenDeviceMapping.findFirst({
+        where: { deviceID: dev.id, deviceEmpCode: log.userId },
+        select: { manageEmployeeID: true },
+      });
+      empId = tokenMapping?.manageEmployeeID ?? null;
+    } else {
+      // Auth-type routing on AT device: use EmpDeviceMapping
+      const empMapping = await tx.empDeviceMapping.findFirst({
+        where: { deviceID: dev.id, deviceEmpCode: log.userId },
+        select: { manageEmployeeID: true },
+      });
+      empId = empMapping?.manageEmployeeID ?? null;
+    }
+
+    if (!empId) {
+      skippedNoMapping++;
+      details.push({ logId: log.id, reason: 'mapping_not_found_for_canteen', deviceId: dev.id, userId: log.userId });
+      continue;
+    }
+
+    const emp = await tx.manageEmployee.findUnique({
+      where: { id: empId },
+      select: { employeeFirstName: true, employeeLastName: true },
+    });
+    const username = `${emp?.employeeFirstName || ''} ${emp?.employeeLastName || ''}`.trim();
+
+    if (!dryRun) {
+      await tx.canteen_tr_logs.create({
+        data: {
+          device_sn: dev.deviceSN,
+          user_id: log.userId,
+          username,
+          punch_time: log.logTime ? new Date(log.logTime) : null,
+          manage_employee_id: empId,
+          device_id: dev.id,
+          default_token: defaultTokenEnabled,
+          auth_type: authType,
+        },
+      });
+      canteenTrInserted++;
+    }
+    successIds.push(log.id);
+    details.push({ logId: log.id, queued: true, route: 'canteen_tr', deviceId: dev.id, employeeId: empId });
+    continue;
+  }
+
+  // Default: Attendance (AT device with FACE auth, or AT device without auth-type routing)
   const mapping = await tx.empDeviceMapping.findFirst({
     where: { deviceID: dev.id, deviceEmpCode: log.userId },
     select: { manageEmployeeID: true },
@@ -88,7 +193,7 @@ for (const log of logs) {
     continue;
   }
 
-  // ✅ This log is valid → queue for insertion and mark success
+  // ✅ This log is valid → queue for EmpAttendanceLogs insertion
   insertRows.push({
     serviceProviderID: dev.serviceProviderID ?? 0,
     companyID:         dev.companyID ?? 0,
@@ -110,9 +215,11 @@ for (const log of logs) {
   details.push({
     logId: log.id,
     queued: true,
+    route: 'attendance',
     deviceId: dev.id,
     employeeId: mapping.manageEmployeeID,
     punchTimeStamp: log.logTime,
+    authType,
   });
 }
 
@@ -126,7 +233,7 @@ if (!dryRun && successIds.length) {
   preMarkedProcessed = upd.count ?? successIds.length;
 }
 
-// Insert rows (if not dryRun)
+// Insert attendance rows (if not dryRun)
 let inserted = 0;
 if (!dryRun && insertRows.length) {
   const ins = await tx.empAttendanceLogs.createMany({
@@ -139,21 +246,14 @@ return {
   picked: logs.length,
   preMarkedProcessed,
   inserted,
+  canteenTrInserted,
+  canteenTvInserted,
   skippedNoDevice,
   skippedInactiveDevice,
   skippedNoMapping,
   details,
 };
 
-      return {
-        picked: logs.length,
-        preMarkedProcessed,
-        inserted,
-        skippedNoDevice,
-        skippedInactiveDevice,
-        skippedNoMapping,
-        details,
-      };
     });
   }
 }

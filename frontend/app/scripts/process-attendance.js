@@ -67,7 +67,14 @@ async function processAttendanceLogs() {
     try {
       await pool.query(`ALTER TABLE process_att_logs ADD COLUMN IF NOT EXISTS device_name VARCHAR(100)`);
       await pool.query(`ALTER TABLE process_att_logs ADD COLUMN IF NOT EXISTS device_type VARCHAR(10)`);
+      await pool.query(`ALTER TABLE process_att_logs ADD COLUMN IF NOT EXISTS auth_type VARCHAR(20)`);
       await pool.query(`ALTER TABLE process_att_logs ALTER COLUMN status SET DEFAULT '0'`);
+      // Add auth_type to essl_raw_attlog if not exists
+      await pool.query(`ALTER TABLE essl_raw_attlog ADD COLUMN IF NOT EXISTS auth_type VARCHAR(20)`);
+      // Add auth_type to canteen tables if not exists
+      await pool.query(`ALTER TABLE canteen_tr_logs ADD COLUMN IF NOT EXISTS auth_type VARCHAR(20)`);
+      await pool.query(`ALTER TABLE canteen_tv_logs ADD COLUMN IF NOT EXISTS auth_type VARCHAR(20)`);
+      await pool.query(`ALTER TABLE canteen_tv_not_logs ADD COLUMN IF NOT EXISTS auth_type VARCHAR(20)`);
     } catch (err) {
       log(DEBUG.DEBUG, "Columns already exist or couldn't be added: " + err.message);
     }
@@ -76,7 +83,7 @@ async function processAttendanceLogs() {
     log(DEBUG.DEBUG, "Fetching unprocessed logs from essl_raw_attlog...");
     
     const logsResult = await pool.query(`
-      SELECT id, device_sn, user_id, punch_time, raw_body
+      SELECT id, device_sn, user_id, punch_time, raw_body, auth_type
       FROM essl_raw_attlog
       WHERE user_id IS NOT NULL 
         AND user_id != ''
@@ -100,18 +107,19 @@ async function processAttendanceLogs() {
     log(DEBUG.DEBUG, "Building device SN map...");
 
     const allDevicesResult = await pool.query(`
-      SELECT id, "deviceSN", "deviceName", "deviceType"
+      SELECT id, "deviceSN", "deviceName", "deviceType", "authTypes"
       FROM "Devices"
       WHERE status = 'Active'
     `);
 
-    // Map: deviceSN → { id, deviceName, deviceType }
+    // Map: deviceSN → { id, deviceName, deviceType, authTypes }
     const deviceSnMap = new Map();
     for (const row of allDevicesResult.rows) {
       deviceSnMap.set(row.deviceSN, {
         id: row.id,
         deviceName: row.deviceName,
         deviceType: row.deviceType || 'AT',
+        authTypes: row.authTypes || [],
       });
     }
     log(DEBUG.INFO, `📋 Found ${deviceSnMap.size} active devices`);
@@ -217,13 +225,31 @@ async function processAttendanceLogs() {
     }
     log(DEBUG.INFO, `🍽️ Canteen default_token_enabled: ${defaultTokenEnabled}`);
     
-    // Step 5: Process each log entry - route based on device type
+    // Step 5: Process each log entry - route based on device type AND auth type
     let insertedCount = 0;
     let canteenTrInserted = 0;
     let canteenTvInserted = 0;
     let attInserted = 0;
     let matchedCount = 0;
     let unmatchedLogs = [];
+
+    /**
+     * Map ESSL verify mode from raw_body to auth_type (fallback if auth_type not in DB).
+     * ESSL: 0=PIN, 1=FINGER, 2=CARD, 15=FACE
+     */
+    function parseAuthTypeFromRawBody(rawBody) {
+      if (!rawBody) return null;
+      const parts = rawBody.trim().split(/\s+/);
+      if (parts.length < 4) return null;
+      const mode = parts[3];
+      switch (mode) {
+        case '0':  return 'PIN';
+        case '1':  return 'FINGER';
+        case '2':  return 'CARD';
+        case '15': return 'FACE';
+        default:   return null;
+      }
+    }
     
     for (const logEntry of unprocessedLogs) {
       const user_id = logEntry.user_id;
@@ -239,28 +265,43 @@ async function processAttendanceLogs() {
       }
 
       const deviceType = deviceInfo.deviceType || 'AT';
+      const deviceAuthTypes = deviceInfo.authTypes || [];
       const lookupKey = `${rawDeviceSN}:${user_id}`;
 
-      if (deviceType === 'TR') {
-        // Token Register device → canteen_tr_logs
-        const tokenInfo = tokenMap.get(lookupKey);
-        if (tokenInfo) {
+      // Determine auth type: prefer DB column, fallback to parsing raw body
+      const authType = logEntry.auth_type || parseAuthTypeFromRawBody(logEntry.raw_body);
+
+      // Auth-type routing: single device with authTypes configured
+      const useAuthTypeRouting = deviceType === 'AT' && deviceAuthTypes.length > 0 && authType;
+
+      if (deviceType === 'TR' || (useAuthTypeRouting && (authType === 'PIN' || authType === 'FINGER'))) {
+        // Token Register → canteen_tr_logs
+        // For dedicated TR devices: use TokenDeviceMapping
+        // For auth-type routed AT devices: use EmpDeviceMapping
+        let empInfo = null;
+        if (deviceType === 'TR') {
+          empInfo = tokenMap.get(lookupKey);
+        } else {
+          empInfo = empMap.get(lookupKey);
+        }
+
+        if (empInfo) {
           await pool.query(`
             INSERT INTO canteen_tr_logs (
                 device_sn, user_id, username, punch_time,
-                manage_employee_id, device_id, default_token, created_at
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
+                manage_employee_id, device_id, default_token, auth_type, created_at
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
           `, [
-            rawDeviceSN, user_id, tokenInfo.username, logEntry.punch_time,
-            tokenInfo.manageEmployeeID, tokenInfo.deviceID, defaultTokenEnabled
+            rawDeviceSN, user_id, empInfo.username, logEntry.punch_time,
+            empInfo.manageEmployeeID, empInfo.deviceID || deviceInfo.id, defaultTokenEnabled, authType
           ]);
           canteenTrInserted++;
           insertedCount++;
           matchedCount++;
-          log(DEBUG.INFO, `🍽️ TR log: user_id "${user_id}" -> "${tokenInfo.username}" (Device: ${deviceInfo.deviceName})`);
+          log(DEBUG.INFO, `🍽️ TR log: user_id "${user_id}" -> "${empInfo.username}" (Device: ${deviceInfo.deviceName}, AuthType: ${authType})`);
         } else {
           unmatchedLogs.push({ user_id, device_sn: rawDeviceSN, punch_time: logEntry.punch_time });
-          log(DEBUG.WARN, `⚠️ No token mapping for user_id: "${user_id}" on TR device: "${rawDeviceSN}". Key: "${lookupKey}"`);
+          log(DEBUG.WARN, `⚠️ No mapping for user_id: "${user_id}" on TR/canteen route. Key: "${lookupKey}"`);
         }
 
       } else if (deviceType === 'TV') {
@@ -270,11 +311,11 @@ async function processAttendanceLogs() {
           await pool.query(`
             INSERT INTO canteen_tv_logs (
                 device_sn, user_id, username, punch_time,
-                manage_employee_id, device_id, default_token, created_at
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
+                manage_employee_id, device_id, default_token, auth_type, created_at
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
           `, [
             rawDeviceSN, user_id, tokenInfo.username, logEntry.punch_time,
-            tokenInfo.manageEmployeeID, tokenInfo.deviceID, defaultTokenEnabled
+            tokenInfo.manageEmployeeID, tokenInfo.deviceID, defaultTokenEnabled, authType
           ]);
           canteenTvInserted++;
           insertedCount++;
@@ -286,7 +327,7 @@ async function processAttendanceLogs() {
         }
 
       } else {
-        // AT or other device → process_att_logs
+        // AT device (FACE auth or no auth-type routing) → process_att_logs (attendance)
         const empInfo = empMap.get(lookupKey);
         if (empInfo) {
           await pool.query(`
@@ -294,18 +335,18 @@ async function processAttendanceLogs() {
                 device_sn, user_id, username, punch_time, 
                 company_name, branch_name, department_name, 
                 device_emp_code, manage_employee_id, device_id,
-                device_name, device_type, raw_body, status
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, '0')
+                device_name, device_type, auth_type, raw_body, status
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, '0')
           `, [
             rawDeviceSN, user_id, empInfo.username, logEntry.punch_time,
             empInfo.companyName, empInfo.branchName, empInfo.departmentName,
             user_id, empInfo.manageEmployeeID, empInfo.deviceID,
-            empInfo.deviceName, empInfo.deviceType, logEntry.raw_body
+            empInfo.deviceName, empInfo.deviceType, authType, logEntry.raw_body
           ]);
           attInserted++;
           insertedCount++;
           matchedCount++;
-          log(DEBUG.INFO, `✅ AT log: user_id "${user_id}" -> "${empInfo.username}" (Device: ${empInfo.deviceName}, Type: ${empInfo.deviceType})`);
+          log(DEBUG.INFO, `✅ AT log: user_id "${user_id}" -> "${empInfo.username}" (Device: ${empInfo.deviceName}, Type: ${empInfo.deviceType}, AuthType: ${authType})`);
         } else {
           unmatchedLogs.push({ user_id, device_sn: rawDeviceSN, punch_time: logEntry.punch_time });
           log(DEBUG.WARN, `⚠️ No emp mapping for user_id: "${user_id}" on AT device: "${rawDeviceSN}". Key: "${lookupKey}"`);
@@ -326,7 +367,12 @@ async function processAttendanceLogs() {
           if (!di) return false;
           const key = `${logEntry.device_sn}:${logEntry.user_id}`;
           const dt = di.deviceType || 'AT';
-          if (dt === 'TR' || dt === 'TV') return tokenMap.has(key);
+          const logAuthType = logEntry.auth_type || parseAuthTypeFromRawBody(logEntry.raw_body);
+          const useAuthRouting = dt === 'AT' && (di.authTypes || []).length > 0 && logAuthType;
+          // Check if any mapping exists for this log
+          if (dt === 'TV') return tokenMap.has(key);
+          if (dt === 'TR') return tokenMap.has(key);
+          if (useAuthRouting && (logAuthType === 'PIN' || logAuthType === 'FINGER')) return empMap.has(key);
           return empMap.has(key);
         })
         .map(logEntry => logEntry.id);

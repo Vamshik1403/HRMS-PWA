@@ -1,4 +1,4 @@
-import { IsEnum, IsInt, IsOptional, IsString } from 'class-validator';
+import { IsArray, IsEnum, IsInt, IsOptional, IsString } from 'class-validator';
 
 export enum DeviceStatusDto {
   Active = 'Active',
@@ -27,6 +27,11 @@ export class CreateDeviceDto {
   @IsOptional()
   @IsString()
   deviceType?: string;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  authTypes?: string[];
 
   @IsString()
   deviceModel: string;

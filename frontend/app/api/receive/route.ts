@@ -53,13 +53,14 @@ async function handleRequest(req: NextRequest) {
     // 4. Determine validity for soft-flag
     const isValid = /\d/.test(body);
 
-    // 5. Extract user_id and punchTime from raw_body
+    // 5. Extract user_id, punchTime, and auth_type from raw_body
     let userId = null;
     let punchTime = null;
+    let authType = null;
     
     if (body.trim()) {
       const parts = body.trim().split(/\s+/);
-      // Format: [user_id, date, time, ...]
+      // ESSL ATTLOG format: [user_id, date, time, verify_mode, work_code]
       if (parts.length >= 3) {
         // Extract user_id (first value)
         if (/^\d+$/.test(parts[0])) {
@@ -69,19 +70,30 @@ async function handleRequest(req: NextRequest) {
         if (parts[1] && parts[2]) {
           punchTime = `${parts[1]} ${parts[2]}`;
         }
+        // Extract verify mode (4th value) and map to auth_type
+        if (parts[3] !== undefined) {
+          const verifyMode = parts[3];
+          switch (verifyMode) {
+            case '0':  authType = 'PIN'; break;
+            case '1':  authType = 'FINGER'; break;
+            case '2':  authType = 'CARD'; break;
+            case '15': authType = 'FACE'; break;
+            default:   authType = null;
+          }
+        }
       }
     }
 
-    // 6. Store ALL logs in essl_raw_attlog with log_type, user_id, and punchTime
+    // 6. Store ALL logs in essl_raw_attlog with log_type, user_id, punchTime, and auth_type
     try {
       await pool.query(
         `INSERT INTO essl_raw_attlog
-         (device_sn, request_path, query_params, raw_body, ip_address, is_valid, log_type, user_id, punch_time)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-        [sn, url.pathname, url.searchParams.toString(), body, ip, isValid, logType, userId, punchTime]
+         (device_sn, request_path, query_params, raw_body, ip_address, is_valid, log_type, user_id, punch_time, auth_type)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+        [sn, url.pathname, url.searchParams.toString(), body, ip, isValid, logType, userId, punchTime, authType]
       );
 
-      console.log("✅ INSERT SUCCESS - log_type:", logType, "user_id:", userId, "punchTime:", punchTime);
+      console.log("✅ INSERT SUCCESS - log_type:", logType, "user_id:", userId, "punchTime:", punchTime, "authType:", authType);
     } catch (err) {
       console.error("❌ DB INSERT ERROR:", err);
     }
@@ -92,6 +104,7 @@ async function handleRequest(req: NextRequest) {
     console.log("LOG_TYPE:", logType);
     console.log("USER_ID:", userId);
     console.log("PUNCH_TIME:", punchTime);
+    console.log("AUTH_TYPE:", authType);
 
     return OK();
   } catch (err) {

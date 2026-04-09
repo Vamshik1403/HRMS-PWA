@@ -13,6 +13,20 @@ export class AttlogListenerService {
     return cleaned.length ? cleaned : 'UNKNOWN';
   }
 
+  /**
+   * Map ESSL verify mode (status field) to a normalized auth type.
+   * ESSL verify modes: 0=PASSWORD/PIN, 1=FINGERPRINT, 2=CARD, 15=FACE
+   */
+  private mapVerifyModeToAuthType(verifyMode: string): string | null {
+    switch (verifyMode) {
+      case '0':  return 'PIN';
+      case '1':  return 'FINGER';
+      case '2':  return 'CARD';
+      case '15': return 'FACE';
+      default:   return null;
+    }
+  }
+
   async appendPerDeviceLog(input: {
     deviceSN: string; method: string; uri: string; queryStr: string; body: string;
   }) {
@@ -58,6 +72,8 @@ export class AttlogListenerService {
           const logTime  = f[1] + (f[2] ? ` ${f[2]}` : '');
           const status   = f[3] ?? '0';
           const workCode = f[4] ?? '0';
+          // Map ESSL verify mode to authType
+          const authType = this.mapVerifyModeToAuthType(String(status));
           rows.push({
             deviceId: device.id,
             deviceSN: device.deviceSN,
@@ -66,6 +82,7 @@ export class AttlogListenerService {
             status: String(status),
             workCode: String(workCode),
             rawData: line,
+            authType,
             processed: '0',
           });
         }

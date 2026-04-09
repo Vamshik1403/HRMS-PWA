@@ -5,7 +5,7 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL_HRMS")
+  url      = env("DATABASE_URL")
 }
 
 model AttendancePolicy {
@@ -309,6 +309,7 @@ model Devices {
   createdAt          DateTime             @default(now())
   updatedAt          DateTime             @updatedAt
   deviceType         String?              @db.VarChar
+  authTypes          String[]             @default([])
   attendanceLogs     AttendanceLogs[]
   branches           Branches?            @relation(fields: [branchesID], references: [id], onUpdate: NoAction)
   company            Company?             @relation(fields: [companyID], references: [id], onUpdate: NoAction)
@@ -326,6 +327,7 @@ model AttendanceLogs {
   status    String   @default("0") @db.VarChar
   workCode  String   @default("0") @db.VarChar
   rawData   String
+  authType  String?  @db.VarChar
   processed String   @default("0") @db.VarChar
   createdAt DateTime @default(now())
   device    Devices  @relation(fields: [deviceId], references: [id], onDelete: Cascade)
@@ -1434,6 +1436,7 @@ model process_att_logs {
   status             String?   @default("0") @db.VarChar(20)
   device_name        String?   @db.VarChar(100)
   device_type        String?   @db.VarChar(10)
+  auth_type          String?   @db.VarChar(20)
 
   @@index([device_sn], map: "idx_process_att_logs_device_sn")
   @@index([processed_at], map: "idx_process_att_logs_processed_at")
@@ -1457,6 +1460,7 @@ model canteen_tr_logs {
   manage_employee_id Int?
   device_id          Int?
   default_token      Boolean   @default(false)
+  auth_type          String?   @db.VarChar(20)
   created_at         DateTime  @default(now()) @db.Timestamp(6)
 
   @@index([user_id], map: "idx_canteen_tr_logs_user_id")
@@ -1472,6 +1476,7 @@ model canteen_tv_logs {
   manage_employee_id Int?
   device_id          Int?
   default_token      Boolean   @default(false)
+  auth_type          String?   @db.VarChar(20)
   created_at         DateTime  @default(now()) @db.Timestamp(6)
 
   @@index([user_id], map: "idx_canteen_tv_logs_user_id")
@@ -1487,6 +1492,7 @@ model canteen_tv_not_logs {
   manage_employee_id Int?
   device_id          Int?
   default_token      Boolean   @default(false)
+  auth_type          String?   @db.VarChar(20)
   created_at         DateTime  @default(now()) @db.Timestamp(6)
 
   @@index([user_id], map: "idx_canteen_tv_not_logs_user_id")
