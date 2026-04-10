@@ -240,12 +240,15 @@ async function processAttendanceLogs() {
     function parseAuthTypeFromRawBody(rawBody) {
       if (!rawBody) return null;
       const parts = rawBody.trim().split(/\s+/);
-      if (parts.length < 4) return null;
-      const mode = parts[3];
+      // ESSL format: user_id date time status verify_mode ...
+      // parts[3] = status (in/out), parts[4] = verify_mode (auth type)
+      if (parts.length < 5) return null;
+      const mode = parts[4];
       switch (mode) {
         case '0':  return 'PIN';
         case '1':  return 'FINGER';
         case '2':  return 'CARD';
+        case '3':  return 'PIN';
         case '15': return 'FACE';
         default:   return null;
       }
@@ -271,10 +274,18 @@ async function processAttendanceLogs() {
       // Determine auth type: prefer DB column, fallback to parsing raw body
       const authType = logEntry.auth_type || parseAuthTypeFromRawBody(logEntry.raw_body);
 
-      // Auth-type routing: single device with authTypes configured
-      const useAuthTypeRouting = (deviceType === 'AT' || deviceType === 'AT+TR') && deviceAuthTypes.length > 0 && authType;
+      // Parse tagged auth types (e.g. ["ATT:FACE", "TR:PIN"])
+      let attendanceAuth = null;
+      let tokenRegAuth = null;
+      for (const at of deviceAuthTypes) {
+        if (at.startsWith('ATT:')) attendanceAuth = at.replace('ATT:', '');
+        else if (at.startsWith('TR:')) tokenRegAuth = at.replace('TR:', '');
+      }
 
-      if (deviceType === 'TR' || (useAuthTypeRouting && (authType === 'PIN' || authType === 'FINGER' || authType === 'CARD'))) {
+      // Auth-type routing for AT+TR combo devices with tagged auth types
+      const useTaggedRouting = deviceType === 'AT+TR' && attendanceAuth && tokenRegAuth && authType;
+
+      if (deviceType === 'TR' || (useTaggedRouting && authType === tokenRegAuth)) {
         // Token Register → canteen_tr_logs
         // For dedicated TR devices: use TokenDeviceMapping
         // For auth-type routed AT devices: use EmpDeviceMapping
@@ -368,11 +379,20 @@ async function processAttendanceLogs() {
           const key = `${logEntry.device_sn}:${logEntry.user_id}`;
           const dt = di.deviceType || 'AT';
           const logAuthType = logEntry.auth_type || parseAuthTypeFromRawBody(logEntry.raw_body);
-          const useAuthRouting = (dt === 'AT' || dt === 'AT+TR') && (di.authTypes || []).length > 0 && logAuthType;
+          
+          // Parse tagged auth types
+          let attAuth = null;
+          let trAuth = null;
+          for (const at of (di.authTypes || [])) {
+            if (at.startsWith('ATT:')) attAuth = at.replace('ATT:', '');
+            else if (at.startsWith('TR:')) trAuth = at.replace('TR:', '');
+          }
+          const useTagged = dt === 'AT+TR' && attAuth && trAuth && logAuthType;
+          
           // Check if any mapping exists for this log
           if (dt === 'TV') return tokenMap.has(key);
           if (dt === 'TR') return tokenMap.has(key);
-          if (useAuthRouting && (logAuthType === 'PIN' || logAuthType === 'FINGER' || logAuthType === 'CARD')) return empMap.has(key);
+          if (useTagged && logAuthType === trAuth) return empMap.has(key);
           return empMap.has(key);
         })
         .map(logEntry => logEntry.id);

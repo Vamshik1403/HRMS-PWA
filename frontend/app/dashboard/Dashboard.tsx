@@ -85,6 +85,14 @@ export default function DashboardPage() {
     const d = String(now.getDate()).padStart(2, '0');
     return `${y}-${m}-${d}`;
   });
+  const [weekAgoDate] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 6);
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${dd}`;
+  });
   const [currentUserMapping, setCurrentUserMapping] = useState<any>(null);
 
   useEffect(() => {
@@ -109,22 +117,19 @@ export default function DashboardPage() {
     try {
       setLoading(true);
 
-      const [empRes, deptRes, attRes, hcRes, processAttRes] = await Promise.all([
+      const [empRes, deptRes, hcRes, processAttRes] = await Promise.all([
         fetch(`${BACKEND_URL}/manage-emp`, { cache: "no-store" }),
         fetch(`${BACKEND_URL}/departments`, { cache: "no-store" }),
-        fetch(`${BACKEND_URL}/emp-attendance-logs`, { cache: "no-store" }),
         fetch(`${BACKEND_URL}/departments/with-headcount`, {
           cache: "no-store",
         }),
-        fetch(`${BACKEND_URL}/process-att-logs?dateFrom=${todayDate}&dateTo=${todayDate}&limit=10000`, { cache: "no-store" }),
+        fetch(`${BACKEND_URL}/process-att-logs?dateFrom=${weekAgoDate}&dateTo=${todayDate}&limit=10000`, { cache: "no-store" }),
       ]);
 
       const empJson = await empRes.json();
       const allEmployees: Employee[] = Array.isArray(empJson) ? empJson : [];
       const deptJson = await deptRes.json();
       const allDepartments: Department[] = Array.isArray(deptJson) ? deptJson : [];
-      const attJson = await attRes.json();
-      const allAttendance: AttendanceLog[] = Array.isArray(attJson) ? attJson : [];
       const allHeadcounts: DepartmentHeadcount[] = hcRes.ok
         ? await hcRes.json()
         : [];
@@ -137,7 +142,7 @@ export default function DashboardPage() {
       const processAttData: any[] = processAttJson?.data && Array.isArray(processAttJson.data)
         ? processAttJson.data
         : [];
-      const processAttAsLogs: AttendanceLog[] = processAttData
+      const allAttendanceMerged: AttendanceLog[] = processAttData
         .filter((p: any) => p.manage_employee_id != null && p.punch_time != null)
         .map((p: any) => {
           const pt = new Date(p.punch_time);
@@ -148,23 +153,11 @@ export default function DashboardPage() {
           const mi = String(pt.getMinutes()).padStart(2, '0');
           const s = String(pt.getSeconds()).padStart(2, '0');
           return {
-            id: -(p.id || 0),
+            id: p.id || 0,
             employeeID: p.manage_employee_id,
             punchTimeStamp: `${y}-${mo}-${d} ${h}:${mi}:${s}`,
           };
         });
-
-      // Merge: combine emp-attendance-logs with process_att_logs (deduplicate by employeeID + timestamp)
-      const seen = new Set(allAttendance.map((l) => `${l.employeeID}_${l.punchTimeStamp}`));
-      const merged: AttendanceLog[] = [...allAttendance];
-      for (const pl of processAttAsLogs) {
-        const key = `${pl.employeeID}_${pl.punchTimeStamp}`;
-        if (!seen.has(key)) {
-          seen.add(key);
-          merged.push(pl);
-        }
-      }
-      const allAttendanceMerged = merged;
 
       let scopedEmployees: Employee[] = [];
       let scopedDepartments: Department[] = [];

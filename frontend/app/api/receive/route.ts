@@ -70,13 +70,16 @@ async function handleRequest(req: NextRequest) {
         if (parts[1] && parts[2]) {
           punchTime = `${parts[1]} ${parts[2]}`;
         }
-        // Extract verify mode (4th value) and map to auth_type
-        if (parts[3] !== undefined) {
-          const verifyMode = parts[3];
+        // Extract verify mode (5th value, index 4) and map to auth_type
+        // ESSL format: user_id date time status verify_mode ...
+        // parts[3] = status (in/out), parts[4] = verify_mode (auth type)
+        if (parts[4] !== undefined) {
+          const verifyMode = parts[4];
           switch (verifyMode) {
             case '0':  authType = 'PIN'; break;
             case '1':  authType = 'FINGER'; break;
             case '2':  authType = 'CARD'; break;
+            case '3':  authType = 'PIN'; break;
             case '15': authType = 'FACE'; break;
             default:   authType = null;
           }
@@ -85,8 +88,7 @@ async function handleRequest(req: NextRequest) {
     }
 
     // 6. Store ALL logs in essl_raw_attlog with log_type, user_id, punchTime, and auth_type
-    try {
-      await pool.query(
+    try {      await pool.query(
         `INSERT INTO essl_raw_attlog
          (device_sn, request_path, query_params, raw_body, ip_address, is_valid, log_type, user_id, punch_time, auth_type)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,

@@ -15,13 +15,14 @@ export class AttlogListenerService {
 
   /**
    * Map ESSL verify mode (status field) to a normalized auth type.
-   * ESSL verify modes: 0=PASSWORD/PIN, 1=FINGERPRINT, 2=CARD, 15=FACE
+   * ESSL verify modes: 0=PASSWORD/PIN, 1=FINGERPRINT, 2=CARD, 3=PIN (CP Plus), 15=FACE
    */
   private mapVerifyModeToAuthType(verifyMode: string): string | null {
     switch (verifyMode) {
       case '0':  return 'PIN';
       case '1':  return 'FINGER';
       case '2':  return 'CARD';
+      case '3':  return 'PIN';
       case '15': return 'FACE';
       default:   return null;
     }
@@ -71,9 +72,11 @@ export class AttlogListenerService {
           const userId   = f[0];
           const logTime  = f[1] + (f[2] ? ` ${f[2]}` : '');
           const status   = f[3] ?? '0';
-          const workCode = f[4] ?? '0';
-          // Map ESSL verify mode to authType
-          const authType = this.mapVerifyModeToAuthType(String(status));
+          const verifyMode = f[4] ?? '0';
+          const workCode = f[5] ?? '0';
+          // Map ESSL verify mode (index 4) to authType
+          // f[3] = status (in/out), f[4] = verify_mode (auth type)
+          const authType = this.mapVerifyModeToAuthType(String(verifyMode));
           rows.push({
             deviceId: device.id,
             deviceSN: device.deviceSN,

@@ -73,8 +73,10 @@ export class CanteenService {
     const empIds = await this.getCompanyEmployeeIds(companyId);
 
     // Checkins from process_att_logs for the date
+    // Exclude AT+TR devices: their canteen interactions go through canteen_tr_logs,
+    // so process_att_logs records are purely attendance and should not count as canteen check-ins.
     const allCheckins = await this.prisma.process_att_logs.findMany({
-      where: { punch_time: { gte: start, lte: end } },
+      where: { punch_time: { gte: start, lte: end }, NOT: { device_type: 'AT+TR' } },
       distinct: ['user_id'],
       select: {
         user_id: true,
@@ -151,7 +153,7 @@ export class CanteenService {
     const { start, end } = this.getDateRange(dateStr);
     const empIds = await this.getCompanyEmployeeIds(companyId);
     const all = await this.prisma.process_att_logs.findMany({
-      where: { punch_time: { gte: start, lte: end } },
+      where: { punch_time: { gte: start, lte: end }, NOT: { device_type: 'AT+TR' } },
       distinct: ['user_id'],
       select: {
         user_id: true,
@@ -175,7 +177,7 @@ export class CanteenService {
     if (defaultEnabled) {
       // All checkins minus those who cancelled via TR
       const allCheckins = await this.prisma.process_att_logs.findMany({
-        where: { punch_time: { gte: start, lte: end } },
+        where: { punch_time: { gte: start, lte: end }, NOT: { device_type: 'AT+TR' } },
         distinct: ['user_id'],
         select: {
           user_id: true,
@@ -250,7 +252,7 @@ export class CanteenService {
 
     if (defaultEnabled) {
       const allCheckins = await this.prisma.process_att_logs.findMany({
-        where: { punch_time: { gte: start, lte: end } },
+        where: { punch_time: { gte: start, lte: end }, NOT: { device_type: 'AT+TR' } },
         distinct: ['user_id'],
         select: { user_id: true, manage_employee_id: true },
       });
@@ -295,7 +297,7 @@ export class CanteenService {
 
     if (defaultEnabled) {
       const allCheckins = await this.prisma.process_att_logs.findMany({
-        where: { punch_time: { gte: start, lte: end } },
+        where: { punch_time: { gte: start, lte: end }, NOT: { device_type: 'AT+TR' } },
         distinct: ['user_id'],
         select: {
           user_id: true,
@@ -380,7 +382,7 @@ export class CanteenService {
     // Fetch all data for the entire range
     const [allCheckins, allTrLogs, allTvLogs] = await Promise.all([
       this.prisma.process_att_logs.findMany({
-        where: { punch_time: { gte: start, lte: end } },
+        where: { punch_time: { gte: start, lte: end }, NOT: { device_type: 'AT+TR' } },
         orderBy: { punch_time: 'asc' },
       }),
       this.prisma.canteen_tr_logs.findMany({

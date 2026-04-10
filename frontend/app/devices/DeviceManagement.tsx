@@ -146,7 +146,8 @@ export function DeviceManagement() {
 
     deviceName: "",
     deviceType: "",
-    authTypes: [] as string[],
+    attendanceAuthType: "" as string,
+    tokenRegAuthType: "" as string,
     deviceMake: "",
     deviceModel: "",
     deviceSN: "",
@@ -333,7 +334,8 @@ export function DeviceManagement() {
       brAutocomplete: "",
       deviceName: "",
       deviceType: "",
-      authTypes: [] as string[],
+      attendanceAuthType: "" as string,
+      tokenRegAuthType: "" as string,
       deviceMake: "",
       deviceModel: "",
       deviceSN: "",
@@ -373,11 +375,18 @@ export function DeviceManagement() {
       finalBranchesID = currentUserMapping.branchesID;
     }
 
+    // Build authTypes from attendance and token register selections
+    const authTypes: string[] = [];
+    if (formData.deviceType === 'AT+TR') {
+      if (formData.attendanceAuthType) authTypes.push(`ATT:${formData.attendanceAuthType}`);
+      if (formData.tokenRegAuthType) authTypes.push(`TR:${formData.tokenRegAuthType}`);
+    }
+
     const payload: any = {
       status: formData.status,
       deviceName: formData.deviceName || undefined,
       deviceType: formData.deviceType || undefined,
-      authTypes: formData.authTypes.length > 0 ? formData.authTypes : [],
+      authTypes: authTypes,
       deviceMake: formData.deviceMake || undefined,
       deviceModel: formData.deviceModel || undefined,
       deviceSN: formData.deviceSN || undefined,
@@ -443,6 +452,16 @@ export function DeviceManagement() {
       brName = d.branches?.branchName ?? d.branchName ?? "";
     }
 
+    // Parse authTypes back into separate fields
+    let attendanceAuthType = "";
+    let tokenRegAuthType = "";
+    if (d.authTypes && d.authTypes.length > 0) {
+      for (const at of d.authTypes) {
+        if (at.startsWith("ATT:")) attendanceAuthType = at.replace("ATT:", "");
+        else if (at.startsWith("TR:")) tokenRegAuthType = at.replace("TR:", "");
+      }
+    }
+
     setFormData({
       status: d.status,
       serviceProviderID: finalServiceProviderID,
@@ -453,7 +472,8 @@ export function DeviceManagement() {
       brAutocomplete: brName,
       deviceName: d.deviceName ?? "",
       deviceType: d.deviceType ?? "",
-      authTypes: d.authTypes ?? [],
+      attendanceAuthType,
+      tokenRegAuthType,
       deviceMake: d.deviceMake ?? "",
       deviceModel: d.deviceModel ?? "",
       deviceSN: d.deviceSN ?? "",
@@ -727,106 +747,70 @@ export function DeviceManagement() {
               </div>
               <div className="space-y-2">
                 <Label>Device Type</Label>
-                <p className="text-xs text-gray-500">
-                  Select one or more device types.
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  {[
-                    { value: "AT", label: "Attendance" },
-                    { value: "TR", label: "Token Registration" },
-                    { value: "TV", label: "Token Verifier" },
-                  ].map((opt) => {
-                    const selectedTypes = formData.deviceType
-                      ? formData.deviceType.split("+")
-                      : [];
-                    const isSelected = selectedTypes.includes(opt.value);
-                    return (
-                      <button
-                        key={opt.value}
-                        type="button"
-                        onClick={() => {
-                          const current = formData.deviceType
-                            ? formData.deviceType.split("+")
-                            : [];
-                          let updated: string[];
-                          if (isSelected) {
-                            updated = current.filter((t) => t !== opt.value);
-                          } else {
-                            updated = [...current, opt.value];
-                          }
-                          const newDeviceType = updated.join("+");
-                          // Clear authTypes if no longer in a verify-mode combo
-                          const hasVerifyCombo =
-                            updated.includes("AT") &&
-                            (updated.includes("TR") || updated.includes("TV"));
-                          setFormData((p) => ({
-                            ...p,
-                            deviceType: newDeviceType,
-                            authTypes: hasVerifyCombo ? p.authTypes : [],
-                          }));
-                        }}
-                        className={`px-3 py-1.5 rounded-md text-sm font-medium border transition-colors ${
-                          isSelected
-                            ? "bg-gray-900 text-white border-gray-900"
-                            : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50"
-                        }`}
-                      >
-                        {opt.label}
-                      </button>
-                    );
-                  })}
-                </div>
+                <select
+                  value={formData.deviceType}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setFormData((p) => ({
+                      ...p,
+                      deviceType: val,
+                      attendanceAuthType: val !== "AT+TR" ? "" : p.attendanceAuthType,
+                      tokenRegAuthType: val !== "AT+TR" ? "" : p.tokenRegAuthType,
+                    }));
+                  }}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-sm border-[#d0d0d0] focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-900/15 focus-visible:border-[#b0b0b0]"
+                >
+                  <option value="">Select device type</option>
+                  <option value="AT">Attendance</option>
+                  <option value="TR">Token Registration</option>
+                  <option value="TV">Token Verifier</option>
+                  <option value="AT+TR">Attendance + Token Register</option>
+                </select>
               </div>
 
-              {/* Auth Types - shown when device type includes AT + TR or AT + TV */}
-              {(() => {
-                const selectedTypes = formData.deviceType
-                  ? formData.deviceType.split("+")
-                  : [];
-                const hasVerifyCombo =
-                  selectedTypes.includes("AT") &&
-                  (selectedTypes.includes("TR") || selectedTypes.includes("TV"));
-                if (!hasVerifyCombo) return null;
-                return (
-                  <div className="space-y-2 rounded-lg border border-gray-200 p-4 bg-gray-50">
-                    <Label>Auth Types</Label>
-                    <p className="text-xs text-gray-500 mb-1">
-                      Select which authentication methods this device uses. FACE = Attendance, PIN/FINGER/CARD = Canteen Token.
+              {/* Auth Type Configuration - shown when device type is AT+TR */}
+              {formData.deviceType === "AT+TR" && (
+                <div className="space-y-4 rounded-lg border border-gray-200 p-4 bg-gray-50">
+                  <div>
+                    <Label className="text-sm font-semibold">Authentication Routing</Label>
+                    <p className="text-xs text-gray-500 mt-1">
+                      Select which authentication method will be used for attendance and which for token registration.
                     </p>
-                    <div className="flex flex-wrap gap-2">
-                      {[
-                        { value: "FACE", label: "Face" },
-                        { value: "FINGER", label: "Fingerprint" },
-                        { value: "PIN", label: "PIN / Password" },
-                        { value: "CARD", label: "Card" },
-                      ].map((opt) => {
-                        const isSelected = formData.authTypes.includes(opt.value);
-                        return (
-                          <button
-                            key={opt.value}
-                            type="button"
-                            onClick={() => {
-                              setFormData((p) => ({
-                                ...p,
-                                authTypes: isSelected
-                                  ? p.authTypes.filter((t) => t !== opt.value)
-                                  : [...p.authTypes, opt.value],
-                              }));
-                            }}
-                            className={`px-3 py-1.5 rounded-md text-sm font-medium border transition-colors ${
-                              isSelected
-                                ? "bg-gray-900 text-white border-gray-900"
-                                : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50"
-                            }`}
-                          >
-                            {opt.label}
-                          </button>
-                        );
-                      })}
-                    </div>
                   </div>
-                );
-              })()}
+                  <div className="space-y-2">
+                    <Label>Attendance Auth Type</Label>
+                    <select
+                      value={formData.attendanceAuthType}
+                      onChange={(e) =>
+                        setFormData((p) => ({ ...p, attendanceAuthType: e.target.value }))
+                      }
+                      className="w-full px-3 py-2 border border-gray-300 rounded-sm border-[#d0d0d0] focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-900/15 focus-visible:border-[#b0b0b0]"
+                    >
+                      <option value="">Select auth type for attendance</option>
+                      <option value="FACE">Face ID</option>
+                      <option value="FINGER">Fingerprint</option>
+                      <option value="PIN">PIN / Password</option>
+                      <option value="CARD">Card</option>
+                    </select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Token Register Auth Type</Label>
+                    <select
+                      value={formData.tokenRegAuthType}
+                      onChange={(e) =>
+                        setFormData((p) => ({ ...p, tokenRegAuthType: e.target.value }))
+                      }
+                      className="w-full px-3 py-2 border border-gray-300 rounded-sm border-[#d0d0d0] focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-900/15 focus-visible:border-[#b0b0b0]"
+                    >
+                      <option value="">Select auth type for token register</option>
+                      <option value="FACE">Face ID</option>
+                      <option value="FINGER">Fingerprint</option>
+                      <option value="PIN">PIN / Password</option>
+                      <option value="CARD">Card</option>
+                    </select>
+                  </div>
+                </div>
+              )}
 
               <div className="space-y-2">
                 <Label>Device Make *</Label>
@@ -941,20 +925,31 @@ export function DeviceManagement() {
                         <TableCell className="whitespace-nowrap">{brName(device)}</TableCell>
                         <TableCell className="font-medium whitespace-nowrap">{device.deviceName}</TableCell>
                         <TableCell className="whitespace-nowrap">
-                          <div className="flex flex-wrap gap-1">
-                            {device.deviceType ? device.deviceType.split('+').map((t) => (
-                              <Badge key={t} variant="secondary" className="text-xs">
-                                {t === 'AT' ? 'Attendance' : t === 'TR' ? 'Token Reg' : t === 'TV' ? 'Token Ver' : t}
+                          {device.deviceType ? (() => {
+                            const typeMap: Record<string, string> = {
+                              'AT': 'Attendance',
+                              'TR': 'Token Reg',
+                              'TV': 'Token Ver',
+                              'AT+TR': 'Att + Token Reg',
+                            };
+                            return (
+                              <Badge variant="secondary" className="text-xs">
+                                {typeMap[device.deviceType] || device.deviceType}
                               </Badge>
-                            )) : <span>—</span>}
-                          </div>
+                            );
+                          })() : <span>—</span>}
                         </TableCell>
                         <TableCell className="whitespace-nowrap">
                           {device.authTypes && device.authTypes.length > 0 ? (
                             <div className="flex flex-wrap gap-1">
-                              {device.authTypes.map((at) => (
-                                <Badge key={at} variant="outline" className="text-xs">{at}</Badge>
-                              ))}
+                              {device.authTypes.map((at) => {
+                                const label = at.startsWith("ATT:") ? `Att: ${at.replace("ATT:", "")}`
+                                  : at.startsWith("TR:") ? `Token: ${at.replace("TR:", "")}`
+                                  : at;
+                                return (
+                                  <Badge key={at} variant="outline" className="text-xs">{label}</Badge>
+                                );
+                              })}
                             </div>
                           ) : '—'}
                         </TableCell>

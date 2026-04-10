@@ -42,10 +42,14 @@ export class ProcessAttLogsService {
       username,
       company_name,
       branch_name,
-      limit = 1000,
-      offset = 0,
+      limit: rawLimit = 1000,
+      offset: rawOffset = 0,
       orderBy = 'desc',
     } = query;
+
+    // Ensure limit and offset are numbers (query params arrive as strings)
+    const limit = typeof rawLimit === 'string' ? parseInt(rawLimit, 10) || 1000 : Number(rawLimit) || 1000;
+    const offset = typeof rawOffset === 'string' ? parseInt(rawOffset, 10) || 0 : Number(rawOffset) || 0;
 
     const whereConditions: any = {};
 
