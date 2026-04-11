@@ -284,175 +284,149 @@ export function ContractorRatesManagement() {
     setIsRateCardOpen(true);
   };
 
-  const filteredContractors = contractors.filter(
-    (c) =>
-      (c.contractorName || "").toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const handleAddNew = async () => {
+    setSelectedContractor(null);
+    setContrSearch("");
+    setRateCards([
+      {
+        _localId: uid(),
+        contractorName: "",
+        departmentName: "",
+        designation: "",
+        workShiftName: "",
+        perMinuteRate: "",
+        perHourRate: "",
+        perDayRate: "",
+        perMonthRate: "",
+      },
+    ]);
+    // Fetch dropdowns
+    try {
+      const [deptRes, desigRes, wsRes] = await Promise.all([
+        fetchJSONSafe<any[]>(API.departments),
+        fetchJSONSafe<any[]>(API.designations),
+        fetchJSONSafe<any[]>(API.workShifts),
+      ]);
+      setRcDepartments(deptRes || []);
+      setRcDesignations(desigRes || []);
+      setRcWorkShifts(wsRes || []);
+    } catch {
+      setRcDepartments([]);
+      setRcDesignations([]);
+      setRcWorkShifts([]);
+    }
+    setIsRateCardOpen(true);
+  };
 
   return (
     <div className="space-y-6 w-full max-w-6xl mx-auto px-4">
-      {/* Header */}
-      <div className="flex items-center justify-between w-full">
-        <div className="min-w-0 flex-1">
-          <p className="text-gray-600 mt-1 text-sm">Manage contractor rate cards by selecting a contractor</p>
-        </div>
-      </div>
-
-      {/* Contractor Selection */}
-      <Card>
-        <CardContent className="p-6">
-          <div className="flex items-center gap-4 w-full">
-            <div ref={contrRef} className="relative flex-1 min-w-0">
-              <label className="text-sm font-medium text-gray-700 mb-1 block">Select Contractor</label>
-              <Input
-                value={contrSearch}
-                onChange={(e) => {
-                  setContrSearch(e.target.value);
-                  runFetchContrSuggestions(e.target.value);
-                }}
-                onFocus={() => runFetchContrSuggestions(contrSearch)}
-                placeholder="Search contractor by name..."
-                autoComplete="off"
-              />
-              {contrSuggestions.length > 0 && (
-                <div className="absolute z-10 bg-white border rounded w-full shadow max-h-48 overflow-y-auto mt-1">
-                  {contrLoading && <div className="px-3 py-2 text-sm text-gray-500">Loading…</div>}
-                  {contrSuggestions.map((c) => (
-                    <div
-                      key={c.id}
-                      className="px-3 py-2 hover:bg-gray-100 cursor-pointer text-sm"
-                      onMouseDown={(e) => e.preventDefault()}
-                      onClick={() => {
-                        setContrSearch(c.contractorName || "");
-                        setContrSuggestions([]);
-                        handleOpenRateCard(c);
-                      }}
-                    >
-                      {c.contractorName || `Contractor #${c.id}`}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-            {selectedContractor && (
-              <div className="flex items-center gap-2 mt-5">
-                <Badge variant="secondary" className="px-3 py-1">
-                  Selected: {selectedContractor.contractorName}
-                </Badge>
-                <Button variant="outline" size="sm" onClick={() => handleOpenRateCard(selectedContractor)}>
-                  <IndianRupee className="w-4 h-4 mr-1" /> Edit Rate Card
-                </Button>
-              </div>
-            )}
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Search for existing rate cards */}
-      <Card>
-        <CardContent className="p-6">
-          <div className="flex items-center space-x-4 w-full">
-            <div className="relative flex-1 min-w-0">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-              <Input
-                placeholder="Search contractors..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10 w-full"
-              />
-            </div>
-            <Badge variant="secondary" className="px-3 py-1 flex-shrink-0">
-              {filteredContractors.length} contractors
-            </Badge>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Contractors with Rate Cards Table */}
-      <Card className="w-full">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <IndianRupee className="w-5 h-5" />
-            Contractor Rate Cards
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="p-0">
-          <div className="overflow-x-auto">
-            <Table className="w-full">
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Contractor Name</TableHead>
-                  <TableHead>Department</TableHead>
-                  <TableHead>Designation</TableHead>
-                  <TableHead>Work Shift</TableHead>
-                  <TableHead>Per Minute (₹)</TableHead>
-                  <TableHead>Per Hour (₹)</TableHead>
-                  <TableHead>Per Day (₹)</TableHead>
-                  <TableHead>Per Month (₹)</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {allRateCards.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={9} className="text-center py-8 text-gray-500">
-                      <div className="flex flex-col items-center gap-2">
-                        <IndianRupee className="w-12 h-12 text-gray-300" />
-                        <p>No rate cards found</p>
-                        <p className="text-sm">Select a contractor above to add rate cards</p>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  allRateCards
-                    .filter((rc) =>
-                      (rc.contractorDisplayName || rc.contractorName || "")
-                        .toLowerCase()
-                        .includes(searchTerm.toLowerCase())
-                    )
-                    .map((rc, index) => (
-                      <TableRow key={`${rc.contractorId}-${index}`}>
-                        <TableCell>{rc.contractorDisplayName || rc.contractorName || ""}</TableCell>
-                        <TableCell>{rc.departmentName || "—"}</TableCell>
-                        <TableCell>{rc.designation || "—"}</TableCell>
-                        <TableCell>{rc.workShiftName || "—"}</TableCell>
-                        <TableCell>{rc.perMinuteRate || "0"}</TableCell>
-                        <TableCell>{rc.perHourRate || "0"}</TableCell>
-                        <TableCell>{rc.perDayRate || "0"}</TableCell>
-                        <TableCell>{rc.perMonthRate || "0"}</TableCell>
-                        <TableCell className="text-right">
-                          {canManage && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => {
-                                const contractor = contractors.find((c) => c.id === rc.contractorId);
-                                if (contractor) handleOpenRateCard(contractor);
-                              }}
-                              className="h-7 px-2 text-xs text-blue-600 hover:text-blue-700 hover:bg-blue-50"
-                              title="Edit Rate Card"
-                            >
-                              <IndianRupee className="w-3 h-3 mr-1" /> Edit
-                            </Button>
-                          )}
-                        </TableCell>
-                      </TableRow>
-                    ))
-                )}
-              </TableBody>
-            </Table>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Rate Card Drawer */}
+      {/* Rate Card FormDrawer */}
       <FormDrawer
         open={isRateCardOpen}
         onOpenChange={setIsRateCardOpen}
-        title={`Contractor Rate Card — ${selectedContractor?.contractorName || ""}`}
-        description="Define rate cards for this contractor by designation."
+        title={selectedContractor ? `Edit Rate Card — ${selectedContractor.contractorName || ""}` : "Add Contractor Rates"}
+        description={selectedContractor ? "Update rate cards for this contractor." : "Select a contractor and define rate cards."}
       >
         <div className="space-y-4">
+          {/* Contractor Name Selection */}
+          <div ref={contrRef} className="relative">
+            <label className="text-xs font-medium text-gray-500 mb-1 block">Contractor Name *</label>
+            <Input
+              value={contrSearch}
+              onChange={(e) => {
+                setContrSearch(e.target.value);
+                if (!selectedContractor || e.target.value !== selectedContractor.contractorName) {
+                  runFetchContrSuggestions(e.target.value);
+                }
+              }}
+              onFocus={() => {
+                if (!selectedContractor) runFetchContrSuggestions(contrSearch);
+              }}
+              placeholder="Type contractor name to search..."
+              autoComplete="off"
+              disabled={!!selectedContractor}
+            />
+            {contrSuggestions.length > 0 && !selectedContractor && (
+              <div className="absolute z-10 bg-white border rounded w-full shadow max-h-48 overflow-y-auto mt-1">
+                {contrLoading && <div className="px-3 py-2 text-sm text-gray-500">Loading…</div>}
+                {contrSuggestions.map((c) => (
+                  <div
+                    key={c.id}
+                    className="px-3 py-2 hover:bg-gray-100 cursor-pointer text-sm"
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={async () => {
+                      setContrSearch(c.contractorName || "");
+                      setContrSuggestions([]);
+                      setSelectedContractor(c);
+                      // Update rate card rows with contractor name
+                      setRateCards((prev) =>
+                        prev.map((r) => ({ ...r, contractorName: c.contractorName || "" }))
+                      );
+                      // Filter dropdowns by company
+                      const cid = c.companyID;
+                      if (cid) {
+                        setRcDepartments((prev) => prev.filter((d: any) => !d.companyID || d.companyID === cid));
+                        setRcDesignations((prev) => prev.filter((d: any) => !d.companyID || d.companyID === cid));
+                        setRcWorkShifts((prev) => prev.filter((w: any) => !w.companyID || w.companyID === cid));
+                      }
+                      // Load existing rate cards
+                      try {
+                        const existing = await fetchJSONSafe<any[]>(`${API.contractors}/${c.id}/rate-cards`);
+                        if (existing && existing.length > 0) {
+                          setRateCards(
+                            existing.map((rc: any) => ({
+                              _localId: uid(),
+                              contractorName: rc.contractorName || c.contractorName || "",
+                              departmentName: rc.departmentName || "",
+                              designation: rc.designation || "",
+                              workShiftName: rc.workShiftName || "",
+                              perMinuteRate: rc.perMinuteRate?.toString() || "",
+                              perHourRate: rc.perHourRate?.toString() || "",
+                              perDayRate: rc.perDayRate?.toString() || "",
+                              perMonthRate: rc.perMonthRate?.toString() || "",
+                            }))
+                          );
+                        }
+                      } catch {
+                        // keep existing empty row
+                      }
+                    }}
+                  >
+                    {c.contractorName || `Contractor #${c.id}`}
+                  </div>
+                ))}
+              </div>
+            )}
+            {selectedContractor && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="absolute right-2 top-6 h-7 text-xs text-gray-500"
+                onClick={() => {
+                  setSelectedContractor(null);
+                  setContrSearch("");
+                  setRateCards([
+                    {
+                      _localId: uid(),
+                      contractorName: "",
+                      departmentName: "",
+                      designation: "",
+                      workShiftName: "",
+                      perMinuteRate: "",
+                      perHourRate: "",
+                      perDayRate: "",
+                      perMonthRate: "",
+                    },
+                  ]);
+                }}
+              >
+                Change
+              </Button>
+            )}
+          </div>
+
+          {/* Rate Card Entries */}
           {rateCards.map((rc, idx) => (
             <div key={rc._localId} className="border rounded-lg p-4 space-y-3 relative bg-gray-50/50">
               <div className="flex items-center justify-between mb-1">
@@ -467,14 +441,6 @@ export function ContractorRatesManagement() {
                 </Button>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="text-xs font-medium text-gray-500 mb-1 block">Contractor Name</label>
-                  <Input
-                    value={rc.contractorName}
-                    onChange={(e) => updateRateCardRow(rc._localId, "contractorName", e.target.value)}
-                    placeholder="Contractor name"
-                  />
-                </div>
                 <div>
                   <label className="text-xs font-medium text-gray-500 mb-1 block">Department</label>
                   <select
@@ -568,45 +534,167 @@ export function ContractorRatesManagement() {
           <Button type="button" variant="outline" size="sm" onClick={addRateCardRow}>
             <Plus className="w-4 h-4 mr-1" /> Add Row
           </Button>
-        </div>
 
-        <div className="flex justify-end gap-3 pt-4">
-          <Button variant="outline" onClick={() => setIsRateCardOpen(false)}>Close</Button>
-          <Button
-            className=""
-            onClick={async () => {
-              if (!selectedContractor) return;
-              try {
-                const payload = {
-                  rateCards: rateCards.map((rc) => ({
-                    contractorName: rc.contractorName || undefined,
-                    departmentName: rc.departmentName || undefined,
-                    designation: rc.designation || undefined,
-                    workShiftName: rc.workShiftName || undefined,
-                    perMinuteRate: rc.perMinuteRate ? parseFloat(rc.perMinuteRate) : 0,
-                    perHourRate: rc.perHourRate ? parseFloat(rc.perHourRate) : 0,
-                    perDayRate: rc.perDayRate ? parseFloat(rc.perDayRate) : 0,
-                    perMonthRate: rc.perMonthRate ? parseFloat(rc.perMonthRate) : 0,
-                  })),
-                };
-                const res = await fetch(`${API.contractors}/${selectedContractor.id}/rate-cards`, {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify(payload),
-                });
-                if (!res.ok) throw new Error(await res.text());
-                setIsRateCardOpen(false);
-                toast.success("Rate card saved successfully");
-                await loadContractors(); // Refresh table
-              } catch (e: any) {
-                toast.error(e?.message || "Failed to save rate cards");
-              }
-            }}
-          >
-            Save Rate Card
-          </Button>
+          <div className="flex justify-end gap-3 pt-4">
+            <Button variant="outline" onClick={() => setIsRateCardOpen(false)}>Close</Button>
+            <Button
+              className=""
+              disabled={!selectedContractor}
+              onClick={async () => {
+                if (!selectedContractor) {
+                  toast.error("Please select a contractor first");
+                  return;
+                }
+                try {
+                  const payload = {
+                    rateCards: rateCards.map((rc) => ({
+                      contractorName: rc.contractorName || undefined,
+                      departmentName: rc.departmentName || undefined,
+                      designation: rc.designation || undefined,
+                      workShiftName: rc.workShiftName || undefined,
+                      perMinuteRate: rc.perMinuteRate ? parseFloat(rc.perMinuteRate) : 0,
+                      perHourRate: rc.perHourRate ? parseFloat(rc.perHourRate) : 0,
+                      perDayRate: rc.perDayRate ? parseFloat(rc.perDayRate) : 0,
+                      perMonthRate: rc.perMonthRate ? parseFloat(rc.perMonthRate) : 0,
+                    })),
+                  };
+                  const res = await fetch(`${API.contractors}/${selectedContractor.id}/rate-cards`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(payload),
+                  });
+                  if (!res.ok) throw new Error(await res.text());
+                  setIsRateCardOpen(false);
+                  toast.success("Rate card saved successfully");
+                  await loadContractors();
+                } catch (e: any) {
+                  toast.error(e?.message || "Failed to save rate cards");
+                }
+              }}
+            >
+              Save Rate Card
+            </Button>
+          </div>
         </div>
       </FormDrawer>
+
+      {!isRateCardOpen && (<>
+      {/* Header */}
+      <div className="flex items-center justify-between w-full">
+        <div className="min-w-0 flex-1">
+          <p className="text-gray-600 mt-1 text-sm">Manage contractor rate cards</p>
+        </div>
+        <div className="flex items-center gap-3">
+          {canManage && (
+            <Button onClick={handleAddNew} className="flex-shrink-0 text-sm px-3 py-2">
+              <Plus className="w-4 h-4 mr-1" />
+              Add Contractor Rates
+            </Button>
+          )}
+        </div>
+      </div>
+
+      {/* Search */}
+      <Card>
+        <CardContent className="p-6">
+          <div className="flex items-center space-x-4 w-full">
+            <div className="relative flex-1 min-w-0">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+              <Input
+                placeholder="Search contractors..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-10 w-full"
+              />
+            </div>
+            <Badge variant="secondary" className="px-3 py-1 flex-shrink-0">
+              {allRateCards.filter((rc) =>
+                (rc.contractorDisplayName || rc.contractorName || "")
+                  .toLowerCase()
+                  .includes(searchTerm.toLowerCase())
+              ).length} rate cards
+            </Badge>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Contractor Rate Cards Table */}
+      <Card className="w-full">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <IndianRupee className="w-5 h-5" />
+            Contractor Rate Cards
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
+          <div className="overflow-x-auto">
+            <Table className="w-full">
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Contractor Name</TableHead>
+                  <TableHead>Department</TableHead>
+                  <TableHead>Designation</TableHead>
+                  <TableHead>Work Shift</TableHead>
+                  <TableHead>Per Minute (₹)</TableHead>
+                  <TableHead>Per Hour (₹)</TableHead>
+                  <TableHead>Per Day (₹)</TableHead>
+                  <TableHead>Per Month (₹)</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {allRateCards.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={9} className="text-center py-8 text-gray-500">
+                      <div className="flex flex-col items-center gap-2">
+                        <IndianRupee className="w-12 h-12 text-gray-300" />
+                        <p>No rate cards found</p>
+                        <p className="text-sm">Click &quot;Add Contractor Rates&quot; to create one</p>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  allRateCards
+                    .filter((rc) =>
+                      (rc.contractorDisplayName || rc.contractorName || "")
+                        .toLowerCase()
+                        .includes(searchTerm.toLowerCase())
+                    )
+                    .map((rc, index) => (
+                      <TableRow key={`${rc.contractorId}-${index}`}>
+                        <TableCell>{rc.contractorDisplayName || rc.contractorName || ""}</TableCell>
+                        <TableCell>{rc.departmentName || "—"}</TableCell>
+                        <TableCell>{rc.designation || "—"}</TableCell>
+                        <TableCell>{rc.workShiftName || "—"}</TableCell>
+                        <TableCell>{rc.perMinuteRate || "0"}</TableCell>
+                        <TableCell>{rc.perHourRate || "0"}</TableCell>
+                        <TableCell>{rc.perDayRate || "0"}</TableCell>
+                        <TableCell>{rc.perMonthRate || "0"}</TableCell>
+                        <TableCell className="text-right">
+                          {canManage && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                const contractor = contractors.find((c) => c.id === rc.contractorId);
+                                if (contractor) handleOpenRateCard(contractor);
+                              }}
+                              className="h-7 px-2 text-xs text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                              title="Edit Rate Card"
+                            >
+                              <IndianRupee className="w-3 h-3 mr-1" /> Edit
+                            </Button>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        </CardContent>
+      </Card>
+      </>)}
     </div>
   );
 }

@@ -102,6 +102,7 @@ interface AttendanceRegularize {
   attendanceDate: string;
   day: string;
   status: string;
+  requestedStatus?: string;
 }
 
 interface LeaveDayStatus {
@@ -326,9 +327,17 @@ export function AttendanceReportsManagement() {
     });
 
     if (regularization) {
-      const dayType = regularization.day;
-      const dayLabel = dayType.charAt(0).toUpperCase() + dayType.slice(1);
-      return { type: "AR", label: `AR (${dayLabel})` };
+      const requestedStatus = regularization.requestedStatus || regularization.day || "";
+      const statusMap: { [key: string]: string } = {
+        'PRESENT': 'Present',
+        'SL': 'Sick Leave',
+        'CL': 'Casual Leave',
+        'PL': 'Privilege Leave',
+        'LOP': 'Loss of Pay',
+        'WEEKOFF': 'Week Off',
+      };
+      const statusLabel = statusMap[requestedStatus] || requestedStatus.charAt(0).toUpperCase() + requestedStatus.slice(1);
+      return { type: "AR", label: `${statusLabel} (Regularized)` };
     }
 
     return null;

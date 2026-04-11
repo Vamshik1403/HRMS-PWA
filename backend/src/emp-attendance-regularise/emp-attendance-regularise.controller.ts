@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, ParseIntPipe } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, ParseIntPipe, Query } from '@nestjs/common';
 import { EmpAttendanceRegulariseService } from './emp-attendance-regularise.service';
 import { CreateEmpAttendanceRegulariseDto } from './dto/create-emp-attendance-regularise.dto';
 import { UpdateEmpAttendanceRegulariseDto } from './dto/update-emp-attendance-regularise.dto';
@@ -6,6 +6,14 @@ import { UpdateEmpAttendanceRegulariseDto } from './dto/update-emp-attendance-re
 @Controller('emp-attendance-regularise')
 export class EmpAttendanceRegulariseController {
   constructor(private readonly empAttendanceRegulariseService: EmpAttendanceRegulariseService) {}
+
+  @Get('fetch-status')
+  fetchStatus(
+    @Query('employeeId', ParseIntPipe) employeeId: number,
+    @Query('date') date: string,
+  ) {
+    return this.empAttendanceRegulariseService.fetchAttendanceStatus(employeeId, date);
+  }
 
   @Post()
   create(@Body() createEmpAttendanceRegulariseDto: CreateEmpAttendanceRegulariseDto) {

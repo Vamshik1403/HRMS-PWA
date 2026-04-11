@@ -9,6 +9,7 @@ import {
   Dialog, DialogContent, DialogFooter,
   DialogHeader, DialogTitle, DialogTrigger,
 } from "../components/ui/dialog"
+import { FormDrawer } from "../components/ui/form-drawer"
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "../components/ui/table"
@@ -840,22 +841,13 @@ const fetchCompanies = useCallback(
   // ===================== UI =====================
   return (
     <div className="space-y-6 w-full max-w-6xl mx-auto px-4">
-      {/* Header */}
-      <div className="flex items-center justify-between w-full flex-wrap gap-4">
-        <p className="text-gray-600 text-sm min-w-0 flex-1">
-          Track advances, approvals, and repayments for your organization.
-        </p>
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogTrigger asChild>
-            <Button onClick={resetForm} className="">
-              <Plus className="w-4 h-4 mr-1" />
-              Add Advance
-            </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>{editingAdvance ? "Edit" : "Add"} Salary Advance</DialogTitle>
-            </DialogHeader>
+      {/* FormDrawer for Add/Edit */}
+      <FormDrawer
+        open={isDialogOpen}
+        onOpenChange={setIsDialogOpen}
+        title={`${editingAdvance ? "Edit" : "Add"} Salary Advance`}
+        description="Fill in the details for the salary advance."
+      >
             <form onSubmit={handleSubmit} className="space-y-6">
               {/* Org Selection - Hidden for Managers */}
               {user?.role === "SUPERADMIN" && (
@@ -967,19 +959,32 @@ const fetchCompanies = useCallback(
                 />
               </div>
 
-              <DialogFooter>
+              <div className="flex justify-end gap-2 pt-4">
+                <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
+                  Cancel
+                </Button>
                 <Button 
                   type="submit" 
-                  className="" 
                   disabled={submitting}
                 >
                   {submitting && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
                   {editingAdvance ? "Update" : "Add"} Advance
                 </Button>
-              </DialogFooter>
+              </div>
             </form>
-          </DialogContent>
-        </Dialog>
+      </FormDrawer>
+
+      {!isDialogOpen && (
+      <>
+      {/* Header */}
+      <div className="flex items-center justify-between w-full flex-wrap gap-4">
+        <p className="text-gray-600 text-sm min-w-0 flex-1">
+          Track advances, approvals, and repayments for your organization.
+        </p>
+        <Button onClick={() => { resetForm(); setIsDialogOpen(true); }}>
+          <Plus className="w-4 h-4 mr-1" />
+          Add Advance
+        </Button>
       </div>
 
       {/* Search + Table */}
@@ -1128,6 +1133,8 @@ const fetchCompanies = useCallback(
           )}
         </CardContent>
       </Card>
+      </>
+      )}
 
       {/* Repayment Modal */}
       <Dialog open={isRepaymentOpen} onOpenChange={setIsRepaymentOpen}>

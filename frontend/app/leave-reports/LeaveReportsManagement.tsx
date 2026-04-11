@@ -182,18 +182,6 @@ export function LeaveReportsManagement() {
 
   return (
     <div className="space-y-6 w-full max-w-7xl mx-auto px-4">
-      {/* Header */}
-      <div className="flex items-center justify-between w-full">
-        <div className="min-w-0 flex-1">
-          <p className="text-gray-600 mt-1 text-sm">Generate and manage comprehensive leave reports</p>
-        </div>
-        <div className="flex items-center gap-3">
-          <Button onClick={() => { resetForm(); setIsDialogOpen(true); }} className="flex-shrink-0 text-sm px-3 py-2">
-                <Plus className="w-4 h-4 mr-1" />
-                Generate Report
-              </Button>
-      </div>
-
       <FormDrawer open={isDialogOpen} onOpenChange={setIsDialogOpen} title={editingReport ? "Edit Leave Report" : "Generate Leave Report"} description={editingReport ? "Update the leave report configuration below." : "Configure the parameters to generate a new leave report."}>
               <form onSubmit={handleSubmit} className="space-y-6">
                 {/* Organization Selection */}
@@ -305,9 +293,20 @@ export function LeaveReportsManagement() {
                 </div>
               </form>
       </FormDrawer>
-      </div>
 
       {!isDialogOpen && (<>
+      {/* Header */}
+      <div className="flex items-center justify-between w-full">
+        <div className="min-w-0 flex-1">
+          <p className="text-gray-600 mt-1 text-sm">Generate and manage comprehensive leave reports</p>
+        </div>
+        <div className="flex items-center gap-3">
+          <Button onClick={() => { resetForm(); setIsDialogOpen(true); }} className="flex-shrink-0 text-sm px-3 py-2">
+            <Plus className="w-4 h-4 mr-1" />
+            Generate Report
+          </Button>
+        </div>
+      </div>
       {/* Search and Filters */}
       <Card>
         <CardContent className="p-6">

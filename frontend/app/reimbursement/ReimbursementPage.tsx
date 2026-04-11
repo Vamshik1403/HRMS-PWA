@@ -9,6 +9,7 @@ import {
   Dialog, DialogContent, DialogFooter,
   DialogHeader, DialogTitle,
 } from "../components/ui/dialog"  
+import { FormDrawer } from "../components/ui/form-drawer"
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "../components/ui/table"
@@ -1183,6 +1184,7 @@ const getTotalAmount = (reimbursement: Reimbursement) => {
 
 return (
     <div className="space-y-6 p-6 bg-[#f8fafc] min-h-screen">
+      {!isDialogOpen && (<>
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
@@ -1422,15 +1424,10 @@ onClick={async () => {
           </div>
         </CardContent>
       </Card>
+      </>)}
 
       {/* Create/Edit Dialog */}
-      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle className="text-xl font-semibold">
-              {editing ? "Edit Reimbursement" : "Create New Reimbursement"}
-            </DialogTitle>
-          </DialogHeader>
+      <FormDrawer open={isDialogOpen} onOpenChange={setIsDialogOpen} title={editing ? "Edit Reimbursement" : "Create New Reimbursement"} description="Fill in the reimbursement details below.">
           <div>
             <form onSubmit={handleSubmit} className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-1 gap-6">
@@ -1664,8 +1661,7 @@ fetchData={(q) => fetchBranches(q)}
               </Button>
             </div>
           </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      </FormDrawer>
 
       {/* Settings/Approve Dialog */}
       <Dialog open={isSettingsDialogOpen} onOpenChange={setIsSettingsDialogOpen}>

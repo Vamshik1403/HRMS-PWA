@@ -102,6 +102,9 @@ export function AttendancePolicyManagement() {
     overtimeTrimmingApply: false,
     checkoutGracePeriodForOvertimeTrimming: 0,
     breakTimeForOT: 0,
+    otMealApply: false,
+    minsForOTMealToken: 0,
+    minsForBreakTimeForMeal: 0,
   });
 
   const BACKEND_URL =
@@ -244,6 +247,9 @@ export function AttendancePolicyManagement() {
         overtimeTrimmingApply: p.overtimeTrimmingApply ?? false,
         checkoutGracePeriodForOvertimeTrimming: p.checkoutGracePeriodForOvertimeTrimming ?? 0,
         breakTimeForOT: p.breakTimeForOT ?? 0,
+        otMealApply: p.otMealApply ?? false,
+        minsForOTMealToken: p.minsForOTMealToken ?? 0,
+        minsForBreakTimeForMeal: p.minsForBreakTimeForMeal ?? 0,
       }));
 
       if (user?.role === "SUPERADMIN") {
@@ -337,6 +343,9 @@ export function AttendancePolicyManagement() {
         maxOvertimeHrs: formData.maxOvertimeHrs,
         overtimeTrimmingApply: formData.overtimeTrimmingApply,
         checkoutGracePeriodForOvertimeTrimming: formData.checkoutGracePeriodForOvertimeTrimming,
+        otMealApply: formData.otMealApply,
+        minsForOTMealToken: formData.minsForOTMealToken,
+        minsForBreakTimeForMeal: formData.minsForBreakTimeForMeal,
       };
 
       const url = editingPolicy
@@ -390,6 +399,9 @@ export function AttendancePolicyManagement() {
       overtimeTrimmingApply: false,
       checkoutGracePeriodForOvertimeTrimming: 0,
       breakTimeForOT: 0,
+      otMealApply: false,
+      minsForOTMealToken: 0,
+      minsForBreakTimeForMeal: 0,
     });
     setEditingPolicy(null);
   };
@@ -451,6 +463,9 @@ export function AttendancePolicyManagement() {
       overtimeTrimmingApply: policy.overtimeTrimmingApply || false,
       checkoutGracePeriodForOvertimeTrimming: policy.checkoutGracePeriodForOvertimeTrimming || 0,
       breakTimeForOT: policy.breakTimeForOT || 0,
+      otMealApply: (policy as any).otMealApply || false,
+      minsForOTMealToken: (policy as any).minsForOTMealToken || 0,
+      minsForBreakTimeForMeal: (policy as any).minsForBreakTimeForMeal || 0,
     });
     setEditingPolicy(policy);
     setIsDialogOpen(true);
@@ -852,13 +867,77 @@ export function AttendancePolicyManagement() {
                           </div>
                         </div>
                       </div>
+
+                      {/* OT Meal Apply */}
+                      <div className="flex items-center space-x-3 pt-2">
+                        <input
+                          type="checkbox"
+                          id="otMealApply"
+                          checked={formData.otMealApply}
+                          onChange={(e) =>
+                            setFormData((prev) => ({
+                              ...prev,
+                              otMealApply: e.target.checked,
+                            }))
+                          }
+                          className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
+                        />
+                        <Label htmlFor="otMealApply" className="text-sm font-medium">
+                          OT Meal Apply
+                        </Label>
+                      </div>
+
+                      {formData.otMealApply && (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 ml-6">
+                          <div className="space-y-2">
+                            <Label htmlFor="minsForOTMealToken">Mins for OT Hours for Meal Token</Label>
+                            <div className="flex items-center space-x-2">
+                              <Input
+                                id="minsForOTMealToken"
+                                type="text"
+                                value={formData.minsForOTMealToken}
+                                onChange={(e) => {
+                                  const value = e.target.value.replace(/\D/g, "");
+                                  setFormData((prev) => ({
+                                    ...prev,
+                                    minsForOTMealToken: parseInt(value) || 0,
+                                  }));
+                                }}
+                                className="flex-1"
+                                placeholder="Enter minutes"
+                              />
+                              <span className="text-sm text-gray-500">Min</span>
+                            </div>
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="minsForBreakTimeForMeal">Mins for Break Time for Meal</Label>
+                            <div className="flex items-center space-x-2">
+                              <Input
+                                id="minsForBreakTimeForMeal"
+                                type="text"
+                                value={formData.minsForBreakTimeForMeal}
+                                onChange={(e) => {
+                                  const value = e.target.value.replace(/\D/g, "");
+                                  setFormData((prev) => ({
+                                    ...prev,
+                                    minsForBreakTimeForMeal: parseInt(value) || 0,
+                                  }));
+                                }}
+                                className="flex-1"
+                                placeholder="Enter minutes"
+                              />
+                              <span className="text-sm text-gray-500">Min</span>
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
               </div>
 
-              {/* Page Break - Overtime Trimming Section */}
-              <div className="border-t border-gray-200 pt-4">
+              {/* Page Break - Overtime Trimming Section (temporarily hidden) */}
+              {/* <div className="border-t border-gray-200 pt-4">
                 <div className="space-y-4">
                   <div className="flex items-center space-x-3">
                     <input
@@ -910,7 +989,7 @@ export function AttendancePolicyManagement() {
                     </div>
                   )}
                 </div>
-              </div>
+              </div> */}
 
               <div className="flex justify-end gap-3 pt-4">
                 <Button

@@ -8,6 +8,7 @@ import { Label } from "../components/ui/label";
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger,
 } from "../components/ui/dialog";
+import { FormDrawer } from "../components/ui/form-drawer";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "../components/ui/table";
@@ -576,32 +577,12 @@ export function BonusAllocationsManagement() {
 
   return (
     <div className="space-y-6 w-full max-w-6xl mx-auto px-4">
-      <div className="flex items-center justify-between w-full">
-        <div className="min-w-0 flex-1">
-          <p className="text-gray-600 mt-1 text-sm">Manage bonus allocations</p>
-        </div>
-        <div className="flex items-center gap-3">
-          <Dialog open={isDialogOpen} onOpenChange={(o) => { setIsDialogOpen(o); if (!o) resetForm(); }}>
-            <DialogTrigger asChild>
-              {canManage && (
-                <Button
-                  onClick={resetForm}
-                  className="flex-shrink-0 text-sm px-3 py-2"
-                >
-                  <Plus className="w-4 h-4 mr-1" />
-                  Add Bonus Allocation
-                </Button>
-              )}
-
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>{editingAllocation ? "Edit Bonus Allocation" : "Add New Bonus Allocation"}</DialogTitle>
-                <DialogDescription>
-                  {editingAllocation ? "Update the bonus allocation information below." : "Fill in the details to add a new bonus allocation."}
-                </DialogDescription>
-              </DialogHeader>
-
+      <FormDrawer
+        open={isDialogOpen}
+        onOpenChange={(o) => { setIsDialogOpen(o); if (!o) resetForm(); }}
+        title={editingAllocation ? "Edit Bonus Allocation" : "Add New Bonus Allocation"}
+        description={editingAllocation ? "Update the bonus allocation information below." : "Fill in the details to add a new bonus allocation."}
+      >
               <form onSubmit={handleSubmit} className="space-y-6">
                 <div className="space-y-4">
                   <h3 className="text-lg font-semibold">Bonus Configuration</h3>
@@ -730,18 +711,32 @@ export function BonusAllocationsManagement() {
                   </div>
                 </div>
 
-                <DialogFooter>
+                <div className="flex justify-end gap-2 pt-4">
                   <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
                     Cancel
                   </Button>
-                  <Button type="submit" className="">
+                  <Button type="submit">
                     {editingAllocation ? "Update Bonus Allocation" : "Add Bonus Allocation"}
                   </Button>
-                </DialogFooter>
+                </div>
               </form>
-            </DialogContent>
-          </Dialog>
+      </FormDrawer>
+
+      {!isDialogOpen && (
+      <>
+      <div className="flex items-center justify-between w-full">
+        <div className="min-w-0 flex-1">
+          <p className="text-gray-600 mt-1 text-sm">Manage bonus allocations</p>
         </div>
+        {canManage && (
+          <Button
+            onClick={() => { resetForm(); setIsDialogOpen(true); }}
+            className="flex-shrink-0 text-sm px-3 py-2"
+          >
+            <Plus className="w-4 h-4 mr-1" />
+            Add Bonus Allocation
+          </Button>
+        )}
       </div>
 
       <Card>
@@ -835,6 +830,8 @@ export function BonusAllocationsManagement() {
           </div>
         </CardContent>
       </Card>
+      </>
+      )}
     </div>
   );
 }

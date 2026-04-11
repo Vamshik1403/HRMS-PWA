@@ -15,6 +15,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "../components/ui/dialog"
+import { FormDrawer } from "../components/ui/form-drawer"
 import {
   Table,
   TableBody,
@@ -592,27 +593,13 @@ export function PublicHolidayManagement() {
 
   return (
     <div className="space-y-6 w-full max-w-6xl mx-auto px-4">
-      {/* Header */}
-      <div className="flex items-center justify-between w-full">
-        <div className="min-w-0 flex-1">
-          <p className="text-gray-600 mt-1 text-sm">Manage public holidays for companies and branches</p>
-        </div>
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          {canManage && (
-            <DialogTrigger asChild>
-              <Button onClick={resetForm} className="">
-                <Plus className="w-4 h-4 mr-2" />
-                Add Public Holiday
-              </Button>
-            </DialogTrigger>
-          )}
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>{editingHoliday?"Edit":"Add New"} Public Holiday</DialogTitle>
-              <DialogDescription>
-                {editingHoliday ? "Update the public holiday details" : "Add a new public holiday to the system"}
-              </DialogDescription>
-            </DialogHeader>
+      {/* FormDrawer for Add/Edit */}
+      <FormDrawer
+        open={isDialogOpen}
+        onOpenChange={setIsDialogOpen}
+        title={`${editingHoliday?"Edit":"Add New"} Public Holiday`}
+        description={editingHoliday ? "Update the public holiday details" : "Add a new public holiday to the system"}
+      >
             <form onSubmit={handleSubmit} className="space-y-6">
               {/* Organization Selection */}
               <div className="space-y-4">
@@ -739,7 +726,7 @@ export function PublicHolidayManagement() {
                 </div>
               </div>
 
-              <DialogFooter>
+              <div className="flex justify-end gap-2 pt-4">
                 <Button 
                   type="button" 
                   variant="outline" 
@@ -747,13 +734,26 @@ export function PublicHolidayManagement() {
                 >
                   Cancel
                 </Button>
-                <Button type="submit" className="">
+                <Button type="submit">
                   {editingHoliday?"Update":"Add"} Public Holiday
                 </Button>
-              </DialogFooter>
+              </div>
             </form>
-          </DialogContent>
-        </Dialog>
+      </FormDrawer>
+
+      {!isDialogOpen && (
+      <>
+      {/* Header */}
+      <div className="flex items-center justify-between w-full">
+        <div className="min-w-0 flex-1">
+          <p className="text-gray-600 mt-1 text-sm">Manage public holidays for companies and branches</p>
+        </div>
+        {canManage && (
+          <Button onClick={() => { resetForm(); setIsDialogOpen(true); }}>
+            <Plus className="w-4 h-4 mr-2" />
+            Add Public Holiday
+          </Button>
+        )}
       </div>
 
       {/* Search and Table */}
@@ -857,6 +857,8 @@ export function PublicHolidayManagement() {
           </div>
         </CardContent>
       </Card>
+      </>
+      )}
     </div>
   )
 }

@@ -2554,19 +2554,7 @@ export function GenerateSalaryManagement() {
       </FormDrawer>
 
       <div className="space-y-6 w-full max-w-7xl mx-auto px-4">
-        <div className="flex items-center justify-between w-full">
-          <div className="min-w-0 flex-1">
-            <p className="text-gray-600 mt-1 text-sm">Generate and manage employee salary payments</p>
-          </div>
-
-          {canManage && (
-            <Button onClick={() => { resetForm(); setIsDialogOpen(true); }} className="flex-shrink-0 text-sm px-3 py-2">
-              <Plus className="w-4 h-4 mr-1" />
-              Add Salary Generation
-            </Button>
-          )}
-
-          <FormDrawer open={isDialogOpen} onOpenChange={(o) => { setIsDialogOpen(o); if (!o) resetForm(); }} title={editing ? "Edit Salary Generation" : "Add New Salary Generation"} description={editing ? "Update the salary generation information below." : "Fill in the details to add a new salary generation."}>
+        <FormDrawer open={isDialogOpen} onOpenChange={(o) => { setIsDialogOpen(o); if (!o) resetForm(); }} title={editing ? "Edit Salary Generation" : "Add New Salary Generation"} description={editing ? "Update the salary generation information below." : "Fill in the details to add a new salary generation."}>
 
               <form onSubmit={handleSubmit} className="space-y-6">
                 <div className="space-y-4">
@@ -2837,9 +2825,19 @@ export function GenerateSalaryManagement() {
               </form>
             
           </FormDrawer>
-        </div>
 
         {!isDialogOpen && (<>
+        <div className="flex items-center justify-between w-full">
+          <div className="min-w-0 flex-1">
+            <p className="text-gray-600 mt-1 text-sm">Generate and manage employee salary payments</p>
+          </div>
+          {canManage && (
+            <Button onClick={() => { resetForm(); setIsDialogOpen(true); }} className="flex-shrink-0 text-sm px-3 py-2">
+              <Plus className="w-4 h-4 mr-1" />
+              Add Salary Generation
+            </Button>
+          )}
+        </div>
         <Card>
           <CardContent className="p-6">
             <div className="flex items-center space-x-4 w-full">

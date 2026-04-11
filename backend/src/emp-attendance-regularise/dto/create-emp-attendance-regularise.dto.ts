@@ -1,4 +1,4 @@
-import { IsOptional, IsString, IsInt, IsDateString, IsEnum } from 'class-validator';
+import { IsOptional, IsString, IsInt, IsDateString, IsBoolean } from 'class-validator';
 
 export class CreateEmpAttendanceRegulariseDto {
   @IsOptional()
@@ -52,4 +52,20 @@ export class CreateEmpAttendanceRegulariseDto {
   @IsOptional()
   @IsString()
   status?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  overtimeApplicable?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  otMealApply?: boolean;
+
+  @IsOptional()
+  @IsInt()
+  otMealMinutes?: number;
+
+  @IsOptional()
+  @IsInt()
+  otBreakMinutes?: number;
 }

@@ -14,6 +14,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "../components/ui/dialog"
+import { FormDrawer } from "../components/ui/form-drawer"
 import {
   Table,
   TableBody,
@@ -557,29 +558,13 @@ export function ManageHolidaysManagement() {
 
   return (
     <div className="space-y-6 w-full max-w-6xl mx-auto px-4">
-      {/* Header */}
-      <div className="flex items-center justify-between w-full">
-        <div className="min-w-0 flex-1">
-          <p className="text-gray-600 mt-1 text-sm">Manage company holidays and special days</p>
-        </div>
-        <div className="flex items-center gap-3">
-          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-            <DialogTrigger asChild>
-            {canManage && (
-              <Button
-                onClick={resetForm}
-                className="flex-shrink-0 text-sm px-3 py-2"
-              >
-                <Plus className="w-4 h-4 mr-1" />
-                Add Holiday
-              </Button>
-            )}
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>{editingHoliday ? "Edit Holiday" : "Add New Holiday"}</DialogTitle>
-                <DialogDescription>{editingHoliday ? "Update the holiday information below." : "Fill in the details to add a new holiday."}</DialogDescription>
-              </DialogHeader>
+      {/* FormDrawer for Add/Edit */}
+      <FormDrawer
+        open={isDialogOpen}
+        onOpenChange={setIsDialogOpen}
+        title={editingHoliday ? "Edit Holiday" : "Add New Holiday"}
+        description={editingHoliday ? "Update the holiday information below." : "Fill in the details to add a new holiday."}
+      >
               <form onSubmit={handleSubmit} className="space-y-6">
                 {/* Organization Selection */}
                 <div className="space-y-4">
@@ -670,16 +655,31 @@ export function ManageHolidaysManagement() {
                   </div>
                 </div>
 
-                <DialogFooter>
+                <div className="flex justify-end gap-2 pt-4">
                   <Button type="button" variant="outline" onClick={()=>setIsDialogOpen(false)}>Cancel</Button>
-                  <Button type="submit" className="">
+                  <Button type="submit">
                     {editingHoliday ? "Update Holiday" : "Add Holiday"}
                   </Button>
-                </DialogFooter>
+                </div>
               </form>
-            </DialogContent>
-          </Dialog>
+      </FormDrawer>
+
+      {!isDialogOpen && (
+      <>
+      {/* Header */}
+      <div className="flex items-center justify-between w-full">
+        <div className="min-w-0 flex-1">
+          <p className="text-gray-600 mt-1 text-sm">Manage company holidays and special days</p>
         </div>
+        {canManage && (
+          <Button
+            onClick={() => { resetForm(); setIsDialogOpen(true); }}
+            className="flex-shrink-0 text-sm px-3 py-2"
+          >
+            <Plus className="w-4 h-4 mr-1" />
+            Add Holiday
+          </Button>
+        )}
       </div>
 
       {/* Search & Filters */}
@@ -785,6 +785,8 @@ export function ManageHolidaysManagement() {
           </div>
         </CardContent>
       </Card>
+      </>
+      )}
     </div>
   )
 }

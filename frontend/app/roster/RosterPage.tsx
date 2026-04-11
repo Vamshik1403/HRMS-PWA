@@ -25,7 +25,7 @@ import { FixedCalendar as CalendarComponent } from "@/app/components/ui/color-ca
 
 // ==================== TYPES ====================
 type ID = number
-type RosterLeaveType = "CASUAL" | "SICK" | "LOP"
+type RosterLeaveType = "CASUAL" | "SICK" | "LOP" | "PL" | "COMP_OFF"
 
 interface ServiceProvider { id: ID; companyName: string }
 interface Company { id: ID; serviceProviderID: ID; companyName: string }
@@ -1486,6 +1486,8 @@ export function RosterManagement() {
                   >
                     <option value="CASUAL">Casual Leave (CL)</option>
                     <option value="SICK">Sick Leave (SL)</option>
+                    <option value="PL">Privilege Leave (PL)</option>
+                    <option value="COMP_OFF">Comp Off Leave</option>
                     <option value="LOP">Loss of Pay (LOP)</option>
                   </select>
                 ) : (

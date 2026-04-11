@@ -83,12 +83,17 @@ export function AttendanceRegularisationManagement() {
     companyID: undefined as number | undefined,
     branchesID: undefined as number | undefined,
     manageEmployeeID: undefined as number | undefined,
+    overtimeApplicable: false,
+    otMealApply: false,
+    otMealMinutes: "" as string | number,
+    otBreakMinutes: "" as string | number,
   })
 
   const [selectedEmployee, setSelectedEmployee] = useState<any | null>(null)
   const [managerData, setManagerData] = useState<any>(null)
   const [empCreds, setEmpCreds] = useState<any>(null)
   const [holidays, setHolidays] = useState<any[]>([])
+  const [isFetchingStatus, setIsFetchingStatus] = useState(false)
   
   const user = useCurrentUser()
   const canManage = user?.role === "SUPERADMIN" || user?.role === "MANAGER"
@@ -423,6 +428,56 @@ export function AttendanceRegularisationManagement() {
     }))
   }
 
+  const fetchActualStatus = async () => {
+    if (!formData.manageEmployeeID || !formData.attendanceDate) {
+      toast.error("Please select an employee and attendance date first")
+      return
+    }
+    setIsFetchingStatus(true)
+    try {
+      const res = await fetch(
+        `${BACKEND_URL}/emp-attendance-regularise/fetch-status?employeeId=${formData.manageEmployeeID}&date=${formData.attendanceDate}`,
+        { cache: "no-store" }
+      )
+      if (!res.ok) throw new Error("Failed to fetch attendance status")
+      const data = await res.json()
+
+      const dayOfWeek = new Date(formData.attendanceDate).toLocaleDateString("en-US", { weekday: "long" })
+
+      let checkInTime = ""
+      let checkOutTime = ""
+      if (data.checkInTime) {
+        checkInTime = new Date(data.checkInTime).toTimeString().split(" ")[0]
+      }
+      if (data.checkOutTime) {
+        checkOutTime = new Date(data.checkOutTime).toTimeString().split(" ")[0]
+      }
+
+      const statusLabel = data.isRegularized
+        ? `${data.actualStatus} (Regularized)`
+        : data.actualStatus
+
+      setFormData((prev) => ({
+        ...prev,
+        actualStatus: statusLabel,
+        checkInTime,
+        checkOutTime,
+        day: dayOfWeek,
+      }))
+
+      if (data.isRegularized) {
+        toast.info("This date has already been regularized")
+      } else {
+        toast.success(`Status fetched: ${data.actualStatus} (${data.punchCount} punches)`)
+      }
+    } catch (error) {
+      console.error("Error fetching attendance status:", error)
+      toast.error("Failed to fetch attendance status")
+    } finally {
+      setIsFetchingStatus(false)
+    }
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
@@ -451,10 +506,14 @@ export function AttendanceRegularisationManagement() {
         day: formData.day,
         checkInTime: formData.checkInTime ? new Date(`2000-01-01T${formData.checkInTime}`) : null,
         checkOutTime: formData.checkOutTime ? new Date(`2000-01-01T${formData.checkOutTime}`) : null,
-        actualStatus: formData.actualStatus || null,
+        actualStatus: formData.actualStatus ? formData.actualStatus.replace(" (Regularized)", "") : null,
         requestedStatus: formData.requestedStatus || null,
         reason: formData.reason || null,
         remarks: formData.remarks,
+        overtimeApplicable: formData.overtimeApplicable || false,
+        otMealApply: formData.otMealApply || false,
+        otMealMinutes: formData.otMealMinutes ? parseInt(String(formData.otMealMinutes)) : null,
+        otBreakMinutes: formData.otBreakMinutes ? parseInt(String(formData.otBreakMinutes)) : null,
       }
 
       const url = editingRegularisation
@@ -502,6 +561,10 @@ export function AttendanceRegularisationManagement() {
       companyID: undefined,
       branchesID: undefined,
       manageEmployeeID: undefined,
+      overtimeApplicable: false,
+      otMealApply: false,
+      otMealMinutes: "",
+      otBreakMinutes: "",
     })
     setSelectedEmployee(null)
     setEditingRegularisation(null)
@@ -525,6 +588,10 @@ export function AttendanceRegularisationManagement() {
       companyID: regularisation.companyID,
       branchesID: regularisation.branchesID,
       manageEmployeeID: regularisation.manageEmployeeID,
+      overtimeApplicable: (regularisation as any).overtimeApplicable || false,
+      otMealApply: (regularisation as any).otMealApply || false,
+      otMealMinutes: (regularisation as any).otMealMinutes || "",
+      otBreakMinutes: (regularisation as any).otBreakMinutes || "",
     })
     setSelectedEmployee({
       employeeID: regularisation.employeeId,
@@ -710,37 +777,46 @@ export function AttendanceRegularisationManagement() {
                 {/* Attendance Details */}
                 <div className="space-y-4">
                   <h3 className="text-lg font-semibold">Attendance Details</h3>
-                  <div className="space-y-2">
-                    <Label htmlFor="attendanceDate">Attendance Date *</Label>
-                    <Input
-                      id="attendanceDate"
-                      type="date"
-                      value={formData.attendanceDate}
-                      max={new Date().toISOString().split("T")[0]}
-                      onChange={(e) => setFormData(prev => ({ ...prev, attendanceDate: e.target.value }))}
-                      className="w-full"
-                      required
-                    />
-                    <p className="text-xs text-gray-500">Only past dates are allowed for regularisation</p>
+                  <div className="flex items-end gap-2">
+                    <div className="flex-1 space-y-2">
+                      <Label htmlFor="attendanceDate">Attendance Date *</Label>
+                      <Input
+                        id="attendanceDate"
+                        type="date"
+                        value={formData.attendanceDate}
+                        max={new Date().toISOString().split("T")[0]}
+                        onChange={(e) => setFormData(prev => ({ ...prev, attendanceDate: e.target.value, actualStatus: "" }))}
+                        className="w-full"
+                        required
+                      />
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={fetchActualStatus}
+                      disabled={isFetchingStatus || !formData.manageEmployeeID || !formData.attendanceDate}
+                      className="flex-shrink-0"
+                    >
+                      {isFetchingStatus ? (
+                        <Clock className="w-4 h-4 mr-1 animate-spin" />
+                      ) : (
+                        <Search className="w-4 h-4 mr-1" />
+                      )}
+                      Fetch
+                    </Button>
                   </div>
+                  <p className="text-xs text-gray-500">Select employee and date, then click Fetch to get system-detected status</p>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="actualStatus">Actual Status (System Detected)</Label>
-                      <select
+                      <Input
                         id="actualStatus"
+                        type="text"
                         value={formData.actualStatus}
-                        onChange={(e) => setFormData(prev => ({ ...prev, actualStatus: e.target.value }))}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-sm border-[#d0d0d0] focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-900/15 focus-visible:border-[#b0b0b0] bg-gray-50"
-                        required
-                      >
-                        <option value="">Select Actual Status</option>
-                        <option value="ABSENT">Absent</option>
-                        <option value="LATE">Late</option>
-                        <option value="HALFDAY">Half Day</option>
-                        <option value="FULLDAY">Full Day</option>
-                        <option value="LOP">Loss of Pay (LOP)</option>
-                        <option value="WEEKOFF">Week Off</option>
-                      </select>
+                        readOnly
+                        className="w-full bg-gray-100 cursor-not-allowed font-medium"
+                        placeholder="Click Fetch to detect status"
+                      />
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="requestedStatus">Request To Change As *</Label>
@@ -758,14 +834,77 @@ export function AttendanceRegularisationManagement() {
                         <option value="PL">Privilege Leave (PL)</option>
                         <option value="LOP">Loss of Pay (LOP)</option>
                         <option value="WEEKOFF">Week Off</option>
-                        <option value="HOLIDAY">Mark as Holiday</option>
-                        {holidays.map((h: any) => (
-                          <option key={h.id} value={`HOLIDAY:${h.holidayName || h.name || ''}`}>
-                            Holiday - {h.holidayName || h.name || `#${h.id}`}
-                          </option>
-                        ))}
                       </select>
                     </div>
+                  </div>
+
+                  {/* Overtime Section */}
+                  <div className="space-y-3 border-t pt-4">
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        id="overtimeApplicable"
+                        checked={formData.overtimeApplicable}
+                        onChange={(e) => setFormData(prev => ({ 
+                          ...prev, 
+                          overtimeApplicable: e.target.checked,
+                          otMealApply: e.target.checked ? prev.otMealApply : false,
+                          otMealMinutes: e.target.checked ? prev.otMealMinutes : "",
+                          otBreakMinutes: e.target.checked ? prev.otBreakMinutes : "",
+                        }))}
+                        className="w-4 h-4 rounded border-gray-300"
+                      />
+                      <Label htmlFor="overtimeApplicable" className="cursor-pointer font-medium">Overtime Applicable</Label>
+                    </div>
+
+                    {formData.overtimeApplicable && (
+                      <div className="space-y-3 pl-6">
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            id="otMealApply"
+                            checked={formData.otMealApply}
+                            onChange={(e) => setFormData(prev => ({ 
+                              ...prev, 
+                              otMealApply: e.target.checked,
+                              otMealMinutes: e.target.checked ? prev.otMealMinutes : "",
+                              otBreakMinutes: e.target.checked ? prev.otBreakMinutes : "",
+                            }))}
+                            className="w-4 h-4 rounded border-gray-300"
+                          />
+                          <Label htmlFor="otMealApply" className="cursor-pointer">OT Meal Apply</Label>
+                        </div>
+
+                        {formData.otMealApply && (
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                              <Label htmlFor="otMealMinutes">Mins for OT Hours for Meal Token</Label>
+                              <Input
+                                id="otMealMinutes"
+                                type="number"
+                                min="0"
+                                value={formData.otMealMinutes}
+                                onChange={(e) => setFormData(prev => ({ ...prev, otMealMinutes: e.target.value }))}
+                                placeholder="Enter minutes"
+                                className="w-full"
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <Label htmlFor="otBreakMinutes">Mins for Break Time for Meal</Label>
+                              <Input
+                                id="otBreakMinutes"
+                                type="number"
+                                min="0"
+                                value={formData.otBreakMinutes}
+                                onChange={(e) => setFormData(prev => ({ ...prev, otBreakMinutes: e.target.value }))}
+                                placeholder="Enter minutes"
+                                className="w-full"
+                              />
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
 
                   <div className="space-y-2">

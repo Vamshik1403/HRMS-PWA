@@ -1182,20 +1182,8 @@ export function LeaveApplicationsManagement() {
 
   return (
     <div className="space-y-6 w-full max-w-full mx-auto px-4 overflow-hidden">
-      {/* Header */}
-      <div className="flex items-center justify-between w-full">
-        <div className="min-w-0 flex-1">
-          <p className="text-gray-600 mt-1 text-sm">Manage employee leave applications and approvals</p>
-        </div>
-        <div className="flex items-center gap-3">
-          <Button
-            onClick={() => { resetForm(); setIsDialogOpen(true); }}
-            className="flex-shrink-0 text-sm px-3 py-2"
-          >
-            <Plus className="w-4 h-4 mr-1" />
-            Add Leave Application
-          </Button>
-          <FormDrawer open={isDialogOpen} onOpenChange={setIsDialogOpen} title={editingApplication ? "Edit Leave Application" : "Submit Leave Application"} description={editingApplication 
+      {/* FormDrawer for Add/Edit */}
+      <FormDrawer open={isDialogOpen} onOpenChange={setIsDialogOpen} title={editingApplication ? "Edit Leave Application" : "Submit Leave Application"} description={editingApplication 
                     ? "Update the leave application information below." 
                     : "Fill in the details to submit a new leave application."}>
               <form onSubmit={handleSubmit} className="space-y-6">
@@ -1400,8 +1388,22 @@ export function LeaveApplicationsManagement() {
               </form>
             
           </FormDrawer>
+
+      {/* Header - shown when form is closed */}
+      {!isDialogOpen && (
+        <div className="flex items-center justify-between w-full">
+          <div className="min-w-0 flex-1">
+            <p className="text-gray-600 mt-1 text-sm">Manage employee leave applications and approvals</p>
+          </div>
+          <Button
+            onClick={() => { resetForm(); setIsDialogOpen(true); }}
+            className="flex-shrink-0 text-sm px-3 py-2"
+          >
+            <Plus className="w-4 h-4 mr-1" />
+            Add Leave Application
+          </Button>
         </div>
-      </div>
+      )}
 
       {/* Revoke Leave Modal */}
       <FormDrawer open={isRevokeDialogOpen} onOpenChange={setIsRevokeDialogOpen} title={"Revoke Leave Application"} description={"Please provide a reason for revoking this leave. It will go for manager approval."}>

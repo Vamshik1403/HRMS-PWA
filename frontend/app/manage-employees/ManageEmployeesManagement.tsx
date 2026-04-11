@@ -539,6 +539,8 @@ export function ManageEmployeesManagement() {
   const [stagingWS, setStagingWS] = useState<{ workShiftID: ID | null; label: string; effectFrom: string }>({ workShiftID: null, label: "", effectFrom: "" });
   const [stagingAP, setStagingAP] = useState<{ attendancePolicyID: ID | null; label: string; effectFrom: string }>({ attendancePolicyID: null, label: "", effectFrom: "" });
   const [stagingLP, setStagingLP] = useState<{ leavePolicyID: ID | null; label: string; effectFrom: string }>({ leavePolicyID: null, label: "", effectFrom: "" });
+  const [stagingET, setStagingET] = useState<{ employmentType: string; effectFrom: string }>({ employmentType: "", effectFrom: "" });
+  const [stagingES, setStagingES] = useState<{ employmentStatus: string; probationPeriod: string; effectFrom: string }>({ employmentStatus: "", probationPeriod: "", effectFrom: "" });
 
   const [originalExpIds, setOriginalExpIds] = useState<ID[]>([]);
   const [originalDevMapIds, setOriginalDevMapIds] = useState<ID[]>([]);
@@ -687,7 +689,7 @@ export function ManageEmployeesManagement() {
     noticePeriodDaysForResignation: "",
     noticePeriodDaysForTermination: "",
 
-    typeOfEmployee: "",
+    typeOfEmployee: "employee",
 
 
 
@@ -1522,8 +1524,17 @@ const addCombinedDevMap = () => {
     return { ...p, empBranchForm: updated, branchesID: last?.branchesID ?? null, brAutocomplete: last?._brAutocomplete ?? "" };
   });
 
-  // Employment Type multi-entry helpers
-  const addEmpEmploymentType = () => setFormData(p => ({ ...p, empEmploymentTypeForm: [...p.empEmploymentTypeForm, { _localId: uid(), employmentType: "" }] }));
+  // Employment Type multi-entry helpers (staging pattern)
+  const addEmpEmploymentType = () => {
+    if (!stagingET.employmentType) return;
+    const newEntry: EmpEmploymentTypeForm = { _localId: uid(), employmentType: stagingET.employmentType, effectFrom: stagingET.effectFrom };
+    setFormData(p => {
+      const updated = [...p.empEmploymentTypeForm, newEntry];
+      const last = updated[updated.length - 1];
+      return { ...p, empEmploymentTypeForm: updated, promotion: { ...p.promotion, employmentType: last?.employmentType ?? "" } };
+    });
+    setStagingET({ employmentType: "", effectFrom: "" });
+  };
   const removeEmpEmploymentType = (lid: string) => setFormData(p => {
     const updated = p.empEmploymentTypeForm.filter(x => x._localId !== lid);
     const last = updated[updated.length - 1];
@@ -1535,8 +1546,17 @@ const addCombinedDevMap = () => {
     return { ...p, empEmploymentTypeForm: updated, promotion: { ...p.promotion, employmentType: last?.employmentType ?? "" } };
   });
 
-  // Employment Status multi-entry helpers
-  const addEmpEmploymentStatus = () => setFormData(p => ({ ...p, empEmploymentStatusForm: [...p.empEmploymentStatusForm, { _localId: uid(), employmentStatus: "", probationPeriod: "" }] }));
+  // Employment Status multi-entry helpers (staging pattern)
+  const addEmpEmploymentStatus = () => {
+    if (!stagingES.employmentStatus) return;
+    const newEntry: EmpEmploymentStatusForm = { _localId: uid(), employmentStatus: stagingES.employmentStatus, probationPeriod: stagingES.probationPeriod, effectFrom: stagingES.effectFrom };
+    setFormData(p => {
+      const updated = [...p.empEmploymentStatusForm, newEntry];
+      const last = updated[updated.length - 1];
+      return { ...p, empEmploymentStatusForm: updated, promotion: { ...p.promotion, employmentStatus: last?.employmentStatus ?? "", probationPeriod: last?.probationPeriod ?? "" } };
+    });
+    setStagingES({ employmentStatus: "", probationPeriod: "", effectFrom: "" });
+  };
   const removeEmpEmploymentStatus = (lid: string) => setFormData(p => {
     const updated = p.empEmploymentStatusForm.filter(x => x._localId !== lid);
     const last = updated[updated.length - 1];
@@ -1636,7 +1656,7 @@ const addCombinedDevMap = () => {
       noticePeriodDaysForResignation: "",
       noticePeriodDaysForTermination: "",
 
-      typeOfEmployee: "",
+      typeOfEmployee: "employee",
 
       workShiftID: null,
       attendancePolicyID: null,
@@ -2743,8 +2763,7 @@ const addCombinedDevMap = () => {
 
                 <div className="space-y-2">
                   <Label>Employee Type</Label>
-                  <select className="w-full rounded-md border px-3 py-2" value={formData.typeOfEmployee || ""} onChange={(e) => setFormData((p) => ({ ...p, typeOfEmployee: e.target.value }))}>
-                    <option value="">-- Select Employee Type --</option>
+                  <select className="w-full rounded-md border px-3 py-2" value={formData.typeOfEmployee || "employee"} onChange={(e) => setFormData((p) => ({ ...p, typeOfEmployee: e.target.value }))}>
                     <option value="employee">Employee</option>
                     <option value="trustee">Trustee</option>
                     <option value="owner">Owner</option>
@@ -3024,39 +3043,44 @@ const addCombinedDevMap = () => {
 
               <hr className="border-t border-gray-200 my-2" />
 
-              {/* Employment Type - Multi-entry repeater */}
+              {/* Employment Type - Search & Add with History */}
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <h3 className="text-lg font-semibold">Employment Type</h3>
-                  <Button variant="outline" size="sm" type="button" onClick={addEmpEmploymentType}>
-                    <Plus className="w-4 h-4 mr-1" /> Add Employment Type
-                  </Button>
                 </div>
-                {formData.empEmploymentTypeForm.length === 0 ? (
-                  <div className="text-center py-6 text-gray-500 border border-gray-200 rounded-lg">
-                    <Icon icon="mdi:briefcase-variant" className="w-10 h-10 text-gray-300 mx-auto mb-2" />
-                    <p>No employment type entries added yet</p>
+                <div className="flex items-end gap-2">
+                  <div className="flex-1 space-y-2">
+                    <Label>Type</Label>
+                    <Select value={stagingET.employmentType || ""} onValueChange={(val) => setStagingET(p => ({ ...p, employmentType: val }))}>
+                      <SelectTrigger className="w-full"><SelectValue placeholder="Select employment type…" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Company">Company</SelectItem>
+                        <SelectItem value="Contract">Contract</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
-                ) : (
-                  formData.empEmploymentTypeForm.map((et) => (
-                    <div key={et._localId} className="border border-gray-200 rounded-lg p-4 space-y-3">
-                      <div className="flex items-center justify-between">
-                        <span className="font-medium text-gray-900">Employment Type</span>
-                        <Button type="button" variant="ghost" size="sm" onClick={() => removeEmpEmploymentType(et._localId)} className="text-red-600 hover:text-red-700 hover:bg-red-50"><X className="w-4 h-4" /></Button>
+                  <div className="space-y-2">
+                    <Label>Effect From</Label>
+                    <Input type="date" value={stagingET.effectFrom} onChange={(e) => setStagingET(p => ({ ...p, effectFrom: e.target.value }))} />
+                  </div>
+                  <Button type="button" size="sm" disabled={!stagingET.employmentType} onClick={addEmpEmploymentType}>Add</Button>
+                </div>
+                <div className="border border-gray-200 rounded-lg overflow-hidden">
+                  <div className="bg-gray-50 px-3 py-2 text-xs font-semibold text-gray-600 uppercase tracking-wide flex">
+                    <span className="flex-1">Employment Type</span><span className="w-32 text-center">Effect From</span><span className="w-10"></span>
+                  </div>
+                  {formData.empEmploymentTypeForm.length === 0 ? (
+                    <div className="text-center py-4 text-gray-400 text-sm">No employment type entries added</div>
+                  ) : (
+                    formData.empEmploymentTypeForm.map((et, i) => (
+                      <div key={et._localId} className={`flex items-center px-3 py-2 text-sm ${i === formData.empEmploymentTypeForm.length - 1 ? 'bg-blue-50 font-medium' : 'bg-white'} ${i > 0 ? 'border-t border-gray-100' : ''}`}>
+                        <span className="flex-1">{et.employmentType || '—'}</span>
+                        <span className="w-32 text-center text-gray-500">{et.effectFrom || '—'}</span>
+                        <Button type="button" variant="ghost" size="sm" onClick={() => removeEmpEmploymentType(et._localId)} className="h-6 w-6 p-0 text-red-500 hover:text-red-700 hover:bg-red-50"><X className="w-3 h-3" /></Button>
                       </div>
-                      <div className="space-y-2">
-                        <Label>Type</Label>
-                        <Select value={et.employmentType || ""} onValueChange={(val) => updateEmpEmploymentType(et._localId, { employmentType: val })}>
-                          <SelectTrigger className="w-full"><SelectValue placeholder="Select employment type…" /></SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="Company">Company</SelectItem>
-                            <SelectItem value="Contract">Contract</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </div>
-                  ))
-                )}
+                    ))
+                  )}
+                </div>
               </div>
 
               {/* Contractor - Search & Add with History */}
@@ -3120,48 +3144,52 @@ const addCombinedDevMap = () => {
                 </div>
               </div>
 
-              {/* Employment Status - Multi-entry repeater */}
+              {/* Employment Status - Search & Add with History */}
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <h3 className="text-lg font-semibold">Employment Status</h3>
-                  <Button variant="outline" size="sm" type="button" onClick={addEmpEmploymentStatus}>
-                    <Plus className="w-4 h-4 mr-1" /> Add Employment Status
-                  </Button>
                 </div>
-                {formData.empEmploymentStatusForm.length === 0 ? (
-                  <div className="text-center py-6 text-gray-500 border border-gray-200 rounded-lg">
-                    <Icon icon="mdi:clipboard-check" className="w-10 h-10 text-gray-300 mx-auto mb-2" />
-                    <p>No employment status entries added yet</p>
+                <div className="flex items-end gap-2">
+                  <div className="flex-1 space-y-2">
+                    <Label>Status</Label>
+                    <Select value={stagingES.employmentStatus || ""} onValueChange={(val) => setStagingES(p => ({ ...p, employmentStatus: val }))}>
+                      <SelectTrigger className="w-full"><SelectValue placeholder="Select status…" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Trainee">Trainee</SelectItem>
+                        <SelectItem value="Probation">Probation</SelectItem>
+                        <SelectItem value="Permanent">Permanent</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
-                ) : (
-                  formData.empEmploymentStatusForm.map((es) => (
-                    <div key={es._localId} className="border border-gray-200 rounded-lg p-4 space-y-3">
-                      <div className="flex items-center justify-between">
-                        <span className="font-medium text-gray-900">Employment Status</span>
-                        <Button type="button" variant="ghost" size="sm" onClick={() => removeEmpEmploymentStatus(es._localId)} className="text-red-600 hover:text-red-700 hover:bg-red-50"><X className="w-4 h-4" /></Button>
-                      </div>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                          <Label>Status</Label>
-                          <Select value={es.employmentStatus || ""} onValueChange={(val) => updateEmpEmploymentStatus(es._localId, { employmentStatus: val })}>
-                            <SelectTrigger className="w-full"><SelectValue placeholder="Select status…" /></SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="Trainee">Trainee</SelectItem>
-                              <SelectItem value="Probation">Probation</SelectItem>
-                              <SelectItem value="Permanent">Permanent</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        {es.employmentStatus === "Probation" && (
-                          <div className="space-y-2">
-                            <Label>Probation Period</Label>
-                            <Input value={es.probationPeriod} onChange={(e) => updateEmpEmploymentStatus(es._localId, { probationPeriod: e.target.value })} placeholder="e.g. 6 months" />
-                          </div>
-                        )}
-                      </div>
+                  {stagingES.employmentStatus === "Probation" && (
+                    <div className="space-y-2">
+                      <Label>Probation Period</Label>
+                      <Input value={stagingES.probationPeriod} onChange={(e) => setStagingES(p => ({ ...p, probationPeriod: e.target.value }))} placeholder="e.g. 6 months" />
                     </div>
-                  ))
-                )}
+                  )}
+                  <div className="space-y-2">
+                    <Label>Effect From</Label>
+                    <Input type="date" value={stagingES.effectFrom} onChange={(e) => setStagingES(p => ({ ...p, effectFrom: e.target.value }))} />
+                  </div>
+                  <Button type="button" size="sm" disabled={!stagingES.employmentStatus} onClick={addEmpEmploymentStatus}>Add</Button>
+                </div>
+                <div className="border border-gray-200 rounded-lg overflow-hidden">
+                  <div className="bg-gray-50 px-3 py-2 text-xs font-semibold text-gray-600 uppercase tracking-wide flex">
+                    <span className="flex-1">Status</span><span className="w-28 text-center">Probation</span><span className="w-32 text-center">Effect From</span><span className="w-10"></span>
+                  </div>
+                  {formData.empEmploymentStatusForm.length === 0 ? (
+                    <div className="text-center py-4 text-gray-400 text-sm">No employment status entries added</div>
+                  ) : (
+                    formData.empEmploymentStatusForm.map((es, i) => (
+                      <div key={es._localId} className={`flex items-center px-3 py-2 text-sm ${i === formData.empEmploymentStatusForm.length - 1 ? 'bg-blue-50 font-medium' : 'bg-white'} ${i > 0 ? 'border-t border-gray-100' : ''}`}>
+                        <span className="flex-1">{es.employmentStatus || '—'}</span>
+                        <span className="w-28 text-center text-gray-500">{es.probationPeriod || '—'}</span>
+                        <span className="w-32 text-center text-gray-500">{es.effectFrom || '—'}</span>
+                        <Button type="button" variant="ghost" size="sm" onClick={() => removeEmpEmploymentStatus(es._localId)} className="h-6 w-6 p-0 text-red-500 hover:text-red-700 hover:bg-red-50"><X className="w-3 h-3" /></Button>
+                      </div>
+                    ))
+                  )}
+                </div>
               </div>
 
               <hr className="border-t border-gray-200 my-2" />

@@ -348,6 +348,10 @@ model EmpAttendanceRegularise {
   reason            String?           @db.VarChar
   remarks           String?           @db.VarChar
   status            String?           @default("Pending") @db.VarChar
+  overtimeApplicable Boolean?         @default(false)
+  otMealApply       Boolean?          @default(false)
+  otMealMinutes     Int?
+  otBreakMinutes    Int?
   createdAt         DateTime?         @default(now())
   updatedAt         DateTime?         @updatedAt
   branches          Branches?         @relation(fields: [branchesID], references: [id], onDelete: NoAction, onUpdate: NoAction)

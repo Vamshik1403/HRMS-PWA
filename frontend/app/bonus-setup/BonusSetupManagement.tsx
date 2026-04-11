@@ -6,9 +6,7 @@ import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 import { Textarea } from "../components/ui/textarea";
-import {
-  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger,
-} from "../components/ui/dialog";
+import { FormDrawer } from "../components/ui/form-drawer";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../components/ui/table";
 import { Badge } from "../components/ui/badge";
 import { Icon } from "@iconify/react";
@@ -459,32 +457,13 @@ const runFetchBR = debounce(async (val: string) => {
   /* ---------------- UI ---------------- */
   return (
     <div className="space-y-6 w-full max-w-6xl mx-auto px-4">
-      {/* Header */}
-      <div className="flex items-center justify-between w-full">
-        <div className="min-w-0 flex-1">
-          <p className="text-gray-600 mt-1 text-sm">Manage bonus configurations and calculations</p>
-        </div>
-        <Dialog open={isDialogOpen} onOpenChange={(o) => { setIsDialogOpen(o); if (!o) resetForm(); }}>
-          <DialogTrigger asChild>
-            {canManage && (
-              <Button
-                onClick={resetForm}
-                className="flex-shrink-0 text-sm px-3 py-2"
-              >
-                <Plus className="w-4 h-4 mr-1" />
-                Add Bonus Setup
-              </Button>
-            )}
-
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>{editingBonus ? "Edit Bonus Setup" : "Add New Bonus Setup"}</DialogTitle>
-              <DialogDescription>
-                {editingBonus ? "Update the bonus setup information below." : "Fill in the details to add a new bonus setup."}
-              </DialogDescription>
-            </DialogHeader>
-
+      {/* FormDrawer for Add/Edit */}
+      <FormDrawer
+        open={isDialogOpen}
+        onOpenChange={(o) => { setIsDialogOpen(o); if (!o) resetForm(); }}
+        title={editingBonus ? "Edit Bonus Setup" : "Add New Bonus Setup"}
+        description={editingBonus ? "Update the bonus setup information below." : "Fill in the details to add a new bonus setup."}
+      >
             <form onSubmit={handleSubmit} className="space-y-6">
               {/* Basic Information WITH AUTOCOMPLETE */}
               {/* SUPERADMIN → show SP + Company + Branch */}
@@ -773,17 +752,34 @@ const runFetchBR = debounce(async (val: string) => {
                 </div>
               </div>
 
-              <DialogFooter>
+              <div className="flex justify-end gap-2 pt-4">
                 <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
                   Cancel
                 </Button>
-                <Button type="submit" className="">
+                <Button type="submit">
                   {editingBonus ? "Update Bonus Setup" : "Add Bonus Setup"}
                 </Button>
-              </DialogFooter>
+              </div>
             </form>
-          </DialogContent>
-        </Dialog>
+      </FormDrawer>
+
+      {/* Show list only when form is closed */}
+      {!isDialogOpen && (
+      <>
+      {/* Header */}
+      <div className="flex items-center justify-between w-full">
+        <div className="min-w-0 flex-1">
+          <p className="text-gray-600 mt-1 text-sm">Manage bonus configurations and calculations</p>
+        </div>
+        {canManage && (
+          <Button
+            onClick={() => { resetForm(); setIsDialogOpen(true); }}
+            className="flex-shrink-0 text-sm px-3 py-2"
+          >
+            <Plus className="w-4 h-4 mr-1" />
+            Add Bonus Setup
+          </Button>
+        )}
       </div>
 
       {/* Search & count */}
@@ -887,6 +883,8 @@ const runFetchBR = debounce(async (val: string) => {
           </div>
         </CardContent>
       </Card>
+      </>
+      )}
     </div>
   );
 }
