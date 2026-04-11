@@ -100,6 +100,7 @@ type DevMapForm = {
   deviceEmpCode: string;
   deviceName?: string;
   deviceType?: string;
+  authType?: string;
   _devAutocomplete?: string;
 };
 
@@ -110,6 +111,7 @@ type TokenDevMapForm = {
   deviceEmpCode: string;
   deviceName?: string;
   deviceType: string; // 'TR' or 'TV'
+  authType?: string;
   _devAutocomplete?: string;
 };
 
@@ -451,6 +453,7 @@ export function ManageEmployeesManagement() {
     deviceEmpCode: string;
     deviceName?: string;
     deviceType?: string;
+    authType?: string;
     _devAutocomplete?: string;
   };
   type BankDetailsForm = {
@@ -467,57 +470,76 @@ export function ManageEmployeesManagement() {
     _localId: string;
     designationID: ID | null;
     _desgAutocomplete: string;
+    effectFrom?: string;
   };
   type EmpDepartmentForm = {
     id?: ID;
     _localId: string;
     departmentNameID: ID | null;
     _deptAutocomplete: string;
+    effectFrom?: string;
   };
   type EmpBranchForm = {
     id?: ID;
     _localId: string;
     branchesID: ID | null;
     _brAutocomplete: string;
+    effectFrom?: string;
   };
   type EmpEmploymentTypeForm = {
     id?: ID;
     _localId: string;
     employmentType: string;
+    effectFrom?: string;
   };
   type EmpEmploymentStatusForm = {
     id?: ID;
     _localId: string;
     employmentStatus: string;
     probationPeriod: string;
+    effectFrom?: string;
   };
   type EmpWorkShiftForm = {
     id?: ID;
     _localId: string;
     workShiftID: ID | null;
     _wsAutocomplete: string;
+    effectFrom?: string;
   };
   type EmpLeavePolicyForm = {
     id?: ID;
     _localId: string;
     leavePolicyID: ID | null;
     _lpAutocomplete: string;
+    effectFrom?: string;
   };
   type EmpAttendancePolicyForm = {
     id?: ID;
     _localId: string;
     attendancePolicyID: ID | null;
     _apAutocomplete: string;
+    effectFrom?: string;
   };
   type EmpContractorForm = {
     id?: ID;
     _localId: string;
     contractorID: ID | null;
     _contrAutocomplete: string;
+    effectFrom?: string;
   };
 
   // Track original child IDs to compute deletions on PATCH
   const [originalEduIds, setOriginalEduIds] = useState<ID[]>([]);
+
+  // Staging state for multi-entry search-and-add pattern
+  const [stagingBranch, setStagingBranch] = useState<{ branchesID: ID | null; label: string; effectFrom: string }>({ branchesID: null, label: "", effectFrom: "" });
+  const [stagingDept, setStagingDept] = useState<{ departmentNameID: ID | null; label: string; effectFrom: string }>({ departmentNameID: null, label: "", effectFrom: "" });
+  const [stagingDesg, setStagingDesg] = useState<{ designationID: ID | null; label: string; effectFrom: string }>({ designationID: null, label: "", effectFrom: "" });
+  const [stagingContr, setStagingContr] = useState<{ contractorID: ID | null; label: string; effectFrom: string }>({ contractorID: null, label: "", effectFrom: "" });
+  const [stagingWS, setStagingWS] = useState<{ workShiftID: ID | null; label: string; effectFrom: string }>({ workShiftID: null, label: "", effectFrom: "" });
+  const [stagingAP, setStagingAP] = useState<{ attendancePolicyID: ID | null; label: string; effectFrom: string }>({ attendancePolicyID: null, label: "", effectFrom: "" });
+  const [stagingLP, setStagingLP] = useState<{ leavePolicyID: ID | null; label: string; effectFrom: string }>({ leavePolicyID: null, label: "", effectFrom: "" });
+
   const [originalExpIds, setOriginalExpIds] = useState<ID[]>([]);
   const [originalDevMapIds, setOriginalDevMapIds] = useState<ID[]>([]);
   const [originalBankDetailIds, setOriginalBankDetailIds] = useState<ID[]>([]);
@@ -539,6 +561,15 @@ export function ManageEmployeesManagement() {
   const tokenDevAbortRef = useRef<AbortController | null>(null);
   const tokenDevTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const tokenDevRef = useRef<HTMLDivElement>(null); // Add this line
+
+  // For Token Verifier Device Mapping
+  const [tokenVerifierDevMapForm, setTokenVerifierDevMapForm] = useState<TokenDevMapForm[]>([]);
+  const [originalTokenVerifierDevMapIds, setOriginalTokenVerifierDevMapIds] = useState<ID[]>([]);
+  const [tokenVerifierDevList, setTokenVerifierDevList] = useState<Device[]>([]);
+  const [tokenVerifierDevLoading, setTokenVerifierDevLoading] = useState(false);
+  const tokenVerifierDevAbortRef = useRef<AbortController | null>(null);
+  const tokenVerifierDevTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const tokenVerifierDevRef = useRef<HTMLDivElement>(null);
 
   // Linked Employees state
   const [linkedEmployees, setLinkedEmployees] = useState<{ id: ID; employeeFirstName?: string | null; employeeLastName?: string | null; employeeID?: string | null }[]>([]);
@@ -837,8 +868,8 @@ const runFetchTokenDevices = (q: string) => {
           d.branchesID === currentUserMapping.branchesID
         );
       }
-      // Filter for TR and TV devices only (ignore AT)
-      const tokenDevices = all.filter(d => d.deviceType === 'TR' || d.deviceType === 'TV');
+      // Filter for TR and AT+TR devices (token register capable)
+      const tokenDevices = all.filter(d => d.deviceType === 'TR' || (d.deviceType && d.deviceType.includes('AT') && d.deviceType.includes('TR')));
       
       const filtered = tokenDevices.filter(d =>
         (d.deviceName ?? "").toLowerCase().includes(q.toLowerCase())
@@ -848,6 +879,55 @@ const runFetchTokenDevices = (q: string) => {
       if ((e as any).name !== "AbortError") console.error("Token device fetch error:", e);
     } finally {
       setTokenDevLoading(false);
+    }
+  }, DEBOUNCE_MS);
+};
+
+// Token Verifier helpers
+const addTokenVerifierDevMap = () => setTokenVerifierDevMapForm(p => [...p, {
+  _localId: uid(),
+  deviceID: "",
+  deviceEmpCode: "",
+  deviceName: "",
+  deviceType: "TV",
+  _devAutocomplete: "",
+}]);
+
+const removeTokenVerifierDevMap = (lid: string) => setTokenVerifierDevMapForm(p => p.filter(x => x._localId !== lid));
+
+const updateTokenVerifierDevMap = (lid: string, key: keyof TokenDevMapForm, val: string) =>
+  setTokenVerifierDevMapForm(p => p.map(x => x._localId === lid ? { ...x, [key]: val } : x));
+
+const runFetchTokenVerifierDevices = (q: string) => {
+  if (tokenVerifierDevTimerRef.current) clearTimeout(tokenVerifierDevTimerRef.current);
+  tokenVerifierDevTimerRef.current = setTimeout(async () => {
+    if (q.length < MIN_CHARS) {
+      setTokenVerifierDevList([]);
+      return;
+    }
+    tokenVerifierDevAbortRef.current?.abort();
+    const ctrl = new AbortController();
+    tokenVerifierDevAbortRef.current = ctrl;
+    setTokenVerifierDevLoading(true);
+    try {
+      let all = await fetchJSONSafe<Device[]>(API.devices, ctrl.signal);
+      if (user?.role === "MANAGER" && currentUserMapping) {
+        all = all.filter(d =>
+          d.companyID === currentUserMapping.companyID &&
+          d.branchesID === currentUserMapping.branchesID
+        );
+      }
+      // Filter for TV devices only
+      const tvDevices = all.filter(d => d.deviceType === 'TV');
+      
+      const filtered = tvDevices.filter(d =>
+        (d.deviceName ?? "").toLowerCase().includes(q.toLowerCase())
+      );
+      setTokenVerifierDevList(filtered.slice(0, 20));
+    } catch (e) {
+      if ((e as any).name !== "AbortError") console.error("Token verifier device fetch error:", e);
+    } finally {
+      setTokenVerifierDevLoading(false);
     }
   }, DEBOUNCE_MS);
 };
@@ -1055,8 +1135,8 @@ const runFetchCombinedDev = (q: string) => {
         );
       }
 
-      // Filter for AT devices only (biometric)
-      const atDevices = all.filter(d => d.deviceType === 'AT');
+      // Filter for AT and AT+TR devices (attendance capable)
+      const atDevices = all.filter(d => d.deviceType === 'AT' || (d.deviceType && d.deviceType.includes('AT')));
       
       const filtered = atDevices.filter(d =>
         (d.deviceName ?? "").toLowerCase().includes(q.toLowerCase())
@@ -1617,6 +1697,7 @@ const addCombinedDevMap = () => {
       empContractorForm: [],
     });
     setTokenDevMapForm([]);
+    setTokenVerifierDevMapForm([]);
     setHasMultiTypeDevices(false);
     setCombinedDevList([]);
     setLinkedEmployees([]);
@@ -1647,6 +1728,8 @@ const addCombinedDevMap = () => {
     setActiveLpLocalId(null);
     setActiveContrLocalId(null);
     setOriginalDevMapIds([]);
+    setOriginalTokenDevMapIds([]);
+    setOriginalTokenVerifierDevMapIds([]);
     setEditingRow(null);
     setSpList([]);
     setCoList([]);
@@ -1890,45 +1973,37 @@ const addCombinedDevMap = () => {
       }));
 
            const devices = formData.devMapForm
-        .filter(d => {
-          if (!d.deviceID) return false;
-          const dt = d.deviceType || "AT";
-          // Include pure AT devices and the AT part of multi-type devices
-          return dt === "AT" || dt.includes("AT");
-        })
+        .filter(d => !!d.deviceID)
         .map(d => ({
-          id: (d.deviceType && d.deviceType.includes('+')) ? undefined : d.id,
+          id: d.id,
           deviceID: Number(d.deviceID),
           deviceEmpCode: d.deviceEmpCode || undefined,
-          deviceType: "AT",
+          authType: d.authType || undefined,
         }));
 
-      // For token devices: include from tokenDevMapForm + multi-type devices from devMapForm
+      // Token register devices
       const tokenDevicesFromForm = tokenDevMapForm
         .filter(d => !!d.deviceID)
         .map(d => ({
-        id: d.id,
-        deviceID: d.deviceID ? Number(d.deviceID) : undefined,
-        deviceEmpCode: d.deviceEmpCode || undefined,
-        deviceType: d.deviceType || "TR",
-      }));
+          id: d.id,
+          deviceID: d.deviceID ? Number(d.deviceID) : undefined,
+          deviceEmpCode: d.deviceEmpCode || undefined,
+          authType: d.authType || undefined,
+          deviceType: d.deviceType || "TR",
+        }));
 
-      const existingTokenDeviceIDs = new Set(tokenDevicesFromForm.map(d => d.deviceID).filter(Boolean));
-      const tokenDevicesFromCombined = formData.devMapForm
-        .filter(d => d.deviceType && d.deviceType.includes('+') && (d.deviceType.includes('TR') || d.deviceType.includes('TV')))
-        .filter(d => !existingTokenDeviceIDs.has(d.deviceID ? Number(d.deviceID) : undefined))
-        .map(d => {
-          const types = d.deviceType!.split('+');
-          const tokenType = types.find(t => t === 'TR' || t === 'TV') || 'TR';
-          return {
-            id: undefined,
-            deviceID: d.deviceID ? Number(d.deviceID) : undefined,
-            deviceEmpCode: d.deviceEmpCode || undefined,
-            deviceType: tokenType,
-          };
-        });
+      // Token verifier devices
+      const tokenVerifierDevicesFromForm = tokenVerifierDevMapForm
+        .filter(d => !!d.deviceID)
+        .map(d => ({
+          id: d.id,
+          deviceID: d.deviceID ? Number(d.deviceID) : undefined,
+          deviceEmpCode: d.deviceEmpCode || undefined,
+          authType: d.authType || undefined,
+          deviceType: "TV",
+        }));
 
-      const tokenDevices = [...tokenDevicesFromForm, ...tokenDevicesFromCombined];
+      const tokenDevices = [...tokenDevicesFromForm, ...tokenVerifierDevicesFromForm];
 
       const bankDetails = formData.bankDetailsForm.map(b => ({
         id: b.id,
@@ -2072,7 +2147,7 @@ const addCombinedDevMap = () => {
           eduIdsToDelete: originalEduIds.filter(id => !eduRemaining.has(id)),
           expIdsToDelete: originalExpIds.filter(id => !expRemaining.has(id)),
           deviceMapIdsToDelete: originalDevMapIds.filter(id => !devRemaining.has(id)),
-          tokenDeviceMapIdsToDelete: originalTokenDevMapIds.filter(id => !tokenDevRemaining.has(id)),
+          tokenDeviceMapIdsToDelete: [...originalTokenDevMapIds, ...originalTokenVerifierDevMapIds].filter(id => !tokenDevRemaining.has(id)),
           bankDetailsIdsToDelete: originalBankDetailIds.filter(id => !bankRemaining.has(id)),
           empDesignationIdsToDelete: originalEmpDesignationIds.filter(id => !empDesgRemaining.has(id)),
           empBranchIdsToDelete: originalEmpBranchIds.filter(id => !empBranchRemaining.has(id)),
@@ -2175,19 +2250,37 @@ const addCombinedDevMap = () => {
       deviceEmpCode: d.deviceEmpCode ?? "",
       deviceName: d.device?.deviceName ?? d.deviceName ?? "",
       deviceType: d.device?.deviceType ?? "AT",
+      authType: (d as any).authType ?? "",
       _devAutocomplete: d.device?.deviceName ?? d.deviceName ?? "",
     }));
 
-    // Token devices from tokenDeviceMapping
-    const tokenDevMapForm: TokenDevMapForm[] = (freshData.tokenDeviceMapping ?? []).map((d: any) => ({
-      id: d.id,
-      _localId: uid(),
-      deviceID: (d.deviceID ?? "").toString(),
-      deviceEmpCode: d.deviceEmpCode ?? "",
-      deviceName: d.device?.deviceName ?? d.deviceName ?? "",
-      deviceType: d.device?.deviceType ?? "TR",
-      _devAutocomplete: d.device?.deviceName ?? d.deviceName ?? "",
-    }));
+    // Token register devices from tokenDeviceMapping (TR only)
+    const tokenDevMapForm: TokenDevMapForm[] = (freshData.tokenDeviceMapping ?? [])
+      .filter((d: any) => (d.device?.deviceType ?? d.deviceType ?? "TR") !== "TV")
+      .map((d: any) => ({
+        id: d.id,
+        _localId: uid(),
+        deviceID: (d.deviceID ?? "").toString(),
+        deviceEmpCode: d.deviceEmpCode ?? "",
+        deviceName: d.device?.deviceName ?? d.deviceName ?? "",
+        deviceType: d.device?.deviceType ?? "TR",
+        authType: d.authType ?? "",
+        _devAutocomplete: d.device?.deviceName ?? d.deviceName ?? "",
+      }));
+
+    // Token verifier devices from tokenDeviceMapping (TV only)
+    const tokenVerifierDevMapFormData: TokenDevMapForm[] = (freshData.tokenDeviceMapping ?? [])
+      .filter((d: any) => (d.device?.deviceType ?? d.deviceType ?? "") === "TV")
+      .map((d: any) => ({
+        id: d.id,
+        _localId: uid(),
+        deviceID: (d.deviceID ?? "").toString(),
+        deviceEmpCode: d.deviceEmpCode ?? "",
+        deviceName: d.device?.deviceName ?? d.deviceName ?? "",
+        deviceType: "TV",
+        authType: d.authType ?? "",
+        _devAutocomplete: d.device?.deviceName ?? d.deviceName ?? "",
+      }));
 
     // Bank details
     const bankSource: BankDetailsRead[] = (freshData.employeeBankDetails ?? freshData.bankDetails ?? []) as BankDetailsRead[];
@@ -2319,6 +2412,10 @@ const addCombinedDevMap = () => {
     // Set token device mapping state
     setTokenDevMapForm(tokenDevMapForm);
     setOriginalTokenDevMapIds(tokenDevMapForm.filter(x => x.id != null).map(x => x.id!));
+
+    // Set token verifier device mapping state
+    setTokenVerifierDevMapForm(tokenVerifierDevMapFormData);
+    setOriginalTokenVerifierDevMapIds(tokenVerifierDevMapFormData.filter(x => x.id != null).map(x => x.id!));
 
     // Async calls for monthly/hourly pay grades
     (async () => {
@@ -2573,65 +2670,75 @@ const addCombinedDevMap = () => {
                   </div>
                 )}
 
-                {/* Branch - Multi-entry repeater */}
+                {/* Branch - Search & Add with History */}
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
                     <h3 className="text-lg font-semibold">Branch *</h3>
-                    <div className="flex gap-2">
-                      {canManage && <Button type="button" variant="outline" size="sm" onClick={() => window.open('/branches', '_blank')}><Plus className="w-4 h-4 mr-1" /> Manage Branches</Button>}
-                      <Button variant="outline" size="sm" type="button" onClick={addEmpBranch}>
-                        <Plus className="w-4 h-4 mr-1" /> Add Branch
-                      </Button>
-                    </div>
+                    {canManage && <Button type="button" variant="outline" size="sm" onClick={() => window.open('/branches', '_blank')}><Plus className="w-4 h-4 mr-1" /> Manage Branches</Button>}
                   </div>
-                  {formData.empBranchForm.length === 0 ? (
-                    <div className="text-center py-6 text-gray-500 border border-gray-200 rounded-lg">
-                      <Icon icon="mdi:office-building-marker" className="w-10 h-10 text-gray-300 mx-auto mb-2" />
-                      <p>No branch entries added yet</p>
+                  <div className="flex items-end gap-2">
+                    <div ref={brRef} className="flex-1 space-y-2 relative">
+                      <Label>Branch Name</Label>
+                      <Input
+                        value={stagingBranch.label}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setStagingBranch(p => ({ ...p, label: val, branchesID: null }));
+                          runFetchBR(val);
+                        }}
+                        onFocus={(e) => {
+                          if (e.target.value.length >= MIN_CHARS) runFetchBR(e.target.value);
+                        }}
+                        placeholder="Search branch…"
+                        autoComplete="off"
+                      />
+                      {brList.length > 0 && (
+                        <div className="absolute z-10 bg-white border rounded w-full shadow max-h-48 overflow-y-auto">
+                          {brLoading && <div className="px-3 py-2 text-sm text-gray-500">Loading…</div>}
+                          {brList.map((br) => (
+                            <div key={br.id} className="px-3 py-2 hover:bg-gray-100 cursor-pointer" onMouseDown={(e) => e.preventDefault()} onClick={() => {
+                              setStagingBranch(p => ({ ...p, branchesID: br.id, label: br.branchName ?? "" }));
+                              if (user?.role === "MANAGER") {
+                                setFormData((p) => ({ ...p, companyID: br.companyID ?? p.companyID, serviceProviderID: br.serviceProviderID ?? p.serviceProviderID }));
+                              }
+                              setBrList([]);
+                            }}>{br.branchName}</div>
+                          ))}
+                        </div>
+                      )}
                     </div>
-                  ) : (
-                    formData.empBranchForm.map((eb) => (
-                      <div key={eb._localId} className="border border-gray-200 rounded-lg p-4 space-y-3">
-                        <div className="flex items-center justify-between">
-                          <span className="font-medium text-gray-900">Branch</span>
-                          <Button type="button" variant="ghost" size="sm" onClick={() => removeEmpBranch(eb._localId)} className="text-red-600 hover:text-red-700 hover:bg-red-50"><X className="w-4 h-4" /></Button>
+                    <div className="space-y-2">
+                      <Label>Effect From</Label>
+                      <Input type="date" value={stagingBranch.effectFrom} onChange={(e) => setStagingBranch(p => ({ ...p, effectFrom: e.target.value }))} />
+                    </div>
+                    <Button type="button" size="sm" disabled={!stagingBranch.branchesID} onClick={() => {
+                      if (!stagingBranch.branchesID) return;
+                      const newEntry: EmpBranchForm = { _localId: uid(), branchesID: stagingBranch.branchesID, _brAutocomplete: stagingBranch.label, effectFrom: stagingBranch.effectFrom };
+                      setFormData(p => {
+                        const updated = [...p.empBranchForm, newEntry];
+                        const last = updated[updated.length - 1];
+                        return { ...p, empBranchForm: updated, branchesID: last?.branchesID ?? null, brAutocomplete: last?._brAutocomplete ?? "" };
+                      });
+                      setStagingBranch({ branchesID: null, label: "", effectFrom: "" });
+                    }}>Add</Button>
+                  </div>
+                  {/* History Box */}
+                  <div className="border border-gray-200 rounded-lg overflow-hidden">
+                    <div className="bg-gray-50 px-3 py-2 text-xs font-semibold text-gray-600 uppercase tracking-wide flex">
+                      <span className="flex-1">Branch</span><span className="w-32 text-center">Effect From</span><span className="w-10"></span>
+                    </div>
+                    {formData.empBranchForm.length === 0 ? (
+                      <div className="text-center py-4 text-gray-400 text-sm">No branches added</div>
+                    ) : (
+                      formData.empBranchForm.map((eb, i) => (
+                        <div key={eb._localId} className={`flex items-center px-3 py-2 text-sm ${i === formData.empBranchForm.length - 1 ? 'bg-blue-50 font-medium' : 'bg-white'} ${i > 0 ? 'border-t border-gray-100' : ''}`}>
+                          <span className="flex-1">{eb._brAutocomplete || '—'}</span>
+                          <span className="w-32 text-center text-gray-500">{eb.effectFrom || '—'}</span>
+                          <Button type="button" variant="ghost" size="sm" onClick={() => removeEmpBranch(eb._localId)} className="h-6 w-6 p-0 text-red-500 hover:text-red-700 hover:bg-red-50"><X className="w-3 h-3" /></Button>
                         </div>
-                        <div ref={brRef} className="space-y-2 relative">
-                          <Label>Branch</Label>
-                          <Input
-                            value={eb._brAutocomplete}
-                            onChange={(e) => {
-                              const val = e.target.value;
-                              updateEmpBranch(eb._localId, { _brAutocomplete: val, branchesID: null });
-                              runFetchBR(val);
-                              setActiveBrLocalId(eb._localId);
-                            }}
-                            onFocus={(e) => {
-                              setActiveBrLocalId(eb._localId);
-                              if (e.target.value.length >= MIN_CHARS) runFetchBR(e.target.value);
-                            }}
-                            placeholder="Start typing branch…"
-                            autoComplete="off"
-                          />
-                          {brList.length > 0 && activeBrLocalId === eb._localId && (
-                            <div className="absolute z-10 bg-white border rounded w-full shadow max-h-48 overflow-y-auto">
-                              {brLoading && <div className="px-3 py-2 text-sm text-gray-500">Loading…</div>}
-                              {brList.map((br) => (
-                                <div key={br.id} className="px-3 py-2 hover:bg-gray-100 cursor-pointer" onMouseDown={(e) => e.preventDefault()} onClick={() => {
-                                  updateEmpBranch(eb._localId, { branchesID: br.id, _brAutocomplete: br.branchName ?? "" });
-                                  if (user?.role === "MANAGER") {
-                                    setFormData((p) => ({ ...p, companyID: br.companyID ?? p.companyID, serviceProviderID: br.serviceProviderID ?? p.serviceProviderID }));
-                                  }
-                                  setBrList([]);
-                                  setActiveBrLocalId(null);
-                                }}>{br.branchName}</div>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    ))
-                  )}
+                      ))
+                    )}
+                  </div>
                 </div>
 
                 <div className="space-y-2">
@@ -2647,6 +2754,8 @@ const addCombinedDevMap = () => {
                   </select>
                 </div>
               </div>
+
+              <hr className="border-t border-gray-200 my-2" />
 
               {/* Basic info */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -2707,6 +2816,7 @@ const addCombinedDevMap = () => {
                 </div>
               </div>
 
+              {formData.pfMemberStatus === "Yes" && (
               <div className="space-y-2">
                 <label>PF Number</label>
                 <Input
@@ -2714,122 +2824,134 @@ const addCombinedDevMap = () => {
                   onChange={(e) => setFormData((p) => ({ ...p, pfNumber: e.target.value }))}
                 />
               </div>
+              )}
 
-              {/* Department - Multi-entry repeater */}
+              <hr className="border-t border-gray-200 my-2" />
+
+              {/* Department - Search & Add with History */}
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <h3 className="text-lg font-semibold">Department</h3>
-                  <div className="flex gap-2">
-                    {canManage && <Button type="button" variant="outline" size="sm" onClick={() => { setQuickAddOpen('department'); setQuickAddValue(''); setQuickAddSuggestions([]); }}><Plus className="w-4 h-4 mr-1" /> Quick Add</Button>}
-                    <Button variant="outline" size="sm" type="button" onClick={addEmpDepartment}>
-                      <Plus className="w-4 h-4 mr-1" /> Add Department
-                    </Button>
-                  </div>
+                  {canManage && <Button type="button" variant="outline" size="sm" onClick={() => { setQuickAddOpen('department'); setQuickAddValue(''); setQuickAddSuggestions([]); }}><Plus className="w-4 h-4 mr-1" /> Quick Add</Button>}
                 </div>
-                {formData.empDepartmentForm.length === 0 ? (
-                  <div className="text-center py-6 text-gray-500 border border-gray-200 rounded-lg">
-                    <Icon icon="mdi:domain" className="w-10 h-10 text-gray-300 mx-auto mb-2" />
-                    <p>No department entries added yet</p>
+                <div className="flex items-end gap-2">
+                  <div ref={deptRef} className="flex-1 space-y-2 relative">
+                    <Label>Department Name</Label>
+                    <Input
+                      value={stagingDept.label}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setStagingDept(p => ({ ...p, label: val, departmentNameID: null }));
+                        runFetchDept(val);
+                      }}
+                      onFocus={(e) => { if (e.target.value.length >= MIN_CHARS) runFetchDept(e.target.value); }}
+                      placeholder="Search department…"
+                      autoComplete="off"
+                    />
+                    {deptList.length > 0 && (
+                      <div className="absolute z-10 bg-white border rounded w-full shadow max-h-48 overflow-y-auto">
+                        {deptLoading && <div className="px-3 py-2 text-sm text-gray-500">Loading…</div>}
+                        {deptList.map((d) => (
+                          <div key={d.id} className="px-3 py-2 hover:bg-gray-100 cursor-pointer" onMouseDown={(e) => e.preventDefault()} onClick={() => {
+                            setStagingDept(p => ({ ...p, departmentNameID: d.id, label: d.departmentName ?? String(d.id) }));
+                            setDeptList([]);
+                          }}>{d.departmentName}</div>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                ) : (
-                  formData.empDepartmentForm.map((ed) => (
-                    <div key={ed._localId} className="border border-gray-200 rounded-lg p-4 space-y-3">
-                      <div className="flex items-center justify-between">
-                        <span className="font-medium text-gray-900">Department</span>
-                        <Button type="button" variant="ghost" size="sm" onClick={() => removeEmpDepartment(ed._localId)} className="text-red-600 hover:text-red-700 hover:bg-red-50"><X className="w-4 h-4" /></Button>
+                  <div className="space-y-2">
+                    <Label>Effect From</Label>
+                    <Input type="date" value={stagingDept.effectFrom} onChange={(e) => setStagingDept(p => ({ ...p, effectFrom: e.target.value }))} />
+                  </div>
+                  <Button type="button" size="sm" disabled={!stagingDept.departmentNameID} onClick={() => {
+                    if (!stagingDept.departmentNameID) return;
+                    const newEntry: EmpDepartmentForm = { _localId: uid(), departmentNameID: stagingDept.departmentNameID, _deptAutocomplete: stagingDept.label, effectFrom: stagingDept.effectFrom };
+                    setFormData(p => {
+                      const updated = [...p.empDepartmentForm, newEntry];
+                      const last = updated[updated.length - 1];
+                      return { ...p, empDepartmentForm: updated, departmentNameID: last?.departmentNameID ?? null, deptAutocomplete: last?._deptAutocomplete ?? "", promotion: { ...p.promotion, departmentNameID: last?.departmentNameID ?? null } };
+                    });
+                    setStagingDept({ departmentNameID: null, label: "", effectFrom: "" });
+                  }}>Add</Button>
+                </div>
+                <div className="border border-gray-200 rounded-lg overflow-hidden">
+                  <div className="bg-gray-50 px-3 py-2 text-xs font-semibold text-gray-600 uppercase tracking-wide flex">
+                    <span className="flex-1">Department</span><span className="w-32 text-center">Effect From</span><span className="w-10"></span>
+                  </div>
+                  {formData.empDepartmentForm.length === 0 ? (
+                    <div className="text-center py-4 text-gray-400 text-sm">No departments added</div>
+                  ) : (
+                    formData.empDepartmentForm.map((ed, i) => (
+                      <div key={ed._localId} className={`flex items-center px-3 py-2 text-sm ${i === formData.empDepartmentForm.length - 1 ? 'bg-blue-50 font-medium' : 'bg-white'} ${i > 0 ? 'border-t border-gray-100' : ''}`}>
+                        <span className="flex-1">{ed._deptAutocomplete || '—'}</span>
+                        <span className="w-32 text-center text-gray-500">{ed.effectFrom || '—'}</span>
+                        <Button type="button" variant="ghost" size="sm" onClick={() => removeEmpDepartment(ed._localId)} className="h-6 w-6 p-0 text-red-500 hover:text-red-700 hover:bg-red-50"><X className="w-3 h-3" /></Button>
                       </div>
-                      <div ref={deptRef} className="space-y-2 relative">
-                        <Label>Department</Label>
-                        <Input
-                          value={ed._deptAutocomplete}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            updateEmpDepartment(ed._localId, { _deptAutocomplete: val, departmentNameID: null });
-                            runFetchDept(val);
-                            setActiveDeptLocalId(ed._localId);
-                          }}
-                          onFocus={(e) => {
-                            setActiveDeptLocalId(ed._localId);
-                            if (e.target.value.length >= MIN_CHARS) runFetchDept(e.target.value);
-                          }}
-                          placeholder="Start typing department…"
-                          autoComplete="off"
-                        />
-                        {deptList.length > 0 && activeDeptLocalId === ed._localId && (
-                          <div className="absolute z-10 bg-white border rounded w-full shadow max-h-48 overflow-y-auto">
-                            {deptLoading && <div className="px-3 py-2 text-sm text-gray-500">Loading…</div>}
-                            {deptList.map((d) => (
-                              <div key={d.id} className="px-3 py-2 hover:bg-gray-100 cursor-pointer" onMouseDown={(e) => e.preventDefault()} onClick={() => {
-                                updateEmpDepartment(ed._localId, { departmentNameID: d.id, _deptAutocomplete: d.departmentName ?? String(d.id) });
-                                setDeptList([]);
-                                setActiveDeptLocalId(null);
-                              }}>{d.departmentName}</div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  ))
-                )}
+                    ))
+                  )}
+                </div>
               </div>
 
-              {/* Designation - Multi-entry repeater */}
+              {/* Designation - Search & Add with History */}
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <h3 className="text-lg font-semibold">Designation</h3>
-                  <div className="flex gap-2">
-                    {canManage && <Button type="button" variant="outline" size="sm" onClick={() => { setQuickAddOpen('designation'); setQuickAddValue(''); setQuickAddSuggestions([]); }}><Plus className="w-4 h-4 mr-1" /> Quick Add</Button>}
-                    <Button variant="outline" size="sm" type="button" onClick={addEmpDesignation}>
-                      <Plus className="w-4 h-4 mr-1" /> Add Designation
-                    </Button>
-                  </div>
+                  {canManage && <Button type="button" variant="outline" size="sm" onClick={() => { setQuickAddOpen('designation'); setQuickAddValue(''); setQuickAddSuggestions([]); }}><Plus className="w-4 h-4 mr-1" /> Quick Add</Button>}
                 </div>
-
-                {formData.empDesignationForm.length === 0 ? (
-                  <div className="text-center py-6 text-gray-500 border border-gray-200 rounded-lg">
-                    <Icon icon="mdi:badge-account" className="w-10 h-10 text-gray-300 mx-auto mb-2" />
-                    <p>No designation rows added yet</p>
+                <div className="flex items-end gap-2">
+                  <div ref={desgRef} className="flex-1 space-y-2 relative">
+                    <Label>Designation Name</Label>
+                    <Input
+                      value={stagingDesg.label}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setStagingDesg(p => ({ ...p, label: val, designationID: null }));
+                        runFetchDesg(val);
+                      }}
+                      onFocus={(e) => { if (e.target.value.length >= MIN_CHARS) runFetchDesg(e.target.value); }}
+                      placeholder="Search designation…"
+                      autoComplete="off"
+                    />
+                    {desgList.length > 0 && (
+                      <div className="absolute z-10 bg-white border rounded w-full shadow max-h-48 overflow-y-auto">
+                        {desgLoading && <div className="px-3 py-2 text-sm text-gray-500">Loading…</div>}
+                        {desgList.map((d) => (
+                          <div key={d.id} className="px-3 py-2 hover:bg-gray-100 cursor-pointer" onMouseDown={(e) => e.preventDefault()} onClick={() => {
+                            setStagingDesg(p => ({ ...p, designationID: d.id, label: d.designation ?? String(d.id) }));
+                            setDesgList([]);
+                          }}>{d.designation}</div>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                ) : (
-                  formData.empDesignationForm.map((ed) => (
-                    <div key={ed._localId} className="border border-gray-200 rounded-lg p-4 space-y-3">
-                      <div className="flex items-center justify-between">
-                        <span className="font-medium text-gray-900">Designation</span>
-                        <Button type="button" variant="ghost" size="sm" onClick={() => removeEmpDesignation(ed._localId)} className="text-red-600 hover:text-red-700 hover:bg-red-50"><X className="w-4 h-4" /></Button>
+                  <div className="space-y-2">
+                    <Label>Effect From</Label>
+                    <Input type="date" value={stagingDesg.effectFrom} onChange={(e) => setStagingDesg(p => ({ ...p, effectFrom: e.target.value }))} />
+                  </div>
+                  <Button type="button" size="sm" disabled={!stagingDesg.designationID} onClick={() => {
+                    if (!stagingDesg.designationID) return;
+                    const newEntry: EmpDesignationForm = { _localId: uid(), designationID: stagingDesg.designationID, _desgAutocomplete: stagingDesg.label, effectFrom: stagingDesg.effectFrom };
+                    setFormData(p => ({ ...p, empDesignationForm: [...p.empDesignationForm, newEntry] }));
+                    setStagingDesg({ designationID: null, label: "", effectFrom: "" });
+                  }}>Add</Button>
+                </div>
+                <div className="border border-gray-200 rounded-lg overflow-hidden">
+                  <div className="bg-gray-50 px-3 py-2 text-xs font-semibold text-gray-600 uppercase tracking-wide flex">
+                    <span className="flex-1">Designation</span><span className="w-32 text-center">Effect From</span><span className="w-10"></span>
+                  </div>
+                  {formData.empDesignationForm.length === 0 ? (
+                    <div className="text-center py-4 text-gray-400 text-sm">No designations added</div>
+                  ) : (
+                    formData.empDesignationForm.map((ed, i) => (
+                      <div key={ed._localId} className={`flex items-center px-3 py-2 text-sm ${i === formData.empDesignationForm.length - 1 ? 'bg-blue-50 font-medium' : 'bg-white'} ${i > 0 ? 'border-t border-gray-100' : ''}`}>
+                        <span className="flex-1">{ed._desgAutocomplete || '—'}</span>
+                        <span className="w-32 text-center text-gray-500">{ed.effectFrom || '—'}</span>
+                        <Button type="button" variant="ghost" size="sm" onClick={() => removeEmpDesignation(ed._localId)} className="h-6 w-6 p-0 text-red-500 hover:text-red-700 hover:bg-red-50"><X className="w-3 h-3" /></Button>
                       </div>
-                      <div ref={desgRef} className="space-y-2 relative">
-                        <Label>Designation</Label>
-                        <Input
-                          value={ed._desgAutocomplete}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            updateEmpDesignation(ed._localId, { _desgAutocomplete: val, designationID: null });
-                            runFetchDesg(val);
-                            setActiveDesgLocalId(ed._localId);
-                          }}
-                          onFocus={(e) => {
-                            setActiveDesgLocalId(ed._localId);
-                            if (e.target.value.length >= MIN_CHARS) runFetchDesg(e.target.value);
-                          }}
-                          placeholder="Start typing designation…"
-                          autoComplete="off"
-                        />
-                        {desgList.length > 0 && activeDesgLocalId === ed._localId && (
-                          <div className="absolute z-10 bg-white border rounded w-full shadow max-h-48 overflow-y-auto">
-                            {desgLoading && <div className="px-3 py-2 text-sm text-gray-500">Loading…</div>}
-                            {desgList.map((d) => (
-                              <div key={d.id} className="px-3 py-2 hover:bg-gray-100 cursor-pointer" onMouseDown={(e) => e.preventDefault()} onClick={() => {
-                                updateEmpDesignation(ed._localId, { designationID: d.id, _desgAutocomplete: d.designation ?? String(d.id) });
-                                setDesgList([]);
-                                setActiveDesgLocalId(null);
-                              }}>{d.designation}</div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  ))
-                )}
+                    ))
+                  )}
+                </div>
               </div>
 
               {/* Manager - Multi-entry repeater */}
@@ -2900,6 +3022,8 @@ const addCombinedDevMap = () => {
                 )}
               </div>
 
+              <hr className="border-t border-gray-200 my-2" />
+
               {/* Employment Type - Multi-entry repeater */}
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
@@ -2935,6 +3059,67 @@ const addCombinedDevMap = () => {
                 )}
               </div>
 
+              {/* Contractor - Search & Add with History */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-semibold">Contractor</h3>
+                  {canManage && <Button type="button" variant="outline" size="sm" onClick={() => { setQuickAddOpen('contractor'); setQuickAddValue(''); setQuickAddSuggestions([]); }}><Plus className="w-4 h-4 mr-1" /> Quick Add</Button>}
+                </div>
+                <div className="flex items-end gap-2">
+                  <div ref={contrRef} className="flex-1 space-y-2 relative">
+                    <Label>Contractor Name</Label>
+                    <Input
+                      value={stagingContr.label}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setStagingContr(p => ({ ...p, label: val, contractorID: null }));
+                        runFetchContr(val);
+                      }}
+                      onFocus={(e) => { if (e.target.value.length >= MIN_CHARS) runFetchContr(e.target.value); }}
+                      placeholder="Search contractor…"
+                      autoComplete="off"
+                    />
+                    {contrList.length > 0 && (
+                      <div className="absolute z-10 bg-white border rounded w-full shadow max-h-48 overflow-y-auto">
+                        {contrLoading && <div className="px-3 py-2 text-sm text-gray-500">Loading…</div>}
+                        {contrList.map((c) => (
+                          <div key={c.id} className="px-3 py-2 hover:bg-gray-100 cursor-pointer" onMouseDown={(e) => e.preventDefault()} onClick={() => {
+                            setStagingContr(p => ({ ...p, contractorID: c.id, label: c.contractorName ?? String(c.id) }));
+                            setContrList([]);
+                          }}>{c.contractorName}</div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Effect From</Label>
+                    <Input type="date" value={stagingContr.effectFrom} onChange={(e) => setStagingContr(p => ({ ...p, effectFrom: e.target.value }))} />
+                  </div>
+                  <Button type="button" size="sm" disabled={!stagingContr.contractorID} onClick={() => {
+                    if (!stagingContr.contractorID) return;
+                    const newEntry: EmpContractorForm = { _localId: uid(), contractorID: stagingContr.contractorID, _contrAutocomplete: stagingContr.label, effectFrom: stagingContr.effectFrom };
+                    setFormData(p => ({ ...p, empContractorForm: [...p.empContractorForm, newEntry] }));
+                    setStagingContr({ contractorID: null, label: "", effectFrom: "" });
+                  }}>Add</Button>
+                </div>
+                <div className="border border-gray-200 rounded-lg overflow-hidden">
+                  <div className="bg-gray-50 px-3 py-2 text-xs font-semibold text-gray-600 uppercase tracking-wide flex">
+                    <span className="flex-1">Contractor</span><span className="w-32 text-center">Effect From</span><span className="w-10"></span>
+                  </div>
+                  {formData.empContractorForm.length === 0 ? (
+                    <div className="text-center py-4 text-gray-400 text-sm">No contractors added</div>
+                  ) : (
+                    formData.empContractorForm.map((ec, i) => (
+                      <div key={ec._localId} className={`flex items-center px-3 py-2 text-sm ${i === formData.empContractorForm.length - 1 ? 'bg-blue-50 font-medium' : 'bg-white'} ${i > 0 ? 'border-t border-gray-100' : ''}`}>
+                        <span className="flex-1">{ec._contrAutocomplete || '—'}</span>
+                        <span className="w-32 text-center text-gray-500">{ec.effectFrom || '—'}</span>
+                        <Button type="button" variant="ghost" size="sm" onClick={() => removeEmpContractor(ec._localId)} className="h-6 w-6 p-0 text-red-500 hover:text-red-700 hover:bg-red-50"><X className="w-3 h-3" /></Button>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+
               {/* Employment Status - Multi-entry repeater */}
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
@@ -2961,8 +3146,9 @@ const addCombinedDevMap = () => {
                           <Select value={es.employmentStatus || ""} onValueChange={(val) => updateEmpEmploymentStatus(es._localId, { employmentStatus: val })}>
                             <SelectTrigger className="w-full"><SelectValue placeholder="Select status…" /></SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="Permanent">Permanent</SelectItem>
+                              <SelectItem value="Trainee">Trainee</SelectItem>
                               <SelectItem value="Probation">Probation</SelectItem>
+                              <SelectItem value="Permanent">Permanent</SelectItem>
                             </SelectContent>
                           </Select>
                         </div>
@@ -2978,63 +3164,7 @@ const addCombinedDevMap = () => {
                 )}
               </div>
 
-              {/* Contractor - Multi-entry repeater */}
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-lg font-semibold">Contractor</h3>
-                  <div className="flex gap-2">
-                    {canManage && <Button type="button" variant="outline" size="sm" onClick={() => { setQuickAddOpen('contractor'); setQuickAddValue(''); setQuickAddSuggestions([]); }}><Plus className="w-4 h-4 mr-1" /> Quick Add</Button>}
-                    <Button variant="outline" size="sm" type="button" onClick={addEmpContractor}>
-                      <Plus className="w-4 h-4 mr-1" /> Add Contractor
-                    </Button>
-                  </div>
-                </div>
-                {formData.empContractorForm.length === 0 ? (
-                  <div className="text-center py-6 text-gray-500 border border-gray-200 rounded-lg">
-                    <Icon icon="mdi:account-hard-hat" className="w-10 h-10 text-gray-300 mx-auto mb-2" />
-                    <p>No contractor entries added yet</p>
-                  </div>
-                ) : (
-                  formData.empContractorForm.map((ec) => (
-                    <div key={ec._localId} className="border border-gray-200 rounded-lg p-4 space-y-3">
-                      <div className="flex items-center justify-between">
-                        <span className="font-medium text-gray-900">Contractor</span>
-                        <Button type="button" variant="ghost" size="sm" onClick={() => removeEmpContractor(ec._localId)} className="text-red-600 hover:text-red-700 hover:bg-red-50"><X className="w-4 h-4" /></Button>
-                      </div>
-                      <div ref={contrRef} className="space-y-2 relative">
-                        <Label>Contractor</Label>
-                        <Input
-                          value={ec._contrAutocomplete}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            updateEmpContractor(ec._localId, { _contrAutocomplete: val, contractorID: null });
-                            runFetchContr(val);
-                            setActiveContrLocalId(ec._localId);
-                          }}
-                          onFocus={(e) => {
-                            setActiveContrLocalId(ec._localId);
-                            if (e.target.value.length >= MIN_CHARS) runFetchContr(e.target.value);
-                          }}
-                          placeholder="Start typing contractor…"
-                          autoComplete="off"
-                        />
-                        {contrList.length > 0 && activeContrLocalId === ec._localId && (
-                          <div className="absolute z-10 bg-white border rounded w-full shadow max-h-48 overflow-y-auto">
-                            {contrLoading && <div className="px-3 py-2 text-sm text-gray-500">Loading…</div>}
-                            {contrList.map((c) => (
-                              <div key={c.id} className="px-3 py-2 hover:bg-gray-100 cursor-pointer" onMouseDown={(e) => e.preventDefault()} onClick={() => {
-                                updateEmpContractor(ec._localId, { contractorID: c.id, _contrAutocomplete: c.contractorName ?? String(c.id) });
-                                setContrList([]);
-                                setActiveContrLocalId(null);
-                              }}>{c.contractorName}</div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
+              <hr className="border-t border-gray-200 my-2" />
 
               {/* Policy / Shift IDs */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -3116,182 +3246,202 @@ const addCombinedDevMap = () => {
                     )}
                   </div>
                 </div>
+              </div>
 
-                {/* Attendance Policy - Multi-entry repeater */}
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-lg font-semibold">Attendance Policy</h3>
-                    <div className="flex gap-2">
-                      {canManage && <Button type="button" variant="outline" size="sm" onClick={() => window.open('/attendance-policy', '_blank')}><Plus className="w-4 h-4 mr-1" /> Manage Policies</Button>}
-                      <Button variant="outline" size="sm" type="button" onClick={addEmpAttendancePolicy}>
-                        <Plus className="w-4 h-4 mr-1" /> Add Attendance Policy
-                      </Button>
-                    </div>
+              {/* Attendance Policy - Search & Add with History */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-semibold">Attendance Policy</h3>
+                  {canManage && <Button type="button" variant="outline" size="sm" onClick={() => window.open('/attendance-policy', '_blank')}><Plus className="w-4 h-4 mr-1" /> Manage Policies</Button>}
+                </div>
+                <div className="flex items-end gap-2">
+                  <div ref={apRef} className="flex-1 space-y-2 relative">
+                    <Label>Attendance Policy</Label>
+                    <Input
+                      value={stagingAP.label}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setStagingAP(p => ({ ...p, label: val, attendancePolicyID: null }));
+                        runFetchAP(val);
+                      }}
+                      onFocus={(e) => {
+                        if (e.target.value.length >= MIN_CHARS) runFetchAP(e.target.value);
+                      }}
+                      placeholder="Search attendance policy…"
+                      autoComplete="off"
+                    />
+                    {apList.length > 0 && (
+                      <div className="absolute z-10 bg-white border rounded w-full shadow max-h-48 overflow-y-auto">
+                        {apLoading && <div className="px-3 py-2 text-sm text-gray-500">Loading…</div>}
+                        {apList.map((a) => (
+                          <div key={a.id} className="px-3 py-2 hover:bg-gray-100 cursor-pointer" onMouseDown={(e) => e.preventDefault()} onClick={() => {
+                            setStagingAP(p => ({ ...p, attendancePolicyID: a.id, label: a.attendancePolicyName ?? "" }));
+                            setApList([]);
+                          }}>{a.attendancePolicyName}</div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Effect From</Label>
+                    <Input type="date" value={stagingAP.effectFrom} onChange={(e) => setStagingAP(p => ({ ...p, effectFrom: e.target.value }))} />
+                  </div>
+                  <Button type="button" size="sm" disabled={!stagingAP.attendancePolicyID} onClick={() => {
+                    if (!stagingAP.attendancePolicyID) return;
+                    const newEntry: EmpAttendancePolicyForm = { _localId: uid(), attendancePolicyID: stagingAP.attendancePolicyID, _apAutocomplete: stagingAP.label, effectFrom: stagingAP.effectFrom };
+                    setFormData(p => ({ ...p, empAttendancePolicyForm: [...p.empAttendancePolicyForm, newEntry] }));
+                    setStagingAP({ attendancePolicyID: null, label: "", effectFrom: "" });
+                  }}>Add</Button>
+                </div>
+                {/* History Box */}
+                <div className="border border-gray-200 rounded-lg overflow-hidden">
+                  <div className="bg-gray-50 px-3 py-2 text-xs font-semibold text-gray-600 uppercase tracking-wide flex">
+                    <span className="flex-1">Attendance Policy</span><span className="w-32 text-center">Effect From</span><span className="w-10"></span>
                   </div>
                   {formData.empAttendancePolicyForm.length === 0 ? (
-                    <div className="text-center py-6 text-gray-500 border border-gray-200 rounded-lg">
-                      <Icon icon="mdi:calendar-check" className="w-10 h-10 text-gray-300 mx-auto mb-2" />
-                      <p>No attendance policy entries added yet</p>
-                    </div>
+                    <div className="text-center py-4 text-gray-400 text-sm">No attendance policies added</div>
                   ) : (
-                    formData.empAttendancePolicyForm.map((ea) => (
-                      <div key={ea._localId} className="border border-gray-200 rounded-lg p-4 space-y-3">
-                        <div className="flex items-center justify-between">
-                          <span className="font-medium text-gray-900">Attendance Policy</span>
-                          <Button type="button" variant="ghost" size="sm" onClick={() => removeEmpAttendancePolicy(ea._localId)} className="text-red-600 hover:text-red-700 hover:bg-red-50"><X className="w-4 h-4" /></Button>
-                        </div>
-                        <div ref={apRef} className="space-y-2 relative">
-                          <Label>Attendance Policy</Label>
-                          <Input
-                            value={ea._apAutocomplete}
-                            onChange={(e) => {
-                              const val = e.target.value;
-                              updateEmpAttendancePolicy(ea._localId, { _apAutocomplete: val, attendancePolicyID: null });
-                              runFetchAP(val);
-                              setActiveApLocalId(ea._localId);
-                            }}
-                            onFocus={(e) => {
-                              setActiveApLocalId(ea._localId);
-                              if (e.target.value.length >= MIN_CHARS) runFetchAP(e.target.value);
-                            }}
-                            placeholder="Start typing attendance policy…"
-                            autoComplete="off"
-                          />
-                          {apList.length > 0 && activeApLocalId === ea._localId && (
-                            <div className="absolute z-10 bg-white border rounded w-full shadow max-h-48 overflow-y-auto">
-                              {apLoading && <div className="px-3 py-2 text-sm text-gray-500">Loading…</div>}
-                              {apList.map((a) => (
-                                <div key={a.id} className="px-3 py-2 hover:bg-gray-100 cursor-pointer" onMouseDown={(e) => e.preventDefault()} onClick={() => {
-                                  updateEmpAttendancePolicy(ea._localId, { attendancePolicyID: a.id, _apAutocomplete: a.attendancePolicyName ?? String(a.id) });
-                                  setApList([]);
-                                  setActiveApLocalId(null);
-                                }}>{a.attendancePolicyName}</div>
-                              ))}
-                            </div>
-                          )}
-                        </div>
+                    formData.empAttendancePolicyForm.map((ea, i) => (
+                      <div key={ea._localId} className={`flex items-center px-3 py-2 text-sm ${i === formData.empAttendancePolicyForm.length - 1 ? 'bg-blue-50 font-medium' : 'bg-white'} ${i > 0 ? 'border-t border-gray-100' : ''}`}>
+                        <span className="flex-1">{ea._apAutocomplete || '—'}</span>
+                        <span className="w-32 text-center text-gray-500">{ea.effectFrom || '—'}</span>
+                        <Button type="button" variant="ghost" size="sm" onClick={() => removeEmpAttendancePolicy(ea._localId)} className="h-6 w-6 p-0 text-red-500 hover:text-red-700 hover:bg-red-50"><X className="w-3 h-3" /></Button>
                       </div>
                     ))
                   )}
                 </div>
               </div>
 
-              {/* Leave Policy - Multi-entry repeater */}
+              {/* Leave Policy - Search & Add with History */}
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <h3 className="text-lg font-semibold">Leave Policy</h3>
-                  <div className="flex gap-2">
-                    {canManage && <Button type="button" variant="outline" size="sm" onClick={() => window.open('/leave-policy', '_blank')}><Plus className="w-4 h-4 mr-1" /> Manage Policies</Button>}
-                    <Button variant="outline" size="sm" type="button" onClick={addEmpLeavePolicy}>
-                      <Plus className="w-4 h-4 mr-1" /> Add Leave Policy
-                    </Button>
-                  </div>
+                  {canManage && <Button type="button" variant="outline" size="sm" onClick={() => window.open('/leave-policy', '_blank')}><Plus className="w-4 h-4 mr-1" /> Manage Policies</Button>}
                 </div>
-                {formData.empLeavePolicyForm.length === 0 ? (
-                  <div className="text-center py-6 text-gray-500 border border-gray-200 rounded-lg">
-                    <Icon icon="mdi:calendar-remove" className="w-10 h-10 text-gray-300 mx-auto mb-2" />
-                    <p>No leave policy entries added yet</p>
+                <div className="flex items-end gap-2">
+                  <div ref={lpRef} className="flex-1 space-y-2 relative">
+                    <Label>Leave Policy</Label>
+                    <Input
+                      value={stagingLP.label}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setStagingLP(p => ({ ...p, label: val, leavePolicyID: null }));
+                        runFetchLP(val);
+                      }}
+                      onFocus={(e) => {
+                        if (e.target.value.length >= MIN_CHARS) runFetchLP(e.target.value);
+                      }}
+                      placeholder="Search leave policy…"
+                      autoComplete="off"
+                    />
+                    {lpList.length > 0 && (
+                      <div className="absolute z-10 bg-white border rounded w-full shadow max-h-48 overflow-y-auto">
+                        {lpLoading && <div className="px-3 py-2 text-sm text-gray-500">Loading…</div>}
+                        {lpList.map((l) => (
+                          <div key={l.id} className="px-3 py-2 hover:bg-gray-100 cursor-pointer" onMouseDown={(e) => e.preventDefault()} onClick={() => {
+                            setStagingLP(p => ({ ...p, leavePolicyID: l.id, label: l.leavePolicyName ?? "" }));
+                            setLpList([]);
+                          }}>{l.leavePolicyName}</div>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                ) : (
-                  formData.empLeavePolicyForm.map((el) => (
-                    <div key={el._localId} className="border border-gray-200 rounded-lg p-4 space-y-3">
-                      <div className="flex items-center justify-between">
-                        <span className="font-medium text-gray-900">Leave Policy</span>
-                        <Button type="button" variant="ghost" size="sm" onClick={() => removeEmpLeavePolicy(el._localId)} className="text-red-600 hover:text-red-700 hover:bg-red-50"><X className="w-4 h-4" /></Button>
+                  <div className="space-y-2">
+                    <Label>Effect From</Label>
+                    <Input type="date" value={stagingLP.effectFrom} onChange={(e) => setStagingLP(p => ({ ...p, effectFrom: e.target.value }))} />
+                  </div>
+                  <Button type="button" size="sm" disabled={!stagingLP.leavePolicyID} onClick={() => {
+                    if (!stagingLP.leavePolicyID) return;
+                    const newEntry: EmpLeavePolicyForm = { _localId: uid(), leavePolicyID: stagingLP.leavePolicyID, _lpAutocomplete: stagingLP.label, effectFrom: stagingLP.effectFrom };
+                    setFormData(p => ({ ...p, empLeavePolicyForm: [...p.empLeavePolicyForm, newEntry] }));
+                    setStagingLP({ leavePolicyID: null, label: "", effectFrom: "" });
+                  }}>Add</Button>
+                </div>
+                {/* History Box */}
+                <div className="border border-gray-200 rounded-lg overflow-hidden">
+                  <div className="bg-gray-50 px-3 py-2 text-xs font-semibold text-gray-600 uppercase tracking-wide flex">
+                    <span className="flex-1">Leave Policy</span><span className="w-32 text-center">Effect From</span><span className="w-10"></span>
+                  </div>
+                  {formData.empLeavePolicyForm.length === 0 ? (
+                    <div className="text-center py-4 text-gray-400 text-sm">No leave policies added</div>
+                  ) : (
+                    formData.empLeavePolicyForm.map((el, i) => (
+                      <div key={el._localId} className={`flex items-center px-3 py-2 text-sm ${i === formData.empLeavePolicyForm.length - 1 ? 'bg-blue-50 font-medium' : 'bg-white'} ${i > 0 ? 'border-t border-gray-100' : ''}`}>
+                        <span className="flex-1">{el._lpAutocomplete || '—'}</span>
+                        <span className="w-32 text-center text-gray-500">{el.effectFrom || '—'}</span>
+                        <Button type="button" variant="ghost" size="sm" onClick={() => removeEmpLeavePolicy(el._localId)} className="h-6 w-6 p-0 text-red-500 hover:text-red-700 hover:bg-red-50"><X className="w-3 h-3" /></Button>
                       </div>
-                      <div ref={lpRef} className="space-y-2 relative">
-                        <Label>Leave Policy</Label>
-                        <Input
-                          value={el._lpAutocomplete}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            updateEmpLeavePolicy(el._localId, { _lpAutocomplete: val, leavePolicyID: null });
-                            runFetchLP(val);
-                            setActiveLpLocalId(el._localId);
-                          }}
-                          onFocus={(e) => {
-                            setActiveLpLocalId(el._localId);
-                            if (e.target.value.length >= MIN_CHARS) runFetchLP(e.target.value);
-                          }}
-                          placeholder="Start typing leave policy…"
-                          autoComplete="off"
-                        />
-                        {lpList.length > 0 && activeLpLocalId === el._localId && (
-                          <div className="absolute z-10 bg-white border rounded w-full shadow max-h-48 overflow-y-auto">
-                            {lpLoading && <div className="px-3 py-2 text-sm text-gray-500">Loading…</div>}
-                            {lpList.map((l) => (
-                              <div key={l.id} className="px-3 py-2 hover:bg-gray-100 cursor-pointer" onMouseDown={(e) => e.preventDefault()} onClick={() => {
-                                updateEmpLeavePolicy(el._localId, { leavePolicyID: l.id, _lpAutocomplete: l.leavePolicyName ?? String(l.id) });
-                                setLpList([]);
-                                setActiveLpLocalId(null);
-                              }}>{l.leavePolicyName}</div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  ))
-                )}
+                    ))
+                  )}
+                </div>
               </div>
 
-              {/* Work Shift - Multi-entry repeater */}
+              {/* Work Shift - Search & Add with History */}
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <h3 className="text-lg font-semibold">Work Shift</h3>
-                  <div className="flex gap-2">
-                    {canManage && <Button type="button" variant="outline" size="sm" onClick={() => window.open('/work-shifts', '_blank')}><Plus className="w-4 h-4 mr-1" /> Manage Shifts</Button>}
-                    <Button variant="outline" size="sm" type="button" onClick={addEmpWorkShift}>
-                      <Plus className="w-4 h-4 mr-1" /> Add Work Shift
-                    </Button>
-                  </div>
+                  {canManage && <Button type="button" variant="outline" size="sm" onClick={() => window.open('/work-shifts', '_blank')}><Plus className="w-4 h-4 mr-1" /> Manage Shifts</Button>}
                 </div>
-                {formData.empWorkShiftForm.length === 0 ? (
-                  <div className="text-center py-6 text-gray-500 border border-gray-200 rounded-lg">
-                    <Icon icon="mdi:clock-outline" className="w-10 h-10 text-gray-300 mx-auto mb-2" />
-                    <p>No work shift entries added yet</p>
+                <div className="flex items-end gap-2">
+                  <div ref={wsRef} className="flex-1 space-y-2 relative">
+                    <Label>Work Shift</Label>
+                    <Input
+                      value={stagingWS.label}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setStagingWS(p => ({ ...p, label: val, workShiftID: null }));
+                        runFetchWS(val);
+                      }}
+                      onFocus={(e) => {
+                        if (e.target.value.length >= MIN_CHARS) runFetchWS(e.target.value);
+                      }}
+                      placeholder="Search work shift…"
+                      autoComplete="off"
+                    />
+                    {wsList.length > 0 && (
+                      <div className="absolute z-10 bg-white border rounded w-full shadow max-h-48 overflow-y-auto">
+                        {wsLoading && <div className="px-3 py-2 text-sm text-gray-500">Loading…</div>}
+                        {wsList.map((w) => (
+                          <div key={w.id} className="px-3 py-2 hover:bg-gray-100 cursor-pointer" onMouseDown={(e) => e.preventDefault()} onClick={() => {
+                            setStagingWS(p => ({ ...p, workShiftID: w.id, label: w.workShiftName ?? "" }));
+                            setWsList([]);
+                          }}>{w.workShiftName}</div>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                ) : (
-                  formData.empWorkShiftForm.map((ew) => (
-                    <div key={ew._localId} className="border border-gray-200 rounded-lg p-4 space-y-3">
-                      <div className="flex items-center justify-between">
-                        <span className="font-medium text-gray-900">Work Shift</span>
-                        <Button type="button" variant="ghost" size="sm" onClick={() => removeEmpWorkShift(ew._localId)} className="text-red-600 hover:text-red-700 hover:bg-red-50"><X className="w-4 h-4" /></Button>
+                  <div className="space-y-2">
+                    <Label>Effect From</Label>
+                    <Input type="date" value={stagingWS.effectFrom} onChange={(e) => setStagingWS(p => ({ ...p, effectFrom: e.target.value }))} />
+                  </div>
+                  <Button type="button" size="sm" disabled={!stagingWS.workShiftID} onClick={() => {
+                    if (!stagingWS.workShiftID) return;
+                    const newEntry: EmpWorkShiftForm = { _localId: uid(), workShiftID: stagingWS.workShiftID, _wsAutocomplete: stagingWS.label, effectFrom: stagingWS.effectFrom };
+                    setFormData(p => ({ ...p, empWorkShiftForm: [...p.empWorkShiftForm, newEntry] }));
+                    setStagingWS({ workShiftID: null, label: "", effectFrom: "" });
+                  }}>Add</Button>
+                </div>
+                {/* History Box */}
+                <div className="border border-gray-200 rounded-lg overflow-hidden">
+                  <div className="bg-gray-50 px-3 py-2 text-xs font-semibold text-gray-600 uppercase tracking-wide flex">
+                    <span className="flex-1">Work Shift</span><span className="w-32 text-center">Effect From</span><span className="w-10"></span>
+                  </div>
+                  {formData.empWorkShiftForm.length === 0 ? (
+                    <div className="text-center py-4 text-gray-400 text-sm">No work shifts added</div>
+                  ) : (
+                    formData.empWorkShiftForm.map((ew, i) => (
+                      <div key={ew._localId} className={`flex items-center px-3 py-2 text-sm ${i === formData.empWorkShiftForm.length - 1 ? 'bg-blue-50 font-medium' : 'bg-white'} ${i > 0 ? 'border-t border-gray-100' : ''}`}>
+                        <span className="flex-1">{ew._wsAutocomplete || '—'}</span>
+                        <span className="w-32 text-center text-gray-500">{ew.effectFrom || '—'}</span>
+                        <Button type="button" variant="ghost" size="sm" onClick={() => removeEmpWorkShift(ew._localId)} className="h-6 w-6 p-0 text-red-500 hover:text-red-700 hover:bg-red-50"><X className="w-3 h-3" /></Button>
                       </div>
-                      <div ref={wsRef} className="space-y-2 relative">
-                        <Label>Work Shift</Label>
-                        <Input
-                          value={ew._wsAutocomplete}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            updateEmpWorkShift(ew._localId, { _wsAutocomplete: val, workShiftID: null });
-                            runFetchWS(val);
-                            setActiveWsLocalId(ew._localId);
-                          }}
-                          onFocus={(e) => {
-                            setActiveWsLocalId(ew._localId);
-                            if (e.target.value.length >= MIN_CHARS) runFetchWS(e.target.value);
-                          }}
-                          placeholder="Start typing work shift…"
-                          autoComplete="off"
-                        />
-                        {wsList.length > 0 && activeWsLocalId === ew._localId && (
-                          <div className="absolute z-10 bg-white border rounded w-full shadow max-h-48 overflow-y-auto">
-                            {wsLoading && <div className="px-3 py-2 text-sm text-gray-500">Loading…</div>}
-                            {wsList.map((w) => (
-                              <div key={w.id} className="px-3 py-2 hover:bg-gray-100 cursor-pointer" onMouseDown={(e) => e.preventDefault()} onClick={() => {
-                                updateEmpWorkShift(ew._localId, { workShiftID: w.id, _wsAutocomplete: w.workShiftName ?? String(w.id) });
-                                setWsList([]);
-                                setActiveWsLocalId(null);
-                              }}>{w.workShiftName}</div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  ))
-                )}
+                    ))
+                  )}
+                </div>
               </div>
 
+
+              <hr className="border-t border-gray-200 my-2" />
 
               {/* Contacts */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -3359,6 +3509,8 @@ const addCombinedDevMap = () => {
                   />
                 </div>
               </div>
+
+              <hr className="border-t border-gray-200 my-2" />
 
               {/* Personal */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -3660,23 +3812,23 @@ const addCombinedDevMap = () => {
               </div>
 
           {/* ==========================
-    BIOMETRIC DEVICE MAPPING 
+    ATTENDANCE DEVICE MAPPING 
     ========================== */}
 <div className="space-y-3">
   <div className="flex items-center justify-between">
-    <h3 className="text-lg font-semibold">Biometric Device Mapping </h3>
+    <h3 className="text-lg font-semibold">Attendance Device Mapping</h3>
     <Button variant="outline" size="sm" type="button" onClick={addDevMap}>
-      <Plus className="w-4 h-4 mr-1" /> Add Biometric Device
+      <Plus className="w-4 h-4 mr-1" /> Add Attendance Device
     </Button>
   </div>
 
-  {formData.devMapForm.filter(dm => dm.deviceType === 'AT').length === 0 ? (
+  {formData.devMapForm.length === 0 ? (
     <div className="text-center py-6 text-gray-500 border border-gray-200 rounded-lg">
       <Icon icon="mdi:fingerprint" className="w-10 h-10 text-gray-300 mx-auto mb-2" />
-      <p>No biometric device mappings added yet</p>
+      <p>No attendance device mappings added yet</p>
     </div>
   ) : (
-    formData.devMapForm.filter(dm => dm.deviceType === 'AT').map((dm) => (
+    formData.devMapForm.map((dm) => (
       <div key={dm._localId} className="border border-gray-200 rounded-lg p-4 space-y-3">
         <div className="flex items-center justify-between">
         
@@ -3693,17 +3845,16 @@ const addCombinedDevMap = () => {
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div ref={devRef} className="space-y-2 relative">
-            <Label>Biometric Device</Label>
+            <Label>Attendance Device</Label>
             <Input
               value={dm._devAutocomplete ?? dm.deviceName ?? ""}
               onChange={(e) => {
                 const val = e.target.value;
                 updateDevMap(dm._localId, "_devAutocomplete", val);
                 updateDevMap(dm._localId, "deviceID", "");
-                updateDevMap(dm._localId, "deviceType", "AT");
                 runFetchDev(val);
               }}
-              placeholder="Type biometric device name…"
+              placeholder="Type attendance device name…"
               autoComplete="off"
             />
             {devList.length > 0 && (
@@ -3718,7 +3869,7 @@ const addCombinedDevMap = () => {
                       updateDevMap(dm._localId, "deviceID", String(dv.id));
                       updateDevMap(dm._localId, "deviceName", dv.deviceName ?? "");
                       updateDevMap(dm._localId, "_devAutocomplete", dv.deviceName ?? "");
-                      updateDevMap(dm._localId, "deviceType", "AT");
+                      updateDevMap(dm._localId, "deviceType", dv.deviceType ?? "AT");
                       setDevList([]);
                     }}
                   >
@@ -3740,6 +3891,30 @@ const addCombinedDevMap = () => {
               autoComplete="off"
             />
           </div>
+
+          <div className="space-y-2">
+            <Label>Auth Type</Label>
+            <select
+              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+              value={dm.authType ?? ""}
+              onChange={(e) => updateDevMap(dm._localId, "authType", e.target.value)}
+            >
+              <option value="">Select auth type</option>
+              {(() => {
+                const usedByTokenReg = new Set(tokenDevMapForm.map((m) => m.authType).filter(Boolean));
+                const usedByTokenVer = new Set(tokenVerifierDevMapForm.map((m) => m.authType).filter(Boolean));
+                const allOptions = [
+                  { value: "FACE", label: "Face ID" },
+                  { value: "FINGER", label: "Fingerprint" },
+                  { value: "PIN", label: "PIN / Password" },
+                  { value: "CARD", label: "Card" },
+                ];
+                return allOptions
+                  .filter((o) => (!usedByTokenReg.has(o.value) && !usedByTokenVer.has(o.value)) || o.value === dm.authType)
+                  .map((o) => <option key={o.value} value={o.value}>{o.label}</option>);
+              })()}
+            </select>
+          </div>
         </div>
       </div>
     ))
@@ -3747,23 +3922,23 @@ const addCombinedDevMap = () => {
 </div>
 
 {/* ==========================
-    TOKEN DEVICE MAPPING 
+    TOKEN REGISTER DEVICE MAPPING 
     ========================== */}
 <div className="space-y-3 mt-6">
   <div className="flex items-center justify-between">
-    <h3 className="text-lg font-semibold">Token Device Mapping </h3>
+    <h3 className="text-lg font-semibold">Token Register Device Mapping</h3>
     <Button variant="outline" size="sm" type="button" onClick={addTokenDevMap}>
-      <Plus className="w-4 h-4 mr-1" /> Add Token Device
+      <Plus className="w-4 h-4 mr-1" /> Add Token Register Device
     </Button>
   </div>
 
-  {tokenDevMapForm.filter(dm => dm.deviceType === 'TR' || dm.deviceType === 'TV').length === 0 ? (
+  {tokenDevMapForm.length === 0 ? (
     <div className="text-center py-6 text-gray-500 border border-gray-200 rounded-lg">
       <Icon icon="mdi:credit-card" className="w-10 h-10 text-gray-300 mx-auto mb-2" />
-      <p>No token device mappings added yet</p>
+      <p>No token register device mappings added yet</p>
     </div>
   ) : (
-    tokenDevMapForm.filter(dm => dm.deviceType === 'TR' || dm.deviceType === 'TV').map((dm) => (
+    tokenDevMapForm.map((dm) => (
       <div key={dm._localId} className="border border-gray-200 rounded-lg p-4 space-y-3">
         <div className="flex items-center justify-between">
           
@@ -3780,7 +3955,7 @@ const addCombinedDevMap = () => {
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div ref={tokenDevRef} className="space-y-2 relative">
-            <Label>Token Device</Label>
+            <Label>Token Register Device</Label>
             <Input
               value={dm._devAutocomplete ?? dm.deviceName ?? ""}
               onChange={(e) => {
@@ -3789,7 +3964,7 @@ const addCombinedDevMap = () => {
                 updateTokenDevMap(dm._localId, "deviceID", "");
                 runFetchTokenDevices(val);
               }}
-              placeholder="Type token device name…"
+              placeholder="Type token register device name…"
               autoComplete="off"
             />
             {tokenDevList.length > 0 && (
@@ -3804,6 +3979,7 @@ const addCombinedDevMap = () => {
                       updateTokenDevMap(dm._localId, "deviceID", String(dv.id));
                       updateTokenDevMap(dm._localId, "deviceName", dv.deviceName ?? "");
                       updateTokenDevMap(dm._localId, "_devAutocomplete", dv.deviceName ?? "");
+                      updateTokenDevMap(dm._localId, "deviceType", dv.deviceType ?? "TR");
                       setTokenDevList([]);
                     }}
                   >
@@ -3825,112 +4001,145 @@ const addCombinedDevMap = () => {
               autoComplete="off"
             />
           </div>
+
+          <div className="space-y-2">
+            <Label>Auth Type</Label>
+            <select
+              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+              value={dm.authType ?? ""}
+              onChange={(e) => updateTokenDevMap(dm._localId, "authType", e.target.value)}
+            >
+              <option value="">Select auth type</option>
+              {(() => {
+                const usedByAtt = new Set(formData.devMapForm.map((m) => m.authType).filter(Boolean));
+                const usedByTokenVer = new Set(tokenVerifierDevMapForm.map((m) => m.authType).filter(Boolean));
+                const allOptions = [
+                  { value: "FACE", label: "Face ID" },
+                  { value: "FINGER", label: "Fingerprint" },
+                  { value: "PIN", label: "PIN / Password" },
+                  { value: "CARD", label: "Card" },
+                ];
+                return allOptions
+                  .filter((o) => (!usedByAtt.has(o.value) && !usedByTokenVer.has(o.value)) || o.value === dm.authType)
+                  .map((o) => <option key={o.value} value={o.value}>{o.label}</option>);
+              })()}
+            </select>
+          </div>
         </div>
       </div>
     ))
   )}
 </div>
 
-{/* ===================================
-     COMBINED BIOMETRIC & TOKEN MAPPING
-     =================================== */}
-  <div className="space-y-3 mt-6">
-    <div className="flex items-center justify-between">
-      <h3 className="text-lg font-semibold">Biometric &amp; Token Device Mapping</h3>
-      <Button variant="outline" size="sm" type="button" onClick={addCombinedDevMap}>
-        <Plus className="w-4 h-4 mr-1" /> Add Device
-      </Button>
-    </div>
+{/* ==========================
+    TOKEN VERIFIER DEVICE MAPPING 
+    ========================== */}
+<div className="space-y-3 mt-6">
+  <div className="flex items-center justify-between">
+    <h3 className="text-lg font-semibold">Token Verifier Device Mapping</h3>
+    <Button variant="outline" size="sm" type="button" onClick={addTokenVerifierDevMap}>
+      <Plus className="w-4 h-4 mr-1" /> Add Token Verifier Device
+    </Button>
+  </div>
 
-    {formData.devMapForm.filter(dm => !dm.deviceType || dm.deviceType === '' || (dm.deviceType && dm.deviceType.includes('+'))).length === 0 ? (
-      <div className="text-center py-6 text-gray-500 border border-gray-200 rounded-lg">
-        <Icon icon="mdi:devices" className="w-10 h-10 text-gray-300 mx-auto mb-2" />
-        <p>No combined device mappings added yet</p>
-      </div>
-    ) : (
-      formData.devMapForm.filter(dm => !dm.deviceType || dm.deviceType === '' || (dm.deviceType && dm.deviceType.includes('+'))).map((dm) => (
-        <div key={dm._localId} className="border border-gray-200 rounded-lg p-4 space-y-3">
-          <div className="flex items-center justify-between">
-            <div className="flex gap-1">
-              {dm.deviceType && dm.deviceType.split('+').map(t => (
-                <Badge key={t} variant="secondary" className="text-xs">
-                  {t === 'AT' ? 'Attendance' : t === 'TR' ? 'Token Reg' : t === 'TV' ? 'Token Ver' : t}
-                </Badge>
-              ))}
-            </div>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={() => removeDevMap(dm._localId)}
-              className="text-red-600 hover:text-red-700 hover:bg-red-50"
-            >
-              <X className="w-4 h-4" />
-            </Button>
+  {tokenVerifierDevMapForm.length === 0 ? (
+    <div className="text-center py-6 text-gray-500 border border-gray-200 rounded-lg">
+      <Icon icon="mdi:card-search" className="w-10 h-10 text-gray-300 mx-auto mb-2" />
+      <p>No token verifier device mappings added yet</p>
+    </div>
+  ) : (
+    tokenVerifierDevMapForm.map((dm) => (
+      <div key={dm._localId} className="border border-gray-200 rounded-lg p-4 space-y-3">
+        <div className="flex items-center justify-between">
+          
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() => removeTokenVerifierDevMap(dm._localId)}
+            className="text-red-600 hover:text-red-700 hover:bg-red-50"
+          >
+            <X className="w-4 h-4" />
+          </Button>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div ref={tokenVerifierDevRef} className="space-y-2 relative">
+            <Label>Token Verifier Device</Label>
+            <Input
+              value={dm._devAutocomplete ?? dm.deviceName ?? ""}
+              onChange={(e) => {
+                const val = e.target.value;
+                updateTokenVerifierDevMap(dm._localId, "_devAutocomplete", val);
+                updateTokenVerifierDevMap(dm._localId, "deviceID", "");
+                runFetchTokenVerifierDevices(val);
+              }}
+              placeholder="Type token verifier device name…"
+              autoComplete="off"
+            />
+            {tokenVerifierDevList.length > 0 && (
+              <div className="absolute z-10 bg-white border rounded w-full shadow max-h-48 overflow-y-auto">
+                {tokenVerifierDevLoading && <div className="px-3 py-2 text-sm text-gray-500">Loading…</div>}
+                {tokenVerifierDevList.map((dv) => (
+                  <div
+                    key={dv.id}
+                    className="px-3 py-2 hover:bg-gray-100 cursor-pointer"
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => {
+                      updateTokenVerifierDevMap(dm._localId, "deviceID", String(dv.id));
+                      updateTokenVerifierDevMap(dm._localId, "deviceName", dv.deviceName ?? "");
+                      updateTokenVerifierDevMap(dm._localId, "_devAutocomplete", dv.deviceName ?? "");
+                      updateTokenVerifierDevMap(dm._localId, "deviceType", "TV");
+                      setTokenVerifierDevList([]);
+                    }}
+                  >
+                    {dv.deviceName ?? `#${dv.id}`}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div ref={combinedDevRef} className="space-y-2 relative">
-              <Label>Device</Label>
-              <Input
-                value={dm._devAutocomplete ?? dm.deviceName ?? ""}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  updateDevMap(dm._localId, "_devAutocomplete", val);
-                  updateDevMap(dm._localId, "deviceID", "");
-                  runFetchCombinedDev(val);
-                }}
-                placeholder="Type device name…"
-                autoComplete="off"
-              />
-              {combinedDevList.length > 0 && (
-                <div className="absolute z-10 bg-white border rounded w-full shadow max-h-48 overflow-y-auto">
-                  {combinedDevLoading && <div className="px-3 py-2 text-sm text-gray-500">Loading…</div>}
-                  {combinedDevList.map((dv) => (
-                    <div
-                      key={dv.id}
-                      className="px-3 py-2 hover:bg-gray-100 cursor-pointer"
-                      onMouseDown={(e) => e.preventDefault()}
-                      onClick={() => {
-                        updateDevMap(dm._localId, "deviceID", String(dv.id));
-                        updateDevMap(dm._localId, "deviceName", dv.deviceName ?? "");
-                        updateDevMap(dm._localId, "_devAutocomplete", dv.deviceName ?? "");
-                        updateDevMap(dm._localId, "deviceType", dv.deviceType ?? "");
-                        setCombinedDevList([]);
-                      }}
-                    >
-                      <div className="flex items-center gap-2">
-                        <span>{dv.deviceName ?? `#${dv.id}`}</span>
-                        <div className="flex gap-1">
-                          {dv.deviceType && dv.deviceType.split('+').map(t => (
-                            <Badge key={t} variant="secondary" className="text-xs">
-                              {t === 'AT' ? 'Attendance' : t === 'TR' ? 'Token Reg' : t === 'TV' ? 'Token Ver' : t}
-                            </Badge>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+          <div className="space-y-2">
+            <Label>Device Employee Code</Label>
+            <Input
+              value={dm.deviceEmpCode}
+              onChange={(e) =>
+                updateTokenVerifierDevMap(dm._localId, "deviceEmpCode", e.target.value)
+              }
+              placeholder="Device Employee Code"
+              autoComplete="off"
+            />
+          </div>
 
-            <div className="space-y-2">
-              <Label>Device Employee Code</Label>
-              <Input
-                value={dm.deviceEmpCode}
-                onChange={(e) =>
-                  updateDevMap(dm._localId, "deviceEmpCode", e.target.value)
-                }
-                placeholder="Device Employee Code"
-                autoComplete="off"
-              />
-            </div>
+          <div className="space-y-2">
+            <Label>Auth Type</Label>
+            <select
+              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+              value={dm.authType ?? ""}
+              onChange={(e) => updateTokenVerifierDevMap(dm._localId, "authType", e.target.value)}
+            >
+              <option value="">Select auth type</option>
+              {(() => {
+                const usedByAtt = new Set(formData.devMapForm.map((m) => m.authType).filter(Boolean));
+                const usedByTokenReg = new Set(tokenDevMapForm.map((m) => m.authType).filter(Boolean));
+                const allOptions = [
+                  { value: "FACE", label: "Face ID" },
+                  { value: "FINGER", label: "Fingerprint" },
+                  { value: "PIN", label: "PIN / Password" },
+                  { value: "CARD", label: "Card" },
+                ];
+                return allOptions
+                  .filter((o) => (!usedByAtt.has(o.value) && !usedByTokenReg.has(o.value)) || o.value === dm.authType)
+                  .map((o) => <option key={o.value} value={o.value}>{o.label}</option>);
+              })()}
+            </select>
           </div>
         </div>
-      ))
-    )}
-  </div>
+      </div>
+    ))
+  )}
+</div>
 
               <div className="flex justify-end gap-2 pt-4 border-t border-gray-200">
                 <Button type="button" variant="outline" onClick={handleCancel}>
@@ -3997,12 +4206,29 @@ const addCombinedDevMap = () => {
 
               {(viewRow.empDeviceMapping?.length ?? 0) > 0 && (
                 <div className="mt-4">
-                  <p className="font-semibold mb-2">Device Mapping:</p>
+                  <p className="font-semibold mb-2">Attendance Device Mapping:</p>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     {viewRow.empDeviceMapping!.map(d => (
                       <div key={d.id} className="border rounded-lg p-3 bg-gray-50">
                         <div><strong>Device:</strong> {d.device?.deviceName ?? `#${d.deviceID}`}</div>
                         <div className="text-sm"><strong>Emp Code:</strong> {d.deviceEmpCode ?? "—"}</div>
+                        <div className="text-sm"><strong>Auth Type:</strong> {(d as any).authType ?? "—"}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {(viewRow.tokenDeviceMapping?.length ?? 0) > 0 && (
+                <div className="mt-4">
+                  <p className="font-semibold mb-2">Token Device Mapping:</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {viewRow.tokenDeviceMapping!.map(d => (
+                      <div key={d.id} className="border rounded-lg p-3 bg-gray-50">
+                        <div><strong>Device:</strong> {d.device?.deviceName ?? `#${d.deviceID}`}</div>
+                        <div className="text-sm"><strong>Type:</strong> {d.device?.deviceType === 'TV' ? 'Token Verifier' : 'Token Register'}</div>
+                        <div className="text-sm"><strong>Emp Code:</strong> {d.deviceEmpCode ?? "—"}</div>
+                        <div className="text-sm"><strong>Auth Type:</strong> {(d as any).authType ?? "—"}</div>
                       </div>
                     ))}
                   </div>
@@ -4035,7 +4261,7 @@ const addCombinedDevMap = () => {
         )}
       </FormDrawer>
 
-      {/* Search & Table */}
+      {!isAddingNew && !isViewing && (
         <>
           <Card>
             <CardContent className="p-6">
@@ -4167,6 +4393,7 @@ const addCombinedDevMap = () => {
             </CardContent>
           </Card>
         </>
+      )}
 
       {/* Quick-Add Dialog */}
       <Dialog open={!!quickAddOpen} onOpenChange={(open) => { if (!open) { setQuickAddOpen(null); setQuickAddSuggestions([]); } }}>

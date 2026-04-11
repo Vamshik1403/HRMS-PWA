@@ -45,6 +45,7 @@ export class DevMapUpdateDto {
   @IsOptional() @IsInt() id?: number;   // present if updating
   @IsInt() deviceID!: number;           // always required to connect/keep
   @IsOptional() @IsString() deviceEmpCode?: string;
+  @IsOptional() @IsString() authType?: string;
 }
 
 export class TokenDeviceMapUpdateDto {

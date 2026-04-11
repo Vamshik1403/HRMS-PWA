@@ -594,7 +594,7 @@ export function CompanyManagement() {
         )}
       </FormDrawer>
 
-      {/* Search & Table */}
+      {!isAddingNew && !isViewing && (<>
           <Card>
             <CardContent className="p-6 flex items-center space-x-4">
               <div className="relative flex-1 min-w-0">
@@ -692,6 +692,7 @@ export function CompanyManagement() {
               </Table>
             </CardContent>
           </Card>
+      </>)}
     </div>
   )
 }

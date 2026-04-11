@@ -1030,6 +1030,7 @@ export function BranchManagement() {
         )}
       </FormDrawer>
 
+      {!isAddingNew && !isViewing && (<>
       {/* Search & Table */}
       <Card>
             <CardContent className="p-6 flex items-center space-x-4">
@@ -1138,6 +1139,7 @@ export function BranchManagement() {
               )}
             </CardContent>
           </Card>
+      </>)}
     </div>
   );
 }

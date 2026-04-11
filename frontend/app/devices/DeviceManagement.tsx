@@ -745,6 +745,27 @@ export function DeviceManagement() {
                   required
                 />
               </div>
+
+              <div className="space-y-2">
+                <Label>Device Make *</Label>
+                <Input
+                  value={formData.deviceMake}
+                  onChange={(e) => setFormData((p) => ({ ...p, deviceMake: e.target.value }))}
+                  placeholder="Enter device make"
+                  required
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label>Device Model *</Label>
+                <Input
+                  value={formData.deviceModel}
+                  onChange={(e) => setFormData((p) => ({ ...p, deviceModel: e.target.value }))}
+                  placeholder="Enter device model"
+                  required
+                />
+              </div>
+
               <div className="space-y-2">
                 <Label>Device Type</Label>
                 <select
@@ -766,70 +787,6 @@ export function DeviceManagement() {
                   <option value="TV">Token Verifier</option>
                   <option value="AT+TR">Attendance + Token Register</option>
                 </select>
-              </div>
-
-              {/* Auth Type Configuration - shown when device type is AT+TR */}
-              {formData.deviceType === "AT+TR" && (
-                <div className="space-y-4 rounded-lg border border-gray-200 p-4 bg-gray-50">
-                  <div>
-                    <Label className="text-sm font-semibold">Authentication Routing</Label>
-                    <p className="text-xs text-gray-500 mt-1">
-                      Select which authentication method will be used for attendance and which for token registration.
-                    </p>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Attendance Auth Type</Label>
-                    <select
-                      value={formData.attendanceAuthType}
-                      onChange={(e) =>
-                        setFormData((p) => ({ ...p, attendanceAuthType: e.target.value }))
-                      }
-                      className="w-full px-3 py-2 border border-gray-300 rounded-sm border-[#d0d0d0] focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-900/15 focus-visible:border-[#b0b0b0]"
-                    >
-                      <option value="">Select auth type for attendance</option>
-                      <option value="FACE">Face ID</option>
-                      <option value="FINGER">Fingerprint</option>
-                      <option value="PIN">PIN / Password</option>
-                      <option value="CARD">Card</option>
-                    </select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Token Register Auth Type</Label>
-                    <select
-                      value={formData.tokenRegAuthType}
-                      onChange={(e) =>
-                        setFormData((p) => ({ ...p, tokenRegAuthType: e.target.value }))
-                      }
-                      className="w-full px-3 py-2 border border-gray-300 rounded-sm border-[#d0d0d0] focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-900/15 focus-visible:border-[#b0b0b0]"
-                    >
-                      <option value="">Select auth type for token register</option>
-                      <option value="FACE">Face ID</option>
-                      <option value="FINGER">Fingerprint</option>
-                      <option value="PIN">PIN / Password</option>
-                      <option value="CARD">Card</option>
-                    </select>
-                  </div>
-                </div>
-              )}
-
-              <div className="space-y-2">
-                <Label>Device Make *</Label>
-                <Input
-                  value={formData.deviceMake}
-                  onChange={(e) => setFormData((p) => ({ ...p, deviceMake: e.target.value }))}
-                  placeholder="Enter device make"
-                  required
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label>Device Model *</Label>
-                <Input
-                  value={formData.deviceModel}
-                  onChange={(e) => setFormData((p) => ({ ...p, deviceModel: e.target.value }))}
-                  placeholder="Enter device model"
-                  required
-                />
               </div>
 
               <div className="space-y-2">
@@ -855,6 +812,7 @@ export function DeviceManagement() {
         </div>
       </FormDrawer>
 
+      {!isAddingNew && (<>
       {/* Search and Filters */}
         <Card>
           <CardContent className="p-6">
@@ -893,7 +851,6 @@ export function DeviceManagement() {
                     <TableHead className="w-[120px]">Branch Name</TableHead>
                     <TableHead className="w-[120px]">Device Name</TableHead>
                     <TableHead className="w-[80px]">Type</TableHead>
-                    <TableHead className="w-[120px]">Auth Types</TableHead>
                     <TableHead className="w-[100px]">Device Make</TableHead>
                     <TableHead className="w-[100px]">Device Model</TableHead>
                     <TableHead className="w-[120px]">Device SN</TableHead>
@@ -939,20 +896,6 @@ export function DeviceManagement() {
                             );
                           })() : <span>—</span>}
                         </TableCell>
-                        <TableCell className="whitespace-nowrap">
-                          {device.authTypes && device.authTypes.length > 0 ? (
-                            <div className="flex flex-wrap gap-1">
-                              {device.authTypes.map((at) => {
-                                const label = at.startsWith("ATT:") ? `Att: ${at.replace("ATT:", "")}`
-                                  : at.startsWith("TR:") ? `Token: ${at.replace("TR:", "")}`
-                                  : at;
-                                return (
-                                  <Badge key={at} variant="outline" className="text-xs">{label}</Badge>
-                                );
-                              })}
-                            </div>
-                          ) : '—'}
-                        </TableCell>
                         <TableCell className="whitespace-nowrap">{device.deviceMake}</TableCell>
                         <TableCell className="whitespace-nowrap">{device.deviceModel}</TableCell>
                         <TableCell className="whitespace-nowrap">{device.deviceSN}</TableCell>
@@ -993,6 +936,7 @@ export function DeviceManagement() {
             </div>
           </CardContent>
         </Card>
+      </>)}
     </div>
   );
 }

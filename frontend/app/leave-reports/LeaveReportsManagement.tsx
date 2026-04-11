@@ -307,6 +307,7 @@ export function LeaveReportsManagement() {
       </FormDrawer>
       </div>
 
+      {!isDialogOpen && (<>
       {/* Search and Filters */}
       <Card>
         <CardContent className="p-6">
@@ -425,6 +426,7 @@ export function LeaveReportsManagement() {
           </div>
         </CardContent>
       </Card>
+      </>)}
     </div>
   )
 }

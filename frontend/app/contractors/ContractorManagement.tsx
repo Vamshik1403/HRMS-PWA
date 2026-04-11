@@ -938,21 +938,24 @@ export function ContractorManagement() {
           </div>
       </FormDrawer>
 
+      {!isDialogOpen && !isViewDialogOpen && (<>
       {/* Search */}
       <Card>
-        <CardContent className="p-6 flex items-center space-x-4">
-          <div className="relative flex-1 min-w-0">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-            <Input
-              placeholder="Search contractors..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10 w-full"
-            />
+        <CardContent>
+          <div className="flex items-center gap-4 flex-wrap">
+            <div className="relative flex-1 min-w-0">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+              <Input
+                placeholder="Search contractors..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-10 w-full"
+              />
+            </div>
+            <Badge variant="secondary" className="px-3 py-1 flex-shrink-0">
+              {filtered.length} contractors
+            </Badge>
           </div>
-          <Badge variant="secondary" className="px-3 py-1 flex-shrink-0">
-            {filtered.length} contractors
-          </Badge>
         </CardContent>
       </Card>
 
@@ -1047,6 +1050,7 @@ export function ContractorManagement() {
           )}
         </CardContent>
       </Card>
+      </>)}
     </div>
   );
 }

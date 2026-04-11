@@ -717,7 +717,7 @@ export function DepartmentManagement() {
         )}
       </FormDrawer>
 
-      {/* Search & Table */}
+      {!isAddingNew && !isViewing && (<>
           <Card>
             <CardContent className="p-6 flex items-center space-x-4">
               <div className="relative flex-1 min-w-0">
@@ -821,6 +821,7 @@ export function DepartmentManagement() {
               )}
             </CardContent>
           </Card>
+      </>)}
     </div>
   );
 }

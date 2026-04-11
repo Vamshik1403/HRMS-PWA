@@ -119,12 +119,14 @@ export class DevMapCreateDto {
    @IsOptional() @IsInt() id?: number;
   @IsInt() deviceID!: number;
   @IsOptional() @IsString() deviceEmpCode?: string;
+  @IsOptional() @IsString() authType?: string;
 }
 
 export class TokenDeviceMapCreateDto  {
    @IsOptional() @IsInt() id?: number;
   @IsInt() deviceID!: number;
   @IsOptional() @IsString() deviceEmpCode?: string;
+  @IsOptional() @IsString() authType?: string;
 }
 
 // ---------- Employee Credentials DTO ----------

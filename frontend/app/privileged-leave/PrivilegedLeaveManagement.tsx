@@ -445,6 +445,7 @@ export function PrivilegedLeaveManagement() {
         </div>
       </div>
 
+      {!isDialogOpen && !isCreditDialogOpen && !isLapseDialogOpen && (<>
       {/* Search */}
       <Card>
         <CardContent className="p-6">
@@ -626,6 +627,7 @@ export function PrivilegedLeaveManagement() {
           </CardContent>
         </Card>
       )}
+      </>)}
     </div>
   )
 }

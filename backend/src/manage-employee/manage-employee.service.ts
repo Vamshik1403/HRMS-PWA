@@ -119,6 +119,7 @@ export class ManageEmployeeService {
             create: devices.map((d) => ({
               deviceID: d.deviceID,
               deviceEmpCode: d.deviceEmpCode ?? null,
+              authType: d.authType ?? null,
             })),
           },
 
@@ -126,6 +127,7 @@ export class ManageEmployeeService {
             create: tokenDevices.map((d) => ({
               deviceID: d.deviceID,
               deviceEmpCode: d.deviceEmpCode ?? null,
+              authType: d.authType ?? null,
             })),
           },
           
@@ -957,6 +959,7 @@ async findOne(id: number) {
             data: {
               device: { connect: { id: d.deviceID } },
               deviceEmpCode: d.deviceEmpCode ?? null,
+              authType: d.authType ?? null,
             },
           });
         }
@@ -967,6 +970,7 @@ async findOne(id: number) {
               manageEmployee: { connect: { id } },
               device: { connect: { id: d.deviceID } },
               deviceEmpCode: d.deviceEmpCode ?? null,
+              authType: d.authType ?? null,
             },
           });
         }
@@ -984,6 +988,7 @@ async findOne(id: number) {
             data: {
               device: { connect: { id: d.deviceID } },
               deviceEmpCode: d.deviceEmpCode ?? null,
+              authType: d.authType ?? null,
             },
           });
         }
@@ -993,6 +998,7 @@ async findOne(id: number) {
               manageEmployee: { connect: { id } },
               device: { connect: { id: d.deviceID } },
               deviceEmpCode: d.deviceEmpCode ?? null,
+              authType: d.authType ?? null,
             },
           });
         }

@@ -907,6 +907,7 @@ model EmpDeviceMapping {
   manageEmployeeID Int?
   deviceID         Int
   deviceEmpCode    String?         @db.VarChar
+  authType         String?         @db.VarChar
   device           Devices         @relation(fields: [deviceID], references: [id], onDelete: NoAction, onUpdate: NoAction)
   manageEmployee   ManageEmployee? @relation(fields: [manageEmployeeID], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
@@ -919,6 +920,7 @@ model TokenDeviceMapping {
   manageEmployeeID Int?
   deviceID         Int?
   deviceEmpCode    String?         @db.VarChar
+  authType         String?         @db.VarChar
   device           Devices?        @relation(fields: [deviceID], references: [id], onDelete: NoAction, onUpdate: NoAction)
   manageEmployee   ManageEmployee? @relation(fields: [manageEmployeeID], references: [id], onDelete: Cascade, onUpdate: NoAction)
 

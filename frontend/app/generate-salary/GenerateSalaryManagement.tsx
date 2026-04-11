@@ -2839,6 +2839,7 @@ export function GenerateSalaryManagement() {
           </FormDrawer>
         </div>
 
+        {!isDialogOpen && (<>
         <Card>
           <CardContent className="p-6">
             <div className="flex items-center space-x-4 w-full">
@@ -2966,6 +2967,7 @@ export function GenerateSalaryManagement() {
             </div>
           </CardContent>
         </Card>
+        </>)}
       </div>
     </>
   );
