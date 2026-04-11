@@ -590,7 +590,6 @@ export function ManageEmployeesManagement() {
     }
     setLinkedEmpSearch("");
     setLinkedEmpSuggestions([]);
-    setShowManagerSearch(false);
   };
 
   const removeLinkedEmployee = (id: ID) => {

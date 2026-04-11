@@ -54,6 +54,7 @@ export class EmpAttendanceSyncService {
     // inside transaction
 const successIds: number[] = [];
 const insertRows: Prisma.EmpAttendanceLogsCreateManyInput[] = [];
+const processAttRows: Prisma.process_att_logsCreateManyInput[] = [];
 let skippedNoDevice = 0;
 let skippedInactiveDevice = 0;
 let skippedNoMapping = 0;
@@ -200,6 +201,19 @@ for (const log of logs) {
     continue;
   }
 
+  // Fetch employee details for process_att_logs
+  const emp = await tx.manageEmployee.findUnique({
+    where: { id: mapping.manageEmployeeID! },
+    select: {
+      employeeFirstName: true,
+      employeeLastName: true,
+      company: { select: { companyName: true } },
+      branches: { select: { branchName: true } },
+      departments: { select: { departmentName: true } },
+    },
+  });
+  const username = `${emp?.employeeFirstName || ''} ${emp?.employeeLastName || ''}`.trim();
+
   // ✅ This log is valid → queue for EmpAttendanceLogs insertion
   insertRows.push({
     serviceProviderID: dev.serviceProviderID ?? 0,
@@ -215,6 +229,25 @@ for (const log of logs) {
     location:          null,
     mobileDeviceID:    null,
     mobileDeviceInfo:  null,
+  });
+
+  // ✅ Also queue for process_att_logs (used by Dashboard present & Canteen check-in)
+  processAttRows.push({
+    device_sn:          dev.deviceSN,
+    user_id:            log.userId,
+    username,
+    punch_time:         log.logTime ? new Date(log.logTime) : null,
+    company_name:       emp?.company?.companyName ?? null,
+    branch_name:        emp?.branches?.branchName ?? null,
+    department_name:    emp?.departments?.departmentName ?? null,
+    device_emp_code:    log.userId,
+    manage_employee_id: mapping.manageEmployeeID,
+    device_id:          dev.id,
+    device_name:        dev.deviceName,
+    device_type:        deviceType,
+    auth_type:          authType,
+    raw_body:           log.rawData,
+    status:             '0',
   });
 
   successIds.push(log.id);
@@ -242,6 +275,7 @@ if (!dryRun && successIds.length) {
 
 // Insert attendance rows (if not dryRun)
 let inserted = 0;
+let processAttInserted = 0;
 if (!dryRun && insertRows.length) {
   const ins = await tx.empAttendanceLogs.createMany({
     data: insertRows,
@@ -249,10 +283,19 @@ if (!dryRun && insertRows.length) {
   inserted = ins.count ?? 0;
 }
 
+// Insert process_att_logs rows for dashboard & canteen check-in (if not dryRun)
+if (!dryRun && processAttRows.length) {
+  const pIns = await tx.process_att_logs.createMany({
+    data: processAttRows,
+  });
+  processAttInserted = pIns.count ?? 0;
+}
+
 return {
   picked: logs.length,
   preMarkedProcessed,
   inserted,
+  processAttInserted,
   canteenTrInserted,
   canteenTvInserted,
   skippedNoDevice,

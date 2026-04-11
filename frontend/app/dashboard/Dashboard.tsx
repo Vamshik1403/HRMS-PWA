@@ -146,12 +146,12 @@ export default function DashboardPage() {
         .filter((p: any) => p.manage_employee_id != null && p.punch_time != null)
         .map((p: any) => {
           const pt = new Date(p.punch_time);
-          const y = pt.getFullYear();
-          const mo = String(pt.getMonth() + 1).padStart(2, '0');
-          const d = String(pt.getDate()).padStart(2, '0');
-          const h = String(pt.getHours()).padStart(2, '0');
-          const mi = String(pt.getMinutes()).padStart(2, '0');
-          const s = String(pt.getSeconds()).padStart(2, '0');
+          const y = pt.getUTCFullYear();
+          const mo = String(pt.getUTCMonth() + 1).padStart(2, '0');
+          const d = String(pt.getUTCDate()).padStart(2, '0');
+          const h = String(pt.getUTCHours()).padStart(2, '0');
+          const mi = String(pt.getUTCMinutes()).padStart(2, '0');
+          const s = String(pt.getUTCSeconds()).padStart(2, '0');
           return {
             id: p.id || 0,
             employeeID: p.manage_employee_id,

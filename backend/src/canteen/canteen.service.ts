@@ -73,10 +73,9 @@ export class CanteenService {
     const empIds = await this.getCompanyEmployeeIds(companyId);
 
     // Checkins from process_att_logs for the date
-    // Exclude AT+TR devices: their canteen interactions go through canteen_tr_logs,
-    // so process_att_logs records are purely attendance and should not count as canteen check-ins.
+    // AT+TR devices route attendance punches here too (with ATT auth), so include all device types.
     const allCheckins = await this.prisma.process_att_logs.findMany({
-      where: { punch_time: { gte: start, lte: end }, NOT: { device_type: 'AT+TR' } },
+      where: { punch_time: { gte: start, lte: end } },
       distinct: ['user_id'],
       select: {
         user_id: true,
@@ -153,7 +152,7 @@ export class CanteenService {
     const { start, end } = this.getDateRange(dateStr);
     const empIds = await this.getCompanyEmployeeIds(companyId);
     const all = await this.prisma.process_att_logs.findMany({
-      where: { punch_time: { gte: start, lte: end }, NOT: { device_type: 'AT+TR' } },
+      where: { punch_time: { gte: start, lte: end } },
       distinct: ['user_id'],
       select: {
         user_id: true,
