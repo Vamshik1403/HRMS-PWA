@@ -34,6 +34,9 @@ export class AttendancePolicyService {
         overtimeTrimmingApply: data.overtimeTrimmingApply ?? false,
         checkoutGracePeriodForOvertimeTrimming: data.checkoutGracePeriodForOvertimeTrimming ?? 0,
         breakTimeForOT: data.breakTimeForOT ?? 0,
+        otMealApply: data.otMealApply ?? false,
+        minsForOTMealToken: data.minsForOTMealToken ?? 0,
+        minsForBreakTimeForMeal: data.minsForBreakTimeForMeal ?? 0,
       },
       include: {
         branches: true,
@@ -92,6 +95,9 @@ export class AttendancePolicyService {
     if (data.overtimeTrimmingApply !== undefined) updateData.overtimeTrimmingApply = data.overtimeTrimmingApply;
     if (data.checkoutGracePeriodForOvertimeTrimming !== undefined) updateData.checkoutGracePeriodForOvertimeTrimming = data.checkoutGracePeriodForOvertimeTrimming;
     if (data.breakTimeForOT !== undefined) updateData.breakTimeForOT = data.breakTimeForOT;
+    if (data.otMealApply !== undefined) updateData.otMealApply = data.otMealApply;
+    if (data.minsForOTMealToken !== undefined) updateData.minsForOTMealToken = data.minsForOTMealToken;
+    if (data.minsForBreakTimeForMeal !== undefined) updateData.minsForBreakTimeForMeal = data.minsForBreakTimeForMeal;
 
     return this.prisma.attendancePolicy.update({
       where: { id },

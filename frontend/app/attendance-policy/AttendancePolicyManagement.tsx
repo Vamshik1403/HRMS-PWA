@@ -54,6 +54,9 @@ interface AttendancePolicy {
   overtimeTrimmingApply: boolean;
   checkoutGracePeriodForOvertimeTrimming: number;
   breakTimeForOT: number;
+  otMealApply: boolean;
+  minsForOTMealToken: number;
+  minsForBreakTimeForMeal: number;
   createdAt: string;
 }
 
@@ -463,9 +466,9 @@ export function AttendancePolicyManagement() {
       overtimeTrimmingApply: policy.overtimeTrimmingApply || false,
       checkoutGracePeriodForOvertimeTrimming: policy.checkoutGracePeriodForOvertimeTrimming || 0,
       breakTimeForOT: policy.breakTimeForOT || 0,
-      otMealApply: (policy as any).otMealApply || false,
-      minsForOTMealToken: (policy as any).minsForOTMealToken || 0,
-      minsForBreakTimeForMeal: (policy as any).minsForBreakTimeForMeal || 0,
+      otMealApply: policy.otMealApply || false,
+      minsForOTMealToken: policy.minsForOTMealToken || 0,
+      minsForBreakTimeForMeal: policy.minsForBreakTimeForMeal || 0,
     });
     setEditingPolicy(policy);
     setIsDialogOpen(true);

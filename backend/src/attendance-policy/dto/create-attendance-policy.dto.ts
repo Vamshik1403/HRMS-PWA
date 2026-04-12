@@ -31,5 +31,8 @@ export class CreateAttendancePolicyDto {
   @IsOptional() @IsBoolean() overtimeTrimmingApply?: boolean;
   @IsOptional() @IsInt() checkoutGracePeriodForOvertimeTrimming?: number;
   @IsOptional() @IsInt() breakTimeForOT?: number;
+  @IsOptional() @IsBoolean() otMealApply?: boolean;
+  @IsOptional() @IsInt() minsForOTMealToken?: number;
+  @IsOptional() @IsInt() minsForBreakTimeForMeal?: number;
   
 }

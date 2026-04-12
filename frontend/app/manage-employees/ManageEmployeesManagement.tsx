@@ -2774,7 +2774,10 @@ const addCombinedDevMap = () => {
                 </div>
               </div>
 
-              <hr className="border-t border-gray-200 my-2" />
+              <div className="relative my-6">
+                <div className="absolute inset-0 flex items-center"><div className="w-full border-t-2 border-blue-200"></div></div>
+                <div className="relative flex justify-start"><span className="bg-white pr-3 text-sm font-semibold text-blue-700 uppercase tracking-wide">Basic Information</span></div>
+              </div>
 
               {/* Basic info */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -2845,7 +2848,10 @@ const addCombinedDevMap = () => {
               </div>
               )}
 
-              <hr className="border-t border-gray-200 my-2" />
+              <div className="relative my-6">
+                <div className="absolute inset-0 flex items-center"><div className="w-full border-t-2 border-blue-200"></div></div>
+                <div className="relative flex justify-start"><span className="bg-white pr-3 text-sm font-semibold text-blue-700 uppercase tracking-wide">Department / Designation / Manager</span></div>
+              </div>
 
               {/* Department - Search & Add with History */}
               <div className="space-y-3">
@@ -3041,7 +3047,10 @@ const addCombinedDevMap = () => {
                 )}
               </div>
 
-              <hr className="border-t border-gray-200 my-2" />
+              <div className="relative my-6">
+                <div className="absolute inset-0 flex items-center"><div className="w-full border-t-2 border-blue-200"></div></div>
+                <div className="relative flex justify-start"><span className="bg-white pr-3 text-sm font-semibold text-blue-700 uppercase tracking-wide">Employment Details</span></div>
+              </div>
 
               {/* Employment Type - Search & Add with History */}
               <div className="space-y-3">
@@ -3192,7 +3201,10 @@ const addCombinedDevMap = () => {
                 </div>
               </div>
 
-              <hr className="border-t border-gray-200 my-2" />
+              <div className="relative my-6">
+                <div className="absolute inset-0 flex items-center"><div className="w-full border-t-2 border-blue-200"></div></div>
+                <div className="relative flex justify-start"><span className="bg-white pr-3 text-sm font-semibold text-blue-700 uppercase tracking-wide">Salary / Policy / Shift</span></div>
+              </div>
 
               {/* Policy / Shift IDs */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -3469,7 +3481,10 @@ const addCombinedDevMap = () => {
               </div>
 
 
-              <hr className="border-t border-gray-200 my-2" />
+              <div className="relative my-6">
+                <div className="absolute inset-0 flex items-center"><div className="w-full border-t-2 border-blue-200"></div></div>
+                <div className="relative flex justify-start"><span className="bg-white pr-3 text-sm font-semibold text-blue-700 uppercase tracking-wide">Contact & Address</span></div>
+              </div>
 
               {/* Contacts */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -3538,7 +3553,10 @@ const addCombinedDevMap = () => {
                 </div>
               </div>
 
-              <hr className="border-t border-gray-200 my-2" />
+              <div className="relative my-6">
+                <div className="absolute inset-0 flex items-center"><div className="w-full border-t-2 border-blue-200"></div></div>
+                <div className="relative flex justify-start"><span className="bg-white pr-3 text-sm font-semibold text-blue-700 uppercase tracking-wide">Personal Details</span></div>
+              </div>
 
               {/* Personal */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -3647,6 +3665,10 @@ const addCombinedDevMap = () => {
               {/* ==========================
                   EDUCATION (repeater)
                   ========================== */}
+              <div className="relative my-6">
+                <div className="absolute inset-0 flex items-center"><div className="w-full border-t-2 border-blue-200"></div></div>
+                <div className="relative flex justify-start"><span className="bg-white pr-3 text-sm font-semibold text-blue-700 uppercase tracking-wide">Education</span></div>
+              </div>
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <h3 className="text-lg font-semibold">Education</h3>
@@ -3717,6 +3739,10 @@ const addCombinedDevMap = () => {
               {/* ==========================
                   EXPERIENCE (repeater)
                   ========================== */}
+              <div className="relative my-6">
+                <div className="absolute inset-0 flex items-center"><div className="w-full border-t-2 border-blue-200"></div></div>
+                <div className="relative flex justify-start"><span className="bg-white pr-3 text-sm font-semibold text-blue-700 uppercase tracking-wide">Experience</span></div>
+              </div>
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <h3 className="text-lg font-semibold">Experience</h3>
@@ -3783,6 +3809,10 @@ const addCombinedDevMap = () => {
               {/* ==========================
                   BANK DETAILS (repeater)
                   ========================== */}
+              <div className="relative my-6">
+                <div className="absolute inset-0 flex items-center"><div className="w-full border-t-2 border-blue-200"></div></div>
+                <div className="relative flex justify-start"><span className="bg-white pr-3 text-sm font-semibold text-blue-700 uppercase tracking-wide">Bank Details</span></div>
+              </div>
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <h3 className="text-lg font-semibold">Bank Details</h3>
@@ -3842,6 +3872,10 @@ const addCombinedDevMap = () => {
           {/* ==========================
     ATTENDANCE DEVICE MAPPING 
     ========================== */}
+              <div className="relative my-6">
+                <div className="absolute inset-0 flex items-center"><div className="w-full border-t-2 border-blue-200"></div></div>
+                <div className="relative flex justify-start"><span className="bg-white pr-3 text-sm font-semibold text-blue-700 uppercase tracking-wide">Device Mappings</span></div>
+              </div>
 <div className="space-y-3">
   <div className="flex items-center justify-between">
     <h3 className="text-lg font-semibold">Attendance Device Mapping</h3>
