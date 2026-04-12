@@ -50,6 +50,7 @@ import { PfcomplianceModule } from './pfcompliance/pfcompliance.module';
 import { ESICComplianceModule } from './esiccompliance/esiccompliance.module';
 import { PTComplianceModule } from './ptcompliance/ptcompliance.module';
 import { TerminationModule } from './termination/termination.module';
+import { EmployeeMemoModule } from './employee-memo/employee-memo.module';
 import { CanteenModule } from './canteen/canteen.module';
 import { ProcessAttLogsModule } from './process_att_logs/process_att_logs.module';
 import { PrivilegedLeaveModule } from './privileged-leave/privileged-leave.module';
@@ -111,6 +112,7 @@ import { ImportAttendanceModule } from './import-attendance/import-attendance.mo
     ESICComplianceModule,
     PTComplianceModule,
     TerminationModule,
+    EmployeeMemoModule,
     CanteenModule,
     ProcessAttLogsModule,
     PrivilegedLeaveModule,

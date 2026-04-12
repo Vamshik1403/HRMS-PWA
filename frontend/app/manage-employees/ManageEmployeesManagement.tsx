@@ -532,15 +532,16 @@ export function ManageEmployeesManagement() {
   const [originalEduIds, setOriginalEduIds] = useState<ID[]>([]);
 
   // Staging state for multi-entry search-and-add pattern
-  const [stagingBranch, setStagingBranch] = useState<{ branchesID: ID | null; label: string; effectFrom: string }>({ branchesID: null, label: "", effectFrom: "" });
-  const [stagingDept, setStagingDept] = useState<{ departmentNameID: ID | null; label: string; effectFrom: string }>({ departmentNameID: null, label: "", effectFrom: "" });
-  const [stagingDesg, setStagingDesg] = useState<{ designationID: ID | null; label: string; effectFrom: string }>({ designationID: null, label: "", effectFrom: "" });
-  const [stagingContr, setStagingContr] = useState<{ contractorID: ID | null; label: string; effectFrom: string }>({ contractorID: null, label: "", effectFrom: "" });
-  const [stagingWS, setStagingWS] = useState<{ workShiftID: ID | null; label: string; effectFrom: string }>({ workShiftID: null, label: "", effectFrom: "" });
-  const [stagingAP, setStagingAP] = useState<{ attendancePolicyID: ID | null; label: string; effectFrom: string }>({ attendancePolicyID: null, label: "", effectFrom: "" });
-  const [stagingLP, setStagingLP] = useState<{ leavePolicyID: ID | null; label: string; effectFrom: string }>({ leavePolicyID: null, label: "", effectFrom: "" });
-  const [stagingET, setStagingET] = useState<{ employmentType: string; effectFrom: string }>({ employmentType: "", effectFrom: "" });
-  const [stagingES, setStagingES] = useState<{ employmentStatus: string; probationPeriod: string; effectFrom: string }>({ employmentStatus: "", probationPeriod: "", effectFrom: "" });
+  const today = new Date().toISOString().split('T')[0];
+  const [stagingBranch, setStagingBranch] = useState<{ branchesID: ID | null; label: string; effectFrom: string }>({ branchesID: null, label: "", effectFrom: today });
+  const [stagingDept, setStagingDept] = useState<{ departmentNameID: ID | null; label: string; effectFrom: string }>({ departmentNameID: null, label: "", effectFrom: today });
+  const [stagingDesg, setStagingDesg] = useState<{ designationID: ID | null; label: string; effectFrom: string }>({ designationID: null, label: "", effectFrom: today });
+  const [stagingContr, setStagingContr] = useState<{ contractorID: ID | null; label: string; effectFrom: string }>({ contractorID: null, label: "", effectFrom: today });
+  const [stagingWS, setStagingWS] = useState<{ workShiftID: ID | null; label: string; effectFrom: string }>({ workShiftID: null, label: "", effectFrom: today });
+  const [stagingAP, setStagingAP] = useState<{ attendancePolicyID: ID | null; label: string; effectFrom: string }>({ attendancePolicyID: null, label: "", effectFrom: today });
+  const [stagingLP, setStagingLP] = useState<{ leavePolicyID: ID | null; label: string; effectFrom: string }>({ leavePolicyID: null, label: "", effectFrom: today });
+  const [stagingET, setStagingET] = useState<{ employmentType: string; effectFrom: string }>({ employmentType: "", effectFrom: today });
+  const [stagingES, setStagingES] = useState<{ employmentStatus: string; probationPeriod: string; effectFrom: string }>({ employmentStatus: "", probationPeriod: "", effectFrom: today });
 
   const [originalExpIds, setOriginalExpIds] = useState<ID[]>([]);
   const [originalDevMapIds, setOriginalDevMapIds] = useState<ID[]>([]);
@@ -1533,7 +1534,7 @@ const addCombinedDevMap = () => {
       const last = updated[updated.length - 1];
       return { ...p, empEmploymentTypeForm: updated, promotion: { ...p.promotion, employmentType: last?.employmentType ?? "" } };
     });
-    setStagingET({ employmentType: "", effectFrom: "" });
+    setStagingET({ employmentType: "", effectFrom: today });
   };
   const removeEmpEmploymentType = (lid: string) => setFormData(p => {
     const updated = p.empEmploymentTypeForm.filter(x => x._localId !== lid);
@@ -1555,7 +1556,7 @@ const addCombinedDevMap = () => {
       const last = updated[updated.length - 1];
       return { ...p, empEmploymentStatusForm: updated, promotion: { ...p.promotion, employmentStatus: last?.employmentStatus ?? "", probationPeriod: last?.probationPeriod ?? "" } };
     });
-    setStagingES({ employmentStatus: "", probationPeriod: "", effectFrom: "" });
+    setStagingES({ employmentStatus: "", probationPeriod: "", effectFrom: today });
   };
   const removeEmpEmploymentStatus = (lid: string) => setFormData(p => {
     const updated = p.empEmploymentStatusForm.filter(x => x._localId !== lid);
@@ -2728,7 +2729,7 @@ const addCombinedDevMap = () => {
                       )}
                     </div>
                     <div className="space-y-2">
-                      <Label>Effect From</Label>
+                      <Label>WEF</Label>
                       <Input type="date" value={stagingBranch.effectFrom} onChange={(e) => setStagingBranch(p => ({ ...p, effectFrom: e.target.value }))} />
                     </div>
                     <Button type="button" size="sm" disabled={!stagingBranch.branchesID} onClick={() => {
@@ -2739,13 +2740,13 @@ const addCombinedDevMap = () => {
                         const last = updated[updated.length - 1];
                         return { ...p, empBranchForm: updated, branchesID: last?.branchesID ?? null, brAutocomplete: last?._brAutocomplete ?? "" };
                       });
-                      setStagingBranch({ branchesID: null, label: "", effectFrom: "" });
+                      setStagingBranch({ branchesID: null, label: "", effectFrom: today });
                     }}>Add</Button>
                   </div>
                   {/* History Box */}
                   <div className="border border-gray-200 rounded-lg overflow-hidden">
                     <div className="bg-gray-50 px-3 py-2 text-xs font-semibold text-gray-600 uppercase tracking-wide flex">
-                      <span className="flex-1">Branch</span><span className="w-32 text-center">Effect From</span><span className="w-10"></span>
+                      <span className="flex-1">Branch</span><span className="w-32 text-center">WEF</span><span className="w-10"></span>
                     </div>
                     {formData.empBranchForm.length === 0 ? (
                       <div className="text-center py-4 text-gray-400 text-sm">No branches added</div>
@@ -2886,7 +2887,7 @@ const addCombinedDevMap = () => {
                     )}
                   </div>
                   <div className="space-y-2">
-                    <Label>Effect From</Label>
+                    <Label>WEF</Label>
                     <Input type="date" value={stagingDept.effectFrom} onChange={(e) => setStagingDept(p => ({ ...p, effectFrom: e.target.value }))} />
                   </div>
                   <Button type="button" size="sm" disabled={!stagingDept.departmentNameID} onClick={() => {
@@ -2897,12 +2898,12 @@ const addCombinedDevMap = () => {
                       const last = updated[updated.length - 1];
                       return { ...p, empDepartmentForm: updated, departmentNameID: last?.departmentNameID ?? null, deptAutocomplete: last?._deptAutocomplete ?? "", promotion: { ...p.promotion, departmentNameID: last?.departmentNameID ?? null } };
                     });
-                    setStagingDept({ departmentNameID: null, label: "", effectFrom: "" });
+                    setStagingDept({ departmentNameID: null, label: "", effectFrom: today });
                   }}>Add</Button>
                 </div>
                 <div className="border border-gray-200 rounded-lg overflow-hidden">
                   <div className="bg-gray-50 px-3 py-2 text-xs font-semibold text-gray-600 uppercase tracking-wide flex">
-                    <span className="flex-1">Department</span><span className="w-32 text-center">Effect From</span><span className="w-10"></span>
+                    <span className="flex-1">Department</span><span className="w-32 text-center">WEF</span><span className="w-10"></span>
                   </div>
                   {formData.empDepartmentForm.length === 0 ? (
                     <div className="text-center py-4 text-gray-400 text-sm">No departments added</div>
@@ -2951,19 +2952,19 @@ const addCombinedDevMap = () => {
                     )}
                   </div>
                   <div className="space-y-2">
-                    <Label>Effect From</Label>
+                    <Label>WEF</Label>
                     <Input type="date" value={stagingDesg.effectFrom} onChange={(e) => setStagingDesg(p => ({ ...p, effectFrom: e.target.value }))} />
                   </div>
                   <Button type="button" size="sm" disabled={!stagingDesg.designationID} onClick={() => {
                     if (!stagingDesg.designationID) return;
                     const newEntry: EmpDesignationForm = { _localId: uid(), designationID: stagingDesg.designationID, _desgAutocomplete: stagingDesg.label, effectFrom: stagingDesg.effectFrom };
                     setFormData(p => ({ ...p, empDesignationForm: [...p.empDesignationForm, newEntry] }));
-                    setStagingDesg({ designationID: null, label: "", effectFrom: "" });
+                    setStagingDesg({ designationID: null, label: "", effectFrom: today });
                   }}>Add</Button>
                 </div>
                 <div className="border border-gray-200 rounded-lg overflow-hidden">
                   <div className="bg-gray-50 px-3 py-2 text-xs font-semibold text-gray-600 uppercase tracking-wide flex">
-                    <span className="flex-1">Designation</span><span className="w-32 text-center">Effect From</span><span className="w-10"></span>
+                    <span className="flex-1">Designation</span><span className="w-32 text-center">WEF</span><span className="w-10"></span>
                   </div>
                   {formData.empDesignationForm.length === 0 ? (
                     <div className="text-center py-4 text-gray-400 text-sm">No designations added</div>
@@ -3069,14 +3070,14 @@ const addCombinedDevMap = () => {
                     </Select>
                   </div>
                   <div className="space-y-2">
-                    <Label>Effect From</Label>
+                    <Label>WEF</Label>
                     <Input type="date" value={stagingET.effectFrom} onChange={(e) => setStagingET(p => ({ ...p, effectFrom: e.target.value }))} />
                   </div>
                   <Button type="button" size="sm" disabled={!stagingET.employmentType} onClick={addEmpEmploymentType}>Add</Button>
                 </div>
                 <div className="border border-gray-200 rounded-lg overflow-hidden">
                   <div className="bg-gray-50 px-3 py-2 text-xs font-semibold text-gray-600 uppercase tracking-wide flex">
-                    <span className="flex-1">Employment Type</span><span className="w-32 text-center">Effect From</span><span className="w-10"></span>
+                    <span className="flex-1">Employment Type</span><span className="w-32 text-center">WEF</span><span className="w-10"></span>
                   </div>
                   {formData.empEmploymentTypeForm.length === 0 ? (
                     <div className="text-center py-4 text-gray-400 text-sm">No employment type entries added</div>
@@ -3125,19 +3126,19 @@ const addCombinedDevMap = () => {
                     )}
                   </div>
                   <div className="space-y-2">
-                    <Label>Effect From</Label>
+                    <Label>WEF</Label>
                     <Input type="date" value={stagingContr.effectFrom} onChange={(e) => setStagingContr(p => ({ ...p, effectFrom: e.target.value }))} />
                   </div>
                   <Button type="button" size="sm" disabled={!stagingContr.contractorID} onClick={() => {
                     if (!stagingContr.contractorID) return;
                     const newEntry: EmpContractorForm = { _localId: uid(), contractorID: stagingContr.contractorID, _contrAutocomplete: stagingContr.label, effectFrom: stagingContr.effectFrom };
                     setFormData(p => ({ ...p, empContractorForm: [...p.empContractorForm, newEntry] }));
-                    setStagingContr({ contractorID: null, label: "", effectFrom: "" });
+                    setStagingContr({ contractorID: null, label: "", effectFrom: today });
                   }}>Add</Button>
                 </div>
                 <div className="border border-gray-200 rounded-lg overflow-hidden">
                   <div className="bg-gray-50 px-3 py-2 text-xs font-semibold text-gray-600 uppercase tracking-wide flex">
-                    <span className="flex-1">Contractor</span><span className="w-32 text-center">Effect From</span><span className="w-10"></span>
+                    <span className="flex-1">Contractor</span><span className="w-32 text-center">WEF</span><span className="w-10"></span>
                   </div>
                   {formData.empContractorForm.length === 0 ? (
                     <div className="text-center py-4 text-gray-400 text-sm">No contractors added</div>
@@ -3177,14 +3178,14 @@ const addCombinedDevMap = () => {
                     </div>
                   )}
                   <div className="space-y-2">
-                    <Label>Effect From</Label>
+                    <Label>WEF</Label>
                     <Input type="date" value={stagingES.effectFrom} onChange={(e) => setStagingES(p => ({ ...p, effectFrom: e.target.value }))} />
                   </div>
                   <Button type="button" size="sm" disabled={!stagingES.employmentStatus} onClick={addEmpEmploymentStatus}>Add</Button>
                 </div>
                 <div className="border border-gray-200 rounded-lg overflow-hidden">
                   <div className="bg-gray-50 px-3 py-2 text-xs font-semibold text-gray-600 uppercase tracking-wide flex">
-                    <span className="flex-1">Status</span><span className="w-28 text-center">Probation</span><span className="w-32 text-center">Effect From</span><span className="w-10"></span>
+                    <span className="flex-1">Status</span><span className="w-28 text-center">Probation</span><span className="w-32 text-center">WEF</span><span className="w-10"></span>
                   </div>
                   {formData.empEmploymentStatusForm.length === 0 ? (
                     <div className="text-center py-4 text-gray-400 text-sm">No employment status entries added</div>
@@ -3323,20 +3324,20 @@ const addCombinedDevMap = () => {
                     )}
                   </div>
                   <div className="space-y-2">
-                    <Label>Effect From</Label>
+                    <Label>WEF</Label>
                     <Input type="date" value={stagingAP.effectFrom} onChange={(e) => setStagingAP(p => ({ ...p, effectFrom: e.target.value }))} />
                   </div>
                   <Button type="button" size="sm" disabled={!stagingAP.attendancePolicyID} onClick={() => {
                     if (!stagingAP.attendancePolicyID) return;
                     const newEntry: EmpAttendancePolicyForm = { _localId: uid(), attendancePolicyID: stagingAP.attendancePolicyID, _apAutocomplete: stagingAP.label, effectFrom: stagingAP.effectFrom };
                     setFormData(p => ({ ...p, empAttendancePolicyForm: [...p.empAttendancePolicyForm, newEntry] }));
-                    setStagingAP({ attendancePolicyID: null, label: "", effectFrom: "" });
+                    setStagingAP({ attendancePolicyID: null, label: "", effectFrom: today });
                   }}>Add</Button>
                 </div>
                 {/* History Box */}
                 <div className="border border-gray-200 rounded-lg overflow-hidden">
                   <div className="bg-gray-50 px-3 py-2 text-xs font-semibold text-gray-600 uppercase tracking-wide flex">
-                    <span className="flex-1">Attendance Policy</span><span className="w-32 text-center">Effect From</span><span className="w-10"></span>
+                    <span className="flex-1">Attendance Policy</span><span className="w-32 text-center">WEF</span><span className="w-10"></span>
                   </div>
                   {formData.empAttendancePolicyForm.length === 0 ? (
                     <div className="text-center py-4 text-gray-400 text-sm">No attendance policies added</div>
@@ -3387,20 +3388,20 @@ const addCombinedDevMap = () => {
                     )}
                   </div>
                   <div className="space-y-2">
-                    <Label>Effect From</Label>
+                    <Label>WEF</Label>
                     <Input type="date" value={stagingLP.effectFrom} onChange={(e) => setStagingLP(p => ({ ...p, effectFrom: e.target.value }))} />
                   </div>
                   <Button type="button" size="sm" disabled={!stagingLP.leavePolicyID} onClick={() => {
                     if (!stagingLP.leavePolicyID) return;
                     const newEntry: EmpLeavePolicyForm = { _localId: uid(), leavePolicyID: stagingLP.leavePolicyID, _lpAutocomplete: stagingLP.label, effectFrom: stagingLP.effectFrom };
                     setFormData(p => ({ ...p, empLeavePolicyForm: [...p.empLeavePolicyForm, newEntry] }));
-                    setStagingLP({ leavePolicyID: null, label: "", effectFrom: "" });
+                    setStagingLP({ leavePolicyID: null, label: "", effectFrom: today });
                   }}>Add</Button>
                 </div>
                 {/* History Box */}
                 <div className="border border-gray-200 rounded-lg overflow-hidden">
                   <div className="bg-gray-50 px-3 py-2 text-xs font-semibold text-gray-600 uppercase tracking-wide flex">
-                    <span className="flex-1">Leave Policy</span><span className="w-32 text-center">Effect From</span><span className="w-10"></span>
+                    <span className="flex-1">Leave Policy</span><span className="w-32 text-center">WEF</span><span className="w-10"></span>
                   </div>
                   {formData.empLeavePolicyForm.length === 0 ? (
                     <div className="text-center py-4 text-gray-400 text-sm">No leave policies added</div>
@@ -3451,20 +3452,20 @@ const addCombinedDevMap = () => {
                     )}
                   </div>
                   <div className="space-y-2">
-                    <Label>Effect From</Label>
+                    <Label>WEF</Label>
                     <Input type="date" value={stagingWS.effectFrom} onChange={(e) => setStagingWS(p => ({ ...p, effectFrom: e.target.value }))} />
                   </div>
                   <Button type="button" size="sm" disabled={!stagingWS.workShiftID} onClick={() => {
                     if (!stagingWS.workShiftID) return;
                     const newEntry: EmpWorkShiftForm = { _localId: uid(), workShiftID: stagingWS.workShiftID, _wsAutocomplete: stagingWS.label, effectFrom: stagingWS.effectFrom };
                     setFormData(p => ({ ...p, empWorkShiftForm: [...p.empWorkShiftForm, newEntry] }));
-                    setStagingWS({ workShiftID: null, label: "", effectFrom: "" });
+                    setStagingWS({ workShiftID: null, label: "", effectFrom: today });
                   }}>Add</Button>
                 </div>
                 {/* History Box */}
                 <div className="border border-gray-200 rounded-lg overflow-hidden">
                   <div className="bg-gray-50 px-3 py-2 text-xs font-semibold text-gray-600 uppercase tracking-wide flex">
-                    <span className="flex-1">Work Shift</span><span className="w-32 text-center">Effect From</span><span className="w-10"></span>
+                    <span className="flex-1">Work Shift</span><span className="w-32 text-center">WEF</span><span className="w-10"></span>
                   </div>
                   {formData.empWorkShiftForm.length === 0 ? (
                     <div className="text-center py-4 text-gray-400 text-sm">No work shifts added</div>

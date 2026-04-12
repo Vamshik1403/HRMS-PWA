@@ -5,7 +5,7 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL_HRMS")
+  url      = env("DATABASE_URL")
 }
 
 model AttendancePolicy {
@@ -668,6 +668,7 @@ model ManageEmployee {
   empAttendancePolicy            EmpAttendancePolicy[]
   empLeavePolicy                 EmpLeavePolicy[]
   empContractor                  EmpContractor[]
+  employeeMemo                   EmployeeMemo[]
 }
 
 model EmployeeFieldHistory {
@@ -1660,4 +1661,22 @@ enum RegularizeAs {
   PL
   LOP
   WEEKOFF
+}
+
+model EmployeeMemo {
+  id                Int              @id @default(autoincrement())
+  serviceProviderID Int?
+  companyID         Int?
+  branchesID        Int?
+  employeeID        Int
+  memoType          String?          @db.VarChar  // Warning, Memo, Notice
+  subject           String?          @db.VarChar
+  description       String?
+  issuedDate        DateTime?        @db.Date
+  issuedBy          String?          @db.VarChar
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  manageEmployee    ManageEmployee   @relation(fields: [employeeID], references: [id], onDelete: Cascade)
+
+  @@index([employeeID])
 }

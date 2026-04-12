@@ -25,7 +25,7 @@ export class ImportAttendanceService {
     }
 
     // Validate required columns exist
-    const requiredCols = ['user_id', 'punch_time'];
+    const requiredCols = ['punch_time'];
     const headers = Object.keys(rows[0]);
     const missing = requiredCols.filter(c => !headers.includes(c));
     if (missing.length) {
@@ -51,7 +51,7 @@ export class ImportAttendanceService {
         // Build process_att_logs row
         processAttLogRows.push({
           device_sn: row.device_sn ? String(row.device_sn) : null,
-          user_id: String(row.user_id),
+          user_id: row.user_id != null ? String(row.user_id) : null,
           username: row.username ? String(row.username) : null,
           punch_time: punchTime,
           company_name: row.company_name ? String(row.company_name) : null,

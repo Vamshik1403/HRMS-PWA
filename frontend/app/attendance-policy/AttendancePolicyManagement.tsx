@@ -349,6 +349,7 @@ export function AttendancePolicyManagement() {
         otMealApply: formData.otMealApply,
         minsForOTMealToken: formData.minsForOTMealToken,
         minsForBreakTimeForMeal: formData.minsForBreakTimeForMeal,
+        breakTimeForOT: formData.breakTimeForOT,
       };
 
       const url = editingPolicy

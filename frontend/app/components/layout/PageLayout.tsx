@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, useMemo } from "react"
 import {
   SidebarProvider,
   Sidebar,
@@ -63,6 +63,7 @@ export function PageLayout({ children }: PageLayoutProps) {
   const currentUser = useCurrentUser()
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const sidebarBeforeDrawerRef = useRef(true)
+  const [fetchedServiceProviders, setFetchedServiceProviders] = useState<any[]>([])
   const [openSections, setOpenSections] = useState<{ [key: string]: boolean }>({
     setup: false,
     employee: false,
@@ -80,9 +81,33 @@ export function PageLayout({ children }: PageLayoutProps) {
   const isManager = currentUser?.role === 'MANAGER'
   const isRegularUser = !isSuperAdmin && !isManager
 
+  // Fetch service providers for sidebar section headings
+  useEffect(() => {
+    const fetchSps = async () => {
+      try {
+        const res = await fetch("/backend/service-provider")
+        if (res.ok) {
+          const data = await res.json()
+          if (Array.isArray(data)) {
+            setFetchedServiceProviders(data)
+          }
+        }
+      } catch { /* ignore */ }
+    }
+    fetchSps()
+  }, [])
+
+  // Determine which service providers to display as sidebar sections
+  const displaySPs = useMemo(() => {
+    if (currentUser?.serviceProvider && currentUser.serviceProviderID) {
+      return [{ id: currentUser.serviceProviderID, companyName: currentUser.serviceProvider.companyName }]
+    }
+    return fetchedServiceProviders.map(sp => ({ id: sp.id, companyName: sp.companyName || "Service Provider" }))
+  }, [currentUser?.serviceProvider, currentUser?.serviceProviderID, fetchedServiceProviders])
+
   // Determine which section should be open based on current path
   useEffect(() => {
-    const newOpenSections = {
+    const newOpenSections: { [key: string]: boolean } = {
       setup: false,
       employee: false,
       payroll: false,
@@ -94,40 +119,61 @@ export function PageLayout({ children }: PageLayoutProps) {
       settings: false
     }
 
+    // Set per-SP parent section keys
+    for (const sp of displaySPs) {
+      newOpenSections[`sp_${sp.id}`] = false
+    }
+
+    // Determine which sub-section to open and expand all SP parent sections
+    const openAllSpParents = () => {
+      for (const sp of displaySPs) {
+        newOpenSections[`sp_${sp.id}`] = true
+      }
+    }
+
     // Company Management section paths
     if (['/company', '/branches', '/devices', '/contractors', '/contractor-rates'].includes(pathname)) {
+      openAllSpParents()
       newOpenSections.setup = true
     }
     // Employee Management section paths
-    else if (['/departments', '/designations', '/manage-employees'].includes(pathname)) {
+    else if (['/departments', '/designations', '/manage-employees', '/employees-promotions', '/employee-memo', '/termination'].includes(pathname)) {
+      openAllSpParents()
       newOpenSections.employee = true
     }
     // Workshift & Policy Management section paths
     else if (['/work-shifts', '/attendance-policy', '/roster'].includes(pathname)) {
+      openAllSpParents()
       newOpenSections.payroll = true
     }
     // Salary Management section paths
     else if (['/monthly-salary-cycle', '/salary-allowances', '/salary-deductions', '/monthly-pay-grade', '/salary-advance', '/reimbursement','/bonus-setup', '/bonus-allocations', '/generate-salary'].includes(pathname)) {
+      openAllSpParents()
       newOpenSections.salary = true
     }
     // Leave Management section paths
     else if (['/manage-holidays', '/public-holiday', '/leave-policy', '/leave-applications', '/privileged-leave'].includes(pathname)) {
+      openAllSpParents()
       newOpenSections.leave = true
     }
     // Attendance Management section paths
     else if (['/field-attendance-schedule', '/attendance-regularisation'].includes(pathname)) {
+      openAllSpParents()
       newOpenSections.attendance = true
     }
     // Reports section paths
     else if (['/attendance-reports', '/leave-reports', '/salary-statements', '/canteen/reports'].includes(pathname)) {
+      openAllSpParents()
       newOpenSections.reports = true
     }
     // Canteen Management section paths
     else if (['/canteen', '/canteen/setup', '/canteen/reports'].includes(pathname)) {
+      openAllSpParents()
       newOpenSections.canteen = true
     }
     // Settings section paths
-    else if (['/import-attendance'].includes(pathname)) {
+    else if (['/import-attendance', '/system-users'].includes(pathname)) {
+      openAllSpParents()
       newOpenSections.settings = true
     }
 
@@ -135,12 +181,13 @@ export function PageLayout({ children }: PageLayoutProps) {
     else if (pathname === '/dashboard') {
       // Only open salary section if user has access to salary management
       if (isSuperAdmin || isManager || isRegularUser) {
+        openAllSpParents()
         newOpenSections.salary = true
       }
     }
 
     setOpenSections(newOpenSections)
-  }, [pathname, isSuperAdmin, isManager, isRegularUser])
+  }, [pathname, isSuperAdmin, isManager, isRegularUser, displaySPs])
 
   // Sidebar stays open when form drawers are active
   // (no collapse behavior needed)
@@ -170,6 +217,9 @@ export function PageLayout({ children }: PageLayoutProps) {
     "/departments",
     "/designations",
     "/manage-employees",
+    "/employees-promotions",
+    "/employee-memo",
+    "/termination",
   ].includes(pathname);
   const payrollSectionActive = [
     "/work-shifts",
@@ -208,7 +258,10 @@ export function PageLayout({ children }: PageLayoutProps) {
     pathname === "/canteen" || pathname === "/canteen/setup";
   const settingsSectionActive = [
     "/import-attendance",
+    "/system-users",
   ].includes(pathname);
+
+  const spSectionActive = setupSectionActive || employeeSectionActive || payrollSectionActive || salarySectionActive || leaveSectionActive || attendanceSectionActive || reportsSectionActive || canteenSectionActive || settingsSectionActive;
 
   return (
     <div className="min-h-screen bg-[#f8fafc]">
@@ -277,6 +330,48 @@ export function PageLayout({ children }: PageLayoutProps) {
                     </SidebarMenuButton>
                   </SidebarMenuItem>
                 )}
+
+                {/* Service Provider Parent Sections */}
+                {displaySPs.map((sp) => (
+                <Collapsible key={sp.id} open={openSections[`sp_${sp.id}`]} onOpenChange={(open) => setOpenSections(prev => ({ ...prev, [`sp_${sp.id}`]: open }))}>
+                  <CollapsibleTrigger asChild>
+                    <SidebarMenuButton
+                      size="lg"
+                      className={cn(
+                        sbMenuBtnReset,
+                        sbRow,
+                        "mx-0 justify-between",
+                        spSectionActive
+                          ? sbActive
+                          : cn(
+                              sbIdle,
+                              openSections[`sp_${sp.id}`] &&
+                                "font-semibold text-[#4f46e5]"
+                            )
+                      )}
+                    >
+                      <span className="flex items-center gap-3 min-w-0">
+                        <Icon
+                          icon="mdi:office-building-outline"
+                          className={cn(
+                            "w-5 h-5 shrink-0",
+                            spSectionActive
+                              ? "text-[#4f46e5]" : "text-gray-400"
+                          )}
+                        />
+                        <span className="truncate font-semibold">{sp.companyName}</span>
+                      </span>
+                      <Icon
+                        icon="mdi:chevron-down"
+                        className={cn(
+                          "w-4 h-4 shrink-0 text-gray-500 transition-transform duration-300",
+                          openSections[`sp_${sp.id}`] && "rotate-180"
+                        )}
+                      />
+                    </SidebarMenuButton>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent>
+                    <div className="ml-3 border-l border-[#f0f0f0] pl-1">
 
                 {/* Setup Section - Only for SUPERADMIN and MANAGER (with restrictions for MANAGER) */}
                 {(isSuperAdmin || isManager) && (
@@ -465,7 +560,7 @@ export function PageLayout({ children }: PageLayoutProps) {
                             </Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
-                        {/* <SidebarMenuSubItem>
+                        <SidebarMenuSubItem>
                           <SidebarMenuSubButton asChild>
                             <Link href="/employees-promotions" className={cn(sbSubRow,
                               isActiveLink('/employees-promotions') 
@@ -477,15 +572,27 @@ export function PageLayout({ children }: PageLayoutProps) {
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
                         <SidebarMenuSubItem>
-                          <SidebarMenuSubButton className={cn(sbSubRow, sbSubIdle, "cursor-default opacity-70")}>
-                            <span className="font-medium">Employees Notices</span>
+                          <SidebarMenuSubButton asChild>
+                            <Link href="/employee-memo" className={cn(sbSubRow,
+                              isActiveLink('/employee-memo') 
+                                ? sbSubActive
+                                : sbSubIdle
+                            )}>
+                              <span className="font-medium">Employee Memo / Warnings</span>
+                            </Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
                         <SidebarMenuSubItem>
-                          <SidebarMenuSubButton className={cn(sbSubRow, sbSubIdle, "cursor-default opacity-70")}>
-                            <span className="font-medium">Employees Terminations</span>
+                          <SidebarMenuSubButton asChild>
+                            <Link href="/termination" className={cn(sbSubRow,
+                              isActiveLink('/termination') 
+                                ? sbSubActive
+                                : sbSubIdle
+                            )}>
+                              <span className="font-medium">Employee Termination</span>
+                            </Link>
                           </SidebarMenuSubButton>
-                        </SidebarMenuSubItem> */}
+                        </SidebarMenuSubItem>
                       </SidebarMenuSub>
                     </CollapsibleContent>
                   </Collapsible>
@@ -1135,10 +1242,27 @@ export function PageLayout({ children }: PageLayoutProps) {
                             </Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
+                        {(isSuperAdmin || isManager) && (
+                          <SidebarMenuSubItem>
+                            <SidebarMenuSubButton asChild>
+                              <Link href="/system-users" className={cn(sbSubRow,
+                                isActiveLink('/system-users') 
+                                  ? sbSubActive
+                                  : sbSubIdle
+                              )}>
+                                <span className="font-medium">System Users</span>
+                              </Link>
+                            </SidebarMenuSubButton>
+                          </SidebarMenuSubItem>
+                        )}
                       </SidebarMenuSub>
                     </CollapsibleContent>
                   </Collapsible>
                 )}
+                    </div>
+                  </CollapsibleContent>
+                </Collapsible>
+                ))}
               </SidebarMenu>
             </SidebarGroup>
           </SidebarContent>

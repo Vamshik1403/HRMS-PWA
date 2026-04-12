@@ -13,7 +13,6 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "../components/ui/dialog";
 import {
   Table,
@@ -25,9 +24,10 @@ import {
 } from "../components/ui/table";
 import { Badge } from "../components/ui/badge";
 import { Icon } from "@iconify/react";
-import { Plus, Search, Edit, Trash2, Eye, CheckCircle, History } from "lucide-react";
+import { Plus, Search, Edit, Trash2, Eye, CheckCircle, History, X } from "lucide-react";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "../components/ui/select";
 import { useCurrentUser } from "../hooks/useCurrentUser";
+import { FormDrawer } from "../components/ui/form-drawer";
 import { toast } from "sonner";
 
 /** ========= Types aligned to backend ========= */
@@ -255,8 +255,8 @@ export function EmployeesPromotionsManagement() {
 
 
   /** dialog state */
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [isViewOpen, setIsViewOpen] = useState(false);
+  const [isAddingNew, setIsAddingNew] = useState(false);
+  const [isViewing, setIsViewing] = useState(false);
   const [viewRow, setViewRow] = useState<empPromotion | null>(null);
   const [editingRow, setEditingRow] = useState<{ current?: CurrentPos | null; promo?: empPromotion | null } | null>(null);
 
@@ -439,6 +439,7 @@ export function EmployeesPromotionsManagement() {
     promotionDate: string;
     status: string;
     promotedSalaryCtc?: string;
+    transferTypes: string[];
 
     currentDeptIdDisplay: string;
     currentManagerIdDisplay: string;
@@ -446,6 +447,8 @@ export function EmployeesPromotionsManagement() {
     currentManagerNameDisplay: string;
     currentDeptNameDisplay: string;
     currentDesgNameDisplay: string;
+    currentCompanyNameDisplay: string;
+    currentBranchNameDisplay: string;
     currentSalaryPayGradeTypeDisplay: string;
     currentEmploymentTypeDisplay: string;
     currentEmploymentStatusDisplay: string;
@@ -505,6 +508,7 @@ export function EmployeesPromotionsManagement() {
     promotionDate: "",
     status: "Not Applied",
     promotedSalaryCtc: "",
+    transferTypes: [] as string[],
 
     currentDeptIdDisplay: "",
     currentManagerIdDisplay: "",
@@ -512,6 +516,8 @@ export function EmployeesPromotionsManagement() {
     currentManagerNameDisplay: "",
     currentDeptNameDisplay: "",
     currentDesgNameDisplay: "",
+    currentCompanyNameDisplay: "",
+    currentBranchNameDisplay: "",
     currentSalaryPayGradeTypeDisplay: "",
     currentEmploymentTypeDisplay: "",
     currentEmploymentStatusDisplay: "",
@@ -1262,6 +1268,8 @@ const runFetchBR = (query: string) => {
       currentManagerIdDisplay: promotionObj.managerID != null ? String(promotionObj.managerID) : "",
       currentDeptNameDisplay: deptName || (promotionObj.departmentNameID || promotionObj.designationID || promotionObj.workShiftID || promotionObj.attendancePolicyID || promotionObj.leavePolicyID ? "Loading..." : "Not assigned"),
       currentDesgNameDisplay: desgName || (promotionObj.departmentNameID || promotionObj.designationID || promotionObj.workShiftID || promotionObj.attendancePolicyID || promotionObj.leavePolicyID ? "Loading..." : "Not assigned"),
+      currentCompanyNameDisplay: (emp as any).company?.companyName ?? p.coAutocomplete ?? "",
+      currentBranchNameDisplay: (emp as any).branches?.branchName ?? p.brAutocomplete ?? "",
       currentSalaryPayGradeTypeDisplay: promotionObj.salaryPayGradeType || "Not set",
       currentEmploymentTypeDisplay: promotionObj.employmentType || "Not set",
       currentEmploymentStatusDisplay: promotionObj.employmentStatus || "Not set",
@@ -1468,7 +1476,7 @@ const runFetchBR = (query: string) => {
 
       await fetchRows();
       resetForm();
-      setIsDialogOpen(false);
+      setIsAddingNew(false);
       toast.success("Promotion saved successfully");
     } catch (e: any) {
       setError(e?.message || "Save failed");
@@ -1556,7 +1564,7 @@ const runFetchBR = (query: string) => {
       setBrList([]);
     }, 0);
 
-    setIsDialogOpen(true);
+    setIsAddingNew(true);
   };
 
 
@@ -1564,7 +1572,7 @@ const runFetchBR = (query: string) => {
   // was: const handleView = (promo: PromotionReq) => {
   const handleView = (promo: EmpPromotionRow) => {
     setViewRow(promo as any); // if your view modal expects old shape, read from nested fields defensively
-    setIsViewOpen(true);
+    setIsViewing(true);
   };
 
 
@@ -1637,6 +1645,7 @@ const runFetchBR = (query: string) => {
       description: "",
       promotionDate: "",
       status: "Not Applied",
+      transferTypes: [],
 
       // READ-ONLY current position (from /manage-emp)
       currentDeptIdDisplay: "",
@@ -1645,6 +1654,8 @@ const runFetchBR = (query: string) => {
       currentManagerNameDisplay: "",
       currentDeptNameDisplay: "",
       currentDesgNameDisplay: "",
+      currentCompanyNameDisplay: "",
+      currentBranchNameDisplay: "",
       currentSalaryPayGradeTypeDisplay: "",
       currentEmploymentTypeDisplay: "",
       currentEmploymentStatusDisplay: "",
@@ -1669,26 +1680,25 @@ const runFetchBR = (query: string) => {
           <p className="text-gray-600 mt-1 text-sm">Create, read, update, and delete promotion requests & current positions</p>
         </div>
 
-        <Dialog open={isDialogOpen} onOpenChange={(v) => { setIsDialogOpen(v); if (!v) resetForm(); }}>
-          <DialogTrigger asChild>
-            {canManage && (
-              <Button
-                onClick={() => { resetForm(); setIsDialogOpen(true); }}
-                className="flex-shrink-0 text-sm px-3 py-2"
-              >
-                <Plus className="w-4 h-4 mr-1" /> Add Promotion
-              </Button>
-            )}
+        {!isAddingNew && !isViewing && canManage && (
+          <Button
+            onClick={() => { resetForm(); setIsAddingNew(true); }}
+            className="flex-shrink-0 text-sm px-3 py-2"
+          >
+            <Plus className="w-4 h-4 mr-1" /> Add Promotion
+          </Button>
+        )}
+        {(isAddingNew || isViewing) && (
+          <Button variant="outline" onClick={() => { resetForm(); setIsAddingNew(false); setIsViewing(false); setViewRow(null); }} className="text-sm px-3 py-2">
+            <X className="w-4 h-4 mr-1" /> Cancel
+          </Button>
+        )}
+      </div>
 
-          </DialogTrigger>
-
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>{editingRow ? "Edit Promotion / Current Position" : "Add New Promotion"}</DialogTitle>
-              <DialogDescription>
-                {editingRow ? "Update both 'Current Position' and 'Promotion Request' below." : "Fill in details below to create both records."}
-              </DialogDescription>
-            </DialogHeader>
+      {/* Add/Edit FormDrawer */}
+      <FormDrawer open={isAddingNew} onOpenChange={(v) => { if (!v) { resetForm(); setIsAddingNew(false); } }}
+        title={editingRow ? "Edit Promotion / Current Position" : "Add New Promotion"}
+        description={editingRow ? "Update both 'Current Position' and 'Promotion Request' below." : "Fill in details below to create both records."}>
 
             {error && (
               <div className="rounded-md border border-red-200 bg-red-50 text-red-700 px-3 py-2 text-sm">
@@ -1897,6 +1907,26 @@ const runFetchBR = (query: string) => {
                 <h3 className="text-lg font-semibold">Current Position Information</h3>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div className="space-y-2">
+                    <Label>Current Company</Label>
+                    <Input
+                      value={formData.currentCompanyNameDisplay}
+                      readOnly
+                      className="bg-gray-50"
+                      placeholder="—"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Current Branch</Label>
+                    <Input
+                      value={formData.currentBranchNameDisplay}
+                      readOnly
+                      className="bg-gray-50"
+                      placeholder="—"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
                     <Label>Current Department </Label>
                     <Input
                       value={formData.currentDeptNameDisplay}
@@ -2019,12 +2049,128 @@ const runFetchBR = (query: string) => {
               <div className="space-y-4">
                 <h3 className="text-lg font-semibold">Promotion Request</h3>
 
-                {/* NEW (current target) */}
+                {/* Transfer Type Selection */}
+                <div className="space-y-2">
+                  <Label>Transfer Type <span className="text-xs text-gray-400">(select what to change)</span></Label>
+                  <div className="flex flex-wrap gap-3">
+                    {[
+                      { value: "company_transfer", label: "Company Transfer" },
+                      { value: "branch_transfer", label: "Branch Transfer" },
+                      { value: "department_transfer", label: "Department Transfer" },
+                      { value: "designation_change", label: "Change of Designation" },
+                    ].map((opt) => (
+                      <label key={opt.value} className="flex items-center gap-2 cursor-pointer select-none">
+                        <input
+                          type="checkbox"
+                          checked={formData.transferTypes.includes(opt.value)}
+                          onChange={(e) => {
+                            setFormData((p) => ({
+                              ...p,
+                              transferTypes: e.target.checked
+                                ? [...p.transferTypes, opt.value]
+                                : p.transferTypes.filter((t: string) => t !== opt.value),
+                            }));
+                          }}
+                          className="rounded border-gray-300"
+                        />
+                        <span className="text-sm">{opt.label}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Transfer To Section - shown only when transfer types are selected */}
+                {formData.transferTypes.length > 0 && (
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  {/* dept new */}
-                  {/* Promoted Department */}
+
+                  {/* Promoted Company - shown for company transfer */}
+                  {formData.transferTypes.includes("company_transfer") && (
+                    <div ref={coRef} className="space-y-2 relative">
+                      <Label>Transfer To Company</Label>
+                      <Input
+                        value={formData.coAutocomplete}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setFormData((p) => ({ ...p, coAutocomplete: val, companyID: null }));
+                          runFetchCO(val);
+                        }}
+                        onFocus={(e) => {
+                          const val = e.target.value;
+                          if (val.length >= MIN_CHARS) runFetchCO(val);
+                        }}
+                        placeholder="Type company…"
+                        autoComplete="off"
+                      />
+                      {coList.length > 0 && (
+                        <div className="absolute z-10 bg-white border rounded w-full shadow max-h-48 overflow-y-auto">
+                          {coLoading && <div className="px-3 py-2 text-sm text-gray-500">Loading…</div>}
+                          {coList.map((c) => (
+                            <div
+                              key={c.id}
+                              className="px-3 py-2 hover:bg-gray-100 cursor-pointer"
+                              onMouseDown={(e) => e.preventDefault()}
+                              onClick={() => {
+                                setFormData((p) => ({ ...p, companyID: c.id, coAutocomplete: c.companyName ?? "" }));
+                                setCoList([]);
+                              }}
+                            >
+                              {c.companyName}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Promoted Branch - shown for branch or company transfer */}
+                  {(formData.transferTypes.includes("branch_transfer") || formData.transferTypes.includes("company_transfer")) && (
+                    <div ref={brRef} className="space-y-2 relative">
+                      <Label>Transfer To Branch</Label>
+                      <Input
+                        value={formData.brAutocomplete}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setFormData((p) => ({ ...p, brAutocomplete: val, branchesID: null }));
+                          runFetchBR(val);
+                        }}
+                        onFocus={(e) => {
+                          const val = e.target.value;
+                          if (val.length >= MIN_CHARS) runFetchBR(val);
+                        }}
+                        placeholder="Type branch…"
+                        autoComplete="off"
+                      />
+                      {brList.length > 0 && (
+                        <div className="absolute z-10 bg-white border rounded w-full shadow max-h-48 overflow-y-auto">
+                          {brLoading && <div className="px-3 py-2 text-sm text-gray-500">Loading…</div>}
+                          {brList.map((b) => (
+                            <div
+                              key={b.id}
+                              className="px-3 py-2 hover:bg-gray-100 cursor-pointer"
+                              onMouseDown={(e) => e.preventDefault()}
+                              onClick={() => {
+                                setFormData((p) => ({
+                                  ...p,
+                                  branchesID: b.id,
+                                  brAutocomplete: b.branchName ?? "",
+                                  serviceProviderID: (b as any).serviceProviderID ?? p.serviceProviderID,
+                                  companyID: (b as any).companyID ?? p.companyID,
+                                }));
+                                setBrList([]);
+                              }}
+                            >
+                              {b.branchName}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Promoted Department - shown for department transfer */}
+                  {formData.transferTypes.includes("department_transfer") && (
                   <div ref={deptNewRef} className="space-y-2 relative">
-                    <Label>Promoted Department</Label>
+                    <Label>Transfer To Department</Label>
                     <Input
                       value={formData.deptNewAutocomplete}
                       onChange={(e) => {
@@ -2068,12 +2214,14 @@ const runFetchBR = (query: string) => {
                       </div>
                     )}
                   </div>
+                  )}
 
 
                   {/* desg new */}
-                  {/* Promoted designation */}
+                  {/* Promoted designation - shown for designation change */}
+                  {formData.transferTypes.includes("designation_change") && (
                   <div ref={desgNewRef} className="space-y-2 relative">
-                    <Label>Promoted designation</Label>
+                    <Label>Transfer To Designation</Label>
                     <Input
                       value={formData.desgNewAutocomplete}
                       onChange={(e) => {
@@ -2117,6 +2265,7 @@ const runFetchBR = (query: string) => {
                       </div>
                     )}
                   </div>
+                  )}
 
 
 
@@ -2517,10 +2666,11 @@ const runFetchBR = (query: string) => {
 
 
                 </div>
+                )}
 
 
 
-                {/* Description / date / status */}
+                {/* Description / date */}
                 <div className="space-y-2">
                   <Label>Description</Label>
                   <Textarea
@@ -2531,7 +2681,7 @@ const runFetchBR = (query: string) => {
                   />
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 gap-4">
                   <div className="space-y-2">
                     <Label>Promotion Date</Label>
                     <Input
@@ -2540,40 +2690,24 @@ const runFetchBR = (query: string) => {
                       onChange={(e) => setFormData((p) => ({ ...p, promotionDate: e.target.value }))}
                     />
                   </div>
-                  <div className="space-y-2">
-                    <Label>Status</Label>
-                    <select
-                      value={formData.status}
-                      onChange={(e) => setFormData((p) => ({ ...p, status: e.target.value }))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-sm border-[#d0d0d0] focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-900/15 focus-visible:border-[#b0b0b0]"
-                    >
-                      <option value="Not Applied">Not Applied</option>
-                      <option value="Applied">Applied</option>
-                    </select>
-                  </div>
                 </div>
               </div>
 
-              <DialogFooter>
-                <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
+              <div className="flex justify-end gap-2 pt-4">
+                <Button type="button" variant="outline" onClick={() => { resetForm(); setIsAddingNew(false); }}>
                   Cancel
                 </Button>
                 <Button type="submit" className="" disabled={saving}>
                   {saving ? "Saving..." : editingRow ? "Update" : "Create"}
                 </Button>
-              </DialogFooter>
+              </div>
             </form>
-          </DialogContent>
-        </Dialog>
-      </div>
+      </FormDrawer>
 
-      {/* View Dialog */}
-      <Dialog open={isViewOpen} onOpenChange={setIsViewOpen}>
-        <DialogContent className="max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Promotion Request</DialogTitle>
-            <DialogDescription>Read-only details</DialogDescription>
-          </DialogHeader>
+      {/* View Details FormDrawer */}
+      <FormDrawer open={!!(isViewing && viewRow)} onOpenChange={(v) => { if (!v) { setIsViewing(false); setViewRow(null); } }}
+        title="Promotion Request"
+        description="Read-only details">
           {viewRow && (
             <div className="space-y-3 text-sm">
               <p><strong>Employee ID:</strong> {viewRow.empID ?? "—"}</p>
@@ -2584,13 +2718,11 @@ const runFetchBR = (query: string) => {
               <p><strong>Description:</strong> {viewRow.description ?? "—"}</p>
             </div>
           )}
-          <DialogFooter>
-            <Button onClick={() => setIsViewOpen(false)} variant="outline">Close</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      </FormDrawer>
 
-      {/* Search */}
+      {/* Search + Table - only when neither form nor view is open */}
+      {!isAddingNew && !isViewing && (
+        <>
       <Card>
         <CardContent className="p-6">
           <div className="flex items-center space-x-4 w-full">
@@ -2735,6 +2867,8 @@ const runFetchBR = (query: string) => {
           </div>
         </CardContent>
       </Card>
+      </>
+      )}
       {/* History Dialog */}
       <Dialog open={isHistoryOpen} onOpenChange={setIsHistoryOpen}>
         <DialogContent className="max-h-[90vh] overflow-y-auto">
