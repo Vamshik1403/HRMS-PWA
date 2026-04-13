@@ -75,7 +75,7 @@ export function PrivilegedLeaveManagement() {
   const [lapseData, setLapseData] = useState({ employeeID: 0, leavePolicyID: 0 })
 
   const user = useCurrentUser()
-  const canManage = user?.role === "SUPERADMIN" || user?.role === "MANAGER"
+  const canManage = user?.role === "SUPERADMIN" || user?.role === "MANAGER" || user?.role === "COMPANY_ADMIN"
 
   useEffect(() => {
     if (user) {
@@ -135,9 +135,8 @@ export function PrivilegedLeaveManagement() {
 
   const filteredLedger = ledgerEntries.filter((entry) => {
     const empName = `${entry.manageEmployee?.employeeFirstName || ""} ${entry.manageEmployee?.employeeLastName || ""}`.toLowerCase()
-    const policyName = (entry.leavePolicy?.leavePolicyName || "").toLowerCase()
     const q = searchTerm.toLowerCase()
-    return empName.includes(q) || policyName.includes(q)
+    return empName.includes(q)
   })
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -252,6 +251,93 @@ export function PrivilegedLeaveManagement() {
     if (!emp) return "-"
     return `${emp.employeeFirstName || ""} ${emp.employeeLastName || ""}`.trim() || "-"
   }
+
+  // History drawer state
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false)
+  const [historyEmployee, setHistoryEmployee] = useState<any>(null)
+  const [historyEntries, setHistoryEntries] = useState<LedgerEntry[]>([])
+  const [historyLapses, setHistoryLapses] = useState<LapseEntry[]>([])
+
+  const handleShowHistory = async (employeeID: number, emp: any) => {
+    setHistoryEmployee(emp)
+    // Filter ledger entries for this employee
+    setHistoryEntries(ledgerEntries.filter((e) => e.employeeID === employeeID))
+    // Load lapse history for this employee
+    try {
+      const res = await fetch(`${BACKEND_URL}/privileged-leave/lapse-history/${employeeID}`)
+      const data = await res.json()
+      setHistoryLapses(Array.isArray(data) ? data : [])
+    } catch {
+      setHistoryLapses([])
+    }
+    setIsHistoryOpen(true)
+  }
+
+  // Compute aggregated employee-level summary from ledger entries
+  interface EmployeePLSummary {
+    employeeID: number
+    employeeCode: string
+    employeeName: string
+    financialYear: string
+    policyName: string
+    totalDaysPresent: number
+    plEarn: number
+    cfPreviousFY: number
+    totalPLCount: number
+    consumedPL: number
+    balancePL: number
+    plExpiryDate: string
+    manageEmployee: any
+  }
+
+  const aggregatedData: EmployeePLSummary[] = (() => {
+    // Group filtered ledger entries by employeeID
+    const map = new Map<number, LedgerEntry[]>()
+    for (const entry of filteredLedger) {
+      const arr = map.get(entry.employeeID) || []
+      arr.push(entry)
+      map.set(entry.employeeID, arr)
+    }
+
+    const now = new Date()
+    const currentFYStart = now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1
+    const fyLabel = `${currentFYStart}-${String(currentFYStart + 1).slice(2)}`
+
+    const rows: EmployeePLSummary[] = []
+    map.forEach((entries, empId) => {
+      const emp = entries[0]?.manageEmployee
+      const policy = entries[0]?.leavePolicy
+
+      const totalCredited = entries.reduce((s, e) => s + (e.creditedLeaves || 0), 0)
+      const totalUsed = entries.reduce((s, e) => s + (e.usedLeaves || 0), 0)
+      const totalBalance = entries.reduce((s, e) => s + (e.balanceLeaves || 0), 0)
+
+      // C/F from previous FY: sum of credited entries before current FY start
+      const fyStartDate = new Date(currentFYStart, 3, 1)
+      const previousEntries = entries.filter((e) => new Date(e.creditDate) < fyStartDate)
+      const cfPreviousFY = previousEntries.reduce((s, e) => s + (e.balanceLeaves || 0), 0)
+
+      const plExpiryLimit = policy?.plCarryForwardLimit ?? 0
+      const expiryDate = plExpiryLimit > 0 ? `${currentFYStart + 1}-03-31` : "-"
+
+      rows.push({
+        employeeID: empId,
+        employeeCode: emp?.employeeID || String(empId),
+        employeeName: getEmployeeName(emp),
+        financialYear: fyLabel,
+        policyName: policy?.leavePolicyName || "-",
+        totalDaysPresent: 0, // Not tracked in current PL ledger
+        plEarn: totalCredited,
+        cfPreviousFY,
+        totalPLCount: totalCredited + cfPreviousFY,
+        consumedPL: totalUsed,
+        balancePL: totalBalance,
+        plExpiryDate: expiryDate,
+        manageEmployee: emp,
+      })
+    })
+    return rows
+  })()
 
   return (
     <div className="space-y-6 w-full max-w-6xl mx-auto px-4">
@@ -445,7 +531,7 @@ export function PrivilegedLeaveManagement() {
         </div>
       </div>
 
-      {!isDialogOpen && !isCreditDialogOpen && !isLapseDialogOpen && (<>
+      {!isDialogOpen && !isCreditDialogOpen && !isLapseDialogOpen && !isHistoryOpen && (<>
       {/* Search */}
       <Card>
         <CardContent className="p-6">
@@ -453,42 +539,25 @@ export function PrivilegedLeaveManagement() {
             <div className="relative flex-1 min-w-0">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
               <Input
-                placeholder="Search by employee or policy..."
+                placeholder="Search by employee name..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="pl-10 w-full"
               />
             </div>
-            <div className="flex gap-2">
-              <Button
-                variant={activeTab === "ledger" ? "default" : "outline"}
-                size="sm"
-                onClick={() => setActiveTab("ledger")}
-              >
-                PL Ledger
-              </Button>
-              <Button
-                variant={activeTab === "lapse" ? "default" : "outline"}
-                size="sm"
-                onClick={() => setActiveTab("lapse")}
-              >
-                Lapse History
-              </Button>
-            </div>
             <Badge variant="secondary" className="px-3 py-1 flex-shrink-0">
-              {activeTab === "ledger" ? filteredLedger.length : lapseEntries.length} records
+              {aggregatedData.length} records
             </Badge>
           </div>
         </CardContent>
       </Card>
 
-      {/* PL Ledger Table */}
-      {activeTab === "ledger" && (
+      {/* PL Summary Table */}
         <Card className="w-full">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Icon icon="mdi:book-open-page-variant" className="w-5 h-5" />
-              Privileged Leave Ledger
+              Privileged Leave Summary
             </CardTitle>
           </CardHeader>
           <CardContent className="p-0 w-full">
@@ -496,66 +565,60 @@ export function PrivilegedLeaveManagement() {
               <Table className="w-full">
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Employee</TableHead>
-                    <TableHead>Policy</TableHead>
-                    <TableHead className="text-center">Credited</TableHead>
-                    <TableHead className="text-center">Used</TableHead>
-                    <TableHead className="text-center">Balance</TableHead>
-                    <TableHead>Credit Date</TableHead>
-                    <TableHead>Description</TableHead>
-                    {canManage && <TableHead className="text-right">Actions</TableHead>}
+                    <TableHead>Employee ID</TableHead>
+                    <TableHead>Employee Name</TableHead>
+                    <TableHead>Financial Year</TableHead>
+                    <TableHead>PL Policy</TableHead>
+                    <TableHead className="text-center">Total Days Present</TableHead>
+                    <TableHead className="text-center">PL Earn</TableHead>
+                    <TableHead className="text-center">C/F PL (Prev FY)</TableHead>
+                    <TableHead className="text-center">Total PL Count</TableHead>
+                    <TableHead className="text-center">Consumed PL</TableHead>
+                    <TableHead className="text-center">Balance PL</TableHead>
+                    <TableHead>PL Expiry Date</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredLedger.length === 0 ? (
+                  {aggregatedData.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={8} className="text-center py-8 text-gray-500">
+                      <TableCell colSpan={12} className="text-center py-8 text-gray-500">
                         <div className="flex flex-col items-center gap-2">
                           <Icon icon="mdi:book-open-page-variant" className="w-12 h-12 text-gray-300" />
-                          <p>No PL ledger entries found</p>
+                          <p>No PL records found</p>
                         </div>
                       </TableCell>
                     </TableRow>
                   ) : (
-                    filteredLedger.map((entry) => (
-                      <TableRow key={entry.id}>
-                        <TableCell className="font-medium whitespace-nowrap">
-                          {getEmployeeName(entry.manageEmployee)}
-                        </TableCell>
-                        <TableCell className="whitespace-nowrap">
-                          {entry.leavePolicy?.leavePolicyName || "-"}
-                        </TableCell>
+                    aggregatedData.map((row) => (
+                      <TableRow key={row.employeeID}>
+                        <TableCell className="whitespace-nowrap">{row.employeeCode}</TableCell>
+                        <TableCell className="font-medium whitespace-nowrap">{row.employeeName}</TableCell>
+                        <TableCell className="whitespace-nowrap">{row.financialYear}</TableCell>
+                        <TableCell className="whitespace-nowrap">{row.policyName}</TableCell>
+                        <TableCell className="text-center">{row.totalDaysPresent || "-"}</TableCell>
                         <TableCell className="text-center">
-                          <Badge variant="secondary" className="bg-green-100 text-green-800">
-                            +{entry.creditedLeaves}
-                          </Badge>
+                          <Badge variant="secondary" className="bg-green-100 text-green-800">{row.plEarn}</Badge>
                         </TableCell>
+                        <TableCell className="text-center">{row.cfPreviousFY}</TableCell>
+                        <TableCell className="text-center font-semibold">{row.totalPLCount}</TableCell>
                         <TableCell className="text-center">
-                          <Badge variant="secondary" className="bg-red-100 text-red-800">
-                            -{entry.usedLeaves}
-                          </Badge>
+                          <Badge variant="secondary" className="bg-red-100 text-red-800">{row.consumedPL}</Badge>
                         </TableCell>
-                        <TableCell className="text-center font-semibold">
-                          {entry.balanceLeaves}
+                        <TableCell className="text-center font-semibold">{row.balancePL}</TableCell>
+                        <TableCell className="whitespace-nowrap">{row.plExpiryDate}</TableCell>
+                        <TableCell className="text-right whitespace-nowrap">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleShowHistory(row.employeeID, row.manageEmployee)}
+                            className="h-7 px-2 text-xs gap-1"
+                            title="View History"
+                          >
+                            <Icon icon="mdi:history" className="w-3.5 h-3.5" />
+                            History
+                          </Button>
                         </TableCell>
-                        <TableCell className="whitespace-nowrap">
-                          {entry.creditDate ? new Date(entry.creditDate).toLocaleDateString() : "-"}
-                        </TableCell>
-                        <TableCell className="max-w-[200px] truncate">
-                          {entry.description || "-"}
-                        </TableCell>
-                        {canManage && (
-                          <TableCell className="text-right whitespace-nowrap">
-                            <div className="flex items-center justify-end gap-1">
-                              <Button variant="ghost" size="sm" onClick={() => handleEdit(entry)} className="h-7 w-7 p-0" title="Edit">
-                                <Edit className="w-3 h-3" />
-                              </Button>
-                              <Button variant="ghost" size="sm" onClick={() => handleDelete(entry.id)} className="h-7 w-7 p-0 text-red-600 hover:text-red-700 hover:bg-red-50" title="Delete">
-                                <Trash2 className="w-3 h-3" />
-                              </Button>
-                            </div>
-                          </TableCell>
-                        )}
                       </TableRow>
                     ))
                   )}
@@ -564,70 +627,93 @@ export function PrivilegedLeaveManagement() {
             </div>
           </CardContent>
         </Card>
-      )}
+      </>)}
 
-      {/* Lapse History Table */}
-      {activeTab === "lapse" && (
-        <Card className="w-full">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Icon icon="mdi:timer-sand" className="w-5 h-5" />
-              PL Lapse History
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-0 w-full">
-            <div className="overflow-x-auto w-full">
-              <Table className="w-full">
+      {/* History Drawer */}
+      <FormDrawer
+        open={isHistoryOpen}
+        onOpenChange={(o) => { setIsHistoryOpen(o); if (!o) { setHistoryEmployee(null); setHistoryEntries([]); setHistoryLapses([]); } }}
+        title={`PL History – ${getEmployeeName(historyEmployee)}`}
+        description="Complete PL ledger and lapse history for this employee"
+      >
+        <div className="space-y-6">
+          {/* Ledger History */}
+          <div>
+            <h4 className="text-sm font-semibold mb-2">Credit / Debit Ledger</h4>
+            <div className="overflow-x-auto border rounded-lg">
+              <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Employee</TableHead>
-                    <TableHead>Policy</TableHead>
-                    <TableHead className="text-center">Lapsed Count</TableHead>
+                    <TableHead>Date</TableHead>
+                    <TableHead className="text-center">Credited</TableHead>
+                    <TableHead className="text-center">Used</TableHead>
+                    <TableHead className="text-center">Balance</TableHead>
+                    <TableHead>Description</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {historyEntries.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={5} className="text-center py-4 text-gray-500 text-sm">No ledger entries</TableCell>
+                    </TableRow>
+                  ) : (
+                    historyEntries.map((entry) => (
+                      <TableRow key={entry.id}>
+                        <TableCell className="whitespace-nowrap text-sm">
+                          {entry.creditDate ? new Date(entry.creditDate).toLocaleDateString() : "-"}
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <Badge variant="secondary" className="bg-green-100 text-green-800">+{entry.creditedLeaves}</Badge>
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <Badge variant="secondary" className="bg-red-100 text-red-800">-{entry.usedLeaves}</Badge>
+                        </TableCell>
+                        <TableCell className="text-center font-semibold">{entry.balanceLeaves}</TableCell>
+                        <TableCell className="max-w-[200px] truncate text-sm">{entry.description || "-"}</TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          </div>
+
+          {/* Lapse History */}
+          <div>
+            <h4 className="text-sm font-semibold mb-2">Lapse History</h4>
+            <div className="overflow-x-auto border rounded-lg">
+              <Table>
+                <TableHeader>
+                  <TableRow>
                     <TableHead>Lapse Date</TableHead>
+                    <TableHead className="text-center">Lapsed Count</TableHead>
                     <TableHead>Reason</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {lapseEntries.length === 0 ? (
+                  {historyLapses.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={5} className="text-center py-8 text-gray-500">
-                        <div className="flex flex-col items-center gap-2">
-                          <Icon icon="mdi:timer-sand" className="w-12 h-12 text-gray-300" />
-                          <p>No lapse records found</p>
-                          <p className="text-sm">Process a lapse to see records here</p>
-                        </div>
-                      </TableCell>
+                      <TableCell colSpan={3} className="text-center py-4 text-gray-500 text-sm">No lapse records</TableCell>
                     </TableRow>
                   ) : (
-                    lapseEntries.map((entry) => (
+                    historyLapses.map((entry) => (
                       <TableRow key={entry.id}>
-                        <TableCell className="font-medium whitespace-nowrap">
-                          {getEmployeeName(entry.manageEmployee)}
-                        </TableCell>
-                        <TableCell className="whitespace-nowrap">
-                          {entry.leavePolicy?.leavePolicyName || "-"}
-                        </TableCell>
-                        <TableCell className="text-center">
-                          <Badge variant="secondary" className="bg-orange-100 text-orange-800">
-                            {entry.leaveCount}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="whitespace-nowrap">
+                        <TableCell className="whitespace-nowrap text-sm">
                           {entry.lapseDate ? new Date(entry.lapseDate).toLocaleDateString() : "-"}
                         </TableCell>
-                        <TableCell className="max-w-[300px] truncate">
-                          {entry.reason || "-"}
+                        <TableCell className="text-center">
+                          <Badge variant="secondary" className="bg-orange-100 text-orange-800">{entry.leaveCount}</Badge>
                         </TableCell>
+                        <TableCell className="max-w-[300px] truncate text-sm">{entry.reason || "-"}</TableCell>
                       </TableRow>
                     ))
                   )}
                 </TableBody>
               </Table>
             </div>
-          </CardContent>
-        </Card>
-      )}
-      </>)}
+          </div>
+        </div>
+      </FormDrawer>
     </div>
   )
 }

@@ -91,7 +91,7 @@ const API = {
   departments: "/backend/departments",
 };
 
-const MIN_CHARS = 1;
+const MIN_CHARS = 0;
 const DEBOUNCE_MS = 250;
 
 async function fetchJSONSafe<T>(url: string, signal?: AbortSignal): Promise<T> {
@@ -132,7 +132,7 @@ export function DesignationManagement() {
     loadMapping();
   }, [user]);
 
-  const canManage = user?.role === "SUPERADMIN" || user?.role === "MANAGER";
+  const canManage = user?.role === "SUPERADMIN" || user?.role === "MANAGER" || user?.role === "COMPANY_ADMIN";
   const isEmployee = user?.role === "EMPLOYEE";
 
   // UI

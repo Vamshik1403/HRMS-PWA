@@ -27,6 +27,8 @@ interface SalaryDeduction {
   companyName: string;
   branchName: string;
   deductionName: string;
+  displayName: string;
+  deductionTypeField: string;
   basedOn?: string;
   deductionType: "Fixed" | "Percentage";
   value: number;
@@ -43,6 +45,8 @@ type ApiSalaryDeduction = {
   companyID: number | null;
   branchesID: number | null;
   salaryDeductionName: string | null;
+  displayName?: string | null;
+  deductionTypeField?: string | null;
   basedOn?: string | null;
   salaryDeductionType: string | null; // "Fixed" | "Percentage"
   salaryDeductionValue: string | null; // stored as string
@@ -65,7 +69,7 @@ const API = {
   branches: "/backend/branches",
 };
 
-const MIN_CHARS = 1;
+const MIN_CHARS = 0;
 
 export function SalaryDeductionsManagement() {
   const [deductions, setDeductions] = useState<SalaryDeduction[]>([]);
@@ -73,7 +77,7 @@ export function SalaryDeductionsManagement() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingDeduction, setEditingDeduction] = useState<SalaryDeduction | null>(null);
   const user = useCurrentUser();
-const canManage = user?.role === "SUPERADMIN" || user?.role === "MANAGER";
+const canManage = user?.role === "SUPERADMIN" || user?.role === "MANAGER" || user?.role === "COMPANY_ADMIN";
 const isEmployee = user?.role === "EMPLOYEE";
 const [currentUserMapping, setCurrentUserMapping] = useState<any>(null);
 
@@ -116,6 +120,8 @@ useEffect(() => {
     coAutocomplete: "",
     brAutocomplete: "",
     deductionName: "",
+    displayName: "",
+    deductionTypeField: "",
     basedOn: "Gross" as "Gross" | "Basic" | "N/A",
     deductionType: "Fixed" as "Fixed" | "Percentage",
     value: 0,
@@ -228,6 +234,8 @@ const loadDeductions = async () => {
       companyName: x.company?.companyName ?? "-",
       branchName: x.branches?.branchName ?? "-",
       deductionName: x.salaryDeductionName ?? "-",
+      displayName: x.displayName ?? "",
+      deductionTypeField: x.deductionTypeField ?? "",
       deductionType:
         ((x.salaryDeductionType ?? "Fixed") === "Percentage" ? "Percentage" : "Fixed") as
           | "Fixed"
@@ -247,6 +255,8 @@ const loadDeductions = async () => {
       companyID: fd.companyID,
       branchesID: fd.branchesID,
       salaryDeductionName: fd.deductionName,
+      displayName: fd.displayName,
+      deductionTypeField: fd.deductionTypeField,
       basedOn: fd.basedOn,
       salaryDeductionType: fd.deductionType, 
       salaryDeductionValue: String(fd.value ?? 0),
@@ -388,6 +398,8 @@ const loadDeductions = async () => {
       coAutocomplete: deduction.companyName || "",
       brAutocomplete: deduction.branchName || "",
       deductionName: deduction.deductionName,
+      displayName: deduction.displayName || "",
+      deductionTypeField: deduction.deductionTypeField || "",
       deductionType: deduction.deductionType,
       value: deduction.value,
       perMonthLimit: deduction.perMonthLimit,
@@ -416,6 +428,8 @@ const loadDeductions = async () => {
       coAutocomplete: "",
       brAutocomplete: "",
       deductionName: "",
+      displayName: "",
+      deductionTypeField: "",
       basedOn: "Gross",
       deductionType: "Fixed",
       value: 0,
@@ -605,6 +619,31 @@ const loadDeductions = async () => {
 </div>
 
 
+  <div className="space-y-2">
+    <Label htmlFor="deductionTypeField">Deduction Type *</Label>
+    <select
+      id="deductionTypeField"
+      value={formData.deductionTypeField}
+      onChange={(e) =>
+        setFormData((prev) => ({
+          ...prev,
+          deductionTypeField: e.target.value,
+        }))
+      }
+      className="w-full px-3 py-2 border border-gray-300 rounded-sm border-[#d0d0d0] focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-900/15 focus-visible:border-[#b0b0b0]"
+      required
+    >
+      <option value="">Select Deduction type</option>
+      <option value="PF">PF</option>
+      <option value="ESI">ESI</option>
+      <option value="PT">PT</option>
+      <option value="TDS">TDS</option>
+      <option value="Loan Recovery">Loan Recovery</option>
+      <option value="Other Deduction">Other Deduction</option>
+    </select>
+  </div>
+
+
               <div className="space-y-2">
                 <Label htmlFor="deductionName">Deduction Name *</Label>
                 <Input
@@ -613,6 +652,16 @@ const loadDeductions = async () => {
                   onChange={(e) => setFormData((prev) => ({ ...prev, deductionName: e.target.value }))}
                   placeholder="Enter deduction name"
                   required
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="displayName">Display Name</Label>
+                <Input
+                  id="displayName"
+                  value={formData.displayName}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, displayName: e.target.value }))}
+                  placeholder="Enter display name"
                 />
               </div>
 
@@ -630,6 +679,7 @@ const loadDeductions = async () => {
                         setFormData((prev) => ({
                           ...prev,
                           basedOn: e.target.value as "Gross" | "Basic" | "N/A",
+                          deductionType: e.target.value === "N/A" ? "Fixed" : prev.deductionType,
                         }))
                       }
                       className="w-full px-3 py-2 border border-gray-300 rounded-sm border-[#d0d0d0] focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-900/15 focus-visible:border-[#b0b0b0]"
@@ -637,7 +687,7 @@ const loadDeductions = async () => {
                     >
                       <option value="Gross">Gross Salary</option>
                       <option value="Basic">Basic Salary</option>
-                      <option value="N/A">Not Applicable</option>
+                      <option value="N/A">Fixed Amount</option>
                     </select>
                   </div>
                   
@@ -652,9 +702,10 @@ const loadDeductions = async () => {
                     }
                     className="w-full px-3 py-2 border border-gray-300 rounded-sm border-[#d0d0d0] focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-900/15 focus-visible:border-[#b0b0b0]"
                     required
+                    disabled={formData.basedOn === "N/A"}
                   >
-                    <option value="Fixed">Fixed Amoount</option>
-                    <option value="Percentage">Percentage</option>
+                    <option value="Fixed">Fixed Amount</option>
+                    {formData.basedOn !== "N/A" && <option value="Percentage">Percentage</option>}
                   </select>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

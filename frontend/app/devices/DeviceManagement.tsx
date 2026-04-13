@@ -82,7 +82,7 @@ const API = {
   branches: "/backend/branches",
 };
 
-const MIN_CHARS = 1;
+const MIN_CHARS = 0;
 const DEBOUNCE_MS = 250;
 
 async function fetchJSONSafe<T>(url: string, signal?: AbortSignal): Promise<T> {
@@ -104,7 +104,7 @@ export function DeviceManagement() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const user = useCurrentUser();
-  const canManage = user?.role === "SUPERADMIN" || user?.role === "MANAGER";
+  const canManage = user?.role === "SUPERADMIN";
   
   // UI
   const [searchTerm, setSearchTerm] = useState("");
@@ -167,7 +167,7 @@ export function DeviceManagement() {
         return;
       }
 
-      // 🟡 MANAGER & EMPLOYEE → Get user mapping first
+      // 🟡 MANAGER, COMPANY_ADMIN & EMPLOYEE → Get user mapping first
       const usersRes = await fetch("/backend/users");
       const users = await usersRes.json();
       const currentUser = users.find((u: any) => u.username === user?.username);
@@ -176,7 +176,7 @@ export function DeviceManagement() {
         // Store the user mapping for form auto-fill
         setCurrentUserMapping(currentUser);
 
-        if (user?.role === "MANAGER") {
+        if (user?.role === "MANAGER" || user?.role === "COMPANY_ADMIN") {
           const filtered = all.filter(
             (d: any) =>
               d.companyID === currentUser.companyID &&

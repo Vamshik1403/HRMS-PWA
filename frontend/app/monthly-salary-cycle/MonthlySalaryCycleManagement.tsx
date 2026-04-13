@@ -60,7 +60,7 @@ const API = {
   branches: "/backend/branches",
 };
 
-const MIN_CHARS = 1;
+const MIN_CHARS = 0;
 
 function pad2(n: number) {
   return String(n).padStart(2, "0");
@@ -72,7 +72,7 @@ export function MonthlySalaryCycleManagement() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingCycle, setEditingCycle] = useState<MonthlySalaryCycle | null>(null);
   const user = useCurrentUser();
-  const canManage = user?.role === "SUPERADMIN" || user?.role === "MANAGER";
+  const canManage = user?.role === "SUPERADMIN" || user?.role === "MANAGER" || user?.role === "COMPANY_ADMIN";
   const isEmployee = user?.role === "EMPLOYEE";
 
   const [currentUserMapping, setCurrentUserMapping] = useState<any>(null);

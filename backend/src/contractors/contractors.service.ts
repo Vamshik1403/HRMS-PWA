@@ -44,7 +44,7 @@ findAll() {
     });
   }
 
-  saveRateCards(contractorID: number, rateCards: { contractorName?: string; departmentName?: string; designation?: string; workShiftName?: string; perMinuteRate?: number; perHourRate?: number; perDayRate?: number; perMonthRate?: number }[]) {
+  saveRateCards(contractorID: number, rateCards: { contractorName?: string; departmentName?: string; designation?: string; workShiftName?: string; perMinuteRate?: number; perHourRate?: number; perDayRate?: number; perMonthRate?: number; otPerMinuteRate?: number; otPerHourRate?: number }[]) {
     return this.prisma.$transaction(async (prisma) => {
       await prisma.contractorRateCard.deleteMany({ where: { contractorID } });
       if (rateCards && rateCards.length > 0) {
@@ -59,6 +59,8 @@ findAll() {
             perHourRate: rc.perHourRate ?? 0,
             perDayRate: rc.perDayRate ?? 0,
             perMonthRate: rc.perMonthRate ?? 0,
+            otPerMinuteRate: rc.otPerMinuteRate ?? 0,
+            otPerHourRate: rc.otPerHourRate ?? 0,
           })),
         });
       }

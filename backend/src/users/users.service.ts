@@ -36,6 +36,7 @@ export class UsersService {
           serviceProviderID: createUserDto.serviceProviderID ?? null,
           companyID: createUserDto.companyID ?? null,
           branchesID: createUserDto.branchesID ?? null,
+          isActive: createUserDto.isActive ?? true,
         },
         include: {
           serviceProvider: true,

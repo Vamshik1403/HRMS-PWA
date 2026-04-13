@@ -97,7 +97,7 @@ export function EmpPublicHoliday() {
   const [holidayOptions, setHolidayOptions] = useState<any[]>([])
   const [financialYearOptions, setFinancialYearOptions] = useState<string[]>([])
   const user = useCurrentUser()
-  const canManage = user?.role === "SUPERADMIN" || user?.role === "MANAGER"
+  const canManage = user?.role === "SUPERADMIN" || user?.role === "MANAGER" || user?.role === "COMPANY_ADMIN"
 
   const [formData, setFormData] = useState({
     serviceProvider: "",

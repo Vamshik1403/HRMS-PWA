@@ -71,7 +71,7 @@ export function CompanyManagement() {
   const [isAddingNew, setIsAddingNew] = useState(false)
   const [isViewing, setIsViewing] = useState(false)
   const user = useCurrentUser()
-  const canManage = user?.role === "SUPERADMIN" || user?.role === "MANAGER"
+  const canManage = user?.role === "SUPERADMIN" || user?.role === "MANAGER" || user?.role === "COMPANY_ADMIN"
 
   interface CompanyFormData extends Partial<Company> {
     autocompleteName?: string
@@ -132,7 +132,7 @@ export function CompanyManagement() {
         return
       }
 
-      if (user?.role === "MANAGER") {
+      if (user?.role === "MANAGER" || user?.role === "COMPANY_ADMIN") {
         const usersRes = await fetch("/backend/users")
         const users = await usersRes.json()
         const currentUser = users.find((u: any) => u.username === user.username)
@@ -662,7 +662,7 @@ export function CompanyManagement() {
                               <Eye className="w-3 h-3" />
                             </Button>
 
-                            {(user?.role === "SUPERADMIN" || user?.role === "MANAGER") && (
+                            {(user?.role === "SUPERADMIN" || user?.role === "MANAGER" || user?.role === "COMPANY_ADMIN") && (
                               <Button
                                 variant="ghost"
                                 size="sm"

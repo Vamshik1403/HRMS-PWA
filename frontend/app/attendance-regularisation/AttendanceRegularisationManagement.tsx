@@ -96,7 +96,7 @@ export function AttendanceRegularisationManagement() {
   const [isFetchingStatus, setIsFetchingStatus] = useState(false)
   
   const user = useCurrentUser()
-  const canManage = user?.role === "SUPERADMIN" || user?.role === "MANAGER"
+  const canManage = user?.role === "SUPERADMIN" || user?.role === "MANAGER" || user?.role === "COMPANY_ADMIN"
 
   // Load user data based on role
   useEffect(() => {

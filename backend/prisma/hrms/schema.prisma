@@ -247,6 +247,8 @@ model ContractorRateCard {
   perHourRate     Float?       @default(0)
   perDayRate      Float?       @default(0)
   perMonthRate    Float?       @default(0)
+  otPerMinuteRate Float?       @default(0)
+  otPerHourRate   Float?       @default(0)
   contractor      Contractors  @relation(fields: [contractorID], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   @@index([contractorID])
@@ -1014,6 +1016,7 @@ model SalaryAllowance {
   companyID                    Int?
   branchesID                   Int?
   salaryAllowanceName          String?                        @db.VarChar
+  displayName                  String?                        @db.VarChar
   salaryAllowanceType          String?                        @db.VarChar
   salaryAllowanceValue         String?                        @db.VarChar
   salaryAllowanceMonthLimit    String?                        @db.VarChar
@@ -1062,6 +1065,8 @@ model SalaryDeduction {
   companyID                    Int?
   branchesID                   Int?
   salaryDeductionName          String?                        @db.VarChar
+  displayName                  String?                        @db.VarChar
+  deductionTypeField           String?                        @db.VarChar
   salaryDeductionType          String?                        @db.VarChar
   salaryDeductionValue         String?                        @db.VarChar
   salaryDeductionMonthLimit    String?                        @db.VarChar
@@ -1635,6 +1640,7 @@ enum UserRole {
   SUPERADMIN
   ADMIN
   MANAGER
+  COMPANY_ADMIN
   EXECUTIVE
   EMPLOYEE
 }

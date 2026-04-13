@@ -14,6 +14,12 @@ export class CreateSalaryDeductionDto {
   @IsOptional() @IsString() @MaxLength(255)
   salaryDeductionName?: string;
 
+  @IsOptional() @IsString() @MaxLength(255)
+  displayName?: string;
+
+  @IsOptional() @IsString() @MaxLength(255)
+  deductionTypeField?: string;
+
   @IsOptional() @IsString()
   basedOn?: string;
 

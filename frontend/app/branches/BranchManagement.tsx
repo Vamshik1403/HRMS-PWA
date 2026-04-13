@@ -90,7 +90,7 @@ const API = {
   companies: "/backend/company",
 };
 
-const MIN_CHARS = 1;
+const MIN_CHARS = 0;
 const DEBOUNCE_MS = 250;
 
 const uid = () => Math.random().toString(36).slice(2, 10);
@@ -135,7 +135,8 @@ export function BranchManagement() {
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [signatureFile, setSignatureFile] = useState<File | null>(null);
   const user = useCurrentUser();
-  const canManage = user?.role === "SUPERADMIN" || user?.role === "MANAGER";
+  const canManage = user?.role === "SUPERADMIN" || user?.role === "MANAGER" || user?.role === "COMPANY_ADMIN";
+  const canCreate = user?.role === "SUPERADMIN";
   const isEmployee = user?.role === "EMPLOYEE";
 
   // Add this with your other state declarations
@@ -199,7 +200,7 @@ export function BranchManagement() {
         // Store the user mapping for form auto-fill
         setCurrentUserMapping(currentUser);
 
-        if (user?.role === "MANAGER") {
+        if (user?.role === "MANAGER" || user?.role === "COMPANY_ADMIN") {
           const filtered = all.filter(
             (b: any) =>
               b.companyID === currentUser.companyID &&
@@ -343,8 +344,8 @@ export function BranchManagement() {
       bankDetailsForm: [],
     };
 
-    // Auto-set Service Provider and Company for MANAGER (no UI display)
-    if (user?.role === "MANAGER" && currentUserMapping) {
+    // Auto-set Service Provider and Company for MANAGER/COMPANY_ADMIN (no UI display)
+    if ((user?.role === "MANAGER" || user?.role === "COMPANY_ADMIN") && currentUserMapping) {
       baseFormData.serviceProviderID = currentUserMapping.serviceProviderID;
       baseFormData.companyID = currentUserMapping.companyID;
     }
@@ -397,11 +398,11 @@ export function BranchManagement() {
     setSaving(true);
     setError(null);
 
-    // For MANAGER, ensure serviceProviderID and companyID are set from user mapping
+    // For MANAGER/COMPANY_ADMIN, ensure serviceProviderID and companyID are set from user mapping
     let finalServiceProviderID = formData.serviceProviderID;
     let finalCompanyID = formData.companyID;
 
-    if (user?.role === "MANAGER" && currentUserMapping) {
+    if ((user?.role === "MANAGER" || user?.role === "COMPANY_ADMIN") && currentUserMapping) {
       finalServiceProviderID = currentUserMapping.serviceProviderID;
       finalCompanyID = currentUserMapping.companyID;
     }
@@ -495,7 +496,7 @@ export function BranchManagement() {
     let spName = "";
     let coName = "";
 
-    if (user?.role === "MANAGER" && currentUserMapping) {
+    if ((user?.role === "MANAGER" || user?.role === "COMPANY_ADMIN") && currentUserMapping) {
       // Use MANAGER's mapped IDs
       finalServiceProviderID = currentUserMapping.serviceProviderID;
       finalCompanyID = currentUserMapping.companyID;
@@ -619,7 +620,7 @@ export function BranchManagement() {
         </div>
 
         <div className="flex items-center gap-3">
-          {!isAddingNew && !isViewing && canManage && (
+          {!isAddingNew && !isViewing && canCreate && (
             <Button
               onClick={() => {
                 resetForm();
@@ -684,8 +685,8 @@ export function BranchManagement() {
             )}
 
             <form onSubmit={handleSubmit} className="space-y-4">
-              {/* Service Provider Autocomplete - Completely hidden for MANAGER */}
-              {user?.role !== "MANAGER" && (
+              {/* Service Provider Autocomplete - Completely hidden for MANAGER/COMPANY_ADMIN */}
+              {user?.role !== "MANAGER" && user?.role !== "COMPANY_ADMIN" && (
                 <div ref={spRef} className="space-y-2 relative">
                   <Label>Service Provider *</Label>
                   <Input
@@ -732,8 +733,8 @@ export function BranchManagement() {
                 </div>
               )}
 
-              {/* Company Autocomplete - Completely hidden for MANAGER */}
-              {user?.role !== "MANAGER" && (
+              {/* Company Autocomplete - Completely hidden for MANAGER/COMPANY_ADMIN */}
+              {user?.role !== "MANAGER" && user?.role !== "COMPANY_ADMIN" && (
                 <div ref={coRef} className="space-y-2 relative">
                   <Label>Company *</Label>
                   <Input
@@ -1117,8 +1118,8 @@ export function BranchManagement() {
                                 </Button>
                               )}
 
-                              {/* 🗑️ Only SUPERADMIN and MANAGER can delete */}
-                              {canManage && (
+                              {/* 🗑️ Only SUPERADMIN can delete */}
+                              {user?.role === "SUPERADMIN" && (
                                 <Button
                                   variant="ghost"
                                   size="sm"

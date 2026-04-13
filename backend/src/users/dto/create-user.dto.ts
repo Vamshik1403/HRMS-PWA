@@ -1,10 +1,11 @@
 // create-user.dto.ts
-import { IsString, IsOptional, IsEnum, MinLength, IsInt } from 'class-validator';
+import { IsString, IsOptional, IsEnum, MinLength, IsInt, IsBoolean } from 'class-validator';
 
 export enum UserRole {
   SUPERADMIN = 'SUPERADMIN',
   ADMIN = 'ADMIN',
   MANAGER = 'MANAGER',
+  COMPANY_ADMIN = 'COMPANY_ADMIN',
   EXECUTIVE = 'EXECUTIVE',
   EMPLOYEE = 'EMPLOYEE',
 }
@@ -31,4 +32,8 @@ export class CreateUserDto {
   @IsOptional()
   @IsInt()
   branchesID?: number;
+
+  @IsOptional()
+  @IsBoolean()
+  isActive?: boolean;
 }

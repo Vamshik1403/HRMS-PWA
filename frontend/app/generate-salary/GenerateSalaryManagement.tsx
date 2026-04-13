@@ -145,7 +145,7 @@ const API = {
   empAttendanceLogs: "/backend/emp-attendance-logs",
 };
 
-const MIN_CHARS = 1;
+const MIN_CHARS = 0;
 
 function empName(e?: Emp | null) {
   const f = (e?.employeeFirstName ?? "").trim();
@@ -1450,7 +1450,7 @@ export function GenerateSalaryManagement() {
 
   const user = useCurrentUser()
   const [items, setItems] = useState<GenerateSalaryRow[]>([])
-  const canManage = user?.role === "SUPERADMIN" || user?.role === "MANAGER"
+  const canManage = user?.role === "SUPERADMIN" || user?.role === "MANAGER" || user?.role === "COMPANY_ADMIN"
 
   const [spList, setSpList] = useState<SP[]>([]);
   const [coList, setCoList] = useState<CO[]>([]);

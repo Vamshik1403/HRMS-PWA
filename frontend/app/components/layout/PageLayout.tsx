@@ -49,7 +49,7 @@ const sbIdle =
   "text-[#6b7280] hover:bg-[#eef2ff] hover:text-[#4f46e5] !bg-transparent";
 
 const sbSubRow =
-  "flex w-full items-center rounded-md !px-3 min-h-9 h-9 max-h-9 text-[12px] font-normal transition-colors duration-150";
+  "flex w-full items-center rounded-md !px-3 min-h-9 h-9 max-h-9 text-[11px] font-normal transition-colors duration-150 overflow-hidden";
 
 const sbSubActive =
   "!bg-[#eef2ff] text-[#4f46e5] font-medium !shadow-none ring-0 relative !pl-6 before:absolute before:left-0 before:top-[30%] before:h-[40%] before:w-[2px] before:rounded-full before:bg-[#4f46e5]";
@@ -79,7 +79,8 @@ export function PageLayout({ children }: PageLayoutProps) {
   // Check user role and determine what to show
   const isSuperAdmin = currentUser?.role === 'SUPERADMIN'
   const isManager = currentUser?.role === 'MANAGER'
-  const isRegularUser = !isSuperAdmin && !isManager
+  const isCompanyAdmin = currentUser?.role === 'COMPANY_ADMIN'
+  const isRegularUser = !isSuperAdmin && !isManager && !isCompanyAdmin
 
   // Fetch service providers for sidebar section headings
   useEffect(() => {
@@ -167,7 +168,7 @@ export function PageLayout({ children }: PageLayoutProps) {
       newOpenSections.reports = true
     }
     // Canteen Management section paths
-    else if (['/canteen', '/canteen/setup', '/canteen/reports'].includes(pathname)) {
+    else if (['/canteen', '/canteen/setup'].includes(pathname)) {
       openAllSpParents()
       newOpenSections.canteen = true
     }
@@ -180,7 +181,7 @@ export function PageLayout({ children }: PageLayoutProps) {
     // Default behavior on dashboard (root) route: show Salary section only if user has access
     else if (pathname === '/dashboard') {
       // Only open salary section if user has access to salary management
-      if (isSuperAdmin || isManager || isRegularUser) {
+      if (isSuperAdmin || isManager || isCompanyAdmin || isRegularUser) {
         openAllSpParents()
         newOpenSections.salary = true
       }
@@ -374,7 +375,7 @@ export function PageLayout({ children }: PageLayoutProps) {
                     <div className="ml-3 border-l border-[#f0f0f0] pl-1">
 
                 {/* Setup Section - Only for SUPERADMIN and MANAGER (with restrictions for MANAGER) */}
-                {(isSuperAdmin || isManager) && (
+                {(isSuperAdmin || isManager || isCompanyAdmin) && (
                   <Collapsible open={openSections.setup} onOpenChange={(open) => setOpenSections(prev => ({ ...prev, setup: open }))}>
                     <CollapsibleTrigger asChild>
                       <SidebarMenuButton
@@ -401,7 +402,7 @@ export function PageLayout({ children }: PageLayoutProps) {
                                 ? "text-[#4f46e5]" : "text-gray-400"
                             )}
                           />
-                          <span className="truncate font-semibold">Company Management</span>
+                          <span className="truncate font-semibold text-[13px]">Company Management</span>
                         </span>
                         <Icon
                           icon="mdi:chevron-down"
@@ -420,8 +421,8 @@ export function PageLayout({ children }: PageLayoutProps) {
                     <CollapsibleContent>
                       <SidebarMenuSub className="ml-5 mt-1 space-y-0.5 border-l border-[#f0f0f0] pl-3">
                        
-                        {/* Company - Only for SUPERADMIN */}
-                        {isSuperAdmin && (
+                        {/* Company - For SUPERADMIN and COMPANY_ADMIN (edit/view only) */}
+                        {(isSuperAdmin || isCompanyAdmin) && (
                           <SidebarMenuSubItem>
                             <SidebarMenuSubButton asChild>
                               <Link href="/company" className={cn(sbSubRow,
@@ -429,7 +430,7 @@ export function PageLayout({ children }: PageLayoutProps) {
                                   ? sbSubActive
                                   : sbSubIdle
                               )}>
-                                <span className="font-medium">Company</span>
+                                <span className="font-medium truncate" style={{ display: "block" }}>Company</span>
                               </Link>
                             </SidebarMenuSubButton>
                           </SidebarMenuSubItem>
@@ -442,7 +443,7 @@ export function PageLayout({ children }: PageLayoutProps) {
                                 ? sbSubActive
                                 : sbSubIdle
                             )}>
-                              <span className="font-medium">Branches</span>
+                              <span className="font-medium truncate" style={{ display: "block" }}>Branches</span>
                             </Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
@@ -453,7 +454,7 @@ export function PageLayout({ children }: PageLayoutProps) {
                                 ? sbSubActive
                                 : sbSubIdle
                             )}>
-                              <span className="font-medium">Devices</span>
+                              <span className="font-medium truncate" style={{ display: "block" }}>Devices</span>
                             </Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
@@ -464,7 +465,7 @@ export function PageLayout({ children }: PageLayoutProps) {
                                 ? sbSubActive
                                 : sbSubIdle
                             )}>
-                              <span className="font-medium">Contractors</span>
+                              <span className="font-medium truncate" style={{ display: "block" }}>Contractors</span>
                             </Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
@@ -475,7 +476,7 @@ export function PageLayout({ children }: PageLayoutProps) {
                                 ? sbSubActive
                                 : sbSubIdle
                             )}>
-                              <span className="font-medium">Contractor Rates</span>
+                              <span className="font-medium truncate" style={{ display: "block" }}>Contractor Rates</span>
                             </Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
@@ -485,7 +486,7 @@ export function PageLayout({ children }: PageLayoutProps) {
                 )}
 
                 {/* Employee Management Section - Only for SUPERADMIN and MANAGER */}
-                {(isSuperAdmin || isManager) && (
+                {(isSuperAdmin || isManager || isCompanyAdmin) && (
                   <Collapsible open={openSections.employee} onOpenChange={(open) => setOpenSections(prev => ({ ...prev, employee: open }))}>
                     <CollapsibleTrigger asChild>
                       <SidebarMenuButton
@@ -512,7 +513,7 @@ export function PageLayout({ children }: PageLayoutProps) {
                                 ? "text-[#4f46e5]" : "text-gray-400"
                             )}
                           />
-                          <span className="truncate font-semibold">
+                          <span className="truncate font-semibold text-[13px]">
                             Employee Management
                           </span>
                         </span>
@@ -534,7 +535,7 @@ export function PageLayout({ children }: PageLayoutProps) {
                                 ? sbSubActive
                                 : sbSubIdle
                             )}>
-                              <span className="font-medium">Departments</span>
+                              <span className="font-medium truncate" style={{ display: "block" }}>Departments</span>
                             </Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
@@ -545,51 +546,51 @@ export function PageLayout({ children }: PageLayoutProps) {
                                 ? sbSubActive
                                 : sbSubIdle
                             )}>
-                              <span className="font-medium">Designations</span>
+                              <span className="font-medium truncate" style={{ display: "block" }}>Designations</span>
                             </Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
                         <SidebarMenuSubItem>
                           <SidebarMenuSubButton asChild>
-                            <Link href="/manage-employees" className={cn(sbSubRow,
+                            <Link href="/manage-employees" title="Manage Employees" className={cn(sbSubRow,
                               isActiveLink('/manage-employees') 
                                 ? sbSubActive
                                 : sbSubIdle
                             )}>
-                              <span className="font-medium">Manage Employees</span>
+                              <span className="font-medium truncate" style={{ display: "block" }}>Manage Employees</span>
                             </Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
                         <SidebarMenuSubItem>
                           <SidebarMenuSubButton asChild>
-                            <Link href="/employees-promotions" className={cn(sbSubRow,
+                            <Link href="/employees-promotions" title="Employees Promotions" className={cn(sbSubRow,
                               isActiveLink('/employees-promotions') 
                                 ? sbSubActive
                                 : sbSubIdle
                             )}>
-                              <span className="font-medium">Employees Promotions</span>
+                              <span className="font-medium" style={{ display: "block" }}>Employees Promotions</span>
                             </Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
                         <SidebarMenuSubItem>
                           <SidebarMenuSubButton asChild>
-                            <Link href="/employee-memo" className={cn(sbSubRow,
+                            <Link href="/employee-memo" title="Employee Memo / Warnings" className={cn(sbSubRow,
                               isActiveLink('/employee-memo') 
                                 ? sbSubActive
                                 : sbSubIdle
                             )}>
-                              <span className="font-medium">Employee Memo / Warnings</span>
+                              <span className="font-medium truncate" style={{ display: "block" }}>Employee Memo</span>
                             </Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
                         <SidebarMenuSubItem>
                           <SidebarMenuSubButton asChild>
-                            <Link href="/termination" className={cn(sbSubRow,
+                            <Link href="/termination" title="Employee Termination" className={cn(sbSubRow,
                               isActiveLink('/termination') 
                                 ? sbSubActive
                                 : sbSubIdle
                             )}>
-                              <span className="font-medium">Employee Termination</span>
+                              <span className="font-medium truncate" style={{ display: "block" }}>Termination</span>
                             </Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
@@ -599,7 +600,7 @@ export function PageLayout({ children }: PageLayoutProps) {
                 )}
 
                 {/* Payroll Management Section - Only for SUPERADMIN and MANAGER */}
-                {(isSuperAdmin || isManager) && (
+                {(isSuperAdmin || isManager || isCompanyAdmin) && (
                   <Collapsible open={openSections.payroll} onOpenChange={(open) => setOpenSections(prev => ({ ...prev, payroll: open }))}>
                     <CollapsibleTrigger asChild>
                       <SidebarMenuButton
@@ -626,8 +627,8 @@ export function PageLayout({ children }: PageLayoutProps) {
                                 ? "text-[#4f46e5]" : "text-gray-400"
                             )}
                           />
-                          <span className="truncate font-semibold">
-                            Workshift & Policy Management
+                          <span className="truncate font-semibold text-[13px]">
+                            Workshift & Policy
                           </span>
                         </span>
                         <Icon
@@ -648,7 +649,7 @@ export function PageLayout({ children }: PageLayoutProps) {
                                 ? sbSubActive
                                 : sbSubIdle
                             )}>
-                              <span className="font-medium">Work Shifts</span>
+                              <span className="font-medium truncate" style={{ display: "block" }}>Work Shifts</span>
                             </Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
@@ -659,7 +660,7 @@ export function PageLayout({ children }: PageLayoutProps) {
                                 ? sbSubActive
                                 : sbSubIdle
                             )}>
-                              <span className="font-medium">Attendance Policy</span>
+                              <span className="font-medium truncate" style={{ display: "block" }}>Attendance Policy</span>
                             </Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
@@ -670,7 +671,7 @@ export function PageLayout({ children }: PageLayoutProps) {
                                 ? sbSubActive
                                 : sbSubIdle
                             )}>
-                              <span className="font-medium">Workshift Roster</span>
+                              <span className="font-medium truncate" style={{ display: "block" }}>Workshift Roster</span>
                             </Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
@@ -680,7 +681,7 @@ export function PageLayout({ children }: PageLayoutProps) {
                 )}
 
                 {/* Salary Management Section - Show to all users with different access levels */}
-                {(isSuperAdmin || isManager || isRegularUser) && (
+                {(isSuperAdmin || isManager || isCompanyAdmin || isRegularUser) && (
                   <Collapsible open={openSections.salary} onOpenChange={(open) => setOpenSections(prev => ({ ...prev, salary: open }))}>
                     <CollapsibleTrigger asChild>
                       <SidebarMenuButton
@@ -707,7 +708,7 @@ export function PageLayout({ children }: PageLayoutProps) {
                                 ? "text-[#4f46e5]" : "text-gray-400"
                             )}
                           />
-                          <span className="truncate font-semibold">
+                          <span className="truncate font-semibold text-[13px]">
                             Salary Management
                           </span>
                         </span>
@@ -723,16 +724,16 @@ export function PageLayout({ children }: PageLayoutProps) {
                     <CollapsibleContent>
                       <SidebarMenuSub className="ml-5 mt-1 space-y-0.5 border-l border-[#f0f0f0] pl-3">
                         {/* Full access for SUPERADMIN and MANAGER */}
-                        {(isSuperAdmin || isManager) && (
+                        {(isSuperAdmin || isManager || isCompanyAdmin) && (
                           <>
                             <SidebarMenuSubItem>
                               <SidebarMenuSubButton asChild>
-                                <Link href="/monthly-salary-cycle" className={cn(sbSubRow,
+                                <Link href="/monthly-salary-cycle" title="Monthly Salary Cycle" className={cn(sbSubRow,
                                   isActiveLink('/monthly-salary-cycle') 
                                     ? sbSubActive
                                     : sbSubIdle
                                 )}>
-                                  <span className="font-medium">Monthly Salary Cycle</span>
+                                  <span className="font-medium truncate" style={{ display: "block" }}>Monthly Salary Cycle</span>
                                 </Link>
                               </SidebarMenuSubButton>
                             </SidebarMenuSubItem>
@@ -743,7 +744,7 @@ export function PageLayout({ children }: PageLayoutProps) {
                                     ? sbSubActive
                                     : sbSubIdle
                                 )}>
-                                  <span className="font-medium">Salary Allowances</span>
+                                  <span className="font-medium truncate" style={{ display: "block" }}>Salary Allowances</span>
                                 </Link>
                               </SidebarMenuSubButton>
                             </SidebarMenuSubItem>
@@ -754,7 +755,7 @@ export function PageLayout({ children }: PageLayoutProps) {
                                     ? sbSubActive
                                     : sbSubIdle
                                 )}>
-                                  <span className="font-medium">Salary Deductions</span>
+                                  <span className="font-medium truncate" style={{ display: "block" }}>Salary Deductions</span>
                                 </Link>
                               </SidebarMenuSubButton>
                             </SidebarMenuSubItem>
@@ -765,7 +766,7 @@ export function PageLayout({ children }: PageLayoutProps) {
                                     ? sbSubActive
                                     : sbSubIdle
                                 )}>
-                                  <span className="font-medium">Monthly Pay Grade</span>
+                                  <span className="font-medium truncate" style={{ display: "block" }}>Paygrade Setup</span>
                                 </Link>
                               </SidebarMenuSubButton>
                             </SidebarMenuSubItem>
@@ -776,7 +777,7 @@ export function PageLayout({ children }: PageLayoutProps) {
                                     ? sbSubActive
                                     : sbSubIdle
                                 )}>
-                                  <span className="font-medium">Bonus Setup</span>
+                                  <span className="font-medium truncate" style={{ display: "block" }}>Bonus Setup</span>
                                 </Link>
                               </SidebarMenuSubButton>
                             </SidebarMenuSubItem>
@@ -787,7 +788,7 @@ export function PageLayout({ children }: PageLayoutProps) {
                                     ? sbSubActive
                                     : sbSubIdle
                                 )}>
-                                  <span className="font-medium">Bonus Allocations</span>
+                                  <span className="font-medium truncate" style={{ display: "block" }}>Bonus Allocations</span>
                                 </Link>
                               </SidebarMenuSubButton>
                             </SidebarMenuSubItem>
@@ -802,7 +803,7 @@ export function PageLayout({ children }: PageLayoutProps) {
                                 ? sbSubActive
                                 : sbSubIdle
                             )}>
-                              <span className="font-medium">Salary Advance</span>
+                              <span className="font-medium truncate" style={{ display: "block" }}>Salary Advance</span>
                             </Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
@@ -813,7 +814,7 @@ export function PageLayout({ children }: PageLayoutProps) {
                                 ? sbSubActive
                                 : sbSubIdle
                             )}>
-                              <span className="font-medium">Reimbursement</span>
+                              <span className="font-medium truncate" style={{ display: "block" }}>Reimbursement</span>
                             </Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
@@ -824,7 +825,7 @@ export function PageLayout({ children }: PageLayoutProps) {
                                 ? sbSubActive
                                 : sbSubIdle
                             )}>
-                              <span className="font-medium">Generate Salary</span>
+                              <span className="font-medium truncate" style={{ display: "block" }}>Generate Salary</span>
                             </Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
@@ -834,7 +835,7 @@ export function PageLayout({ children }: PageLayoutProps) {
                 )}
 
                 {/* Leave Management Section - Show to all users */}
-                {(isSuperAdmin || isManager || isRegularUser) && (
+                {(isSuperAdmin || isManager || isCompanyAdmin || isRegularUser) && (
                   <Collapsible open={openSections.leave} onOpenChange={(open) => setOpenSections(prev => ({ ...prev, leave: open }))}>
                     <CollapsibleTrigger asChild>
                       <SidebarMenuButton
@@ -861,7 +862,7 @@ export function PageLayout({ children }: PageLayoutProps) {
                                 ? "text-[#4f46e5]" : "text-gray-400"
                             )}
                           />
-                          <span className="truncate font-semibold">
+                          <span className="truncate font-semibold text-[13px]">
                             Leave Management
                           </span>
                         </span>
@@ -877,7 +878,7 @@ export function PageLayout({ children }: PageLayoutProps) {
                     <CollapsibleContent>
                       <SidebarMenuSub className="ml-5 mt-1 space-y-0.5 border-l border-[#f0f0f0] pl-3">
                         {/* Manage Holidays only for SUPERADMIN and MANAGER */}
-                        {(isSuperAdmin || isManager) && (
+                        {(isSuperAdmin || isManager || isCompanyAdmin) && (
                           <SidebarMenuSubItem>
                             <SidebarMenuSubButton asChild>
                               <Link href="/manage-holidays" className={cn(sbSubRow,
@@ -885,7 +886,7 @@ export function PageLayout({ children }: PageLayoutProps) {
                                   ? sbSubActive
                                   : sbSubIdle
                               )}>
-                                <span className="font-medium">Manage Holiday</span>
+                                <span className="font-medium truncate" style={{ display: "block" }}>Manage Holidays</span>
                               </Link>
                             </SidebarMenuSubButton>
                           </SidebarMenuSubItem>
@@ -899,11 +900,11 @@ export function PageLayout({ children }: PageLayoutProps) {
                                 ? sbSubActive
                                 : sbSubIdle
                             )}>
-                              <span className="font-medium">Public Holiday</span>
+                              <span className="font-medium truncate" style={{ display: "block" }}>Public Holiday</span>
                             </Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
-                        {(isSuperAdmin || isManager) && (
+                        {(isSuperAdmin || isManager || isCompanyAdmin) && (
                           <SidebarMenuSubItem>
                             <SidebarMenuSubButton asChild>
                               <Link href="/leave-policy" className={cn(sbSubRow,
@@ -911,20 +912,20 @@ export function PageLayout({ children }: PageLayoutProps) {
                                   ? sbSubActive
                                   : sbSubIdle
                               )}>
-                                <span className="font-medium">Leave Policy</span>
+                                <span className="font-medium truncate" style={{ display: "block" }}>Leave Policy</span>
                               </Link>
                             </SidebarMenuSubButton>
                           </SidebarMenuSubItem>
                         )}
-                        {(isSuperAdmin || isManager) && (
+                        {(isSuperAdmin || isManager || isCompanyAdmin) && (
                           <SidebarMenuSubItem>
                             <SidebarMenuSubButton asChild>
-                              <Link href="/privileged-leave" className={cn(sbSubRow,
+                              <Link href="/privileged-leave" title="Privileged Leave Management" className={cn(sbSubRow,
                                 isActiveLink('/privileged-leave') 
                                   ? sbSubActive
                                   : sbSubIdle
                               )}>
-                                <span className="font-medium">Privileged Leave Management</span>
+                                <span className="font-medium truncate" style={{ display: "block" }}>Privileged Leave</span>
                               </Link>
                             </SidebarMenuSubButton>
                           </SidebarMenuSubItem>
@@ -936,7 +937,7 @@ export function PageLayout({ children }: PageLayoutProps) {
                                 ? sbSubActive
                                 : sbSubIdle
                             )}>
-                              <span className="font-medium">Leave Application</span>
+                              <span className="font-medium truncate" style={{ display: "block" }}>Leave Application</span>
                             </Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
@@ -946,7 +947,7 @@ export function PageLayout({ children }: PageLayoutProps) {
                 )}
 
                 {/* Attendance Management Section - Only for SUPERADMIN and MANAGER */}
-                {(isSuperAdmin || isManager) && (
+                {(isSuperAdmin || isManager || isCompanyAdmin) && (
                   <Collapsible open={openSections.attendance} onOpenChange={(open) => setOpenSections(prev => ({ ...prev, attendance: open }))}>
                     <CollapsibleTrigger asChild>
                       <SidebarMenuButton
@@ -973,7 +974,7 @@ export function PageLayout({ children }: PageLayoutProps) {
                                 ? "text-[#4f46e5]" : "text-gray-400"
                             )}
                           />
-                          <span className="truncate font-semibold">
+                          <span className="truncate font-semibold text-[13px]">
                             Attendance Management
                           </span>
                         </span>
@@ -991,23 +992,23 @@ export function PageLayout({ children }: PageLayoutProps) {
                         
                         <SidebarMenuSubItem>
                           <SidebarMenuSubButton asChild>
-                            <Link href="/attendance-regularisation" className={cn(sbSubRow,
+                            <Link href="/attendance-regularisation" title="Attendance Regularisation" className={cn(sbSubRow,
                               isActiveLink('/attendance-regularisation') 
                                 ? sbSubActive
                                 : sbSubIdle
                             )}>
-                              <span className="font-medium">Attendance Regularisation</span>
+                              <span className="font-medium" style={{ display: "block" }}>Attendance Regularisation</span>
                             </Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
                         <SidebarMenuSubItem>
                           <SidebarMenuSubButton asChild>
-                            <Link href="/field-attendance-schedule" className={cn(sbSubRow,
+                            <Link href="/field-attendance-schedule" title="Field Attendance Schedule" className={cn(sbSubRow,
                               isActiveLink('/field-attendance-schedule') 
                                 ? sbSubActive
                                 : sbSubIdle
                             )}>
-                              <span className="font-medium">Field Attendance Schedule</span>
+                              <span className="font-medium" style={{ display: "block" }}>Field Attendance Schedule</span>
                             </Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
@@ -1017,7 +1018,7 @@ export function PageLayout({ children }: PageLayoutProps) {
                 )}
 
                 {/* Reports Section - Only for SUPERADMIN and MANAGER */}
-                {(isSuperAdmin || isManager) && (
+                {(isSuperAdmin || isManager || isCompanyAdmin) && (
                   <Collapsible open={openSections.reports} onOpenChange={(open) => setOpenSections(prev => ({ ...prev, reports: open }))}>
                     <CollapsibleTrigger asChild>
                       <SidebarMenuButton
@@ -1044,7 +1045,7 @@ export function PageLayout({ children }: PageLayoutProps) {
                                 ? "text-[#4f46e5]" : "text-gray-400"
                             )}
                           />
-                          <span className="truncate font-semibold">
+                          <span className="truncate font-semibold text-[13px]">
                             Reports
                           </span>
                         </span>
@@ -1066,7 +1067,7 @@ export function PageLayout({ children }: PageLayoutProps) {
                                 ? sbSubActive
                                 : sbSubIdle
                             )}>
-                              <span className="font-medium">Attendance Reports</span>
+                              <span className="font-medium truncate" style={{ display: "block" }}>Attendance Reports</span>
                             </Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
@@ -1077,7 +1078,7 @@ export function PageLayout({ children }: PageLayoutProps) {
                                 ? sbSubActive
                                 : sbSubIdle
                             )}>
-                              <span className="font-medium">Leave Reports</span>
+                              <span className="font-medium truncate" style={{ display: "block" }}>Leave Reports</span>
                             </Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
@@ -1088,7 +1089,7 @@ export function PageLayout({ children }: PageLayoutProps) {
                                 ? sbSubActive
                                 : sbSubIdle
                             )}>
-                              <span className="font-medium">Salary Statements</span>
+                              <span className="font-medium truncate" style={{ display: "block" }}>Salary Statements</span>
                             </Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem> */}
@@ -1099,7 +1100,7 @@ export function PageLayout({ children }: PageLayoutProps) {
                                 ? sbSubActive
                                 : sbSubIdle
                             )}>
-                              <span className="font-medium">Canteen Reports</span>
+                              <span className="font-medium truncate" style={{ display: "block" }}>Canteen Reports</span>
                             </Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
@@ -1108,7 +1109,7 @@ export function PageLayout({ children }: PageLayoutProps) {
                   </Collapsible>
                 )}
                 {/* Canteen Management Section */}
-                {(isSuperAdmin || isManager) && (
+                {(isSuperAdmin || isManager || isCompanyAdmin) && (
                   <Collapsible open={openSections.canteen} onOpenChange={(open) => setOpenSections(prev => ({ ...prev, canteen: open }))}>
                     <CollapsibleTrigger asChild>
                       <SidebarMenuButton
@@ -1135,7 +1136,7 @@ export function PageLayout({ children }: PageLayoutProps) {
                                 ? "text-[#4f46e5]" : "text-gray-400"
                             )}
                           />
-                          <span className="truncate font-semibold">
+                          <span className="truncate font-semibold text-[13px]">
                             Canteen Management
                           </span>
                         </span>
@@ -1157,7 +1158,7 @@ export function PageLayout({ children }: PageLayoutProps) {
                                 ? sbSubActive
                                 : sbSubIdle
                             )}>
-                              <span className="font-medium">Dashboard</span>
+                              <span className="font-medium truncate" style={{ display: "block" }}>Dashboard</span>
                             </Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
@@ -1168,18 +1169,7 @@ export function PageLayout({ children }: PageLayoutProps) {
                                 ? sbSubActive
                                 : sbSubIdle
                             )}>
-                              <span className="font-medium">Setup</span>
-                            </Link>
-                          </SidebarMenuSubButton>
-                        </SidebarMenuSubItem>
-                        <SidebarMenuSubItem>
-                          <SidebarMenuSubButton asChild>
-                            <Link href="/canteen/reports" className={cn(sbSubRow,
-                              isActiveLink('/canteen/reports') 
-                                ? sbSubActive
-                                : sbSubIdle
-                            )}>
-                              <span className="font-medium">Reports</span>
+                              <span className="font-medium truncate" style={{ display: "block" }}>Setup</span>
                             </Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
@@ -1189,7 +1179,7 @@ export function PageLayout({ children }: PageLayoutProps) {
                 )}
 
                 {/* Settings Section - Only for SUPERADMIN and MANAGER */}
-                {(isSuperAdmin || isManager) && (
+                {(isSuperAdmin || isManager || isCompanyAdmin) && (
                   <Collapsible open={openSections.settings} onOpenChange={(open) => setOpenSections(prev => ({ ...prev, settings: open }))}>
                     <CollapsibleTrigger asChild>
                       <SidebarMenuButton
@@ -1216,7 +1206,7 @@ export function PageLayout({ children }: PageLayoutProps) {
                                 ? "text-[#4f46e5]" : "text-gray-400"
                             )}
                           />
-                          <span className="truncate font-semibold">
+                          <span className="truncate font-semibold text-[13px]">
                             Settings
                           </span>
                         </span>
@@ -1238,11 +1228,11 @@ export function PageLayout({ children }: PageLayoutProps) {
                                 ? sbSubActive
                                 : sbSubIdle
                             )}>
-                              <span className="font-medium">Import Attendance</span>
+                              <span className="font-medium truncate" style={{ display: "block" }}>Import Attendance</span>
                             </Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
-                        {(isSuperAdmin || isManager) && (
+                        {isSuperAdmin && (
                           <SidebarMenuSubItem>
                             <SidebarMenuSubButton asChild>
                               <Link href="/system-users" className={cn(sbSubRow,
@@ -1250,7 +1240,7 @@ export function PageLayout({ children }: PageLayoutProps) {
                                   ? sbSubActive
                                   : sbSubIdle
                               )}>
-                                <span className="font-medium">System Users</span>
+                                <span className="font-medium truncate" style={{ display: "block" }}>System Users</span>
                               </Link>
                             </SidebarMenuSubButton>
                           </SidebarMenuSubItem>
@@ -1292,7 +1282,7 @@ export function PageLayout({ children }: PageLayoutProps) {
                   </div>
                 </div>
                 <div className="flex items-center justify-end gap-2 sm:gap-2 shrink-0">
-                  {(isSuperAdmin || isManager) && (
+                  {(isSuperAdmin || isManager || isCompanyAdmin) && (
                     <Link
                       href="/manage-employees"
                       title="Employees"

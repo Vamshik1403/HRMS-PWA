@@ -40,7 +40,7 @@ export class ContractorsController {
   @Post(':id/rate-cards')
   saveRateCards(
     @Param('id') id: string,
-    @Body() body: { rateCards: { contractorName?: string; departmentName?: string; designation?: string; workShiftName?: string; perMinuteRate?: number; perHourRate?: number; perDayRate?: number; perMonthRate?: number }[] },
+    @Body() body: { rateCards: { contractorName?: string; departmentName?: string; designation?: string; workShiftName?: string; perMinuteRate?: number; perHourRate?: number; perDayRate?: number; perMonthRate?: number; otPerMinuteRate?: number; otPerHourRate?: number }[] },
   ) {
     return this.contractorsService.saveRateCards(+id, body.rateCards);
   }

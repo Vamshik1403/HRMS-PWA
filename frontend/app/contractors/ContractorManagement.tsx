@@ -94,7 +94,7 @@ const API = {
   upload: "/backend/files/upload",
 };
 
-const MIN_CHARS = 1;
+const MIN_CHARS = 0;
 const DEBOUNCE_MS = 250;
 
 async function fetchJSONSafe<T>(url: string, signal?: AbortSignal): Promise<T> {
@@ -124,7 +124,7 @@ export function ContractorManagement() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const user = useCurrentUser();
-  const canManage = user?.role === "SUPERADMIN" || user?.role === "MANAGER";
+  const canManage = user?.role === "SUPERADMIN" || user?.role === "MANAGER" || user?.role === "COMPANY_ADMIN";
   const isEmployee = user?.role === "EMPLOYEE";
   // Add this with your other state declarations
   const [currentUserMapping, setCurrentUserMapping] = useState<any>(null);

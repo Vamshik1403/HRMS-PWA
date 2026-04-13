@@ -249,7 +249,7 @@ const API = {
   hourlyGrades: "/backend/hourly-grade",
 };
 
-const MIN_CHARS = 1;
+const MIN_CHARS = 0;
 const DEBOUNCE_MS = 250;
 
 async function fetchJSONSafe<T>(url: string, signal?: AbortSignal): Promise<T> {
@@ -346,7 +346,7 @@ export function ManageEmployeesManagement() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const user = useCurrentUser();
-  const canManage = user?.role === "SUPERADMIN" || user?.role === "MANAGER";
+  const canManage = user?.role === "SUPERADMIN" || user?.role === "MANAGER" || user?.role === "COMPANY_ADMIN";
   const isEmployee = user?.role === "EMPLOYEE";
 
   // UI
@@ -2620,6 +2620,7 @@ const addCombinedDevMap = () => {
                             setFormData((p) => ({ ...p, spAutocomplete: val, serviceProviderID: null }));
                             runFetchSP(val);
                           }}
+                          onFocus={(e) => { runFetchSP(e.target.value); }}
                           placeholder="Start typing service provider…"
                           autoComplete="off"
                         />
@@ -2660,6 +2661,7 @@ const addCombinedDevMap = () => {
                             setFormData((p) => ({ ...p, coAutocomplete: val, companyID: null }));
                             runFetchCO(val);
                           }}
+                          onFocus={(e) => { runFetchCO(e.target.value); }}
                           placeholder="Start typing company…"
                           autoComplete="off"
                         />
@@ -2755,7 +2757,7 @@ const addCombinedDevMap = () => {
                         <div key={eb._localId} className={`flex items-center px-3 py-2 text-sm ${i === formData.empBranchForm.length - 1 ? 'bg-blue-50 font-medium' : 'bg-white'} ${i > 0 ? 'border-t border-gray-100' : ''}`}>
                           <span className="flex-1">{eb._brAutocomplete || '—'}</span>
                           <span className="w-32 text-center text-gray-500">{eb.effectFrom || '—'}</span>
-                          <Button type="button" variant="ghost" size="sm" onClick={() => removeEmpBranch(eb._localId)} className="h-6 w-6 p-0 text-red-500 hover:text-red-700 hover:bg-red-50"><X className="w-3 h-3" /></Button>
+                          {!editingRow && <Button type="button" variant="ghost" size="sm" onClick={() => removeEmpBranch(eb._localId)} className="h-6 w-6 p-0 text-red-500 hover:text-red-700 hover:bg-red-50"><X className="w-3 h-3" /></Button>}
                         </div>
                       ))
                     )}
@@ -2912,7 +2914,7 @@ const addCombinedDevMap = () => {
                       <div key={ed._localId} className={`flex items-center px-3 py-2 text-sm ${i === formData.empDepartmentForm.length - 1 ? 'bg-blue-50 font-medium' : 'bg-white'} ${i > 0 ? 'border-t border-gray-100' : ''}`}>
                         <span className="flex-1">{ed._deptAutocomplete || '—'}</span>
                         <span className="w-32 text-center text-gray-500">{ed.effectFrom || '—'}</span>
-                        <Button type="button" variant="ghost" size="sm" onClick={() => removeEmpDepartment(ed._localId)} className="h-6 w-6 p-0 text-red-500 hover:text-red-700 hover:bg-red-50"><X className="w-3 h-3" /></Button>
+                        {!editingRow && <Button type="button" variant="ghost" size="sm" onClick={() => removeEmpDepartment(ed._localId)} className="h-6 w-6 p-0 text-red-500 hover:text-red-700 hover:bg-red-50"><X className="w-3 h-3" /></Button>}
                       </div>
                     ))
                   )}
@@ -2973,7 +2975,7 @@ const addCombinedDevMap = () => {
                       <div key={ed._localId} className={`flex items-center px-3 py-2 text-sm ${i === formData.empDesignationForm.length - 1 ? 'bg-blue-50 font-medium' : 'bg-white'} ${i > 0 ? 'border-t border-gray-100' : ''}`}>
                         <span className="flex-1">{ed._desgAutocomplete || '—'}</span>
                         <span className="w-32 text-center text-gray-500">{ed.effectFrom || '—'}</span>
-                        <Button type="button" variant="ghost" size="sm" onClick={() => removeEmpDesignation(ed._localId)} className="h-6 w-6 p-0 text-red-500 hover:text-red-700 hover:bg-red-50"><X className="w-3 h-3" /></Button>
+                        {!editingRow && <Button type="button" variant="ghost" size="sm" onClick={() => removeEmpDesignation(ed._localId)} className="h-6 w-6 p-0 text-red-500 hover:text-red-700 hover:bg-red-50"><X className="w-3 h-3" /></Button>}
                       </div>
                     ))
                   )}
@@ -3000,7 +3002,7 @@ const addCombinedDevMap = () => {
                       <div key={le.id} className="border border-gray-200 rounded-lg p-4 space-y-3">
                         <div className="flex items-center justify-between">
                           <span className="font-medium text-gray-900">{name}</span>
-                          <Button type="button" variant="ghost" size="sm" onClick={() => removeLinkedEmployee(le.id)} className="text-red-600 hover:text-red-700 hover:bg-red-50"><X className="w-4 h-4" /></Button>
+                          {!editingRow && <Button type="button" variant="ghost" size="sm" onClick={() => removeLinkedEmployee(le.id)} className="text-red-600 hover:text-red-700 hover:bg-red-50"><X className="w-4 h-4" /></Button>}
                         </div>
                       </div>
                     );
@@ -3086,7 +3088,7 @@ const addCombinedDevMap = () => {
                       <div key={et._localId} className={`flex items-center px-3 py-2 text-sm ${i === formData.empEmploymentTypeForm.length - 1 ? 'bg-blue-50 font-medium' : 'bg-white'} ${i > 0 ? 'border-t border-gray-100' : ''}`}>
                         <span className="flex-1">{et.employmentType || '—'}</span>
                         <span className="w-32 text-center text-gray-500">{et.effectFrom || '—'}</span>
-                        <Button type="button" variant="ghost" size="sm" onClick={() => removeEmpEmploymentType(et._localId)} className="h-6 w-6 p-0 text-red-500 hover:text-red-700 hover:bg-red-50"><X className="w-3 h-3" /></Button>
+                        {!editingRow && <Button type="button" variant="ghost" size="sm" onClick={() => removeEmpEmploymentType(et._localId)} className="h-6 w-6 p-0 text-red-500 hover:text-red-700 hover:bg-red-50"><X className="w-3 h-3" /></Button>}
                       </div>
                     ))
                   )}
@@ -3147,7 +3149,7 @@ const addCombinedDevMap = () => {
                       <div key={ec._localId} className={`flex items-center px-3 py-2 text-sm ${i === formData.empContractorForm.length - 1 ? 'bg-blue-50 font-medium' : 'bg-white'} ${i > 0 ? 'border-t border-gray-100' : ''}`}>
                         <span className="flex-1">{ec._contrAutocomplete || '—'}</span>
                         <span className="w-32 text-center text-gray-500">{ec.effectFrom || '—'}</span>
-                        <Button type="button" variant="ghost" size="sm" onClick={() => removeEmpContractor(ec._localId)} className="h-6 w-6 p-0 text-red-500 hover:text-red-700 hover:bg-red-50"><X className="w-3 h-3" /></Button>
+                        {!editingRow && <Button type="button" variant="ghost" size="sm" onClick={() => removeEmpContractor(ec._localId)} className="h-6 w-6 p-0 text-red-500 hover:text-red-700 hover:bg-red-50"><X className="w-3 h-3" /></Button>}
                       </div>
                     ))
                   )}
@@ -3195,7 +3197,7 @@ const addCombinedDevMap = () => {
                         <span className="flex-1">{es.employmentStatus || '—'}</span>
                         <span className="w-28 text-center text-gray-500">{es.probationPeriod || '—'}</span>
                         <span className="w-32 text-center text-gray-500">{es.effectFrom || '—'}</span>
-                        <Button type="button" variant="ghost" size="sm" onClick={() => removeEmpEmploymentStatus(es._localId)} className="h-6 w-6 p-0 text-red-500 hover:text-red-700 hover:bg-red-50"><X className="w-3 h-3" /></Button>
+                        {!editingRow && <Button type="button" variant="ghost" size="sm" onClick={() => removeEmpEmploymentStatus(es._localId)} className="h-6 w-6 p-0 text-red-500 hover:text-red-700 hover:bg-red-50"><X className="w-3 h-3" /></Button>}
                       </div>
                     ))
                   )}
@@ -3346,7 +3348,7 @@ const addCombinedDevMap = () => {
                       <div key={ea._localId} className={`flex items-center px-3 py-2 text-sm ${i === formData.empAttendancePolicyForm.length - 1 ? 'bg-blue-50 font-medium' : 'bg-white'} ${i > 0 ? 'border-t border-gray-100' : ''}`}>
                         <span className="flex-1">{ea._apAutocomplete || '—'}</span>
                         <span className="w-32 text-center text-gray-500">{ea.effectFrom || '—'}</span>
-                        <Button type="button" variant="ghost" size="sm" onClick={() => removeEmpAttendancePolicy(ea._localId)} className="h-6 w-6 p-0 text-red-500 hover:text-red-700 hover:bg-red-50"><X className="w-3 h-3" /></Button>
+                        {!editingRow && <Button type="button" variant="ghost" size="sm" onClick={() => removeEmpAttendancePolicy(ea._localId)} className="h-6 w-6 p-0 text-red-500 hover:text-red-700 hover:bg-red-50"><X className="w-3 h-3" /></Button>}
                       </div>
                     ))
                   )}
@@ -3410,7 +3412,7 @@ const addCombinedDevMap = () => {
                       <div key={el._localId} className={`flex items-center px-3 py-2 text-sm ${i === formData.empLeavePolicyForm.length - 1 ? 'bg-blue-50 font-medium' : 'bg-white'} ${i > 0 ? 'border-t border-gray-100' : ''}`}>
                         <span className="flex-1">{el._lpAutocomplete || '—'}</span>
                         <span className="w-32 text-center text-gray-500">{el.effectFrom || '—'}</span>
-                        <Button type="button" variant="ghost" size="sm" onClick={() => removeEmpLeavePolicy(el._localId)} className="h-6 w-6 p-0 text-red-500 hover:text-red-700 hover:bg-red-50"><X className="w-3 h-3" /></Button>
+                        {!editingRow && <Button type="button" variant="ghost" size="sm" onClick={() => removeEmpLeavePolicy(el._localId)} className="h-6 w-6 p-0 text-red-500 hover:text-red-700 hover:bg-red-50"><X className="w-3 h-3" /></Button>}
                       </div>
                     ))
                   )}
@@ -3474,7 +3476,7 @@ const addCombinedDevMap = () => {
                       <div key={ew._localId} className={`flex items-center px-3 py-2 text-sm ${i === formData.empWorkShiftForm.length - 1 ? 'bg-blue-50 font-medium' : 'bg-white'} ${i > 0 ? 'border-t border-gray-100' : ''}`}>
                         <span className="flex-1">{ew._wsAutocomplete || '—'}</span>
                         <span className="w-32 text-center text-gray-500">{ew.effectFrom || '—'}</span>
-                        <Button type="button" variant="ghost" size="sm" onClick={() => removeEmpWorkShift(ew._localId)} className="h-6 w-6 p-0 text-red-500 hover:text-red-700 hover:bg-red-50"><X className="w-3 h-3" /></Button>
+                        {!editingRow && <Button type="button" variant="ghost" size="sm" onClick={() => removeEmpWorkShift(ew._localId)} className="h-6 w-6 p-0 text-red-500 hover:text-red-700 hover:bg-red-50"><X className="w-3 h-3" /></Button>}
                       </div>
                     ))
                   )}
@@ -3688,7 +3690,7 @@ const addCombinedDevMap = () => {
                     <div key={ed._localId} className="border border-gray-200 rounded-lg p-4 space-y-3">
                       <div className="flex items-center justify-between">
                         <span className="font-medium text-gray-900">Education</span>
-                        <Button
+                        {!editingRow && <Button
                           type="button"
                           variant="ghost"
                           size="sm"
@@ -3696,7 +3698,7 @@ const addCombinedDevMap = () => {
                           className="text-red-600 hover:text-red-700 hover:bg-red-50"
                         >
                           <X className="w-4 h-4" />
-                        </Button>
+                        </Button>}
                       </div>
 
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -3762,7 +3764,7 @@ const addCombinedDevMap = () => {
                     <div key={xp._localId} className="border border-gray-200 rounded-lg p-4 space-y-3">
                       <div className="flex items-center justify-between">
                         <span className="font-medium text-gray-900">Experience</span>
-                        <Button
+                        {!editingRow && <Button
                           type="button"
                           variant="ghost"
                           size="sm"
@@ -3770,7 +3772,7 @@ const addCombinedDevMap = () => {
                           className="text-red-600 hover:text-red-700 hover:bg-red-50"
                         >
                           <X className="w-4 h-4" />
-                        </Button>
+                        </Button>}
                       </div>
 
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -3832,7 +3834,7 @@ const addCombinedDevMap = () => {
                     <div key={bk._localId} className="border border-gray-200 rounded-lg p-4 space-y-3">
                       <div className="flex items-center justify-between">
                         <span className="font-medium text-gray-900">Bank</span>
-                        <Button
+                        {!editingRow && <Button
                           type="button"
                           variant="ghost"
                           size="sm"
@@ -3840,7 +3842,7 @@ const addCombinedDevMap = () => {
                           className="text-red-600 hover:text-red-700 hover:bg-red-50"
                         >
                           <X className="w-4 h-4" />
-                        </Button>
+                        </Button>}
                       </div>
 
                       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
@@ -3895,7 +3897,7 @@ const addCombinedDevMap = () => {
       <div key={dm._localId} className="border border-gray-200 rounded-lg p-4 space-y-3">
         <div className="flex items-center justify-between">
         
-          <Button
+          {!editingRow && <Button
             type="button"
             variant="ghost"
             size="sm"
@@ -3903,7 +3905,7 @@ const addCombinedDevMap = () => {
             className="text-red-600 hover:text-red-700 hover:bg-red-50"
           >
             <X className="w-4 h-4" />
-          </Button>
+          </Button>}
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -4005,7 +4007,7 @@ const addCombinedDevMap = () => {
       <div key={dm._localId} className="border border-gray-200 rounded-lg p-4 space-y-3">
         <div className="flex items-center justify-between">
           
-          <Button
+          {!editingRow && <Button
             type="button"
             variant="ghost"
             size="sm"
@@ -4013,7 +4015,7 @@ const addCombinedDevMap = () => {
             className="text-red-600 hover:text-red-700 hover:bg-red-50"
           >
             <X className="w-4 h-4" />
-          </Button>
+          </Button>}
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -4115,7 +4117,7 @@ const addCombinedDevMap = () => {
       <div key={dm._localId} className="border border-gray-200 rounded-lg p-4 space-y-3">
         <div className="flex items-center justify-between">
           
-          <Button
+          {!editingRow && <Button
             type="button"
             variant="ghost"
             size="sm"
@@ -4123,7 +4125,7 @@ const addCombinedDevMap = () => {
             className="text-red-600 hover:text-red-700 hover:bg-red-50"
           >
             <X className="w-4 h-4" />
-          </Button>
+          </Button>}
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">

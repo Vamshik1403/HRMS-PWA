@@ -126,7 +126,7 @@ const API = {
   branches: "/backend/branches",
 };
 
-const MIN_CHARS = 1;
+const MIN_CHARS = 0;
 const EPS = 0.5;
 
 /* ---------- Component ---------- */
@@ -137,7 +137,7 @@ export function MonthlyPayGradeManagement() {
   const [editingPayGrade, setEditingPayGrade] = useState<MonthlyPayGradeUI | null>(null);
 
   const user = useCurrentUser();
-  const canManage = user?.role === "SUPERADMIN" || user?.role === "MANAGER";
+  const canManage = user?.role === "SUPERADMIN" || user?.role === "MANAGER" || user?.role === "COMPANY_ADMIN";
   const isEmployee = user?.role === "EMPLOYEE";
 
   const [currentUserMapping, setCurrentUserMapping] = useState<any>(null);
@@ -738,7 +738,7 @@ miniOTTime: x.miniOTTime ?? 0,
       {/* Header */}
       <div className="flex items-center justify-between w-full">
         <div className="min-w-0 flex-1">
-          <p className="text-gray-600 mt-1 text-sm">Manage monthly pay grades and salary structures</p>
+          <p className="text-gray-600 mt-1 text-sm">Manage pay grades and salary structures</p>
         </div>
         {canManage && (
               <Button
@@ -746,12 +746,12 @@ miniOTTime: x.miniOTTime ?? 0,
                 className="flex-shrink-0 text-sm px-3 py-2"
               >
                 <Plus className="w-4 h-4 mr-1" />
-                Add Monthly Pay Grade
+                Add Paygrade Setup
               </Button>
             )}
       </div>
 
-      <FormDrawer open={isDialogOpen} onOpenChange={(o) => { setIsDialogOpen(o); if (!o) resetForm(); }} title={editingPayGrade ? "Edit Monthly Pay Grade" : "Add New Monthly Pay Grade"} description={editingPayGrade ? "Update the monthly pay grade information below." : "Fill in the details to add a new monthly pay grade."}>
+      <FormDrawer open={isDialogOpen} onOpenChange={(o) => { setIsDialogOpen(o); if (!o) resetForm(); }} title={editingPayGrade ? "Edit Paygrade Setup" : "Add New Paygrade Setup"} description={editingPayGrade ? "Update the paygrade setup information below." : "Fill in the details to add a new paygrade setup."}>
 
             <form onSubmit={handleSubmit} className="space-y-6">
               {/* Basic Information with AUTOCOMPLETE */}
@@ -911,108 +911,16 @@ miniOTTime: x.miniOTTime ?? 0,
 
               {/* Name */}
               <div className="space-y-2">
-                <Label htmlFor="monthlyPayGradeName">Monthly Pay Grade Name *</Label>
+                <Label htmlFor="monthlyPayGradeName">Paygrade Setup Name *</Label>
                 <Input
                   id="monthlyPayGradeName"
                   value={formData.monthlyPayGradeName}
                   onChange={(e) => setFormData((p) => ({ ...p, monthlyPayGradeName: e.target.value }))}
-                  placeholder="Enter monthly pay grade name"
+                  placeholder="Enter paygrade setup name"
                   required
                 />
               </div>
 
-
-
-              {/* Overtime Configuration */}
-<div className="space-y-4">
-  <h3 className="text-lg font-semibold">Overtime Configuration</h3>
-
-  <div className="border rounded-lg p-4 bg-gray-50 space-y-4">
-    {/* Enable OT */}
-    <div className="flex items-center gap-3">
-     <input
-  type="checkbox"
-  id="otEnabled"
-  checked={formData.otStatus}
-  onChange={(e) =>
-    setFormData((p) => ({
-      ...p,
-      otStatus: e.target.checked,
-      otRate: e.target.checked ? p.otRate : "",
-    }))
-  }
-  className="w-4 h-4 text-blue-600 border-gray-300 rounded"
-/>
-
-      <Label htmlFor="otEnabled" className="cursor-pointer">
-        Enable Overtime
-      </Label>
-    </div>
-
-    {/* OT Rate */}
-    <div className="flex items-center gap-4">
-      <div className="space-y-2 flex-1 max-w-xs">
-        <Label htmlFor="otHourlyRate">
-          Overtime Rate (Per Hour)
-        </Label>
-        <div className="flex items-center gap-2">
-       <Input
-  id="otHourlyRate"
-  type="text"
-  value={formData.otRate}
-  onChange={(e) =>
-    setFormData((p) => ({
-      ...p,
-      otRate: e.target.value,
-    }))
-  }
-  disabled={!formData.otStatus}
-  className={!formData.otStatus ? "bg-gray-100 cursor-not-allowed" : ""}
-/>
-
-          <span className="text-sm text-gray-500">₹ / hour</span>
-        </div>
-      </div>
-
-      {!formData.otStatus && (
-        <p className="text-sm text-gray-500 mt-6">
-          Enable overtime to set hourly rate
-        </p>
-      )}
-    </div>
-
-    <div className="flex items-center gap-4">
-      <div className="space-y-2 flex-1 max-w-xs">
-        <Label htmlFor="otHourlyRate">
-          Minimum Time For Overtime
-        </Label>
-        <div className="flex items-center gap-2">
-       <Input
-  id="miniOTTime"
-  type="text"
-  value={formData.miniOTTime ?? ""}
-  onChange={(e) =>
-    setFormData((p) => ({
-      ...p,
-      miniOTTime: parseInt(e.target.value) || 0,
-    }))
-  }
-  disabled={!formData.otStatus}
-  className={!formData.otStatus ? "bg-gray-100 cursor-not-allowed" : ""}
-/>
-
-          <span className="text-sm text-gray-500">in mins</span>
-        </div>
-      </div>
-
-      {!formData.otStatus && (
-        <p className="text-sm text-gray-500 mt-6">
-          Enable overtime to set hourly rate
-        </p>
-      )}
-    </div>
-  </div>
-</div>
 
 
               {/* Salary Config */}
@@ -1286,7 +1194,7 @@ miniOTTime: x.miniOTTime ?? 0,
                   Cancel
                 </Button>
                 <Button type="submit" className="">
-                  {editingPayGrade ? "Update Monthly Pay Grade" : "Add Monthly Pay Grade"}
+                  {editingPayGrade ? "Update Paygrade Setup" : "Add Paygrade Setup"}
                 </Button>
               </div>
             </form>
@@ -1300,7 +1208,7 @@ miniOTTime: x.miniOTTime ?? 0,
             <div className="relative flex-1 min-w-0">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
               <Input
-                placeholder="Search monthly pay grades..."
+                placeholder="Search paygrade setups..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="pl-10 w-full"
@@ -1318,7 +1226,7 @@ miniOTTime: x.miniOTTime ?? 0,
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Icon icon="mdi:cash-multiple" className="w-5 h-5" />
-            Monthly Pay Grade List
+            Paygrade Setup List
           </CardTitle>
         </CardHeader>
         <CardContent className="p-0 w-full">
@@ -1344,7 +1252,7 @@ miniOTTime: x.miniOTTime ?? 0,
                     <TableCell colSpan={11} className="text-center py-8 text-gray-500">
                       <div className="flex flex-col items-center gap-2">
                         <Icon icon="mdi:cash-multiple" className="w-12 h-12 text-gray-300" />
-                        <p>No monthly pay grades found</p>
+                        <p>No paygrade setups found</p>
                         <p className="text-sm">Try adjusting your search criteria</p>
                       </div>
                     </TableCell>

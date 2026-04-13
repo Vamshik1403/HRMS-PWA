@@ -126,7 +126,7 @@ const API = {
   reimbursement: "/backend/reimbursement", // Add this
 };
 
-const MIN_CHARS = 1;
+const MIN_CHARS = 0;
 
 
 
@@ -1122,7 +1122,7 @@ export function EmpGenerateSalary() {
 
 const user = useCurrentUser()
 const [items, setItems] = useState<GenerateSalaryRow[]>([])
-const canManage = user?.role === "SUPERADMIN" || user?.role === "MANAGER"
+const canManage = user?.role === "SUPERADMIN" || user?.role === "MANAGER" || user?.role === "COMPANY_ADMIN"
 
   // suggestion states
   const [spList, setSpList] = useState<SP[]>([]);

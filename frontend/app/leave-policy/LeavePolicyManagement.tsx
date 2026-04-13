@@ -89,7 +89,7 @@ export function LeavePolicyManagement() {
   })
   const [availableHolidays, setAvailableHolidays] = useState<Holiday[]>([])
   const user = useCurrentUser();
-  const canManage = user?.role === "SUPERADMIN" || user?.role === "MANAGER";
+  const canManage = user?.role === "SUPERADMIN" || user?.role === "MANAGER" || user?.role === "COMPANY_ADMIN";
 const [currentUserMapping, setCurrentUserMapping] = useState<any>(null);
 
 

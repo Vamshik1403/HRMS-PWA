@@ -27,6 +27,7 @@ interface SalaryAllowance {
   companyName: string;
   branchName: string;
   allowanceName: string;
+  displayName: string;
   allowanceType: string;
   basedOn?: "Gross" | "Basic" | "N/A";
   salaryAllowanceType: "Fixed" | "Percentage";
@@ -41,6 +42,7 @@ type ApiSalaryAllowance = {
   companyID: number | null;
   branchesID: number | null;
   salaryAllowanceName: string | null;
+  displayName?: string | null;
   allowanceType: string | null;
   salaryAllowanceType: string | null; // "Fixed" | "Percentage" (stored as string)
   salaryAllowanceValue: string | null; // keep as string in DB
@@ -64,7 +66,7 @@ const API = {
   branches: "/backend/branches",
 };
 
-const MIN_CHARS = 1;
+const MIN_CHARS = 0;
 
 export function SalaryAllowancesManagement() {
   const [allowances, setAllowances] = useState<SalaryAllowance[]>([]);
@@ -72,7 +74,7 @@ export function SalaryAllowancesManagement() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingAllowance, setEditingAllowance] = useState<SalaryAllowance | null>(null);
   const user = useCurrentUser();
-  const canManage = user?.role === "SUPERADMIN" || user?.role === "MANAGER";
+  const canManage = user?.role === "SUPERADMIN" || user?.role === "MANAGER" || user?.role === "COMPANY_ADMIN";
   const isEmployee = user?.role === "EMPLOYEE";
   const [currentUserMapping, setCurrentUserMapping] = useState<any>(null);
 
@@ -103,6 +105,7 @@ useEffect(() => {
     coAutocomplete: "",
     brAutocomplete: "",
     allowanceName: "",
+    displayName: "",
     allowanceType: "",
     basedOn: "N/A" as "Gross" | "Basic" | "N/A",
     salaryAllowanceType: "Fixed" as "Fixed" | "Percentage",
@@ -208,6 +211,7 @@ const resolvedCompanyID =
       companyName: x.company?.companyName ?? "-",
       branchName: x.branches?.branchName ?? "-",
       allowanceName: x.salaryAllowanceName ?? "-",
+      displayName: x.displayName ?? "",
       allowanceType: x.allowanceType ?? "-",
       basedOn: ((x.basedOn ?? "Gross") === "Basic" ? "Basic" : 
       (x.basedOn ?? "Gross") === "N/A" ? "N/A" : "Gross") as "Gross" | "Basic" | "N/A",
@@ -226,6 +230,7 @@ const resolvedCompanyID =
       companyID: fd.companyID,
       branchesID: fd.branchesID,
       salaryAllowanceName: fd.allowanceName,
+      displayName: fd.displayName,
       allowanceType: fd.allowanceType,
       basedOn: fd.basedOn,
       salaryAllowanceType: fd.salaryAllowanceType, 
@@ -371,6 +376,7 @@ const resolvedCompanyID =
       coAutocomplete: allowance.companyName || "",
       brAutocomplete: allowance.branchName || "",
       allowanceName: allowance.allowanceName,
+      displayName: allowance.displayName || "",
       allowanceType: allowance.allowanceType,
       basedOn: allowance.basedOn || "N/A",
       salaryAllowanceType: allowance.salaryAllowanceType,
@@ -401,6 +407,7 @@ const resolvedCompanyID =
       coAutocomplete: "",
       brAutocomplete: "",
       allowanceName: "",
+      displayName: "",
       allowanceType: "",
       basedOn: "Gross",
       salaryAllowanceType: "Fixed",
@@ -625,6 +632,16 @@ const resolvedCompanyID =
                 />
               </div>
 
+              <div className="space-y-2">
+                <Label htmlFor="displayName">Display Name</Label>
+                <Input
+                  id="displayName"
+                  value={formData.displayName}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, displayName: e.target.value }))}
+                  placeholder="Enter display name"
+                />
+              </div>
+
             {/* Allowance Configuration */}
 <div className="space-y-4">
   <h3 className="text-lg font-semibold">Allowance Configuration</h3>
@@ -639,6 +656,7 @@ const resolvedCompanyID =
         setFormData((prev) => ({
           ...prev,
           basedOn: e.target.value as "Gross" | "Basic" | "N/A",
+          salaryAllowanceType: e.target.value === "N/A" ? "Fixed" : prev.salaryAllowanceType,
         }))
       }
       className="w-full px-3 py-2 border border-gray-300 rounded-sm border-[#d0d0d0] focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-900/15 focus-visible:border-[#b0b0b0]"
@@ -646,7 +664,7 @@ const resolvedCompanyID =
     >
       <option value="Gross">Gross Salary</option>
       <option value="Basic">Basic Salary</option>
-      <option value="N/A">Not Applicable</option>
+      <option value="N/A">Fixed Amount</option>
     </select>
   </div>
   
@@ -663,9 +681,10 @@ const resolvedCompanyID =
       }
       className="w-full px-3 py-2 border border-gray-300 rounded-sm border-[#d0d0d0] focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-900/15 focus-visible:border-[#b0b0b0]"
       required
+      disabled={formData.basedOn === "N/A"}
     >
       <option value="Fixed">Fixed Amount</option>
-      <option value="Percentage">Percentage</option>
+      {formData.basedOn !== "N/A" && <option value="Percentage">Percentage</option>}
     </select>
   </div>
   

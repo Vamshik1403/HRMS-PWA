@@ -14,6 +14,9 @@ export class CreateSalaryAllowanceDto {
   @IsOptional() @IsString() @MaxLength(255)
   salaryAllowanceName?: string;
 
+  @IsOptional() @IsString() @MaxLength(255)
+  displayName?: string;
+
   @IsOptional() @IsString()
   allowanceType?:string;
 

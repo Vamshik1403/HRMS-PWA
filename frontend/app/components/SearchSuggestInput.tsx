@@ -40,12 +40,6 @@ export function SearchSuggestInput({
       clearTimeout(timeoutRef.current);
     }
 
-    if (inputValue.length < 1) {
-      setSuggestions([]);
-      setShowSuggestions(false);
-      return;
-    }
-
     timeoutRef.current = setTimeout(async () => {
       setIsLoading(true);
       try {
@@ -76,12 +70,26 @@ export function SearchSuggestInput({
     setSuggestions([]);
   };
 
-  const handleFocus = (e: React.FocusEvent<HTMLInputElement>) => {
+  const handleFocus = async (e: React.FocusEvent<HTMLInputElement>) => {
     const target = e.target;
     const len = target.value.length;
     requestAnimationFrame(() => {
       target.setSelectionRange(len, len);
     });
+    // Show suggestions on focus even without typing
+    if (!showSuggestions) {
+      setIsLoading(true);
+      try {
+        const data = await fetchData(value);
+        setSuggestions(data.slice(0, 10));
+        setShowSuggestions(true);
+      } catch (error) {
+        console.error("Error fetching suggestions:", error);
+        setSuggestions([]);
+      } finally {
+        setIsLoading(false);
+      }
+    }
   };
 
   useEffect(() => {

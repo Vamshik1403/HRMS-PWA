@@ -40,7 +40,8 @@ export function SystemUsersManagement() {
   const user = useCurrentUser();
   const isSuperAdmin = user?.role === "SUPERADMIN";
   const isManager = user?.role === "MANAGER";
-  const canAccess = isSuperAdmin || isManager;
+  const isCompanyAdmin = user?.role === "COMPANY_ADMIN";
+  const canAccess = isSuperAdmin;
 
   const [rows, setRows] = useState<UserRow[]>([]);
   const [loading, setLoading] = useState(false);

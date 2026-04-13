@@ -40,6 +40,8 @@ interface ContractorRateCard {
   perHourRate: string;
   perDayRate: string;
   perMonthRate: string;
+  otPerMinuteRate: string;
+  otPerHourRate: string;
 }
 
 const API = {
@@ -49,7 +51,7 @@ const API = {
   workShifts: "/backend/work-shift",
 };
 
-const MIN_CHARS = 1;
+const MIN_CHARS = 0;
 const DEBOUNCE_MS = 250;
 
 async function fetchJSONSafe<T>(url: string, signal?: AbortSignal): Promise<T> {
@@ -63,7 +65,7 @@ const uid = () => Math.random().toString(36).slice(2, 10);
 
 export function ContractorRatesManagement() {
   const user = useCurrentUser();
-  const canManage = user?.role === "SUPERADMIN" || user?.role === "MANAGER";
+  const canManage = user?.role === "SUPERADMIN" || user?.role === "MANAGER" || user?.role === "COMPANY_ADMIN";
 
   // Contractor selection
   const [contractors, setContractors] = useState<ContractorRead[]>([]);
@@ -203,6 +205,8 @@ export function ContractorRatesManagement() {
         perHourRate: "",
         perDayRate: "",
         perMonthRate: "",
+        otPerMinuteRate: "",
+        otPerHourRate: "",
       },
     ]);
   };
@@ -249,6 +253,8 @@ export function ContractorRatesManagement() {
             perHourRate: rc.perHourRate?.toString() || "",
             perDayRate: rc.perDayRate?.toString() || "",
             perMonthRate: rc.perMonthRate?.toString() || "",
+            otPerMinuteRate: rc.otPerMinuteRate?.toString() || "",
+            otPerHourRate: rc.otPerHourRate?.toString() || "",
           }))
         );
       } else {
@@ -263,6 +269,8 @@ export function ContractorRatesManagement() {
             perHourRate: "",
             perDayRate: "",
             perMonthRate: "",
+            otPerMinuteRate: "",
+            otPerHourRate: "",
           },
         ]);
       }
@@ -278,6 +286,8 @@ export function ContractorRatesManagement() {
           perHourRate: "",
           perDayRate: "",
           perMonthRate: "",
+          otPerMinuteRate: "",
+          otPerHourRate: "",
         },
       ]);
     }
@@ -298,6 +308,8 @@ export function ContractorRatesManagement() {
         perHourRate: "",
         perDayRate: "",
         perMonthRate: "",
+        otPerMinuteRate: "",
+        otPerHourRate: "",
       },
     ]);
     // Fetch dropdowns
@@ -384,6 +396,8 @@ export function ContractorRatesManagement() {
                               perHourRate: rc.perHourRate?.toString() || "",
                               perDayRate: rc.perDayRate?.toString() || "",
                               perMonthRate: rc.perMonthRate?.toString() || "",
+                              otPerMinuteRate: rc.otPerMinuteRate?.toString() || "",
+                              otPerHourRate: rc.otPerHourRate?.toString() || "",
                             }))
                           );
                         }
@@ -417,6 +431,8 @@ export function ContractorRatesManagement() {
                       perHourRate: "",
                       perDayRate: "",
                       perMonthRate: "",
+                      otPerMinuteRate: "",
+                      otPerHourRate: "",
                     },
                   ]);
                 }}
@@ -481,6 +497,7 @@ export function ContractorRatesManagement() {
                   </select>
                 </div>
               </div>
+              <h4 className="text-xs font-semibold text-gray-600 uppercase tracking-wide mt-2">Normal Rates</h4>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 <div>
                   <label className="text-xs font-medium text-gray-500 mb-1 block">Per Minute (₹)</label>
@@ -523,17 +540,36 @@ export function ContractorRatesManagement() {
                   />
                 </div>
               </div>
+              <h4 className="text-xs font-semibold text-gray-600 uppercase tracking-wide mt-2">Overtime (OT) Rates</h4>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-medium text-gray-500 mb-1 block">OT Per Minute (₹)</label>
+                  <Input
+                    type="number"
+                    value={rc.otPerMinuteRate}
+                    onChange={(e) => updateRateCardRow(rc._localId, "otPerMinuteRate", e.target.value)}
+                    placeholder="0"
+                    min="0"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-gray-500 mb-1 block">OT Per Hour (₹)</label>
+                  <Input
+                    type="number"
+                    value={rc.otPerHourRate}
+                    onChange={(e) => updateRateCardRow(rc._localId, "otPerHourRate", e.target.value)}
+                    placeholder="0"
+                    min="0"
+                  />
+                </div>
+              </div>
             </div>
           ))}
           {rateCards.length === 0 && (
             <div className="text-center py-8 text-gray-400 text-sm border rounded-lg">
-              No rate entries. Click &quot;Add Row&quot; to begin.
+              No rate entries yet.
             </div>
           )}
-
-          <Button type="button" variant="outline" size="sm" onClick={addRateCardRow}>
-            <Plus className="w-4 h-4 mr-1" /> Add Row
-          </Button>
 
           <div className="flex justify-end gap-3 pt-4">
             <Button variant="outline" onClick={() => setIsRateCardOpen(false)}>Close</Button>
@@ -556,6 +592,8 @@ export function ContractorRatesManagement() {
                       perHourRate: rc.perHourRate ? parseFloat(rc.perHourRate) : 0,
                       perDayRate: rc.perDayRate ? parseFloat(rc.perDayRate) : 0,
                       perMonthRate: rc.perMonthRate ? parseFloat(rc.perMonthRate) : 0,
+                      otPerMinuteRate: rc.otPerMinuteRate ? parseFloat(rc.otPerMinuteRate) : 0,
+                      otPerHourRate: rc.otPerHourRate ? parseFloat(rc.otPerHourRate) : 0,
                     })),
                   };
                   const res = await fetch(`${API.contractors}/${selectedContractor.id}/rate-cards`, {
@@ -639,13 +677,15 @@ export function ContractorRatesManagement() {
                   <TableHead>Per Hour (₹)</TableHead>
                   <TableHead>Per Day (₹)</TableHead>
                   <TableHead>Per Month (₹)</TableHead>
+                  <TableHead>OT Min (₹)</TableHead>
+                  <TableHead>OT Hr (₹)</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {allRateCards.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={9} className="text-center py-8 text-gray-500">
+                    <TableCell colSpan={11} className="text-center py-8 text-gray-500">
                       <div className="flex flex-col items-center gap-2">
                         <IndianRupee className="w-12 h-12 text-gray-300" />
                         <p>No rate cards found</p>
@@ -670,6 +710,8 @@ export function ContractorRatesManagement() {
                         <TableCell>{rc.perHourRate || "0"}</TableCell>
                         <TableCell>{rc.perDayRate || "0"}</TableCell>
                         <TableCell>{rc.perMonthRate || "0"}</TableCell>
+                        <TableCell>{rc.otPerMinuteRate || "0"}</TableCell>
+                        <TableCell>{rc.otPerHourRate || "0"}</TableCell>
                         <TableCell className="text-right">
                           {canManage && (
                             <Button

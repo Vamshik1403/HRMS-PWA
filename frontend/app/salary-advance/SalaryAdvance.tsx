@@ -135,7 +135,7 @@ export function SalaryAdvanceManagement() {
   const [selectedSalaryPeriod, setSelectedSalaryPeriod] = useState("")
   
   const user = useCurrentUser()
-  const canManage = user?.role === "SUPERADMIN" || user?.role === "MANAGER"
+  const canManage = user?.role === "SUPERADMIN" || user?.role === "MANAGER" || user?.role === "COMPANY_ADMIN"
   const isEmployee = !canManage
 
 
