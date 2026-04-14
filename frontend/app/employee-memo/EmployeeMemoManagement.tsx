@@ -120,7 +120,7 @@ export function EmployeeMemoManagement() {
       subject: "",
       description: "",
       issuedDate: new Date().toISOString().split("T")[0],
-      issuedBy: "",
+      issuedBy: user?.username ?? "",
     });
     setEditingRow(null);
   };
@@ -175,7 +175,7 @@ export function EmployeeMemoManagement() {
   };
 
   const handleDelete = async (id: number) => {
-    if (!confirm("Delete this memo/warning?")) return;
+    if (!confirm("Delete this warning/notice?")) return;
     try {
       await fetch(`${API}/${id}`, { method: "DELETE" });
       toast.success("Deleted");
@@ -198,10 +198,10 @@ export function EmployeeMemoManagement() {
   return (
     <div className="space-y-6 w-full max-w-7xl mx-auto px-4">
       <div className="flex items-center justify-between w-full">
-        <p className="text-gray-600 text-sm">Manage employee memos, warnings, and notices</p>
+        <p className="text-gray-600 text-sm">Manage employee warnings and notices</p>
         {!isAddingNew && !isViewing && canManage && (
           <Button onClick={() => { resetForm(); setIsAddingNew(true); }} className="text-sm px-3 py-2">
-            <Plus className="w-4 h-4 mr-1" /> Add Memo / Warning
+            <Plus className="w-4 h-4 mr-1" /> Add Warning / Notice
           </Button>
         )}
         {(isAddingNew || isViewing) && (
@@ -213,7 +213,7 @@ export function EmployeeMemoManagement() {
 
       {/* Add/Edit FormDrawer */}
       <FormDrawer open={isAddingNew} onOpenChange={(v) => { if (!v) handleCancel(); }}
-        title={editingRow ? "Edit Memo / Warning" : "Add Memo / Warning"}>
+        title={editingRow ? "Edit Warning / Notice" : "Add Warning / Notice"}>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div ref={empRef} className="space-y-2 relative">
             <Label>Employee *</Label>
@@ -250,7 +250,6 @@ export function EmployeeMemoManagement() {
                 <SelectTrigger><SelectValue placeholder="Select type…" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="Warning">Warning</SelectItem>
-                  <SelectItem value="Memo">Memo</SelectItem>
                   <SelectItem value="Notice">Notice</SelectItem>
                 </SelectContent>
               </Select>
@@ -263,7 +262,7 @@ export function EmployeeMemoManagement() {
 
           <div className="space-y-2">
             <Label>Subject</Label>
-            <Input value={form.subject} onChange={(e) => setForm((p) => ({ ...p, subject: e.target.value }))} placeholder="Subject of memo/warning" />
+            <Input value={form.subject} onChange={(e) => setForm((p) => ({ ...p, subject: e.target.value }))} placeholder="Subject of warning/notice" />
           </div>
 
           <div className="space-y-2">
@@ -273,7 +272,7 @@ export function EmployeeMemoManagement() {
 
           <div className="space-y-2">
             <Label>Issued By</Label>
-            <Input value={form.issuedBy} onChange={(e) => setForm((p) => ({ ...p, issuedBy: e.target.value }))} placeholder="Name of issuer" />
+            <Input value={form.issuedBy} readOnly className="bg-gray-50" />
           </div>
 
           <div className="flex justify-end gap-2 pt-4">
@@ -285,7 +284,7 @@ export function EmployeeMemoManagement() {
 
       {/* View Details FormDrawer */}
       <FormDrawer open={!!(isViewing && viewRow)} onOpenChange={(v) => { if (!v) handleCancel(); }}
-        title="Memo / Warning Details">
+        title="Warning / Notice Details">
         {viewRow && (
           <div className="space-y-3 text-sm">
             <p><strong>Employee:</strong> {viewRow.manageEmployee?.employeeFirstName ?? ""} {viewRow.manageEmployee?.employeeLastName ?? ""} ({viewRow.manageEmployee?.employeeID ?? ""})</p>

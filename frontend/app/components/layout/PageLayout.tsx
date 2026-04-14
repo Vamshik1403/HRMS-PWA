@@ -600,7 +600,7 @@ export function PageLayout({ children }: PageLayoutProps) {
                                 ? sbSubActive
                                 : sbSubIdle
                             )}>
-                              <span className="font-medium truncate" style={{ display: "block" }}>Offboarding</span>
+                              <span className="font-medium truncate" style={{ display: "block" }}>Off Boarding</span>
                             </Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>

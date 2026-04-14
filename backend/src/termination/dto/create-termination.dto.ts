@@ -1,4 +1,4 @@
-import { IsEnum, IsInt, IsOptional, IsString, IsDateString } from 'class-validator';
+import { IsEnum, IsInt, IsOptional, IsString, IsDateString, Min } from 'class-validator';
 
 export enum ExitType {
   RESIGNATION = 'RESIGNATION',
@@ -28,4 +28,13 @@ export class CreateTerminationDto {
   @IsOptional()
   @IsDateString()
   resignationDate?: string;
+
+  @IsOptional()
+  @IsDateString()
+  noticeStartDate?: string;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  noticeDays?: number;
 }

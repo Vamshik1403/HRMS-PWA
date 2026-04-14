@@ -1685,7 +1685,7 @@ const runFetchBR = (query: string) => {
             onClick={() => { resetForm(); setIsAddingNew(true); }}
             className="flex-shrink-0 text-sm px-3 py-2"
           >
-            <Plus className="w-4 h-4 mr-1" /> Add Promotion
+            <Plus className="w-4 h-4 mr-1" /> Add Promotion & Transfers
           </Button>
         )}
         {(isAddingNew || isViewing) && (

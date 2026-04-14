@@ -55,6 +55,8 @@ interface Termination {
   reasonCategory?: string;
   lastWorkingDay?: string;
   resignationDate?: string;
+  noticeStartDate?: string;
+  noticeDays?: number;
   createdAt: string;
   employee?: Employee;
 }
@@ -90,6 +92,8 @@ export default function TerminationManagement() {
     exitType: "",
     reasonCategory: "",
     resignationDate: "",
+    initiatedOn: new Date().toISOString().split("T")[0],
+    noticePeriod: "",
   });
 
   // -------------------
@@ -135,6 +139,8 @@ export default function TerminationManagement() {
           exitType: form.exitType,
           reasonCategory: form.reasonCategory,
           resignationDate: form.resignationDate || undefined,
+          noticeStartDate: form.initiatedOn || undefined,
+          noticeDays: form.noticePeriod ? Number(form.noticePeriod) : undefined,
         }),
       });
 
@@ -144,6 +150,8 @@ export default function TerminationManagement() {
         exitType: "",
         reasonCategory: "",
         resignationDate: "",
+        initiatedOn: new Date().toISOString().split("T")[0],
+        noticePeriod: "",
       });
       fetchData();
     } catch {
@@ -240,7 +248,7 @@ export default function TerminationManagement() {
             onClick={() => setIsAdding(true)}
           >
             <Plus className="w-4 h-4 mr-1" />
-            Initiate Exit
+            Initiate Off Boarding
           </Button>
         )}
       </div>
@@ -303,6 +311,31 @@ export default function TerminationManagement() {
                 />
               </div>
 
+              <div>
+                <Label>Initiated On</Label>
+                <Input
+                  type="date"
+                  value={form.initiatedOn}
+                  min={new Date().toISOString().split("T")[0]}
+                  onChange={(e) =>
+                    setForm({ ...form, initiatedOn: e.target.value })
+                  }
+                />
+              </div>
+
+              <div>
+                <Label>Notice Period (Days)</Label>
+                <Input
+                  type="number"
+                  min="0"
+                  value={form.noticePeriod}
+                  onChange={(e) =>
+                    setForm({ ...form, noticePeriod: e.target.value })
+                  }
+                  placeholder="e.g. 30"
+                />
+              </div>
+
               <div className="flex gap-2">
                 <Button type="submit" disabled={saving}>
                   <Save className="w-4 h-4 mr-1" />
@@ -331,7 +364,10 @@ export default function TerminationManagement() {
                   <TableHead>Employee</TableHead>
                   <TableHead>Exit Type</TableHead>
                   <TableHead>Status</TableHead>
+                  <TableHead>Initiated On</TableHead>
+                  <TableHead>Notice Period</TableHead>
                   <TableHead>Last Working Day</TableHead>
+                  <TableHead>Employee Status</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -361,9 +397,39 @@ export default function TerminationManagement() {
                     </TableCell>
 
                     <TableCell>
+                      {t.noticeStartDate
+                        ? new Date(t.noticeStartDate).toLocaleDateString()
+                        : "-"}
+                    </TableCell>
+
+                    <TableCell>
+                      {t.noticeDays != null ? `${t.noticeDays} days` : "-"}
+                    </TableCell>
+
+                    <TableCell>
                       {t.lastWorkingDay
                         ? new Date(t.lastWorkingDay).toLocaleDateString()
                         : "-"}
+                    </TableCell>
+
+                    <TableCell>
+                      {(() => {
+                        if (t.exitStatus === "FINAL_SETTLED" || t.exitStatus === "APPROVED") {
+                          return <Badge className="bg-red-100 text-red-700">Inactive</Badge>;
+                        }
+                        if (t.exitStatus === "CANCELLED" || t.exitStatus === "WITHDRAWN") {
+                          return <Badge className="bg-green-100 text-green-700">Active</Badge>;
+                        }
+                        if (t.noticeStartDate && t.noticeDays) {
+                          const end = new Date(t.noticeStartDate);
+                          end.setDate(end.getDate() + t.noticeDays);
+                          if (new Date() >= end) {
+                            return <Badge className="bg-red-100 text-red-700">Inactive</Badge>;
+                          }
+                          return <Badge className="bg-orange-100 text-orange-700">Notice Period</Badge>;
+                        }
+                        return <Badge className="bg-green-100 text-green-700">Active</Badge>;
+                      })()}
                     </TableCell>
 
                     <TableCell className="text-right space-x-2">

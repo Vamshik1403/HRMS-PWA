@@ -81,6 +81,10 @@ async findAll() {
       resignationDate: dto.resignationDate
         ? new Date(dto.resignationDate)
         : null,
+      noticeStartDate: dto.noticeStartDate
+        ? new Date(dto.noticeStartDate)
+        : null,
+      noticeDays: dto.noticeDays ?? null,
       exitStatus: 'DRAFT',
     },
   });
