@@ -49,7 +49,7 @@ const sbIdle =
   "text-[#6b7280] hover:bg-[#eef2ff] hover:text-[#4f46e5] !bg-transparent";
 
 const sbSubRow =
-  "flex w-full items-center rounded-md !px-3 min-h-9 h-9 max-h-9 text-[11px] font-normal transition-colors duration-150 overflow-hidden";
+  "flex w-full items-center rounded-md !px-3 min-h-9 h-9 max-h-9 text-[13px] font-normal transition-colors duration-150 overflow-hidden";
 
 const sbSubActive =
   "!bg-[#eef2ff] text-[#4f46e5] font-medium !shadow-none ring-0 relative !pl-6 before:absolute before:left-0 before:top-[30%] before:h-[40%] before:w-[2px] before:rounded-full before:bg-[#4f46e5]";
@@ -412,7 +412,7 @@ export function PageLayout({ children }: PageLayoutProps) {
                                 ? "text-[#4f46e5]" : "text-gray-400"
                             )}
                           />
-                          <span className="truncate font-semibold text-[13px]">Company Management</span>
+                          <span className="truncate font-semibold text-sm">Company Management</span>
                         </span>
                         <Icon
                           icon="mdi:chevron-down"
@@ -523,7 +523,7 @@ export function PageLayout({ children }: PageLayoutProps) {
                                 ? "text-[#4f46e5]" : "text-gray-400"
                             )}
                           />
-                          <span className="truncate font-semibold text-[13px]">
+                          <span className="truncate font-semibold text-sm">
                             Employee Management
                           </span>
                         </span>
@@ -578,7 +578,7 @@ export function PageLayout({ children }: PageLayoutProps) {
                                 ? sbSubActive
                                 : sbSubIdle
                             )}>
-                              <span className="font-medium" style={{ display: "block" }}>Employees Promotions</span>
+                              <span className="font-medium" style={{ display: "block" }}>Promotions & Transfers</span>
                             </Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
@@ -589,7 +589,7 @@ export function PageLayout({ children }: PageLayoutProps) {
                                 ? sbSubActive
                                 : sbSubIdle
                             )}>
-                              <span className="font-medium truncate" style={{ display: "block" }}>Employee Memo</span>
+                              <span className="font-medium truncate" style={{ display: "block" }}>Warning & Notices</span>
                             </Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
@@ -600,7 +600,7 @@ export function PageLayout({ children }: PageLayoutProps) {
                                 ? sbSubActive
                                 : sbSubIdle
                             )}>
-                              <span className="font-medium truncate" style={{ display: "block" }}>Termination</span>
+                              <span className="font-medium truncate" style={{ display: "block" }}>Offboarding</span>
                             </Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
@@ -637,8 +637,8 @@ export function PageLayout({ children }: PageLayoutProps) {
                                 ? "text-[#4f46e5]" : "text-gray-400"
                             )}
                           />
-                          <span className="truncate font-semibold text-[13px]">
-                            Workshift & Policy
+                          <span className="truncate font-semibold text-sm">
+                            Shift & Attendance Policy
                           </span>
                         </span>
                         <Icon
@@ -679,7 +679,164 @@ export function PageLayout({ children }: PageLayoutProps) {
                   </Collapsible>
                 )}
 
+
                 {/* Leave Policy Section - Show to all users */}
+                {/* Salary Management Section - Show to all users with different access levels */}
+                {(isSuperAdmin || isManager || isCompanyAdmin || isRegularUser) && (
+                  <Collapsible open={openSections.salary} onOpenChange={(open) => setOpenSections(prev => ({ ...prev, salary: open }))}>
+                    <CollapsibleTrigger asChild>
+                      <SidebarMenuButton
+                        size="lg"
+                        className={cn(
+                          sbMenuBtnReset,
+                          sbRow,
+                          "mx-0 justify-between",
+                          salarySectionActive
+                            ? sbActive
+                            : cn(
+                                sbIdle,
+                                openSections.salary &&
+                                  "font-semibold text-[#4f46e5]"
+                              )
+                        )}
+                      >
+                        <span className="flex items-center gap-3 min-w-0">
+                          <Icon
+                            icon="mdi:currency-usd"
+                            className={cn(
+                              "w-5 h-5 shrink-0",
+                              salarySectionActive
+                                ? "text-[#4f46e5]" : "text-gray-400"
+                            )}
+                          />
+                          <span className="truncate font-semibold text-sm">
+                            Salary Management
+                          </span>
+                        </span>
+                        <Icon
+                          icon="mdi:chevron-down"
+                          className={cn(
+                            "w-4 h-4 shrink-0 text-gray-500 transition-transform duration-300",
+                            openSections.salary && "rotate-180"
+                          )}
+                        />
+                      </SidebarMenuButton>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent>
+                      <SidebarMenuSub className="ml-5 mt-1 space-y-0.5 border-l border-[#f0f0f0] pl-3">
+                        {/* Full access for SUPERADMIN and MANAGER */}
+                        {(isSuperAdmin || isManager || isCompanyAdmin) && (
+                          <>
+                            <SidebarMenuSubItem>
+                              <SidebarMenuSubButton asChild>
+                                <Link href="/monthly-salary-cycle" title="Monthly Salary Cycle" className={cn(sbSubRow,
+                                  isActiveLink('/monthly-salary-cycle') 
+                                    ? sbSubActive
+                                    : sbSubIdle
+                                )}>
+                                  <span className="font-medium truncate" style={{ display: "block" }}>Monthly Salary Cycle</span>
+                                </Link>
+                              </SidebarMenuSubButton>
+                            </SidebarMenuSubItem>
+                            <SidebarMenuSubItem>
+                              <SidebarMenuSubButton asChild>
+                                <Link href="/salary-allowances" className={cn(sbSubRow,
+                                  isActiveLink('/salary-allowances') 
+                                    ? sbSubActive
+                                    : sbSubIdle
+                                )}>
+                                  <span className="font-medium truncate" style={{ display: "block" }}>Allowances</span>
+                                </Link>
+                              </SidebarMenuSubButton>
+                            </SidebarMenuSubItem>
+                            <SidebarMenuSubItem>
+                              <SidebarMenuSubButton asChild>
+                                <Link href="/salary-deductions" className={cn(sbSubRow,
+                                  isActiveLink('/salary-deductions') 
+                                    ? sbSubActive
+                                    : sbSubIdle
+                                )}>
+                                  <span className="font-medium truncate" style={{ display: "block" }}>Deductions</span>
+                                </Link>
+                              </SidebarMenuSubButton>
+                            </SidebarMenuSubItem>
+                            <SidebarMenuSubItem>
+                              <SidebarMenuSubButton asChild>
+                                <Link href="/monthly-pay-grade" className={cn(sbSubRow,
+                                  isActiveLink('/monthly-pay-grade') 
+                                    ? sbSubActive
+                                    : sbSubIdle
+                                )}>
+                                  <span className="font-medium truncate" style={{ display: "block" }}>Paygrade</span>
+                                </Link>
+                              </SidebarMenuSubButton>
+                            </SidebarMenuSubItem>
+                            <SidebarMenuSubItem>
+                              <SidebarMenuSubButton asChild>
+                                <Link href="/bonus-setup" className={cn(sbSubRow,
+                                  isActiveLink('/bonus-setup') 
+                                    ? sbSubActive
+                                    : sbSubIdle
+                                )}>
+                                  <span className="font-medium truncate" style={{ display: "block" }}>Bonus Rule</span>
+                                </Link>
+                              </SidebarMenuSubButton>
+                            </SidebarMenuSubItem>
+                            <SidebarMenuSubItem>
+                              <SidebarMenuSubButton asChild>
+                                <Link href="/bonus-allocations" className={cn(sbSubRow,
+                                  isActiveLink('/bonus-allocations') 
+                                    ? sbSubActive
+                                    : sbSubIdle
+                                )}>
+                                  <span className="font-medium truncate" style={{ display: "block" }}>Bonus Allocations</span>
+                                </Link>
+                              </SidebarMenuSubButton>
+                            </SidebarMenuSubItem>
+                          </>
+                        )}
+                        
+                        {/* Common links for all users - Salary Advance, Reimbursement, Generate Salary */}
+                        <SidebarMenuSubItem>
+                          <SidebarMenuSubButton asChild>
+                            <Link href="/salary-advance" className={cn(sbSubRow,
+                              isActiveLink('/salary-advance') 
+                                ? sbSubActive
+                                : sbSubIdle
+                            )}>
+                              <span className="font-medium truncate" style={{ display: "block" }}>Salary Advances</span>
+                            </Link>
+                          </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
+                        <SidebarMenuSubItem>
+                          <SidebarMenuSubButton asChild>
+                            <Link href="/reimbursement" className={cn(sbSubRow,
+                              isActiveLink('/reimbursement') 
+                                ? sbSubActive
+                                : sbSubIdle
+                            )}>
+                              <span className="font-medium truncate" style={{ display: "block" }}>Reimbursements</span>
+                            </Link>
+                          </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
+                        <SidebarMenuSubItem>
+                          <SidebarMenuSubButton asChild>
+                            <Link href="/generate-salary" className={cn(sbSubRow,
+                              isActiveLink('/generate-salary') 
+                                ? sbSubActive
+                                : sbSubIdle
+                            )}>
+                              <span className="font-medium truncate" style={{ display: "block" }}>Run Payroll</span>
+                            </Link>
+                          </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
+                      </SidebarMenuSub>
+                    </CollapsibleContent>
+                  </Collapsible>
+                )}
+
+                {/* Leave Management Section - Show to all users */}
+
                 {(isSuperAdmin || isManager || isCompanyAdmin || isRegularUser) && (
                   <Collapsible open={openSections.leave} onOpenChange={(open) => setOpenSections(prev => ({ ...prev, leave: open }))}>
                     <CollapsibleTrigger asChild>
@@ -707,7 +864,7 @@ export function PageLayout({ children }: PageLayoutProps) {
                                 ? "text-[#4f46e5]" : "text-gray-400"
                             )}
                           />
-                          <span className="truncate font-semibold text-[13px]">
+                       <span className="truncate font-semibold text-[13px]">
                             Leave Policy
                           </span>
                         </span>
@@ -993,7 +1150,7 @@ export function PageLayout({ children }: PageLayoutProps) {
                                 ? "text-[#4f46e5]" : "text-gray-400"
                             )}
                           />
-                          <span className="truncate font-semibold text-[13px]">
+                          <span className="truncate font-semibold text-sm">
                             Attendance Management
                           </span>
                         </span>
@@ -1171,7 +1328,7 @@ export function PageLayout({ children }: PageLayoutProps) {
                                 ? "text-[#4f46e5]" : "text-gray-400"
                             )}
                           />
-                          <span className="truncate font-semibold text-[13px]">
+                          <span className="truncate font-semibold text-sm">
                             Reports
                           </span>
                         </span>
@@ -1246,6 +1403,76 @@ export function PageLayout({ children }: PageLayoutProps) {
                   </Collapsible>
                 )}
 
+                {/* Canteen Management Section */}
+                {(isSuperAdmin || isManager || isCompanyAdmin) && (
+                  <Collapsible open={openSections.canteen} onOpenChange={(open) => setOpenSections(prev => ({ ...prev, canteen: open }))}>
+                    <CollapsibleTrigger asChild>
+                      <SidebarMenuButton
+                        size="lg"
+                        className={cn(
+                          sbMenuBtnReset,
+                          sbRow,
+                          "mx-0 justify-between",
+                          canteenSectionActive
+                            ? sbActive
+                            : cn(
+                                sbIdle,
+                                openSections.canteen &&
+                                  "font-semibold text-[#4f46e5]"
+                              )
+                        )}
+                      >
+                        <span className="flex items-center gap-3 min-w-0">
+                          <Icon
+                            icon="mdi:silverware-fork-knife"
+                            className={cn(
+                              "w-5 h-5 shrink-0",
+                              canteenSectionActive
+                                ? "text-[#4f46e5]" : "text-gray-400"
+                            )}
+                          />
+                          <span className="truncate font-semibold text-sm">
+                            Canteen Management
+                          </span>
+                        </span>
+                        <Icon
+                          icon="mdi:chevron-down"
+                          className={cn(
+                            "w-4 h-4 shrink-0 text-gray-500 transition-transform duration-300",
+                            openSections.canteen && "rotate-180"
+                          )}
+                        />
+                      </SidebarMenuButton>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent>
+                      <SidebarMenuSub className="ml-5 mt-1 space-y-0.5 border-l border-[#f0f0f0] pl-3">
+                        <SidebarMenuSubItem>
+                          <SidebarMenuSubButton asChild>
+                            <Link href="/canteen" className={cn(sbSubRow,
+                              isActiveLink('/canteen') 
+                                ? sbSubActive
+                                : sbSubIdle
+                            )}>
+                              <span className="font-medium truncate" style={{ display: "block" }}>Dashboard</span>
+                            </Link>
+                          </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
+                        <SidebarMenuSubItem>
+                          <SidebarMenuSubButton asChild>
+                            <Link href="/canteen/setup" className={cn(sbSubRow,
+                              isActiveLink('/canteen/setup') 
+                                ? sbSubActive
+                                : sbSubIdle
+                            )}>
+                              <span className="font-medium truncate" style={{ display: "block" }}>Setup</span>
+                            </Link>
+                          </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
+                      </SidebarMenuSub>
+                    </CollapsibleContent>
+                  </Collapsible>
+                )}
+
                 {/* Settings Section - Only for SUPERADMIN and MANAGER */}
                 {(isSuperAdmin || isManager || isCompanyAdmin) && (
                   <Collapsible open={openSections.settings} onOpenChange={(open) => setOpenSections(prev => ({ ...prev, settings: open }))}>
@@ -1274,7 +1501,7 @@ export function PageLayout({ children }: PageLayoutProps) {
                                 ? "text-[#4f46e5]" : "text-gray-400"
                             )}
                           />
-                          <span className="truncate font-semibold text-[13px]">
+                          <span className="truncate font-semibold text-sm">
                             Settings
                           </span>
                         </span>
