@@ -170,7 +170,7 @@ export function PageLayout({ children }: PageLayoutProps) {
       newOpenSections.attendance = true
     }
     // Reports section paths
-    else if (['/attendance-reports', '/leave-reports', '/salary-statements', '/canteen/reports', '/payroll-reports'].includes(pathname)) {
+    else if (['/attendance-reports', '/leave-reports', '/salary-statements', '/canteen/reports', '/payroll-reports', '/contractor-reports'].includes(pathname)) {
       openAllSpParents()
       newOpenSections.reports = true
     }
@@ -264,6 +264,7 @@ export function PageLayout({ children }: PageLayoutProps) {
     "/salary-statements",
     "/canteen/reports",
     "/payroll-reports",
+    "/contractor-reports",
   ].includes(pathname);
   const canteenSectionActive =
     pathname === "/canteen" || pathname === "/canteen/setup";
@@ -1240,6 +1241,17 @@ export function PageLayout({ children }: PageLayoutProps) {
                                 : sbSubIdle
                             )}>
                               <span className="font-medium truncate" style={{ display: "block" }}>Canteen Reports</span>
+                            </Link>
+                          </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
+                        <SidebarMenuSubItem>
+                          <SidebarMenuSubButton asChild>
+                            <Link href="/contractor-reports" className={cn(sbSubRow,
+                              isActiveLink('/contractor-reports') 
+                                ? sbSubActive
+                                : sbSubIdle
+                            )}>
+                              <span className="font-medium truncate" style={{ display: "block" }}>Contractor Reports</span>
                             </Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>

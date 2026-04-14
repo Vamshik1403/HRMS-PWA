@@ -746,7 +746,7 @@ miniOTTime: x.miniOTTime ?? 0,
                 className="flex-shrink-0 text-sm px-3 py-2"
               >
                 <Plus className="w-4 h-4 mr-1" />
-                Add Paygrade Setup
+                Add Paygrade
               </Button>
             )}
       </div>
@@ -1194,7 +1194,7 @@ miniOTTime: x.miniOTTime ?? 0,
                   Cancel
                 </Button>
                 <Button type="submit" className="">
-                  {editingPayGrade ? "Update Paygrade Setup" : "Add Paygrade Setup"}
+                  {editingPayGrade ? "Update Paygrade" : "Add Paygrade"}
                 </Button>
               </div>
             </form>

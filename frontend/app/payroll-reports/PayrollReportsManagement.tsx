@@ -1,32 +1,43 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card";
-import { Button } from "../../components/ui/button";
-import { Input } from "../../components/ui/input";
-import { Label } from "../../components/ui/label";
+import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
+import { Button } from "../components/ui/button";
+import { Input } from "../components/ui/input";
+import { Label } from "../components/ui/label";
 import { Search, Download, FileText } from "lucide-react";
-import { useCurrentUser } from "../../hooks/useCurrentUser";
+import { useCurrentUser } from "../hooks/useCurrentUser";
 import * as XLSX from "xlsx";
 
-const BACKEND_URL =
-  process.env.NEXT_PUBLIC_BACKEND_URL || "/backend";
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "/backend";
 
 interface Company { id: number; companyName: string; }
 interface Branch { id: number; branchName: string; companyID: number; }
 interface Department { id: number; companyID: number; branchesID: number; departmentName: string; }
+interface Designation { id: number; companyID: number; branchesID: number; departmentID?: number; designation: string; }
 interface Employee {
   id: number; employeeID: string;
   employeeFirstName: string; employeeLastName: string;
   companyID: number; branchesID: number; departmentNameID?: number | null;
+  designationID?: number | null;
+  designations?: { designation?: string };
+  departments?: { departmentName?: string };
 }
 
-interface CanteenRecord {
-  manage_employee_id: number | null;
-  user_id: string;
-  username: string;
-  punch_time: string;
-  default_token?: boolean;
+interface SalaryRecord {
+  id: number;
+  companyID: number | null;
+  branchesID: number | null;
+  employeeID: number;
+  monthPeriod: string;
+  paymentMode: string | null;
+  paymentType: string | null;
+  paymentDate: string | null;
+  paymentRemark: string | null;
+  status: string | null;
+  manageEmployee?: Employee;
+  company?: Company;
+  branches?: Branch;
 }
 
 interface ReportRow {
@@ -36,9 +47,11 @@ interface ReportRow {
   companyName: string;
   branchName: string;
   departmentName: string;
-  date: string;
-  time: string;
-  defaultToken: string;
+  designation: string;
+  monthPeriod: string;
+  paymentMode: string;
+  paymentDate: string;
+  status: string;
 }
 
 const getTodayStr = () => {
@@ -47,14 +60,12 @@ const getTodayStr = () => {
 };
 
 const REPORT_TYPES = [
-  { value: "checkin", label: "Checkin" },
-  { value: "tokenAssigned", label: "Token Assigned" },
-  { value: "tokenCancel", label: "Token Cancel" },
-  { value: "tokenConsumed", label: "Token Consumed" },
-  { value: "tokenNotConsumed", label: "Token Not Consumed" },
+  { value: "payout_summary", label: "Payout Summary" },
+  { value: "total_working_hours", label: "Total Working Hours" },
+  { value: "ot_hours", label: "OT Hours" },
 ];
 
-export function CanteenReports() {
+export function PayrollReportsManagement() {
   const user = useCurrentUser();
 
   const [companies, setCompanies] = useState<Company[]>([]);
@@ -62,8 +73,9 @@ export function CanteenReports() {
   const [allDepartments, setAllDepartments] = useState<Department[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
+  const [allDesignations, setAllDesignations] = useState<Designation[]>([]);
+  const [designations, setDesignations] = useState<Designation[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
-  const [defaultTokenEnabled, setDefaultTokenEnabled] = useState(false);
 
   const [reportData, setReportData] = useState<ReportRow[]>([]);
   const [loading, setLoading] = useState(false);
@@ -74,7 +86,8 @@ export function CanteenReports() {
     companyID: null as number | null,
     branchID: null as number | null,
     departmentID: null as number | null,
-    reportType: "checkin",
+    designationID: null as number | null,
+    reportType: "payout_summary",
     dateFrom: "",
     dateTo: getTodayStr(),
   });
@@ -87,24 +100,22 @@ export function CanteenReports() {
       fetch(`${BACKEND_URL}/branches`, { cache: "no-store" }).then((r) => r.json()),
       fetch(`${BACKEND_URL}/departments`, { cache: "no-store" }).then((r) => r.json()),
       fetch(`${BACKEND_URL}/manage-emp`, { cache: "no-store" }).then((r) => r.json()),
-      fetch(`${BACKEND_URL}/canteen/setup`, { cache: "no-store" }).then((r) => r.json()),
-    ]).then(([cos, brs, depts, emps, setup]) => {
+      fetch(`${BACKEND_URL}/designations`, { cache: "no-store" }).then((r) => r.json()),
+    ]).then(([cos, brs, depts, emps, desigs]) => {
       setCompanies(cos);
       setAllBranches(brs);
       setAllDepartments(depts);
-      setEmployees(emps);
-      setDefaultTokenEnabled(setup?.default_token_enabled ?? false);
+      setEmployees(Array.isArray(emps) ? emps : emps?.data ?? []);
+      setAllDesignations(Array.isArray(desigs) ? desigs : []);
     });
   }, []);
 
-  // ── Filter branches based on selected company ──
+  // ── Filter branches ──
 
   useEffect(() => {
     if (!user) return;
     let cid = formData.companyID;
-    if (user.role !== "SUPERADMIN" && user.companyID) {
-      cid = user.companyID;
-    }
+    if (user.role !== "SUPERADMIN" && user.companyID) cid = user.companyID;
     let filtered = [...allBranches];
     if (cid) filtered = filtered.filter((b) => b.companyID === cid);
     setBranches(filtered);
@@ -114,7 +125,7 @@ export function CanteenReports() {
     }
   }, [user, allBranches, formData.companyID]);
 
-  // ── Filter departments based on selected company + branch ──
+  // ── Filter departments ──
 
   useEffect(() => {
     if (!user) return;
@@ -129,20 +140,6 @@ export function CanteenReports() {
     }
   }, [user, allDepartments, formData.companyID, formData.branchID]);
 
-  // ── Helpers ──
-
-  const formatPunchTime = (pt: string) => {
-    const raw = pt.replace("Z", "").replace(/[+-]\d{2}:\d{2}$/, "");
-    const d = new Date(raw);
-    return {
-      date: d.toLocaleDateString("en-IN", { day: "2-digit", month: "2-digit", year: "numeric" }),
-      time: d.toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit", second: "2-digit", hour12: true }),
-    };
-  };
-
-  const getReportTypeLabel = () =>
-    REPORT_TYPES.find((t) => t.value === formData.reportType)?.label || formData.reportType;
-
   // ── Generate Report ──
 
   const generateReport = async () => {
@@ -155,51 +152,55 @@ export function CanteenReports() {
     try {
       const cid = user?.role !== "SUPERADMIN" && user?.companyID ? user.companyID : formData.companyID;
 
-      const params = new URLSearchParams({
-        dateFrom: formData.dateFrom,
-        dateTo: formData.dateTo,
-        type: formData.reportType,
+      const res = await fetch(`${BACKEND_URL}/generate-salary`, { cache: "no-store" });
+      const raw = await res.json();
+      const records: SalaryRecord[] = Array.isArray(raw) ? raw : raw?.data ?? [];
+
+      // Filter records by company, branch, department, date range
+      const filtered = records.filter((rec) => {
+        if (cid && rec.companyID !== cid) return false;
+        if (formData.branchID && rec.branchesID !== formData.branchID) return false;
+        if (formData.departmentID && rec.manageEmployee?.departmentNameID !== formData.departmentID) return false;
+        if (formData.designationID && rec.manageEmployee?.designationID !== formData.designationID) return false;
+
+        // Filter by date range using monthPeriod or paymentDate
+        const recDate = rec.paymentDate || rec.monthPeriod;
+        if (recDate) {
+          if (formData.dateFrom && recDate < formData.dateFrom) return false;
+          if (formData.dateTo && recDate > formData.dateTo) return false;
+        }
+
+        return true;
       });
-      if (cid) params.set("companyId", String(cid));
-      if (formData.branchID) params.set("branchId", String(formData.branchID));
-      if (formData.departmentID) params.set("departmentId", String(formData.departmentID));
 
-      const res = await fetch(`${BACKEND_URL}/canteen/reports?${params.toString()}`, { cache: "no-store" });
-      const records: CanteenRecord[] = await res.json();
-
-      // Build lookup maps
-      const empMap = new Map(employees.map((e) => [e.id, e]));
       const companyMap = new Map(companies.map((c) => [c.id, c]));
       const branchMap = new Map(allBranches.map((b) => [b.id, b]));
       const deptMap = new Map(allDepartments.map((d) => [d.id, d]));
 
-      const rows: ReportRow[] = records.map((rec, i) => {
-        const emp = rec.manage_employee_id ? empMap.get(rec.manage_employee_id) : null;
-        const company = emp?.companyID ? companyMap.get(emp.companyID) : null;
-        const branch = emp?.branchesID ? branchMap.get(emp.branchesID) : null;
+      const rows: ReportRow[] = filtered.map((rec, i) => {
+        const emp = rec.manageEmployee;
+        const company = rec.companyID ? companyMap.get(rec.companyID) : null;
+        const branch = rec.branchesID ? branchMap.get(rec.branchesID) : null;
         const dept = emp?.departmentNameID ? deptMap.get(emp.departmentNameID) : null;
-        const { date, time } = rec.punch_time
-          ? formatPunchTime(rec.punch_time)
-          : { date: "-", time: "-" };
 
         return {
           sno: i + 1,
-          employeeID: emp?.employeeID || rec.user_id || "-",
-          employeeName: emp
-            ? `${emp.employeeFirstName} ${emp.employeeLastName}`
-            : rec.username || "-",
-          companyName: company?.companyName || "-",
-          branchName: branch?.branchName || "-",
-          departmentName: dept?.departmentName || "-",
-          date,
-          time,
-          defaultToken: defaultTokenEnabled ? "Enabled" : "Disabled",
+          employeeID: emp?.employeeID || "-",
+          employeeName: emp ? `${emp.employeeFirstName} ${emp.employeeLastName}` : "-",
+          companyName: company?.companyName || rec.company?.companyName || "-",
+          branchName: branch?.branchName || rec.branches?.branchName || "-",
+          departmentName: dept?.departmentName || emp?.departments?.departmentName || "-",
+          designation: emp?.designations?.designation || "-",
+          monthPeriod: rec.monthPeriod || "-",
+          paymentMode: rec.paymentMode || "-",
+          paymentDate: rec.paymentDate || "-",
+          status: rec.status || "-",
         };
       });
 
       setReportData(rows);
     } catch (err) {
-      console.error("Error generating canteen report:", err);
+      console.error("Error generating payroll report:", err);
       alert("Error generating report.");
       setReportData([]);
     } finally {
@@ -214,22 +215,23 @@ export function CanteenReports() {
       dateTo: getTodayStr(),
       branchID: null,
       departmentID: null,
+      designationID: null,
       companyID: user?.role === "SUPERADMIN" ? null : prev.companyID,
-      reportType: "checkin",
+      reportType: "payout_summary",
     }));
     setReportData([]);
     setSearchTerm("");
     setEmployeeFilter("");
   };
 
-  // ── Compute employees filtered by selected company ──
+  // ── Filter employees by selected company ──
 
   const companyEmployees = employees.filter((emp) => {
     const cid = user?.role !== "SUPERADMIN" && user?.companyID ? user.companyID : formData.companyID;
     return !cid || emp.companyID === cid;
   });
 
-  // ── Filter displayed data by search + employee filter ──
+  // ── Filter displayed data ──
 
   const filteredData = reportData.filter((row) => {
     const term = searchTerm.toLowerCase();
@@ -259,26 +261,21 @@ export function CanteenReports() {
       "Company": row.companyName,
       "Branch": row.branchName,
       "Department": row.departmentName,
-      "Default Token": row.defaultToken,
-      "Date": row.date,
-      "Punch Time": row.time,
+      "Designation": row.designation,
+      "Month Period": row.monthPeriod,
+      "Payment Mode": row.paymentMode,
+      "Payment Date": row.paymentDate,
+      "Status": row.status,
     }));
 
     const ws = XLSX.utils.json_to_sheet(excelRows);
 
     ws["!cols"] = [
-      { wch: 6 },
-      { wch: 14 },
-      { wch: 22 },
-      { wch: 24 },
-      { wch: 16 },
-      { wch: 16 },
-      { wch: 14 },
-      { wch: 12 },
-      { wch: 14 },
+      { wch: 6 }, { wch: 14 }, { wch: 22 }, { wch: 24 },
+      { wch: 16 }, { wch: 16 }, { wch: 16 }, { wch: 14 },
+      { wch: 14 }, { wch: 14 }, { wch: 12 },
     ];
 
-    // Apply header styles
     const range = XLSX.utils.decode_range(ws["!ref"] || "A1");
     for (let C = range.s.c; C <= range.e.c; C++) {
       const ref = XLSX.utils.encode_cell({ r: 0, c: C });
@@ -297,7 +294,6 @@ export function CanteenReports() {
       }
     }
 
-    // Apply data cell styles
     for (let R = 1; R <= range.e.r; R++) {
       for (let C = range.s.c; C <= range.e.c; C++) {
         const ref = XLSX.utils.encode_cell({ r: R, c: C });
@@ -317,28 +313,36 @@ export function CanteenReports() {
     }
 
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Canteen Report");
+    XLSX.utils.book_append_sheet(wb, ws, "Payroll Report");
 
-    const typeLabel = getReportTypeLabel().replace(/\s+/g, "_");
-    XLSX.writeFile(wb, `Canteen_${typeLabel}_${formData.dateFrom}_to_${formData.dateTo}.xlsx`);
+    const typeLabel = REPORT_TYPES.find((t) => t.value === formData.reportType)?.label?.replace(/\s+/g, "_") || formData.reportType;
+    XLSX.writeFile(wb, `Payroll_${typeLabel}_${formData.dateFrom}_to_${formData.dateTo}.xlsx`);
   };
 
-  // ── Branch change handler ──
+  // ── Filter designations by company/branch ──
+
+  useEffect(() => {
+    if (!user) return;
+    const cid = user.role !== "SUPERADMIN" && user.companyID ? user.companyID : formData.companyID;
+    let filtered = [...allDesignations];
+    if (cid) filtered = filtered.filter((d) => d.companyID === cid);
+    if (formData.branchID) filtered = filtered.filter((d) => d.branchesID === formData.branchID);
+    setDesignations(filtered);
+  }, [user, allDesignations, formData.companyID, formData.branchID]);
 
   const handleBranchChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const val = e.target.value ? Number(e.target.value) : null;
-    setFormData((prev) => ({ ...prev, branchID: val, departmentID: null }));
+    setFormData((prev) => ({ ...prev, branchID: val, departmentID: null, designationID: null }));
   };
 
   // ── Render ──
 
   return (
     <div className="space-y-6 w-full max-w-7xl mx-auto px-4">
-      {/* Header */}
       <div className="flex items-center justify-between w-full">
         <div className="min-w-0 flex-1">
           <p className="text-gray-600 mt-1 text-sm">
-            Generate and view canteen reports by company, branch, department and date range.
+            Generate and view payroll reports by company, branch, department and date range.
           </p>
         </div>
       </div>
@@ -346,7 +350,7 @@ export function CanteenReports() {
       {/* Filter Card */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">Canteen Filters</CardTitle>
+          <CardTitle className="flex items-center gap-2">Payroll Filters</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
@@ -369,9 +373,7 @@ export function CanteenReports() {
                 >
                   <option value="">Select company</option>
                   {companies.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.companyName}
-                    </option>
+                    <option key={c.id} value={c.id}>{c.companyName}</option>
                   ))}
                 </select>
               </div>
@@ -387,9 +389,7 @@ export function CanteenReports() {
               >
                 <option value="">All branches</option>
                 {branches.map((b) => (
-                  <option key={b.id} value={b.id}>
-                    {b.branchName}
-                  </option>
+                  <option key={b.id} value={b.id}>{b.branchName}</option>
                 ))}
               </select>
             </div>
@@ -409,9 +409,27 @@ export function CanteenReports() {
               >
                 <option value="">All departments</option>
                 {departments.map((d) => (
-                  <option key={d.id} value={d.id}>
-                    {d.departmentName}
-                  </option>
+                  <option key={d.id} value={d.id}>{d.departmentName}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Designation */}
+            <div className="space-y-2">
+              <Label>Designation</Label>
+              <select
+                className="w-full px-3 py-2 border rounded-md bg-white"
+                value={formData.designationID ?? ""}
+                onChange={(e) =>
+                  setFormData((prev) => ({
+                    ...prev,
+                    designationID: e.target.value ? Number(e.target.value) : null,
+                  }))
+                }
+              >
+                <option value="">All designations</option>
+                {designations.map((d) => (
+                  <option key={d.id} value={d.id}>{d.designation}</option>
                 ))}
               </select>
             </div>
@@ -427,17 +445,14 @@ export function CanteenReports() {
                 }
               >
                 {REPORT_TYPES.map((t) => (
-                  <option key={t.value} value={t.value}>
-                    {t.label}
-                  </option>
+                  <option key={t.value} value={t.value}>{t.label}</option>
                 ))}
               </select>
             </div>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
-            {/* Date From */}
-            {/* Employee Dropdown */}
+            {/* Employee */}
             <div className="space-y-2">
               <Label>Employee</Label>
               <select
@@ -454,6 +469,7 @@ export function CanteenReports() {
               </select>
             </div>
 
+            {/* Date From */}
             <div className="space-y-2">
               <Label>Date From</Label>
               <Input
@@ -478,11 +494,7 @@ export function CanteenReports() {
             </div>
 
             <div className="flex items-end gap-3">
-              <Button
-                className=""
-                onClick={generateReport}
-                disabled={loading}
-              >
+              <Button onClick={generateReport} disabled={loading}>
                 {loading ? "Generating..." : "Generate Report"}
               </Button>
               <Button variant="outline" onClick={resetForm}>
@@ -513,7 +525,7 @@ export function CanteenReports() {
             <div className="flex items-center justify-between">
               <CardTitle className="flex items-center gap-2 text-lg font-semibold">
                 <FileText className="w-5 h-5" />
-                {getReportTypeLabel()} – {filteredData.length} records
+                {REPORT_TYPES.find((t) => t.value === formData.reportType)?.label || formData.reportType} – {filteredData.length} records
               </CardTitle>
               <div className="flex items-center gap-3">
                 <div className="relative w-64">
@@ -548,9 +560,11 @@ export function CanteenReports() {
                     <th className="px-3 py-2 text-left">COMPANY</th>
                     <th className="px-3 py-2 text-left">BRANCH</th>
                     <th className="px-3 py-2 text-left">DEPARTMENT</th>
-                    <th className="px-3 py-2 text-center">DEFAULT TOKEN</th>
-                    <th className="px-3 py-2 text-center">DATE</th>
-                    <th className="px-3 py-2 text-center">PUNCH TIME</th>
+                    <th className="px-3 py-2 text-left">DESIGNATION</th>
+                    <th className="px-3 py-2 text-center">MONTH PERIOD</th>
+                    <th className="px-3 py-2 text-center">PAYMENT MODE</th>
+                    <th className="px-3 py-2 text-center">PAYMENT DATE</th>
+                    <th className="px-3 py-2 text-center">STATUS</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -562,17 +576,21 @@ export function CanteenReports() {
                       <td className="px-3 py-2 text-[11px]">{row.companyName}</td>
                       <td className="px-3 py-2 text-[11px]">{row.branchName}</td>
                       <td className="px-3 py-2 text-[11px]">{row.departmentName}</td>
+                      <td className="px-3 py-2 text-[11px]">{row.designation}</td>
+                      <td className="px-3 py-2 text-center text-[11px]">{row.monthPeriod}</td>
+                      <td className="px-3 py-2 text-center text-[11px]">{row.paymentMode}</td>
+                      <td className="px-3 py-2 text-center text-[11px]">{row.paymentDate}</td>
                       <td className="px-3 py-2 text-center text-[11px]">
                         <span className={`px-2 py-0.5 rounded text-[10px] font-semibold ${
-                          row.defaultToken === "Enabled"
+                          row.status === "Paid"
                             ? "bg-green-100 text-green-700"
-                            : "bg-red-100 text-red-700"
+                            : row.status === "Pending"
+                            ? "bg-yellow-100 text-yellow-700"
+                            : "bg-gray-100 text-gray-700"
                         }`}>
-                          {row.defaultToken}
+                          {row.status}
                         </span>
                       </td>
-                      <td className="px-3 py-2 text-center text-[11px]">{row.date}</td>
-                      <td className="px-3 py-2 text-center text-[11px]">{row.time}</td>
                     </tr>
                   ))}
                 </tbody>

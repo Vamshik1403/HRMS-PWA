@@ -69,6 +69,14 @@ interface Department {
   departmentName: string;
 }
 
+interface Designation {
+  id: number;
+  companyID: number;
+  branchesID: number;
+  departmentID?: number;
+  designation: string;
+}
+
 interface PublicHoliday {
   companyID: number;
   branchesID: number;
@@ -168,6 +176,8 @@ export function AttendanceReportsManagement() {
   const [attendanceRegularizations, setAttendanceRegularizations] = useState<AttendanceRegularize[]>([]);
   const [leaveApplications, setLeaveApplications] = useState<LeaveApplication[]>([]);
   const [devices, setDevices] = useState<Device[]>([]);
+  const [allDesignations, setAllDesignations] = useState<Designation[]>([]);
+  const [designations, setDesignations] = useState<Designation[]>([]);
 
   const [managerData, setManagerData] = useState<any>(null);
   const [empCreds, setEmpCreds] = useState<any>(null);
@@ -177,6 +187,7 @@ export function AttendanceReportsManagement() {
     branchName: "",
     department: "",
     reportType: "All Punches Logs",
+    designation: "",
     dateFrom: "",
     dateTo: getTodayStr()
   });
@@ -615,6 +626,19 @@ export function AttendanceReportsManagement() {
   }, []);
 
   useEffect(() => {
+    const loadAllDesignations = async () => {
+      try {
+        const res = await fetch(`${BACKEND_URL}/designations`, { cache: "no-store" });
+        const data = await res.json();
+        setAllDesignations(Array.isArray(data) ? data : []);
+      } catch (error) {
+        console.error("Error loading designations:", error);
+      }
+    };
+    loadAllDesignations();
+  }, []);
+
+  useEffect(() => {
     const loadDevices = async () => {
       try {
         const res = await fetch(`${BACKEND_URL}/devices`, { cache: "no-store" });
@@ -727,9 +751,16 @@ export function AttendanceReportsManagement() {
 
     setDepartments(data);
 
+    // Also filter designations for this branch
+    const cid = companyID ?? formData.companyID;
+    let desigData = allDesignations.filter(d => d.branchesID === branchId);
+    if (cid) desigData = desigData.filter(d => d.companyID === cid);
+    setDesignations(desigData);
+
     setFormData(prev => ({
       ...prev,
-      department: data.length ? data[0].departmentName : ""
+      department: data.length ? data[0].departmentName : "",
+      designation: "",
     }));
   };
 
@@ -845,6 +876,13 @@ export function AttendanceReportsManagement() {
         }
       }
 
+      // Filter by designation if selected
+      if (formData.designation) {
+        filteredEmployees = filteredEmployees.filter(
+          (e: any) => e.designationID === Number(formData.designation)
+        );
+      }
+
       // Group logs by employee (match by username)
       const logsByEmployee = new Map<number, any[]>();
       
@@ -923,6 +961,7 @@ export function AttendanceReportsManagement() {
       dateFrom: "",
       dateTo: getTodayStr(),
       department: "",
+      designation: "",
       branchName: "",
       companyID: user?.role === "SUPERADMIN" ? null : prev.companyID
     }));
@@ -1169,6 +1208,26 @@ export function AttendanceReportsManagement() {
               </select>
             </div>
 
+            <div className="space-y-2">
+              <Label>Designation</Label>
+              <select
+                className="w-full px-3 py-2 border rounded-md bg-white"
+                value={formData.designation}
+                onChange={e =>
+                  setFormData(prev => ({ ...prev, designation: e.target.value }))
+                }
+              >
+                <option value="">All designations</option>
+                {designations.map(d => (
+                  <option key={d.id} value={String(d.id)}>
+                    {d.designation}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
             <div className="space-y-2">
               <Label>Report Type</Label>
               <select

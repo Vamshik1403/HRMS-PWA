@@ -968,7 +968,7 @@ const fetchCompanies = useCallback(
                   disabled={submitting}
                 >
                   {submitting && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                  {editingAdvance ? "Update" : "Add"} Advance
+                  {editingAdvance ? "Update Salary Advance" : "Add Salary Advance"}
                 </Button>
               </div>
             </form>
@@ -983,7 +983,7 @@ const fetchCompanies = useCallback(
         </p>
         <Button onClick={() => { resetForm(); setIsDialogOpen(true); }}>
           <Plus className="w-4 h-4 mr-1" />
-          Add Advance
+          Add Salary Advance
         </Button>
       </div>
 

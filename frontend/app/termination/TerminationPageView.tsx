@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Card,
   CardContent,
@@ -77,6 +77,13 @@ export default function TerminationManagement() {
   const [isAdding, setIsAdding] = useState(false);
   const [search, setSearch] = useState("");
 
+  // Employee autocomplete
+  const [empSearch, setEmpSearch] = useState("");
+  const [empList, setEmpList] = useState<Employee[]>([]);
+  const [empLoading, setEmpLoading] = useState(false);
+  const empRef = useRef<HTMLDivElement>(null);
+  const empTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const [approveModalOpen, setApproveModalOpen] = useState(false);
   const [selectedTermination, setSelectedTermination] =
     useState<Termination | null>(null);
@@ -123,6 +130,28 @@ export default function TerminationManagement() {
     fetchData();
   }, []);
 
+  const runFetchEmp = (q: string) => {
+    if (empTimerRef.current) clearTimeout(empTimerRef.current);
+    empTimerRef.current = setTimeout(() => {
+      if (q.length < 1) { setEmpList([]); return; }
+      const ql = q.toLowerCase();
+      const filtered = employees.filter((e) => {
+        const name = `${e.employeeFirstName ?? ""} ${e.employeeLastName ?? ""}`.toLowerCase();
+        const eid = (e.employeeID ?? "").toLowerCase();
+        return name.includes(ql) || eid.includes(ql);
+      });
+      setEmpList(filtered.slice(0, 20));
+    }, 150);
+  };
+
+  useEffect(() => {
+    const onClick = (e: MouseEvent) => {
+      if (empRef.current && !empRef.current.contains(e.target as Node)) setEmpList([]);
+    };
+    document.addEventListener("mousedown", onClick);
+    return () => document.removeEventListener("mousedown", onClick);
+  }, []);
+
   // -------------------
   // Initiate Exit
   // -------------------
@@ -145,6 +174,7 @@ export default function TerminationManagement() {
       });
 
       setIsAdding(false);
+      setEmpSearch("");
       setForm({
         employeeId: "",
         exitType: "",
@@ -261,23 +291,38 @@ export default function TerminationManagement() {
           </CardHeader>
           <CardContent>
             <form onSubmit={handleCreate} className="space-y-4">
-              <div>
+              <div ref={empRef} className="relative">
                 <Label>Employee *</Label>
-                <select
-                  value={form.employeeId}
-                  onChange={(e) =>
-                    setForm({ ...form, employeeId: e.target.value })
-                  }
-                  className="w-full border rounded p-2"
-                  required
-                >
-                  <option value="">Select Employee</option>
-                  {employees.map((e) => (
-                    <option key={e.id} value={e.id}>
-                      {e.employeeFirstName} {e.employeeLastName}
-                    </option>
-                  ))}
-                </select>
+                <Input
+                  value={empSearch}
+                  onChange={(e) => {
+                    setEmpSearch(e.target.value);
+                    setForm({ ...form, employeeId: "" });
+                    runFetchEmp(e.target.value);
+                  }}
+                  onFocus={(e) => { if (e.target.value.length >= 1) runFetchEmp(e.target.value); }}
+                  placeholder="Type employee name or ID…"
+                  autoComplete="off"
+                  required={!form.employeeId}
+                />
+                {empList.length > 0 && (
+                  <div className="absolute z-10 bg-white border rounded w-full shadow max-h-48 overflow-y-auto">
+                    {empList.map((e) => (
+                      <div
+                        key={e.id}
+                        className="px-3 py-2 hover:bg-gray-100 cursor-pointer"
+                        onMouseDown={(ev) => ev.preventDefault()}
+                        onClick={() => {
+                          setForm({ ...form, employeeId: String(e.id) });
+                          setEmpSearch(`${e.employeeFirstName ?? ""} ${e.employeeLastName ?? ""} - ${e.employeeID ?? ""}`.trim());
+                          setEmpList([]);
+                        }}
+                      >
+                        {e.employeeFirstName ?? ""} {e.employeeLastName ?? ""} - {e.employeeID ?? ""}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
               <div>

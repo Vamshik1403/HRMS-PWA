@@ -2819,7 +2819,7 @@ export function GenerateSalaryManagement() {
                     Cancel
                   </Button>
                   <Button type="submit" className="">
-                    {editing ? "Update Salary Generation" : "Add Salary Generation"}
+                    {editing ? "Update Run Payroll" : "Add Run Payroll"}
                   </Button>
                 </div>
               </form>
@@ -2834,7 +2834,7 @@ export function GenerateSalaryManagement() {
           {canManage && (
             <Button onClick={() => { resetForm(); setIsDialogOpen(true); }} className="flex-shrink-0 text-sm px-3 py-2">
               <Plus className="w-4 h-4 mr-1" />
-              Add Salary Generation
+              Add Run Payroll
             </Button>
           )}
         </div>

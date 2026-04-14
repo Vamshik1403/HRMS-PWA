@@ -445,7 +445,7 @@ const resolvedCompanyID =
                 className="flex-shrink-0 text-sm px-3 py-2"
               >
                 <Plus className="w-4 h-4 mr-1" />
-                Add Salary Allowance
+                Add Allowance
               </Button>
             )}
       </div>
@@ -721,7 +721,7 @@ const resolvedCompanyID =
     Cancel
   </Button>
   <Button type="submit" className="">
-    {editingAllowance ? "Update Salary Allowance" : "Add Salary Allowance"}
+    {editingAllowance ? "Update Allowance" : "Add Allowance"}
   </Button>
 </div>
             </form>

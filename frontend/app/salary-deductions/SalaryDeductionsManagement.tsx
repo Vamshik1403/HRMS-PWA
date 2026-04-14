@@ -465,7 +465,7 @@ const loadDeductions = async () => {
     className="flex-shrink-0 text-sm px-3 py-2"
   >
     <Plus className="w-4 h-4 mr-1" />
-    Add Salary Deduction
+    Add Deduction
   </Button>
 )}
       </div>
@@ -741,7 +741,7 @@ const loadDeductions = async () => {
                   Cancel
                 </Button>
                 <Button type="submit" className="">
-                  {editingDeduction ? "Update Salary Deduction" : "Add Salary Deduction"}
+                  {editingDeduction ? "Update Deduction" : "Add Deduction"}
                 </Button>
               </div>
             </form>

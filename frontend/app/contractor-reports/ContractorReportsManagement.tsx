@@ -1,32 +1,31 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card";
-import { Button } from "../../components/ui/button";
-import { Input } from "../../components/ui/input";
-import { Label } from "../../components/ui/label";
+import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
+import { Button } from "../components/ui/button";
+import { Input } from "../components/ui/input";
+import { Label } from "../components/ui/label";
 import { Search, Download, FileText } from "lucide-react";
-import { useCurrentUser } from "../../hooks/useCurrentUser";
+import { useCurrentUser } from "../hooks/useCurrentUser";
 import * as XLSX from "xlsx";
 
-const BACKEND_URL =
-  process.env.NEXT_PUBLIC_BACKEND_URL || "/backend";
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "/backend";
 
 interface Company { id: number; companyName: string; }
 interface Branch { id: number; branchName: string; companyID: number; }
 interface Department { id: number; companyID: number; branchesID: number; departmentName: string; }
+interface Contractor { id: number; companyID: number | null; contractorName: string; }
+interface WorkShift { id: number; companyID: number; branchesID: number; shiftName?: string; workShiftDay?: any[]; }
 interface Employee {
   id: number; employeeID: string;
   employeeFirstName: string; employeeLastName: string;
-  companyID: number; branchesID: number; departmentNameID?: number | null;
-}
-
-interface CanteenRecord {
-  manage_employee_id: number | null;
-  user_id: string;
-  username: string;
-  punch_time: string;
-  default_token?: boolean;
+  companyID: number; branchesID: number;
+  departmentNameID?: number | null;
+  contractorID?: number | null;
+  workShiftID?: number | null;
+  designationID?: number | null;
+  designations?: { designation?: string };
+  departments?: { departmentName?: string };
 }
 
 interface ReportRow {
@@ -36,25 +35,17 @@ interface ReportRow {
   companyName: string;
   branchName: string;
   departmentName: string;
-  date: string;
-  time: string;
-  defaultToken: string;
+  designation: string;
+  contractorName: string;
+  shiftName: string;
 }
 
-const getTodayStr = () => {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-};
-
 const REPORT_TYPES = [
-  { value: "checkin", label: "Checkin" },
-  { value: "tokenAssigned", label: "Token Assigned" },
-  { value: "tokenCancel", label: "Token Cancel" },
-  { value: "tokenConsumed", label: "Token Consumed" },
-  { value: "tokenNotConsumed", label: "Token Not Consumed" },
+  { value: "contractor_employees", label: "Contractor Employees" },
+  { value: "contractor_summary", label: "Contractor Summary" },
 ];
 
-export function CanteenReports() {
+export function ContractorReportsManagement() {
   const user = useCurrentUser();
 
   const [companies, setCompanies] = useState<Company[]>([]);
@@ -62,21 +53,21 @@ export function CanteenReports() {
   const [allDepartments, setAllDepartments] = useState<Department[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
+  const [contractors, setContractors] = useState<Contractor[]>([]);
+  const [workShifts, setWorkShifts] = useState<WorkShift[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
-  const [defaultTokenEnabled, setDefaultTokenEnabled] = useState(false);
 
   const [reportData, setReportData] = useState<ReportRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
-  const [employeeFilter, setEmployeeFilter] = useState("");
 
   const [formData, setFormData] = useState({
     companyID: null as number | null,
     branchID: null as number | null,
     departmentID: null as number | null,
-    reportType: "checkin",
-    dateFrom: "",
-    dateTo: getTodayStr(),
+    contractorID: null as number | null,
+    shiftID: null as number | null,
+    reportType: "contractor_employees",
   });
 
   // ── Load master data ──
@@ -86,25 +77,25 @@ export function CanteenReports() {
       fetch(`${BACKEND_URL}/company`).then((r) => r.json()),
       fetch(`${BACKEND_URL}/branches`, { cache: "no-store" }).then((r) => r.json()),
       fetch(`${BACKEND_URL}/departments`, { cache: "no-store" }).then((r) => r.json()),
+      fetch(`${BACKEND_URL}/contractors`, { cache: "no-store" }).then((r) => r.json()),
+      fetch(`${BACKEND_URL}/work-shift`, { cache: "no-store" }).then((r) => r.json()),
       fetch(`${BACKEND_URL}/manage-emp`, { cache: "no-store" }).then((r) => r.json()),
-      fetch(`${BACKEND_URL}/canteen/setup`, { cache: "no-store" }).then((r) => r.json()),
-    ]).then(([cos, brs, depts, emps, setup]) => {
+    ]).then(([cos, brs, depts, cons, shifts, emps]) => {
       setCompanies(cos);
       setAllBranches(brs);
       setAllDepartments(depts);
-      setEmployees(emps);
-      setDefaultTokenEnabled(setup?.default_token_enabled ?? false);
+      setContractors(Array.isArray(cons) ? cons : cons?.data ?? []);
+      setWorkShifts(Array.isArray(shifts) ? shifts : shifts?.data ?? []);
+      setEmployees(Array.isArray(emps) ? emps : emps?.data ?? []);
     });
   }, []);
 
-  // ── Filter branches based on selected company ──
+  // ── Filter branches ──
 
   useEffect(() => {
     if (!user) return;
     let cid = formData.companyID;
-    if (user.role !== "SUPERADMIN" && user.companyID) {
-      cid = user.companyID;
-    }
+    if (user.role !== "SUPERADMIN" && user.companyID) cid = user.companyID;
     let filtered = [...allBranches];
     if (cid) filtered = filtered.filter((b) => b.companyID === cid);
     setBranches(filtered);
@@ -114,7 +105,7 @@ export function CanteenReports() {
     }
   }, [user, allBranches, formData.companyID]);
 
-  // ── Filter departments based on selected company + branch ──
+  // ── Filter departments ──
 
   useEffect(() => {
     if (!user) return;
@@ -129,77 +120,67 @@ export function CanteenReports() {
     }
   }, [user, allDepartments, formData.companyID, formData.branchID]);
 
-  // ── Helpers ──
+  // ── Filtered contractors by company ──
 
-  const formatPunchTime = (pt: string) => {
-    const raw = pt.replace("Z", "").replace(/[+-]\d{2}:\d{2}$/, "");
-    const d = new Date(raw);
-    return {
-      date: d.toLocaleDateString("en-IN", { day: "2-digit", month: "2-digit", year: "numeric" }),
-      time: d.toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit", second: "2-digit", hour12: true }),
-    };
-  };
+  const filteredContractors = contractors.filter((c) => {
+    const cid = user?.role !== "SUPERADMIN" && user?.companyID ? user.companyID : formData.companyID;
+    return !cid || c.companyID === cid;
+  });
 
-  const getReportTypeLabel = () =>
-    REPORT_TYPES.find((t) => t.value === formData.reportType)?.label || formData.reportType;
+  // ── Filtered shifts by company/branch ──
+
+  const filteredShifts = workShifts.filter((s) => {
+    const cid = user?.role !== "SUPERADMIN" && user?.companyID ? user.companyID : formData.companyID;
+    if (cid && s.companyID !== cid) return false;
+    if (formData.branchID && s.branchesID !== formData.branchID) return false;
+    return true;
+  });
 
   // ── Generate Report ──
 
   const generateReport = async () => {
-    if (!formData.dateFrom || !formData.dateTo) {
-      alert("Please select both Date From and Date To");
-      return;
-    }
-
     setLoading(true);
     try {
       const cid = user?.role !== "SUPERADMIN" && user?.companyID ? user.companyID : formData.companyID;
 
-      const params = new URLSearchParams({
-        dateFrom: formData.dateFrom,
-        dateTo: formData.dateTo,
-        type: formData.reportType,
-      });
-      if (cid) params.set("companyId", String(cid));
-      if (formData.branchID) params.set("branchId", String(formData.branchID));
-      if (formData.departmentID) params.set("departmentId", String(formData.departmentID));
+      // Filter employees who belong to a contractor
+      let filtered = employees.filter((e) => e.contractorID != null);
 
-      const res = await fetch(`${BACKEND_URL}/canteen/reports?${params.toString()}`, { cache: "no-store" });
-      const records: CanteenRecord[] = await res.json();
+      if (cid) filtered = filtered.filter((e) => e.companyID === cid);
+      if (formData.branchID) filtered = filtered.filter((e) => e.branchesID === formData.branchID);
+      if (formData.departmentID) filtered = filtered.filter((e) => e.departmentNameID === formData.departmentID);
+      if (formData.contractorID) filtered = filtered.filter((e) => e.contractorID === formData.contractorID);
+      if (formData.shiftID) filtered = filtered.filter((e) => e.workShiftID === formData.shiftID);
 
-      // Build lookup maps
-      const empMap = new Map(employees.map((e) => [e.id, e]));
       const companyMap = new Map(companies.map((c) => [c.id, c]));
       const branchMap = new Map(allBranches.map((b) => [b.id, b]));
       const deptMap = new Map(allDepartments.map((d) => [d.id, d]));
+      const contMap = new Map(contractors.map((c) => [c.id, c]));
+      const shiftMap = new Map(workShifts.map((s) => [s.id, s]));
 
-      const rows: ReportRow[] = records.map((rec, i) => {
-        const emp = rec.manage_employee_id ? empMap.get(rec.manage_employee_id) : null;
-        const company = emp?.companyID ? companyMap.get(emp.companyID) : null;
-        const branch = emp?.branchesID ? branchMap.get(emp.branchesID) : null;
-        const dept = emp?.departmentNameID ? deptMap.get(emp.departmentNameID) : null;
-        const { date, time } = rec.punch_time
-          ? formatPunchTime(rec.punch_time)
-          : { date: "-", time: "-" };
+      const rows: ReportRow[] = filtered.map((emp, i) => {
+        const company = companyMap.get(emp.companyID);
+        const branch = branchMap.get(emp.branchesID);
+        const dept = emp.departmentNameID ? deptMap.get(emp.departmentNameID) : null;
+        const cont = emp.contractorID ? contMap.get(emp.contractorID) : null;
+        const shift = emp.workShiftID ? shiftMap.get(emp.workShiftID) : null;
 
         return {
           sno: i + 1,
-          employeeID: emp?.employeeID || rec.user_id || "-",
-          employeeName: emp
-            ? `${emp.employeeFirstName} ${emp.employeeLastName}`
-            : rec.username || "-",
+          employeeID: emp.employeeID || "-",
+          employeeName: `${emp.employeeFirstName} ${emp.employeeLastName}`,
           companyName: company?.companyName || "-",
           branchName: branch?.branchName || "-",
-          departmentName: dept?.departmentName || "-",
-          date,
-          time,
-          defaultToken: defaultTokenEnabled ? "Enabled" : "Disabled",
+          departmentName: dept?.departmentName || emp.departments?.departmentName || "-",
+          designation: emp.designations?.designation || "-",
+          contractorName: cont?.contractorName || "-",
+          shiftName: shift?.shiftName || `Shift ${shift?.id || "-"}`,
         };
       });
 
       setReportData(rows);
     } catch (err) {
-      console.error("Error generating canteen report:", err);
+      console.error("Error generating contractor report:", err);
       alert("Error generating report.");
       setReportData([]);
     } finally {
@@ -210,38 +191,29 @@ export function CanteenReports() {
   const resetForm = () => {
     setFormData((prev) => ({
       ...prev,
-      dateFrom: "",
-      dateTo: getTodayStr(),
       branchID: null,
       departmentID: null,
+      contractorID: null,
+      shiftID: null,
       companyID: user?.role === "SUPERADMIN" ? null : prev.companyID,
-      reportType: "checkin",
+      reportType: "contractor_employees",
     }));
     setReportData([]);
     setSearchTerm("");
-    setEmployeeFilter("");
   };
 
-  // ── Compute employees filtered by selected company ──
-
-  const companyEmployees = employees.filter((emp) => {
-    const cid = user?.role !== "SUPERADMIN" && user?.companyID ? user.companyID : formData.companyID;
-    return !cid || emp.companyID === cid;
-  });
-
-  // ── Filter displayed data by search + employee filter ──
+  // ── Filter displayed data ──
 
   const filteredData = reportData.filter((row) => {
     const term = searchTerm.toLowerCase();
-    const matchesSearch = !term || (
+    return !term || (
       row.employeeID.toLowerCase().includes(term) ||
       row.employeeName.toLowerCase().includes(term) ||
       row.companyName.toLowerCase().includes(term) ||
       row.branchName.toLowerCase().includes(term) ||
-      row.departmentName.toLowerCase().includes(term)
+      row.departmentName.toLowerCase().includes(term) ||
+      row.contractorName.toLowerCase().includes(term)
     );
-    const matchesEmployee = !employeeFilter || row.employeeID === employeeFilter;
-    return matchesSearch && matchesEmployee;
   });
 
   // ── Download Excel ──
@@ -259,26 +231,18 @@ export function CanteenReports() {
       "Company": row.companyName,
       "Branch": row.branchName,
       "Department": row.departmentName,
-      "Default Token": row.defaultToken,
-      "Date": row.date,
-      "Punch Time": row.time,
+      "Designation": row.designation,
+      "Contractor": row.contractorName,
+      "Shift": row.shiftName,
     }));
 
     const ws = XLSX.utils.json_to_sheet(excelRows);
 
     ws["!cols"] = [
-      { wch: 6 },
-      { wch: 14 },
-      { wch: 22 },
-      { wch: 24 },
-      { wch: 16 },
-      { wch: 16 },
-      { wch: 14 },
-      { wch: 12 },
-      { wch: 14 },
+      { wch: 6 }, { wch: 14 }, { wch: 22 }, { wch: 24 },
+      { wch: 16 }, { wch: 16 }, { wch: 16 }, { wch: 22 }, { wch: 14 },
     ];
 
-    // Apply header styles
     const range = XLSX.utils.decode_range(ws["!ref"] || "A1");
     for (let C = range.s.c; C <= range.e.c; C++) {
       const ref = XLSX.utils.encode_cell({ r: 0, c: C });
@@ -297,7 +261,6 @@ export function CanteenReports() {
       }
     }
 
-    // Apply data cell styles
     for (let R = 1; R <= range.e.r; R++) {
       for (let C = range.s.c; C <= range.e.c; C++) {
         const ref = XLSX.utils.encode_cell({ r: R, c: C });
@@ -317,13 +280,9 @@ export function CanteenReports() {
     }
 
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Canteen Report");
-
-    const typeLabel = getReportTypeLabel().replace(/\s+/g, "_");
-    XLSX.writeFile(wb, `Canteen_${typeLabel}_${formData.dateFrom}_to_${formData.dateTo}.xlsx`);
+    XLSX.utils.book_append_sheet(wb, ws, "Contractor Report");
+    XLSX.writeFile(wb, `Contractor_Report.xlsx`);
   };
-
-  // ── Branch change handler ──
 
   const handleBranchChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const val = e.target.value ? Number(e.target.value) : null;
@@ -334,11 +293,10 @@ export function CanteenReports() {
 
   return (
     <div className="space-y-6 w-full max-w-7xl mx-auto px-4">
-      {/* Header */}
       <div className="flex items-center justify-between w-full">
         <div className="min-w-0 flex-1">
           <p className="text-gray-600 mt-1 text-sm">
-            Generate and view canteen reports by company, branch, department and date range.
+            Generate and view contractor reports by company, branch, department, contractor and shift.
           </p>
         </div>
       </div>
@@ -346,7 +304,7 @@ export function CanteenReports() {
       {/* Filter Card */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">Canteen Filters</CardTitle>
+          <CardTitle className="flex items-center gap-2">Contractor Filters</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
@@ -364,14 +322,14 @@ export function CanteenReports() {
                       companyID: val,
                       branchID: null,
                       departmentID: null,
+                      contractorID: null,
+                      shiftID: null,
                     }));
                   }}
                 >
                   <option value="">Select company</option>
                   {companies.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.companyName}
-                    </option>
+                    <option key={c.id} value={c.id}>{c.companyName}</option>
                   ))}
                 </select>
               </div>
@@ -387,9 +345,7 @@ export function CanteenReports() {
               >
                 <option value="">All branches</option>
                 {branches.map((b) => (
-                  <option key={b.id} value={b.id}>
-                    {b.branchName}
-                  </option>
+                  <option key={b.id} value={b.id}>{b.branchName}</option>
                 ))}
               </select>
             </div>
@@ -409,9 +365,7 @@ export function CanteenReports() {
               >
                 <option value="">All departments</option>
                 {departments.map((d) => (
-                  <option key={d.id} value={d.id}>
-                    {d.departmentName}
-                  </option>
+                  <option key={d.id} value={d.id}>{d.departmentName}</option>
                 ))}
               </select>
             </div>
@@ -427,62 +381,55 @@ export function CanteenReports() {
                 }
               >
                 {REPORT_TYPES.map((t) => (
-                  <option key={t.value} value={t.value}>
-                    {t.label}
-                  </option>
+                  <option key={t.value} value={t.value}>{t.label}</option>
                 ))}
               </select>
             </div>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
-            {/* Date From */}
-            {/* Employee Dropdown */}
+            {/* Contractor */}
             <div className="space-y-2">
-              <Label>Employee</Label>
+              <Label>Contractor</Label>
               <select
                 className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                value={employeeFilter}
-                onChange={(e) => setEmployeeFilter(e.target.value)}
+                value={formData.contractorID ?? ""}
+                onChange={(e) =>
+                  setFormData((prev) => ({
+                    ...prev,
+                    contractorID: e.target.value ? Number(e.target.value) : null,
+                  }))
+                }
               >
-                <option value="">All Employees</option>
-                {companyEmployees.map((emp) => (
-                  <option key={emp.id} value={emp.employeeID}>
-                    {emp.employeeID} - {emp.employeeFirstName} {emp.employeeLastName}
-                  </option>
+                <option value="">All Contractors</option>
+                {filteredContractors.map((c) => (
+                  <option key={c.id} value={c.id}>{c.contractorName}</option>
                 ))}
               </select>
             </div>
 
+            {/* Shift */}
             <div className="space-y-2">
-              <Label>Date From</Label>
-              <Input
-                type="date"
-                value={formData.dateFrom}
+              <Label>Shift</Label>
+              <select
+                className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                value={formData.shiftID ?? ""}
                 onChange={(e) =>
-                  setFormData((prev) => ({ ...prev, dateFrom: e.target.value }))
+                  setFormData((prev) => ({
+                    ...prev,
+                    shiftID: e.target.value ? Number(e.target.value) : null,
+                  }))
                 }
-              />
-            </div>
-
-            {/* Date To */}
-            <div className="space-y-2">
-              <Label>Date To</Label>
-              <Input
-                type="date"
-                value={formData.dateTo}
-                onChange={(e) =>
-                  setFormData((prev) => ({ ...prev, dateTo: e.target.value }))
-                }
-              />
-            </div>
-
-            <div className="flex items-end gap-3">
-              <Button
-                className=""
-                onClick={generateReport}
-                disabled={loading}
               >
+                <option value="">All Shifts</option>
+                {filteredShifts.map((s) => (
+                  <option key={s.id} value={s.id}>{s.shiftName || `Shift ${s.id}`}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="col-span-2 flex items-end gap-3">
+              <Button onClick={generateReport} disabled={loading}>
                 {loading ? "Generating..." : "Generate Report"}
               </Button>
               <Button variant="outline" onClick={resetForm}>
@@ -492,7 +439,7 @@ export function CanteenReports() {
           </div>
 
           <p className="text-xs text-gray-500 mt-2">
-            Reports are filtered by company, branch, department (if selected) and date range.
+            Reports show employees assigned to contractors, filtered by company, branch, department, contractor and shift.
           </p>
         </CardContent>
       </Card>
@@ -501,7 +448,7 @@ export function CanteenReports() {
       {reportData.length === 0 && !loading && (
         <Card>
           <CardContent className="py-6 text-center text-sm text-gray-500">
-            No records found for selected filters and date range.
+            No records found for selected filters.
           </CardContent>
         </Card>
       )}
@@ -513,13 +460,13 @@ export function CanteenReports() {
             <div className="flex items-center justify-between">
               <CardTitle className="flex items-center gap-2 text-lg font-semibold">
                 <FileText className="w-5 h-5" />
-                {getReportTypeLabel()} – {filteredData.length} records
+                {REPORT_TYPES.find((t) => t.value === formData.reportType)?.label || formData.reportType} – {filteredData.length} records
               </CardTitle>
               <div className="flex items-center gap-3">
                 <div className="relative w-64">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
                   <Input
-                    placeholder="Search employee, company, branch..."
+                    placeholder="Search employee, contractor..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                     className="pl-10"
@@ -548,9 +495,9 @@ export function CanteenReports() {
                     <th className="px-3 py-2 text-left">COMPANY</th>
                     <th className="px-3 py-2 text-left">BRANCH</th>
                     <th className="px-3 py-2 text-left">DEPARTMENT</th>
-                    <th className="px-3 py-2 text-center">DEFAULT TOKEN</th>
-                    <th className="px-3 py-2 text-center">DATE</th>
-                    <th className="px-3 py-2 text-center">PUNCH TIME</th>
+                    <th className="px-3 py-2 text-left">DESIGNATION</th>
+                    <th className="px-3 py-2 text-left">CONTRACTOR</th>
+                    <th className="px-3 py-2 text-left">SHIFT</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -562,17 +509,9 @@ export function CanteenReports() {
                       <td className="px-3 py-2 text-[11px]">{row.companyName}</td>
                       <td className="px-3 py-2 text-[11px]">{row.branchName}</td>
                       <td className="px-3 py-2 text-[11px]">{row.departmentName}</td>
-                      <td className="px-3 py-2 text-center text-[11px]">
-                        <span className={`px-2 py-0.5 rounded text-[10px] font-semibold ${
-                          row.defaultToken === "Enabled"
-                            ? "bg-green-100 text-green-700"
-                            : "bg-red-100 text-red-700"
-                        }`}>
-                          {row.defaultToken}
-                        </span>
-                      </td>
-                      <td className="px-3 py-2 text-center text-[11px]">{row.date}</td>
-                      <td className="px-3 py-2 text-center text-[11px]">{row.time}</td>
+                      <td className="px-3 py-2 text-[11px]">{row.designation}</td>
+                      <td className="px-3 py-2 text-[11px]">{row.contractorName}</td>
+                      <td className="px-3 py-2 text-[11px]">{row.shiftName}</td>
                     </tr>
                   ))}
                 </tbody>

@@ -288,7 +288,7 @@ export function LeaveReportsManagement() {
                     Cancel
                   </Button>
                   <Button type="submit" className="">
-                    {editingReport ? "Update Report" : "Generate Report"}
+                    {editingReport ? "Update Report" : "Generate Leave Report"}
                   </Button>
                 </div>
               </form>
@@ -303,7 +303,7 @@ export function LeaveReportsManagement() {
         <div className="flex items-center gap-3">
           <Button onClick={() => { resetForm(); setIsDialogOpen(true); }} className="flex-shrink-0 text-sm px-3 py-2">
             <Plus className="w-4 h-4 mr-1" />
-            Generate Report
+            Generate Leave Report
           </Button>
         </div>
       </div>
