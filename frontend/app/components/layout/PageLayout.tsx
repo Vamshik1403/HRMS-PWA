@@ -49,7 +49,7 @@ const sbIdle =
   "text-[#6b7280] hover:bg-[#eef2ff] hover:text-[#4f46e5] !bg-transparent";
 
 const sbSubRow =
-  "flex w-full items-center rounded-md !px-3 min-h-9 h-9 max-h-9 text-[11px] font-normal transition-colors duration-150 overflow-hidden";
+  "flex w-full items-center rounded-md !px-3 min-h-9 h-9 max-h-9 text-[13px] font-normal transition-colors duration-150 overflow-hidden";
 
 const sbSubActive =
   "!bg-[#eef2ff] text-[#4f46e5] font-medium !shadow-none ring-0 relative !pl-6 before:absolute before:left-0 before:top-[30%] before:h-[40%] before:w-[2px] before:rounded-full before:bg-[#4f46e5]";
@@ -402,7 +402,7 @@ export function PageLayout({ children }: PageLayoutProps) {
                                 ? "text-[#4f46e5]" : "text-gray-400"
                             )}
                           />
-                          <span className="truncate font-semibold text-[13px]">Company Management</span>
+                          <span className="truncate font-semibold text-sm">Company Management</span>
                         </span>
                         <Icon
                           icon="mdi:chevron-down"
@@ -513,7 +513,7 @@ export function PageLayout({ children }: PageLayoutProps) {
                                 ? "text-[#4f46e5]" : "text-gray-400"
                             )}
                           />
-                          <span className="truncate font-semibold text-[13px]">
+                          <span className="truncate font-semibold text-sm">
                             Employee Management
                           </span>
                         </span>
@@ -568,7 +568,7 @@ export function PageLayout({ children }: PageLayoutProps) {
                                 ? sbSubActive
                                 : sbSubIdle
                             )}>
-                              <span className="font-medium" style={{ display: "block" }}>Employees Promotions</span>
+                              <span className="font-medium" style={{ display: "block" }}>Promotions & Transfers</span>
                             </Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
@@ -579,7 +579,7 @@ export function PageLayout({ children }: PageLayoutProps) {
                                 ? sbSubActive
                                 : sbSubIdle
                             )}>
-                              <span className="font-medium truncate" style={{ display: "block" }}>Employee Memo</span>
+                              <span className="font-medium truncate" style={{ display: "block" }}>Warning & Notices</span>
                             </Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
@@ -590,7 +590,7 @@ export function PageLayout({ children }: PageLayoutProps) {
                                 ? sbSubActive
                                 : sbSubIdle
                             )}>
-                              <span className="font-medium truncate" style={{ display: "block" }}>Termination</span>
+                              <span className="font-medium truncate" style={{ display: "block" }}>Offboarding</span>
                             </Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
@@ -627,8 +627,8 @@ export function PageLayout({ children }: PageLayoutProps) {
                                 ? "text-[#4f46e5]" : "text-gray-400"
                             )}
                           />
-                          <span className="truncate font-semibold text-[13px]">
-                            Workshift & Policy
+                          <span className="truncate font-semibold text-sm">
+                            Shift & Attendance Policy
                           </span>
                         </span>
                         <Icon
@@ -708,7 +708,7 @@ export function PageLayout({ children }: PageLayoutProps) {
                                 ? "text-[#4f46e5]" : "text-gray-400"
                             )}
                           />
-                          <span className="truncate font-semibold text-[13px]">
+                          <span className="truncate font-semibold text-sm">
                             Salary Management
                           </span>
                         </span>
@@ -744,7 +744,7 @@ export function PageLayout({ children }: PageLayoutProps) {
                                     ? sbSubActive
                                     : sbSubIdle
                                 )}>
-                                  <span className="font-medium truncate" style={{ display: "block" }}>Salary Allowances</span>
+                                  <span className="font-medium truncate" style={{ display: "block" }}>Allowances</span>
                                 </Link>
                               </SidebarMenuSubButton>
                             </SidebarMenuSubItem>
@@ -755,7 +755,7 @@ export function PageLayout({ children }: PageLayoutProps) {
                                     ? sbSubActive
                                     : sbSubIdle
                                 )}>
-                                  <span className="font-medium truncate" style={{ display: "block" }}>Salary Deductions</span>
+                                  <span className="font-medium truncate" style={{ display: "block" }}>Deductions</span>
                                 </Link>
                               </SidebarMenuSubButton>
                             </SidebarMenuSubItem>
@@ -766,7 +766,7 @@ export function PageLayout({ children }: PageLayoutProps) {
                                     ? sbSubActive
                                     : sbSubIdle
                                 )}>
-                                  <span className="font-medium truncate" style={{ display: "block" }}>Paygrade Setup</span>
+                                  <span className="font-medium truncate" style={{ display: "block" }}>Paygrade</span>
                                 </Link>
                               </SidebarMenuSubButton>
                             </SidebarMenuSubItem>
@@ -777,7 +777,7 @@ export function PageLayout({ children }: PageLayoutProps) {
                                     ? sbSubActive
                                     : sbSubIdle
                                 )}>
-                                  <span className="font-medium truncate" style={{ display: "block" }}>Bonus Setup</span>
+                                  <span className="font-medium truncate" style={{ display: "block" }}>Bonus Rule</span>
                                 </Link>
                               </SidebarMenuSubButton>
                             </SidebarMenuSubItem>
@@ -803,7 +803,7 @@ export function PageLayout({ children }: PageLayoutProps) {
                                 ? sbSubActive
                                 : sbSubIdle
                             )}>
-                              <span className="font-medium truncate" style={{ display: "block" }}>Salary Advance</span>
+                              <span className="font-medium truncate" style={{ display: "block" }}>Salary Advances</span>
                             </Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
@@ -814,7 +814,7 @@ export function PageLayout({ children }: PageLayoutProps) {
                                 ? sbSubActive
                                 : sbSubIdle
                             )}>
-                              <span className="font-medium truncate" style={{ display: "block" }}>Reimbursement</span>
+                              <span className="font-medium truncate" style={{ display: "block" }}>Reimbursements</span>
                             </Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
@@ -825,7 +825,7 @@ export function PageLayout({ children }: PageLayoutProps) {
                                 ? sbSubActive
                                 : sbSubIdle
                             )}>
-                              <span className="font-medium truncate" style={{ display: "block" }}>Generate Salary</span>
+                              <span className="font-medium truncate" style={{ display: "block" }}>Run Payroll</span>
                             </Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
@@ -862,7 +862,7 @@ export function PageLayout({ children }: PageLayoutProps) {
                                 ? "text-[#4f46e5]" : "text-gray-400"
                             )}
                           />
-                          <span className="truncate font-semibold text-[13px]">
+                          <span className="truncate font-semibold text-sm">
                             Leave Management
                           </span>
                         </span>
@@ -974,7 +974,7 @@ export function PageLayout({ children }: PageLayoutProps) {
                                 ? "text-[#4f46e5]" : "text-gray-400"
                             )}
                           />
-                          <span className="truncate font-semibold text-[13px]">
+                          <span className="truncate font-semibold text-sm">
                             Attendance Management
                           </span>
                         </span>
@@ -1045,7 +1045,7 @@ export function PageLayout({ children }: PageLayoutProps) {
                                 ? "text-[#4f46e5]" : "text-gray-400"
                             )}
                           />
-                          <span className="truncate font-semibold text-[13px]">
+                          <span className="truncate font-semibold text-sm">
                             Reports
                           </span>
                         </span>
@@ -1136,7 +1136,7 @@ export function PageLayout({ children }: PageLayoutProps) {
                                 ? "text-[#4f46e5]" : "text-gray-400"
                             )}
                           />
-                          <span className="truncate font-semibold text-[13px]">
+                          <span className="truncate font-semibold text-sm">
                             Canteen Management
                           </span>
                         </span>
@@ -1206,7 +1206,7 @@ export function PageLayout({ children }: PageLayoutProps) {
                                 ? "text-[#4f46e5]" : "text-gray-400"
                             )}
                           />
-                          <span className="truncate font-semibold text-[13px]">
+                          <span className="truncate font-semibold text-sm">
                             Settings
                           </span>
                         </span>
