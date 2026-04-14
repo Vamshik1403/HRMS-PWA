@@ -107,7 +107,7 @@ export default function EmpLayout({ children }: EmpLayoutProps) {
                           : "text-[#6b7280] hover:bg-[#f3f4f6] hover:text-[#1a1a2e]"
                       }`}>
                         <Icon icon="mdi:currency-usd" className={`w-5 h-5 shrink-0 ${["/empSalaryAdvance", "/empReimbursement", "/empGenerateSalary"].includes(pathname) ? "text-[#4f46e5]" : "text-gray-400"}`} />
-                        <span className="text-[13px]">Salary Management</span>
+                        <span className="text-[13px]">Payroll Management</span>
                         <Icon
                           icon="mdi:chevron-right"
                           className={`w-4 h-4 ml-auto transition-transform duration-200 text-gray-400 ${
@@ -159,7 +159,7 @@ export default function EmpLayout({ children }: EmpLayoutProps) {
                           : "text-[#6b7280] hover:bg-[#f3f4f6] hover:text-[#1a1a2e]"
                       }`}>
                         <Icon icon="mdi:calendar-clock-outline" className={`w-5 h-5 shrink-0 ${["/empPublicHoliday", "/empLeaveApplication"].includes(pathname) ? "text-[#4f46e5]" : "text-gray-400"}`} />
-                        <span className="text-[13px]">Leave Management</span>
+                        <span className="text-[13px]">Leave Policy</span>
                         <Icon
                           icon="mdi:chevron-right"
                           className={`w-4 h-4 ml-auto transition-transform duration-200 text-gray-400 ${

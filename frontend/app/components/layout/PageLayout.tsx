@@ -68,6 +68,7 @@ export function PageLayout({ children }: PageLayoutProps) {
     setup: false,
     employee: false,
     payroll: false,
+    payrollPolicy: false,
     salary: false,
     leave: false,
     attendance: false,
@@ -112,6 +113,7 @@ export function PageLayout({ children }: PageLayoutProps) {
       setup: false,
       employee: false,
       payroll: false,
+      payrollPolicy: false,
       salary: false,
       leave: false,
       attendance: false,
@@ -143,27 +145,32 @@ export function PageLayout({ children }: PageLayoutProps) {
       newOpenSections.employee = true
     }
     // Workshift & Policy Management section paths
-    else if (['/work-shifts', '/attendance-policy', '/roster'].includes(pathname)) {
+    else if (['/work-shifts', '/attendance-policy'].includes(pathname)) {
       openAllSpParents()
       newOpenSections.payroll = true
     }
     // Salary Management section paths
-    else if (['/monthly-salary-cycle', '/salary-allowances', '/salary-deductions', '/monthly-pay-grade', '/salary-advance', '/reimbursement','/bonus-setup', '/bonus-allocations', '/generate-salary'].includes(pathname)) {
+    else if (['/salary-advance', '/reimbursement', '/bonus-allocations', '/generate-salary'].includes(pathname)) {
       openAllSpParents()
       newOpenSections.salary = true
     }
+    // Payroll Policy section paths
+    else if (['/monthly-salary-cycle', '/salary-allowances', '/salary-deductions', '/monthly-pay-grade', '/bonus-setup'].includes(pathname)) {
+      openAllSpParents()
+      newOpenSections.payrollPolicy = true
+    }
     // Leave Management section paths
-    else if (['/manage-holidays', '/public-holiday', '/leave-policy', '/leave-applications', '/privileged-leave'].includes(pathname)) {
+    else if (['/manage-holidays', '/public-holiday', '/leave-policy'].includes(pathname)) {
       openAllSpParents()
       newOpenSections.leave = true
     }
     // Attendance Management section paths
-    else if (['/field-attendance-schedule', '/attendance-regularisation'].includes(pathname)) {
+    else if (['/field-attendance-schedule', '/attendance-regularisation', '/roster', '/leave-applications', '/privileged-leave'].includes(pathname)) {
       openAllSpParents()
       newOpenSections.attendance = true
     }
     // Reports section paths
-    else if (['/attendance-reports', '/leave-reports', '/salary-statements', '/canteen/reports'].includes(pathname)) {
+    else if (['/attendance-reports', '/leave-reports', '/salary-statements', '/canteen/reports', '/payroll-reports'].includes(pathname)) {
       openAllSpParents()
       newOpenSections.reports = true
     }
@@ -225,35 +232,38 @@ export function PageLayout({ children }: PageLayoutProps) {
   const payrollSectionActive = [
     "/work-shifts",
     "/attendance-policy",
-    "/roster",
   ].includes(pathname);
   const salarySectionActive = [
+    "/salary-advance",
+    "/reimbursement",
+    "/bonus-allocations",
+    "/generate-salary",
+  ].includes(pathname);
+  const payrollPolicySectionActive = [
     "/monthly-salary-cycle",
     "/salary-allowances",
     "/salary-deductions",
     "/monthly-pay-grade",
-    "/salary-advance",
-    "/reimbursement",
     "/bonus-setup",
-    "/bonus-allocations",
-    "/generate-salary",
   ].includes(pathname);
   const leaveSectionActive = [
     "/manage-holidays",
     "/public-holiday",
     "/leave-policy",
-    "/leave-applications",
-    "/privileged-leave",
   ].includes(pathname);
   const attendanceSectionActive = [
     "/field-attendance-schedule",
     "/attendance-regularisation",
+    "/roster",
+    "/leave-applications",
+    "/privileged-leave",
   ].includes(pathname);
   const reportsSectionActive = [
     "/attendance-reports",
     "/leave-reports",
     "/salary-statements",
     "/canteen/reports",
+    "/payroll-reports",
   ].includes(pathname);
   const canteenSectionActive =
     pathname === "/canteen" || pathname === "/canteen/setup";
@@ -262,7 +272,7 @@ export function PageLayout({ children }: PageLayoutProps) {
     "/system-users",
   ].includes(pathname);
 
-  const spSectionActive = setupSectionActive || employeeSectionActive || payrollSectionActive || salarySectionActive || leaveSectionActive || attendanceSectionActive || reportsSectionActive || canteenSectionActive || settingsSectionActive;
+  const spSectionActive = setupSectionActive || employeeSectionActive || payrollSectionActive || payrollPolicySectionActive || salarySectionActive || leaveSectionActive || attendanceSectionActive || reportsSectionActive || canteenSectionActive || settingsSectionActive;
 
   return (
     <div className="min-h-screen bg-[#f8fafc]">
@@ -664,177 +674,12 @@ export function PageLayout({ children }: PageLayoutProps) {
                             </Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
-                        <SidebarMenuSubItem>
-                          <SidebarMenuSubButton asChild>
-                            <Link href="/roster" className={cn(sbSubRow,
-                              isActiveLink('/roster') 
-                                ? sbSubActive
-                                : sbSubIdle
-                            )}>
-                              <span className="font-medium truncate" style={{ display: "block" }}>Workshift Roster</span>
-                            </Link>
-                          </SidebarMenuSubButton>
-                        </SidebarMenuSubItem>
                       </SidebarMenuSub>
                     </CollapsibleContent>
                   </Collapsible>
                 )}
 
-                {/* Salary Management Section - Show to all users with different access levels */}
-                {(isSuperAdmin || isManager || isCompanyAdmin || isRegularUser) && (
-                  <Collapsible open={openSections.salary} onOpenChange={(open) => setOpenSections(prev => ({ ...prev, salary: open }))}>
-                    <CollapsibleTrigger asChild>
-                      <SidebarMenuButton
-                        size="lg"
-                        className={cn(
-                          sbMenuBtnReset,
-                          sbRow,
-                          "mx-0 justify-between",
-                          salarySectionActive
-                            ? sbActive
-                            : cn(
-                                sbIdle,
-                                openSections.salary &&
-                                  "font-semibold text-[#4f46e5]"
-                              )
-                        )}
-                      >
-                        <span className="flex items-center gap-3 min-w-0">
-                          <Icon
-                            icon="mdi:currency-usd"
-                            className={cn(
-                              "w-5 h-5 shrink-0",
-                              salarySectionActive
-                                ? "text-[#4f46e5]" : "text-gray-400"
-                            )}
-                          />
-                          <span className="truncate font-semibold text-[13px]">
-                            Salary Management
-                          </span>
-                        </span>
-                        <Icon
-                          icon="mdi:chevron-down"
-                          className={cn(
-                            "w-4 h-4 shrink-0 text-gray-500 transition-transform duration-300",
-                            openSections.salary && "rotate-180"
-                          )}
-                        />
-                      </SidebarMenuButton>
-                    </CollapsibleTrigger>
-                    <CollapsibleContent>
-                      <SidebarMenuSub className="ml-5 mt-1 space-y-0.5 border-l border-[#f0f0f0] pl-3">
-                        {/* Full access for SUPERADMIN and MANAGER */}
-                        {(isSuperAdmin || isManager || isCompanyAdmin) && (
-                          <>
-                            <SidebarMenuSubItem>
-                              <SidebarMenuSubButton asChild>
-                                <Link href="/monthly-salary-cycle" title="Monthly Salary Cycle" className={cn(sbSubRow,
-                                  isActiveLink('/monthly-salary-cycle') 
-                                    ? sbSubActive
-                                    : sbSubIdle
-                                )}>
-                                  <span className="font-medium truncate" style={{ display: "block" }}>Monthly Salary Cycle</span>
-                                </Link>
-                              </SidebarMenuSubButton>
-                            </SidebarMenuSubItem>
-                            <SidebarMenuSubItem>
-                              <SidebarMenuSubButton asChild>
-                                <Link href="/salary-allowances" className={cn(sbSubRow,
-                                  isActiveLink('/salary-allowances') 
-                                    ? sbSubActive
-                                    : sbSubIdle
-                                )}>
-                                  <span className="font-medium truncate" style={{ display: "block" }}>Salary Allowances</span>
-                                </Link>
-                              </SidebarMenuSubButton>
-                            </SidebarMenuSubItem>
-                            <SidebarMenuSubItem>
-                              <SidebarMenuSubButton asChild>
-                                <Link href="/salary-deductions" className={cn(sbSubRow,
-                                  isActiveLink('/salary-deductions') 
-                                    ? sbSubActive
-                                    : sbSubIdle
-                                )}>
-                                  <span className="font-medium truncate" style={{ display: "block" }}>Salary Deductions</span>
-                                </Link>
-                              </SidebarMenuSubButton>
-                            </SidebarMenuSubItem>
-                            <SidebarMenuSubItem>
-                              <SidebarMenuSubButton asChild>
-                                <Link href="/monthly-pay-grade" className={cn(sbSubRow,
-                                  isActiveLink('/monthly-pay-grade') 
-                                    ? sbSubActive
-                                    : sbSubIdle
-                                )}>
-                                  <span className="font-medium truncate" style={{ display: "block" }}>Paygrade Setup</span>
-                                </Link>
-                              </SidebarMenuSubButton>
-                            </SidebarMenuSubItem>
-                            <SidebarMenuSubItem>
-                              <SidebarMenuSubButton asChild>
-                                <Link href="/bonus-setup" className={cn(sbSubRow,
-                                  isActiveLink('/bonus-setup') 
-                                    ? sbSubActive
-                                    : sbSubIdle
-                                )}>
-                                  <span className="font-medium truncate" style={{ display: "block" }}>Bonus Setup</span>
-                                </Link>
-                              </SidebarMenuSubButton>
-                            </SidebarMenuSubItem>
-                            <SidebarMenuSubItem>
-                              <SidebarMenuSubButton asChild>
-                                <Link href="/bonus-allocations" className={cn(sbSubRow,
-                                  isActiveLink('/bonus-allocations') 
-                                    ? sbSubActive
-                                    : sbSubIdle
-                                )}>
-                                  <span className="font-medium truncate" style={{ display: "block" }}>Bonus Allocations</span>
-                                </Link>
-                              </SidebarMenuSubButton>
-                            </SidebarMenuSubItem>
-                          </>
-                        )}
-                        
-                        {/* Common links for all users - Salary Advance, Reimbursement, Generate Salary */}
-                        <SidebarMenuSubItem>
-                          <SidebarMenuSubButton asChild>
-                            <Link href="/salary-advance" className={cn(sbSubRow,
-                              isActiveLink('/salary-advance') 
-                                ? sbSubActive
-                                : sbSubIdle
-                            )}>
-                              <span className="font-medium truncate" style={{ display: "block" }}>Salary Advance</span>
-                            </Link>
-                          </SidebarMenuSubButton>
-                        </SidebarMenuSubItem>
-                        <SidebarMenuSubItem>
-                          <SidebarMenuSubButton asChild>
-                            <Link href="/reimbursement" className={cn(sbSubRow,
-                              isActiveLink('/reimbursement') 
-                                ? sbSubActive
-                                : sbSubIdle
-                            )}>
-                              <span className="font-medium truncate" style={{ display: "block" }}>Reimbursement</span>
-                            </Link>
-                          </SidebarMenuSubButton>
-                        </SidebarMenuSubItem>
-                        <SidebarMenuSubItem>
-                          <SidebarMenuSubButton asChild>
-                            <Link href="/generate-salary" className={cn(sbSubRow,
-                              isActiveLink('/generate-salary') 
-                                ? sbSubActive
-                                : sbSubIdle
-                            )}>
-                              <span className="font-medium truncate" style={{ display: "block" }}>Generate Salary</span>
-                            </Link>
-                          </SidebarMenuSubButton>
-                        </SidebarMenuSubItem>
-                      </SidebarMenuSub>
-                    </CollapsibleContent>
-                  </Collapsible>
-                )}
-
-                {/* Leave Management Section - Show to all users */}
+                {/* Leave Policy Section - Show to all users */}
                 {(isSuperAdmin || isManager || isCompanyAdmin || isRegularUser) && (
                   <Collapsible open={openSections.leave} onOpenChange={(open) => setOpenSections(prev => ({ ...prev, leave: open }))}>
                     <CollapsibleTrigger asChild>
@@ -863,7 +708,7 @@ export function PageLayout({ children }: PageLayoutProps) {
                             )}
                           />
                           <span className="truncate font-semibold text-[13px]">
-                            Leave Management
+                            Leave Policy
                           </span>
                         </span>
                         <Icon
@@ -917,27 +762,106 @@ export function PageLayout({ children }: PageLayoutProps) {
                             </SidebarMenuSubButton>
                           </SidebarMenuSubItem>
                         )}
-                        {(isSuperAdmin || isManager || isCompanyAdmin) && (
-                          <SidebarMenuSubItem>
-                            <SidebarMenuSubButton asChild>
-                              <Link href="/privileged-leave" title="Privileged Leave Management" className={cn(sbSubRow,
-                                isActiveLink('/privileged-leave') 
-                                  ? sbSubActive
-                                  : sbSubIdle
-                              )}>
-                                <span className="font-medium truncate" style={{ display: "block" }}>Privileged Leave</span>
-                              </Link>
-                            </SidebarMenuSubButton>
-                          </SidebarMenuSubItem>
+                      </SidebarMenuSub>
+                    </CollapsibleContent>
+                  </Collapsible>
+                )}
+
+                {/* Payroll Policy Section - Only for admin roles */}
+                {(isSuperAdmin || isManager || isCompanyAdmin) && (
+                  <Collapsible open={openSections.payrollPolicy} onOpenChange={(open) => setOpenSections(prev => ({ ...prev, payrollPolicy: open }))}>
+                    <CollapsibleTrigger asChild>
+                      <SidebarMenuButton
+                        size="lg"
+                        className={cn(
+                          sbMenuBtnReset,
+                          sbRow,
+                          "mx-0 justify-between",
+                          payrollPolicySectionActive
+                            ? sbActive
+                            : cn(
+                                sbIdle,
+                                openSections.payrollPolicy &&
+                                  "font-semibold text-[#4f46e5]"
+                              )
                         )}
+                      >
+                        <span className="flex items-center gap-3 min-w-0">
+                          <Icon
+                            icon="mdi:file-document-edit-outline"
+                            className={cn(
+                              "w-5 h-5 shrink-0",
+                              payrollPolicySectionActive
+                                ? "text-[#4f46e5]" : "text-gray-400"
+                            )}
+                          />
+                          <span className="truncate font-semibold text-[13px]">
+                            Payroll Policy
+                          </span>
+                        </span>
+                        <Icon
+                          icon="mdi:chevron-down"
+                          className={cn(
+                            "w-4 h-4 shrink-0 text-gray-500 transition-transform duration-300",
+                            openSections.payrollPolicy && "rotate-180"
+                          )}
+                        />
+                      </SidebarMenuButton>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent>
+                      <SidebarMenuSub className="ml-5 mt-1 space-y-0.5 border-l border-[#f0f0f0] pl-3">
                         <SidebarMenuSubItem>
                           <SidebarMenuSubButton asChild>
-                            <Link href="/leave-applications" className={cn(sbSubRow,
-                              isActiveLink('/leave-applications') 
+                            <Link href="/monthly-salary-cycle" title="Payroll Salary Cycle" className={cn(sbSubRow,
+                              isActiveLink('/monthly-salary-cycle') 
                                 ? sbSubActive
                                 : sbSubIdle
                             )}>
-                              <span className="font-medium truncate" style={{ display: "block" }}>Leave Application</span>
+                              <span className="font-medium truncate" style={{ display: "block" }}>Payroll Salary Cycle</span>
+                            </Link>
+                          </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
+                        <SidebarMenuSubItem>
+                          <SidebarMenuSubButton asChild>
+                            <Link href="/salary-allowances" className={cn(sbSubRow,
+                              isActiveLink('/salary-allowances') 
+                                ? sbSubActive
+                                : sbSubIdle
+                            )}>
+                              <span className="font-medium truncate" style={{ display: "block" }}>Salary Allowances</span>
+                            </Link>
+                          </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
+                        <SidebarMenuSubItem>
+                          <SidebarMenuSubButton asChild>
+                            <Link href="/salary-deductions" className={cn(sbSubRow,
+                              isActiveLink('/salary-deductions') 
+                                ? sbSubActive
+                                : sbSubIdle
+                            )}>
+                              <span className="font-medium truncate" style={{ display: "block" }}>Salary Deductions</span>
+                            </Link>
+                          </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
+                        <SidebarMenuSubItem>
+                          <SidebarMenuSubButton asChild>
+                            <Link href="/monthly-pay-grade" className={cn(sbSubRow,
+                              isActiveLink('/monthly-pay-grade') 
+                                ? sbSubActive
+                                : sbSubIdle
+                            )}>
+                              <span className="font-medium truncate" style={{ display: "block" }}>Paygrade Setup</span>
+                            </Link>
+                          </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
+                        <SidebarMenuSubItem>
+                          <SidebarMenuSubButton asChild>
+                            <Link href="/bonus-setup" className={cn(sbSubRow,
+                              isActiveLink('/bonus-setup') 
+                                ? sbSubActive
+                                : sbSubIdle
+                            )}>
+                              <span className="font-medium truncate" style={{ display: "block" }}>Bonus Setup</span>
                             </Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
@@ -946,8 +870,103 @@ export function PageLayout({ children }: PageLayoutProps) {
                   </Collapsible>
                 )}
 
-                {/* Attendance Management Section - Only for SUPERADMIN and MANAGER */}
-                {(isSuperAdmin || isManager || isCompanyAdmin) && (
+                {/* Payroll Management Section - Show to all users with different access levels */}
+                {(isSuperAdmin || isManager || isCompanyAdmin || isRegularUser) && (
+                  <Collapsible open={openSections.salary} onOpenChange={(open) => setOpenSections(prev => ({ ...prev, salary: open }))}>
+                    <CollapsibleTrigger asChild>
+                      <SidebarMenuButton
+                        size="lg"
+                        className={cn(
+                          sbMenuBtnReset,
+                          sbRow,
+                          "mx-0 justify-between",
+                          salarySectionActive
+                            ? sbActive
+                            : cn(
+                                sbIdle,
+                                openSections.salary &&
+                                  "font-semibold text-[#4f46e5]"
+                              )
+                        )}
+                      >
+                        <span className="flex items-center gap-3 min-w-0">
+                          <Icon
+                            icon="mdi:currency-usd"
+                            className={cn(
+                              "w-5 h-5 shrink-0",
+                              salarySectionActive
+                                ? "text-[#4f46e5]" : "text-gray-400"
+                            )}
+                          />
+                          <span className="truncate font-semibold text-[13px]">
+                            Payroll Management
+                          </span>
+                        </span>
+                        <Icon
+                          icon="mdi:chevron-down"
+                          className={cn(
+                            "w-4 h-4 shrink-0 text-gray-500 transition-transform duration-300",
+                            openSections.salary && "rotate-180"
+                          )}
+                        />
+                      </SidebarMenuButton>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent>
+                      <SidebarMenuSub className="ml-5 mt-1 space-y-0.5 border-l border-[#f0f0f0] pl-3">
+                        {(isSuperAdmin || isManager || isCompanyAdmin) && (
+                          <SidebarMenuSubItem>
+                            <SidebarMenuSubButton asChild>
+                              <Link href="/bonus-allocations" className={cn(sbSubRow,
+                                isActiveLink('/bonus-allocations') 
+                                  ? sbSubActive
+                                  : sbSubIdle
+                              )}>
+                                <span className="font-medium truncate" style={{ display: "block" }}>Bonus Allocations</span>
+                              </Link>
+                            </SidebarMenuSubButton>
+                          </SidebarMenuSubItem>
+                        )}
+                        {/* Common links for all users - Salary Advance, Reimbursement, Generate Salary */}
+                        <SidebarMenuSubItem>
+                          <SidebarMenuSubButton asChild>
+                            <Link href="/salary-advance" className={cn(sbSubRow,
+                              isActiveLink('/salary-advance') 
+                                ? sbSubActive
+                                : sbSubIdle
+                            )}>
+                              <span className="font-medium truncate" style={{ display: "block" }}>Salary Advance</span>
+                            </Link>
+                          </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
+                        <SidebarMenuSubItem>
+                          <SidebarMenuSubButton asChild>
+                            <Link href="/reimbursement" className={cn(sbSubRow,
+                              isActiveLink('/reimbursement') 
+                                ? sbSubActive
+                                : sbSubIdle
+                            )}>
+                              <span className="font-medium truncate" style={{ display: "block" }}>Reimbursement</span>
+                            </Link>
+                          </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
+                        <SidebarMenuSubItem>
+                          <SidebarMenuSubButton asChild>
+                            <Link href="/generate-salary" className={cn(sbSubRow,
+                              isActiveLink('/generate-salary') 
+                                ? sbSubActive
+                                : sbSubIdle
+                            )}>
+                              <span className="font-medium truncate" style={{ display: "block" }}>Generate Salary</span>
+                            </Link>
+                          </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
+                      </SidebarMenuSub>
+                    </CollapsibleContent>
+                  </Collapsible>
+                )}
+
+                {/* Attendance Management Section - Show to all users */}
+                {(isSuperAdmin || isManager || isCompanyAdmin || isRegularUser) && (
                   <Collapsible open={openSections.attendance} onOpenChange={(open) => setOpenSections(prev => ({ ...prev, attendance: open }))}>
                     <CollapsibleTrigger asChild>
                       <SidebarMenuButton
@@ -1009,6 +1028,113 @@ export function PageLayout({ children }: PageLayoutProps) {
                                 : sbSubIdle
                             )}>
                               <span className="font-medium" style={{ display: "block" }}>Field Attendance Schedule</span>
+                            </Link>
+                          </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
+                        {(isSuperAdmin || isManager || isCompanyAdmin) && (
+                          <SidebarMenuSubItem>
+                            <SidebarMenuSubButton asChild>
+                              <Link href="/roster" className={cn(sbSubRow,
+                                isActiveLink('/roster') 
+                                  ? sbSubActive
+                                  : sbSubIdle
+                              )}>
+                                <span className="font-medium truncate" style={{ display: "block" }}>Workshift Roster</span>
+                              </Link>
+                            </SidebarMenuSubButton>
+                          </SidebarMenuSubItem>
+                        )}
+                        <SidebarMenuSubItem>
+                          <SidebarMenuSubButton asChild>
+                            <Link href="/leave-applications" className={cn(sbSubRow,
+                              isActiveLink('/leave-applications') 
+                                ? sbSubActive
+                                : sbSubIdle
+                            )}>
+                              <span className="font-medium truncate" style={{ display: "block" }}>Leave Application</span>
+                            </Link>
+                          </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
+                        {(isSuperAdmin || isManager || isCompanyAdmin) && (
+                          <SidebarMenuSubItem>
+                            <SidebarMenuSubButton asChild>
+                              <Link href="/privileged-leave" title="Privileged Leave Management" className={cn(sbSubRow,
+                                isActiveLink('/privileged-leave') 
+                                  ? sbSubActive
+                                  : sbSubIdle
+                              )}>
+                                <span className="font-medium truncate" style={{ display: "block" }}>Privileged Leave</span>
+                              </Link>
+                            </SidebarMenuSubButton>
+                          </SidebarMenuSubItem>
+                        )}
+                      </SidebarMenuSub>
+                    </CollapsibleContent>
+                  </Collapsible>
+                )}
+
+                {/* Canteen Management Section */}
+                {(isSuperAdmin || isManager || isCompanyAdmin) && (
+                  <Collapsible open={openSections.canteen} onOpenChange={(open) => setOpenSections(prev => ({ ...prev, canteen: open }))}>
+                    <CollapsibleTrigger asChild>
+                      <SidebarMenuButton
+                        size="lg"
+                        className={cn(
+                          sbMenuBtnReset,
+                          sbRow,
+                          "mx-0 justify-between",
+                          canteenSectionActive
+                            ? sbActive
+                            : cn(
+                                sbIdle,
+                                openSections.canteen &&
+                                  "font-semibold text-[#4f46e5]"
+                              )
+                        )}
+                      >
+                        <span className="flex items-center gap-3 min-w-0">
+                          <Icon
+                            icon="mdi:silverware-fork-knife"
+                            className={cn(
+                              "w-5 h-5 shrink-0",
+                              canteenSectionActive
+                                ? "text-[#4f46e5]" : "text-gray-400"
+                            )}
+                          />
+                          <span className="truncate font-semibold text-[13px]">
+                            Canteen Management
+                          </span>
+                        </span>
+                        <Icon
+                          icon="mdi:chevron-down"
+                          className={cn(
+                            "w-4 h-4 shrink-0 text-gray-500 transition-transform duration-300",
+                            openSections.canteen && "rotate-180"
+                          )}
+                        />
+                      </SidebarMenuButton>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent>
+                      <SidebarMenuSub className="ml-5 mt-1 space-y-0.5 border-l border-[#f0f0f0] pl-3">
+                        <SidebarMenuSubItem>
+                          <SidebarMenuSubButton asChild>
+                            <Link href="/canteen" className={cn(sbSubRow,
+                              isActiveLink('/canteen') 
+                                ? sbSubActive
+                                : sbSubIdle
+                            )}>
+                              <span className="font-medium truncate" style={{ display: "block" }}>Dashboard</span>
+                            </Link>
+                          </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
+                        <SidebarMenuSubItem>
+                          <SidebarMenuSubButton asChild>
+                            <Link href="/canteen/setup" className={cn(sbSubRow,
+                              isActiveLink('/canteen/setup') 
+                                ? sbSubActive
+                                : sbSubIdle
+                            )}>
+                              <span className="font-medium truncate" style={{ display: "block" }}>Configuration</span>
                             </Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
@@ -1082,6 +1208,17 @@ export function PageLayout({ children }: PageLayoutProps) {
                             </Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
+                        <SidebarMenuSubItem>
+                          <SidebarMenuSubButton asChild>
+                            <Link href="/payroll-reports" className={cn(sbSubRow,
+                              isActiveLink('/payroll-reports') 
+                                ? sbSubActive
+                                : sbSubIdle
+                            )}>
+                              <span className="font-medium truncate" style={{ display: "block" }}>Payroll Reports</span>
+                            </Link>
+                          </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
                         {/* <SidebarMenuSubItem>
                           <SidebarMenuSubButton asChild>
                             <Link href="/salary-statements" className={cn(sbSubRow,
@@ -1101,75 +1238,6 @@ export function PageLayout({ children }: PageLayoutProps) {
                                 : sbSubIdle
                             )}>
                               <span className="font-medium truncate" style={{ display: "block" }}>Canteen Reports</span>
-                            </Link>
-                          </SidebarMenuSubButton>
-                        </SidebarMenuSubItem>
-                      </SidebarMenuSub>
-                    </CollapsibleContent>
-                  </Collapsible>
-                )}
-                {/* Canteen Management Section */}
-                {(isSuperAdmin || isManager || isCompanyAdmin) && (
-                  <Collapsible open={openSections.canteen} onOpenChange={(open) => setOpenSections(prev => ({ ...prev, canteen: open }))}>
-                    <CollapsibleTrigger asChild>
-                      <SidebarMenuButton
-                        size="lg"
-                        className={cn(
-                          sbMenuBtnReset,
-                          sbRow,
-                          "mx-0 justify-between",
-                          canteenSectionActive
-                            ? sbActive
-                            : cn(
-                                sbIdle,
-                                openSections.canteen &&
-                                  "font-semibold text-[#4f46e5]"
-                              )
-                        )}
-                      >
-                        <span className="flex items-center gap-3 min-w-0">
-                          <Icon
-                            icon="mdi:silverware-fork-knife"
-                            className={cn(
-                              "w-5 h-5 shrink-0",
-                              canteenSectionActive
-                                ? "text-[#4f46e5]" : "text-gray-400"
-                            )}
-                          />
-                          <span className="truncate font-semibold text-[13px]">
-                            Canteen Management
-                          </span>
-                        </span>
-                        <Icon
-                          icon="mdi:chevron-down"
-                          className={cn(
-                            "w-4 h-4 shrink-0 text-gray-500 transition-transform duration-300",
-                            openSections.canteen && "rotate-180"
-                          )}
-                        />
-                      </SidebarMenuButton>
-                    </CollapsibleTrigger>
-                    <CollapsibleContent>
-                      <SidebarMenuSub className="ml-5 mt-1 space-y-0.5 border-l border-[#f0f0f0] pl-3">
-                        <SidebarMenuSubItem>
-                          <SidebarMenuSubButton asChild>
-                            <Link href="/canteen" className={cn(sbSubRow,
-                              isActiveLink('/canteen') 
-                                ? sbSubActive
-                                : sbSubIdle
-                            )}>
-                              <span className="font-medium truncate" style={{ display: "block" }}>Dashboard</span>
-                            </Link>
-                          </SidebarMenuSubButton>
-                        </SidebarMenuSubItem>
-                        <SidebarMenuSubItem>
-                          <SidebarMenuSubButton asChild>
-                            <Link href="/canteen/setup" className={cn(sbSubRow,
-                              isActiveLink('/canteen/setup') 
-                                ? sbSubActive
-                                : sbSubIdle
-                            )}>
-                              <span className="font-medium truncate" style={{ display: "block" }}>Setup</span>
                             </Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
