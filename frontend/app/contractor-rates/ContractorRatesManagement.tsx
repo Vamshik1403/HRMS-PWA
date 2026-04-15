@@ -120,6 +120,10 @@ export function ContractorRatesManagement() {
     perHourRate: "",
     perDayRate: "",
     perMonthRate: "",
+    dailyRateMinute: "",
+    dailyRateHour: "",
+    monthlyRateMinute: "",
+    monthlyRateHours: "",
     otPerMinuteRate: "",
     otPerHourRate: "",
     otRateMultiplier: "",
@@ -262,6 +266,10 @@ export function ContractorRatesManagement() {
         perHourRate: rateCard.perHourRate?.toString() || "",
         perDayRate: rateCard.perDayRate?.toString() || "",
         perMonthRate: rateCard.perMonthRate?.toString() || "",
+        dailyRateMinute: rateCard.dailyRateMinute?.toString() || "",
+        dailyRateHour: rateCard.dailyRateHour?.toString() || "",
+        monthlyRateMinute: rateCard.monthlyRateMinute?.toString() || "",
+        monthlyRateHours: rateCard.monthlyRateHours?.toString() || "",
         otPerMinuteRate: rateCard.otPerMinuteRate?.toString() || "",
         otPerHourRate: rateCard.otPerHourRate?.toString() || "",
         otRateMultiplier: rateCard.otRateMultiplier?.toString() || "",
@@ -316,6 +324,10 @@ export function ContractorRatesManagement() {
             perHourRate: formData.perHourRate ? parseFloat(formData.perHourRate) : 0,
             perDayRate: formData.perDayRate ? parseFloat(formData.perDayRate) : 0,
             perMonthRate: formData.perMonthRate ? parseFloat(formData.perMonthRate) : 0,
+            dailyRateMinute: formData.dailyRateMinute ? parseFloat(formData.dailyRateMinute) : 0,
+            dailyRateHour: formData.dailyRateHour ? parseFloat(formData.dailyRateHour) : 0,
+            monthlyRateMinute: formData.monthlyRateMinute ? parseFloat(formData.monthlyRateMinute) : 0,
+            monthlyRateHours: formData.monthlyRateHours ? parseFloat(formData.monthlyRateHours) : 0,
             otPerMinuteRate: formData.otPerMinuteRate ? parseFloat(formData.otPerMinuteRate) : 0,
             otPerHourRate: formData.otPerHourRate ? parseFloat(formData.otPerHourRate) : 0,
             otRateMultiplier: formData.otRateMultiplier ? parseFloat(formData.otRateMultiplier) : 0,
@@ -480,7 +492,7 @@ export function ContractorRatesManagement() {
             {renderSuggestField("Designation", desigSuggest, (d) => d.designation, (d) =>
               setFormData((prev) => ({ ...prev, designation: d.designation }))
             )}
-            {renderSuggestField("Work Shift", shiftSuggest, (w) => w.workShiftName, (w) =>
+            {isAllInclusive && renderSuggestField("Work Shift", shiftSuggest, (w) => w.workShiftName, (w) =>
               setFormData((prev) => ({ ...prev, workShiftName: w.workShiftName }))
             )}
           </div>
@@ -489,24 +501,24 @@ export function ContractorRatesManagement() {
           {isAllInclusive && (
             <>
               <h4 className="text-xs font-semibold text-gray-600 uppercase tracking-wide mt-2">
-                Normal Rates
+                Daily &amp; Monthly Rates
               </h4>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 <div className="space-y-1">
-                  <label className="text-xs font-medium text-gray-500 block">Per Minute (₹)</label>
-                  <Input type="number" value={formData.perMinuteRate} onChange={(e) => setFormData((p) => ({ ...p, perMinuteRate: e.target.value }))} placeholder="0" min="0" />
+                  <label className="text-xs font-medium text-gray-500 block">Daily Rate - Minute (₹)</label>
+                  <Input type="number" value={formData.dailyRateMinute} onChange={(e) => setFormData((p) => ({ ...p, dailyRateMinute: e.target.value }))} placeholder="0" min="0" />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-xs font-medium text-gray-500 block">Per Hour (₹)</label>
-                  <Input type="number" value={formData.perHourRate} onChange={(e) => setFormData((p) => ({ ...p, perHourRate: e.target.value }))} placeholder="0" min="0" />
+                  <label className="text-xs font-medium text-gray-500 block">Daily Rate - Hour (₹)</label>
+                  <Input type="number" value={formData.dailyRateHour} onChange={(e) => setFormData((p) => ({ ...p, dailyRateHour: e.target.value }))} placeholder="0" min="0" />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-xs font-medium text-gray-500 block">Per Day (₹)</label>
-                  <Input type="number" value={formData.perDayRate} onChange={(e) => setFormData((p) => ({ ...p, perDayRate: e.target.value }))} placeholder="0" min="0" />
+                  <label className="text-xs font-medium text-gray-500 block">Monthly Rate - Minute (₹)</label>
+                  <Input type="number" value={formData.monthlyRateMinute} onChange={(e) => setFormData((p) => ({ ...p, monthlyRateMinute: e.target.value }))} placeholder="0" min="0" />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-xs font-medium text-gray-500 block">Per Month (₹)</label>
-                  <Input type="number" value={formData.perMonthRate} onChange={(e) => setFormData((p) => ({ ...p, perMonthRate: e.target.value }))} placeholder="0" min="0" />
+                  <label className="text-xs font-medium text-gray-500 block">Monthly Rate - Hours (₹)</label>
+                  <Input type="number" value={formData.monthlyRateHours} onChange={(e) => setFormData((p) => ({ ...p, monthlyRateHours: e.target.value }))} placeholder="0" min="0" />
                 </div>
               </div>
 
@@ -523,7 +535,7 @@ export function ContractorRatesManagement() {
                   <Input type="number" value={formData.otPerHourRate} onChange={(e) => setFormData((p) => ({ ...p, otPerHourRate: e.target.value }))} placeholder="0" min="0" />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-xs font-medium text-gray-500 block">OT Rate Multiplier</label>
+                  <label className="text-xs font-medium text-gray-500 block">OT Rate Calculation</label>
                   <Input type="number" value={formData.otRateMultiplier} onChange={(e) => setFormData((p) => ({ ...p, otRateMultiplier: e.target.value }))} placeholder="e.g. 1.5" min="0" step="0.1" />
                 </div>
               </div>

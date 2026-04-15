@@ -44,7 +44,7 @@ findAll() {
     });
   }
 
-  saveRateCards(contractorID: number, rateCards: { contractorName?: string; branchName?: string; departmentName?: string; designation?: string; workShiftName?: string; payoutType?: string; perMinuteRate?: number; perHourRate?: number; perDayRate?: number; perMonthRate?: number; otPerMinuteRate?: number; otPerHourRate?: number; otRateMultiplier?: number; commissionType?: string; commissionValue?: number }[]) {
+  saveRateCards(contractorID: number, rateCards: { contractorName?: string; branchName?: string; departmentName?: string; designation?: string; workShiftName?: string; payoutType?: string; perMinuteRate?: number; perHourRate?: number; perDayRate?: number; perMonthRate?: number; dailyRateMinute?: number; dailyRateHour?: number; monthlyRateMinute?: number; monthlyRateHours?: number; otPerMinuteRate?: number; otPerHourRate?: number; otRateMultiplier?: number; commissionType?: string; commissionValue?: number }[]) {
     return this.prisma.$transaction(async (prisma) => {
       await prisma.contractorRateCard.deleteMany({ where: { contractorID } });
       if (rateCards && rateCards.length > 0) {
@@ -61,6 +61,10 @@ findAll() {
             perHourRate: rc.perHourRate ?? 0,
             perDayRate: rc.perDayRate ?? 0,
             perMonthRate: rc.perMonthRate ?? 0,
+            dailyRateMinute: rc.dailyRateMinute ?? 0,
+            dailyRateHour: rc.dailyRateHour ?? 0,
+            monthlyRateMinute: rc.monthlyRateMinute ?? 0,
+            monthlyRateHours: rc.monthlyRateHours ?? 0,
             otPerMinuteRate: rc.otPerMinuteRate ?? 0,
             otPerHourRate: rc.otPerHourRate ?? 0,
             otRateMultiplier: rc.otRateMultiplier ?? 0,
