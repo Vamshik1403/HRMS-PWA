@@ -19,6 +19,7 @@ import { Plus, Search, Edit, Trash2, Eye, X, Save } from "lucide-react";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import { FormDrawer } from "../components/ui/form-drawer";
 import { toast } from "sonner";
+import { getSidebarContext } from "../utils/sidebarContext";
 
 // ---------------------------
 // Types aligned to backend
@@ -151,10 +152,18 @@ export function DepartmentManagement() {
         setCurrentUserMapping(currentUser);
 
         if (user?.role === "MANAGER") {
-          // 🟢 FIX: Only filter by companyID, not branchesID
-          const filtered = all.filter(
-            (r: any) => r.companyID === currentUser.companyID
-          );
+          let filtered: any[];
+          if (currentUser.companyID) {
+            filtered = all.filter(
+              (r: any) => r.companyID === currentUser.companyID
+            );
+          } else if (currentUser.serviceProviderID) {
+            filtered = all.filter(
+              (r: any) => r.serviceProviderID === currentUser.serviceProviderID
+            );
+          } else {
+            filtered = [];
+          }
           console.log("Manager filtered departments:", filtered); // Debug
           setRows(filtered);
         } else if (user?.role === "EMPLOYEE") {
@@ -329,6 +338,14 @@ export function DepartmentManagement() {
       baseFormData.companyID = currentUserMapping.companyID;
       baseFormData.spAutocomplete = currentUserMapping.serviceProvider?.companyName || "";
       baseFormData.coAutocomplete = currentUserMapping.company?.companyName || "";
+    } else if (user?.role === "SUPERADMIN") {
+      const ctx = getSidebarContext();
+      if (ctx) {
+        baseFormData.serviceProviderID = ctx.serviceProviderID;
+        baseFormData.companyID = ctx.companyID;
+        baseFormData.spAutocomplete = ctx.serviceProviderName;
+        baseFormData.coAutocomplete = ctx.companyName;
+      }
     }
 
     setFormData(baseFormData);
@@ -543,8 +560,8 @@ export function DepartmentManagement() {
             )}
 
             <form onSubmit={handleSubmit} className="space-y-4">
-              {/* Service Provider Autocomplete - Hidden for MANAGER */}
-              {user?.role !== "MANAGER" && (
+              {/* Service Provider - auto-filled from sidebar */}
+              {false && (
                 <div ref={spRef} className="space-y-2 relative">
                   <Label>Service Provider *</Label>
                   <Input
@@ -588,8 +605,8 @@ export function DepartmentManagement() {
                 </div>
               )}
 
-              {/* Company Autocomplete - Hidden for MANAGER */}
-              {user?.role !== "MANAGER" && (
+              {/* Company - auto-filled from sidebar */}
+              {false && (
                 <div ref={coRef} className="space-y-2 relative">
                   <Label>Company *</Label>
                   <Input

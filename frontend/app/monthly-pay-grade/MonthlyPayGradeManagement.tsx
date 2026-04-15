@@ -12,6 +12,7 @@ import { Icon } from "@iconify/react";
 import { Plus, Search, Edit, Trash2 } from "lucide-react";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import { toast } from "sonner";
+import { getSidebarContext } from "../utils/sidebarContext";
 
 
 /* ---------- Types ---------- */
@@ -237,13 +238,21 @@ useEffect(() => {
 
       // 🔐 ROLE-BASED TABLE FILTERING
       if (user?.role === "MANAGER" && currentUserMapping) {
-        setPayGrades(
-          uiRows.filter(
+        let filtered: any[];
+        if (currentUserMapping.companyID && currentUserMapping.branchesID) {
+          filtered = uiRows.filter(
             pg =>
               pg.companyID === currentUserMapping.companyID &&
               pg.branchesID === currentUserMapping.branchesID
-          )
-        );
+          );
+        } else if (currentUserMapping.companyID) {
+          filtered = uiRows.filter(pg => pg.companyID === currentUserMapping.companyID);
+        } else if (currentUserMapping.serviceProviderID) {
+          filtered = uiRows.filter((pg: any) => pg.serviceProviderID === currentUserMapping.serviceProviderID);
+        } else {
+          filtered = [];
+        }
+        setPayGrades(filtered);
       } else {
         // SUPERADMIN → see ALL
         setPayGrades(uiRows);
@@ -675,12 +684,13 @@ miniOTTime: x.miniOTTime ?? 0,
   };
 
   const resetForm = () => {
+    const ctx = getSidebarContext();
     setFormData({
-      serviceProviderID: null,
-      companyID: null,
+      serviceProviderID: ctx?.serviceProviderID ?? null,
+      companyID: ctx?.companyID ?? null,
       branchesID: null,
-      spAutocomplete: "",
-      coAutocomplete: "",
+      spAutocomplete: ctx?.serviceProviderName ?? "",
+      coAutocomplete: ctx?.companyName ?? "",
       brAutocomplete: "",
       monthlyPayGradeName: "",
       otStatus: false,
@@ -755,11 +765,10 @@ miniOTTime: x.miniOTTime ?? 0,
 
             <form onSubmit={handleSubmit} className="space-y-6">
               {/* Basic Information with AUTOCOMPLETE */}
-              {/* SUPERADMIN → show SP + Company + Branch */}
-              {user?.role === "SUPERADMIN" && (
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  {/* SP */}
-                  <div ref={spRef} className="space-y-2 relative">
+              {/* SP/Company auto-filled from sidebar, Branch always visible */}
+                <div className="grid grid-cols-1 gap-4">
+                  {/* SP - auto-filled from sidebar */}
+                  <div ref={spRef} className="space-y-2 relative hidden">
                     <Label>Service Provider *</Label>
                     <Input
                       value={formData.spAutocomplete}
@@ -794,8 +803,8 @@ miniOTTime: x.miniOTTime ?? 0,
                     )}
                   </div>
 
-                  {/* Company */}
-                  <div ref={coRef} className="space-y-2 relative">
+                  {/* Company - auto-filled from sidebar */}
+                  <div ref={coRef} className="space-y-2 relative hidden">
                     <Label>Company *</Label>
                     <Input
                       value={formData.coAutocomplete}
@@ -866,7 +875,6 @@ miniOTTime: x.miniOTTime ?? 0,
                     )}
                   </div>
                 </div>
-              )}
 
               {/* MANAGER → Only Branch input */}
               {user?.role === "MANAGER" && (
@@ -907,7 +915,6 @@ miniOTTime: x.miniOTTime ?? 0,
                   </div>
                 </div>
               )}
-
 
               {/* Name */}
               <div className="space-y-2">

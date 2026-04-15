@@ -25,6 +25,7 @@ import { Plus, Search, Edit, Trash2 } from "lucide-react";
 import { SearchSuggestInput } from "../components/SearchSuggestInput";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import { toast } from "sonner";
+import { getSidebarContext } from "../utils/sidebarContext";
 
 
 interface AttendancePolicy {
@@ -48,6 +49,7 @@ interface AttendancePolicy {
   allow_self_mark_attendance: boolean;
   allow_manager_update_ot: boolean;
   max_ot_hours_per_day_min: number;
+  countWorkhoursInMinutes?: boolean;
   overtimeApplicable: boolean;
   minOvertimeHrs: number;
   maxOvertimeHrs: number;
@@ -99,6 +101,7 @@ export function AttendancePolicyManagement() {
     allow_self_mark_attendance: false,
     allow_manager_update_ot: false,
     max_ot_hours_per_day_min: 0,
+    countWorkhoursInMinutes: false,
     overtimeApplicable: false,
     minOvertimeHrs: 0,
     maxOvertimeHrs: 0,
@@ -265,11 +268,20 @@ export function AttendancePolicyManagement() {
         const users = await usersRes.json();
         const currentUser = users.find((u: any) => u.username === user.username);
         if (currentUser) {
-          const filtered = mapped.filter(
-            (r) =>
-              r.companyID === currentUser.companyID &&
-              r.branchesID === currentUser.branchesID
-          );
+          let filtered: any[];
+          if (currentUser.companyID && currentUser.branchesID) {
+            filtered = mapped.filter(
+              (r) =>
+                r.companyID === currentUser.companyID &&
+                r.branchesID === currentUser.branchesID
+            );
+          } else if (currentUser.companyID) {
+            filtered = mapped.filter((r) => r.companyID === currentUser.companyID);
+          } else if (currentUser.serviceProviderID) {
+            filtered = mapped.filter((r: any) => r.serviceProviderID === currentUser.serviceProviderID);
+          } else {
+            filtered = [];
+          }
           setPolicies(filtered);
           return;
         }
@@ -377,13 +389,14 @@ export function AttendancePolicyManagement() {
   };
 
   const resetForm = () => {
+    const ctx = getSidebarContext();
     setFormData({
-      serviceProvider: "",
-      companyName: "",
+      serviceProvider: ctx?.serviceProviderName ?? "",
+      companyName: ctx?.companyName ?? "",
       branchName: "",
       attendancePolicyName: "",
-      serviceProviderID: undefined,
-      companyID: undefined,
+      serviceProviderID: ctx?.serviceProviderID ?? undefined,
+      companyID: ctx?.companyID ?? undefined,
       branchesID: undefined,
       workingHoursType: "Fixed",
       checkin_begin_before_min: 0,
@@ -397,6 +410,7 @@ export function AttendancePolicyManagement() {
       allow_self_mark_attendance: false,
       allow_manager_update_ot: false,
       max_ot_hours_per_day_min: 0,
+      countWorkhoursInMinutes: false,
       overtimeApplicable: false,
       minOvertimeHrs: 0,
       maxOvertimeHrs: 0,
@@ -461,6 +475,7 @@ export function AttendancePolicyManagement() {
       allow_self_mark_attendance: policy.allow_self_mark_attendance,
       allow_manager_update_ot: policy.allow_manager_update_ot,
       max_ot_hours_per_day_min: policy.max_ot_hours_per_day_min,
+      countWorkhoursInMinutes: policy.countWorkhoursInMinutes || false,
       overtimeApplicable: policy.overtimeApplicable || false,
       minOvertimeHrs: policy.minOvertimeHrs || 0,
       maxOvertimeHrs: policy.maxOvertimeHrs || 0,
@@ -521,7 +536,8 @@ export function AttendancePolicyManagement() {
             >
               {/* Basic Information */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                {user?.role === "SUPERADMIN" && (
+                {/* SP + Company auto-filled from sidebar context */}
+                {false && (
                   <>
                     <SearchSuggestInput
                       label="Service Provider"
@@ -787,6 +803,23 @@ export function AttendancePolicyManagement() {
               {/* Page Break - Overtime Configuration Section */}
               <div className="border-t border-gray-200 pt-4">
                 <div className="space-y-4">
+                  <div className="flex items-center space-x-3">
+                    <input
+                      type="checkbox"
+                      id="countWorkhoursInMinutes"
+                      checked={formData.countWorkhoursInMinutes}
+                      onChange={(e) =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          countWorkhoursInMinutes: e.target.checked,
+                        }))
+                      }
+                      className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
+                    />
+                    <Label htmlFor="countWorkhoursInMinutes" className="text-sm font-medium">
+                      Count total workhours in minutes &amp; count OT minutes after total shift hours
+                    </Label>
+                  </div>
                   <div className="flex items-center space-x-3">
                     <input
                       type="checkbox"

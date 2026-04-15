@@ -20,6 +20,7 @@ import { Plus, Search, Edit, Trash2, Check, X } from "lucide-react"
 import { useCurrentUser } from "../hooks/useCurrentUser"
 import { SearchSuggestInput } from "../components/SearchSuggestInput"
 import { toast } from "sonner";
+import { getSidebarContext } from "../utils/sidebarContext";
 
 interface LeaveApplication {
   id: string
@@ -619,9 +620,18 @@ export function LeaveApplicationsManagement() {
 
       // MANAGER → only mapped branches (filtered by search)
       if (user?.role === "MANAGER" && managerData) {
-        const filteredByCompany = data.filter(
-          (item: any) => item.companyID === managerData.companyID
-        )
+        let filteredByCompany;
+        if (managerData.companyID) {
+          filteredByCompany = data.filter(
+            (item: any) => item.companyID === managerData.companyID
+          )
+        } else if (managerData.serviceProviderID) {
+          filteredByCompany = data.filter(
+            (item: any) => item.serviceProviderID === managerData.serviceProviderID
+          )
+        } else {
+          filteredByCompany = []
+        }
         return q
           ? filteredByCompany.filter((item: any) =>
               (item?.branchName || "").toLowerCase().includes(q)
@@ -687,10 +697,20 @@ export function LeaveApplicationsManagement() {
           return [] // No employees shown until branch is selected
         }
         
-        const filteredData = data.filter((item: any) => 
-          item.companyID === managerData?.companyID && 
-          item.branchesID === formData.branchesID
-        )
+        let filteredData;
+        if (managerData?.companyID) {
+          filteredData = data.filter((item: any) => 
+            item.companyID === managerData?.companyID && 
+            item.branchesID === formData.branchesID
+          )
+        } else if (managerData?.serviceProviderID) {
+          filteredData = data.filter((item: any) => 
+            item.serviceProviderID === managerData?.serviceProviderID && 
+            item.branchesID === formData.branchesID
+          )
+        } else {
+          filteredData = []
+        }
         
         return filteredData
           .filter((item: any) => {
@@ -1116,17 +1136,18 @@ export function LeaveApplicationsManagement() {
   }
 
   const resetForm = () => {
+    const ctx = getSidebarContext();
     setFormData({
-      serviceProvider: "",
-      companyName: "",
+      serviceProvider: ctx?.serviceProviderName ?? "",
+      companyName: ctx?.companyName ?? "",
       branchName: "",
       employeeName: isNormalUser ? `${empCreds?.employeeFirstName || ""} ${empCreds?.employeeLastName || ""}`.trim() : "",
       leaveType: "",
       fromDate: "",
       toDate: "",
       purpose: "",
-      serviceProviderID: undefined,
-      companyID: undefined,
+      serviceProviderID: ctx?.serviceProviderID ?? undefined,
+      companyID: ctx?.companyID ?? undefined,
       branchesID: undefined,
       manageEmployeeID: isNormalUser ? empCreds?.manageEmployeeID : undefined,
     })
@@ -1191,8 +1212,8 @@ export function LeaveApplicationsManagement() {
                 <div className="space-y-4">
                   <h3 className="text-lg font-semibold">Organization Selection</h3>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                    {/* Service Provider - Hidden for non-SUPERADMIN */}
-                    {user?.role === "SUPERADMIN" && (
+                    {/* Service Provider - auto-filled from sidebar */}
+                    {false && (
                       <SearchSuggestInput
                         label="Service Provider"
                         placeholder="Select Service Provider"
@@ -1208,8 +1229,8 @@ export function LeaveApplicationsManagement() {
                       />
                     )}
                     
-                    {/* Company Name - Hidden for non-SUPERADMIN */}
-                    {user?.role === "SUPERADMIN" && (
+                    {/* Company Name - auto-filled from sidebar */}
+                    {false && (
                       <SearchSuggestInput
                         label="Company Name"
                         placeholder="Select Company"

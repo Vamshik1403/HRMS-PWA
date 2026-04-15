@@ -44,7 +44,7 @@ findAll() {
     });
   }
 
-  saveRateCards(contractorID: number, rateCards: { contractorName?: string; departmentName?: string; designation?: string; workShiftName?: string; perMinuteRate?: number; perHourRate?: number; perDayRate?: number; perMonthRate?: number; otPerMinuteRate?: number; otPerHourRate?: number }[]) {
+  saveRateCards(contractorID: number, rateCards: { contractorName?: string; branchName?: string; departmentName?: string; designation?: string; workShiftName?: string; payoutType?: string; perMinuteRate?: number; perHourRate?: number; perDayRate?: number; perMonthRate?: number; otPerMinuteRate?: number; otPerHourRate?: number; otRateMultiplier?: number; commissionType?: string; commissionValue?: number }[]) {
     return this.prisma.$transaction(async (prisma) => {
       await prisma.contractorRateCard.deleteMany({ where: { contractorID } });
       if (rateCards && rateCards.length > 0) {
@@ -52,15 +52,20 @@ findAll() {
           data: rateCards.map((rc) => ({
             contractorID,
             contractorName: rc.contractorName,
+            branchName: rc.branchName,
             departmentName: rc.departmentName,
             designation: rc.designation,
             workShiftName: rc.workShiftName,
+            payoutType: rc.payoutType,
             perMinuteRate: rc.perMinuteRate ?? 0,
             perHourRate: rc.perHourRate ?? 0,
             perDayRate: rc.perDayRate ?? 0,
             perMonthRate: rc.perMonthRate ?? 0,
             otPerMinuteRate: rc.otPerMinuteRate ?? 0,
             otPerHourRate: rc.otPerHourRate ?? 0,
+            otRateMultiplier: rc.otRateMultiplier ?? 0,
+            commissionType: rc.commissionType,
+            commissionValue: rc.commissionValue ?? 0,
           })),
         });
       }

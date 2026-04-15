@@ -20,6 +20,7 @@ import { Icon } from "@iconify/react";
 import { Plus, Search, Edit, Trash2, Eye, IndianRupee } from "lucide-react";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import { toast } from "sonner";
+import { getSidebarContext } from "../utils/sidebarContext";
 
 
 // ---------------------------
@@ -465,6 +466,14 @@ export function ContractorManagement() {
       baseFormData.companyID = currentUserMapping.companyID;
       baseFormData.spAutocomplete = currentUserMapping.serviceProvider?.companyName || "";
       baseFormData.coAutocomplete = currentUserMapping.company?.companyName || "";
+    } else if (user?.role === "SUPERADMIN") {
+      const ctx = getSidebarContext();
+      if (ctx) {
+        baseFormData.serviceProviderID = ctx.serviceProviderID;
+        baseFormData.companyID = ctx.companyID;
+        baseFormData.spAutocomplete = ctx.serviceProviderName;
+        baseFormData.coAutocomplete = ctx.companyName;
+      }
     }
 
     setFormData(baseFormData);
@@ -662,7 +671,7 @@ export function ContractorManagement() {
           <p className="text-gray-600 mt-1 text-sm">Manage contractor records</p>
         </div>
 
-        {canManage && (
+        {canManage && !isDialogOpen && !isViewDialogOpen && (
               <Button
                 onClick={() => { resetForm(); setIsDialogOpen(true); }}
                 className="text-sm px-3 py-2"
@@ -685,8 +694,8 @@ export function ContractorManagement() {
             )}
 
             <form onSubmit={handleSubmit} className="space-y-4">
-              {/* Service Provider Autocomplete - Completely hidden for MANAGER */}
-              {user?.role !== "MANAGER" && (
+              {/* Service Provider - auto-filled from sidebar */}
+              {false && (
                 <div ref={spRef} className="space-y-2 relative">
                   <Label>Service Provider *</Label>
                   <Input
@@ -731,20 +740,21 @@ export function ContractorManagement() {
                 </div>
               )}
 
-              {/* Company Autocomplete - Completely hidden for MANAGER */}
-              {user?.role !== "MANAGER" && (
+              {/* Company - auto-filled from sidebar */}
+              {false && (
                 <div ref={coRef} className="space-y-2 relative">
                   <Label>Company *</Label>
                   <Input
                     value={formData.coAutocomplete}
                     onChange={(e) => {
                       const val = e.target.value;
-                      setFormData((p) => ({ ...p, coAutocomplete: val }));
+                      setFormData((p) => ({ ...p, coAutocomplete: val, companyID: null }));
                       runFetchCompanies(val);
                     }}
                     onFocus={() => {
-                      const val = formData.coAutocomplete;
-                      if (val.length >= MIN_CHARS) runFetchCompanies(val);
+                      if (!formData.companyID && formData.coAutocomplete.length >= MIN_CHARS) {
+                        runFetchCompanies(formData.coAutocomplete);
+                      }
                     }}
                     placeholder={formData.serviceProviderID ? "Start typing company..." : "Please select a service provider first"}
                     autoComplete="off"
@@ -791,14 +801,38 @@ export function ContractorManagement() {
               </div>
 
                           <div className="space-y-2">
-                              <Label>Contractor Type</Label>
-                             <select className="w-full rounded-md border px-3 py-2" value={formData.contractorType || ""} onChange={(e) => setFormData((p) => ({ ...p, contractorType: e.target.value }))}>
-                                <option value="">-- Select Contractor Type --</option>
-                                <option value="MSP">Managed Service Provider</option>
-                                <option value="MPC">ManPower Contractor</option>
-                           
-                              </select>
-              
+                              <Label>Contractor Type (Select Multiple)</Label>
+                              {(() => {
+                                const CONTRACTOR_TYPES = [
+                                  { value: "MSP", label: "Managed Service Provider", hint: "Contractor pays Employee Salary" },
+                                  { value: "CA", label: "Commission Agent", hint: "Company pays Employee Salary and gives commission to contractor" },
+                                ];
+                                const selected = (formData.contractorType || "").split(",").filter(Boolean);
+                                const toggle = (val: string) => {
+                                  const next = selected.includes(val)
+                                    ? selected.filter((v) => v !== val)
+                                    : [...selected, val];
+                                  setFormData((p) => ({ ...p, contractorType: next.join(",") }));
+                                };
+                                return (
+                                  <div className="space-y-2">
+                                    {CONTRACTOR_TYPES.map((ct) => (
+                                      <label key={ct.value} className="flex items-start gap-2 cursor-pointer">
+                                        <input
+                                          type="checkbox"
+                                          checked={selected.includes(ct.value)}
+                                          onChange={() => toggle(ct.value)}
+                                          className="mt-1 h-4 w-4 rounded border-gray-300"
+                                        />
+                                        <div>
+                                          <span className="text-sm font-medium">{ct.label}</span>
+                                          <p className="text-xs text-gray-500">{ct.hint}</p>
+                                        </div>
+                                      </label>
+                                    ))}
+                                  </div>
+                                );
+                              })()}
                             </div>
 
               <div className="space-y-2">
@@ -974,6 +1008,7 @@ export function ContractorManagement() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Contractor</TableHead>
+                  <TableHead>Type</TableHead>
                   <TableHead>Service Provider</TableHead>
                   <TableHead>Company</TableHead>
                   <TableHead>Email</TableHead>
@@ -997,6 +1032,13 @@ export function ContractorManagement() {
                   filtered.map((r) => (
                     <TableRow key={r.id}>
                       <TableCell className="whitespace-nowrap">{r.contractorName || "—"}</TableCell>
+                      <TableCell className="whitespace-nowrap">
+                        {(r.contractorType || "").split(",").filter(Boolean).map((t) => {
+                          const labels: Record<string, string> = { MSP: "MSP", CA: "Commission Agent", MPC: "ManPower" };
+                          return <Badge key={t} variant="secondary" className="mr-1 text-xs">{labels[t] || t}</Badge>;
+                        })}
+                        {!(r.contractorType) && "—"}
+                      </TableCell>
                       <TableCell className="whitespace-nowrap">{spName(r)}</TableCell>
                       <TableCell className="whitespace-nowrap">{coName(r)}</TableCell>
                       <TableCell className="whitespace-nowrap">{r.emailAdd || "—"}</TableCell>

@@ -29,6 +29,7 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from ".
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import { FormDrawer } from "../components/ui/form-drawer";
 import { toast } from "sonner";
+import { getSidebarContext } from "../utils/sidebarContext";
 
 /** ========= Types aligned to backend ========= */
 type ID = number;
@@ -613,11 +614,20 @@ export function EmployeesPromotionsManagement() {
         const currentUser = users.find((u: any) => u.username === user.username);
 
         if (currentUser) {
-          const filtered = list.filter(
-            (r: any) =>
-              r.companyID === currentUser.companyID &&
-              r.branchesID === currentUser.branchesID
-          );
+          let filtered: any[];
+          if (currentUser.companyID && currentUser.branchesID) {
+            filtered = list.filter(
+              (r: any) =>
+                r.companyID === currentUser.companyID &&
+                r.branchesID === currentUser.branchesID
+            );
+          } else if (currentUser.companyID) {
+            filtered = list.filter((r: any) => r.companyID === currentUser.companyID);
+          } else if (currentUser.serviceProviderID) {
+            filtered = list.filter((r: any) => r.serviceProviderID === currentUser.serviceProviderID);
+          } else {
+            filtered = [];
+          }
           setRows(filtered);
           return;
         }
@@ -1592,12 +1602,13 @@ const runFetchBR = (query: string) => {
 
   /** ======= Reset ======= */
   const resetForm = () => {
+    const ctx = getSidebarContext();
     setFormData({
-      serviceProviderID: null,
-      companyID: null,
+      serviceProviderID: ctx?.serviceProviderID ?? null,
+      companyID: ctx?.companyID ?? null,
       branchesID: null,
-      spAutocomplete: "",
-      coAutocomplete: "",
+      spAutocomplete: ctx?.serviceProviderName ?? "",
+      coAutocomplete: ctx?.companyName ?? "",
       brAutocomplete: "",
 
       manageEmployeeID: null,
@@ -1713,8 +1724,8 @@ const runFetchBR = (query: string) => {
                 {/* SP / Company / Branch */}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
 
-                  {/* SUPERADMIN ONLY — SERVICE PROVIDER */}
-                  {user?.role === "SUPERADMIN" && (
+                  {/* Service Provider - auto-filled from sidebar */}
+                  {false && (
                     <div ref={spRef} className="space-y-2 relative">
                       <Label>Service Provider *</Label>
                       <Input
@@ -1753,8 +1764,8 @@ const runFetchBR = (query: string) => {
                     </div>
                   )}
 
-                  {/* SUPERADMIN ONLY — COMPANY */}
-                  {user?.role === "SUPERADMIN" && (
+                  {/* Company - auto-filled from sidebar */}
+                  {false && (
                     <div ref={coRef} className="space-y-2 relative">
                       <Label>Company *</Label>
                       <Input

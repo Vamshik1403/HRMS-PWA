@@ -25,6 +25,7 @@ export class CreateAttendancePolicyDto {
 
   @IsOptional() @IsInt() max_ot_hours_per_day_min?: number;
 
+  @IsOptional() @IsBoolean() countWorkhoursInMinutes?: boolean;
     @IsOptional() @IsBoolean() overtimeApplicable?: boolean;
   @IsOptional() @IsInt() minOvertimeHrs?: number;
   @IsOptional() @IsInt() maxOvertimeHrs?: number;

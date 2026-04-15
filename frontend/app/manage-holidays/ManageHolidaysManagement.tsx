@@ -29,6 +29,7 @@ import { Plus, Search, Edit, Trash2 } from "lucide-react"
 import { SearchSuggestInput } from "../components/SearchSuggestInput"
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import { toast } from "sonner";
+import { getSidebarContext } from "../utils/sidebarContext";
 
 interface Holiday {
   id: string
@@ -248,10 +249,18 @@ export function ManageHolidaysManagement() {
       // 🟡 MANAGER → filter by assigned company and branch
       if (user?.role === "MANAGER" && managerData) {
         console.log("Filtering for MANAGER:", managerData);
-        const filtered = holidaysData.filter(
-          (r: any) =>
-            r.companyID === managerData.companyID
-        );
+        let filtered;
+        if (managerData.companyID) {
+          filtered = holidaysData.filter(
+            (r: any) => r.companyID === managerData.companyID
+          );
+        } else if (managerData.serviceProviderID) {
+          filtered = holidaysData.filter(
+            (r: any) => r.serviceProviderID === managerData.serviceProviderID
+          );
+        } else {
+          filtered = [];
+        }
         console.log("Manager filtered holidays:", filtered);
         setHolidays(filtered);
         return;
@@ -376,7 +385,14 @@ export function ManageHolidaysManagement() {
         branchName: empCreds.branchName || "",
       });
     } else {
-      setFormData(baseForm);
+      const ctx = getSidebarContext();
+      setFormData({
+        ...baseForm,
+        serviceProviderID: ctx?.serviceProviderID ?? undefined,
+        companyID: ctx?.companyID ?? undefined,
+        serviceProvider: ctx?.serviceProviderName ?? "",
+        companyName: ctx?.companyName ?? "",
+      });
     }
     
     setEditingHoliday(null)
@@ -570,8 +586,8 @@ export function ManageHolidaysManagement() {
                 <div className="space-y-4">
                   <h3 className="text-lg font-semibold">Organization Selection</h3>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                    {/* Service Provider - Only for SUPERADMIN */}
-                    {user?.role === "SUPERADMIN" && (
+                    {/* Service Provider - auto-filled from sidebar */}
+                    {false && (
                       <SearchSuggestInput
                         label="Service Provider"
                         placeholder="Select Service Provider"
@@ -585,8 +601,8 @@ export function ManageHolidaysManagement() {
                       />
                     )}
 
-                    {/* Company - Only for SUPERADMIN */}
-                    {user?.role === "SUPERADMIN" && (
+                    {/* Company - auto-filled from sidebar */}
+                    {false && (
                       <SearchSuggestInput
                         label="Company Name"
                         placeholder="Select Company"

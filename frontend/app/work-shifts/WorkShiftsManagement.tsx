@@ -25,6 +25,7 @@ import { Plus, Search, Edit, Trash2 } from "lucide-react";
 import { SearchSuggestInput } from "../components/SearchSuggestInput";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import { toast } from "sonner";
+import { getSidebarContext } from "../utils/sidebarContext";
 
 interface DaySchedule {
   day: string;
@@ -492,16 +493,17 @@ export function WorkShiftsManagement() {
 
 
   const resetForm = () => {
+    const ctx = getSidebarContext();
     setFormData({
-      serviceProvider: "",
-      companyName: "",
+      serviceProvider: ctx?.serviceProviderName ?? "",
+      companyName: ctx?.companyName ?? "",
       branchName: "",
       workShiftName: "",
       isFlexible: false,
       isRotating: false,
       workShiftType: "",
-      serviceProviderID: undefined,
-      companyID: undefined,
+      serviceProviderID: ctx?.serviceProviderID ?? undefined,
+      companyID: ctx?.companyID ?? undefined,
       branchesID: undefined,
       weeklySchedule: DAYS_OF_WEEK.map((day) => ({
         day,
@@ -626,8 +628,8 @@ export function WorkShiftsManagement() {
               className="space-y-6"
             >
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                {/* SUPERADMIN → Show SP + Company + Branch */}
-                {user?.role === "SUPERADMIN" && (
+                {/* SP + Company auto-filled from sidebar context */}
+                {false && (
                   <>
                     <SearchSuggestInput
                       label="Service Provider"
@@ -760,6 +762,11 @@ export function WorkShiftsManagement() {
                     </Label>
                   </div>
                 </div>
+                {formData.isFlexible && (
+                  <p className="text-xs text-amber-600 bg-amber-50 p-2 rounded">
+                    ⚠️ Flexible shifts count total working hours. Latemarks and shift timing are not bound to the employee.
+                  </p>
+                )}
                 {formData.isRotating && (
                   <p className="text-xs text-amber-600 bg-amber-50 p-2 rounded">
                     ⚠️ Rotating shifts cannot have weekly off days. Weekly off checkboxes are disabled.

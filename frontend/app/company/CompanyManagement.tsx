@@ -24,6 +24,7 @@ import {
 import { SelectTrigger, SelectValue, SelectContent, SelectItem } from "@radix-ui/react-select"
 import { Select } from "react-day-picker"
 import { toast } from "sonner"
+import { getSidebarContext } from "../utils/sidebarContext"
 
 interface Company {
   id: number
@@ -37,6 +38,8 @@ interface Company {
   address?: string
   country?: string
   state?: string
+  city?: string
+  pincode?: string
   timeZone?: string
   currency?: string
   pfNo?: string
@@ -46,6 +49,7 @@ interface Company {
   linNo?: string
   gstNo?: string
   shopRegNo?: string
+  shopRegCertHistory?: { certNo: string; effectFrom: string; _localId: string }[]
   financialYearStart?: string
   contactNo?: string
   emailAdd?: string
@@ -87,6 +91,8 @@ export function CompanyManagement() {
     address: "",
     country: "",
     state: "",
+    city: "",
+    pincode: "",
     timeZone: "",
     currency: "",
     pfNo: "",
@@ -96,6 +102,7 @@ export function CompanyManagement() {
     linNo: "",
     gstNo: "",
     shopRegNo: "",
+    shopRegCertHistory: [] as { certNo: string; effectFrom: string; _localId: string }[],
     financialYearStart: "",
     contactNo: "",
     emailAdd: "",
@@ -103,6 +110,8 @@ export function CompanyManagement() {
   })
 
   const wrapperRef = useRef<HTMLDivElement>(null)
+
+  const [stagingShopReg, setStagingShopReg] = useState({ certNo: "", effectFrom: new Date().toISOString().slice(0, 10) });
 
   // Handle PF Compliance navigation
   const handlePFCompliance = () => {
@@ -138,11 +147,20 @@ export function CompanyManagement() {
         const currentUser = users.find((u: any) => u.username === user.username)
 
         if (currentUser) {
-          const filtered = all.filter(
-            (c: any) =>
-              c.id === currentUser.companyID ||
-              c.branchesID === currentUser.branchesID
-          )
+          let filtered;
+          if (currentUser.companyID) {
+            filtered = all.filter(
+              (c: any) =>
+                c.id === currentUser.companyID ||
+                c.branchesID === currentUser.branchesID
+            )
+          } else if (currentUser.serviceProviderID) {
+            filtered = all.filter(
+              (c: any) => c.serviceProviderID === currentUser.serviceProviderID
+            )
+          } else {
+            filtered = []
+          }
           setCompanies(filtered)
           return
         }
@@ -243,6 +261,7 @@ export function CompanyManagement() {
       setIsAddingNew(false);
       setEditingCompany(null);
       toast.success("Company saved successfully");
+      window.dispatchEvent(new Event("sidebar-refresh"));
     } catch (err) {
       console.error(err);
       toast.error((err as any)?.message || "Failed to save company");
@@ -280,6 +299,7 @@ export function CompanyManagement() {
   }
 
   const resetForm = () => {
+    const ctx = getSidebarContext();
     setFormData({
       companyName: "",
       companyType: "",
@@ -288,6 +308,8 @@ export function CompanyManagement() {
       address: "",
       country: "",
       state: "",
+      city: "",
+      pincode: "",
       timeZone: "",
       currency: "",
       pfNo: "",
@@ -297,9 +319,12 @@ export function CompanyManagement() {
       linNo: "",
       gstNo: "",
       shopRegNo: "",
+      shopRegCertHistory: [],
       financialYearStart: "",
       contactNo: "",
       emailAdd: "",
+      serviceProviderID: ctx?.serviceProviderID ?? undefined,
+      autocompleteName: ctx?.serviceProviderName ?? "",
     })
     setLogoFile(null)
     setSignatureFile(null)
@@ -378,8 +403,8 @@ export function CompanyManagement() {
       >
         <div>
             <form onSubmit={handleSubmit} className="space-y-4">
-              {/* Company Name with Service Provider Autocomplete */}
-              <div ref={wrapperRef} className="space-y-2 relative">
+              {/* Company Name with Service Provider Autocomplete - auto-filled from sidebar */}
+              <div ref={wrapperRef} className="space-y-2 relative hidden">
                 <Label>Service Provider *</Label>
                 <Input
                   value={formData.autocompleteName || ""}
@@ -477,6 +502,17 @@ export function CompanyManagement() {
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
+                  <Label>City</Label>
+                  <Input value={formData.city || ""} onChange={(e) => setFormData((p) => ({ ...p, city: e.target.value }))} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Pincode</Label>
+                  <Input value={formData.pincode || ""} onChange={(e) => setFormData((p) => ({ ...p, pincode: e.target.value }))} />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-2">
                   <Label>Time Zone</Label>
                   <Input value={formData.timeZone || ""} onChange={(e) => setFormData((p) => ({ ...p, timeZone: e.target.value }))} />
                 </div>
@@ -497,7 +533,70 @@ export function CompanyManagement() {
 
               <div className="space-y-2">
                 <Label>Shop Registration Certificate No</Label>
-                <Input value={formData.shopRegNo || ""} onChange={(e) => setFormData((p) => ({ ...p, shopRegNo: e.target.value }))} />
+                <div className="flex items-end gap-2">
+                  <div className="flex-1">
+                    <Input
+                      placeholder="Certificate No"
+                      value={stagingShopReg.certNo}
+                      onChange={(e) => setStagingShopReg((p) => ({ ...p, certNo: e.target.value }))}
+                    />
+                  </div>
+                  <div className="w-40">
+                    <Input
+                      type="date"
+                      value={stagingShopReg.effectFrom}
+                      onChange={(e) => setStagingShopReg((p) => ({ ...p, effectFrom: e.target.value }))}
+                    />
+                  </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    disabled={!stagingShopReg.certNo.trim()}
+                    onClick={() => {
+                      const entry = { certNo: stagingShopReg.certNo.trim(), effectFrom: stagingShopReg.effectFrom, _localId: Math.random().toString(36).slice(2, 10) };
+                      setFormData((p) => ({
+                        ...p,
+                        shopRegCertHistory: [...(p.shopRegCertHistory || []), entry],
+                        shopRegNo: entry.certNo,
+                      }));
+                      setStagingShopReg({ certNo: "", effectFrom: new Date().toISOString().slice(0, 10) });
+                    }}
+                  >
+                    Add
+                  </Button>
+                </div>
+                {(formData.shopRegCertHistory || []).length > 0 && (
+                  <div className="border border-gray-200 rounded-lg overflow-hidden mt-2">
+                    <div className="bg-gray-50 px-3 py-2 text-xs font-semibold text-gray-600 uppercase tracking-wide flex">
+                      <span className="flex-1">Certificate No</span>
+                      <span className="w-32 text-center">Effect Date</span>
+                      <span className="w-10"></span>
+                    </div>
+                    {(formData.shopRegCertHistory || []).map((entry, i) => (
+                      <div
+                        key={entry._localId}
+                        className={`flex items-center px-3 py-2 text-sm ${i === (formData.shopRegCertHistory || []).length - 1 ? "bg-blue-50 font-medium" : "bg-white"} ${i > 0 ? "border-t border-gray-100" : ""}`}
+                      >
+                        <span className="flex-1">{entry.certNo}</span>
+                        <span className="w-32 text-center text-gray-500">{entry.effectFrom || "—"}</span>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            setFormData((p) => {
+                              const updated = (p.shopRegCertHistory || []).filter((x) => x._localId !== entry._localId);
+                              return { ...p, shopRegCertHistory: updated, shopRegNo: updated.length > 0 ? updated[updated.length - 1].certNo : "" };
+                            });
+                          }}
+                          className="h-6 w-6 p-0 text-red-500"
+                        >
+                          <X className="w-3 h-3" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
               <div className="space-y-2">
@@ -563,6 +662,8 @@ export function CompanyManagement() {
               <div><strong>Address:</strong> {viewCompany.address}</div>
               <div><strong>Country:</strong> {viewCompany.country}</div>
               <div><strong>State:</strong> {viewCompany.state}</div>
+              <div><strong>City:</strong> {viewCompany.city || "—"}</div>
+              <div><strong>Pincode:</strong> {viewCompany.pincode || "—"}</div>
               <div><strong>GST No:</strong> {viewCompany.gstNo}</div>
               <div><strong>Contact:</strong> {viewCompany.contactNo}</div>
               <div><strong>Email:</strong> {viewCompany.emailAdd}</div>
@@ -573,7 +674,15 @@ export function CompanyManagement() {
               <div><strong>PAN:</strong> {viewCompany.panNo}</div>
               <div><strong>ESI:</strong> {viewCompany.esiNo}</div>
               <div><strong>LIN:</strong> {viewCompany.linNo}</div>
-              <div><strong>Shop Reg:</strong> {viewCompany.shopRegNo}</div>
+              <div><strong>Shop Reg:</strong> {viewCompany.shopRegNo}
+                {(viewCompany as any).shopRegCertHistory && Array.isArray((viewCompany as any).shopRegCertHistory) && (viewCompany as any).shopRegCertHistory.length > 0 && (
+                  <div className="mt-1 text-xs text-gray-500">
+                    {(viewCompany as any).shopRegCertHistory.map((h: any, i: number) => (
+                      <div key={i}>{h.certNo} — WEF {h.effectFrom || "—"}</div>
+                    ))}
+                  </div>
+                )}
+              </div>
               <div><strong>FY Start:</strong> {viewCompany.financialYearStart}</div>
             </div>
             <div className="flex gap-4 mt-4">

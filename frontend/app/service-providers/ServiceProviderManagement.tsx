@@ -26,6 +26,9 @@ interface ServiceProvider {
   companyAddress: string
   country: string
   state: string
+  city: string
+  pincode: string
+  countryCode: string
   gstNo: string
   contactNo: string
   emailAdd: string
@@ -46,6 +49,9 @@ export function ServiceProviderManagement() {
     companyAddress: "",
     country: "",
     state: "",
+    city: "",
+    pincode: "",
+    countryCode: "",
     gstNo: "",
     contactNo: "",
     emailAdd: "",
@@ -101,6 +107,7 @@ const handleSubmit = async (e: React.FormEvent) => {
     resetForm()
     setIsDialogOpen(false)
     toast.success("Service provider saved successfully")
+    window.dispatchEvent(new Event("sidebar-refresh"))
   } catch (error) {
     console.error("Error saving service provider:", error)
     toast.error((error as any)?.message || "Failed to save service provider")
@@ -129,6 +136,9 @@ const handleSubmit = async (e: React.FormEvent) => {
       companyAddress: provider.companyAddress,
       country: provider.country,
       state: provider.state,
+      city: provider.city || "",
+      pincode: provider.pincode || "",
+      countryCode: provider.countryCode || "",
       gstNo: provider.gstNo,
       contactNo: provider.contactNo,
       emailAdd: provider.emailAdd,
@@ -150,6 +160,9 @@ const handleSubmit = async (e: React.FormEvent) => {
       companyAddress: "",
       country: "",
       state: "",
+      city: "",
+      pincode: "",
+      countryCode: "",
       gstNo: "",
       contactNo: "",
       emailAdd: "",
@@ -223,12 +236,30 @@ const handleSubmit = async (e: React.FormEvent) => {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="state">state *</Label>
+                  <Label htmlFor="state">State *</Label>
                   <Input
                     id="state"
                     value={formData.state}
                     onChange={(e) => setFormData((prev) => ({ ...prev, state: e.target.value }))}
                     required
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="city">City</Label>
+                  <Input
+                    id="city"
+                    value={formData.city}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, city: e.target.value }))}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="pincode">Pincode</Label>
+                  <Input
+                    id="pincode"
+                    value={formData.pincode}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, pincode: e.target.value }))}
                   />
                 </div>
               </div>
@@ -244,12 +275,22 @@ const handleSubmit = async (e: React.FormEvent) => {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="contactNo">Contact Number *</Label>
-                  <Input
-                    id="contactNo"
-                    value={formData.contactNo}
-                    onChange={(e) => setFormData((prev) => ({ ...prev, contactNo: e.target.value }))}
-                    required
-                  />
+                  <div className="flex gap-2">
+                    <Input
+                      id="countryCode"
+                      value={formData.countryCode}
+                      onChange={(e) => setFormData((prev) => ({ ...prev, countryCode: e.target.value }))}
+                      placeholder="+91"
+                      className="w-20 shrink-0"
+                    />
+                    <Input
+                      id="contactNo"
+                      value={formData.contactNo}
+                      onChange={(e) => setFormData((prev) => ({ ...prev, contactNo: e.target.value }))}
+                      required
+                      className="flex-1"
+                    />
+                  </div>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="emailAdd">Email Address *</Label>
@@ -294,8 +335,10 @@ const handleSubmit = async (e: React.FormEvent) => {
               <p><strong>Address:</strong> {viewProvider.companyAddress}</p>
               <p><strong>Country:</strong> {viewProvider.country}</p>
               <p><strong>State:</strong> {viewProvider.state}</p>
+              <p><strong>City:</strong> {viewProvider.city || "—"}</p>
+              <p><strong>Pincode:</strong> {viewProvider.pincode || "—"}</p>
               <p><strong>GST No:</strong> {viewProvider.gstNo}</p>
-              <p><strong>Contact:</strong> {viewProvider.contactNo}</p>
+              <p><strong>Contact:</strong> {viewProvider.countryCode ? `${viewProvider.countryCode} ` : ""}{viewProvider.contactNo}</p>
               <p><strong>Email:</strong> {viewProvider.emailAdd}</p>
             </div>
           )}

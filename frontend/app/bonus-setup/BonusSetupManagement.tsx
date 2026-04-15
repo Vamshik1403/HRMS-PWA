@@ -13,6 +13,7 @@ import { Icon } from "@iconify/react";
 import { Plus, Search, Edit, Trash2 } from "lucide-react";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import { toast } from "sonner";
+import { getSidebarContext } from "../utils/sidebarContext";
 
 
 /* ---------------- API endpoints ---------------- */
@@ -170,6 +171,7 @@ const resolvedCompanyID =
         const params = new URLSearchParams();
         if (currentUserMapping.companyID) params.append('companyID', currentUserMapping.companyID.toString());
         if (currentUserMapping.branchesID) params.append('branchesID', currentUserMapping.branchesID.toString());
+        if (!currentUserMapping.companyID && currentUserMapping.serviceProviderID) params.append('serviceProviderID', currentUserMapping.serviceProviderID.toString());
         
         const queryString = params.toString();
         if (queryString) {
@@ -183,10 +185,18 @@ const resolvedCompanyID =
       // Additional client-side filtering for MANAGER role
       let filteredData = data;
       if (user?.role === "MANAGER" && currentUserMapping) {
-        filteredData = data.filter(bonus => {
-          return bonus.companyID === currentUserMapping.companyID && 
-                 bonus.branchesID === currentUserMapping.branchesID;
-        });
+        if (currentUserMapping.companyID && currentUserMapping.branchesID) {
+          filteredData = data.filter(bonus => {
+            return bonus.companyID === currentUserMapping.companyID && 
+                   bonus.branchesID === currentUserMapping.branchesID;
+          });
+        } else if (currentUserMapping.companyID) {
+          filteredData = data.filter(bonus => bonus.companyID === currentUserMapping.companyID);
+        } else if (currentUserMapping.serviceProviderID) {
+          filteredData = data.filter((bonus: any) => bonus.serviceProviderID === currentUserMapping.serviceProviderID);
+        } else {
+          filteredData = [];
+        }
       }
 
       const all = filteredData.map(mapApiToUi);
@@ -420,12 +430,13 @@ const runFetchBR = debounce(async (val: string) => {
   };
 
   const resetForm = () => {
+    const ctx = getSidebarContext();
     setFormData({
-      serviceProviderID: null,
-      companyID: null,
+      serviceProviderID: ctx?.serviceProviderID ?? null,
+      companyID: ctx?.companyID ?? null,
       branchesID: null,
-      spAutocomplete: "",
-      coAutocomplete: "",
+      spAutocomplete: ctx?.serviceProviderName ?? "",
+      coAutocomplete: ctx?.companyName ?? "",
       brAutocomplete: "",
       bonusName: "",
       bonusType: "",
@@ -466,11 +477,10 @@ const runFetchBR = debounce(async (val: string) => {
       >
             <form onSubmit={handleSubmit} className="space-y-6">
               {/* Basic Information WITH AUTOCOMPLETE */}
-              {/* SUPERADMIN → show SP + Company + Branch */}
-              {user?.role === "SUPERADMIN" && (
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  {/* Service Provider */}
-                  <div ref={spRef} className="space-y-2 relative">
+              {/* SP/Company auto-filled from sidebar, Branch always visible */}
+                <div className="grid grid-cols-1 gap-4">
+                  {/* Service Provider - auto-filled from sidebar */}
+                  <div ref={spRef} className="space-y-2 relative hidden">
                     <Label>Service Provider *</Label>
                     <Input
                       value={formData.spAutocomplete}
@@ -511,8 +521,8 @@ const runFetchBR = debounce(async (val: string) => {
                     )}
                   </div>
 
-                  {/* Company */}
-                  <div ref={coRef} className="space-y-2 relative">
+                  {/* Company - auto-filled from sidebar */}
+                  <div ref={coRef} className="space-y-2 relative hidden">
                     <Label>Company *</Label>
                     <Input
                       value={formData.coAutocomplete}
@@ -595,10 +605,9 @@ const runFetchBR = debounce(async (val: string) => {
                     )}
                   </div>
                 </div>
-              )}
 
-              {/* MANAGER → Only Branch input */}
-              {user?.role === "MANAGER" && (
+              {/* MANAGER → Only Branch input - disabled, Branch now always visible above */}
+              {false && (
                 <div className="grid grid-cols-1 gap-4">
                   <div ref={brRef} className="space-y-2 relative">
                     <Label>Branch *</Label>

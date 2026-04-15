@@ -27,6 +27,7 @@ import { Icon } from "@iconify/react"
 import { Plus, Search, Edit, Trash2, MapPin } from "lucide-react"
 import { SearchSuggestInput } from "../components/SearchSuggestInput"
 import { toast } from "sonner"
+import { getSidebarContext } from "../utils/sidebarContext"
 
 interface FieldAttendanceSchedule {
   id: string
@@ -285,9 +286,10 @@ createdAt: schedule.createdAt
   }
 
   const resetForm = () => {
+    const ctx = getSidebarContext();
     setFormData({
-      serviceProvider: "",
-      companyName: "",
+      serviceProvider: ctx?.serviceProviderName ?? "",
+      companyName: ctx?.companyName ?? "",
       branchName: "",
       employeeName: "",
       siteName: "",
@@ -296,8 +298,8 @@ createdAt: schedule.createdAt
       longitude: "",
       fromDate: "",
       toDate: "",
-      serviceProviderID: undefined,
-      companyID: undefined,
+      serviceProviderID: ctx?.serviceProviderID ?? undefined,
+      companyID: ctx?.companyID ?? undefined,
       branchesID: undefined,
       manageEmployeeID: undefined,
     })
@@ -395,6 +397,8 @@ createdAt: schedule.createdAt
                 <div className="space-y-4">
                   <h3 className="text-lg font-semibold">Organization Selection</h3>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    {/* SP + Company auto-filled from sidebar context */}
+                    {false && (<>
                     <SearchSuggestInput
                       label="Service Provider"
                       placeholder="Select Service Provider"
@@ -421,6 +425,7 @@ createdAt: schedule.createdAt
                       valueField="id"
                       required
                     />
+                    </>)}
                     <SearchSuggestInput
                       label="Branch Name"
                       placeholder="Select Branch"

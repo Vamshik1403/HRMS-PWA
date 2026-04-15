@@ -20,6 +20,7 @@ import { Plus, Search, Edit, Trash2 } from "lucide-react"
 import { SearchSuggestInput } from "../components/SearchSuggestInput"
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import { toast } from "sonner";
+import { getSidebarContext } from "../utils/sidebarContext";
 
 interface Holiday {
   id: string
@@ -309,11 +310,20 @@ const fetchBranches = async (query: string) => {
         const users = await usersRes.json();
         const currentUser = users.find((u: any) => u.username === user.username);
         if (currentUser) {
-          const filtered = mapped.filter(
-            (r: any) =>
-              r.companyID === currentUser.companyID &&
-              r.branchesID === currentUser.branchesID
-          );
+          let filtered: any[];
+          if (currentUser.companyID && currentUser.branchesID) {
+            filtered = mapped.filter(
+              (r: any) =>
+                r.companyID === currentUser.companyID &&
+                r.branchesID === currentUser.branchesID
+            );
+          } else if (currentUser.companyID) {
+            filtered = mapped.filter((r: any) => r.companyID === currentUser.companyID);
+          } else if (currentUser.serviceProviderID) {
+            filtered = mapped.filter((r: any) => r.serviceProviderID === currentUser.serviceProviderID);
+          } else {
+            filtered = [];
+          }
           setPolicies(filtered);
           return;
         }
@@ -438,12 +448,13 @@ const fetchBranches = async (query: string) => {
   }
 
   const resetForm = () => {
+    const ctx = getSidebarContext();
     setFormData({
-      serviceProviderID: 0,
-      companyID: 0,
+      serviceProviderID: ctx?.serviceProviderID ?? 0,
+      companyID: ctx?.companyID ?? 0,
       branchesID: 0,
-      serviceProvider: "",
-      companyName: "",
+      serviceProvider: ctx?.serviceProviderName ?? "",
+      companyName: ctx?.companyName ?? "",
       branchName: "",
       leavePolicyName: "",
       sickLeaveCount: 0,
@@ -575,8 +586,8 @@ const handleCompanySelect = (selected: SelectedItem) => {
               {/* Basic Information */}
 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
 
-  {/* SUPERADMIN → Show SP + Company + Branch */}
-  {user?.role === "SUPERADMIN" && (
+  {/* SP + Company auto-filled from sidebar context */}
+  {false && (
     <>
       <SearchSuggestInput
         label="Service Provider"

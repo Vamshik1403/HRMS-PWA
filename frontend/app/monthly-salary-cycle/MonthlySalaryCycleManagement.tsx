@@ -19,6 +19,7 @@ import { Icon } from "@iconify/react";
 import { Plus, Search, Edit, Trash2 } from "lucide-react";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import { toast } from "sonner";
+import { getSidebarContext } from "../utils/sidebarContext";
 
 
 interface MonthlySalaryCycle {
@@ -376,12 +377,13 @@ const runFetchBR = debounce(async (val: string) => {
   };
 
   const resetForm = () => {
+    const ctx = getSidebarContext();
     setFormData({
-      serviceProviderID: null,
-      companyID: null,
+      serviceProviderID: ctx?.serviceProviderID ?? null,
+      companyID: ctx?.companyID ?? null,
       branchesID: null,
-      spAutocomplete: "",
-      coAutocomplete: "",
+      spAutocomplete: ctx?.serviceProviderName ?? "",
+      coAutocomplete: ctx?.companyName ?? "",
       brAutocomplete: "",
       cycleName: "",
       startDayOfMonth: 1,
@@ -429,8 +431,8 @@ const runFetchBR = debounce(async (val: string) => {
               {/* Basic Information */}
               {/* Service Provider (Autocomplete) */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                {/* SUPERADMIN — Service Provider */}
-                {user?.role === "SUPERADMIN" && (
+                {/* Service Provider - auto-filled from sidebar */}
+                {false && (
                   <div ref={spRef} className="space-y-2 relative">
                     <Label>Service Provider *</Label>
                     <Input
@@ -473,8 +475,8 @@ const runFetchBR = debounce(async (val: string) => {
                   </div>
                 )}
 
-                {/* SUPERADMIN — Company */}
-                {user?.role === "SUPERADMIN" && (
+                {/* Company - auto-filled from sidebar */}
+                {false && (
                   <div ref={coRef} className="space-y-2 relative">
                     <Label>Company *</Label>
                     <Input

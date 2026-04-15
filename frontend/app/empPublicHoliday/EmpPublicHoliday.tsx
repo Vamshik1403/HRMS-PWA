@@ -180,11 +180,20 @@ export function EmpPublicHoliday() {
         const usersData = await robustGet<any[]>(`${BACKEND_URL}/users`)
         const currentUser = usersData.find((u) => u.username === user.username)
         if (currentUser) {
-          const filtered = mapped.filter(
-            (h) =>
-              h.companyID === currentUser.companyID &&
-              h.branchesID === currentUser.branchesID
-          )
+          let filtered: any[];
+          if (currentUser.companyID && currentUser.branchesID) {
+            filtered = mapped.filter(
+              (h) =>
+                h.companyID === currentUser.companyID &&
+                h.branchesID === currentUser.branchesID
+            )
+          } else if (currentUser.companyID) {
+            filtered = mapped.filter((h) => h.companyID === currentUser.companyID)
+          } else if (currentUser.serviceProviderID) {
+            filtered = mapped.filter((h: any) => h.serviceProviderID === currentUser.serviceProviderID)
+          } else {
+            filtered = []
+          }
           setPublicHolidays(filtered)
           return
         }

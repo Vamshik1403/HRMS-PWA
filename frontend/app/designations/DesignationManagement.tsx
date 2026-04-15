@@ -26,6 +26,7 @@ import { Plus, Search, Edit, Trash2, Eye, X, Save } from "lucide-react";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import { FormDrawer } from "../components/ui/form-drawer";
 import { toast } from "sonner";
+import { getSidebarContext } from "../utils/sidebarContext";
 
 // ---------------------------
 // Types aligned to backend
@@ -291,11 +292,20 @@ export function DesignationManagement() {
         const currentUser = users.find((u: any) => u.username === user.username);
 
         if (currentUser) {
-          const filtered = all.filter(
-            (r: any) =>
-              r.companyID === currentUser.companyID &&
-              r.branchesID === currentUser.branchesID
-          );
+          let filtered: any[];
+          if (currentUser.companyID && currentUser.branchesID) {
+            filtered = all.filter(
+              (r: any) =>
+                r.companyID === currentUser.companyID &&
+                r.branchesID === currentUser.branchesID
+            );
+          } else if (currentUser.companyID) {
+            filtered = all.filter((r: any) => r.companyID === currentUser.companyID);
+          } else if (currentUser.serviceProviderID) {
+            filtered = all.filter((r: any) => r.serviceProviderID === currentUser.serviceProviderID);
+          } else {
+            filtered = [];
+          }
           setRows(filtered);
           return;
         }
@@ -346,17 +356,18 @@ export function DesignationManagement() {
   // Form helpers
   // ---------------------------
   const resetForm = () => {
+    const ctx = getSidebarContext();
     setFormData({
-      serviceProviderID: null,
-      companyID: null,
+      serviceProviderID: ctx?.serviceProviderID ?? null,
+      companyID: ctx?.companyID ?? null,
       branchesID: null,
       departmentID: null,
       designation: "",
       otApplicable: "",
       noticePeriodDaysForResignation: "",
       noticePeriodDaysForTermination: "",
-      spAutocomplete: "",
-      coAutocomplete: "",
+      spAutocomplete: ctx?.serviceProviderName ?? "",
+      coAutocomplete: ctx?.companyName ?? "",
       brAutocomplete: "",
       deptAutocomplete: "",
     });
@@ -691,8 +702,8 @@ export function DesignationManagement() {
             )}
 
             <form onSubmit={handleSubmit} className="space-y-4">
-              {/* Service Provider Autocomplete */}
-              {user?.role === "SUPERADMIN" && (
+              {/* Service Provider - auto-filled from sidebar */}
+              {false && (
                 <div ref={spRef} className="space-y-2 relative">
                   <Label>Service Provider *</Label>
                   <Input
@@ -731,8 +742,8 @@ export function DesignationManagement() {
                 </div>
               )}
 
-              {/* Company Autocomplete */}
-              {user?.role === "SUPERADMIN" && (
+              {/* Company - auto-filled from sidebar */}
+              {false && (
                 <div ref={coRef} className="space-y-2 relative">
                   <Label>Company *</Label>
                   <Input

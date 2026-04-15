@@ -84,7 +84,7 @@ export default function PFCompliancePage() {
       fetchCompanies();
     } else if (currentUser?.role === "MANAGER") {
       // For MANAGER, fetch companies and auto-select their company
-      fetchCompanies().then(() => {
+      fetchCompanies().then((allCompanies) => {
         if (currentUser.companyID) {
           // Create company object from user data
           const managerCompany: Company = {
@@ -97,6 +97,10 @@ export default function PFCompliancePage() {
           // Fetch compliance and employee data for this company
           fetchCompliance(currentUser.companyID);
           fetchEmployeeCount(currentUser.companyID);
+        } else if (currentUser.serviceProviderID && allCompanies) {
+          // SP-level manager: filter companies by serviceProviderID
+          const spCompanies = allCompanies.filter((c: any) => c.serviceProviderID === currentUser.serviceProviderID);
+          setCompanies(spCompanies);
         }
         setIsInitialized(true);
       });

@@ -20,6 +20,7 @@ import { useCurrentUser } from "../hooks/useCurrentUser";
 import { useRouter } from "next/navigation";
 import { FormDrawer } from "../components/ui/form-drawer";
 import { toast } from "sonner";
+import { getSidebarContext } from "../utils/sidebarContext";
 
 // ---------------------------
 // Types aligned to backend
@@ -274,12 +275,18 @@ export function DeviceManagement() {
       try {
         const all = await fetchJSONSafe<Branch[]>(API.branches, ctrl.signal);
 
-        // 🟡 If MANAGER, filter by companyID
+        // 🟡 If MANAGER, filter by companyID or serviceProviderID
         let filtered = all || [];
-        if (user?.role === "MANAGER" && currentUserMapping?.companyID) {
-          filtered = filtered.filter(
-            (b: any) => b.companyID === currentUserMapping.companyID
-          );
+        if (user?.role === "MANAGER" && currentUserMapping) {
+          if (currentUserMapping.companyID) {
+            filtered = filtered.filter(
+              (b: any) => b.companyID === currentUserMapping.companyID
+            );
+          } else if (currentUserMapping.serviceProviderID) {
+            filtered = filtered.filter(
+              (b: any) => b.serviceProviderID === currentUserMapping.serviceProviderID
+            );
+          }
         }
 
         // 🟢 Then apply search filtering
@@ -346,6 +353,14 @@ export function DeviceManagement() {
       baseFormData.serviceProviderID = currentUserMapping.serviceProviderID;
       baseFormData.companyID = currentUserMapping.companyID;
       baseFormData.branchesID = currentUserMapping.branchesID;
+    } else if (user?.role === "SUPERADMIN") {
+      const ctx = getSidebarContext();
+      if (ctx) {
+        baseFormData.serviceProviderID = ctx.serviceProviderID;
+        baseFormData.companyID = ctx.companyID;
+        baseFormData.spAutocomplete = ctx.serviceProviderName;
+        baseFormData.coAutocomplete = ctx.companyName;
+      }
     }
 
     setFormData(baseFormData);
@@ -605,8 +620,8 @@ export function DeviceManagement() {
                 </select>
               </div>
 
-              {/* Service Provider Autocomplete - Completely hidden for MANAGER */}
-              {user?.role !== "MANAGER" && (
+              {/* Service Provider - auto-filled from sidebar */}
+              {false && (
                 <div ref={spRef} className="space-y-2 relative">
                   <Label>Service Provider *</Label>
                   <Input
@@ -649,8 +664,8 @@ export function DeviceManagement() {
                 </div>
               )}
 
-              {/* Company Autocomplete - Completely hidden for MANAGER */}
-              {user?.role !== "MANAGER" && (
+              {/* Company - auto-filled from sidebar */}
+              {false && (
                 <div ref={coRef} className="space-y-2 relative">
                   <Label>Company *</Label>
                   <Input

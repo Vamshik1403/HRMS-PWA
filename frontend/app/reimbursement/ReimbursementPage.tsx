@@ -816,11 +816,20 @@ useEffect(() => {
       const usersData = await robustGet<any[]>(`${BACKEND_URL}/users`)
       const currentUser = usersData.find((u) => u.username === user.username)
       if (currentUser) {
-        const filtered = mapped.filter(
-          (r) =>
-            r.companyID === currentUser.companyID &&
-            r.branchesID === currentUser.branchesID
-        )
+        let filtered: any[];
+        if (currentUser.companyID && currentUser.branchesID) {
+          filtered = mapped.filter(
+            (r) =>
+              r.companyID === currentUser.companyID &&
+              r.branchesID === currentUser.branchesID
+          )
+        } else if (currentUser.companyID) {
+          filtered = mapped.filter((r) => r.companyID === currentUser.companyID)
+        } else if (currentUser.serviceProviderID) {
+          filtered = mapped.filter((r: any) => r.serviceProviderID === currentUser.serviceProviderID)
+        } else {
+          filtered = []
+        }
         setReimbursements(filtered)
         return
       }

@@ -28,6 +28,7 @@ import { Plus, Search, Edit, Trash2, Clock, Check, X } from "lucide-react"
 import { SearchSuggestInput } from "../components/SearchSuggestInput"
 import { useCurrentUser } from "../hooks/useCurrentUser"
 import { toast } from "sonner";
+import { getSidebarContext } from "../utils/sidebarContext";
 
 interface AttendanceRegularisation {
   id: string
@@ -205,9 +206,18 @@ export function AttendanceRegularisationManagement() {
 
       // MANAGER → only mapped branches (filtered by search)
       if (user?.role === "MANAGER" && managerData) {
-        const filteredByCompany = data.filter(
-          (item: any) => item.companyID === managerData.companyID
-        )
+        let filteredByCompany;
+        if (managerData.companyID) {
+          filteredByCompany = data.filter(
+            (item: any) => item.companyID === managerData.companyID
+          )
+        } else if (managerData.serviceProviderID) {
+          filteredByCompany = data.filter(
+            (item: any) => item.serviceProviderID === managerData.serviceProviderID
+          )
+        } else {
+          filteredByCompany = []
+        }
         return q
           ? filteredByCompany.filter((item: any) =>
               (item?.branchName || "").toLowerCase().includes(q)
@@ -257,11 +267,20 @@ export function AttendanceRegularisationManagement() {
 
       // MANAGER → only employees from same company and branch
       if (user?.role === "MANAGER" && managerData) {
-        const filtered = data.filter(
-          (item: any) => 
-            item.companyID === managerData.companyID && 
-            item.branchesID === managerData.branchesID
-        )
+        let filtered;
+        if (managerData.companyID) {
+          filtered = data.filter(
+            (item: any) => 
+              item.companyID === managerData.companyID && 
+              item.branchesID === managerData.branchesID
+          )
+        } else if (managerData.serviceProviderID) {
+          filtered = data.filter(
+            (item: any) => item.serviceProviderID === managerData.serviceProviderID
+          )
+        } else {
+          filtered = []
+        }
         return filtered
           .filter((item: any) => {
             const fullName = `${item?.employeeFirstName || ""} ${item?.employeeLastName || ""}`.trim().toLowerCase()
@@ -544,9 +563,10 @@ export function AttendanceRegularisationManagement() {
   }
 
   const resetForm = () => {
+    const ctx = getSidebarContext();
     setFormData({
-      serviceProvider: "",
-      companyName: "",
+      serviceProvider: ctx?.serviceProviderName ?? "",
+      companyName: ctx?.companyName ?? "",
       branchName: "",
       employeeName: "",
       attendanceDate: "",
@@ -557,8 +577,8 @@ export function AttendanceRegularisationManagement() {
       reason: "",
       remarks: "",
       day: "",
-      serviceProviderID: undefined,
-      companyID: undefined,
+      serviceProviderID: ctx?.serviceProviderID ?? undefined,
+      companyID: ctx?.companyID ?? undefined,
       branchesID: undefined,
       manageEmployeeID: undefined,
       overtimeApplicable: false,
@@ -686,8 +706,8 @@ export function AttendanceRegularisationManagement() {
                 <div className="space-y-4">
                   <h3 className="text-lg font-semibold">Organization Selection</h3>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                    {/* Service Provider - Hidden for non-SUPERADMIN */}
-                    {user?.role === "SUPERADMIN" && (
+                    {/* Service Provider - auto-filled from sidebar */}
+                    {false && (
                       <SearchSuggestInput
                         label="Service Provider"
                         placeholder="Select Service Provider"
@@ -703,8 +723,8 @@ export function AttendanceRegularisationManagement() {
                       />
                     )}
                     
-                    {/* Company Name - Hidden for non-SUPERADMIN */}
-                    {user?.role === "SUPERADMIN" && (
+                    {/* Company Name - auto-filled from sidebar */}
+                    {false && (
                       <SearchSuggestInput
                         label="Company Name"
                         placeholder="Select Company"

@@ -111,8 +111,26 @@ export class AuthService {
         id: user.id,
         username: user.username,
         role: user.role,
-        type: 'user'
+        type: 'user',
+        serviceProviderID: user.serviceProviderID ?? undefined,
+        companyID: user.companyID ?? undefined,
+        branchesID: user.branchesID ?? undefined,
       };
+
+      // For roles that are scoped to SP/Company/Branch, fetch relation names
+      if (user.serviceProviderID || user.companyID || user.branchesID) {
+        const fullUser = await this.prisma.user.findUnique({
+          where: { id: user.id },
+          include: {
+            serviceProvider: { select: { companyName: true } },
+            company: { select: { companyName: true } },
+            branches: { select: { branchName: true } },
+          },
+        });
+        if (fullUser?.serviceProvider) userData.serviceProvider = fullUser.serviceProvider;
+        if (fullUser?.company) userData.company = fullUser.company;
+        if (fullUser?.branches) userData.branches = fullUser.branches;
+      }
     } else {
       // Employee user
       payload = {

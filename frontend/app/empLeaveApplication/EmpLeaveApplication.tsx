@@ -224,11 +224,20 @@ export function EmpLeaveApplication() {
         const usersData = await fetch(`${BACKEND_URL}/users`).then((r) => r.json())
         const currentUser = usersData.find((u: any) => u.username === user.username)
         if (currentUser) {
-          const filtered = mapped.filter(
-            (a) =>
-              a.companyID === currentUser.companyID &&
-              a.branchesID === currentUser.branchesID
-          )
+          let filtered: any[];
+          if (currentUser.companyID && currentUser.branchesID) {
+            filtered = mapped.filter(
+              (a) =>
+                a.companyID === currentUser.companyID &&
+                a.branchesID === currentUser.branchesID
+            )
+          } else if (currentUser.companyID) {
+            filtered = mapped.filter((a) => a.companyID === currentUser.companyID)
+          } else if (currentUser.serviceProviderID) {
+            filtered = mapped.filter((a: any) => a.serviceProviderID === currentUser.serviceProviderID)
+          } else {
+            filtered = []
+          }
           setLeaveApplications(filtered)
           return
         }

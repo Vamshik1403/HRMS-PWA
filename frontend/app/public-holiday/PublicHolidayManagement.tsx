@@ -29,6 +29,7 @@ import { Icon } from "@iconify/react"
 import { Plus, Search, Edit, Trash2 } from "lucide-react"
 import { SearchSuggestInput } from "../components/SearchSuggestInput"
 import { toast } from "sonner";
+import { getSidebarContext } from "../utils/sidebarContext";
 
 interface PublicHoliday {
   id: string
@@ -323,10 +324,18 @@ export function PublicHolidayManagement() {
       }
 
       if (user?.role === "MANAGER") {
-        const filtered = mapped.filter(
-          (h) =>
-            h.companyID === managerData?.companyID
-        )
+        let filtered: any[];
+        if (managerData?.companyID) {
+          filtered = mapped.filter(
+            (h) => h.companyID === managerData?.companyID
+          );
+        } else if (managerData?.serviceProviderID) {
+          filtered = mapped.filter(
+            (h: any) => h.serviceProviderID === managerData?.serviceProviderID
+          );
+        } else {
+          filtered = [];
+        }
         setPublicHolidays(filtered)
         return
       }
@@ -542,7 +551,14 @@ export function PublicHolidayManagement() {
         branchName: empCreds.branchName || "",
       });
     } else {
-      setFormData(baseForm);
+      const ctx = getSidebarContext();
+      setFormData({
+        ...baseForm,
+        serviceProviderID: ctx?.serviceProviderID ?? undefined,
+        companyID: ctx?.companyID ?? undefined,
+        serviceProvider: ctx?.serviceProviderName ?? "",
+        companyName: ctx?.companyName ?? "",
+      });
     }
     
     setEditingHoliday(null)
@@ -605,8 +621,8 @@ export function PublicHolidayManagement() {
               <div className="space-y-4">
                 <h3 className="text-lg font-semibold">Organization Selection</h3>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  {/* Service Provider - Only for SUPERADMIN */}
-                  {user?.role === "SUPERADMIN" && (
+                  {/* Service Provider - auto-filled from sidebar */}
+                  {false && (
                     <SearchSuggestInput 
                       label="Service Provider" 
                       placeholder="Select Service Provider" 
@@ -619,8 +635,8 @@ export function PublicHolidayManagement() {
                     />
                   )}
 
-                  {/* Company - Only for SUPERADMIN */}
-                  {user?.role === "SUPERADMIN" && (
+                  {/* Company - auto-filled from sidebar */}
+                  {false && (
                     <SearchSuggestInput 
                       label="Company Name" 
                       placeholder="Select Company" 

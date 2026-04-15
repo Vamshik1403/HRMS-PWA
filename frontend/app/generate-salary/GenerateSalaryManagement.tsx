@@ -14,6 +14,7 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { useCurrentUser } from "../hooks/useCurrentUser"
 import { toast } from "sonner";
+import { getSidebarContext } from "../utils/sidebarContext";
 
 /* =======================
    Types (aligned to API)
@@ -1619,11 +1620,20 @@ export function GenerateSalaryManagement() {
         const users = await robustGet(API.users)
         const currentUser = users.find((u: any) => u.username === user.username)
         if (currentUser) {
-          const filtered = allItems.filter(
-            (r) =>
-              r.companyID === currentUser.companyID &&
-              r.branchesID === currentUser.branchesID
-          )
+          let filtered: any[];
+          if (currentUser.companyID && currentUser.branchesID) {
+            filtered = allItems.filter(
+              (r) =>
+                r.companyID === currentUser.companyID &&
+                r.branchesID === currentUser.branchesID
+            )
+          } else if (currentUser.companyID) {
+            filtered = allItems.filter((r) => r.companyID === currentUser.companyID)
+          } else if (currentUser.serviceProviderID) {
+            filtered = allItems.filter((r: any) => r.serviceProviderID === currentUser.serviceProviderID)
+          } else {
+            filtered = []
+          }
           setItems(filtered)
           return
         }
@@ -1776,12 +1786,13 @@ export function GenerateSalaryManagement() {
   }
 
   function resetForm() {
+    const ctx = getSidebarContext();
     const baseForm: FormData = {
-      serviceProviderID: null,
-      companyID: null,
+      serviceProviderID: ctx?.serviceProviderID ?? null,
+      companyID: ctx?.companyID ?? null,
       branchesID: null,
-      spAutocomplete: "",
-      coAutocomplete: "",
+      spAutocomplete: ctx?.serviceProviderName ?? "",
+      coAutocomplete: ctx?.companyName ?? "",
       brAutocomplete: "",
       employeeDbID: null,
       employeeAutocomplete: "",
@@ -2560,8 +2571,8 @@ export function GenerateSalaryManagement() {
                 <div className="space-y-4">
                   <h3 className="text-lg font-semibold">Organization Selection</h3>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                    {/* Service Provider - Only for SUPERADMIN */}
-                    {user?.role === "SUPERADMIN" && (
+                    {/* Service Provider - auto-filled from sidebar */}
+                    {false && (
                       <div ref={spRef} className="space-y-2 relative">
                         <Label>Service Provider *</Label>
                         <Input
@@ -2615,8 +2626,8 @@ export function GenerateSalaryManagement() {
                       </div>
                     )}
 
-                    {/* Company - ONLY for SUPERADMIN */}
-                    {user?.role === "SUPERADMIN" && (
+                    {/* Company - auto-filled from sidebar */}
+                    {false && (
                       <div ref={coRef} className="space-y-2 relative">
                         <Label>Company Name *</Label>
                         <Input

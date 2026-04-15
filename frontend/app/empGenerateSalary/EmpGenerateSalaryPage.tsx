@@ -13,6 +13,7 @@ import { Plus, Search, Edit, Trash2, Download } from "lucide-react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { useCurrentUser } from "../hooks/useCurrentUser"
+import { getSidebarContext } from "../utils/sidebarContext";
 
 
 /* =======================
@@ -1290,11 +1291,20 @@ const canManage = user?.role === "SUPERADMIN" || user?.role === "MANAGER" || use
       const users = await robustGet(`${BACKEND_URL}/users`)
       const currentUser = users.find((u: any) => u.username === user.username)
       if (currentUser) {
-        const filtered = allItems.filter(
-          (r) =>
-            r.companyID === currentUser.companyID &&
-            r.branchesID === currentUser.branchesID
-        )
+        let filtered: any[];
+        if (currentUser.companyID && currentUser.branchesID) {
+          filtered = allItems.filter(
+            (r) =>
+              r.companyID === currentUser.companyID &&
+              r.branchesID === currentUser.branchesID
+          )
+        } else if (currentUser.companyID) {
+          filtered = allItems.filter((r) => r.companyID === currentUser.companyID)
+        } else if (currentUser.serviceProviderID) {
+          filtered = allItems.filter((r: any) => r.serviceProviderID === currentUser.serviceProviderID)
+        } else {
+          filtered = []
+        }
         setItems(filtered)
         return
       }
@@ -1372,12 +1382,13 @@ useEffect(() => {
   }
 
   function resetForm() {
+    const ctx = getSidebarContext();
     setFormData({
-      serviceProviderID: null,
-      companyID: null,
+      serviceProviderID: ctx?.serviceProviderID ?? null,
+      companyID: ctx?.companyID ?? null,
       branchesID: null,
-      spAutocomplete: "",
-      coAutocomplete: "",
+      spAutocomplete: ctx?.serviceProviderName ?? "",
+      coAutocomplete: ctx?.companyName ?? "",
       brAutocomplete: "",
       employeeDbID: null,
       employeeAutocomplete: "",

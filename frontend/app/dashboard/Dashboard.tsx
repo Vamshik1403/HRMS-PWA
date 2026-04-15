@@ -35,6 +35,7 @@ interface AttendanceLog {
 
 interface Department {
   id: number;
+  serviceProviderID?: number;
   companyID: number;
   branchesID: number;
   departmentName?: string | null;
@@ -166,16 +167,32 @@ export default function DashboardPage() {
         scopedEmployees = allEmployees;
         scopedDepartments = allDepartments;
       } else if ((user!.role === "MANAGER" || user!.role === "COMPANY_ADMIN") && currentUserMapping) {
-        scopedEmployees = allEmployees.filter(
-          (e) =>
-            e.companyID === currentUserMapping.companyID &&
-            e.branchesID === currentUserMapping.branchesID
-        );
-        scopedDepartments = allDepartments.filter(
-          (d) =>
-            d.companyID === currentUserMapping.companyID &&
-            d.branchesID === currentUserMapping.branchesID
-        );
+        if (currentUserMapping.companyID && currentUserMapping.branchesID) {
+          scopedEmployees = allEmployees.filter(
+            (e) =>
+              e.companyID === currentUserMapping.companyID &&
+              e.branchesID === currentUserMapping.branchesID
+          );
+          scopedDepartments = allDepartments.filter(
+            (d) =>
+              d.companyID === currentUserMapping.companyID &&
+              d.branchesID === currentUserMapping.branchesID
+          );
+        } else if (currentUserMapping.companyID) {
+          scopedEmployees = allEmployees.filter(
+            (e) => e.companyID === currentUserMapping.companyID
+          );
+          scopedDepartments = allDepartments.filter(
+            (d) => d.companyID === currentUserMapping.companyID
+          );
+        } else if (currentUserMapping.serviceProviderID) {
+          scopedEmployees = allEmployees.filter(
+            (e) => e.serviceProviderID === currentUserMapping.serviceProviderID
+          );
+          scopedDepartments = allDepartments.filter(
+            (d) => d.serviceProviderID === currentUserMapping.serviceProviderID
+          );
+        }
       } else if (user!.role === "EMPLOYEE") {
         scopedEmployees = allEmployees.filter(
           (e) =>
@@ -384,6 +401,24 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-5">
+      {/* Create Company Card - SUPERADMIN only */}
+      {user?.role === "SUPERADMIN" && (
+        <section className={`${cardShell} p-6 sm:p-7`}>
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-lg font-bold text-gray-900 tracking-tight">Quick Actions</h2>
+              <p className="text-sm text-gray-500 mt-1">Manage your organization</p>
+            </div>
+            <Link
+              href="/company"
+              className="inline-flex items-center gap-2 px-4 py-2.5 bg-[#4f46e5] text-white text-sm font-medium rounded-lg hover:bg-[#4338ca] transition-colors shadow-sm"
+            >
+              <Icon icon="mdi:plus" className="w-4 h-4" />
+              Create Company
+            </Link>
+          </div>
+        </section>
+      )}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 items-start">
         <div className="lg:col-span-2 space-y-5">
           <section className={`${cardShell} p-6 sm:p-7`}>

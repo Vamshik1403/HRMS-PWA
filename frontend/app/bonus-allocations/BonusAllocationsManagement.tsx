@@ -287,13 +287,27 @@ export function BonusAllocationsManagement() {
       // Additional client-side filtering for MANAGER role
       let filteredData = data;
       if (user?.role === "MANAGER" && currentUserMapping) {
-        filteredData = data.filter(allocation => {
-          const allocationCompanyID = allocation.bonusSetup?.companyID;
-          const allocationBranchesID = allocation.bonusSetup?.branchesID;
-          
-          return allocationCompanyID === currentUserMapping.companyID && 
-                 allocationBranchesID === currentUserMapping.branchesID;
-        });
+        if (currentUserMapping.companyID && currentUserMapping.branchesID) {
+          filteredData = data.filter(allocation => {
+            const allocationCompanyID = allocation.bonusSetup?.companyID;
+            const allocationBranchesID = allocation.bonusSetup?.branchesID;
+            
+            return allocationCompanyID === currentUserMapping.companyID && 
+                   allocationBranchesID === currentUserMapping.branchesID;
+          });
+        } else if (currentUserMapping.companyID) {
+          filteredData = data.filter(allocation => {
+            const allocationCompanyID = allocation.bonusSetup?.companyID;
+            return allocationCompanyID === currentUserMapping.companyID;
+          });
+        } else if (currentUserMapping.serviceProviderID) {
+          filteredData = data.filter((allocation: any) => {
+            const allocationSPID = allocation.bonusSetup?.serviceProviderID;
+            return allocationSPID === currentUserMapping.serviceProviderID;
+          });
+        } else {
+          filteredData = [];
+        }
       }
 
       const all = filteredData.map((x) => ({

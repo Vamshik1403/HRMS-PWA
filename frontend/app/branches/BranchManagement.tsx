@@ -22,6 +22,7 @@ import {
 } from "../components/ui/dropdown-menu";
 import { FormDrawer } from "../components/ui/form-drawer";
 import { toast } from "sonner";
+import { getSidebarContext } from "../utils/sidebarContext";
 
 // ---------------------------
 // Types aligned to backend
@@ -54,6 +55,8 @@ interface BranchRead {
   address?: string | null;
   country?: string | null;
   state?: string | null;
+  city?: string | null;
+  pincode?: string | null;
   timeZone?: string | null;
   currency?: string | null;
   pfNo?: string | null;
@@ -62,6 +65,7 @@ interface BranchRead {
   linNo?: string | null;
   gstNo?: string | null;
   shopRegNo?: string | null;
+  shopRegCertHistory?: { certNo: string; effectFrom: string; _localId: string }[] | null;
   contactNo?: string | null;
   emailAdd?: string | null;
   companyLogoUrl?: string | null;
@@ -152,6 +156,8 @@ export function BranchManagement() {
     address: "",
     country: "",
     state: "",
+    city: "",
+    pincode: "",
     timeZone: "",
     currency: "",
     pfNo: "",
@@ -160,6 +166,7 @@ export function BranchManagement() {
     linNo: "",
     gstNo: "",
     shopRegNo: "",
+    shopRegCertHistory: [] as { certNo: string; effectFrom: string; _localId: string }[],
     contactNo: "",
     emailAdd: "",
     companyLogoUrl: "",
@@ -174,6 +181,8 @@ export function BranchManagement() {
 
   // Track original bank IDs on edit to compute deletions
   const [originalBankIds, setOriginalBankIds] = useState<ID[]>([]);
+
+  const [stagingShopReg, setStagingShopReg] = useState({ certNo: "", effectFrom: new Date().toISOString().slice(0, 10) });
 
   // Handle PT Compliance navigation
   const handlePTCompliance = () => {
@@ -201,11 +210,24 @@ export function BranchManagement() {
         setCurrentUserMapping(currentUser);
 
         if (user?.role === "MANAGER" || user?.role === "COMPANY_ADMIN") {
-          const filtered = all.filter(
-            (b: any) =>
-              b.companyID === currentUser.companyID &&
-              b.id === currentUser.branchesID
-          );
+          let filtered: any[];
+          if (currentUser.companyID && currentUser.branchesID) {
+            filtered = all.filter(
+              (b: any) =>
+                b.companyID === currentUser.companyID &&
+                b.id === currentUser.branchesID
+            );
+          } else if (currentUser.companyID) {
+            filtered = all.filter(
+              (b: any) => b.companyID === currentUser.companyID
+            );
+          } else if (currentUser.serviceProviderID) {
+            filtered = all.filter(
+              (b: any) => b.serviceProviderID === currentUser.serviceProviderID
+            );
+          } else {
+            filtered = [];
+          }
           setBranches(filtered);
         } else if (user?.role === "EMPLOYEE") {
           // For EMPLOYEE, still use credentials but store user mapping
@@ -326,6 +348,8 @@ export function BranchManagement() {
       address: "",
       country: "",
       state: "",
+      city: "",
+      pincode: "",
       timeZone: "",
       currency: "",
       pfNo: "",
@@ -334,6 +358,7 @@ export function BranchManagement() {
       linNo: "",
       gstNo: "",
       shopRegNo: "",
+      shopRegCertHistory: [],
       contactNo: "",
       emailAdd: "",
       companyLogoUrl: "",
@@ -348,6 +373,14 @@ export function BranchManagement() {
     if ((user?.role === "MANAGER" || user?.role === "COMPANY_ADMIN") && currentUserMapping) {
       baseFormData.serviceProviderID = currentUserMapping.serviceProviderID;
       baseFormData.companyID = currentUserMapping.companyID;
+    } else if (user?.role === "SUPERADMIN") {
+      const ctx = getSidebarContext();
+      if (ctx) {
+        baseFormData.serviceProviderID = ctx.serviceProviderID;
+        baseFormData.companyID = ctx.companyID;
+        baseFormData.spAutocomplete = ctx.serviceProviderName;
+        baseFormData.coAutocomplete = ctx.companyName;
+      }
     }
 
     setFormData(baseFormData);
@@ -430,6 +463,8 @@ export function BranchManagement() {
       address: formData.address || undefined,
       country: formData.country || undefined,
       state: formData.state || undefined,
+      city: formData.city || undefined,
+      pincode: formData.pincode || undefined,
       timeZone: formData.timeZone || undefined,
       currency: formData.currency || undefined,
       pfNo: formData.pfNo || undefined,
@@ -438,6 +473,7 @@ export function BranchManagement() {
       linNo: formData.linNo || undefined,
       gstNo: formData.gstNo || undefined,
       shopRegNo: formData.shopRegNo || undefined,
+      shopRegCertHistory: formData.shopRegCertHistory && formData.shopRegCertHistory.length > 0 ? formData.shopRegCertHistory : undefined,
       contactNo: formData.contactNo || undefined,
       emailAdd: formData.emailAdd || undefined,
       companyLogoUrl: formData.companyLogoUrl || undefined,
@@ -532,6 +568,8 @@ export function BranchManagement() {
       address: b.address ?? "",
       country: b.country ?? "",
       state: b.state ?? "",
+      city: b.city ?? "",
+      pincode: b.pincode ?? "",
       timeZone: b.timeZone ?? "",
       currency: b.currency ?? "",
       pfNo: b.pfNo ?? "",
@@ -540,6 +578,7 @@ export function BranchManagement() {
       linNo: b.linNo ?? "",
       gstNo: b.gstNo ?? "",
       shopRegNo: b.shopRegNo ?? "",
+      shopRegCertHistory: Array.isArray((b as any).shopRegCertHistory) ? (b as any).shopRegCertHistory : [],
       contactNo: b.contactNo ?? "",
       emailAdd: b.emailAdd ?? "",
       companyLogoUrl: b.companyLogoUrl ?? "",
@@ -685,8 +724,8 @@ export function BranchManagement() {
             )}
 
             <form onSubmit={handleSubmit} className="space-y-4">
-              {/* Service Provider Autocomplete - Completely hidden for MANAGER/COMPANY_ADMIN */}
-              {user?.role !== "MANAGER" && user?.role !== "COMPANY_ADMIN" && (
+              {/* Service Provider - auto-filled from sidebar */}
+              {false && (
                 <div ref={spRef} className="space-y-2 relative">
                   <Label>Service Provider *</Label>
                   <Input
@@ -733,8 +772,8 @@ export function BranchManagement() {
                 </div>
               )}
 
-              {/* Company Autocomplete - Completely hidden for MANAGER/COMPANY_ADMIN */}
-              {user?.role !== "MANAGER" && user?.role !== "COMPANY_ADMIN" && (
+              {/* Company - auto-filled from sidebar */}
+              {false && (
                 <div ref={coRef} className="space-y-2 relative">
                   <Label>Company *</Label>
                   <Input
@@ -840,6 +879,17 @@ export function BranchManagement() {
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
+                  <Label>City</Label>
+                  <Input value={formData.city} onChange={(e) => setFormData((p) => ({ ...p, city: e.target.value }))} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Pincode</Label>
+                  <Input value={formData.pincode} onChange={(e) => setFormData((p) => ({ ...p, pincode: e.target.value }))} />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-2">
                   <Label>Time Zone</Label>
                   <Input value={formData.timeZone} onChange={(e) => setFormData((p) => ({ ...p, timeZone: e.target.value }))} />
                 </div>
@@ -855,7 +905,74 @@ export function BranchManagement() {
                 <div className="space-y-2"><Label>ESI No</Label><Input value={formData.esiNo} onChange={(e) => setFormData((p) => ({ ...p, esiNo: e.target.value }))} /></div>
                 <div className="space-y-2"><Label>LIN No</Label><Input value={formData.linNo} onChange={(e) => setFormData((p) => ({ ...p, linNo: e.target.value }))} /></div>
                 <div className="space-y-2"><Label>GST No</Label><Input value={formData.gstNo} onChange={(e) => setFormData((p) => ({ ...p, gstNo: e.target.value }))} /></div>
-                <div className="space-y-2"><Label>Shop Registration Certificate No</Label><Input value={formData.shopRegNo} onChange={(e) => setFormData((p) => ({ ...p, shopRegNo: e.target.value }))} /></div>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Shop Registration Certificate No</Label>
+                <div className="flex items-end gap-2">
+                  <div className="flex-1">
+                    <Input
+                      placeholder="Certificate No"
+                      value={stagingShopReg.certNo}
+                      onChange={(e) => setStagingShopReg((p) => ({ ...p, certNo: e.target.value }))}
+                    />
+                  </div>
+                  <div className="w-40">
+                    <Input
+                      type="date"
+                      value={stagingShopReg.effectFrom}
+                      onChange={(e) => setStagingShopReg((p) => ({ ...p, effectFrom: e.target.value }))}
+                    />
+                  </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    disabled={!stagingShopReg.certNo.trim()}
+                    onClick={() => {
+                      const entry = { certNo: stagingShopReg.certNo.trim(), effectFrom: stagingShopReg.effectFrom, _localId: Math.random().toString(36).slice(2, 10) };
+                      setFormData((p) => ({
+                        ...p,
+                        shopRegCertHistory: [...(p.shopRegCertHistory || []), entry],
+                        shopRegNo: entry.certNo,
+                      }));
+                      setStagingShopReg({ certNo: "", effectFrom: new Date().toISOString().slice(0, 10) });
+                    }}
+                  >
+                    Add
+                  </Button>
+                </div>
+                {(formData.shopRegCertHistory || []).length > 0 && (
+                  <div className="border border-gray-200 rounded-lg overflow-hidden mt-2">
+                    <div className="bg-gray-50 px-3 py-2 text-xs font-semibold text-gray-600 uppercase tracking-wide flex">
+                      <span className="flex-1">Certificate No</span>
+                      <span className="w-32 text-center">Effect Date</span>
+                      <span className="w-10"></span>
+                    </div>
+                    {(formData.shopRegCertHistory || []).map((entry, i) => (
+                      <div
+                        key={entry._localId}
+                        className={`flex items-center px-3 py-2 text-sm ${i === (formData.shopRegCertHistory || []).length - 1 ? "bg-blue-50 font-medium" : "bg-white"} ${i > 0 ? "border-t border-gray-100" : ""}`}
+                      >
+                        <span className="flex-1">{entry.certNo}</span>
+                        <span className="w-32 text-center text-gray-500">{entry.effectFrom || "—"}</span>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            setFormData((p) => {
+                              const updated = (p.shopRegCertHistory || []).filter((x) => x._localId !== entry._localId);
+                              return { ...p, shopRegCertHistory: updated, shopRegNo: updated.length > 0 ? updated[updated.length - 1].certNo : "" };
+                            });
+                          }}
+                          className="h-6 w-6 p-0 text-red-500"
+                        >
+                          <X className="w-3 h-3" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -999,6 +1116,8 @@ export function BranchManagement() {
                 <div className="p-3 bg-gray-50 rounded-lg"><strong>Address:</strong> {viewBranch.address}</div>
                 <div className="p-3 bg-gray-50 rounded-lg"><strong>Country:</strong> {viewBranch.country}</div>
                 <div className="p-3 bg-gray-50 rounded-lg"><strong>State:</strong> {viewBranch.state}</div>
+                <div className="p-3 bg-gray-50 rounded-lg"><strong>City:</strong> {viewBranch.city}</div>
+                <div className="p-3 bg-gray-50 rounded-lg"><strong>Pincode:</strong> {viewBranch.pincode}</div>
                 <div className="p-3 bg-gray-50 rounded-lg"><strong>GST No:</strong> {viewBranch.gstNo}</div>
                 <div className="p-3 bg-gray-50 rounded-lg"><strong>Contact:</strong> {viewBranch.contactNo}</div>
                 <div className="p-3 bg-gray-50 rounded-lg"><strong>Email:</strong> {viewBranch.emailAdd}</div>
@@ -1008,7 +1127,15 @@ export function BranchManagement() {
                 <div className="p-3 bg-gray-50 rounded-lg"><strong>TAN:</strong> {viewBranch.tanNo}</div>
                 <div className="p-3 bg-gray-50 rounded-lg"><strong>ESI:</strong> {viewBranch.esiNo}</div>
                 <div className="p-3 bg-gray-50 rounded-lg"><strong>LIN:</strong> {viewBranch.linNo}</div>
-                <div className="p-3 bg-gray-50 rounded-lg"><strong>Shop Reg:</strong> {viewBranch.shopRegNo}</div>
+                <div className="p-3 bg-gray-50 rounded-lg"><strong>Shop Reg:</strong> {viewBranch.shopRegNo}
+                  {(viewBranch as any).shopRegCertHistory && Array.isArray((viewBranch as any).shopRegCertHistory) && (viewBranch as any).shopRegCertHistory.length > 0 && (
+                    <div className="mt-1 text-xs text-gray-500">
+                      {(viewBranch as any).shopRegCertHistory.map((h: any, i: number) => (
+                        <div key={i}>{h.certNo} — WEF {h.effectFrom || "—"}</div>
+                      ))}
+                    </div>
+                  )}
+                </div>
                 <div className="p-3 bg-gray-50 rounded-lg"><strong>FY Start:</strong> {viewBranch.financialYearStart}</div>
               </div>
               

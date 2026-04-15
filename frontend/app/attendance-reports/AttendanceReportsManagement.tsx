@@ -721,7 +721,11 @@ export function AttendanceReportsManagement() {
     let data = [...allBranches];
 
     if (user.role === "MANAGER" && managerData) {
-      data = data.filter(b => b.companyID === managerData.companyID);
+      if (managerData.companyID) {
+        data = data.filter(b => b.companyID === managerData.companyID);
+      } else if (managerData.serviceProviderID) {
+        data = data.filter((b: any) => b.serviceProviderID === managerData.serviceProviderID);
+      }
     } else if (user.role === "EMPLOYEE" && empCreds) {
       data = data.filter(b => b.companyID === empCreds.companyID);
     } else if (user.role === "SUPERADMIN" && formData.companyID) {
@@ -797,6 +801,11 @@ export function AttendanceReportsManagement() {
       } else if (user?.role === "MANAGER" && managerData) {
         selectedCompanyID = managerData.companyID;
         selectedBranchID = managerData.branchesID;
+        if (!selectedCompanyID && managerData.serviceProviderID) {
+          const branch = allBranches.find(b => b.branchName === formData.branchName);
+          selectedCompanyID = branch?.companyID ?? null;
+          selectedBranchID = branch?.id ?? null;
+        }
       } else if (user?.role === "EMPLOYEE" && empCreds) {
         selectedCompanyID = empCreds.companyID;
         selectedBranchID = empCreds.branchesID;

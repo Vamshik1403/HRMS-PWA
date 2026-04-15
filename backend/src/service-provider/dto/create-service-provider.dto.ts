@@ -19,6 +19,18 @@ export class CreateServiceProviderDto {
 
   @IsOptional()
   @IsString()
+  city?: string;
+
+  @IsOptional()
+  @IsString()
+  pincode?: string;
+
+  @IsOptional()
+  @IsString()
+  countryCode?: string;
+
+  @IsOptional()
+  @IsString()
   gstNo?: string;
 
   @IsOptional()

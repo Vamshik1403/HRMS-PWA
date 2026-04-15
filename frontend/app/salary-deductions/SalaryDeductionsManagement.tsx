@@ -19,6 +19,7 @@ import { Icon } from "@iconify/react";
 import { Plus, Search, Edit, Trash2 } from "lucide-react";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import { toast } from "sonner";
+import { getSidebarContext } from "../utils/sidebarContext";
 
 
 interface SalaryDeduction {
@@ -420,12 +421,13 @@ const loadDeductions = async () => {
   };
 
   const resetForm = () => {
+    const ctx = getSidebarContext();
     setFormData({
-      serviceProviderID: null,
-      companyID: null,
+      serviceProviderID: ctx?.serviceProviderID ?? null,
+      companyID: ctx?.companyID ?? null,
       branchesID: null,
-      spAutocomplete: "",
-      coAutocomplete: "",
+      spAutocomplete: ctx?.serviceProviderName ?? "",
+      coAutocomplete: ctx?.companyName ?? "",
       brAutocomplete: "",
       deductionName: "",
       displayName: "",
@@ -477,8 +479,8 @@ const loadDeductions = async () => {
                 {/* Service Provider Autocomplete */}
                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
 
-  {/* SUPERADMIN → full control */}
-  {user?.role === "SUPERADMIN" && (
+  {/* SP/Company - auto-filled from sidebar */}
+  {false && (
     <>
       {/* Service Provider */}
       <div ref={spRef} className="space-y-2 relative">

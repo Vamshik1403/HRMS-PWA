@@ -9,7 +9,7 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "../components/ui/table";
 import { Badge } from "../components/ui/badge";
-import { Plus, Search, Edit, Trash2, Eye, X } from "lucide-react";
+import { Plus, Search, Edit, Trash2, Eye, EyeOff, X } from "lucide-react";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "../components/ui/select";
@@ -34,7 +34,9 @@ interface UserRow {
   branches?: { branchName?: string } | null;
 }
 
-const ROLES = ["MANAGER", "EMPLOYEE"];
+// Roles available based on the current user's role
+const SUPERADMIN_ROLES = ["SUPERADMIN", "MANAGER", "COMPANY_ADMIN", "BRANCH_ADMIN"];
+const MANAGER_ROLES = ["MANAGER", "COMPANY_ADMIN", "BRANCH_ADMIN"];
 
 export function SystemUsersManagement() {
   const user = useCurrentUser();
@@ -51,6 +53,7 @@ export function SystemUsersManagement() {
   const [editingRow, setEditingRow] = useState<UserRow | null>(null);
   const [isViewing, setIsViewing] = useState(false);
   const [viewRow, setViewRow] = useState<UserRow | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
 
   const [spList, setSpList] = useState<any[]>([]);
   const [companyList, setCompanyList] = useState<any[]>([]);
@@ -163,6 +166,7 @@ export function SystemUsersManagement() {
     setIsAddingNew(false);
     setIsViewing(false);
     setViewRow(null);
+    setShowPassword(false);
   };
 
   const handleDelete = async (id: number) => {
@@ -219,20 +223,26 @@ export function SystemUsersManagement() {
 
           <div className="space-y-2">
             <Label>{editingRow ? "New Password (leave blank to keep)" : "Password *"}</Label>
-            <Input type="password" value={form.password} onChange={(e) => setForm((p) => ({ ...p, password: e.target.value }))} placeholder={editingRow ? "Leave blank to keep current" : "Minimum 6 characters"} {...(!editingRow ? { required: true, minLength: 6 } : {})} />
+            <div className="relative">
+              <Input type={showPassword ? "text" : "password"} value={form.password} onChange={(e) => setForm((p) => ({ ...p, password: e.target.value }))} placeholder={editingRow ? "Leave blank to keep current" : "Minimum 6 characters"} className="pr-10" {...(!editingRow ? { required: true, minLength: 6 } : {})} />
+              <button type="button" onClick={() => setShowPassword((v) => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600" tabIndex={-1}>
+                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
           </div>
 
           <div className="space-y-2">
             <Label>Role</Label>
-            <Select value={form.role} onValueChange={(v) => setForm((p) => ({ ...p, role: v }))}>
+            <Select value={form.role} onValueChange={(v) => setForm((p) => ({ ...p, role: v, companyID: "", branchesID: "" }))}>
               <SelectTrigger><SelectValue placeholder="Select role…" /></SelectTrigger>
               <SelectContent>
-                {ROLES.map((r) => <SelectItem key={r} value={r}>{r}</SelectItem>)}
+                {(isSuperAdmin ? SUPERADMIN_ROLES : MANAGER_ROLES).map((r) => <SelectItem key={r} value={r}>{r === "MANAGER" ? "SERVICE PROVIDER" : r === "BRANCH_ADMIN" ? "BRANCH ADMIN" : r === "COMPANY_ADMIN" ? "COMPANY ADMIN" : r}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
 
-          {isSuperAdmin && (
+          {/* SP field: shown for MANAGER, COMPANY_ADMIN, BRANCH_ADMIN */}
+          {isSuperAdmin && (form.role === "MANAGER" || form.role === "COMPANY_ADMIN" || form.role === "BRANCH_ADMIN") && (
             <div className="space-y-2">
               <Label>Service Provider</Label>
               <Select value={String(form.serviceProviderID)} onValueChange={(v) => setForm((p) => ({ ...p, serviceProviderID: v, companyID: "", branchesID: "" }))}>
@@ -244,7 +254,8 @@ export function SystemUsersManagement() {
             </div>
           )}
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {/* Company field: shown for COMPANY_ADMIN, BRANCH_ADMIN */}
+          {(form.role === "COMPANY_ADMIN" || form.role === "BRANCH_ADMIN") && (
             <div className="space-y-2">
               <Label>Company</Label>
               <Select value={String(form.companyID)} onValueChange={(v) => setForm((p) => ({ ...p, companyID: v, branchesID: "" }))}>
@@ -254,6 +265,10 @@ export function SystemUsersManagement() {
                 </SelectContent>
               </Select>
             </div>
+          )}
+
+          {/* Branch field: shown only for BRANCH_ADMIN */}
+          {form.role === "BRANCH_ADMIN" && (
             <div className="space-y-2">
               <Label>Branch</Label>
               <Select value={String(form.branchesID)} onValueChange={(v) => setForm((p) => ({ ...p, branchesID: v }))}>
@@ -263,7 +278,7 @@ export function SystemUsersManagement() {
                 </SelectContent>
               </Select>
             </div>
-          </div>
+          )}
 
           {editingRow && (
             <div className="flex items-center gap-2">

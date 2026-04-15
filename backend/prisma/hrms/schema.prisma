@@ -29,6 +29,7 @@ model AttendancePolicy {
   checkoutGracePeriodForOvertimeTrimming Int?             @default(0)
   maxOvertimeHrs                         Int?             @default(0)
   minOvertimeHrs                         Int?             @default(0)
+  countWorkhoursInMinutes                Boolean?         @default(false)
   overtimeApplicable                     Boolean?         @default(false)
   overtimeTrimmingApply                  Boolean?         @default(false)
   breakTimeForOT                         Int?             @default(0)
@@ -95,6 +96,8 @@ model Branches {
   address                 String?                   @db.VarChar
   country                 String?                   @db.VarChar
   state                   String?                   @db.VarChar
+  city                    String?                   @db.VarChar
+  pincode                 String?                   @db.VarChar
   timeZone                String?                   @db.VarChar
   currency                String?                   @db.VarChar
   pfNo                    String?                   @db.VarChar
@@ -103,6 +106,7 @@ model Branches {
   linNo                   String?                   @db.VarChar
   gstNo                   String?                   @db.VarChar
   shopRegNo               String?                   @db.VarChar
+  shopRegCertHistory      Json?
   financialYearStart      String?                   @db.VarChar
   contactNo               String?                   @db.VarChar
   emailAdd                String?                   @db.VarChar
@@ -152,6 +156,8 @@ model Company {
   address                        String?                   @db.VarChar
   country                        String?                   @db.VarChar
   state                          String?                   @db.VarChar
+  city                           String?                   @db.VarChar
+  pincode                        String?                   @db.VarChar
   timeZone                       String?                   @db.VarChar
   currency                       String?                   @db.VarChar
   pfNo                           String?                   @db.VarChar
@@ -161,6 +167,7 @@ model Company {
   linNo                          String?                   @db.VarChar
   gstNo                          String?                   @db.VarChar
   shopRegNo                      String?                   @db.VarChar
+  shopRegCertHistory              Json?
   financialYearStart             String?                   @db.VarChar
   contactNo                      String?                   @db.VarChar
   emailAdd                       String?                   @db.VarChar
@@ -240,15 +247,20 @@ model ContractorRateCard {
   id              Int          @id @default(autoincrement())
   contractorID    Int
   contractorName  String?      @db.VarChar
+  branchName      String?      @db.VarChar
   departmentName  String?      @db.VarChar
   designation     String?      @db.VarChar
   workShiftName   String?      @db.VarChar
+  payoutType      String?      @db.VarChar
   perMinuteRate   Float?       @default(0)
   perHourRate     Float?       @default(0)
   perDayRate      Float?       @default(0)
   perMonthRate    Float?       @default(0)
   otPerMinuteRate Float?       @default(0)
   otPerHourRate   Float?       @default(0)
+  otRateMultiplier Float?     @default(0)
+  commissionType  String?      @db.VarChar
+  commissionValue Float?       @default(0)
   contractor      Contractors  @relation(fields: [contractorID], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   @@index([contractorID])
@@ -1083,6 +1095,9 @@ model ServiceProvider {
   companyAddress          String?                   @db.VarChar
   country                 String?                   @db.VarChar
   state                   String?                   @db.VarChar
+  city                    String?                   @db.VarChar
+  pincode                 String?                   @db.VarChar
+  countryCode             String?                   @db.VarChar
   gstNo                   String?                   @db.VarChar
   contactNo               String?                   @db.VarChar
   emailAdd                String?                   @db.VarChar
@@ -1641,6 +1656,7 @@ enum UserRole {
   ADMIN
   MANAGER
   COMPANY_ADMIN
+  BRANCH_ADMIN
   EXECUTIVE
   EMPLOYEE
 }
