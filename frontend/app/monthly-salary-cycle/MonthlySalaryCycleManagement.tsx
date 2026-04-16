@@ -149,15 +149,26 @@ const resolvedCompanyID =
     if (user) loadSalaryCycles();
   }, [user]);
 
+  useEffect(() => {
+    const handler = () => { if (user) loadSalaryCycles(); };
+    window.addEventListener("sidebar-context-changed", handler);
+    return () => window.removeEventListener("sidebar-context-changed", handler);
+  }, [user]);
+
   const loadSalaryCycles = async () => {
     try {
       const res = await fetch(API.salaryCycle);
       const data: ApiSalaryCycle[] = await res.json();
       const all = data.map(mapApiToUi);
 
-      // 🟢 SUPERADMIN → all
+      // 🟢 SUPERADMIN → filter by sidebar context
       if (user?.role === "SUPERADMIN") {
-        setCycles(all);
+        const ctx = getSidebarContext();
+        if (ctx?.companyID) {
+          setCycles(all.filter((r: any) => r.companyID === ctx.companyID));
+        } else {
+          setCycles(all);
+        }
         return;
       }
 

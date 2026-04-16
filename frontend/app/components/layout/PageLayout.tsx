@@ -30,7 +30,11 @@ import { usePathname, useRouter } from "next/navigation";
 import { useCurrentUser } from "../../hooks/useCurrentUser";
 import { Input } from "../ui/input";
 import { cn } from "@/app/utils/cn";
-import { setSidebarContext } from "@/app/utils/sidebarContext";
+import { setSidebarContext, getSidebarContext } from "@/app/utils/sidebarContext";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../ui/dialog";
+import { Button } from "../ui/button";
+import { Label } from "../ui/label";
+import { toast } from "sonner";
 
 interface PageLayoutProps {
   children: React.ReactNode;
@@ -87,6 +91,51 @@ export function PageLayout({ children }: PageLayoutProps) {
   const isBranchAdmin = currentUser?.role === 'BRANCH_ADMIN'
   const isRegularUser = !isSuperAdmin && !isManager && !isCompanyAdmin && !isBranchAdmin
 
+  // Profile modal state
+  const [profileOpen, setProfileOpen] = useState(false)
+  const [profileForm, setProfileForm] = useState({ username: "", password: "", confirmPassword: "" })
+  const [profileSaving, setProfileSaving] = useState(false)
+
+  const handleProfileOpen = () => {
+    setProfileForm({ username: currentUser?.username || "", password: "", confirmPassword: "" })
+    setProfileOpen(true)
+  }
+
+  const handleProfileSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (profileForm.password && profileForm.password !== profileForm.confirmPassword) {
+      toast.error("Passwords do not match")
+      return
+    }
+    if (profileForm.password && profileForm.password.length < 6) {
+      toast.error("Password must be at least 6 characters")
+      return
+    }
+    setProfileSaving(true)
+    try {
+      const payload: any = { username: profileForm.username }
+      if (profileForm.password) payload.password = profileForm.password
+      const res = await fetch(`/backend/users/${currentUser?.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      })
+      if (!res.ok) throw new Error(await res.text())
+      // Update localStorage
+      const userData = JSON.parse(localStorage.getItem("user") || "{}")
+      userData.username = profileForm.username
+      localStorage.setItem("user", JSON.stringify(userData))
+      toast.success("Profile updated successfully")
+      setProfileOpen(false)
+      // Reload to reflect changes
+      window.location.reload()
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to update profile")
+    } finally {
+      setProfileSaving(false)
+    }
+  }
+
   // Fetch service providers and companies for sidebar
   useEffect(() => {
     const fetchData = async () => {
@@ -137,6 +186,24 @@ export function PageLayout({ children }: PageLayoutProps) {
     return map
   }, [displaySPs, fetchedCompanies, isCompanyAdmin, isBranchAdmin, currentUser?.companyID])
 
+  // Auto-set sidebar context for COMPANY_ADMIN / BRANCH_ADMIN so forms can read it
+  useEffect(() => {
+    if ((isCompanyAdmin || isBranchAdmin) && currentUser?.companyID) {
+      const ctx = getSidebarContext();
+      if (!ctx || ctx.companyID !== currentUser.companyID) {
+        // Find the company and SP for this user
+        for (const sp of displaySPs) {
+          const comps = companiesBySP[sp.id] || [];
+          const comp = comps.find((c: any) => c.id === currentUser.companyID);
+          if (comp) {
+            setSidebarContext(sp.id, sp.companyName || "", comp.id, comp.companyName || "");
+            break;
+          }
+        }
+      }
+    }
+  }, [isCompanyAdmin, isBranchAdmin, currentUser?.companyID, displaySPs, companiesBySP])
+
   const toggleSection = useCallback((key: string, open: boolean) => {
     setOpenSections(prev => ({ ...prev, [key]: open }))
   }, [])
@@ -148,9 +215,18 @@ export function PageLayout({ children }: PageLayoutProps) {
     const inAdmin = ADMIN_PATHS.includes(pathname)
 
     if (inSection) {
+      const ctx = getSidebarContext();
+      const activeCompanyID = ctx?.companyID;
       for (const sp of displaySPs) {
+        if (activeCompanyID) {
+          // Only expand the SP that contains the active company
+          const spComps = companiesBySP[sp.id] || [];
+          const hasActiveCompany = spComps.some((c: any) => c.id === activeCompanyID);
+          if (!hasActiveCompany) continue;
+        }
         newOpen[`sp_${sp.id}`] = true
         for (const comp of (companiesBySP[sp.id] || [])) {
+          if (activeCompanyID && comp.id !== activeCompanyID) continue;
           newOpen[`company_${comp.id}`] = true
           if (SETUP_PATHS.includes(pathname)) newOpen[`c${comp.id}_setup`] = true
           if (EMPLOYEE_PATHS.includes(pathname)) newOpen[`c${comp.id}_employee`] = true
@@ -174,8 +250,6 @@ export function PageLayout({ children }: PageLayoutProps) {
     setOpenSections(newOpen)
   }, [pathname, displaySPs, companiesBySP])
 
-  const isActiveLink = (href: string) => pathname === href
-
   const pageTitle = (() => {
     if (pathname === "/dashboard") return "Dashboard";
     const parts = pathname.split("/").filter(Boolean);
@@ -184,22 +258,36 @@ export function PageLayout({ children }: PageLayoutProps) {
     return raw.split("-").map(s => s.charAt(0).toUpperCase() + s.slice(1)).join(" ");
   })();
 
-  const setupSectionActive = SETUP_PATHS.includes(pathname);
-  const employeeSectionActive = EMPLOYEE_PATHS.includes(pathname);
-  const payrollSectionActive = PAYROLL_PATHS.includes(pathname);
-  const salarySectionActive = SALARY_PATHS.includes(pathname);
-  const payrollPolicySectionActive = PAYROLL_POLICY_PATHS.includes(pathname);
-  const leaveSectionActive = LEAVE_PATHS.includes(pathname);
-  const attendanceSectionActive = ATTENDANCE_PATHS.includes(pathname);
-  const reportsSectionActive = REPORTS_PATHS.includes(pathname);
-  const canteenSectionActive = pathname === "/canteen" || pathname === "/canteen/setup";
-  const settingsSectionActive = SETTINGS_PATHS.includes(pathname);
+  const activeCtx = getSidebarContext();
+  const activeCompanyID = activeCtx?.companyID;
+
+  const isActiveLink = (href: string, companyId?: number) => {
+    if (pathname !== href) return false;
+    if (companyId != null && activeCompanyID != null) return companyId === activeCompanyID;
+    return true;
+  };
+
+  const isSectionActiveForCompany = (paths: string[], companyId: number) => {
+    return paths.includes(pathname) && activeCompanyID === companyId;
+  };
+
   const adminSectionActive = ADMIN_PATHS.includes(pathname);
 
   /* ── helper: render all management sections under a company ── */
   const renderCompanySections = (companyId: number, spId: number, spName: string, companyName: string) => {
     const k = (s: string) => `c${companyId}_${s}`
     const onNav = () => setSidebarContext(spId, spName, companyId, companyName)
+
+    const setupSectionActive = isSectionActiveForCompany(SETUP_PATHS, companyId);
+    const employeeSectionActive = isSectionActiveForCompany(EMPLOYEE_PATHS, companyId);
+    const payrollSectionActive = isSectionActiveForCompany(PAYROLL_PATHS, companyId);
+    const salarySectionActive = isSectionActiveForCompany(SALARY_PATHS, companyId);
+    const payrollPolicySectionActive = isSectionActiveForCompany(PAYROLL_POLICY_PATHS, companyId);
+    const leaveSectionActive = isSectionActiveForCompany(LEAVE_PATHS, companyId);
+    const attendanceSectionActive = isSectionActiveForCompany(ATTENDANCE_PATHS, companyId);
+    const reportsSectionActive = isSectionActiveForCompany(REPORTS_PATHS, companyId);
+    const canteenSectionActive = (pathname === "/canteen" || pathname === "/canteen/setup") && activeCompanyID === companyId;
+    const settingsSectionActive = isSectionActiveForCompany(SETTINGS_PATHS, companyId);
     return (
       <div className="ml-2 border-l border-[#f0f0f0] pl-1">
 
@@ -218,12 +306,12 @@ export function PageLayout({ children }: PageLayoutProps) {
             <CollapsibleContent>
               <SidebarMenuSub className="ml-5 mt-1 space-y-0.5 border-l border-[#f0f0f0] pl-3">
                 {(isSuperAdmin || isCompanyAdmin) && (
-                  <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/company" className={cn(sbSubRow, isActiveLink('/company') ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Company Profile</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
+                  <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/company" className={cn(sbSubRow, isActiveLink('/company', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Company Profile</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
                 )}
-                <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/branches" className={cn(sbSubRow, isActiveLink('/branches') ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Branches</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
-                <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/devices" className={cn(sbSubRow, isActiveLink('/devices') ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Devices</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
-                <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/contractors" className={cn(sbSubRow, isActiveLink('/contractors') ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Contractors</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
-                <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/contractor-rates" className={cn(sbSubRow, isActiveLink('/contractor-rates') ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Contractor Rates</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
+                <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/branches" className={cn(sbSubRow, isActiveLink('/branches', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Branches</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
+                <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/devices" className={cn(sbSubRow, isActiveLink('/devices', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Devices</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
+                <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/contractors" className={cn(sbSubRow, isActiveLink('/contractors', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Contractors</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
+                <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/contractor-rates" className={cn(sbSubRow, isActiveLink('/contractor-rates', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Contractor Rates</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
               </SidebarMenuSub>
             </CollapsibleContent>
           </Collapsible>
@@ -243,12 +331,12 @@ export function PageLayout({ children }: PageLayoutProps) {
             </CollapsibleTrigger>
             <CollapsibleContent>
               <SidebarMenuSub className="ml-5 mt-1 space-y-0.5 border-l border-[#f0f0f0] pl-3">
-                <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/departments" className={cn(sbSubRow, isActiveLink('/departments') ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Departments</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
-                <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/designations" className={cn(sbSubRow, isActiveLink('/designations') ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Designations</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
-                <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/manage-employees" className={cn(sbSubRow, isActiveLink('/manage-employees') ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Manage Employees</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
-                <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/employees-promotions" className={cn(sbSubRow, isActiveLink('/employees-promotions') ? sbSubActive : sbSubIdle)}><span className="font-medium" style={{ display: "block" }}>Promotions & Transfers</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
-                <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/employee-memo" className={cn(sbSubRow, isActiveLink('/employee-memo') ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Warning & Notices</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
-                <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/termination" className={cn(sbSubRow, isActiveLink('/termination') ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Off Boarding</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
+                <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/departments" className={cn(sbSubRow, isActiveLink('/departments', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Departments</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
+                <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/designations" className={cn(sbSubRow, isActiveLink('/designations', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Designations</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
+                <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/manage-employees" className={cn(sbSubRow, isActiveLink('/manage-employees', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Manage Employees</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
+                <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/employees-promotions" className={cn(sbSubRow, isActiveLink('/employees-promotions', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium" style={{ display: "block" }}>Promotions & Transfers</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
+                <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/employee-memo" className={cn(sbSubRow, isActiveLink('/employee-memo', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Warning & Notices</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
+                <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/termination" className={cn(sbSubRow, isActiveLink('/termination', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Off Boarding</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
               </SidebarMenuSub>
             </CollapsibleContent>
           </Collapsible>
@@ -268,8 +356,8 @@ export function PageLayout({ children }: PageLayoutProps) {
             </CollapsibleTrigger>
             <CollapsibleContent>
               <SidebarMenuSub className="ml-5 mt-1 space-y-0.5 border-l border-[#f0f0f0] pl-3">
-                <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/work-shifts" className={cn(sbSubRow, isActiveLink('/work-shifts') ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Work Shifts</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
-                <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/attendance-policy" className={cn(sbSubRow, isActiveLink('/attendance-policy') ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Attendance Policy</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
+                <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/work-shifts" className={cn(sbSubRow, isActiveLink('/work-shifts', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Work Shifts</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
+                <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/attendance-policy" className={cn(sbSubRow, isActiveLink('/attendance-policy', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Attendance Policy</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
               </SidebarMenuSub>
             </CollapsibleContent>
           </Collapsible>
@@ -290,11 +378,11 @@ export function PageLayout({ children }: PageLayoutProps) {
             <CollapsibleContent>
               <SidebarMenuSub className="ml-5 mt-1 space-y-0.5 border-l border-[#f0f0f0] pl-3">
                 {(isSuperAdmin || isManager || isCompanyAdmin || isBranchAdmin) && (
-                  <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/manage-holidays" className={cn(sbSubRow, isActiveLink('/manage-holidays') ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Manage Holidays</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
+                  <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/manage-holidays" className={cn(sbSubRow, isActiveLink('/manage-holidays', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Manage Holidays</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
                 )}
-                <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/public-holiday" className={cn(sbSubRow, isActiveLink('/public-holiday') ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Public Holiday</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
+                <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/public-holiday" className={cn(sbSubRow, isActiveLink('/public-holiday', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Public Holiday</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
                 {(isSuperAdmin || isManager || isCompanyAdmin || isBranchAdmin) && (
-                  <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/leave-policy" className={cn(sbSubRow, isActiveLink('/leave-policy') ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Leave Policy</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
+                  <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/leave-policy" className={cn(sbSubRow, isActiveLink('/leave-policy', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Leave Policy</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
                 )}
               </SidebarMenuSub>
             </CollapsibleContent>
@@ -315,11 +403,11 @@ export function PageLayout({ children }: PageLayoutProps) {
             </CollapsibleTrigger>
             <CollapsibleContent>
               <SidebarMenuSub className="ml-5 mt-1 space-y-0.5 border-l border-[#f0f0f0] pl-3">
-                <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/monthly-salary-cycle" className={cn(sbSubRow, isActiveLink('/monthly-salary-cycle') ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Payroll Salary Cycle</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
-                <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/salary-allowances" className={cn(sbSubRow, isActiveLink('/salary-allowances') ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Allowances</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
-                <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/salary-deductions" className={cn(sbSubRow, isActiveLink('/salary-deductions') ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Deductions</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
-                <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/monthly-pay-grade" className={cn(sbSubRow, isActiveLink('/monthly-pay-grade') ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Paygrade</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
-                <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/bonus-setup" className={cn(sbSubRow, isActiveLink('/bonus-setup') ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Bonus Rule</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
+                <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/monthly-salary-cycle" className={cn(sbSubRow, isActiveLink('/monthly-salary-cycle', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Payroll Salary Cycle</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
+                <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/salary-allowances" className={cn(sbSubRow, isActiveLink('/salary-allowances', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Allowances</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
+                <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/salary-deductions" className={cn(sbSubRow, isActiveLink('/salary-deductions', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Deductions</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
+                <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/monthly-pay-grade" className={cn(sbSubRow, isActiveLink('/monthly-pay-grade', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Paygrade</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
+                <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/bonus-setup" className={cn(sbSubRow, isActiveLink('/bonus-setup', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Bonus Rule</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
               </SidebarMenuSub>
             </CollapsibleContent>
           </Collapsible>
@@ -340,11 +428,11 @@ export function PageLayout({ children }: PageLayoutProps) {
             <CollapsibleContent>
               <SidebarMenuSub className="ml-5 mt-1 space-y-0.5 border-l border-[#f0f0f0] pl-3">
                 {(isSuperAdmin || isManager || isCompanyAdmin || isBranchAdmin) && (
-                  <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/bonus-allocations" className={cn(sbSubRow, isActiveLink('/bonus-allocations') ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Bonus Allocations</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
+                  <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/bonus-allocations" className={cn(sbSubRow, isActiveLink('/bonus-allocations', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Bonus Allocations</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
                 )}
-                <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/salary-advance" className={cn(sbSubRow, isActiveLink('/salary-advance') ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Salary Advances</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
-                <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/reimbursement" className={cn(sbSubRow, isActiveLink('/reimbursement') ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Reimbursements</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
-                <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/generate-salary" className={cn(sbSubRow, isActiveLink('/generate-salary') ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Run Payroll</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
+                <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/salary-advance" className={cn(sbSubRow, isActiveLink('/salary-advance', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Salary Advances</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
+                <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/reimbursement" className={cn(sbSubRow, isActiveLink('/reimbursement', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Reimbursements</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
+                <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/generate-salary" className={cn(sbSubRow, isActiveLink('/generate-salary', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Run Payroll</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
               </SidebarMenuSub>
             </CollapsibleContent>
           </Collapsible>
@@ -364,14 +452,14 @@ export function PageLayout({ children }: PageLayoutProps) {
             </CollapsibleTrigger>
             <CollapsibleContent>
               <SidebarMenuSub className="ml-5 mt-1 space-y-0.5 border-l border-[#f0f0f0] pl-3">
-                <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/attendance-regularisation" className={cn(sbSubRow, isActiveLink('/attendance-regularisation') ? sbSubActive : sbSubIdle)}><span className="font-medium" style={{ display: "block" }}>Attendance Regularisation</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
-                <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/field-attendance-schedule" className={cn(sbSubRow, isActiveLink('/field-attendance-schedule') ? sbSubActive : sbSubIdle)}><span className="font-medium" style={{ display: "block" }}>Field Attendance Schedule</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
+                <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/attendance-regularisation" className={cn(sbSubRow, isActiveLink('/attendance-regularisation', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium" style={{ display: "block" }}>Attendance Regularisation</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
+                <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/field-attendance-schedule" className={cn(sbSubRow, isActiveLink('/field-attendance-schedule', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium" style={{ display: "block" }}>Field Attendance Schedule</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
                 {(isSuperAdmin || isManager || isCompanyAdmin || isBranchAdmin) && (
-                  <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/roster" className={cn(sbSubRow, isActiveLink('/roster') ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Workshift Roster</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
+                  <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/roster" className={cn(sbSubRow, isActiveLink('/roster', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Workshift Roster</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
                 )}
-                <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/leave-applications" className={cn(sbSubRow, isActiveLink('/leave-applications') ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Leave Application</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
+                <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/leave-applications" className={cn(sbSubRow, isActiveLink('/leave-applications', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Leave Application</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
                 {(isSuperAdmin || isManager || isCompanyAdmin || isBranchAdmin) && (
-                  <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/privileged-leave" className={cn(sbSubRow, isActiveLink('/privileged-leave') ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Privileged Leave</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
+                  <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/privileged-leave" className={cn(sbSubRow, isActiveLink('/privileged-leave', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Privileged Leave</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
                 )}
               </SidebarMenuSub>
             </CollapsibleContent>
@@ -392,8 +480,8 @@ export function PageLayout({ children }: PageLayoutProps) {
             </CollapsibleTrigger>
             <CollapsibleContent>
               <SidebarMenuSub className="ml-5 mt-1 space-y-0.5 border-l border-[#f0f0f0] pl-3">
-                <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/canteen" className={cn(sbSubRow, isActiveLink('/canteen') ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Dashboard</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
-                <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/canteen/setup" className={cn(sbSubRow, isActiveLink('/canteen/setup') ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Configuration</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
+                <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/canteen" className={cn(sbSubRow, isActiveLink('/canteen', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Dashboard</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
+                <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/canteen/setup" className={cn(sbSubRow, isActiveLink('/canteen/setup', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Configuration</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
               </SidebarMenuSub>
             </CollapsibleContent>
           </Collapsible>
@@ -413,11 +501,11 @@ export function PageLayout({ children }: PageLayoutProps) {
             </CollapsibleTrigger>
             <CollapsibleContent>
               <SidebarMenuSub className="ml-5 mt-1 space-y-0.5 border-l border-[#f0f0f0] pl-3">
-                <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/attendance-reports" className={cn(sbSubRow, isActiveLink('/attendance-reports') ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Attendance Reports</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
-                <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/leave-reports" className={cn(sbSubRow, isActiveLink('/leave-reports') ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Leave Reports</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
-                <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/payroll-reports" className={cn(sbSubRow, isActiveLink('/payroll-reports') ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Payroll Reports</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
-                <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/canteen/reports" className={cn(sbSubRow, isActiveLink('/canteen/reports') ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Canteen Reports</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
-                <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/contractor-reports" className={cn(sbSubRow, isActiveLink('/contractor-reports') ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Contractor Reports</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
+                <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/attendance-reports" className={cn(sbSubRow, isActiveLink('/attendance-reports', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Attendance Reports</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
+                <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/leave-reports" className={cn(sbSubRow, isActiveLink('/leave-reports', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Leave Reports</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
+                <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/payroll-reports" className={cn(sbSubRow, isActiveLink('/payroll-reports', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Payroll Reports</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
+                <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/canteen/reports" className={cn(sbSubRow, isActiveLink('/canteen/reports', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Canteen Reports</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
+                <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/contractor-reports" className={cn(sbSubRow, isActiveLink('/contractor-reports', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Contractor Reports</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
               </SidebarMenuSub>
             </CollapsibleContent>
           </Collapsible>
@@ -437,7 +525,7 @@ export function PageLayout({ children }: PageLayoutProps) {
             </CollapsibleTrigger>
             <CollapsibleContent>
               <SidebarMenuSub className="ml-5 mt-1 space-y-0.5 border-l border-[#f0f0f0] pl-3">
-                <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/import-attendance" className={cn(sbSubRow, isActiveLink('/import-attendance') ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Import Attendance</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
+                <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/import-attendance" className={cn(sbSubRow, isActiveLink('/import-attendance', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Import Attendance</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
               </SidebarMenuSub>
             </CollapsibleContent>
           </Collapsible>
@@ -453,9 +541,7 @@ export function PageLayout({ children }: PageLayoutProps) {
           <SidebarHeader className="px-4 py-6 border-0">
             <div className="flex items-center justify-between">
               <Link href="/dashboard" className="flex items-center gap-3">
-                <div className="w-11 h-11 rounded-full bg-[#4f46e5] flex items-center justify-center text-white text-sm font-bold shadow-[0_6px_16px_rgba(79,70,229,0.35)] shrink-0">
-                  HR
-                </div>
+                <img src="/img/OpenHRM_Logo.png" alt="OpenHRM" className="w-11 h-11 rounded-full object-cover shrink-0 shadow-[0_6px_16px_rgba(79,70,229,0.35)]" />
                 <div className="min-w-0">
                   <span className="text-[#111827] font-bold text-sm tracking-tight block truncate">OpenHRM</span>
                   <p className="text-[11px] text-gray-400">Human resources</p>
@@ -612,19 +698,10 @@ export function PageLayout({ children }: PageLayoutProps) {
                   </div>
                 </div>
                 <div className="flex items-center justify-end gap-2 sm:gap-2 shrink-0">
-                  {(isSuperAdmin || isManager || isCompanyAdmin || isBranchAdmin) && (
-                    <Link href="/manage-employees" title="Employees" className="p-2.5 rounded-full bg-white border border-[#e8e8e8] shadow-sm text-gray-600 hover:bg-[#fafafa] hover:text-gray-900 transition-colors" aria-label="Manage employees">
-                      <Icon icon="mdi:account-group-outline" className="w-[22px] h-[22px]" />
-                    </Link>
-                  )}
-                  <Link href="/attendance-logs" title="Attendance logs" className="p-2.5 rounded-full bg-white border border-[#e8e8e8] shadow-sm text-gray-600 hover:bg-[#fafafa] hover:text-gray-900 transition-colors hidden sm:flex" aria-label="Attendance logs">
-                    <Icon icon="mdi:clipboard-text-clock-outline" className="w-[22px] h-[22px]" />
-                  </Link>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <button type="button" className="flex items-center gap-2 cursor-pointer focus:outline-none rounded-full pl-1 pr-1 py-1 hover:bg-white/80 transition-colors">
                         <Avatar className="w-10 h-10 ring-[3px] ring-white shadow-md">
-                          <AvatarImage src="" />
                           <AvatarFallback className="bg-gray-900 text-white text-sm font-bold">{currentUser?.username?.[0]?.toUpperCase() || "A"}</AvatarFallback>
                         </Avatar>
                       </button>
@@ -632,8 +709,21 @@ export function PageLayout({ children }: PageLayoutProps) {
                     <DropdownMenuContent align="end" className="w-52 rounded-2xl">
                       <div className="px-3 py-2 border-b border-gray-100">
                         <p className="text-sm font-semibold text-gray-900 truncate">{currentUser?.username || "User"}</p>
-                        <p className="text-[11px] text-gray-400 font-medium mt-0.5">{currentUser?.role || "—"}</p>
+                        <p className="text-[11px] text-gray-400 font-medium mt-0.5">{(() => {
+                          const roleMap: Record<string, string> = {
+                            SUPERADMIN: "Super Admin",
+                            MANAGER: "Manager",
+                            COMPANY_ADMIN: "Company Admin",
+                            BRANCH_ADMIN: "Branch Admin",
+                            EMPLOYEE: "Employee",
+                          };
+                          return roleMap[currentUser?.role || ""] || currentUser?.role || "—";
+                        })()}</p>
                       </div>
+                      <DropdownMenuItem className="cursor-pointer rounded-xl m-1" onClick={handleProfileOpen}>
+                        <Icon icon="mdi:account-circle-outline" className="w-4 h-4 mr-2" />
+                        User Profile
+                      </DropdownMenuItem>
                       <DropdownMenuItem className="cursor-pointer text-red-600 focus:text-red-600 rounded-xl m-1" onClick={() => {
                         localStorage.removeItem("accessToken");
                         localStorage.removeItem("user");
@@ -652,6 +742,48 @@ export function PageLayout({ children }: PageLayoutProps) {
           </div>
         </SidebarInset>
       </SidebarProvider>
+
+      {/* User Profile Modal */}
+      <Dialog open={profileOpen} onOpenChange={setProfileOpen}>
+        <DialogContent className="!w-full !max-w-md !left-1/2 !top-1/2 !-translate-x-1/2 !-translate-y-1/2 !right-auto !bottom-auto !h-auto !min-h-0 rounded-2xl">
+          <DialogHeader>
+            <DialogTitle>User Profile</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleProfileSubmit} className="space-y-4 mt-4">
+            <div className="space-y-2">
+              <Label>Username</Label>
+              <Input
+                value={profileForm.username}
+                onChange={(e) => setProfileForm(p => ({ ...p, username: e.target.value }))}
+                placeholder="Username"
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>New Password (leave blank to keep current)</Label>
+              <Input
+                type="password"
+                value={profileForm.password}
+                onChange={(e) => setProfileForm(p => ({ ...p, password: e.target.value }))}
+                placeholder="Enter new password"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Confirm Password</Label>
+              <Input
+                type="password"
+                value={profileForm.confirmPassword}
+                onChange={(e) => setProfileForm(p => ({ ...p, confirmPassword: e.target.value }))}
+                placeholder="Confirm new password"
+              />
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button type="button" variant="outline" onClick={() => setProfileOpen(false)}>Cancel</Button>
+              <Button type="submit" disabled={profileSaving}>{profileSaving ? "Saving…" : "Update"}</Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

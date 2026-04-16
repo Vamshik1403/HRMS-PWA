@@ -601,9 +601,14 @@ export function EmployeesPromotionsManagement() {
       const all = await fetchJSONSafe<EmpPromotionRow[]>(API.empPromotion);
       const list = Array.isArray(all) ? all : (all ?? []);
 
-      // 🟢 SUPERADMIN → All
+      // 🟢 SUPERADMIN → filter by sidebar context
       if (user?.role === "SUPERADMIN") {
-        setRows(list);
+        const ctx = getSidebarContext();
+        if (ctx?.companyID) {
+          setRows(list.filter((r: any) => r.companyID === ctx.companyID));
+        } else {
+          setRows(list);
+        }
         return;
       }
 
@@ -658,6 +663,12 @@ export function EmployeesPromotionsManagement() {
 
   useEffect(() => {
     if (user) fetchRows();
+  }, [user]);
+
+  useEffect(() => {
+    const handler = () => { if (user) fetchRows(); };
+    window.addEventListener("sidebar-context-changed", handler);
+    return () => window.removeEventListener("sidebar-context-changed", handler);
   }, [user]);
 
 

@@ -38,6 +38,14 @@ interface UserRow {
 const SUPERADMIN_ROLES = ["SUPERADMIN", "MANAGER", "COMPANY_ADMIN", "BRANCH_ADMIN"];
 const MANAGER_ROLES = ["MANAGER", "COMPANY_ADMIN", "BRANCH_ADMIN"];
 
+const ROLE_DISPLAY: Record<string, string> = {
+  SUPERADMIN: "SUPERADMIN",
+  MANAGER: "SERVICE PROVIDER",
+  COMPANY_ADMIN: "COMPANY ADMIN",
+  BRANCH_ADMIN: "BRANCH ADMIN",
+  EMPLOYEE: "EMPLOYEE",
+};
+
 export function SystemUsersManagement() {
   const user = useCurrentUser();
   const isSuperAdmin = user?.role === "SUPERADMIN";
@@ -300,7 +308,7 @@ export function SystemUsersManagement() {
         {viewRow && (
           <div className="space-y-3 text-sm">
             <p><strong>Username:</strong> {viewRow.username}</p>
-            <p><strong>Role:</strong> {viewRow.role}</p>
+            <p><strong>Role:</strong> {ROLE_DISPLAY[viewRow.role] || viewRow.role}</p>
             <p><strong>Service Provider:</strong> {viewRow.serviceProvider?.companyName ?? "—"}</p>
             <p><strong>Company:</strong> {viewRow.company?.companyName ?? "—"}</p>
             <p><strong>Branch:</strong> {viewRow.branches?.branchName ?? "—"}</p>
@@ -346,7 +354,7 @@ export function SystemUsersManagement() {
                     filteredRows.map((r) => (
                       <TableRow key={r.id}>
                         <TableCell className="font-medium">{r.username}</TableCell>
-                        <TableCell><Badge variant="secondary">{r.role}</Badge></TableCell>
+                        <TableCell><Badge variant="secondary">{ROLE_DISPLAY[r.role] || r.role}</Badge></TableCell>
                         <TableCell>{r.serviceProvider?.companyName ?? "—"}</TableCell>
                         <TableCell>{r.company?.companyName ?? "—"}</TableCell>
                         <TableCell>{r.branches?.branchName ?? "—"}</TableCell>
@@ -357,7 +365,9 @@ export function SystemUsersManagement() {
                           <div className="flex justify-end gap-1">
                             <Button variant="ghost" size="sm" onClick={() => { setViewRow(r); setIsViewing(true); }}><Eye className="w-4 h-4" /></Button>
                             <Button variant="ghost" size="sm" onClick={() => handleEdit(r)}><Edit className="w-4 h-4" /></Button>
-                            <Button variant="ghost" size="sm" onClick={() => handleDelete(r.id)} className="text-red-500 hover:text-red-700"><Trash2 className="w-4 h-4" /></Button>
+                            {r.role !== "SUPERADMIN" && (
+                              <Button variant="ghost" size="sm" onClick={() => handleDelete(r.id)} className="text-red-500 hover:text-red-700"><Trash2 className="w-4 h-4" /></Button>
+                            )}
                           </div>
                         </TableCell>
                       </TableRow>

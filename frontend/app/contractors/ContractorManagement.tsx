@@ -269,9 +269,14 @@ export function ContractorManagement() {
       setLoading(true);
       const all = await fetchJSONSafe<ContractorRead[]>(API.contractors);
 
-      // 🟢 SUPERADMIN → All contractors
+      // 🟢 SUPERADMIN → filter by sidebar context
       if (user?.role === "SUPERADMIN") {
-        setRows(all);
+        const ctx = getSidebarContext();
+        if (ctx?.companyID) {
+          setRows(all.filter((r: any) => r.companyID === ctx.companyID));
+        } else {
+          setRows(all);
+        }
         return;
       }
 
@@ -312,6 +317,12 @@ export function ContractorManagement() {
 
   useEffect(() => {
     if (user) fetchRows();
+  }, [user]);
+
+  useEffect(() => {
+    const handler = () => { if (user) fetchRows(); };
+    window.addEventListener("sidebar-context-changed", handler);
+    return () => window.removeEventListener("sidebar-context-changed", handler);
   }, [user]);
 
   // Fetch all companies once on component mount
@@ -558,6 +569,15 @@ export function ContractorManagement() {
   // ---------------------------
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Validation
+    const validationErrors: string[] = [];
+    if (!formData.contractorName?.trim()) validationErrors.push("Contractor Name is required");
+    if (validationErrors.length > 0) {
+      validationErrors.forEach(msg => toast.error(msg));
+      return;
+    }
+
     setSaving(true);
     setError(null);
 

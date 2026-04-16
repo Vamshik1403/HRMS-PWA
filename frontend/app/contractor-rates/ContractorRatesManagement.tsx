@@ -18,6 +18,7 @@ import { Badge } from "../components/ui/badge";
 import { Plus, Search, IndianRupee } from "lucide-react";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import { toast } from "sonner";
+import { getSidebarContext } from "../utils/sidebarContext";
 
 type ID = number;
 
@@ -151,11 +152,22 @@ export function ContractorRatesManagement() {
     loadContractors();
   }, [user, currentUserMapping]);
 
+  useEffect(() => {
+    const handler = () => { if (user) loadContractors(); };
+    window.addEventListener("sidebar-context-changed", handler);
+    return () => window.removeEventListener("sidebar-context-changed", handler);
+  }, [user, currentUserMapping]);
+
   const loadContractors = async () => {
     setLoading(true);
     try {
       let data = await fetchJSONSafe<ContractorRead[]>(API.contractors);
-      if (user?.role === "MANAGER" && currentUserMapping) {
+      if (user?.role === "SUPERADMIN") {
+        const ctx = getSidebarContext();
+        if (ctx?.companyID) {
+          data = data.filter((c) => c.companyID === ctx.companyID);
+        }
+      } else if (user?.role === "MANAGER" && currentUserMapping) {
         if (currentUserMapping.companyID) {
           data = data.filter((c) => c.companyID === currentUserMapping.companyID);
         } else if (currentUserMapping.serviceProviderID) {

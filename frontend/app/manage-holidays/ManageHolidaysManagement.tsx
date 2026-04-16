@@ -201,6 +201,12 @@ export function ManageHolidaysManagement() {
     loadHolidays() 
   }, [user, managerData, empCreds])
 
+  useEffect(() => {
+    const handler = () => { if (user) loadHolidays(); };
+    window.addEventListener("sidebar-context-changed", handler);
+    return () => window.removeEventListener("sidebar-context-changed", handler);
+  }, [user]);
+
   const loadHolidays = async () => {
     setIsLoading(true);
     try {
@@ -240,9 +246,14 @@ export function ManageHolidaysManagement() {
 
       console.log("Mapped holidays data:", holidaysData);
 
-      // 🟢 SUPERADMIN → all
+      // 🟢 SUPERADMIN → filter by sidebar context
       if (user?.role === "SUPERADMIN") {
-        setHolidays(holidaysData);
+        const ctx = getSidebarContext();
+        if (ctx?.companyID) {
+          setHolidays(holidaysData.filter((r: any) => r.companyID === ctx.companyID));
+        } else {
+          setHolidays(holidaysData);
+        }
         return;
       }
 
@@ -299,6 +310,15 @@ export function ManageHolidaysManagement() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+
+    // Validation
+    const validationErrors: string[] = []
+    if (!formData.holidayName?.trim()) validationErrors.push("Holiday Name is required")
+    if (validationErrors.length > 0) {
+      validationErrors.forEach(msg => toast.error(msg))
+      return
+    }
+
     try {
       // Determine IDs based on role
       let serviceProviderID, companyID, branchesID;
@@ -544,6 +564,9 @@ export function ManageHolidaysManagement() {
         companyIdToUse = managerData?.companyID;
       } else if (user?.role === "EMPLOYEE") {
         companyIdToUse = empCreds?.companyID;
+      } else {
+        // COMPANY_ADMIN / BRANCH_ADMIN
+        companyIdToUse = formData.companyID;
       }
 
       if (!companyIdToUse) return [];

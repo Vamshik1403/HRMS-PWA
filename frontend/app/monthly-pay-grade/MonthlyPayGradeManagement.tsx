@@ -254,8 +254,13 @@ useEffect(() => {
         }
         setPayGrades(filtered);
       } else {
-        // SUPERADMIN → see ALL
-        setPayGrades(uiRows);
+        // SUPERADMIN → filter by sidebar context
+        const ctx = getSidebarContext();
+        if (ctx?.companyID) {
+          setPayGrades(uiRows.filter((r: any) => r.companyID === ctx.companyID));
+        } else {
+          setPayGrades(uiRows);
+        }
       }
     } catch (e) {
       console.error("Monthly pay grade fetch failed", e);
@@ -264,6 +269,31 @@ useEffect(() => {
     }
   })();
 }, [user, currentUserMapping]);
+
+  useEffect(() => {
+    const handler = () => {
+      // Force re-run of the load useEffect by updating a dummy state
+      if (user) {
+        (async () => {
+          try {
+            const res = await fetch(API.mpg);
+            const data: ApiMPG[] = await res.json();
+            const uiRows = data.map(mapApiToUi);
+            const ctx = getSidebarContext();
+            if (ctx?.companyID) {
+              setPayGrades(uiRows.filter((r: any) => r.companyID === ctx.companyID));
+            } else {
+              setPayGrades(uiRows);
+            }
+          } catch (e) {
+            console.error("Monthly pay grade fetch failed", e);
+          }
+        })();
+      }
+    };
+    window.addEventListener("sidebar-context-changed", handler);
+    return () => window.removeEventListener("sidebar-context-changed", handler);
+  }, [user]);
 
       
       

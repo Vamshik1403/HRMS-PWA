@@ -136,9 +136,14 @@ export function DepartmentManagement() {
       setLoading(true);
       const all = await fetchJSONSafe<DepartmentRead[]>(API.departments);
 
-      // 🟢 SUPERADMIN → All departments
+      // 🟢 SUPERADMIN → filter by sidebar context
       if (user?.role === "SUPERADMIN") {
-        setRows(all);
+        const ctx = getSidebarContext();
+        if (ctx?.companyID) {
+          setRows(all.filter((r: any) => r.companyID === ctx.companyID));
+        } else {
+          setRows(all);
+        }
         return;
       }
 
@@ -203,6 +208,12 @@ export function DepartmentManagement() {
       fetchRows();
       fetchLookups();
     }
+  }, [user]);
+
+  useEffect(() => {
+    const handler = () => { if (user) fetchRows(); };
+    window.addEventListener("sidebar-context-changed", handler);
+    return () => window.removeEventListener("sidebar-context-changed", handler);
   }, [user]);
 
   // ---------------------------
@@ -272,11 +283,15 @@ export function DepartmentManagement() {
       try {
         const all = await fetchJSONSafe<Branch[]>(API.branches, ctrl.signal);
 
-        // 🟡 If MANAGER, filter by companyID
+        // 🟡 Filter by companyID
         let filtered = all || [];
         if (user?.role === "MANAGER" && currentUserMapping?.companyID) {
           filtered = filtered.filter(
             (b: any) => b.companyID === currentUserMapping.companyID
+          );
+        } else if (formData.companyID) {
+          filtered = filtered.filter(
+            (b: any) => b.companyID === formData.companyID
           );
         }
 
@@ -419,6 +434,15 @@ export function DepartmentManagement() {
   // ---------------------------
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Validation
+    const validationErrors: string[] = [];
+    if (!formData.departmentName?.trim()) validationErrors.push("Department Name is required");
+    if (validationErrors.length > 0) {
+      validationErrors.forEach(msg => toast.error(msg));
+      return;
+    }
+
     setSaving(true);
     setError(null);
 

@@ -17,6 +17,7 @@ import { Icon } from "@iconify/react";
 import { Plus, Search, Edit, Trash2, Play } from "lucide-react";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import { toast } from "sonner";
+import { getSidebarContext } from "../utils/sidebarContext";
 
 /* ---------------- API endpoints ---------------- */
 const API = {
@@ -257,6 +258,12 @@ export function BonusAllocationsManagement() {
     if (user) loadAllocations();
   }, [user, currentUserMapping]);
 
+  useEffect(() => {
+    const handler = () => { if (user) loadAllocations(); };
+    window.addEventListener("sidebar-context-changed", handler);
+    return () => window.removeEventListener("sidebar-context-changed", handler);
+  }, [user]);
+
   const loadAllocations = async () => {
     try {
       // Build URL with filters for MANAGER role
@@ -325,9 +332,14 @@ export function BonusAllocationsManagement() {
         branchesID: x.bonusSetup?.branchesID ?? null,
       }));
 
-      // 🟢 SUPERADMIN — show all
+      // 🟢 SUPERADMIN — filter by sidebar context
       if (user?.role === "SUPERADMIN") {
-        setAllocations(all);
+        const ctx = getSidebarContext();
+        if (ctx?.companyID) {
+          setAllocations(all.filter((r: any) => r.companyID === ctx.companyID));
+        } else {
+          setAllocations(all);
+        }
         return;
       }
 
@@ -472,7 +484,15 @@ export function BonusAllocationsManagement() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.bonusSetupID || !formData.employeeDbID) return;
+
+    // Validation
+    const validationErrors: string[] = [];
+    if (!formData.bonusSetupID) validationErrors.push("Please select a Bonus Setup");
+    if (!formData.employeeDbID) validationErrors.push("Please select an Employee");
+    if (validationErrors.length > 0) {
+      validationErrors.forEach(msg => toast.error(msg));
+      return;
+    }
 
     const payload = {
       bonusSetupID: formData.bonusSetupID,

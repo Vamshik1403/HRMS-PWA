@@ -26,6 +26,7 @@ import { Badge } from "../components/ui/badge"
 import { Icon } from "@iconify/react"
 import { Plus, Search, Trash2 } from "lucide-react"
 import { useCurrentUser } from "../hooks/useCurrentUser"
+import { getSidebarContext } from "../utils/sidebarContext"
 import { toast } from "sonner"
 
 const BACKEND_URL = "/backend"
@@ -58,11 +59,24 @@ export function EmployeeWeeklyOffManagement() {
     }
   }, [user])
 
+  useEffect(() => {
+    const handler = () => { if (user) loadWeeklyOffs(); };
+    window.addEventListener("sidebar-context-changed", handler);
+    return () => window.removeEventListener("sidebar-context-changed", handler);
+  }, [user]);
+
   const loadWeeklyOffs = async () => {
     try {
       const res = await fetch(`${BACKEND_URL}/employee-weekly-off`)
       const data = await res.json()
-      setWeeklyOffs(Array.isArray(data) ? data : [])
+      let result = Array.isArray(data) ? data : []
+      if (user?.role === "SUPERADMIN") {
+        const ctx = getSidebarContext();
+        if (ctx?.companyID) {
+          result = result.filter((r: any) => r.companyID === ctx.companyID);
+        }
+      }
+      setWeeklyOffs(result)
     } catch (err) {
       console.error("Error loading weekly offs:", err)
     }
@@ -85,6 +99,16 @@ export function EmployeeWeeklyOffManagement() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+
+    // Validation
+    const validationErrors: string[] = []
+    if (!formData.employeeID) validationErrors.push("Please select an Employee")
+    if (!formData.date) validationErrors.push("Date is required")
+    if (validationErrors.length > 0) {
+      validationErrors.forEach(msg => toast.error(msg))
+      return
+    }
+
     try {
       await fetch(`${BACKEND_URL}/employee-weekly-off`, {
         method: "POST",

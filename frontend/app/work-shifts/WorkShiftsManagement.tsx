@@ -229,6 +229,12 @@ export function WorkShiftsManagement() {
     if (user) loadWorkShifts();
   }, [user]);
 
+  useEffect(() => {
+    const handler = () => { if (user) loadWorkShifts(); };
+    window.addEventListener("sidebar-context-changed", handler);
+    return () => window.removeEventListener("sidebar-context-changed", handler);
+  }, [user]);
+
 
   const loadWorkShifts = async () => {
     try {
@@ -277,36 +283,39 @@ export function WorkShiftsManagement() {
 
       // Role-based filtering
       if (user?.role === "SUPERADMIN") {
-        setWorkShifts(mapped);
+        const ctx = getSidebarContext();
+        if (ctx?.companyID) {
+          setWorkShifts(mapped.filter((r: any) => r.companyID === ctx.companyID));
+        } else {
+          setWorkShifts(mapped);
+        }
         return;
       }
 
-      if (user?.role === "MANAGER") {
-        const usersRes = await fetch(`${BACKEND_URL}/users`);
-        const users = await usersRes.json();
-        const currentUser = users.find((u: any) => u.username === user.username);
+      // Non-SUPERADMIN: get user mapping
+      const usersRes = await fetch(`${BACKEND_URL}/users`);
+      const users = await usersRes.json();
+      const currentUser = users.find((u: any) => u.username === user?.username);
 
-        if (currentUser) {
-          const filtered = mapped.filter(
-            (s) =>
-              s.companyID === currentUser.companyID &&
-              s.branchesID === currentUser.branchesID
-          );
-          setWorkShifts(filtered);
-          return;
+      if (currentUser) {
+        let filtered: typeof mapped = [];
+        if (user?.role === "MANAGER") {
+          filtered = mapped.filter((s) => s.serviceProviderID === currentUser.serviceProviderID);
+        } else if (user?.role === "COMPANY_ADMIN") {
+          filtered = mapped.filter((s) => s.companyID === currentUser.companyID);
+        } else if (user?.role === "BRANCH_ADMIN") {
+          filtered = mapped.filter((s) => s.companyID === currentUser.companyID && s.branchesID === currentUser.branchesID);
+        } else {
+          // EMPLOYEE fallback
+          const credsRes = await fetch(`${BACKEND_URL}/manage-emp/credentials/all`);
+          const creds = await credsRes.json();
+          const emp = creds.find((c: any) => c.username === user?.username);
+          if (emp) {
+            filtered = mapped.filter((s) => s.companyID === emp.companyID && s.branchesID === emp.branchesID);
+          } else {
+            filtered = [];
+          }
         }
-      }
-
-      const credsRes = await fetch(`${BACKEND_URL}/manage-emp/credentials/all`);
-      const creds = await credsRes.json();
-      const emp = creds.find((c: any) => c.username === user?.username);
-
-      if (emp) {
-        const filtered = mapped.filter(
-          (s) =>
-            s.companyID === emp.companyID &&
-            s.branchesID === emp.branchesID
-        );
         setWorkShifts(filtered);
       } else {
         setWorkShifts([]);
@@ -429,6 +438,14 @@ export function WorkShiftsManagement() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Validation
+    const validationErrors: string[] = [];
+    if (!formData.workShiftName?.trim()) validationErrors.push("Work Shift Name is required");
+    if (validationErrors.length > 0) {
+      validationErrors.forEach(msg => toast.error(msg));
+      return;
+    }
 
     try {
       const toDateTime = (time: string) => {

@@ -170,6 +170,12 @@ useEffect(() => {
   loadDeductions();
 }, [user, currentUserMapping]);
 
+useEffect(() => {
+  const handler = () => { if (user) loadDeductions(); };
+  window.addEventListener("sidebar-context-changed", handler);
+  return () => window.removeEventListener("sidebar-context-changed", handler);
+}, [user]);
+
 
 const loadDeductions = async () => {
   try {
@@ -177,9 +183,14 @@ const loadDeductions = async () => {
     const data: ApiSalaryDeduction[] = await res.json();
     const all = data.map(mapApiToUi);
 
-    // 🟢 SUPERADMIN — all records
+    // 🟢 SUPERADMIN → filter by sidebar context
     if (user?.role === "SUPERADMIN") {
-      setDeductions(all);
+      const ctx = getSidebarContext();
+      if (ctx?.companyID) {
+        setDeductions(all.filter((r: any) => r.companyID === ctx.companyID));
+      } else {
+        setDeductions(all);
+      }
       return;
     }
 
@@ -359,6 +370,14 @@ const loadDeductions = async () => {
   // ---- CRUD ----
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Validation
+    const validationErrors: string[] = [];
+    if (!formData.deductionName?.trim()) validationErrors.push("Deduction Name is required");
+    if (validationErrors.length > 0) {
+      validationErrors.forEach(msg => toast.error(msg));
+      return;
+    }
 
     const payload = mapUiToPayload(formData);
 

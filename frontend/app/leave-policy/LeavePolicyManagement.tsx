@@ -270,6 +270,15 @@ const fetchBranches = async (query: string) => {
   }
 };
 
+  useEffect(() => {
+    if (user) loadLeavePolicies();
+  }, [user]);
+
+  useEffect(() => {
+    const handler = () => { if (user) loadLeavePolicies(); };
+    window.addEventListener("sidebar-context-changed", handler);
+    return () => window.removeEventListener("sidebar-context-changed", handler);
+  }, [user]);
 
   const loadLeavePolicies = async () => {
     try {
@@ -298,48 +307,41 @@ const fetchBranches = async (query: string) => {
         };
       });
 
-      // 🟢 SUPERADMIN → all
+      // 🟢 SUPERADMIN → filter by sidebar context
       if (user?.role === "SUPERADMIN") {
-        setPolicies(mapped);
+        const ctx = getSidebarContext();
+        if (ctx?.companyID) {
+          setPolicies(mapped.filter((r: any) => r.companyID === ctx.companyID));
+        } else {
+          setPolicies(mapped);
+        }
         return;
       }
 
-      // 🟡 MANAGER → filter by /users
-      if (user?.role === "MANAGER") {
-        const usersRes = await fetch(`${BACKEND_URL}/users`);
-        const users = await usersRes.json();
-        const currentUser = users.find((u: any) => u.username === user.username);
-        if (currentUser) {
-          let filtered: any[];
-          if (currentUser.companyID && currentUser.branchesID) {
-            filtered = mapped.filter(
-              (r: any) =>
-                r.companyID === currentUser.companyID &&
-                r.branchesID === currentUser.branchesID
-            );
-          } else if (currentUser.companyID) {
-            filtered = mapped.filter((r: any) => r.companyID === currentUser.companyID);
-          } else if (currentUser.serviceProviderID) {
-            filtered = mapped.filter((r: any) => r.serviceProviderID === currentUser.serviceProviderID);
+      // Non-SUPERADMIN: get user mapping
+      const usersRes = await fetch(`${BACKEND_URL}/users`);
+      const users = await usersRes.json();
+      const currentUser = users.find((u: any) => u.username === user?.username);
+
+      if (currentUser) {
+        let filtered: any[];
+        if (user?.role === "MANAGER") {
+          filtered = mapped.filter((r: any) => r.serviceProviderID === currentUser.serviceProviderID);
+        } else if (user?.role === "COMPANY_ADMIN") {
+          filtered = mapped.filter((r: any) => r.companyID === currentUser.companyID);
+        } else if (user?.role === "BRANCH_ADMIN") {
+          filtered = mapped.filter((r: any) => r.companyID === currentUser.companyID && r.branchesID === currentUser.branchesID);
+        } else {
+          // EMPLOYEE fallback
+          const credsRes = await fetch(`${BACKEND_URL}/manage-emp/credentials/all`);
+          const creds = await credsRes.json();
+          const emp = creds.find((c: any) => c.username === user?.username);
+          if (emp) {
+            filtered = mapped.filter((r: any) => r.companyID === emp.companyID && r.branchesID === emp.branchesID);
           } else {
             filtered = [];
           }
-          setPolicies(filtered);
-          return;
         }
-      }
-
-      // 🔵 EMPLOYEE → filter by /manage-emp/credentials/all
-      const credsRes = await fetch(`${BACKEND_URL}/manage-emp/credentials/all`);
-      const creds = await credsRes.json();
-      const emp = creds.find((c: any) => c.username === user?.username);
-
-      if (emp) {
-        const filtered = mapped.filter(
-          (r: any) =>
-            r.companyID === emp.companyID &&
-            r.branchesID === emp.branchesID
-        );
         setPolicies(filtered);
       } else {
         setPolicies([]);
@@ -371,6 +373,14 @@ const fetchBranches = async (query: string) => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+
+    // Validation
+    const validationErrors: string[] = []
+    if (!formData.leavePolicyName?.trim()) validationErrors.push("Leave Policy Name is required")
+    if (validationErrors.length > 0) {
+      validationErrors.forEach(msg => toast.error(msg))
+      return
+    }
 
     try {
       // Send selected ManageHoliday IDs to backend

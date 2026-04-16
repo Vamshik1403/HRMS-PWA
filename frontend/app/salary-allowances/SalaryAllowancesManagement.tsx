@@ -153,15 +153,26 @@ const resolvedCompanyID =
     if (user) loadAllowances();
   }, [user]);
 
+  useEffect(() => {
+    const handler = () => { if (user) loadAllowances(); };
+    window.addEventListener("sidebar-context-changed", handler);
+    return () => window.removeEventListener("sidebar-context-changed", handler);
+  }, [user]);
+
   const loadAllowances = async () => {
     try {
       const res = await fetch(API.allowance);
       const data: ApiSalaryAllowance[] = await res.json();
       const all = data.map(mapApiToUi);
 
-      // 🟢 SUPERADMIN → all
+      // 🟢 SUPERADMIN → filter by sidebar context
       if (user?.role === "SUPERADMIN") {
-        setAllowances(all);
+        const ctx = getSidebarContext();
+        if (ctx?.companyID) {
+          setAllowances(all.filter((r: any) => r.companyID === ctx.companyID));
+        } else {
+          setAllowances(all);
+        }
         return;
       }
 
@@ -337,6 +348,14 @@ const resolvedCompanyID =
   // CRUD
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Validation
+    const validationErrors: string[] = [];
+    if (!formData.allowanceName?.trim()) validationErrors.push("Allowance Name is required");
+    if (validationErrors.length > 0) {
+      validationErrors.forEach(msg => toast.error(msg));
+      return;
+    }
 
     const payload = mapUiToPayload(formData);
 

@@ -15,6 +15,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "../components/ui/select";
 import { useCurrentUser } from "../hooks/useCurrentUser";
+import { getSidebarContext } from "../utils/sidebarContext";
 import { toast } from "sonner";
 import { FormDrawer } from "../components/ui/form-drawer";
 
@@ -73,7 +74,14 @@ export function EmployeeMemoManagement() {
     try {
       const res = await fetch(API);
       const data = await res.json();
-      setRows(Array.isArray(data) ? data : data?.data ?? []);
+      let result = Array.isArray(data) ? data : data?.data ?? [];
+      if (user?.role === "SUPERADMIN") {
+        const ctx = getSidebarContext();
+        if (ctx?.companyID) {
+          result = result.filter((r: any) => r.companyID === ctx.companyID);
+        }
+      }
+      setRows(result);
     } catch {
       setRows([]);
     } finally {
@@ -82,6 +90,12 @@ export function EmployeeMemoManagement() {
   };
 
   useEffect(() => { fetchRows(); }, []);
+
+  useEffect(() => {
+    const handler = () => { fetchRows(); };
+    window.addEventListener("sidebar-context-changed", handler);
+    return () => window.removeEventListener("sidebar-context-changed", handler);
+  }, []);
 
   const runFetchEmp = (q: string) => {
     if (empTimerRef.current) clearTimeout(empTimerRef.current);

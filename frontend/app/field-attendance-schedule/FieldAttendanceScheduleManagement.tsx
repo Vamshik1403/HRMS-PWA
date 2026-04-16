@@ -122,11 +122,13 @@ export function FieldAttendanceScheduleManagement() {
       const res = await fetch(`${BACKEND_URL}/branches`, { cache: "no-store" })
       const data = await res.json()
       const q = query.toLowerCase()
-      return Array.isArray(data)
-        ? data.filter((item: any) =>
-          (item?.branchName || "").toLowerCase().includes(q)
-        )
-        : []
+      let filtered = Array.isArray(data) ? data : []
+      if (formData.companyID) {
+        filtered = filtered.filter((item: any) => item.companyID === formData.companyID)
+      }
+      return filtered.filter((item: any) =>
+        (item?.branchName || "").toLowerCase().includes(q)
+      )
     } catch (error) {
       console.error("Error fetching branches:", error)
       return []
@@ -138,8 +140,15 @@ export function FieldAttendanceScheduleManagement() {
       const res = await fetch(`${BACKEND_URL}/manage-emp`, { cache: "no-store" })
       const data = await res.json()
       const q = query.toLowerCase()
-      return Array.isArray(data)
-        ? data.filter((item: any) => {
+      let filtered = Array.isArray(data) ? data : []
+      if (formData.companyID) {
+        filtered = filtered.filter((item: any) => item.companyID === formData.companyID)
+      }
+      if (formData.branchesID) {
+        filtered = filtered.filter((item: any) => item.branchesID === formData.branchesID)
+      }
+      return filtered
+        .filter((item: any) => {
           const fullName = `${item?.employeeFirstName || ""} ${item?.employeeLastName || ""}`.trim().toLowerCase()
           const employeeId = (item?.employeeID || "").toLowerCase()
           return fullName.includes(q) || employeeId.includes(q)
@@ -147,7 +156,6 @@ export function FieldAttendanceScheduleManagement() {
           ...item,
           displayName: `${item?.employeeFirstName || ""} ${item?.employeeLastName || ""}`.trim() + (item?.employeeID ? ` (${item.employeeID})` : "")
         }))
-        : []
     } catch (error) {
       console.error("Error fetching employees:", error)
       return []
@@ -158,6 +166,12 @@ export function FieldAttendanceScheduleManagement() {
   useEffect(() => {
     loadFieldAttendanceSchedules()
   }, [])
+
+  useEffect(() => {
+    const handler = () => { loadFieldAttendanceSchedules(); };
+    window.addEventListener("sidebar-context-changed", handler);
+    return () => window.removeEventListener("sidebar-context-changed", handler);
+  }, []);
 
   const loadFieldAttendanceSchedules = async () => {
     try {
@@ -194,7 +208,12 @@ createdAt: schedule.createdAt
 
         })
       )
-      setSchedules(schedulesData)
+      let result = schedulesData;
+      const ctx = getSidebarContext();
+      if (ctx?.companyID) {
+        result = result.filter((r: any) => r.companyID === ctx.companyID);
+      }
+      setSchedules(result)
     } catch (error) {
       console.error("Error loading field attendance schedules:", error)
     }

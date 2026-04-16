@@ -1612,7 +1612,12 @@ export function GenerateSalaryManagement() {
       const allItems: GenerateSalaryRow[] = Array.isArray(raw) ? raw : (raw?.data ?? [])
 
       if (user?.role === "SUPERADMIN") {
-        setItems(allItems)
+        const ctx = getSidebarContext();
+        if (ctx?.companyID) {
+          setItems(allItems.filter((r: any) => r.companyID === ctx.companyID));
+        } else {
+          setItems(allItems);
+        }
         return
       }
 
@@ -1667,6 +1672,12 @@ export function GenerateSalaryManagement() {
   useEffect(() => {
     if (user) fetchAll()
   }, [user])
+
+  useEffect(() => {
+    const handler = () => { if (user) fetchAll(); };
+    window.addEventListener("sidebar-context-changed", handler);
+    return () => window.removeEventListener("sidebar-context-changed", handler);
+  }, [user]);
 
   // Payment dialog functions
   async function openPaymentDialog(row: GenerateSalaryRow) {

@@ -179,6 +179,12 @@ export function PublicHolidayManagement() {
     }
   }, [user, managerData, empCreds])
 
+  useEffect(() => {
+    const handler = () => { if (user) loadPublicHolidays(); };
+    window.addEventListener("sidebar-context-changed", handler);
+    return () => window.removeEventListener("sidebar-context-changed", handler);
+  }, [user, managerData, empCreds]);
+
   // Load holiday options when branch is selected
   useEffect(() => {
     if (formData.branchesID && formData.companyID) {
@@ -233,6 +239,9 @@ export function PublicHolidayManagement() {
         companyIdToUse = managerData?.companyID;
       } else if (user?.role === "EMPLOYEE") {
         companyIdToUse = empCreds?.companyID;
+      } else {
+        // COMPANY_ADMIN / BRANCH_ADMIN
+        companyIdToUse = formData.companyID;
       }
 
       if (!companyIdToUse) return [];
@@ -319,7 +328,12 @@ export function PublicHolidayManagement() {
 
       // ---- Role-based filtering ----
       if (user?.role === "SUPERADMIN") {
-        setPublicHolidays(mapped)
+        const ctx = getSidebarContext();
+        if (ctx?.companyID) {
+          setPublicHolidays(mapped.filter((r: any) => r.companyID === ctx.companyID));
+        } else {
+          setPublicHolidays(mapped);
+        }
         return
       }
 

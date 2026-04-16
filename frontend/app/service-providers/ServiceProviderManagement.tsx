@@ -77,6 +77,14 @@ export function ServiceProviderManagement() {
 const handleSubmit = async (e: React.FormEvent) => {
   e.preventDefault()
 
+  // Validation
+  const validationErrors: string[] = []
+  if (!formData.companyName?.trim()) validationErrors.push("Company Name is required")
+  if (validationErrors.length > 0) {
+    validationErrors.forEach(msg => toast.error(msg))
+    return
+  }
+
   try {
     console.log("Submitting form data:", formData)
 

@@ -807,31 +807,46 @@ tokenDeviceMapping: tokenDevices,
 
     let filteredRows = enrichedEmployees;
 
-    // SUPERADMIN → all
+    // SUPERADMIN → filter by sidebar context
     if (user?.role === "SUPERADMIN") {
-      filteredRows = enrichedEmployees;
+      const ctx = getSidebarContext();
+      if (ctx?.companyID) {
+        filteredRows = enrichedEmployees.filter((r: any) => r.companyID === ctx.companyID);
+      } else {
+        filteredRows = enrichedEmployees;
+      }
     }
-    // MANAGER → match companyID + branchesID from /users
+    // MANAGER → filter by serviceProviderID
     else if (user?.role === "MANAGER") {
       const usersRes = await fetch("/backend/users");
       const users = await usersRes.json();
       const currentUser = users.find((u: any) => u.username === user.username);
       if (currentUser) {
-        if (currentUser.companyID && currentUser.branchesID) {
-          filteredRows = enrichedEmployees.filter(
-            (r: any) =>
-              r.companyID === currentUser.companyID &&
-              r.branchesID === currentUser.branchesID
-          );
-        } else if (currentUser.companyID) {
-          filteredRows = enrichedEmployees.filter(
-            (r: any) => r.companyID === currentUser.companyID
-          );
-        } else if (currentUser.serviceProviderID) {
-          filteredRows = enrichedEmployees.filter(
-            (r: any) => r.serviceProviderID === currentUser.serviceProviderID
-          );
-        }
+        filteredRows = enrichedEmployees.filter(
+          (r: any) => r.serviceProviderID === currentUser.serviceProviderID
+        );
+      }
+    }
+    // COMPANY_ADMIN → filter by companyID
+    else if (user?.role === "COMPANY_ADMIN") {
+      const usersRes = await fetch("/backend/users");
+      const users = await usersRes.json();
+      const currentUser = users.find((u: any) => u.username === user.username);
+      if (currentUser) {
+        filteredRows = enrichedEmployees.filter(
+          (r: any) => r.companyID === currentUser.companyID
+        );
+      }
+    }
+    // BRANCH_ADMIN → filter by companyID + branchesID
+    else if (user?.role === "BRANCH_ADMIN") {
+      const usersRes = await fetch("/backend/users");
+      const users = await usersRes.json();
+      const currentUser = users.find((u: any) => u.username === user.username);
+      if (currentUser) {
+        filteredRows = enrichedEmployees.filter(
+          (r: any) => r.companyID === currentUser.companyID && r.branchesID === currentUser.branchesID
+        );
       }
     }
     // EMPLOYEE → match via manage-emp/credentials/all
@@ -861,6 +876,12 @@ tokenDeviceMapping: tokenDevices,
 
   useEffect(() => {
     if (user) fetchRows();
+  }, [user]);
+
+  useEffect(() => {
+    const handler = () => { if (user) fetchRows(); };
+    window.addEventListener("sidebar-context-changed", handler);
+    return () => window.removeEventListener("sidebar-context-changed", handler);
   }, [user]);
 
 
@@ -893,6 +914,8 @@ const runFetchTokenDevices = (q: string) => {
       let all = await fetchJSONSafe<Device[]>(API.devices, ctrl.signal);
       if (user?.role === "MANAGER" && currentUserMapping) {
         all = filterForManager(all);
+      } else if (formData.companyID) {
+        all = all.filter(x => x.companyID === formData.companyID);
       }
       // Filter for TR and AT+TR devices (token register capable)
       const tokenDevices = all.filter(d => d.deviceType === 'TR' || (d.deviceType && d.deviceType.includes('AT') && d.deviceType.includes('TR')));
@@ -939,6 +962,8 @@ const runFetchTokenVerifierDevices = (q: string) => {
       let all = await fetchJSONSafe<Device[]>(API.devices, ctrl.signal);
       if (user?.role === "MANAGER" && currentUserMapping) {
         all = filterForManager(all);
+      } else if (formData.companyID) {
+        all = all.filter(x => x.companyID === formData.companyID);
       }
       // Filter for TV devices only
       const tvDevices = all.filter(d => d.deviceType === 'TV');
@@ -963,6 +988,8 @@ useEffect(() => {
       let all = await fetchJSONSafe<Device[]>(API.devices);
       if (user?.role === "MANAGER" && currentUserMapping) {
         all = filterForManager(all);
+      } else if (formData.companyID) {
+        all = all.filter(x => x.companyID === formData.companyID);
       }
       const hasMulti = all.some(d => d.deviceType && d.deviceType.includes('+'));
       setHasMultiTypeDevices(hasMulti);
@@ -988,6 +1015,8 @@ const runFetchCombinedDev = (q: string) => {
       let all = await fetchJSONSafe<Device[]>(API.devices, ctrl.signal);
       if (user?.role === "MANAGER" && currentUserMapping) {
         all = filterForManager(all);
+      } else if (formData.companyID) {
+        all = all.filter(x => x.companyID === formData.companyID);
       }
       // Filter for multi-type devices (devices that have '+' in deviceType)
       const multiTypeDevices = all.filter(d => d.deviceType && d.deviceType.includes('+'));
@@ -1035,6 +1064,8 @@ const runFetchCombinedDev = (q: string) => {
         let all = await fetchJSONSafe<MonthlyPG[]>(API.monthlyGrades, ctrl.signal);
         if (user?.role === "MANAGER" && currentUserMapping) {
           all = filterForManager(all);
+        } else if (formData.companyID) {
+          all = all.filter(x => x.companyID === formData.companyID);
         }
         const filtered = (all || []).filter(x =>
           (x.monthlyPayGradeName ?? "").toLowerCase().includes(q.toLowerCase())
@@ -1067,6 +1098,8 @@ const runFetchCombinedDev = (q: string) => {
 
         if (user?.role === "MANAGER" && currentUserMapping) {
           all = filterForManager(all);
+        } else if (formData.companyID) {
+          all = all.filter(x => x.companyID === formData.companyID);
         }
 
         const filtered = all.filter(d =>
@@ -1097,6 +1130,8 @@ const runFetchCombinedDev = (q: string) => {
         let all = await fetchJSONSafe<Desg[]>(API.designations, ctrl.signal);
         if (user?.role === "MANAGER" && currentUserMapping) {
           all = filterForManager(all);
+        } else if (formData.companyID) {
+          all = all.filter(x => x.companyID === formData.companyID);
         }
         const filtered = (all || []).filter(d => (d.designation ?? "").toLowerCase().includes(q.toLowerCase()));
         setDesgList(filtered.slice(0, 20));
@@ -1112,7 +1147,12 @@ const runFetchCombinedDev = (q: string) => {
       const ctrl = new AbortController(); contrAbortRef.current = ctrl;
       setContrLoading(true);
       try {
-        const all = await fetchJSONSafe<Contr[]>(API.contractors, ctrl.signal);
+        let all = await fetchJSONSafe<Contr[]>(API.contractors, ctrl.signal);
+        if (user?.role === "MANAGER" && currentUserMapping) {
+          all = filterForManager(all);
+        } else if (formData.companyID) {
+          all = all.filter(x => x.companyID === formData.companyID);
+        }
         const filtered = (all || []).filter(c => (c.contractorName ?? "").toLowerCase().includes(q.toLowerCase()));
         setContrList(filtered.slice(0, 20));
       } finally { setContrLoading(false); }
@@ -1138,6 +1178,8 @@ const runFetchCombinedDev = (q: string) => {
 
       if (user?.role === "MANAGER" && currentUserMapping) {
         all = filterForManager(all);
+      } else if (formData.companyID) {
+        all = all.filter(x => x.companyID === formData.companyID);
       }
 
       // Filter for AT and AT+TR devices (attendance capable)
@@ -1170,6 +1212,8 @@ const runFetchCombinedDev = (q: string) => {
         let all = await fetchJSONSafe<WS[]>(API.workShifts, ctrl.signal);
         if (user?.role === "MANAGER" && currentUserMapping) {
           all = filterForManager(all);
+        } else if (formData.companyID) {
+          all = all.filter(x => x.companyID === formData.companyID);
         }
         const filtered = (all || []).filter(w => (w.workShiftName ?? "").toLowerCase().includes(q.toLowerCase()));
         setWsList(filtered.slice(0, 20));
@@ -1188,6 +1232,8 @@ const runFetchCombinedDev = (q: string) => {
         let all = await fetchJSONSafe<AP[]>(API.attendancePolicies, ctrl.signal);
         if (user?.role === "MANAGER" && currentUserMapping) {
           all = filterForManager(all);
+        } else if (formData.companyID) {
+          all = all.filter(x => x.companyID === formData.companyID);
         }
         const filtered = (all || []).filter(a => (a.attendancePolicyName ?? "").toLowerCase().includes(q.toLowerCase()));
         setApList(filtered.slice(0, 20));
@@ -1206,6 +1252,8 @@ const runFetchCombinedDev = (q: string) => {
         let all = await fetchJSONSafe<LP[]>(API.leavePolicies, ctrl.signal);
         if (user?.role === "MANAGER" && currentUserMapping) {
           all = filterForManager(all);
+        } else if (formData.companyID) {
+          all = all.filter(x => x.companyID === formData.companyID);
         }
         const filtered = (all || []).filter(l => (l.leavePolicyName ?? "").toLowerCase().includes(q.toLowerCase()));
         setLpList(filtered.slice(0, 20));
@@ -1795,8 +1843,14 @@ const addCombinedDevMap = () => {
             return;
         }
         const all = await fetchJSONSafe<any[]>(url);
+        let scoped = all;
+        if (user?.role === "MANAGER" && currentUserMapping) {
+          scoped = filterForManager(scoped);
+        } else if (formData.companyID) {
+          scoped = scoped.filter((x: any) => x.companyID === formData.companyID);
+        }
         const ql = query.toLowerCase();
-        const filtered = all.filter((item: any) =>
+        const filtered = scoped.filter((item: any) =>
           (item[displayField] ?? "").toLowerCase().includes(ql)
         );
         setQuickAddSuggestions(filtered.slice(0, 10));
@@ -1960,6 +2014,15 @@ const addCombinedDevMap = () => {
      =============== */
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Validation
+    const validationErrors: string[] = [];
+    if (!formData.employeeFirstName?.trim()) validationErrors.push("Employee First Name is required");
+    if (validationErrors.length > 0) {
+      validationErrors.forEach(msg => toast.error(msg));
+      return;
+    }
+
     setSaving(true);
     setError(null);
 

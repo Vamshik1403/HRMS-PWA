@@ -188,6 +188,9 @@ export function DesignationManagement() {
     deptAutocomplete: "",
   });
 
+  // Flag to skip cascade clearing during programmatic resets
+  const skipCascadeRef = useRef(false);
+
   // Timers for debouncing
   const companyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const branchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -225,8 +228,9 @@ export function DesignationManagement() {
     loadAllData();
   }, []);
 
-  // Clear dependent fields when parent changes (only for add mode)
+  // Clear dependent fields when parent changes (only for add mode, skip during reset)
   useEffect(() => {
+    if (skipCascadeRef.current) return;
     if (!editing) {
       if (formData.serviceProviderID) {
         setFormData(prev => ({
@@ -246,6 +250,7 @@ export function DesignationManagement() {
   }, [formData.serviceProviderID, editing]);
 
   useEffect(() => {
+    if (skipCascadeRef.current) return;
     if (!editing) {
       if (formData.companyID) {
         setFormData(prev => ({
@@ -262,6 +267,7 @@ export function DesignationManagement() {
   }, [formData.companyID, editing]);
 
   useEffect(() => {
+    if (skipCascadeRef.current) return;
     if (!editing) {
       if (formData.branchesID) {
         setFormData(prev => ({
@@ -279,39 +285,46 @@ export function DesignationManagement() {
       setLoading(true);
       const all = await fetchJSONSafe<DesignationRead[]>(API.designations);
 
-      // 🟢 SUPERADMIN → all
+      // 🟢 SUPERADMIN → filter by sidebar context
       if (user?.role === "SUPERADMIN") {
-        setRows(all);
+        const ctx = getSidebarContext();
+        if (ctx?.companyID) {
+          setRows(all.filter((r: any) => r.companyID === ctx.companyID));
+        } else {
+          setRows(all);
+        }
         return;
       }
 
-      // 🟡 MANAGER → match companyID + branchesID from /users
-      if (user?.role === "MANAGER") {
-        const usersRes = await fetch("/backend/users");
-        const users = await usersRes.json();
-        const currentUser = users.find((u: any) => u.username === user.username);
+      // Non-SUPERADMIN: get user mapping
+      const usersRes = await fetch("/backend/users");
+      const users = await usersRes.json();
+      const currentUser = users.find((u: any) => u.username === user?.username);
 
-        if (currentUser) {
-          let filtered: any[];
-          if (currentUser.companyID && currentUser.branchesID) {
-            filtered = all.filter(
-              (r: any) =>
-                r.companyID === currentUser.companyID &&
-                r.branchesID === currentUser.branchesID
-            );
-          } else if (currentUser.companyID) {
-            filtered = all.filter((r: any) => r.companyID === currentUser.companyID);
-          } else if (currentUser.serviceProviderID) {
-            filtered = all.filter((r: any) => r.serviceProviderID === currentUser.serviceProviderID);
+      if (currentUser) {
+        let filtered: any[];
+        if (user?.role === "MANAGER") {
+          filtered = all.filter((r: any) => r.serviceProviderID === currentUser.serviceProviderID);
+        } else if (user?.role === "COMPANY_ADMIN") {
+          filtered = all.filter((r: any) => r.companyID === currentUser.companyID);
+        } else if (user?.role === "BRANCH_ADMIN") {
+          filtered = all.filter((r: any) => r.companyID === currentUser.companyID && r.branchesID === currentUser.branchesID);
+        } else {
+          // EMPLOYEE fallback
+          const credsRes = await fetch("/backend/manage-emp/credentials/all");
+          const creds = await credsRes.json();
+          const emp = creds.find((c: any) => c.username === user?.username);
+          if (emp) {
+            filtered = all.filter((r: any) => r.companyID === emp.companyID && r.branchesID === emp.branchesID);
           } else {
             filtered = [];
           }
-          setRows(filtered);
-          return;
         }
+        setRows(filtered);
+        return;
       }
 
-      // 🔵 EMPLOYEE → match companyID + branchesID from credentials
+      // Fallback: try credentials
       const credsRes = await fetch("/backend/manage-emp/credentials/all");
       const creds = await credsRes.json();
       const emp = creds.find((c: any) => c.username === user?.username);
@@ -340,6 +353,12 @@ export function DesignationManagement() {
     }
   }, [user]);
 
+  useEffect(() => {
+    const handler = () => { if (user) fetchRows(); };
+    window.addEventListener("sidebar-context-changed", handler);
+    return () => window.removeEventListener("sidebar-context-changed", handler);
+  }, [user]);
+
   // Close suggestion popovers on outside click
   useEffect(() => {
     const onDocClick = (e: MouseEvent) => {
@@ -357,6 +376,7 @@ export function DesignationManagement() {
   // ---------------------------
   const resetForm = () => {
     const ctx = getSidebarContext();
+    skipCascadeRef.current = true;
     setFormData({
       serviceProviderID: ctx?.serviceProviderID ?? null,
       companyID: ctx?.companyID ?? null,
@@ -376,9 +396,11 @@ export function DesignationManagement() {
     setSuggestedBranches([]);
     setSuggestedDepartments([]);
     setError(null);
+    setTimeout(() => { skipCascadeRef.current = false; }, 0);
   };
 
   const handleEdit = (r: DesignationRead) => {
+    skipCascadeRef.current = true;
     setEditing(r);
     setIsAddingNew(true);
     setIsViewing(false);
@@ -413,6 +435,7 @@ export function DesignationManagement() {
     };
     
     setFormData(newFormData);
+    setTimeout(() => { skipCascadeRef.current = false; }, 0);
   };
 
   const handleView = (r: DesignationRead) => {
@@ -438,6 +461,17 @@ export function DesignationManagement() {
   // ---------------------------
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Validation
+    const validationErrors: string[] = [];
+    if (!formData.designation?.trim()) validationErrors.push("Designation is required");
+    if (!formData.branchesID) validationErrors.push("Please select a Branch");
+    if (!formData.departmentID) validationErrors.push("Please select a Department");
+    if (validationErrors.length > 0) {
+      validationErrors.forEach(msg => toast.error(msg));
+      return;
+    }
+
     setSaving(true);
     setError(null);
 
@@ -461,13 +495,6 @@ export function DesignationManagement() {
       noticePeriodDaysForResignation: formData.noticePeriodDaysForResignation || null,
       noticePeriodDaysForTermination: formData.noticePeriodDaysForTermination || null,
     };
-
-    // Validate all required fields are selected
-    if (!payload.branchesID || !payload.departmentID || !payload.designation) {
-      setError("Please select branch, department and enter designation");
-      setSaving(false);
-      return;
-    }
 
     try {
       if (editing) {

@@ -21,6 +21,7 @@ export function setSidebarContext(
       STORAGE_KEY,
       JSON.stringify({ serviceProviderID: spId, serviceProviderName: spName, companyID: companyId, companyName: companyName })
     );
+    window.dispatchEvent(new Event("sidebar-context-changed"));
   } catch { /* ignore */ }
 }
 

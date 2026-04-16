@@ -76,6 +76,7 @@ export function CompanyManagement() {
   const [isViewing, setIsViewing] = useState(false)
   const user = useCurrentUser()
   const canManage = user?.role === "SUPERADMIN" || user?.role === "MANAGER" || user?.role === "COMPANY_ADMIN"
+  const isNonSuperAdmin = user?.role === "MANAGER" || user?.role === "COMPANY_ADMIN" || user?.role === "BRANCH_ADMIN"
 
   interface CompanyFormData extends Partial<Company> {
     autocompleteName?: string
@@ -130,6 +131,26 @@ export function CompanyManagement() {
     }
   }, [user])
 
+  useEffect(() => {
+    const handler = () => { if (user) fetchCompanies() }
+    window.addEventListener("sidebar-context-changed", handler)
+    return () => window.removeEventListener("sidebar-context-changed", handler)
+  }, [user])
+
+  // For non-SUPERADMIN users, auto-open edit form with their company
+  useEffect(() => {
+    if (isNonSuperAdmin && companies.length > 0 && !isAddingNew && !editingCompany) {
+      const company = companies[0] as any
+      setFormData({
+        ...company,
+        serviceProviderID: company.serviceProviderID,
+        autocompleteName: company.serviceProvider?.companyName || "",
+      })
+      setEditingCompany(company)
+      setIsAddingNew(true)
+    }
+  }, [companies, isNonSuperAdmin])
+
   const fetchCompanies = async () => {
     try {
       const res = await fetch("/backend/company")
@@ -137,11 +158,39 @@ export function CompanyManagement() {
       const all = Array.isArray(json) ? json : json.data ?? []
 
       if (user?.role === "SUPERADMIN") {
-        setCompanies(all)
+        const ctx = getSidebarContext()
+        if (ctx?.serviceProviderID) {
+          setCompanies(all.filter((c: any) => c.serviceProviderID === ctx.serviceProviderID))
+        } else {
+          setCompanies(all)
+        }
         return
       }
 
-      if (user?.role === "MANAGER" || user?.role === "COMPANY_ADMIN") {
+      if (user?.role === "MANAGER") {
+        const usersRes = await fetch("/backend/users")
+        const users = await usersRes.json()
+        const currentUser = users.find((u: any) => u.username === user.username)
+
+        if (currentUser) {
+          let filtered;
+          if (currentUser.serviceProviderID) {
+            filtered = all.filter(
+              (c: any) => c.serviceProviderID === currentUser.serviceProviderID
+            )
+          } else if (currentUser.companyID) {
+            filtered = all.filter(
+              (c: any) => c.id === currentUser.companyID
+            )
+          } else {
+            filtered = []
+          }
+          setCompanies(filtered)
+          return
+        }
+      }
+
+      if (user?.role === "COMPANY_ADMIN") {
         const usersRes = await fetch("/backend/users")
         const users = await usersRes.json()
         const currentUser = users.find((u: any) => u.username === user.username)
@@ -150,9 +199,7 @@ export function CompanyManagement() {
           let filtered;
           if (currentUser.companyID) {
             filtered = all.filter(
-              (c: any) =>
-                c.id === currentUser.companyID ||
-                c.branchesID === currentUser.branchesID
+              (c: any) => c.id === currentUser.companyID
             )
           } else if (currentUser.serviceProviderID) {
             filtered = all.filter(
@@ -161,6 +208,20 @@ export function CompanyManagement() {
           } else {
             filtered = []
           }
+          setCompanies(filtered)
+          return
+        }
+      }
+
+      if (user?.role === "BRANCH_ADMIN") {
+        const usersRes = await fetch("/backend/users")
+        const users = await usersRes.json()
+        const currentUser = users.find((u: any) => u.username === user.username)
+
+        if (currentUser && currentUser.companyID) {
+          const filtered = all.filter(
+            (c: any) => c.id === currentUser.companyID
+          )
           setCompanies(filtered)
           return
         }
@@ -221,6 +282,14 @@ export function CompanyManagement() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    // Validation
+    const validationErrors: string[] = [];
+    if (!formData.companyName?.trim() && !formData.autocompleteName?.trim()) validationErrors.push("Company Name is required");
+    if (validationErrors.length > 0) {
+      validationErrors.forEach(msg => toast.error(msg));
+      return;
+    }
+
     try {
       let companyLogoUrl = formData.companyLogoUrl || "";
       let SignatureUrl = formData.SignatureUrl || "";
@@ -257,9 +326,16 @@ export function CompanyManagement() {
       if (!res.ok) throw new Error(await res.text());
 
       await fetchCompanies();
-      resetForm();
-      setIsAddingNew(false);
-      setEditingCompany(null);
+      // For non-SUPERADMIN, stay in edit mode (useEffect will re-open)
+      if (!isNonSuperAdmin) {
+        resetForm();
+        setIsAddingNew(false);
+        setEditingCompany(null);
+      } else {
+        // Reset editing state so useEffect re-triggers with fresh data
+        setEditingCompany(null);
+        setIsAddingNew(false);
+      }
       toast.success("Company saved successfully");
       window.dispatchEvent(new Event("sidebar-refresh"));
     } catch (err) {
@@ -299,7 +375,6 @@ export function CompanyManagement() {
   }
 
   const resetForm = () => {
-    const ctx = getSidebarContext();
     setFormData({
       companyName: "",
       companyType: "",
@@ -323,8 +398,8 @@ export function CompanyManagement() {
       financialYearStart: "",
       contactNo: "",
       emailAdd: "",
-      serviceProviderID: ctx?.serviceProviderID ?? undefined,
-      autocompleteName: ctx?.serviceProviderName ?? "",
+      serviceProviderID: undefined,
+      autocompleteName: "",
     })
     setLogoFile(null)
     setSignatureFile(null)
@@ -383,7 +458,7 @@ export function CompanyManagement() {
               <Plus className="w-4 h-4 mr-1" /> Add Company
             </Button>
           )}
-          {(isAddingNew || isViewing) && (
+          {(isAddingNew || isViewing) && !isNonSuperAdmin && (
             <Button
               variant="outline"
               onClick={handleCancel}
@@ -404,7 +479,7 @@ export function CompanyManagement() {
         <div>
             <form onSubmit={handleSubmit} className="space-y-4">
               {/* Company Name with Service Provider Autocomplete - auto-filled from sidebar */}
-              <div ref={wrapperRef} className="space-y-2 relative hidden">
+              <div ref={wrapperRef} className="space-y-2 relative">
                 <Label>Service Provider *</Label>
                 <Input
                   value={formData.autocompleteName || ""}

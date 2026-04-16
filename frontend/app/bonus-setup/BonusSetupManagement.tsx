@@ -162,6 +162,12 @@ const resolvedCompanyID =
     if (user) loadBonuses();
   }, [user]);
 
+  useEffect(() => {
+    const handler = () => { if (user) loadBonuses(); };
+    window.addEventListener("sidebar-context-changed", handler);
+    return () => window.removeEventListener("sidebar-context-changed", handler);
+  }, [user]);
+
   const loadBonuses = async () => {
     try {
       // Build URL with filters for MANAGER role
@@ -201,9 +207,14 @@ const resolvedCompanyID =
 
       const all = filteredData.map(mapApiToUi);
 
-      // SUPERADMIN → all
+      // SUPERADMIN → filter by sidebar context
       if (user?.role === "SUPERADMIN") {
-        setBonuses(all);
+        const ctx = getSidebarContext();
+        if (ctx?.companyID) {
+          setBonuses(all.filter((r: any) => r.companyID === ctx.companyID));
+        } else {
+          setBonuses(all);
+        }
         return;
       }
 
@@ -371,6 +382,15 @@ const runFetchBR = debounce(async (val: string) => {
   /* ---------------- CRUD ---------------- */
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Validation
+    const validationErrors: string[] = [];
+    if (!formData.bonusName?.trim()) validationErrors.push("Bonus Name is required");
+    if (validationErrors.length > 0) {
+      validationErrors.forEach(msg => toast.error(msg));
+      return;
+    }
+
     const payload = mapUiToPayload(formData);
     try {
       if (editingBonus) {

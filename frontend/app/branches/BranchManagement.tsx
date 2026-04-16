@@ -194,13 +194,18 @@ export function BranchManagement() {
       setLoading(true);
       const all = await fetchJSONSafe<BranchRead[]>(API.branches);
 
-      // 🟢 SUPERADMIN → All branches
+      // 🟢 SUPERADMIN → filter by sidebar context
       if (user?.role === "SUPERADMIN") {
-        setBranches(all);
+        const ctx = getSidebarContext();
+        if (ctx?.companyID) {
+          setBranches(all.filter((r: any) => r.companyID === ctx.companyID));
+        } else {
+          setBranches(all);
+        }
         return;
       }
 
-      // 🟡 MANAGER & EMPLOYEE → Get user mapping first
+      // 🟡 Non-SUPERADMIN → Get user mapping first
       const usersRes = await fetch("/backend/users");
       const users = await usersRes.json();
       const currentUser = users.find((u: any) => u.username === user?.username);
@@ -209,15 +214,16 @@ export function BranchManagement() {
         // Store the user mapping for form auto-fill
         setCurrentUserMapping(currentUser);
 
-        if (user?.role === "MANAGER" || user?.role === "COMPANY_ADMIN") {
+        if (user?.role === "MANAGER") {
+          // Service provider sees all branches under their service provider
+          const filtered = all.filter(
+            (b: any) => b.serviceProviderID === currentUser.serviceProviderID
+          );
+          setBranches(filtered);
+        } else if (user?.role === "COMPANY_ADMIN") {
+          // Company admin sees all branches in their company
           let filtered: any[];
-          if (currentUser.companyID && currentUser.branchesID) {
-            filtered = all.filter(
-              (b: any) =>
-                b.companyID === currentUser.companyID &&
-                b.id === currentUser.branchesID
-            );
-          } else if (currentUser.companyID) {
+          if (currentUser.companyID) {
             filtered = all.filter(
               (b: any) => b.companyID === currentUser.companyID
             );
@@ -228,6 +234,14 @@ export function BranchManagement() {
           } else {
             filtered = [];
           }
+          setBranches(filtered);
+        } else if (user?.role === "BRANCH_ADMIN") {
+          // Branch admin sees only their branch
+          const filtered = all.filter(
+            (b: any) =>
+              b.companyID === currentUser.companyID &&
+              b.id === currentUser.branchesID
+          );
           setBranches(filtered);
         } else if (user?.role === "EMPLOYEE") {
           // For EMPLOYEE, still use credentials but store user mapping
@@ -261,6 +275,12 @@ export function BranchManagement() {
 
   useEffect(() => {
     if (user) fetchBranches();
+  }, [user]);
+
+  useEffect(() => {
+    const handler = () => { if (user) fetchBranches(); };
+    window.addEventListener("sidebar-context-changed", handler);
+    return () => window.removeEventListener("sidebar-context-changed", handler);
   }, [user]);
 
   // ---------------------------
@@ -428,6 +448,15 @@ export function BranchManagement() {
   // ---------------------------
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Validation
+    const validationErrors: string[] = [];
+    if (!formData.branchName?.trim()) validationErrors.push("Branch Name is required");
+    if (validationErrors.length > 0) {
+      validationErrors.forEach(msg => toast.error(msg));
+      return;
+    }
+
     setSaving(true);
     setError(null);
 
@@ -689,33 +718,6 @@ export function BranchManagement() {
         title={editingBranch ? "Edit Branch" : "Add New Branch"}
       >
         <div>
-          <div className="flex items-center justify-end mb-4">
-            {/* PT Compliance Dropdown */}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="bg-gradient-to-r from-purple-50 to-indigo-50 hover:from-purple-100 hover:to-indigo-100 border-purple-200 text-purple-700 font-medium"
-                >
-                  <Shield className="w-4 h-4 mr-2" />
-                  Compliance
-                  <ChevronDown className="w-4 h-4 ml-2" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-56">
-                <DropdownMenuLabel>Quick Navigation</DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={handlePTCompliance} className="cursor-pointer">
-                  <FileText className="w-4 h-4 mr-2 text-purple-600" />
-                  <div className="flex flex-col">
-                    <span>PT Configuration</span>
-                    <span className="text-xs text-gray-500">Professional Tax</span>
-                  </div>
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
           <div>
             {error && (
               <div className="rounded-md border border-red-200 bg-red-50 text-red-700 px-3 py-2 text-sm mb-4">
@@ -1221,17 +1223,6 @@ export function BranchManagement() {
                           <TableCell>{b.gstNo || "—"}</TableCell>
                           <TableCell className="text-right">
                             <div className="flex items-center justify-end gap-1">
-                              {/* 👁 Everyone can view */}
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleView(b)}
-                                className="h-7 w-7 p-0"
-                                title="View"
-                              >
-                                <Eye className="w-3 h-3" />
-                              </Button>
-
                               {/* ✏️ Only SUPERADMIN and MANAGER can edit */}
                               {canManage && (
                                 <Button

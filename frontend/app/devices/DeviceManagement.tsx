@@ -162,13 +162,18 @@ export function DeviceManagement() {
       setLoading(true);
       const all = await fetchJSONSafe<DeviceRead[]>(API.devices);
 
-      // 🟢 SUPERADMIN → All devices
+      // 🟢 SUPERADMIN → filter by sidebar context
       if (user?.role === "SUPERADMIN") {
-        setDevices(all);
+        const ctx = getSidebarContext();
+        if (ctx?.companyID) {
+          setDevices(all.filter((r: any) => r.companyID === ctx.companyID));
+        } else {
+          setDevices(all);
+        }
         return;
       }
 
-      // 🟡 MANAGER, COMPANY_ADMIN & EMPLOYEE → Get user mapping first
+      // 🟡 Non-SUPERADMIN → Get user mapping first
       const usersRes = await fetch("/backend/users");
       const users = await usersRes.json();
       const currentUser = users.find((u: any) => u.username === user?.username);
@@ -177,7 +182,20 @@ export function DeviceManagement() {
         // Store the user mapping for form auto-fill
         setCurrentUserMapping(currentUser);
 
-        if (user?.role === "MANAGER" || user?.role === "COMPANY_ADMIN") {
+        if (user?.role === "MANAGER") {
+          // Service provider sees all devices under their service provider
+          const filtered = all.filter(
+            (d: any) => d.serviceProviderID === currentUser.serviceProviderID
+          );
+          setDevices(filtered);
+        } else if (user?.role === "COMPANY_ADMIN") {
+          // Company admin sees all devices in their company
+          const filtered = all.filter(
+            (d: any) => d.companyID === currentUser.companyID
+          );
+          setDevices(filtered);
+        } else if (user?.role === "BRANCH_ADMIN") {
+          // Branch admin sees devices in their branch
           const filtered = all.filter(
             (d: any) =>
               d.companyID === currentUser.companyID &&
@@ -206,6 +224,12 @@ export function DeviceManagement() {
 
   useEffect(() => {
     if (user) fetchDevices();
+  }, [user]);
+
+  useEffect(() => {
+    const handler = () => { if (user) fetchDevices(); };
+    window.addEventListener("sidebar-context-changed", handler);
+    return () => window.removeEventListener("sidebar-context-changed", handler);
   }, [user]);
 
   // ---------------------------
@@ -376,6 +400,16 @@ export function DeviceManagement() {
   // ---------------------------
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Validation
+    const validationErrors: string[] = [];
+    if (!formData.deviceName?.trim()) validationErrors.push("Device Name is required");
+    if (!formData.deviceSN?.trim()) validationErrors.push("Device Serial Number is required");
+    if (validationErrors.length > 0) {
+      validationErrors.forEach(msg => toast.error(msg));
+      return;
+    }
+
     setSaving(true);
     setError(null);
 

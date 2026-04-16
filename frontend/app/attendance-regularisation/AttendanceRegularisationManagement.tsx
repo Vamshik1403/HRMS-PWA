@@ -322,6 +322,12 @@ export function AttendanceRegularisationManagement() {
     if (user) loadAttendanceRegularisations()
   }, [user, managerData, empCreds])
 
+  useEffect(() => {
+    const handler = () => { if (user) loadAttendanceRegularisations(); };
+    window.addEventListener("sidebar-context-changed", handler);
+    return () => window.removeEventListener("sidebar-context-changed", handler);
+  }, [user, managerData, empCreds]);
+
   const loadAttendanceRegularisations = async () => {
     try {
       const res = await fetch(`${BACKEND_URL}/emp-attendance-regularise`, {
@@ -369,7 +375,12 @@ export function AttendanceRegularisationManagement() {
       }
 
       if (user.role === "SUPERADMIN") {
-        setRegularisations(regularisationsData)
+        const ctx = getSidebarContext();
+        if (ctx?.companyID) {
+          setRegularisations(regularisationsData.filter((r: any) => r.companyID === ctx.companyID));
+        } else {
+          setRegularisations(regularisationsData);
+        }
         return
       }
 

@@ -651,6 +651,18 @@ export function LeaveApplicationsManagement() {
           : filteredByCompany
       }
 
+      // COMPANY_ADMIN / BRANCH_ADMIN → filter by formData.companyID
+      if (formData.companyID) {
+        const filteredByCompany = data.filter(
+          (item: any) => item.companyID === formData.companyID
+        )
+        return q
+          ? filteredByCompany.filter((item: any) =>
+              (item?.branchName || "").toLowerCase().includes(q)
+            )
+          : filteredByCompany
+      }
+
       return []
     } catch (error) {
       console.error("Error fetching branches:", error)
@@ -730,6 +742,24 @@ export function LeaveApplicationsManagement() {
           (item: any) => item.id === empCreds.manageEmployeeID
         )
         return filtered
+          .filter((item: any) => {
+            const fullName = `${item?.employeeFirstName || ""} ${item?.employeeLastName || ""}`.trim().toLowerCase()
+            const employeeId = (item?.employeeID || "").toLowerCase()
+            return fullName.includes(q) || employeeId.includes(q)
+          })
+          .map((item: any) => ({
+            ...item,
+            displayName: `${item?.employeeFirstName || ""} ${item?.employeeLastName || ""}`.trim() + (item?.employeeID ? ` (${item.employeeID})` : "")
+          }))
+      }
+
+      // COMPANY_ADMIN / BRANCH_ADMIN → filter by formData
+      if (formData.companyID && formData.branchesID) {
+        const filteredData = data.filter((item: any) =>
+          item.companyID === formData.companyID &&
+          item.branchesID === formData.branchesID
+        )
+        return filteredData
           .filter((item: any) => {
             const fullName = `${item?.employeeFirstName || ""} ${item?.employeeLastName || ""}`.trim().toLowerCase()
             const employeeId = (item?.employeeID || "").toLowerCase()
@@ -894,7 +924,12 @@ export function LeaveApplicationsManagement() {
       }
 
       if (user.role === "SUPERADMIN") {
-        setLeaveApplications(splitApplications)
+        const ctx = getSidebarContext();
+        if (ctx?.companyID) {
+          setLeaveApplications(splitApplications.filter((r: any) => r.companyID === ctx.companyID));
+        } else {
+          setLeaveApplications(splitApplications);
+        }
         return
       }
 
@@ -935,6 +970,12 @@ export function LeaveApplicationsManagement() {
   useEffect(() => {
     if (user) loadLeaveApplications()
   }, [user, managerData, empCreds])
+
+  useEffect(() => {
+    const handler = () => { if (user) loadLeaveApplications(); };
+    window.addEventListener("sidebar-context-changed", handler);
+    return () => window.removeEventListener("sidebar-context-changed", handler);
+  }, [user, managerData, empCreds]);
 
   useEffect(() => {
     if (user?.role === "MANAGER" && managerData) {
