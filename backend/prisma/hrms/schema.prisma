@@ -1659,12 +1659,9 @@ enum ExitStatus {
 
 enum UserRole {
   SUPERADMIN
-  ADMIN
-  MANAGER
+  SERVICE_PROVIDER
   COMPANY_ADMIN
   BRANCH_ADMIN
-  EXECUTIVE
-  EMPLOYEE
 }
 
 enum OTStatus {
