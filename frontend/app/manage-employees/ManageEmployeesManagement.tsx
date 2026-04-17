@@ -347,7 +347,7 @@ export function ManageEmployeesManagement() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const user = useCurrentUser();
-  const canManage = user?.role === "SUPERADMIN" || user?.role === "MANAGER" || user?.role === "COMPANY_ADMIN";
+  const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN";
   const isEmployee = user?.role === "EMPLOYEE";
 
   // UI
@@ -634,7 +634,7 @@ export function ManageEmployeesManagement() {
   const [currentUserMapping, setCurrentUserMapping] = useState<any>(null);
 
   useEffect(() => {
-    if (user?.role !== "MANAGER") return;
+    if (user?.role !== "SERVICE_PROVIDER") return;
 
     (async () => {
       const res = await fetch("/backend/users");
@@ -645,7 +645,7 @@ export function ManageEmployeesManagement() {
   }, [user]);
 
   useEffect(() => {
-    if (user?.role === "MANAGER" && currentUserMapping) {
+    if (user?.role === "SERVICE_PROVIDER" && currentUserMapping) {
       setFormData(p => ({
         ...p,
         serviceProviderID: currentUserMapping.serviceProviderID,
@@ -817,14 +817,21 @@ tokenDeviceMapping: tokenDevices,
       }
     }
     // MANAGER → filter by serviceProviderID
-    else if (user?.role === "MANAGER") {
-      const usersRes = await fetch("/backend/users");
-      const users = await usersRes.json();
-      const currentUser = users.find((u: any) => u.username === user.username);
-      if (currentUser) {
+    else if (user?.role === "SERVICE_PROVIDER") {
+      const ctx = getSidebarContext();
+      if (ctx?.companyID) {
         filteredRows = enrichedEmployees.filter(
-          (r: any) => r.serviceProviderID === currentUser.serviceProviderID
+          (r: any) => r.companyID === ctx.companyID
         );
+      } else {
+        const usersRes = await fetch("/backend/users");
+        const users = await usersRes.json();
+        const currentUser = users.find((u: any) => u.username === user.username);
+        if (currentUser) {
+          filteredRows = enrichedEmployees.filter(
+            (r: any) => r.serviceProviderID === currentUser.serviceProviderID
+          );
+        }
       }
     }
     // COMPANY_ADMIN → filter by companyID
@@ -912,7 +919,7 @@ const runFetchTokenDevices = (q: string) => {
     setTokenDevLoading(true);
     try {
       let all = await fetchJSONSafe<Device[]>(API.devices, ctrl.signal);
-      if (user?.role === "MANAGER" && currentUserMapping) {
+      if (user?.role === "SERVICE_PROVIDER" && currentUserMapping) {
         all = filterForManager(all);
       } else if (formData.companyID) {
         all = all.filter(x => x.companyID === formData.companyID);
@@ -960,7 +967,7 @@ const runFetchTokenVerifierDevices = (q: string) => {
     setTokenVerifierDevLoading(true);
     try {
       let all = await fetchJSONSafe<Device[]>(API.devices, ctrl.signal);
-      if (user?.role === "MANAGER" && currentUserMapping) {
+      if (user?.role === "SERVICE_PROVIDER" && currentUserMapping) {
         all = filterForManager(all);
       } else if (formData.companyID) {
         all = all.filter(x => x.companyID === formData.companyID);
@@ -986,7 +993,7 @@ useEffect(() => {
   (async () => {
     try {
       let all = await fetchJSONSafe<Device[]>(API.devices);
-      if (user?.role === "MANAGER" && currentUserMapping) {
+      if (user?.role === "SERVICE_PROVIDER" && currentUserMapping) {
         all = filterForManager(all);
       } else if (formData.companyID) {
         all = all.filter(x => x.companyID === formData.companyID);
@@ -1013,7 +1020,7 @@ const runFetchCombinedDev = (q: string) => {
     setCombinedDevLoading(true);
     try {
       let all = await fetchJSONSafe<Device[]>(API.devices, ctrl.signal);
-      if (user?.role === "MANAGER" && currentUserMapping) {
+      if (user?.role === "SERVICE_PROVIDER" && currentUserMapping) {
         all = filterForManager(all);
       } else if (formData.companyID) {
         all = all.filter(x => x.companyID === formData.companyID);
@@ -1062,7 +1069,7 @@ const runFetchCombinedDev = (q: string) => {
       setMonthlyPGLoading(true);
       try {
         let all = await fetchJSONSafe<MonthlyPG[]>(API.monthlyGrades, ctrl.signal);
-        if (user?.role === "MANAGER" && currentUserMapping) {
+        if (user?.role === "SERVICE_PROVIDER" && currentUserMapping) {
           all = filterForManager(all);
         } else if (formData.companyID) {
           all = all.filter(x => x.companyID === formData.companyID);
@@ -1096,7 +1103,7 @@ const runFetchCombinedDev = (q: string) => {
       try {
         let all = await fetchJSONSafe<Dept[]>(API.departments, ctrl.signal);
 
-        if (user?.role === "MANAGER" && currentUserMapping) {
+        if (user?.role === "SERVICE_PROVIDER" && currentUserMapping) {
           all = filterForManager(all);
         } else if (formData.companyID) {
           all = all.filter(x => x.companyID === formData.companyID);
@@ -1128,7 +1135,7 @@ const runFetchCombinedDev = (q: string) => {
       setDesgLoading(true);
       try {
         let all = await fetchJSONSafe<Desg[]>(API.designations, ctrl.signal);
-        if (user?.role === "MANAGER" && currentUserMapping) {
+        if (user?.role === "SERVICE_PROVIDER" && currentUserMapping) {
           all = filterForManager(all);
         } else if (formData.companyID) {
           all = all.filter(x => x.companyID === formData.companyID);
@@ -1148,7 +1155,7 @@ const runFetchCombinedDev = (q: string) => {
       setContrLoading(true);
       try {
         let all = await fetchJSONSafe<Contr[]>(API.contractors, ctrl.signal);
-        if (user?.role === "MANAGER" && currentUserMapping) {
+        if (user?.role === "SERVICE_PROVIDER" && currentUserMapping) {
           all = filterForManager(all);
         } else if (formData.companyID) {
           all = all.filter(x => x.companyID === formData.companyID);
@@ -1176,7 +1183,7 @@ const runFetchCombinedDev = (q: string) => {
     try {
       let all = await fetchJSONSafe<Device[]>(API.devices, ctrl.signal);
 
-      if (user?.role === "MANAGER" && currentUserMapping) {
+      if (user?.role === "SERVICE_PROVIDER" && currentUserMapping) {
         all = filterForManager(all);
       } else if (formData.companyID) {
         all = all.filter(x => x.companyID === formData.companyID);
@@ -1210,7 +1217,7 @@ const runFetchCombinedDev = (q: string) => {
       setWsLoading(true);
       try {
         let all = await fetchJSONSafe<WS[]>(API.workShifts, ctrl.signal);
-        if (user?.role === "MANAGER" && currentUserMapping) {
+        if (user?.role === "SERVICE_PROVIDER" && currentUserMapping) {
           all = filterForManager(all);
         } else if (formData.companyID) {
           all = all.filter(x => x.companyID === formData.companyID);
@@ -1230,7 +1237,7 @@ const runFetchCombinedDev = (q: string) => {
       setApLoading(true);
       try {
         let all = await fetchJSONSafe<AP[]>(API.attendancePolicies, ctrl.signal);
-        if (user?.role === "MANAGER" && currentUserMapping) {
+        if (user?.role === "SERVICE_PROVIDER" && currentUserMapping) {
           all = filterForManager(all);
         } else if (formData.companyID) {
           all = all.filter(x => x.companyID === formData.companyID);
@@ -1250,7 +1257,7 @@ const runFetchCombinedDev = (q: string) => {
       setLpLoading(true);
       try {
         let all = await fetchJSONSafe<LP[]>(API.leavePolicies, ctrl.signal);
-        if (user?.role === "MANAGER" && currentUserMapping) {
+        if (user?.role === "SERVICE_PROVIDER" && currentUserMapping) {
           all = filterForManager(all);
         } else if (formData.companyID) {
           all = all.filter(x => x.companyID === formData.companyID);
@@ -1303,7 +1310,7 @@ const runFetchCombinedDev = (q: string) => {
 
     brTimerRef.current = setTimeout(async () => {
       const companyID =
-        user?.role === "MANAGER"
+        user?.role === "SERVICE_PROVIDER"
           ? currentUserMapping?.companyID
           : formData.companyID;
 
@@ -1844,7 +1851,7 @@ const addCombinedDevMap = () => {
         }
         const all = await fetchJSONSafe<any[]>(url);
         let scoped = all;
-        if (user?.role === "MANAGER" && currentUserMapping) {
+        if (user?.role === "SERVICE_PROVIDER" && currentUserMapping) {
           scoped = filterForManager(scoped);
         } else if (formData.companyID) {
           scoped = scoped.filter((x: any) => x.companyID === formData.companyID);
@@ -2811,7 +2818,7 @@ const addCombinedDevMap = () => {
                           {brList.map((br) => (
                             <div key={br.id} className="px-3 py-2 hover:bg-gray-100 cursor-pointer" onMouseDown={(e) => e.preventDefault()} onClick={() => {
                               setStagingBranch(p => ({ ...p, branchesID: br.id, label: br.branchName ?? "" }));
-                              if (user?.role === "MANAGER") {
+                              if (user?.role === "SERVICE_PROVIDER") {
                                 setFormData((p) => ({ ...p, companyID: br.companyID ?? p.companyID, serviceProviderID: br.serviceProviderID ?? p.serviceProviderID }));
                               }
                               setBrList([]);

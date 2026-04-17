@@ -182,12 +182,13 @@ export function DeviceManagement() {
         // Store the user mapping for form auto-fill
         setCurrentUserMapping(currentUser);
 
-        if (user?.role === "MANAGER") {
-          // Service provider sees all devices under their service provider
-          const filtered = all.filter(
-            (d: any) => d.serviceProviderID === currentUser.serviceProviderID
-          );
-          setDevices(filtered);
+        if (user?.role === "SERVICE_PROVIDER") {
+          const ctx = getSidebarContext();
+          if (ctx?.companyID) {
+            setDevices(all.filter((d: any) => d.companyID === ctx.companyID));
+          } else {
+            setDevices(all.filter((d: any) => d.serviceProviderID === currentUser.serviceProviderID));
+          }
         } else if (user?.role === "COMPANY_ADMIN") {
           // Company admin sees all devices in their company
           const filtered = all.filter(
@@ -301,7 +302,7 @@ export function DeviceManagement() {
 
         // 🟡 If MANAGER, filter by companyID or serviceProviderID
         let filtered = all || [];
-        if (user?.role === "MANAGER" && currentUserMapping) {
+        if (user?.role === "SERVICE_PROVIDER" && currentUserMapping) {
           if (currentUserMapping.companyID) {
             filtered = filtered.filter(
               (b: any) => b.companyID === currentUserMapping.companyID
@@ -373,7 +374,7 @@ export function DeviceManagement() {
     };
 
     // Auto-set Service Provider, Company, and Branch for MANAGER (no UI display)
-    if (user?.role === "MANAGER" && currentUserMapping) {
+    if (user?.role === "SERVICE_PROVIDER" && currentUserMapping) {
       baseFormData.serviceProviderID = currentUserMapping.serviceProviderID;
       baseFormData.companyID = currentUserMapping.companyID;
       baseFormData.branchesID = currentUserMapping.branchesID;
@@ -418,7 +419,7 @@ export function DeviceManagement() {
     let finalCompanyID = formData.companyID;
     let finalBranchesID = formData.branchesID;
 
-    if (user?.role === "MANAGER" && currentUserMapping) {
+    if (user?.role === "SERVICE_PROVIDER" && currentUserMapping) {
       finalServiceProviderID = currentUserMapping.serviceProviderID;
       finalCompanyID = currentUserMapping.companyID;
       finalBranchesID = currentUserMapping.branchesID;
@@ -486,7 +487,7 @@ export function DeviceManagement() {
     let coName = "";
     let brName = "";
 
-    if (user?.role === "MANAGER" && currentUserMapping) {
+    if (user?.role === "SERVICE_PROVIDER" && currentUserMapping) {
       // Use MANAGER's mapped IDs
       finalServiceProviderID = currentUserMapping.serviceProviderID;
       finalCompanyID = currentUserMapping.companyID;

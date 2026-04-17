@@ -35,12 +35,12 @@ interface UserRow {
 }
 
 // Roles available based on the current user's role
-const SUPERADMIN_ROLES = ["SUPERADMIN", "MANAGER", "COMPANY_ADMIN", "BRANCH_ADMIN"];
-const MANAGER_ROLES = ["MANAGER", "COMPANY_ADMIN", "BRANCH_ADMIN"];
+const SUPERADMIN_ROLES = ["SUPERADMIN", "SERVICE_PROVIDER", "COMPANY_ADMIN", "BRANCH_ADMIN"];
+const SERVICE_PROVIDER_ROLES = ["SERVICE_PROVIDER", "COMPANY_ADMIN", "BRANCH_ADMIN"];
 
 const ROLE_DISPLAY: Record<string, string> = {
   SUPERADMIN: "SUPERADMIN",
-  MANAGER: "SERVICE PROVIDER",
+  SERVICE_PROVIDER: "SERVICE PROVIDER",
   COMPANY_ADMIN: "COMPANY ADMIN",
   BRANCH_ADMIN: "BRANCH ADMIN",
   EMPLOYEE: "EMPLOYEE",
@@ -49,7 +49,7 @@ const ROLE_DISPLAY: Record<string, string> = {
 export function SystemUsersManagement() {
   const user = useCurrentUser();
   const isSuperAdmin = user?.role === "SUPERADMIN";
-  const isManager = user?.role === "MANAGER";
+  const isServiceProvider = user?.role === "SERVICE_PROVIDER";
   const isCompanyAdmin = user?.role === "COMPANY_ADMIN";
   const canAccess = isSuperAdmin;
 
@@ -114,10 +114,10 @@ export function SystemUsersManagement() {
   };
 
   const filteredCompanies = useMemo(() => {
-    const spId = isManager && user?.serviceProviderID ? user.serviceProviderID : form.serviceProviderID ? Number(form.serviceProviderID) : null;
+    const spId = isServiceProvider && user?.serviceProviderID ? user.serviceProviderID : form.serviceProviderID ? Number(form.serviceProviderID) : null;
     if (!spId) return companyList;
     return companyList.filter((c: any) => c.serviceProviderID === Number(spId));
-  }, [companyList, form.serviceProviderID, isManager, user?.serviceProviderID]);
+  }, [companyList, form.serviceProviderID, isServiceProvider, user?.serviceProviderID]);
 
   const filteredBranches = useMemo(() => {
     if (!form.companyID) return branchList;
@@ -244,13 +244,13 @@ export function SystemUsersManagement() {
             <Select value={form.role} onValueChange={(v) => setForm((p) => ({ ...p, role: v, companyID: "", branchesID: "" }))}>
               <SelectTrigger><SelectValue placeholder="Select role…" /></SelectTrigger>
               <SelectContent>
-                {(isSuperAdmin ? SUPERADMIN_ROLES : MANAGER_ROLES).map((r) => <SelectItem key={r} value={r}>{r === "MANAGER" ? "SERVICE PROVIDER" : r === "BRANCH_ADMIN" ? "BRANCH ADMIN" : r === "COMPANY_ADMIN" ? "COMPANY ADMIN" : r}</SelectItem>)}
+                {(isSuperAdmin ? SUPERADMIN_ROLES : SERVICE_PROVIDER_ROLES).map((r) => <SelectItem key={r} value={r}>{r === "SERVICE_PROVIDER" ? "SERVICE PROVIDER" : r === "BRANCH_ADMIN" ? "BRANCH ADMIN" : r === "COMPANY_ADMIN" ? "COMPANY ADMIN" : r}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
 
           {/* SP field: shown for MANAGER, COMPANY_ADMIN, BRANCH_ADMIN */}
-          {isSuperAdmin && (form.role === "MANAGER" || form.role === "COMPANY_ADMIN" || form.role === "BRANCH_ADMIN") && (
+          {isSuperAdmin && (form.role === "SERVICE_PROVIDER" || form.role === "COMPANY_ADMIN" || form.role === "BRANCH_ADMIN") && (
             <div className="space-y-2">
               <Label>Service Provider</Label>
               <Select value={String(form.serviceProviderID)} onValueChange={(v) => setForm((p) => ({ ...p, serviceProviderID: v, companyID: "", branchesID: "" }))}>

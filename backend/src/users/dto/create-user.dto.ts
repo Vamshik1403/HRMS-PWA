@@ -4,7 +4,7 @@ import { IsString, IsOptional, IsEnum, MinLength, IsInt, IsBoolean } from 'class
 export enum UserRole {
   SUPERADMIN = 'SUPERADMIN',
   ADMIN = 'ADMIN',
-  MANAGER = 'MANAGER',
+  SERVICE_PROVIDER = 'SERVICE_PROVIDER',
   COMPANY_ADMIN = 'COMPANY_ADMIN',
   BRANCH_ADMIN = 'BRANCH_ADMIN',
   EXECUTIVE = 'EXECUTIVE',

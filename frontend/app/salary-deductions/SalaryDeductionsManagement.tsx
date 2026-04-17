@@ -78,7 +78,7 @@ export function SalaryDeductionsManagement() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingDeduction, setEditingDeduction] = useState<SalaryDeduction | null>(null);
   const user = useCurrentUser();
-const canManage = user?.role === "SUPERADMIN" || user?.role === "MANAGER" || user?.role === "COMPANY_ADMIN";
+const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN";
 const isEmployee = user?.role === "EMPLOYEE";
 const [currentUserMapping, setCurrentUserMapping] = useState<any>(null);
 
@@ -87,7 +87,7 @@ const [currentUserMapping, setCurrentUserMapping] = useState<any>(null);
 
 // load manager mapping from /users
 useEffect(() => {
-  if (user?.role !== "MANAGER") return;
+  if (user?.role !== "SERVICE_PROVIDER") return;
 
   (async () => {
     const res = await fetch("/backend/users");
@@ -99,7 +99,7 @@ useEffect(() => {
 
 // apply to form automatically
 useEffect(() => {
-  if (user?.role === "MANAGER" && currentUserMapping) {
+  if (user?.role === "SERVICE_PROVIDER" && currentUserMapping) {
     setFormData((p) => ({
       ...p,
       serviceProviderID: currentUserMapping.serviceProviderID,
@@ -154,12 +154,12 @@ useEffect(() => {
 
 
   const resolvedServiceProviderID =
-  user?.role === "MANAGER"
+  user?.role === "SERVICE_PROVIDER"
     ? currentUserMapping?.serviceProviderID
     : formData.serviceProviderID;
 
 const resolvedCompanyID =
-  user?.role === "MANAGER"
+  user?.role === "SERVICE_PROVIDER"
     ? currentUserMapping?.companyID
     : formData.companyID;
 
@@ -195,17 +195,10 @@ const loadDeductions = async () => {
     }
 
     // 🟡 MANAGER — filter via /users
-    if (user?.role === "MANAGER") {
-      const usersRes = await fetch("/backend/users");
-      const users = await usersRes.json();
-      const currentUser = users.find((u: any) => u.username === user.username);
-      if (currentUser) {
-        const filtered = all.filter(
-          (d) =>
-            d.companyID === currentUser.companyID &&
-            d.branchesID === currentUser.branchesID
-        );
-        setDeductions(filtered);
+    if (user?.role === "SERVICE_PROVIDER") {
+      const ctx = getSidebarContext();
+      if (ctx?.companyID) {
+        setDeductions(all.filter((d: any) => d.companyID === ctx.companyID));
         return;
       }
     }
@@ -588,7 +581,7 @@ const loadDeductions = async () => {
   )}
 
   {/* MANAGER → hide SP/Company, auto-assign IDs */}
-  {user?.role === "MANAGER" && currentUserMapping && (
+  {user?.role === "SERVICE_PROVIDER" && currentUserMapping && (
     <>
       <input type="hidden" />
       {(() => {

@@ -94,7 +94,7 @@ export function LeaveApplicationsManagement() {
   })
 
   const user = useCurrentUser()
-  const canManage = user?.role === "SUPERADMIN" || user?.role === "MANAGER" || user?.role === "COMPANY_ADMIN"
+  const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN"
   const isNormalUser = user?.role === "EMPLOYEE"
 
   // Revoke Modal State
@@ -121,7 +121,7 @@ export function LeaveApplicationsManagement() {
     const loadUserData = async () => {
       try {
         // --- MANAGER ---
-        if (user.role === "MANAGER") {
+        if (user.role === "SERVICE_PROVIDER") {
           const usersRes = await fetch(`${BACKEND_URL}/users`);
           const users = await usersRes.json();
           const me = users.find((u: any) => u.username === user.username);
@@ -619,7 +619,7 @@ export function LeaveApplicationsManagement() {
       }
 
       // MANAGER → only mapped branches (filtered by search)
-      if (user?.role === "MANAGER" && managerData) {
+      if (user?.role === "SERVICE_PROVIDER" && managerData) {
         let filteredByCompany;
         if (managerData.companyID) {
           filteredByCompany = data.filter(
@@ -702,17 +702,17 @@ export function LeaveApplicationsManagement() {
           }))
       }
 
-      // MANAGER → Filter by manager's company AND selected branch
-      if (user?.role === "MANAGER") {
-        // MANAGER REQUIREMENT: Must have branchesID selected
+      // SERVICE_PROVIDER → Filter by sidebar context company AND selected branch
+      if (user?.role === "SERVICE_PROVIDER") {
         if (!formData.branchesID) {
           return [] // No employees shown until branch is selected
         }
         
+        const ctx = getSidebarContext();
         let filteredData;
-        if (managerData?.companyID) {
+        if (ctx?.companyID) {
           filteredData = data.filter((item: any) => 
-            item.companyID === managerData?.companyID && 
+            item.companyID === ctx.companyID && 
             item.branchesID === formData.branchesID
           )
         } else if (managerData?.serviceProviderID) {
@@ -933,18 +933,16 @@ export function LeaveApplicationsManagement() {
         return
       }
 
-      if (user.role === "MANAGER") {
-        // Fetch manager info from /users
+      if (user.role === "SERVICE_PROVIDER") {
+        const ctx = getSidebarContext()
+        if (ctx?.companyID) {
+          setLeaveApplications(splitApplications.filter((a: any) => a.companyID === ctx.companyID))
+          return
+        }
         const usersData = await fetch(`${BACKEND_URL}/users`).then((r) => r.json())
         const currentUser = usersData.find((u: any) => u.username === user.username)
-        if (currentUser) {
-          const filtered = splitApplications.filter(
-            (a) =>
-              a.companyID === currentUser.companyID &&
-              a.branchesID === currentUser.branchesID
-          )
-          console.log("Filtered for MANAGER:", filtered);
-          setLeaveApplications(filtered)
+        if (currentUser?.serviceProviderID) {
+          setLeaveApplications(splitApplications.filter((a: any) => a.serviceProviderID === currentUser.serviceProviderID))
           return
         }
       }
@@ -978,7 +976,7 @@ export function LeaveApplicationsManagement() {
   }, [user, managerData, empCreds]);
 
   useEffect(() => {
-    if (user?.role === "MANAGER" && managerData) {
+    if (user?.role === "SERVICE_PROVIDER" && managerData) {
       // Auto-populate company info for manager
       setFormData(prev => ({
         ...prev,
@@ -1027,7 +1025,7 @@ export function LeaveApplicationsManagement() {
 
   useEffect(() => {
     if ((user?.role === "SUPERADMIN" && formData.branchesID) || 
-        (user?.role === "MANAGER" && formData.branchesID)) {
+        (user?.role === "SERVICE_PROVIDER" && formData.branchesID)) {
       setFormData(prev => ({
         ...prev,
         employeeName: "",
@@ -1304,7 +1302,7 @@ export function LeaveApplicationsManagement() {
                         valueField="id"
                         required
                       />
-                      {(user?.role === "MANAGER" || user?.role === "EMPLOYEE") && (
+                      {(user?.role === "SERVICE_PROVIDER" || user?.role === "EMPLOYEE") && (
                         <p className="text-xs text-gray-500 mt-1">
                           You can only select from your assigned branches
                         </p>
@@ -1332,7 +1330,7 @@ export function LeaveApplicationsManagement() {
                         required
                       />
                       <p className="text-xs text-gray-500">Show FirstName + LastName + Emp ID</p>
-                      {user?.role === "MANAGER" && (
+                      {user?.role === "SERVICE_PROVIDER" && (
                         <p className="text-xs text-gray-500">
                           You can only select employees from your assigned branch
                         </p>

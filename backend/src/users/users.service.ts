@@ -8,7 +8,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service'
 import { CreateUserDto } from './dto/create-user.dto'
 import { UpdateUserDto } from './dto/update-user.dto'
-import { UserRole } from './dto/create-user.dto'
+import { UserRole } from '@prisma/client'
 import * as bcrypt from 'bcrypt'
 
 @Injectable()
@@ -32,7 +32,7 @@ export class UsersService {
         data: {
           username: createUserDto.username,
           passwordHash,
-          role: createUserDto.role || UserRole.EMPLOYEE,
+          role: (createUserDto.role as UserRole) || UserRole.EMPLOYEE,
           serviceProviderID: createUserDto.serviceProviderID ?? null,
           companyID: createUserDto.companyID ?? null,
           branchesID: createUserDto.branchesID ?? null,

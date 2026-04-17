@@ -90,17 +90,17 @@ export function LeavePolicyManagement() {
   })
   const [availableHolidays, setAvailableHolidays] = useState<Holiday[]>([])
   const user = useCurrentUser();
-  const canManage = user?.role === "SUPERADMIN" || user?.role === "MANAGER" || user?.role === "COMPANY_ADMIN";
+  const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN";
 const [currentUserMapping, setCurrentUserMapping] = useState<any>(null);
 
 
 const resolvedServiceProviderID =
-  user?.role === "MANAGER"
+  user?.role === "SERVICE_PROVIDER"
     ? currentUserMapping?.serviceProviderID
     : formData.serviceProviderID;
 
 const resolvedCompanyID =
-  user?.role === "MANAGER"
+  user?.role === "SERVICE_PROVIDER"
     ? currentUserMapping?.companyID
     : formData.companyID;
 
@@ -108,7 +108,7 @@ const resolvedCompanyID =
 
 // Load mapping for MANAGER
 useEffect(() => {
-  if (user?.role !== "MANAGER") return;
+  if (user?.role !== "SERVICE_PROVIDER") return;
 
   (async () => {
     const res = await fetch(`${BACKEND_URL}/users`);
@@ -120,7 +120,7 @@ useEffect(() => {
 
 // Auto-fill IDs for MANAGER
 useEffect(() => {
-  if (user?.role === "MANAGER" && currentUserMapping) {
+  if (user?.role === "SERVICE_PROVIDER" && currentUserMapping) {
     setFormData((p) => ({
       ...p,
       serviceProviderID: currentUserMapping.serviceProviderID,
@@ -153,7 +153,7 @@ const loadAvailableHolidays = async () => {
     }
 
     // ✅ MANAGER: filter by /users mapping (already your logic)
-    else if (user?.role === "MANAGER") {
+    else if (user?.role === "SERVICE_PROVIDER") {
       const usersRes = await fetch(`${BACKEND_URL}/users`);
       const users = await usersRes.json();
       const me = users.find((u: any) => u.username === user.username);
@@ -325,8 +325,13 @@ const fetchBranches = async (query: string) => {
 
       if (currentUser) {
         let filtered: any[];
-        if (user?.role === "MANAGER") {
-          filtered = mapped.filter((r: any) => r.serviceProviderID === currentUser.serviceProviderID);
+        if (user?.role === "SERVICE_PROVIDER") {
+          const ctx = getSidebarContext();
+          if (ctx?.companyID) {
+            filtered = mapped.filter((r: any) => r.companyID === ctx.companyID);
+          } else {
+            filtered = mapped.filter((r: any) => r.serviceProviderID === currentUser.serviceProviderID);
+          }
         } else if (user?.role === "COMPANY_ADMIN") {
           filtered = mapped.filter((r: any) => r.companyID === currentUser.companyID);
         } else if (user?.role === "BRANCH_ADMIN") {
@@ -393,17 +398,17 @@ const fetchBranches = async (query: string) => {
 
      const payload = {
   serviceProviderID:
-    user?.role === "MANAGER"
+    user?.role === "SERVICE_PROVIDER"
       ? currentUserMapping?.serviceProviderID || null
       : formData.serviceProviderID || null,
 
   companyID:
-    user?.role === "MANAGER"
+    user?.role === "SERVICE_PROVIDER"
       ? currentUserMapping?.companyID || null
       : formData.companyID || null,
 
   branchesID:
-    user?.role === "MANAGER"
+    user?.role === "SERVICE_PROVIDER"
       ? currentUserMapping?.branchesID || null
       : formData.branchesID || null,
 
@@ -630,7 +635,7 @@ const handleCompanySelect = (selected: SelectedItem) => {
   )}
 
   {/* MANAGER → Only Branch */}
-  {user?.role === "MANAGER" && (
+  {user?.role === "SERVICE_PROVIDER" && (
     <SearchSuggestInput
       label="Branch Name"
       value={formData.branchName}

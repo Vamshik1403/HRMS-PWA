@@ -115,7 +115,7 @@ export function DesignationManagement() {
 
   const user = useCurrentUser();
   useEffect(() => {
-    if (!user || user.role !== "MANAGER") return;
+    if (!user || user.role !== "SERVICE_PROVIDER") return;
 
     const loadMapping = async () => {
       try {
@@ -133,7 +133,7 @@ export function DesignationManagement() {
     loadMapping();
   }, [user]);
 
-  const canManage = user?.role === "SUPERADMIN" || user?.role === "MANAGER" || user?.role === "COMPANY_ADMIN";
+  const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN";
   const isEmployee = user?.role === "EMPLOYEE";
 
   // UI
@@ -303,8 +303,13 @@ export function DesignationManagement() {
 
       if (currentUser) {
         let filtered: any[];
-        if (user?.role === "MANAGER") {
-          filtered = all.filter((r: any) => r.serviceProviderID === currentUser.serviceProviderID);
+        if (user?.role === "SERVICE_PROVIDER") {
+          const ctx = getSidebarContext();
+          if (ctx?.companyID) {
+            filtered = all.filter((r: any) => r.companyID === ctx.companyID);
+          } else {
+            filtered = all.filter((r: any) => r.serviceProviderID === currentUser.serviceProviderID);
+          }
         } else if (user?.role === "COMPANY_ADMIN") {
           filtered = all.filter((r: any) => r.companyID === currentUser.companyID);
         } else if (user?.role === "BRANCH_ADMIN") {

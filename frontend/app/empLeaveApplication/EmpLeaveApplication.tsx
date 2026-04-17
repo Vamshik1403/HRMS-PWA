@@ -26,6 +26,7 @@ import { Badge } from "../components/ui/badge"
 import { Icon } from "@iconify/react"
 import { Plus, Search, Edit, Trash2, Check, X } from "lucide-react"
 import { useCurrentUser } from "../hooks/useCurrentUser"
+import { getSidebarContext } from "../utils/sidebarContext"
 
 interface LeaveApplication {
   id: string
@@ -88,7 +89,7 @@ export function EmpLeaveApplication() {
   })
 
   const user = useCurrentUser()
-  const canManage = user?.role === "SUPERADMIN" || user?.role === "MANAGER" || user?.role === "COMPANY_ADMIN"
+  const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN"
   
   // Revoke Modal State
   const [isRevokeDialogOpen, setIsRevokeDialogOpen] = useState(false)
@@ -219,26 +220,16 @@ export function EmpLeaveApplication() {
         return
       }
 
-      if (user.role === "MANAGER") {
-        // Fetch manager info from /users
+      if (user.role === "SERVICE_PROVIDER") {
+        const ctx = getSidebarContext()
+        if (ctx?.companyID) {
+          setLeaveApplications(mapped.filter((a: any) => a.companyID === ctx.companyID))
+          return
+        }
         const usersData = await fetch(`${BACKEND_URL}/users`).then((r) => r.json())
         const currentUser = usersData.find((u: any) => u.username === user.username)
-        if (currentUser) {
-          let filtered: any[];
-          if (currentUser.companyID && currentUser.branchesID) {
-            filtered = mapped.filter(
-              (a) =>
-                a.companyID === currentUser.companyID &&
-                a.branchesID === currentUser.branchesID
-            )
-          } else if (currentUser.companyID) {
-            filtered = mapped.filter((a) => a.companyID === currentUser.companyID)
-          } else if (currentUser.serviceProviderID) {
-            filtered = mapped.filter((a: any) => a.serviceProviderID === currentUser.serviceProviderID)
-          } else {
-            filtered = []
-          }
-          setLeaveApplications(filtered)
+        if (currentUser?.serviceProviderID) {
+          setLeaveApplications(mapped.filter((a: any) => a.serviceProviderID === currentUser.serviceProviderID))
           return
         }
       }

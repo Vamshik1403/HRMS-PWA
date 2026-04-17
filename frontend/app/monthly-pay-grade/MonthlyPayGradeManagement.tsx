@@ -138,14 +138,14 @@ export function MonthlyPayGradeManagement() {
   const [editingPayGrade, setEditingPayGrade] = useState<MonthlyPayGradeUI | null>(null);
 
   const user = useCurrentUser();
-  const canManage = user?.role === "SUPERADMIN" || user?.role === "MANAGER" || user?.role === "COMPANY_ADMIN";
+  const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN";
   const isEmployee = user?.role === "EMPLOYEE";
 
   const [currentUserMapping, setCurrentUserMapping] = useState<any>(null);
 
   // Fetch mapping for MANAGER
   useEffect(() => {
-    if (user?.role !== "MANAGER") return;
+    if (user?.role !== "SERVICE_PROVIDER") return;
 
     (async () => {
       try {
@@ -162,7 +162,7 @@ export function MonthlyPayGradeManagement() {
 
   // Auto-assign IDs for MANAGER
   useEffect(() => {
-    if (user?.role === "MANAGER" && currentUserMapping) {
+    if (user?.role === "SERVICE_PROVIDER" && currentUserMapping) {
       setFormData((p) => ({
         ...p,
         serviceProviderID: currentUserMapping.serviceProviderID,
@@ -237,22 +237,15 @@ useEffect(() => {
       const uiRows = data.map(mapApiToUi);
 
       // 🔐 ROLE-BASED TABLE FILTERING
-      if (user?.role === "MANAGER" && currentUserMapping) {
-        let filtered: any[];
-        if (currentUserMapping.companyID && currentUserMapping.branchesID) {
-          filtered = uiRows.filter(
-            pg =>
-              pg.companyID === currentUserMapping.companyID &&
-              pg.branchesID === currentUserMapping.branchesID
-          );
-        } else if (currentUserMapping.companyID) {
-          filtered = uiRows.filter(pg => pg.companyID === currentUserMapping.companyID);
-        } else if (currentUserMapping.serviceProviderID) {
-          filtered = uiRows.filter((pg: any) => pg.serviceProviderID === currentUserMapping.serviceProviderID);
+      if (user?.role === "SERVICE_PROVIDER") {
+        const ctx = getSidebarContext();
+        if (ctx?.companyID) {
+          setPayGrades(uiRows.filter((pg: any) => pg.companyID === ctx.companyID));
+        } else if (currentUserMapping?.serviceProviderID) {
+          setPayGrades(uiRows.filter((pg: any) => pg.serviceProviderID === currentUserMapping.serviceProviderID));
         } else {
-          filtered = [];
+          setPayGrades([]);
         }
-        setPayGrades(filtered);
       } else {
         // SUPERADMIN → filter by sidebar context
         const ctx = getSidebarContext();
@@ -301,18 +294,18 @@ useEffect(() => {
       
 
 const resolvedServiceProviderID =
-  user?.role === "MANAGER"
+  user?.role === "SERVICE_PROVIDER"
     ? currentUserMapping?.serviceProviderID
     : formData.serviceProviderID;
 
 const resolvedCompanyID =
-  user?.role === "MANAGER"
+  user?.role === "SERVICE_PROVIDER"
     ? currentUserMapping?.companyID
     : formData.companyID;
 
 
 const resolvedBranchID =
-  user?.role === "MANAGER"
+  user?.role === "SERVICE_PROVIDER"
     ? currentUserMapping?.branchesID
     : formData.branchesID;
 
@@ -907,7 +900,7 @@ miniOTTime: x.miniOTTime ?? 0,
                 </div>
 
               {/* MANAGER → Only Branch input */}
-              {user?.role === "MANAGER" && (
+              {user?.role === "SERVICE_PROVIDER" && (
                 <div className="grid grid-cols-1 gap-4">
                   <div ref={brRef} className="space-y-2 relative">
                     <Label>Branch *</Label>

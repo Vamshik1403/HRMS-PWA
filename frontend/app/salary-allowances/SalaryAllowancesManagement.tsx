@@ -75,13 +75,13 @@ export function SalaryAllowancesManagement() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingAllowance, setEditingAllowance] = useState<SalaryAllowance | null>(null);
   const user = useCurrentUser();
-  const canManage = user?.role === "SUPERADMIN" || user?.role === "MANAGER" || user?.role === "COMPANY_ADMIN";
+  const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN";
   const isEmployee = user?.role === "EMPLOYEE";
   const [currentUserMapping, setCurrentUserMapping] = useState<any>(null);
 
 // MANAGER mapping loader
 useEffect(() => {
-  if (user?.role !== "MANAGER") return;
+  if (user?.role !== "SERVICE_PROVIDER") return;
 
   (async () => {
     try {
@@ -127,12 +127,12 @@ useEffect(() => {
   const brRef = useRef<HTMLDivElement | null>(null);
 
   const resolvedServiceProviderID =
-  user?.role === "MANAGER"
+  user?.role === "SERVICE_PROVIDER"
     ? currentUserMapping?.serviceProviderID
     : formData.serviceProviderID;
 
 const resolvedCompanyID =
-  user?.role === "MANAGER"
+  user?.role === "SERVICE_PROVIDER"
     ? currentUserMapping?.companyID
     : formData.companyID;
 
@@ -177,17 +177,10 @@ const resolvedCompanyID =
       }
 
       // 🟡 MANAGER → filter via /users
-      if (user?.role === "MANAGER") {
-        const usersRes = await fetch("/backend/users");
-        const users = await usersRes.json();
-        const currentUser = users.find((u: any) => u.username === user.username);
-        if (currentUser) {
-          const filtered = all.filter(
-            (a: any) =>
-              a.companyID === currentUser.companyID &&
-              a.branchesID === currentUser.branchesID
-          );
-          setAllowances(filtered);
+      if (user?.role === "SERVICE_PROVIDER") {
+        const ctx = getSidebarContext();
+        if (ctx?.companyID) {
+          setAllowances(all.filter((a: any) => a.companyID === ctx.companyID));
           return;
         }
       }
@@ -566,7 +559,7 @@ const resolvedCompanyID =
   )}
 
   {/* MANAGER → hide SP/Company, auto-assign IDs */}
-  {user?.role === "MANAGER" && currentUserMapping && (
+  {user?.role === "SERVICE_PROVIDER" && currentUserMapping && (
     <>
       <input type="hidden" />
       {(() => {

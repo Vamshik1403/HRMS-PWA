@@ -76,7 +76,7 @@ export function AttendancePolicyManagement() {
     null
   );
   const user = useCurrentUser();
-  const canManage = user?.role === "SUPERADMIN" || user?.role === "MANAGER" || user?.role === "COMPANY_ADMIN";
+  const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN";
   const isEmployee = user?.role === "EMPLOYEE";
 
   const [currentUserMapping, setCurrentUserMapping] = useState<any>(null);
@@ -117,18 +117,18 @@ export function AttendancePolicyManagement() {
     process.env.NEXT_PUBLIC_BACKEND_URL || "/backend";
 
   const resolvedServiceProviderID =
-    user?.role === "MANAGER"
+    user?.role === "SERVICE_PROVIDER"
       ? currentUserMapping?.serviceProviderID
       : formData.serviceProviderID;
 
   const resolvedCompanyID =
-    user?.role === "MANAGER"
+    user?.role === "SERVICE_PROVIDER"
       ? currentUserMapping?.companyID
       : formData.companyID;
 
   // Load mapping for MANAGER
   useEffect(() => {
-    if (user?.role !== "MANAGER") return;
+    if (user?.role !== "SERVICE_PROVIDER") return;
 
     (async () => {
       const res = await fetch(`${BACKEND_URL}/users`);
@@ -140,7 +140,7 @@ export function AttendancePolicyManagement() {
 
   // Auto-fill SP + Company + Branch for MANAGER
   useEffect(() => {
-    if (user?.role === "MANAGER" && currentUserMapping) {
+    if (user?.role === "SERVICE_PROVIDER" && currentUserMapping) {
       setFormData((p) => ({
         ...p,
         serviceProviderID: currentUserMapping.serviceProviderID,
@@ -281,8 +281,13 @@ export function AttendancePolicyManagement() {
 
       if (currentUser) {
         let filtered: any[];
-        if (user?.role === "MANAGER") {
-          filtered = mapped.filter((r: any) => r.serviceProviderID === currentUser.serviceProviderID);
+        if (user?.role === "SERVICE_PROVIDER") {
+          const ctx = getSidebarContext();
+          if (ctx?.companyID) {
+            filtered = mapped.filter((r: any) => r.companyID === ctx.companyID);
+          } else {
+            filtered = mapped.filter((r: any) => r.serviceProviderID === currentUser.serviceProviderID);
+          }
         } else if (user?.role === "COMPANY_ADMIN") {
           filtered = mapped.filter((r) => r.companyID === currentUser.companyID);
         } else if (user?.role === "BRANCH_ADMIN") {
@@ -339,15 +344,15 @@ export function AttendancePolicyManagement() {
     try {
       const attendancePolicyData = {
         serviceProviderID:
-          user?.role === "MANAGER"
+          user?.role === "SERVICE_PROVIDER"
             ? currentUserMapping?.serviceProviderID
             : formData.serviceProviderID,
         companyID:
-          user?.role === "MANAGER"
+          user?.role === "SERVICE_PROVIDER"
             ? currentUserMapping?.companyID
             : formData.companyID,
         branchesID:
-          user?.role === "MANAGER"
+          user?.role === "SERVICE_PROVIDER"
             ? currentUserMapping?.branchesID
             : formData.branchesID,
         attendancePolicyName: formData.attendancePolicyName,
@@ -579,7 +584,7 @@ export function AttendancePolicyManagement() {
                   </>
                 )}
 
-                {user?.role === "MANAGER" && (
+                {user?.role === "SERVICE_PROVIDER" && (
                   <SearchSuggestInput
                     label="Branch Name"
                     placeholder="Select Branch"

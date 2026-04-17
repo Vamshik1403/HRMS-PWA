@@ -27,6 +27,7 @@ import {
 import { Badge } from "../components/ui/badge"
 import { Plus, Search, Edit, Trash2 } from "lucide-react"
 import { SearchSuggestInput } from "../components/SearchSuggestInput"
+import { getSidebarContext } from "../utils/sidebarContext"
 
 interface PublicHoliday {
   id: string
@@ -97,7 +98,7 @@ export function EmpPublicHoliday() {
   const [holidayOptions, setHolidayOptions] = useState<any[]>([])
   const [financialYearOptions, setFinancialYearOptions] = useState<string[]>([])
   const user = useCurrentUser()
-  const canManage = user?.role === "SUPERADMIN" || user?.role === "MANAGER" || user?.role === "COMPANY_ADMIN"
+  const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN"
 
   const [formData, setFormData] = useState({
     serviceProvider: "",
@@ -174,27 +175,17 @@ export function EmpPublicHoliday() {
       return
     }
 
-    if (user?.role === "MANAGER") {
-      // Fetch user info from /users to confirm company/branch IDs
+    if (user?.role === "SERVICE_PROVIDER") {
+      const ctx = getSidebarContext()
+      if (ctx?.companyID) {
+        setPublicHolidays(mapped.filter((h: any) => h.companyID === ctx.companyID))
+        return
+      }
       try {
         const usersData = await robustGet<any[]>(`${BACKEND_URL}/users`)
         const currentUser = usersData.find((u) => u.username === user.username)
-        if (currentUser) {
-          let filtered: any[];
-          if (currentUser.companyID && currentUser.branchesID) {
-            filtered = mapped.filter(
-              (h) =>
-                h.companyID === currentUser.companyID &&
-                h.branchesID === currentUser.branchesID
-            )
-          } else if (currentUser.companyID) {
-            filtered = mapped.filter((h) => h.companyID === currentUser.companyID)
-          } else if (currentUser.serviceProviderID) {
-            filtered = mapped.filter((h: any) => h.serviceProviderID === currentUser.serviceProviderID)
-          } else {
-            filtered = []
-          }
-          setPublicHolidays(filtered)
+        if (currentUser?.serviceProviderID) {
+          setPublicHolidays(mapped.filter((h: any) => h.serviceProviderID === currentUser.serviceProviderID))
           return
         }
       } catch (e) {

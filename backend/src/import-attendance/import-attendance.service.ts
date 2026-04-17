@@ -18,7 +18,7 @@ export class ImportAttendanceService {
       throw new BadRequestException('The file contains no sheets');
     }
     const sheet = workbook.Sheets[sheetName];
-    const rows: Record<string, any>[] = XLSX.utils.sheet_to_json(sheet, { defval: null });
+    const rows: Record<string, any>[] = XLSX.utils.sheet_to_json(sheet, { defval: null, raw: false });
 
     if (!rows.length) {
       throw new BadRequestException('The file contains no data rows');
@@ -231,20 +231,22 @@ export class ImportAttendanceService {
   private parseDateTime(value: any): Date | null {
     if (!value) return null;
 
-    // Handle Excel serial date numbers
+    // Handle Date objects (from cellDates: true)
+    if (value instanceof Date) {
+      return isNaN(value.getTime()) ? null : value;
+    }
+
+    // Handle Excel serial date numbers (fallback if cellDates didn't convert)
     if (typeof value === 'number') {
-      const excelEpoch = new Date(1899, 11, 30);
-      const date = new Date(excelEpoch.getTime() + value * 86400000);
+      // Use UTC-based epoch to avoid timezone shifts
+      const excelEpochMs = Date.UTC(1899, 11, 30);
+      const date = new Date(excelEpochMs + value * 86400000);
       return isNaN(date.getTime()) ? null : date;
     }
 
     const str = String(value).trim();
 
-    // Try ISO / common date-time formats
-    const parsed = new Date(str);
-    if (!isNaN(parsed.getTime())) return parsed;
-
-    // Try DD/MM/YYYY HH:mm:ss
+    // Try DD/MM/YYYY HH:mm:ss first (before new Date which treats it as MM/DD)
     const dmyMatch = str.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})\s+(\d{1,2}):(\d{2}):?(\d{2})?$/);
     if (dmyMatch) {
       const [, d, m, y, h, min, sec] = dmyMatch;
@@ -252,10 +254,24 @@ export class ImportAttendanceService {
       return isNaN(date.getTime()) ? null : date;
     }
 
+    // Try YYYY-MM-DD HH:mm:ss (ISO-like formats)
+    const isoMatch = str.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})\s+(\d{1,2}):(\d{2}):?(\d{2})?$/);
+    if (isoMatch) {
+      const [, y, m, d, h, min, sec] = isoMatch;
+      const date = new Date(parseInt(y), parseInt(m) - 1, parseInt(d), parseInt(h), parseInt(min), parseInt(sec || '0'));
+      return isNaN(date.getTime()) ? null : date;
+    }
+
+    // Fallback: try native Date constructor
+    const parsed = new Date(str);
+    if (!isNaN(parsed.getTime())) return parsed;
+
     return null;
   }
 
   private formatDateTimeString(date: Date): string {
+    // Use local time methods for dates parsed from string (local),
+    // but handle UTC dates from cellDates/serial conversion properly
     const y = date.getFullYear();
     const mo = String(date.getMonth() + 1).padStart(2, '0');
     const d = String(date.getDate()).padStart(2, '0');

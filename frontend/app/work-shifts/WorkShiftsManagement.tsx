@@ -77,7 +77,7 @@ export function WorkShiftsManagement() {
     null
   );
   const user = useCurrentUser();
-  const canManage = user?.role === "SUPERADMIN" || user?.role === "MANAGER" || user?.role === "COMPANY_ADMIN";
+  const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN";
   const isEmployee = user?.role === "EMPLOYEE";
   const [currentUserMapping, setCurrentUserMapping] = useState<any>(null);
 
@@ -127,7 +127,7 @@ export function WorkShiftsManagement() {
 
   // Load mapping for MANAGER
   useEffect(() => {
-    if (user?.role !== "MANAGER") return;
+    if (user?.role !== "SERVICE_PROVIDER") return;
 
     (async () => {
       const res = await fetch("/backend/users");
@@ -139,7 +139,7 @@ export function WorkShiftsManagement() {
 
   // Auto-inject mapped IDs for MANAGER
   useEffect(() => {
-    if (user?.role === "MANAGER" && currentUserMapping) {
+    if (user?.role === "SERVICE_PROVIDER" && currentUserMapping) {
       setFormData((p) => ({
         ...p,
         serviceProviderID: currentUserMapping.serviceProviderID,
@@ -171,7 +171,7 @@ export function WorkShiftsManagement() {
   const fetchCompanies = async (query: string) => {
     try {
       const spID =
-        user?.role === "MANAGER"
+        user?.role === "SERVICE_PROVIDER"
           ? currentUserMapping?.serviceProviderID
           : formData.serviceProviderID;
 
@@ -199,7 +199,7 @@ export function WorkShiftsManagement() {
   const fetchBranches = async (query: string) => {
     try {
       const companyID =
-        user?.role === "MANAGER"
+        user?.role === "SERVICE_PROVIDER"
           ? currentUserMapping?.companyID
           : formData.companyID;
 
@@ -299,8 +299,13 @@ export function WorkShiftsManagement() {
 
       if (currentUser) {
         let filtered: typeof mapped = [];
-        if (user?.role === "MANAGER") {
-          filtered = mapped.filter((s) => s.serviceProviderID === currentUser.serviceProviderID);
+        if (user?.role === "SERVICE_PROVIDER") {
+          const ctx = getSidebarContext();
+          if (ctx?.companyID) {
+            filtered = mapped.filter((s: any) => s.companyID === ctx.companyID);
+          } else {
+            filtered = mapped.filter((s) => s.serviceProviderID === currentUser.serviceProviderID);
+          }
         } else if (user?.role === "COMPANY_ADMIN") {
           filtered = mapped.filter((s) => s.companyID === currentUser.companyID);
         } else if (user?.role === "BRANCH_ADMIN") {
@@ -464,15 +469,15 @@ export function WorkShiftsManagement() {
 
       const workShiftData = {
         serviceProviderID:
-          user?.role === "MANAGER"
+          user?.role === "SERVICE_PROVIDER"
             ? currentUserMapping?.serviceProviderID
             : formData.serviceProviderID,
         companyID:
-          user?.role === "MANAGER"
+          user?.role === "SERVICE_PROVIDER"
             ? currentUserMapping?.companyID
             : formData.companyID,
         branchesID:
-          user?.role === "MANAGER"
+          user?.role === "SERVICE_PROVIDER"
             ? currentUserMapping?.branchesID
             : formData.branchesID,
         workShiftName: formData.workShiftName,
@@ -679,7 +684,7 @@ export function WorkShiftsManagement() {
                 )}
 
                 {/* MANAGER → Only Branch input */}
-                {user?.role === "MANAGER" && (
+                {user?.role === "SERVICE_PROVIDER" && (
                   <SearchSuggestInput
                     label="Branch Name"
                     placeholder="Select Branch"

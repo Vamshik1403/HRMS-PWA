@@ -18,6 +18,7 @@ import { Search, Edit, Trash2, Check, X, Plus, Settings, PlusCircle, MinusCircle
 import { SearchSuggestInput } from "../components/SearchSuggestInput"
 import { useCurrentUser } from "../hooks/useCurrentUser"
 import { toast } from "sonner"
+import { getSidebarContext } from "../utils/sidebarContext"
 
 // ============ Type Definitions ============
 type AdvanceStatus = "Pending" | "Approved" | "Rejected" | "Paid"
@@ -135,18 +136,18 @@ export function SalaryAdvanceManagement() {
   const [selectedSalaryPeriod, setSelectedSalaryPeriod] = useState("")
   
   const user = useCurrentUser()
-  const canManage = user?.role === "SUPERADMIN" || user?.role === "MANAGER" || user?.role === "COMPANY_ADMIN"
+  const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN"
   const isEmployee = !canManage
 
 
 
   const resolvedServiceProviderID =
-  user?.role === "MANAGER"
+  user?.role === "SERVICE_PROVIDER"
     ? managerData?.serviceProviderID
     : formData.serviceProviderID;
 
 const resolvedCompanyID =
-  user?.role === "MANAGER"
+  user?.role === "SERVICE_PROVIDER"
     ? managerData?.companyID
     : formData.companyID;
 
@@ -156,7 +157,7 @@ const resolvedBranchID = formData.branchesID;
   // ============ Load Manager Data ============
   useEffect(() => {
     const loadManagerData = async () => {
-      if (user?.role === "MANAGER") {
+      if (user?.role === "SERVICE_PROVIDER") {
         try {
           const usersData = await robustGet<any[]>(`${BACKEND_URL}/users`)
           const currentUser = usersData.find(u => u.username === user.username)
@@ -505,16 +506,19 @@ const fetchCompanies = useCallback(
         return
       }
 
-      if (user?.role === "MANAGER") {
-        const usersData = await robustGet<any[]>(`${BACKEND_URL}/users`)
-        const currentUser = usersData.find(u => u.username === user.username)
-        if (currentUser) {
+      if (user?.role === "SERVICE_PROVIDER") {
+        const ctx = getSidebarContext()
+        if (ctx?.companyID) {
           const filtered = mapped.filter(
-            a =>
-              a.companyID === currentUser.companyID &&
-              a.branchesID === currentUser.branchesID
+            a => a.companyID === ctx.companyID
           )
           setAdvances(filtered)
+          return
+        }
+        const usersData = await robustGet<any[]>(`${BACKEND_URL}/users`)
+        const currentUser = usersData.find(u => u.username === user.username)
+        if (currentUser?.serviceProviderID) {
+          setAdvances(mapped.filter((a: any) => a.serviceProviderID === currentUser.serviceProviderID))
           return
         }
       }
@@ -569,9 +573,9 @@ const fetchCompanies = useCallback(
     try {
       // For managers, auto-populate their company and branch data
       const submitData = {
-        serviceProviderID: user?.role === "MANAGER" ? managerData?.serviceProviderID : formData.serviceProviderID,
-        companyID: user?.role === "MANAGER" ? managerData?.companyID : formData.companyID,
-        branchesID: user?.role === "MANAGER" ? managerData?.branchesID : formData.branchesID,
+        serviceProviderID: user?.role === "SERVICE_PROVIDER" ? managerData?.serviceProviderID : formData.serviceProviderID,
+        companyID: user?.role === "SERVICE_PROVIDER" ? managerData?.companyID : formData.companyID,
+        branchesID: user?.role === "SERVICE_PROVIDER" ? managerData?.branchesID : formData.branchesID,
         manageEmployeeID: formData.manageEmployeeID,
         previousAdvancesDue: formData.previousAdvancesDue,
         advanceAmount: formData.advanceAmount,
@@ -606,16 +610,16 @@ const fetchCompanies = useCallback(
   const resetForm = useCallback(() => {
     setFormData({
       serviceProvider: "", 
-      companyName: user?.role === "MANAGER" ? managerData?.companyName || "" : "", 
+      companyName: user?.role === "SERVICE_PROVIDER" ? managerData?.companyName || "" : "", 
       branchName: "", 
       employeeName: "",
       previousAdvancesDue: "0", 
       advanceAmount: "", 
       reason: "", 
       status: "Pending", 
-      serviceProviderID: user?.role === "MANAGER" ? managerData?.serviceProviderID : undefined,
-      companyID: user?.role === "MANAGER" ? managerData?.companyID : undefined,
-      branchesID: user?.role === "MANAGER" ? managerData?.branchesID : undefined,
+      serviceProviderID: user?.role === "SERVICE_PROVIDER" ? managerData?.serviceProviderID : undefined,
+      companyID: user?.role === "SERVICE_PROVIDER" ? managerData?.companyID : undefined,
+      branchesID: user?.role === "SERVICE_PROVIDER" ? managerData?.branchesID : undefined,
       manageEmployeeID: undefined
     })
     setEditingAdvance(null)
@@ -886,7 +890,7 @@ const fetchCompanies = useCallback(
               )}
 
               {/* For Managers - Show read-only company info */}
-              {user?.role === "MANAGER" && (
+              {user?.role === "SERVICE_PROVIDER" && (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                  
                   <SearchSuggestInput 

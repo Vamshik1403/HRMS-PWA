@@ -68,7 +68,7 @@ const API = {
 
 export default function TerminationManagement() {
   const user = useCurrentUser();
-  const canManage = user?.role === "SUPERADMIN" || user?.role === "MANAGER" || user?.role === "COMPANY_ADMIN";
+  const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN";
 
   const [terminations, setTerminations] = useState<Termination[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Pencil, Save, AlertTriangle, Building2, Users, PlusCircle, MapPin, Plus, Trash2 } from "lucide-react";
 import { useCurrentUser } from "../hooks/useCurrentUser";
+import { getSidebarContext } from "../utils/sidebarContext";
 import { Button } from "../components/ui/button";
 import { ArrowLeft } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -120,26 +121,16 @@ export default function PTCompliancePage() {
   useEffect(() => {
     if (currentUser?.role === "SUPERADMIN") {
       fetchCompanies();
-    } else if (currentUser?.role === "MANAGER") {
-      // For MANAGER, first fetch all companies to get the full company list
+    } else if (currentUser?.role === "SERVICE_PROVIDER") {
       fetchCompanies().then(() => {
-        if (currentUser.companyID) {
-          // Create company object from user data
+        const ctx = getSidebarContext();
+        if (ctx?.companyID) {
           const managerCompany: Company = {
-            id: currentUser.companyID,
+            id: ctx.companyID,
             companyName: currentUser.company?.companyName || "Company"
           };
           setSelectedCompany(managerCompany);
-          
-          // Fetch branches for this company
-          fetchBranches(currentUser.companyID).then((fetchedBranches) => {
-            if (currentUser.branchesID && fetchedBranches.length > 0) {
-              // Find the specific branch from fetched branches
-              const managerBranch = fetchedBranches.find((b: Branch) => b.id === currentUser.branchesID);
-              if (managerBranch) {
-                setSelectedBranch(managerBranch);
-              }
-            }
+          fetchBranches(ctx.companyID).then(() => {
             setIsInitialized(true);
           });
         }
@@ -408,7 +399,7 @@ export default function PTCompliancePage() {
   };
 
   // Check if user is authorized
-  if (!currentUser || (currentUser.role !== "SUPERADMIN" && currentUser.role !== "MANAGER")) {
+  if (!currentUser || (currentUser.role !== "SUPERADMIN" && currentUser.role !== "SERVICE_PROVIDER")) {
     return (
       <div className="p-8 max-w-7xl mx-auto">
         <div className="bg-red-50 border border-red-200 rounded-lg p-6 text-center">
@@ -453,7 +444,7 @@ export default function PTCompliancePage() {
             </>
           )}
 
-          {currentUser?.role === "MANAGER" && selectedCompany && (
+          {currentUser?.role === "SERVICE_PROVIDER" && selectedCompany && (
             <div className="flex items-center gap-2 bg-blue-50 px-4 py-2 rounded-lg">
               <Building2 size={18} className="text-blue-600" />
               <span className="font-medium text-blue-800">{selectedCompany.companyName}</span>
@@ -474,7 +465,7 @@ export default function PTCompliancePage() {
               {branches.map(b => (
                 <option key={b.id} value={b.id}>
                   {b.branchName} {b.state ? `(${b.state})` : ''}
-                  {currentUser?.role === "MANAGER" && currentUser.branchesID === b.id ? ' (Your Branch)' : ''}
+                  {currentUser?.role === "SERVICE_PROVIDER" && currentUser.branchesID === b.id ? ' (Your Branch)' : ''}
                 </option>
               ))}
             </select>
@@ -503,7 +494,7 @@ export default function PTCompliancePage() {
               </div>
               <div className="p-6">
                 <p className="font-medium text-gray-900 text-lg">{selectedCompany.companyName}</p>
-                {currentUser?.role === "MANAGER" && (
+                {currentUser?.role === "SERVICE_PROVIDER" && (
                   <p className="text-xs text-gray-500 mt-2 flex items-center gap-1">
                     <span className="inline-block w-2 h-2 bg-green-500 rounded-full"></span>
                     Auto-selected from your profile
@@ -525,7 +516,7 @@ export default function PTCompliancePage() {
                 {selectedBranch.state && (
                   <p className="text-sm text-gray-600 mt-1">State: {selectedBranch.state}</p>
                 )}
-                {currentUser?.role === "MANAGER" && currentUser.branchesID === selectedBranch.id && (
+                {currentUser?.role === "SERVICE_PROVIDER" && currentUser.branchesID === selectedBranch.id && (
                   <p className="text-xs text-blue-600 mt-2 flex items-center gap-1">
                     <span className="inline-block w-2 h-2 bg-blue-500 rounded-full"></span>
                     Your assigned branch
@@ -887,7 +878,7 @@ export default function PTCompliancePage() {
           <AlertTriangle className="mx-auto h-12 w-12 text-yellow-500 mb-4" />
           <h2 className="text-xl font-semibold text-yellow-800 mb-2">No Selection</h2>
           <p className="text-yellow-700">
-            {currentUser?.role === "MANAGER" 
+            {currentUser?.role === "SERVICE_PROVIDER" 
               ? "Please select a branch to view PT compliance settings."
               : "Please select a company and branch to view PT compliance settings."}
           </p>

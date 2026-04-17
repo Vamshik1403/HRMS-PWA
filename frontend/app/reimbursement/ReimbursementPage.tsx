@@ -20,6 +20,7 @@ import jsPDF from "jspdf"
 import html2canvas from "html2canvas"
 import { useCurrentUser } from "../hooks/useCurrentUser"
 import { toast } from "sonner"
+import { getSidebarContext } from "../utils/sidebarContext"
 
 
 interface ReimbursementItem {
@@ -398,7 +399,7 @@ export function ReimbursementManagement() {
 const [empCreds, setEmpCreds] = useState<any>(null);
 
   const user = useCurrentUser()
-const canManage = user?.role === "SUPERADMIN" || user?.role === "MANAGER" || user?.role === "COMPANY_ADMIN"
+const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN"
 const isEmployee = !canManage
 
   const [formData, setFormData] = useState({
@@ -424,12 +425,12 @@ const isEmployee = !canManage
 
 
   const resolvedServiceProviderID =
-  user?.role === "MANAGER"
+  user?.role === "SERVICE_PROVIDER"
     ? managerData?.serviceProviderID
     : formData.serviceProviderID;
 
 const resolvedCompanyID =
-  user?.role === "MANAGER"
+  user?.role === "SERVICE_PROVIDER"
     ? managerData?.companyID
     : formData.companyID;
 
@@ -811,26 +812,17 @@ useEffect(() => {
     return
   }
 
-  if (user?.role === "MANAGER") {
+  if (user?.role === "SERVICE_PROVIDER") {
+    const ctx = getSidebarContext()
+    if (ctx?.companyID) {
+      setReimbursements(mapped.filter((r: any) => r.companyID === ctx.companyID))
+      return
+    }
     try {
       const usersData = await robustGet<any[]>(`${BACKEND_URL}/users`)
       const currentUser = usersData.find((u) => u.username === user.username)
-      if (currentUser) {
-        let filtered: any[];
-        if (currentUser.companyID && currentUser.branchesID) {
-          filtered = mapped.filter(
-            (r) =>
-              r.companyID === currentUser.companyID &&
-              r.branchesID === currentUser.branchesID
-          )
-        } else if (currentUser.companyID) {
-          filtered = mapped.filter((r) => r.companyID === currentUser.companyID)
-        } else if (currentUser.serviceProviderID) {
-          filtered = mapped.filter((r: any) => r.serviceProviderID === currentUser.serviceProviderID)
-        } else {
-          filtered = []
-        }
-        setReimbursements(filtered)
+      if (currentUser?.serviceProviderID) {
+        setReimbursements(mapped.filter((r: any) => r.serviceProviderID === currentUser.serviceProviderID))
         return
       }
     } catch (e) {
@@ -949,7 +941,7 @@ useEffect(() => {
 
   // Load mapping for MANAGER
 useEffect(() => {
-  if (user?.role !== "MANAGER") return;
+  if (user?.role !== "SERVICE_PROVIDER") return;
 
   (async () => {
     try {
@@ -988,7 +980,7 @@ const handleSubmit = async (e: React.FormEvent) => {
   }
 
   // MANAGER (auto)
-  if (user?.role === "MANAGER" && managerData) {
+  if (user?.role === "SERVICE_PROVIDER" && managerData) {
     payload.serviceProviderID = managerData.serviceProviderID;
     payload.companyID = managerData.companyID;
     payload.branchesID = managerData.branchesID;
@@ -997,7 +989,7 @@ const handleSubmit = async (e: React.FormEvent) => {
   }
 
   // EMPLOYEE (auto)
-  if (user?.role !== "SUPERADMIN" && user?.role !== "MANAGER" && empCreds) {
+  if (user?.role !== "SUPERADMIN" && user?.role !== "SERVICE_PROVIDER" && empCreds) {
     payload.serviceProviderID = empCreds.serviceProviderID;
     payload.companyID = empCreds.companyID;
     payload.branchesID = empCreds.branchesID;
@@ -1204,7 +1196,7 @@ onClick={async () => {
   resetForm();
 
   // === MANAGER AUTO-FILL ===
-  if (user?.role === "MANAGER") {
+  if (user?.role === "SERVICE_PROVIDER") {
     const users = await robustGet<any[]>(`${BACKEND_URL}/users`);
     const me = users.find((u: any) => u.username === user.username);
     if (me) {
@@ -1219,7 +1211,7 @@ onClick={async () => {
   }
 
   // === EMPLOYEE AUTO-FILL ===
-  if (user?.role !== "SUPERADMIN" && user?.role !== "MANAGER") {
+  if (user?.role !== "SUPERADMIN" && user?.role !== "SERVICE_PROVIDER") {
     const creds = await robustGet<any[]>(
       `${BACKEND_URL}/manage-emp/credentials/all`
     );
@@ -1518,7 +1510,7 @@ fetchData={(q) => fetchBranches(q)}
 )}
 
 {/* MANAGER → only Branch input, SP + Company hidden */}
-{user?.role === "MANAGER" && (
+{user?.role === "SERVICE_PROVIDER" && (
   <div className="grid grid-cols-1 gap-4">
     <SearchSuggestInput
       label="Branch"
@@ -1541,7 +1533,7 @@ fetchData={(q) => fetchBranches(q)}
 )}
 
 {/* EMPLOYEE → No SP / Company / Branch fields at all */}
-{user?.role !== "SUPERADMIN" && user?.role !== "MANAGER" && (
+{user?.role !== "SUPERADMIN" && user?.role !== "SERVICE_PROVIDER" && (
   <></>
 )}
 

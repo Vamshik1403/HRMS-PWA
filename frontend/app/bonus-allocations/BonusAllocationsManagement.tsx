@@ -201,14 +201,14 @@ export function BonusAllocationsManagement() {
   const [editingAllocation, setEditingAllocation] = useState<BonusAllocationUI | null>(null);
 
   const user = useCurrentUser();
-  const canManage = user?.role === "SUPERADMIN" || user?.role === "MANAGER" || user?.role === "COMPANY_ADMIN";
+  const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN";
   const isEmployee = user?.role === "EMPLOYEE";
 
   const [currentUserMapping, setCurrentUserMapping] = useState<any>(null);
 
   // Fetch mapping for MANAGER
   useEffect(() => {
-    if (user?.role !== "MANAGER") return;
+    if (user?.role !== "SERVICE_PROVIDER") return;
 
     (async () => {
       try {
@@ -269,7 +269,7 @@ export function BonusAllocationsManagement() {
       // Build URL with filters for MANAGER role
       let allocationsUrl = API.allocations;
       
-      if (user?.role === "MANAGER" && currentUserMapping) {
+      if (user?.role === "SERVICE_PROVIDER" && currentUserMapping) {
         const params = new URLSearchParams();
         if (currentUserMapping.companyID) params.append('companyID', currentUserMapping.companyID.toString());
         if (currentUserMapping.branchesID) params.append('branchesID', currentUserMapping.branchesID.toString());
@@ -293,7 +293,7 @@ export function BonusAllocationsManagement() {
 
       // Additional client-side filtering for MANAGER role
       let filteredData = data;
-      if (user?.role === "MANAGER" && currentUserMapping) {
+      if (user?.role === "SERVICE_PROVIDER" && currentUserMapping) {
         if (currentUserMapping.companyID && currentUserMapping.branchesID) {
           filteredData = data.filter(allocation => {
             const allocationCompanyID = allocation.bonusSetup?.companyID;
@@ -344,17 +344,10 @@ export function BonusAllocationsManagement() {
       }
 
       // 🟡 MANAGER — filter from /users
-      if (user?.role === "MANAGER") {
-        const usersRes = await fetch("/backend/users");
-        const users = await usersRes.json();
-        const currentUser = users.find((u: any) => u.username === user.username);
-        if (currentUser) {
-          const filtered = all.filter(
-            (a) =>
-              a.companyID === currentUser.companyID &&
-              a.branchesID === currentUser.branchesID
-          );
-          setAllocations(filtered);
+      if (user?.role === "SERVICE_PROVIDER") {
+        const ctx = getSidebarContext();
+        if (ctx?.companyID) {
+          setAllocations(all.filter((a: any) => a.companyID === ctx.companyID));
           return;
         }
       }
@@ -404,7 +397,7 @@ export function BonusAllocationsManagement() {
       // Build URL with filters for MANAGER role
       let employeesUrl = API.employees;
       
-      if (user?.role === "MANAGER" && currentUserMapping) {
+      if (user?.role === "SERVICE_PROVIDER" && currentUserMapping) {
         const params = new URLSearchParams();
         if (currentUserMapping.companyID) params.append('companyID', currentUserMapping.companyID.toString());
         if (currentUserMapping.branchesID) params.append('branchesID', currentUserMapping.branchesID.toString());
@@ -419,7 +412,7 @@ export function BonusAllocationsManagement() {
       
       // Additional client-side filtering for MANAGER role
       let filtered = list;
-      if (user?.role === "MANAGER" && currentUserMapping) {
+      if (user?.role === "SERVICE_PROVIDER" && currentUserMapping) {
         filtered = list.filter(employee => {
           return employee.companyID === currentUserMapping.companyID && 
                  employee.branchesID === currentUserMapping.branchesID;
@@ -448,7 +441,7 @@ export function BonusAllocationsManagement() {
       // Build URL with filters for MANAGER role
       let bonusUrl = API.bonusSetups;
       
-      if (user?.role === "MANAGER" && currentUserMapping) {
+      if (user?.role === "SERVICE_PROVIDER" && currentUserMapping) {
         const params = new URLSearchParams();
         if (currentUserMapping.companyID) params.append('companyID', currentUserMapping.companyID.toString());
         if (currentUserMapping.branchesID) params.append('branchesID', currentUserMapping.branchesID.toString());
@@ -463,7 +456,7 @@ export function BonusAllocationsManagement() {
       
       // Additional client-side filtering for MANAGER role
       let filtered = list;
-      if (user?.role === "MANAGER" && currentUserMapping) {
+      if (user?.role === "SERVICE_PROVIDER" && currentUserMapping) {
         filtered = list.filter(bonus => {
           return bonus.companyID === currentUserMapping.companyID && 
                  bonus.branchesID === currentUserMapping.branchesID;

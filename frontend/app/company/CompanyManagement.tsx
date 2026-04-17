@@ -75,8 +75,8 @@ export function CompanyManagement() {
   const [isAddingNew, setIsAddingNew] = useState(false)
   const [isViewing, setIsViewing] = useState(false)
   const user = useCurrentUser()
-  const canManage = user?.role === "SUPERADMIN" || user?.role === "MANAGER" || user?.role === "COMPANY_ADMIN"
-  const isNonSuperAdmin = user?.role === "MANAGER" || user?.role === "COMPANY_ADMIN" || user?.role === "BRANCH_ADMIN"
+  const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN"
+  const isNonSuperAdmin = user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN" || user?.role === "BRANCH_ADMIN"
 
   interface CompanyFormData extends Partial<Company> {
     autocompleteName?: string
@@ -167,20 +167,24 @@ export function CompanyManagement() {
         return
       }
 
-      if (user?.role === "MANAGER") {
+      if (user?.role === "SERVICE_PROVIDER") {
+        const ctx = getSidebarContext()
         const usersRes = await fetch("/backend/users")
         const users = await usersRes.json()
         const currentUser = users.find((u: any) => u.username === user.username)
+
+        if (ctx?.companyID) {
+          // Show only the selected company from sidebar
+          const filtered = all.filter((c: any) => c.id === ctx.companyID)
+          setCompanies(filtered)
+          return
+        }
 
         if (currentUser) {
           let filtered;
           if (currentUser.serviceProviderID) {
             filtered = all.filter(
               (c: any) => c.serviceProviderID === currentUser.serviceProviderID
-            )
-          } else if (currentUser.companyID) {
-            filtered = all.filter(
-              (c: any) => c.id === currentUser.companyID
             )
           } else {
             filtered = []
@@ -846,7 +850,7 @@ export function CompanyManagement() {
                               <Eye className="w-3 h-3" />
                             </Button>
 
-                            {(user?.role === "SUPERADMIN" || user?.role === "MANAGER" || user?.role === "COMPANY_ADMIN") && (
+                            {(user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN") && (
                               <Button
                                 variant="ghost"
                                 size="sm"

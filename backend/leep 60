@@ -1,0 +1,16 @@
+ id | serviceProviderID | companyID | branchesID | employeeFirstName 
+----+-------------------+-----------+------------+-------------------
+  7 |                 6 |        16 |          4 | Employee1111
+  8 |                 7 |        17 |          7 | Employee2111
+  9 |                 6 |        16 |          4 | Employee1112
+ 10 |                 7 |        17 |          7 | Employee2112
+ 12 |                 6 |        18 |         10 | Employee1211
+ 13 |                 6 |        18 |         10 | Employee1212
+ 14 |                 7 |        20 |         11 | Employee2211
+ 15 |                 7 |        20 |         11 | Employee2212
+ 16 |                 6 |        18 |         12 | Employee1221
+ 17 |                 6 |        18 |            | Employee1222
+ 18 |                 7 |        20 |         13 | Employee2221
+ 19 |                 7 |        20 |         13 | Employee2222
+(12 rows)
+

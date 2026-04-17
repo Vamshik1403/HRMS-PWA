@@ -198,14 +198,14 @@ export function EmployeesPromotionsManagement() {
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const user = useCurrentUser();
-  const canManage = user?.role === "SUPERADMIN" || user?.role === "MANAGER" || user?.role === "COMPANY_ADMIN";
+  const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN";
   const isEmployee = user?.role === "EMPLOYEE";
 
   const [currentUserMapping, setCurrentUserMapping] = useState<any | null>(null);
 
   // Fetch mapping for MANAGER
   useEffect(() => {
-    if (user?.role !== "MANAGER") return;
+    if (user?.role !== "SERVICE_PROVIDER") return;
 
     (async () => {
       const res = await fetch("/backend/users");
@@ -218,7 +218,7 @@ export function EmployeesPromotionsManagement() {
 
   // Auto-assign for MANAGER before creating
   useEffect(() => {
-    if (user?.role === "MANAGER" && currentUserMapping) {
+    if (user?.role === "SERVICE_PROVIDER" && currentUserMapping) {
       setFormData((p) => ({
         ...p,
         serviceProviderID: currentUserMapping.serviceProviderID,
@@ -241,7 +241,7 @@ export function EmployeesPromotionsManagement() {
     if (user?.role === "SUPERADMIN") return arr;
 
     // MANAGER → company fixed, branch depends on selection
-    if (user?.role === "MANAGER" && currentUserMapping) {
+    if (user?.role === "SERVICE_PROVIDER" && currentUserMapping) {
       return arr.filter(
         (x) =>
           x.companyID === currentUserMapping.companyID &&
@@ -587,7 +587,7 @@ export function EmployeesPromotionsManagement() {
 
 
   const resolvedCompanyID =
-    user?.role === "MANAGER"
+    user?.role === "SERVICE_PROVIDER"
       ? currentUserMapping?.companyID
       : formData.companyID;
 
@@ -613,27 +613,17 @@ export function EmployeesPromotionsManagement() {
       }
 
       // 🟡 MANAGER → Filter by /users mapping
-      if (user?.role === "MANAGER") {
+      if (user?.role === "SERVICE_PROVIDER") {
+        const ctx = getSidebarContext();
+        if (ctx?.companyID) {
+          setRows(list.filter((r: any) => r.companyID === ctx.companyID));
+          return;
+        }
         const usersRes = await fetch("/backend/users");
         const users = await usersRes.json();
         const currentUser = users.find((u: any) => u.username === user.username);
-
-        if (currentUser) {
-          let filtered: any[];
-          if (currentUser.companyID && currentUser.branchesID) {
-            filtered = list.filter(
-              (r: any) =>
-                r.companyID === currentUser.companyID &&
-                r.branchesID === currentUser.branchesID
-            );
-          } else if (currentUser.companyID) {
-            filtered = list.filter((r: any) => r.companyID === currentUser.companyID);
-          } else if (currentUser.serviceProviderID) {
-            filtered = list.filter((r: any) => r.serviceProviderID === currentUser.serviceProviderID);
-          } else {
-            filtered = [];
-          }
-          setRows(filtered);
+        if (currentUser?.serviceProviderID) {
+          setRows(list.filter((r: any) => r.serviceProviderID === currentUser.serviceProviderID));
           return;
         }
       }
@@ -759,7 +749,7 @@ const runFetchBR = (query: string) => {
   brTimerRef.current = setTimeout(async () => {
     // company must be known
     const companyID =
-      user?.role === "MANAGER"
+      user?.role === "SERVICE_PROVIDER"
         ? currentUserMapping?.companyID
         : formData.companyID;
 
@@ -803,12 +793,12 @@ const runFetchBR = (query: string) => {
   empTimerRef.current = setTimeout(async () => {
     // 🔒 HARD STOP: branch + company must exist
     const companyID =
-      user?.role === "MANAGER"
+      user?.role === "SERVICE_PROVIDER"
         ? currentUserMapping?.companyID
         : formData.companyID;
 
     const branchID =
-      user?.role === "MANAGER"
+      user?.role === "SERVICE_PROVIDER"
         ? currentUserMapping?.branchesID
         : formData.branchesID;
 

@@ -8,6 +8,7 @@ import { Label } from "../components/ui/label";
 import { Badge } from "../components/ui/badge";
 import { Search, Download, FileText } from "lucide-react";
 import { useCurrentUser } from "../hooks/useCurrentUser";
+import { getSidebarContext } from "../utils/sidebarContext";
 import * as XLSX from "xlsx";
 
 // ─── Interfaces ─────────────────────────────────────────────
@@ -226,7 +227,7 @@ export function LeaveReportsManagement() {
     if (!user) return;
     const loadUserData = async () => {
       try {
-        if (user.role === "MANAGER") {
+        if (user.role === "SERVICE_PROVIDER") {
           const usersRes = await fetch(`${BACKEND_URL}/users`);
           const users = await usersRes.json();
           const me = users.find((u: any) => u.username === user.username);
@@ -249,10 +250,11 @@ export function LeaveReportsManagement() {
   useEffect(() => {
     if (!user) return;
     let data = [...allBranches];
-    if (user.role === "MANAGER" && managerData) {
-      if (managerData.companyID) {
-        data = data.filter((b) => b.companyID === managerData.companyID);
-      } else if (managerData.serviceProviderID) {
+    if (user.role === "SERVICE_PROVIDER") {
+      const ctx = getSidebarContext();
+      if (ctx?.companyID) {
+        data = data.filter((b) => b.companyID === ctx.companyID);
+      } else if (managerData?.serviceProviderID) {
         data = data.filter((b: any) => b.serviceProviderID === managerData.serviceProviderID);
       }
     } else if (user.role === "EMPLOYEE" && empCreds) {
@@ -312,10 +314,11 @@ export function LeaveReportsManagement() {
         selectedCompanyID = formData.companyID;
         const branch = allBranches.find((b) => b.branchName === formData.branchName);
         selectedBranchID = branch?.id ?? null;
-      } else if (user?.role === "MANAGER" && managerData) {
-        selectedCompanyID = managerData.companyID;
-        selectedBranchID = managerData.branchesID;
-        if (!selectedCompanyID && managerData.serviceProviderID) {
+      } else if (user?.role === "SERVICE_PROVIDER") {
+        const ctx = getSidebarContext();
+        selectedCompanyID = ctx?.companyID || managerData?.companyID;
+        selectedBranchID = managerData?.branchesID;
+        if (!selectedCompanyID && managerData?.serviceProviderID) {
           const branch = allBranches.find((b) => b.branchName === formData.branchName);
           selectedCompanyID = branch?.companyID ?? null;
           selectedBranchID = branch?.id ?? null;

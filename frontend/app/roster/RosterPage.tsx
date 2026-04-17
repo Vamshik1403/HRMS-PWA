@@ -227,7 +227,7 @@ export function RosterManagement() {
 
   // Get user from localStorage
   const [user, setUser] = useState<any>(null)
-  const [userRole, setUserRole] = useState<"SUPERADMIN" | "MANAGER" | "EMPLOYEE" | null>(null)
+  const [userRole, setUserRole] = useState<"SUPERADMIN" | "SERVICE_PROVIDER" | "EMPLOYEE" | null>(null)
 
   // ==================== USER AUTHENTICATION ====================
   useEffect(() => {
@@ -249,7 +249,7 @@ export function RosterManagement() {
 
   // Load user mapping for MANAGER
   useEffect(() => {
-    if (userRole !== "MANAGER" || !user) return
+    if (userRole !== "SERVICE_PROVIDER" || !user) return
 
     const loadUserMapping = async () => {
       try {
@@ -305,23 +305,23 @@ export function RosterManagement() {
   }, [userRole, user])
 
   const isSuperAdmin = userRole === "SUPERADMIN"
-  const isManager = userRole === "MANAGER"
+  const isServiceProvider = userRole === "SERVICE_PROVIDER"
 
   // ✅ EFFECTIVE SCOPE
   const effectiveServiceProviderID = useMemo(() => {
-    if (isManager && currentUserMapping) return currentUserMapping.serviceProviderID
+    if (isServiceProvider && currentUserMapping) return currentUserMapping.serviceProviderID
     return serviceProviderID
-  }, [isManager, currentUserMapping, serviceProviderID])
+  }, [isServiceProvider, currentUserMapping, serviceProviderID])
 
   const effectiveCompanyID = useMemo(() => {
-    if (isManager) return companyID
+    if (isServiceProvider) return companyID
     return companyID
-  }, [isManager, currentUserMapping, companyID])
+  }, [isServiceProvider, currentUserMapping, companyID])
 
   const effectiveBranchesID = useMemo(() => {
-    if (isManager) return branchesID
+    if (isServiceProvider) return branchesID
     return branchesID
-  }, [isManager, currentUserMapping, branchesID])
+  }, [isServiceProvider, currentUserMapping, branchesID])
 
   // ==================== COMPUTED VALUES ====================
   const dates = useMemo(() => {
@@ -344,7 +344,7 @@ export function RosterManagement() {
       )
     }
 
-    if (isManager) {
+    if (isServiceProvider) {
       return (
         !!currentUserMapping?.serviceProviderID &&
         !!companyID &&
@@ -357,7 +357,7 @@ export function RosterManagement() {
     return false
   }, [
     isSuperAdmin,
-    isManager,
+    isServiceProvider,
     serviceProviderID,
     companyID,
     branchesID,
@@ -566,7 +566,7 @@ export function RosterManagement() {
     }
 
     if (isSuperAdmin && (!serviceProviderID || !companyID || !branchesID)) return
-    if (isManager && (!companyID || !branchesID)) return
+    if (isServiceProvider && (!companyID || !branchesID)) return
 
     const loadDepartments = async () => {
       try {
@@ -585,12 +585,12 @@ export function RosterManagement() {
     }
 
     loadDepartments()
-  }, [effectiveServiceProviderID, effectiveCompanyID, effectiveBranchesID, isSuperAdmin, isManager])
+  }, [effectiveServiceProviderID, effectiveCompanyID, effectiveBranchesID, isSuperAdmin, isServiceProvider])
 
   // Load designations when department changes
   useEffect(() => {
     if (isSuperAdmin && (!serviceProviderID || !companyID || !branchesID)) return
-    if (isManager && (!companyID || !branchesID)) return
+    if (isServiceProvider && (!companyID || !branchesID)) return
 
     const loadDesignations = async () => {
       try {
@@ -614,7 +614,7 @@ export function RosterManagement() {
     }
 
     loadDesignations()
-  }, [effectiveServiceProviderID, effectiveCompanyID, effectiveBranchesID, departmentID, isSuperAdmin, isManager])
+  }, [effectiveServiceProviderID, effectiveCompanyID, effectiveBranchesID, departmentID, isSuperAdmin, isServiceProvider])
 
   // Auto-refresh roster data
   useEffect(() => {
@@ -945,7 +945,7 @@ export function RosterManagement() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <p className="text-sm text-gray-600 mt-1">
-            {isManager ? (
+            {isServiceProvider ? (
               `👨‍💼 Manager: ${user?.username || "Unknown"} - Role: ${userRole}`
             ) : isSuperAdmin ? (
               `👑 Super Admin: ${user?.username || "Unknown"}`
@@ -994,7 +994,7 @@ export function RosterManagement() {
             <div className="flex items-center gap-2">
               <span className="font-medium">Role:</span>
               <Badge className={`px-3 py-1 ${userRole === "SUPERADMIN" ? "bg-purple-100 text-purple-700 border-purple-300" :
-                userRole === "MANAGER" ? "bg-blue-100 text-blue-700 border-blue-300" :
+                userRole === "SERVICE_PROVIDER" ? "bg-blue-100 text-blue-700 border-blue-300" :
                   "bg-gray-100 text-gray-700 border-gray-300"
                 }`}>
                 {userRole}
@@ -1055,7 +1055,7 @@ export function RosterManagement() {
                 }}
                 disabled={
                   (isSuperAdmin && !serviceProviderID) ||
-                  (isManager && coList.length === 0)
+                  (isServiceProvider && coList.length === 0)
                 }
               >
                 <option value="">Select Company</option>
@@ -1074,7 +1074,7 @@ export function RosterManagement() {
                 onChange={(e) => setBranchesID(e.target.value ? Number(e.target.value) : "")}
                 disabled={
                   (isSuperAdmin && (!serviceProviderID || !companyID)) ||
-                  (isManager && (!companyID || brList.length === 0))
+                  (isServiceProvider && (!companyID || brList.length === 0))
                 }
               >
                 <option value="">Select Branch</option>
@@ -1097,7 +1097,7 @@ export function RosterManagement() {
                 }}
                 disabled={
                   (isSuperAdmin && (!serviceProviderID || !companyID || !branchesID)) ||
-                  (isManager && (!companyID || !branchesID))
+                  (isServiceProvider && (!companyID || !branchesID))
                 }
                 required
               >
@@ -1117,7 +1117,7 @@ export function RosterManagement() {
                 onChange={(e) => setDesignationID(e.target.value ? Number(e.target.value) : "")}
                 disabled={
                   (isSuperAdmin && (!serviceProviderID || !companyID || !branchesID)) ||
-                  (isManager && (!companyID || !branchesID)) ||
+                  (isServiceProvider && (!companyID || !branchesID)) ||
                   !departmentID // Disable if no department selected
                 }
               >
@@ -1198,13 +1198,13 @@ export function RosterManagement() {
                 Approved Leaves: {leaveApplications.length}
               </Badge>
             )}
-            {isManager && (
+            {isServiceProvider && (
               <Badge variant="outline" className="px-3 py-1 bg-[#eef2ff] text-[#4338ca] border-[#d1d5db]">
                 <Users className="w-3 h-3 mr-1" />
                 Manager Mode
               </Badge>
             )}
-            {isManager && currentUserMapping && (
+            {isServiceProvider && currentUserMapping && (
               <Badge variant="outline" className="px-3 py-1 bg-green-100 text-green-700 border-green-300">
                 Companies: {managerCompanies.length}
               </Badge>

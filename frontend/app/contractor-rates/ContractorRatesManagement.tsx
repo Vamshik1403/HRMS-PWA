@@ -79,7 +79,7 @@ function useSearchSuggest<T>(
 export function ContractorRatesManagement() {
   const user = useCurrentUser();
   const canManage =
-    user?.role === "SUPERADMIN" || user?.role === "MANAGER" || user?.role === "COMPANY_ADMIN";
+    user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN";
 
   const [contractors, setContractors] = useState<ContractorRead[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
@@ -136,7 +136,7 @@ export function ContractorRatesManagement() {
 
   useEffect(() => {
     if (!user) return;
-    if (user.role === "MANAGER") {
+    if (user.role === "SERVICE_PROVIDER") {
       fetch("/backend/users")
         .then((r) => r.json())
         .then((users) => {
@@ -167,10 +167,11 @@ export function ContractorRatesManagement() {
         if (ctx?.companyID) {
           data = data.filter((c) => c.companyID === ctx.companyID);
         }
-      } else if (user?.role === "MANAGER" && currentUserMapping) {
-        if (currentUserMapping.companyID) {
-          data = data.filter((c) => c.companyID === currentUserMapping.companyID);
-        } else if (currentUserMapping.serviceProviderID) {
+      } else if (user?.role === "SERVICE_PROVIDER") {
+        const ctx = getSidebarContext();
+        if (ctx?.companyID) {
+          data = data.filter((c: any) => c.companyID === ctx.companyID);
+        } else if (currentUserMapping?.serviceProviderID) {
           data = data.filter((c: any) => c.serviceProviderID === currentUserMapping.serviceProviderID);
         }
       }
@@ -215,7 +216,7 @@ export function ContractorRatesManagement() {
     contrTimerRef.current = setTimeout(async () => {
       try {
         let all = await fetchJSONSafe<ContractorRead[]>(API.contractors);
-        if (user?.role === "MANAGER" && currentUserMapping) {
+        if (user?.role === "SERVICE_PROVIDER" && currentUserMapping) {
           all = all.filter((c) => c.companyID === currentUserMapping.companyID);
         }
         const ql = q.trim().toLowerCase();

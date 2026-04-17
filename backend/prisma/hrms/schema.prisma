@@ -1662,6 +1662,7 @@ enum UserRole {
   SERVICE_PROVIDER
   COMPANY_ADMIN
   BRANCH_ADMIN
+  EMPLOYEE
 }
 
 enum OTStatus {

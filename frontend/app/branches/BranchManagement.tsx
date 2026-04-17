@@ -139,7 +139,7 @@ export function BranchManagement() {
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [signatureFile, setSignatureFile] = useState<File | null>(null);
   const user = useCurrentUser();
-  const canManage = user?.role === "SUPERADMIN" || user?.role === "MANAGER" || user?.role === "COMPANY_ADMIN";
+  const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN";
   const canCreate = user?.role === "SUPERADMIN";
   const isEmployee = user?.role === "EMPLOYEE";
 
@@ -214,12 +214,14 @@ export function BranchManagement() {
         // Store the user mapping for form auto-fill
         setCurrentUserMapping(currentUser);
 
-        if (user?.role === "MANAGER") {
-          // Service provider sees all branches under their service provider
-          const filtered = all.filter(
-            (b: any) => b.serviceProviderID === currentUser.serviceProviderID
-          );
-          setBranches(filtered);
+        if (user?.role === "SERVICE_PROVIDER") {
+          // Service provider sees branches for selected company from sidebar
+          const ctx = getSidebarContext();
+          if (ctx?.companyID) {
+            setBranches(all.filter((b: any) => b.companyID === ctx.companyID));
+          } else {
+            setBranches(all.filter((b: any) => b.serviceProviderID === currentUser.serviceProviderID));
+          }
         } else if (user?.role === "COMPANY_ADMIN") {
           // Company admin sees all branches in their company
           let filtered: any[];
@@ -390,7 +392,7 @@ export function BranchManagement() {
     };
 
     // Auto-set Service Provider and Company for MANAGER/COMPANY_ADMIN (no UI display)
-    if ((user?.role === "MANAGER" || user?.role === "COMPANY_ADMIN") && currentUserMapping) {
+    if ((user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN") && currentUserMapping) {
       baseFormData.serviceProviderID = currentUserMapping.serviceProviderID;
       baseFormData.companyID = currentUserMapping.companyID;
     } else if (user?.role === "SUPERADMIN") {
@@ -464,7 +466,7 @@ export function BranchManagement() {
     let finalServiceProviderID = formData.serviceProviderID;
     let finalCompanyID = formData.companyID;
 
-    if ((user?.role === "MANAGER" || user?.role === "COMPANY_ADMIN") && currentUserMapping) {
+    if ((user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN") && currentUserMapping) {
       finalServiceProviderID = currentUserMapping.serviceProviderID;
       finalCompanyID = currentUserMapping.companyID;
     }
@@ -561,7 +563,7 @@ export function BranchManagement() {
     let spName = "";
     let coName = "";
 
-    if ((user?.role === "MANAGER" || user?.role === "COMPANY_ADMIN") && currentUserMapping) {
+    if ((user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN") && currentUserMapping) {
       // Use MANAGER's mapped IDs
       finalServiceProviderID = currentUserMapping.serviceProviderID;
       finalCompanyID = currentUserMapping.companyID;

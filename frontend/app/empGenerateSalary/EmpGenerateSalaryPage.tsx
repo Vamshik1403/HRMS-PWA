@@ -1123,7 +1123,7 @@ export function EmpGenerateSalary() {
 
 const user = useCurrentUser()
 const [items, setItems] = useState<GenerateSalaryRow[]>([])
-const canManage = user?.role === "SUPERADMIN" || user?.role === "MANAGER" || user?.role === "COMPANY_ADMIN"
+const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN"
 
   // suggestion states
   const [spList, setSpList] = useState<SP[]>([]);
@@ -1287,25 +1287,16 @@ const canManage = user?.role === "SUPERADMIN" || user?.role === "MANAGER" || use
     }
 
     // === MANAGER → match companyID + branchesID from /users
-    if (user?.role === "MANAGER") {
+    if (user?.role === "SERVICE_PROVIDER") {
+      const ctx = getSidebarContext()
+      if (ctx?.companyID) {
+        setItems(allItems.filter((r: any) => r.companyID === ctx.companyID))
+        return
+      }
       const users = await robustGet(`${BACKEND_URL}/users`)
       const currentUser = users.find((u: any) => u.username === user.username)
-      if (currentUser) {
-        let filtered: any[];
-        if (currentUser.companyID && currentUser.branchesID) {
-          filtered = allItems.filter(
-            (r) =>
-              r.companyID === currentUser.companyID &&
-              r.branchesID === currentUser.branchesID
-          )
-        } else if (currentUser.companyID) {
-          filtered = allItems.filter((r) => r.companyID === currentUser.companyID)
-        } else if (currentUser.serviceProviderID) {
-          filtered = allItems.filter((r: any) => r.serviceProviderID === currentUser.serviceProviderID)
-        } else {
-          filtered = []
-        }
-        setItems(filtered)
+      if (currentUser?.serviceProviderID) {
+        setItems(allItems.filter((r: any) => r.serviceProviderID === currentUser.serviceProviderID))
         return
       }
     }

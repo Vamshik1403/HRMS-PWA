@@ -97,7 +97,7 @@ export function AttendanceRegularisationManagement() {
   const [isFetchingStatus, setIsFetchingStatus] = useState(false)
   
   const user = useCurrentUser()
-  const canManage = user?.role === "SUPERADMIN" || user?.role === "MANAGER" || user?.role === "COMPANY_ADMIN"
+  const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN"
 
   // Load user data based on role
   useEffect(() => {
@@ -106,7 +106,7 @@ export function AttendanceRegularisationManagement() {
     const loadUserData = async () => {
       try {
         // --- MANAGER ---
-        if (user.role === "MANAGER") {
+        if (user.role === "SERVICE_PROVIDER") {
           const usersRes = await fetch(`${BACKEND_URL}/users`);
           const users = await usersRes.json();
           const me = users.find((u: any) => u.username === user.username);
@@ -205,7 +205,7 @@ export function AttendanceRegularisationManagement() {
       }
 
       // MANAGER → only mapped branches (filtered by search)
-      if (user?.role === "MANAGER" && managerData) {
+      if (user?.role === "SERVICE_PROVIDER" && managerData) {
         let filteredByCompany;
         if (managerData.companyID) {
           filteredByCompany = data.filter(
@@ -266,7 +266,7 @@ export function AttendanceRegularisationManagement() {
       }
 
       // MANAGER → only employees from same company and branch
-      if (user?.role === "MANAGER" && managerData) {
+      if (user?.role === "SERVICE_PROVIDER" && managerData) {
         let filtered;
         if (managerData.companyID) {
           filtered = data.filter(
@@ -384,17 +384,16 @@ export function AttendanceRegularisationManagement() {
         return
       }
 
-      if (user.role === "MANAGER") {
-        // Fetch manager info from /users
+      if (user.role === "SERVICE_PROVIDER") {
+        const ctx = getSidebarContext()
+        if (ctx?.companyID) {
+          setRegularisations(regularisationsData.filter((a: any) => a.companyID === ctx.companyID))
+          return
+        }
         const usersData = await fetch(`${BACKEND_URL}/users`).then((r) => r.json())
         const currentUser = usersData.find((u: any) => u.username === user.username)
-        if (currentUser) {
-          const filtered = regularisationsData.filter(
-            (a) =>
-              a.companyID === currentUser.companyID &&
-              a.branchesID === currentUser.branchesID
-          )
-          setRegularisations(filtered)
+        if (currentUser?.serviceProviderID) {
+          setRegularisations(regularisationsData.filter((a: any) => a.serviceProviderID === currentUser.serviceProviderID))
           return
         }
       }
@@ -768,7 +767,7 @@ export function AttendanceRegularisationManagement() {
                         valueField="id"
                         required
                       />
-                      {(user?.role === "MANAGER" || user?.role === "EMPLOYEE") && (
+                      {(user?.role === "SERVICE_PROVIDER" || user?.role === "EMPLOYEE") && (
                         <p className="text-xs text-gray-500 mt-1">
                           You can only select from your assigned branches
                         </p>
@@ -795,9 +794,9 @@ export function AttendanceRegularisationManagement() {
                       required
                     />
                     <p className="text-xs text-gray-500">Show FirstName + LastName + Emp ID</p>
-                    {(user?.role === "MANAGER" || user?.role === "EMPLOYEE") && (
+                    {(user?.role === "SERVICE_PROVIDER" || user?.role === "EMPLOYEE") && (
                       <p className="text-xs text-gray-500">
-                        {user?.role === "MANAGER" 
+                        {user?.role === "SERVICE_PROVIDER" 
                           ? "You can only select employees from your assigned branch" 
                           : "You can only select yourself"}
                       </p>

@@ -125,7 +125,7 @@ export function ContractorManagement() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const user = useCurrentUser();
-  const canManage = user?.role === "SUPERADMIN" || user?.role === "MANAGER" || user?.role === "COMPANY_ADMIN";
+  const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN";
   const isEmployee = user?.role === "EMPLOYEE";
   // Add this with your other state declarations
   const [currentUserMapping, setCurrentUserMapping] = useState<any>(null);
@@ -289,12 +289,15 @@ export function ContractorManagement() {
         // Store the user mapping for form auto-fill
         setCurrentUserMapping(currentUser);
 
-        if (user?.role === "MANAGER") {
-          const filtered = all.filter(
-            (c: any) =>
-              c.companyID === currentUser.companyID
-          );
-          setRows(filtered);
+        if (user?.role === "SERVICE_PROVIDER") {
+          const ctx = getSidebarContext();
+          if (ctx?.companyID) {
+            setRows(all.filter((c: any) => c.companyID === ctx.companyID));
+          } else if (currentUser.serviceProviderID) {
+            setRows(all.filter((c: any) => c.serviceProviderID === currentUser.serviceProviderID));
+          } else {
+            setRows([]);
+          }
         } else if (user?.role === "EMPLOYEE") {
           const filtered = all.filter(
             (c: any) =>
@@ -472,7 +475,7 @@ export function ContractorManagement() {
     };
 
     // Auto-set Service Provider and Company for MANAGER
-    if (user?.role === "MANAGER" && currentUserMapping) {
+    if (user?.role === "SERVICE_PROVIDER" && currentUserMapping) {
       baseFormData.serviceProviderID = currentUserMapping.serviceProviderID;
       baseFormData.companyID = currentUserMapping.companyID;
       baseFormData.spAutocomplete = currentUserMapping.serviceProvider?.companyName || "";
@@ -505,7 +508,7 @@ export function ContractorManagement() {
     let spName = "";
     let coName = "";
 
-    if (user?.role === "MANAGER" && currentUserMapping) {
+    if (user?.role === "SERVICE_PROVIDER" && currentUserMapping) {
       // Use MANAGER's mapped IDs
       finalServiceProviderID = currentUserMapping.serviceProviderID;
       finalCompanyID = currentUserMapping.companyID;
@@ -585,7 +588,7 @@ export function ContractorManagement() {
     let finalServiceProviderID = formData.serviceProviderID;
     let finalCompanyID = formData.companyID;
 
-    if (user?.role === "MANAGER" && currentUserMapping) {
+    if (user?.role === "SERVICE_PROVIDER" && currentUserMapping) {
       finalServiceProviderID = currentUserMapping.serviceProviderID;
       finalCompanyID = currentUserMapping.companyID;
     }

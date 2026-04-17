@@ -79,7 +79,7 @@ export function DepartmentManagement() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const user = useCurrentUser();
-  const canManage = user?.role === "SUPERADMIN" || user?.role === "MANAGER" || user?.role === "COMPANY_ADMIN";
+  const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN";
   const isEmployee = user?.role === "EMPLOYEE";
   const [currentUserMapping, setCurrentUserMapping] = useState<any>(null);
 
@@ -156,20 +156,15 @@ export function DepartmentManagement() {
         // Store the user mapping for form auto-fill
         setCurrentUserMapping(currentUser);
 
-        if (user?.role === "MANAGER") {
-          let filtered: any[];
-          if (currentUser.companyID) {
-            filtered = all.filter(
-              (r: any) => r.companyID === currentUser.companyID
-            );
+        if (user?.role === "SERVICE_PROVIDER") {
+          const ctx = getSidebarContext();
+          if (ctx?.companyID) {
+            setRows(all.filter((r: any) => r.companyID === ctx.companyID));
           } else if (currentUser.serviceProviderID) {
-            filtered = all.filter(
-              (r: any) => r.serviceProviderID === currentUser.serviceProviderID
-            );
+            setRows(all.filter((r: any) => r.serviceProviderID === currentUser.serviceProviderID));
           } else {
-            filtered = [];
+            setRows([]);
           }
-          setRows(filtered);
         } else if (user?.role === "COMPANY_ADMIN") {
           const filtered = all.filter(
             (r: any) => r.companyID === currentUser.companyID
@@ -296,7 +291,7 @@ export function DepartmentManagement() {
 
         // 🟡 Filter by companyID
         let filtered = all || [];
-        if (user?.role === "MANAGER" && currentUserMapping?.companyID) {
+        if (user?.role === "SERVICE_PROVIDER" && currentUserMapping?.companyID) {
           filtered = filtered.filter(
             (b: any) => b.companyID === currentUserMapping.companyID
           );
@@ -359,7 +354,7 @@ export function DepartmentManagement() {
     };
 
     // Auto-set Service Provider and Company for MANAGER
-    if (user?.role === "MANAGER" && currentUserMapping) {
+    if (user?.role === "SERVICE_PROVIDER" && currentUserMapping) {
       baseFormData.serviceProviderID = currentUserMapping.serviceProviderID;
       baseFormData.companyID = currentUserMapping.companyID;
       baseFormData.spAutocomplete = currentUserMapping.serviceProvider?.companyName || "";
@@ -393,7 +388,7 @@ export function DepartmentManagement() {
     let spName = "";
     let coName = "";
 
-    if (user?.role === "MANAGER" && currentUserMapping) {
+    if (user?.role === "SERVICE_PROVIDER" && currentUserMapping) {
       // Use MANAGER's mapped IDs
       finalServiceProviderID = currentUserMapping.serviceProviderID;
       finalCompanyID = currentUserMapping.companyID;
@@ -461,7 +456,7 @@ export function DepartmentManagement() {
     let finalServiceProviderID = formData.serviceProviderID;
     let finalCompanyID = formData.companyID;
 
-    if (user?.role === "MANAGER" && currentUserMapping) {
+    if (user?.role === "SERVICE_PROVIDER" && currentUserMapping) {
       finalServiceProviderID = currentUserMapping.serviceProviderID;
       finalCompanyID = currentUserMapping.companyID;
     }

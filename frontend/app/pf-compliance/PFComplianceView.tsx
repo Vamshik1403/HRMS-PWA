@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Pencil, Save, AlertTriangle, Building2, Users, PlusCircle } from "lucide-react";
 import { useCurrentUser } from "../hooks/useCurrentUser";
+import { getSidebarContext } from "../utils/sidebarContext";
 import { useRouter } from "next/navigation"
 import { Button } from "../components/ui/button"
 import {  ArrowLeft, X, ChevronDown, FileText, Shield } from "lucide-react"
@@ -82,23 +83,17 @@ export default function PFCompliancePage() {
   useEffect(() => {
     if (currentUser?.role === "SUPERADMIN") {
       fetchCompanies();
-    } else if (currentUser?.role === "MANAGER") {
-      // For MANAGER, fetch companies and auto-select their company
+    } else if (currentUser?.role === "SERVICE_PROVIDER") {
       fetchCompanies().then((allCompanies) => {
-        if (currentUser.companyID) {
-          // Create company object from user data
-          const managerCompany: Company = {
-            id: currentUser.companyID,
-            companyName: currentUser.company?.companyName || "Company",
-
-          };
-          setSelectedCompany(managerCompany);
-          
-          // Fetch compliance and employee data for this company
-          fetchCompliance(currentUser.companyID);
-          fetchEmployeeCount(currentUser.companyID);
+        const ctx = getSidebarContext();
+        if (ctx?.companyID) {
+          const company = allCompanies?.find((c: any) => c.id === ctx.companyID);
+          if (company) {
+            setSelectedCompany(company);
+            fetchCompliance(ctx.companyID);
+            fetchEmployeeCount(ctx.companyID);
+          }
         } else if (currentUser.serviceProviderID && allCompanies) {
-          // SP-level manager: filter companies by serviceProviderID
           const spCompanies = allCompanies.filter((c: any) => c.serviceProviderID === currentUser.serviceProviderID);
           setCompanies(spCompanies);
         }
@@ -259,7 +254,7 @@ export default function PFCompliancePage() {
   };
 
   // Check if user is authorized
-  if (!currentUser || (currentUser.role !== "SUPERADMIN" && currentUser.role !== "MANAGER")) {
+  if (!currentUser || (currentUser.role !== "SUPERADMIN" && currentUser.role !== "SERVICE_PROVIDER")) {
     return (
       <div className="p-8 max-w-6xl mx-auto">
         <div className="bg-red-50 border border-red-200 rounded-lg p-6 text-center">
@@ -303,7 +298,7 @@ export default function PFCompliancePage() {
               </select>
             </>
           ) : (
-            currentUser?.role === "MANAGER" && selectedCompany && (
+            currentUser?.role === "SERVICE_PROVIDER" && selectedCompany && (
               <div className="flex items-center gap-2 bg-blue-50 px-4 py-2 rounded-lg">
                 <Building2 size={18} className="text-blue-600" />
                 <span className="font-medium text-blue-800">{selectedCompany.companyName}</span>
@@ -339,7 +334,7 @@ export default function PFCompliancePage() {
                 <div className="mb-4">
                   <label className="text-xs text-gray-500 uppercase">Company Name</label>
                   <p className="font-medium text-gray-900 text-lg">{selectedCompany.companyName}</p>
-                  {currentUser?.role === "MANAGER" && (
+                  {currentUser?.role === "SERVICE_PROVIDER" && (
                     <p className="text-xs text-gray-500 mt-2 flex items-center gap-1">
                       <span className="inline-block w-2 h-2 bg-green-500 rounded-full"></span>
                       Auto-selected from your profile
@@ -716,7 +711,7 @@ export default function PFCompliancePage() {
           <AlertTriangle className="mx-auto h-12 w-12 text-yellow-500 mb-4" />
           <h2 className="text-xl font-semibold text-yellow-800 mb-2">No Company Selected</h2>
           <p className="text-yellow-700">
-            {currentUser?.role === "MANAGER" 
+            {currentUser?.role === "SERVICE_PROVIDER" 
               ? "No company is assigned to your profile. Please contact an administrator."
               : "Please select a company to view PF compliance settings."}
           </p>

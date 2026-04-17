@@ -73,14 +73,14 @@ export function MonthlySalaryCycleManagement() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingCycle, setEditingCycle] = useState<MonthlySalaryCycle | null>(null);
   const user = useCurrentUser();
-  const canManage = user?.role === "SUPERADMIN" || user?.role === "MANAGER" || user?.role === "COMPANY_ADMIN";
+  const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN";
   const isEmployee = user?.role === "EMPLOYEE";
 
   const [currentUserMapping, setCurrentUserMapping] = useState<any>(null);
 
   // Fetch mapping for MANAGER
   useEffect(() => {
-    if (user?.role !== "MANAGER") return;
+    if (user?.role !== "SERVICE_PROVIDER") return;
 
     (async () => {
       try {
@@ -123,12 +123,12 @@ export function MonthlySalaryCycleManagement() {
 
 
   const resolvedServiceProviderID =
-  user?.role === "MANAGER"
+  user?.role === "SERVICE_PROVIDER"
     ? currentUserMapping?.serviceProviderID
     : formData.serviceProviderID;
 
 const resolvedCompanyID =
-  user?.role === "MANAGER"
+  user?.role === "SERVICE_PROVIDER"
     ? currentUserMapping?.companyID
     : formData.companyID;
 
@@ -173,17 +173,10 @@ const resolvedCompanyID =
       }
 
       // 🟡 MANAGER → filter using /users
-      if (user?.role === "MANAGER") {
-        const usersRes = await fetch("/backend/users");
-        const users = await usersRes.json();
-        const currentUser = users.find((u: any) => u.username === user.username);
-        if (currentUser) {
-          const filtered = all.filter(
-            (c) =>
-              c.companyID === currentUser.companyID &&
-              c.branchesID === currentUser.branchesID
-          );
-          setCycles(filtered);
+      if (user?.role === "SERVICE_PROVIDER") {
+        const ctx = getSidebarContext();
+        if (ctx?.companyID) {
+          setCycles(all.filter((c: any) => c.companyID === ctx.companyID));
           return;
         }
       }
@@ -531,7 +524,7 @@ const runFetchBR = debounce(async (val: string) => {
                 )}
 
                 {/* MANAGER — hidden auto-fill */}
-                {user?.role === "MANAGER" && currentUserMapping && (
+                {user?.role === "SERVICE_PROVIDER" && currentUserMapping && (
                   <>
                     <input type="hidden" value={currentUserMapping.serviceProviderID} />
                     <input type="hidden" value={currentUserMapping.companyID} />

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Pencil, Save, AlertTriangle, Building2, Users, PlusCircle } from "lucide-react";
 import { useCurrentUser } from "../hooks/useCurrentUser";
+import { getSidebarContext } from "../utils/sidebarContext";
 import { Button } from "../components/ui/button"
 import { ArrowLeft } from "lucide-react"
 import { useRouter } from "next/navigation"
@@ -52,7 +53,7 @@ export default function ESICCompliancePage() {
   useEffect(() => {
     if (currentUser?.role === "SUPERADMIN") {
       fetchCompanies();
-    } else if (currentUser?.role === "MANAGER") {
+    } else if (currentUser?.role === "SERVICE_PROVIDER") {
       // For MANAGER, fetch companies and auto-select their company
       fetchCompanies().then((allCompanies) => {
         if (currentUser.companyID) {
@@ -229,7 +230,7 @@ export default function ESICCompliancePage() {
   };
 
   // Check if user is authorized
-  if (!currentUser || (currentUser.role !== "SUPERADMIN" && currentUser.role !== "MANAGER")) {
+  if (!currentUser || (currentUser.role !== "SUPERADMIN" && currentUser.role !== "SERVICE_PROVIDER")) {
     return (
       <div className="p-8 max-w-6xl mx-auto">
         <div className="bg-red-50 border border-red-200 rounded-lg p-6 text-center">
@@ -273,7 +274,7 @@ export default function ESICCompliancePage() {
               </select>
             </>
           ) : (
-            currentUser?.role === "MANAGER" && selectedCompany && (
+            currentUser?.role === "SERVICE_PROVIDER" && selectedCompany && (
               <div className="flex items-center gap-2 bg-blue-50 px-4 py-2 rounded-lg">
                 <Building2 size={18} className="text-blue-600" />
                 <span className="font-medium text-blue-800">{selectedCompany.companyName}</span>
@@ -309,7 +310,7 @@ export default function ESICCompliancePage() {
                 <div className="mb-4">
                   <label className="text-xs text-gray-500 uppercase">Company Name</label>
                   <p className="font-medium text-gray-900 text-lg">{selectedCompany.companyName}</p>
-                  {currentUser?.role === "MANAGER" && (
+                  {currentUser?.role === "SERVICE_PROVIDER" && (
                     <p className="text-xs text-gray-500 mt-2 flex items-center gap-1">
                       <span className="inline-block w-2 h-2 bg-green-500 rounded-full"></span>
                       Auto-selected from your profile
@@ -606,7 +607,7 @@ export default function ESICCompliancePage() {
           <AlertTriangle className="mx-auto h-12 w-12 text-yellow-500 mb-4" />
           <h2 className="text-xl font-semibold text-yellow-800 mb-2">No Company Selected</h2>
           <p className="text-yellow-700">
-            {currentUser?.role === "MANAGER" 
+            {currentUser?.role === "SERVICE_PROVIDER" 
               ? "No company is assigned to your profile. Please contact an administrator."
               : "Please select a company to view ESIC compliance settings."}
           </p>

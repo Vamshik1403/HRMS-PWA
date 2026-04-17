@@ -100,7 +100,7 @@ export function PublicHolidayManagement() {
   const [holidayOptions, setHolidayOptions] = useState<any[]>([])
   const [financialYearOptions, setFinancialYearOptions] = useState<string[]>([])
   const user = useCurrentUser()
-  const canManage = user?.role === "SUPERADMIN" || user?.role === "MANAGER" || user?.role === "COMPANY_ADMIN"
+  const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN"
 
   const [managerData, setManagerData] = useState<any>(null);
   const [empCreds, setEmpCreds] = useState<any>(null);
@@ -127,7 +127,7 @@ export function PublicHolidayManagement() {
     const loadUserData = async () => {
       try {
         // --- MANAGER ---
-        if (user.role === "MANAGER") {
+        if (user.role === "SERVICE_PROVIDER") {
           const usersRes = await fetch(`${BACKEND_URL}/users`);
           const users = await usersRes.json();
           const me = users.find((u: any) => u.username === user.username);
@@ -235,7 +235,7 @@ export function PublicHolidayManagement() {
       
       if (user?.role === "SUPERADMIN") {
         companyIdToUse = formData.companyID;
-      } else if (user?.role === "MANAGER") {
+      } else if (user?.role === "SERVICE_PROVIDER") {
         companyIdToUse = managerData?.companyID;
       } else if (user?.role === "EMPLOYEE") {
         companyIdToUse = empCreds?.companyID;
@@ -337,21 +337,18 @@ export function PublicHolidayManagement() {
         return
       }
 
-      if (user?.role === "MANAGER") {
-        let filtered: any[];
-        if (managerData?.companyID) {
-          filtered = mapped.filter(
-            (h) => h.companyID === managerData?.companyID
-          );
-        } else if (managerData?.serviceProviderID) {
-          filtered = mapped.filter(
-            (h: any) => h.serviceProviderID === managerData?.serviceProviderID
-          );
-        } else {
-          filtered = [];
+      if (user?.role === "SERVICE_PROVIDER") {
+        const ctx = getSidebarContext();
+        if (ctx?.companyID) {
+          setPublicHolidays(mapped.filter((h: any) => h.companyID === ctx.companyID));
+          return;
         }
-        setPublicHolidays(filtered)
-        return
+        if (managerData?.serviceProviderID) {
+          setPublicHolidays(mapped.filter((h: any) => h.serviceProviderID === managerData.serviceProviderID));
+          return;
+        }
+        setPublicHolidays([]);
+        return;
       }
 
       if (user?.role === "EMPLOYEE") {
@@ -476,7 +473,7 @@ export function PublicHolidayManagement() {
       serviceProviderID = formData.serviceProviderID;
       companyID = formData.companyID;
       branchesID = formData.branchesID;
-    } else if (user?.role === "MANAGER") {
+    } else if (user?.role === "SERVICE_PROVIDER") {
       serviceProviderID = managerData?.serviceProviderID;
       companyID = managerData?.companyID;
       branchesID = formData.branchesID;
@@ -546,7 +543,7 @@ export function PublicHolidayManagement() {
       manageHolidayID: undefined,
     };
 
-    if (user?.role === "MANAGER" && managerData) {
+    if (user?.role === "SERVICE_PROVIDER" && managerData) {
       setFormData({
         ...baseForm,
         serviceProviderID: managerData.serviceProviderID,
@@ -666,7 +663,7 @@ export function PublicHolidayManagement() {
                  
 
                   {/* Branch - For SUPERADMIN and MANAGER */}
-                  {(user?.role === "SUPERADMIN" || user?.role === "MANAGER") && (
+                  {(user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER") && (
                     <div className={`${user?.role === "SUPERADMIN" ? "col-span-1" : "col-span-3"}`}>
                       <SearchSuggestInput 
                         label="Branch Name" 
@@ -678,7 +675,7 @@ export function PublicHolidayManagement() {
                         displayField="branchName" 
                         valueField="id" 
                       />
-                      {user?.role === "MANAGER" && (
+                      {user?.role === "SERVICE_PROVIDER" && (
                         <p className="text-xs text-gray-500 mt-1">
                           You can only select from branches in your assigned company
                         </p>

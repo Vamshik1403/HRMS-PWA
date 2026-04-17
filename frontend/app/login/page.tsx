@@ -50,7 +50,7 @@ export default function LoginPage() {
           localStorage.setItem('user', JSON.stringify(completeUser))
 
           setTimeout(() => {
-            if (completeUser.role === 'SUPERADMIN' || completeUser.role === 'MANAGER' || completeUser.role === 'COMPANY_ADMIN') {
+            if (completeUser.role === 'SUPERADMIN' || completeUser.role === 'SERVICE_PROVIDER' || completeUser.role === 'COMPANY_ADMIN') {
               router.push('/dashboard')
             } else {
               router.push('/empdashboard')
@@ -61,7 +61,7 @@ export default function LoginPage() {
           localStorage.setItem('user', JSON.stringify(basicUser))
           
           setTimeout(() => {
-            if (basicUser.role === 'SUPERADMIN' || basicUser.role === 'MANAGER' || basicUser.role === 'COMPANY_ADMIN') {
+            if (basicUser.role === 'SUPERADMIN' || basicUser.role === 'SERVICE_PROVIDER' || basicUser.role === 'COMPANY_ADMIN') {
               router.push('/dashboard')
             } else {
               router.push('/empdashboard')

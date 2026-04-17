@@ -292,7 +292,7 @@ async function getManagerAssignedScope(username: string): Promise<ManagerScope |
     const users: any[] = await robustGet(API.users);
     const currentUser = users.find((u: any) => u.username === username);
 
-    if (currentUser && (currentUser.role === "MANAGER" || currentUser.role === "SUPERADMIN")) {
+    if (currentUser && (currentUser.role === "SERVICE_PROVIDER" || currentUser.role === "SUPERADMIN")) {
       return {
         companyID: currentUser.companyID || null,
         branchesID: currentUser.branchesID || null,
@@ -1451,7 +1451,7 @@ export function GenerateSalaryManagement() {
 
   const user = useCurrentUser()
   const [items, setItems] = useState<GenerateSalaryRow[]>([])
-  const canManage = user?.role === "SUPERADMIN" || user?.role === "MANAGER" || user?.role === "COMPANY_ADMIN"
+  const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN"
 
   const [spList, setSpList] = useState<SP[]>([]);
   const [coList, setCoList] = useState<CO[]>([]);
@@ -1518,7 +1518,7 @@ export function GenerateSalaryManagement() {
         setManagerScope(scope);
 
         // Auto-fill form data for MANAGER
-        if (scope && user.role === "MANAGER") {
+        if (scope && user.role === "SERVICE_PROVIDER") {
           setFormData(prev => ({
             ...prev,
             serviceProviderID: scope.serviceProviderID,
@@ -1621,25 +1621,16 @@ export function GenerateSalaryManagement() {
         return
       }
 
-      if (user?.role === "MANAGER") {
+      if (user?.role === "SERVICE_PROVIDER") {
+        const ctx = getSidebarContext()
+        if (ctx?.companyID) {
+          setItems(allItems.filter((r: any) => r.companyID === ctx.companyID))
+          return
+        }
         const users = await robustGet(API.users)
         const currentUser = users.find((u: any) => u.username === user.username)
-        if (currentUser) {
-          let filtered: any[];
-          if (currentUser.companyID && currentUser.branchesID) {
-            filtered = allItems.filter(
-              (r) =>
-                r.companyID === currentUser.companyID &&
-                r.branchesID === currentUser.branchesID
-            )
-          } else if (currentUser.companyID) {
-            filtered = allItems.filter((r) => r.companyID === currentUser.companyID)
-          } else if (currentUser.serviceProviderID) {
-            filtered = allItems.filter((r: any) => r.serviceProviderID === currentUser.serviceProviderID)
-          } else {
-            filtered = []
-          }
-          setItems(filtered)
+        if (currentUser?.serviceProviderID) {
+          setItems(allItems.filter((r: any) => r.serviceProviderID === currentUser.serviceProviderID))
           return
         }
       }
@@ -1811,7 +1802,7 @@ export function GenerateSalaryManagement() {
     };
 
     // Set defaults based on role
-    if (user?.role === "MANAGER" && managerScope) {
+    if (user?.role === "SERVICE_PROVIDER" && managerScope) {
       baseForm.companyID = managerScope.companyID;
       // Don't auto-set branch for MANAGER - let them choose
     }
@@ -1899,7 +1890,7 @@ export function GenerateSalaryManagement() {
           filtered = [];
         }
       }
-      else if (user?.role === "MANAGER") {
+      else if (user?.role === "SERVICE_PROVIDER") {
         // MANAGER: Only show their assigned company
         if (managerScope?.companyID) {
           filtered = data.filter(co =>
@@ -1954,7 +1945,7 @@ export function GenerateSalaryManagement() {
       }
 
       // For MANAGER, show branches from their assigned company only
-      if (user?.role === "MANAGER" && managerScope?.companyID) {
+      if (user?.role === "SERVICE_PROVIDER" && managerScope?.companyID) {
         data = data.filter(b => b.companyID === managerScope.companyID);
       }
 
@@ -1987,7 +1978,7 @@ export function GenerateSalaryManagement() {
         companyId = formData.companyID;
         branchId = formData.branchesID;
       }
-    } else if (user?.role === "MANAGER") {
+    } else if (user?.role === "SERVICE_PROVIDER") {
       // MANAGER needs at least branch (company is auto-filled)
       if (formData.branchesID && managerScope?.companyID) {
         shouldFetch = true;
@@ -2699,7 +2690,7 @@ export function GenerateSalaryManagement() {
                       ref={brRef}
                       className="space-y-2 relative"
                       style={{
-                        gridColumn: user?.role === "MANAGER" ? "span 3" : "span 1"
+                        gridColumn: user?.role === "SERVICE_PROVIDER" ? "span 3" : "span 1"
                       }}
                     >
                       <Label>Branch Name *</Label>
@@ -2743,7 +2734,7 @@ export function GenerateSalaryManagement() {
                           ))}
                         </div>
                       )}
-                      {user?.role === "MANAGER" && (
+                      {user?.role === "SERVICE_PROVIDER" && (
                         <p className="text-xs text-gray-500">You can only select from your assigned branches</p>
                       )}
                     </div>
@@ -2796,7 +2787,7 @@ export function GenerateSalaryManagement() {
                         </div>
                       )}
                       <p className="text-xs text-gray-500">
-                        {user?.role === "MANAGER"
+                        {user?.role === "SERVICE_PROVIDER"
                           ? "Employees from your assigned branch only"
                           : "Fetched from /manage-emp"}
                       </p>

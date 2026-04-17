@@ -97,7 +97,7 @@ export default function DashboardPage() {
   const [currentUserMapping, setCurrentUserMapping] = useState<any>(null);
 
   useEffect(() => {
-    if (user?.role !== "MANAGER" && user?.role !== "COMPANY_ADMIN") return;
+    if (user?.role !== "SERVICE_PROVIDER" && user?.role !== "COMPANY_ADMIN") return;
 
     (async () => {
       const res = await fetch(`${BACKEND_URL}/users`, { cache: "no-store" });
@@ -109,7 +109,7 @@ export default function DashboardPage() {
 
   useEffect(() => {
     if (!user) return;
-    if ((user.role === "MANAGER" || user.role === "COMPANY_ADMIN") && !currentUserMapping) return;
+    if ((user.role === "SERVICE_PROVIDER" || user.role === "COMPANY_ADMIN") && !currentUserMapping) return;
 
     loadDashboard();
   }, [user, currentUserMapping]);
@@ -166,26 +166,8 @@ export default function DashboardPage() {
       if (user!.role === "SUPERADMIN") {
         scopedEmployees = allEmployees;
         scopedDepartments = allDepartments;
-      } else if ((user!.role === "MANAGER" || user!.role === "COMPANY_ADMIN") && currentUserMapping) {
-        if (currentUserMapping.companyID && currentUserMapping.branchesID) {
-          scopedEmployees = allEmployees.filter(
-            (e) =>
-              e.companyID === currentUserMapping.companyID &&
-              e.branchesID === currentUserMapping.branchesID
-          );
-          scopedDepartments = allDepartments.filter(
-            (d) =>
-              d.companyID === currentUserMapping.companyID &&
-              d.branchesID === currentUserMapping.branchesID
-          );
-        } else if (currentUserMapping.companyID) {
-          scopedEmployees = allEmployees.filter(
-            (e) => e.companyID === currentUserMapping.companyID
-          );
-          scopedDepartments = allDepartments.filter(
-            (d) => d.companyID === currentUserMapping.companyID
-          );
-        } else if (currentUserMapping.serviceProviderID) {
+      } else if (user!.role === "SERVICE_PROVIDER" && currentUserMapping) {
+        if (currentUserMapping.serviceProviderID) {
           scopedEmployees = allEmployees.filter(
             (e) => e.serviceProviderID === currentUserMapping.serviceProviderID
           );
@@ -193,6 +175,15 @@ export default function DashboardPage() {
             (d) => d.serviceProviderID === currentUserMapping.serviceProviderID
           );
         }
+      } else if (user!.role === "COMPANY_ADMIN" && currentUserMapping) {
+        scopedEmployees = allEmployees.filter(
+          (e) =>
+            e.companyID === currentUserMapping.companyID && e.branchesID === currentUserMapping.branchesID
+        );
+        scopedDepartments = allDepartments.filter(
+          (d) =>
+            d.companyID === currentUserMapping.companyID && d.branchesID === currentUserMapping.branchesID
+        );
       } else if (user!.role === "EMPLOYEE") {
         scopedEmployees = allEmployees.filter(
           (e) =>
