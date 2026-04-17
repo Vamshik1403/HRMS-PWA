@@ -822,27 +822,30 @@ const handleCompanySelect = (selected: SelectedItem) => {
                         }`} />
                       </button>
                     </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="plCarryForwardLimit">PL Carry Forward Limit</Label>
-                      <Input
-                        id="plCarryForwardLimit"
-                        type="number"
-                        value={formData.plCarryForwardLimit}
-                        onChange={(e) => setFormData(prev => ({ ...prev, plCarryForwardLimit: parseInt(e.target.value) || 0 }))}
-                        placeholder="0"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="lapseEncashmentDate">Lapse / Encashment Date</Label>
-                      <Input
-                        id="lapseEncashmentDate"
-                        type="date"
-                        value={formData.lapseEncashmentDate}
-                        onChange={(e) => setFormData(prev => ({ ...prev, lapseEncashmentDate: e.target.value }))}
-                      />
-                    </div>
                   </div>
                 )}
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="plCarryForwardLimit">PL Carry Forward Limit</Label>
+                    <Input
+                      id="plCarryForwardLimit"
+                      type="number"
+                      value={formData.plCarryForwardLimit}
+                      onChange={(e) => setFormData(prev => ({ ...prev, plCarryForwardLimit: parseInt(e.target.value) || 0 }))}
+                      placeholder="0"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="lapseEncashmentDate">PL Expiry Date</Label>
+                    <Input
+                      id="lapseEncashmentDate"
+                      type="date"
+                      value={formData.lapseEncashmentDate}
+                      onChange={(e) => setFormData(prev => ({ ...prev, lapseEncashmentDate: e.target.value }))}
+                    />
+                  </div>
+                </div>
               </div>
 
             

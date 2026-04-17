@@ -173,6 +173,31 @@ export class UsersService {
     return this.prisma.user.findUnique({ where: { username } })
   }
 
+  // 🟢 GET USER PROFILE
+  async getProfile(userId: number) {
+    const profile = await this.prisma.userProfile.findUnique({
+      where: { userId },
+    })
+    return profile
+  }
+
+  // 🟢 UPSERT USER PROFILE
+  async upsertProfile(userId: number, data: {
+    fullName?: string
+    email?: string
+    mobileNo?: string
+    address?: string
+    city?: string
+    state?: string
+    pincode?: string
+  }) {
+    return this.prisma.userProfile.upsert({
+      where: { userId },
+      update: data,
+      create: { userId, ...data },
+    })
+  }
+
   // 🧩 Helper to exclude passwordHash from responses
   private excludePassword(user: any) {
     if (!user) return user

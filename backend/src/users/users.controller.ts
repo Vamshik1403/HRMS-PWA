@@ -53,4 +53,19 @@ export class UsersController {
   async remove(@Param('id', ParseIntPipe) id: number) {
     return this.usersService.remove(id);
   }
+
+  @Get(':id/profile')
+  @HttpCode(HttpStatus.OK)
+  async getProfile(@Param('id', ParseIntPipe) id: number) {
+    return this.usersService.getProfile(id);
+  }
+
+  @Patch(':id/profile')
+  @HttpCode(HttpStatus.OK)
+  async upsertProfile(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() body: { fullName?: string; email?: string; mobileNo?: string; address?: string; city?: string; state?: string; pincode?: string },
+  ) {
+    return this.usersService.upsertProfile(id, body);
+  }
 }

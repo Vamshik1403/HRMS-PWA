@@ -90,6 +90,80 @@ export function EmpLeaveApplication() {
 
   const user = useCurrentUser()
   const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN"
+
+  // Leave balance state
+  const [leaveBalance, setLeaveBalance] = useState<Record<string, { used: number; total: number; remaining: number }>>({})
+  const [availableLeaveTypes, setAvailableLeaveTypes] = useState<string[]>(["ShortLeave", "LoP"])
+
+  const leaveTypeLabel = (type: string) => {
+    const map: Record<string, string> = {
+      Sick: "Sick Leave", Casual: "Casual Leave", Privileged: "Privileged Leave",
+      ShortLeave: "Short Leave", CompOff: "Comp Off", LoP: "Loss of Pay (LoP)",
+      MtL: "Maternity Leave (MtL)", PtL: "Paternity Leave (PtL)",
+    };
+    return map[type] || type;
+  };
+
+  const loadLeaveBalance = async (employeeId: number) => {
+    try {
+      const empRes = await robustGet<any>(`${BACKEND_URL}/manage-emp/${employeeId}`);
+      const policy = empRes.leavePolicy || {};
+      const totalSick = Number(policy.sickLeaveCount) || 0;
+      const totalCasual = Number(policy.casualLeaveCount) || 0;
+
+      let totalPrivileged = 0;
+      try {
+        const plData = await robustGet<any[]>(`${BACKEND_URL}/privileged-leave/employee/${employeeId}`);
+        if (Array.isArray(plData)) totalPrivileged = plData.reduce((s: number, e: any) => s + (Number(e.balanceLeaves) || 0), 0);
+      } catch {}
+
+      let totalCompOff = 0;
+      try {
+        const woData = await robustGet<any[]>(`${BACKEND_URL}/employee-weekly-off?employeeID=${employeeId}`);
+        if (Array.isArray(woData)) totalCompOff = woData.filter((w: any) => w.status === "Present").length;
+      } catch {}
+
+      const allLeaves = await robustGet<any[]>(`${BACKEND_URL}/leave-application`);
+      const approved = (Array.isArray(allLeaves) ? allLeaves : []).filter(
+        (l: any) => l.manageEmployeeID === employeeId && l.status === "Approved"
+      );
+
+      const used: Record<string, number> = { Sick: 0, Casual: 0, Privileged: 0, CompOff: 0, MtL: 0, PtL: 0 };
+      approved.forEach((leave: any) => {
+        if (leave.dayStatuses && Array.isArray(leave.dayStatuses)) {
+          leave.dayStatuses.forEach((day: any) => { if (used[day.status] !== undefined) used[day.status]++; });
+        } else if (leave.fromDate && leave.toDate) {
+          const days = Math.ceil(Math.abs(new Date(leave.toDate).getTime() - new Date(leave.fromDate).getTime()) / 86400000) + 1;
+          if (used[leave.appliedLeaveType] !== undefined) used[leave.appliedLeaveType] += days;
+        }
+      });
+
+      const mk = (u: number, t: number) => ({ used: Math.min(u, t), total: t, remaining: Math.max(t - u, 0) });
+      const balance: Record<string, { used: number; total: number; remaining: number }> = {
+        sick: mk(used.Sick, totalSick),
+        casual: mk(used.Casual, totalCasual),
+        privileged: mk(used.Privileged, totalPrivileged),
+        compOff: mk(used.CompOff, totalCompOff),
+        maternity: mk(used.MtL, 180),
+        paternity: mk(used.PtL, 15),
+      };
+      setLeaveBalance(balance);
+
+      const types: string[] = [];
+      if (balance.sick.remaining > 0) types.push("Sick");
+      if (balance.casual.remaining > 0) types.push("Casual");
+      if (balance.privileged.remaining > 0) types.push("Privileged");
+      types.push("ShortLeave");
+      if (balance.compOff.remaining > 0) types.push("CompOff");
+      types.push("LoP");
+      if (balance.maternity.remaining > 0) types.push("MtL");
+      if (balance.paternity.remaining > 0) types.push("PtL");
+      setAvailableLeaveTypes(types);
+    } catch (error) {
+      console.error("Error loading leave balance:", error);
+      setAvailableLeaveTypes(["ShortLeave", "LoP"]);
+    }
+  };
   
   // Revoke Modal State
   const [isRevokeDialogOpen, setIsRevokeDialogOpen] = useState(false)
@@ -147,6 +221,9 @@ export function EmpLeaveApplication() {
           branchesID: userCreds.branchesID,
           manageEmployeeID: userCreds.employeeID,
         }))
+        
+        // Load leave balance
+        loadLeaveBalance(userCreds.employeeID)
       }
     } catch (error) {
       console.error("Error loading user credentials:", error)
@@ -470,6 +547,46 @@ export function EmpLeaveApplication() {
                 {/* Leave Application Details */}
                 <div className="space-y-4">
                   <h3 className="text-lg font-semibold">Leave Application Details</h3>
+                  
+                  {/* Leave Balance Display */}
+                  {Object.keys(leaveBalance).length > 0 && (
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 p-4 bg-gray-50 rounded-lg">
+                      {([
+                        { key: "sick", label: "Sick Leave", color: "text-blue-600" },
+                        { key: "casual", label: "Casual Leave", color: "text-green-600" },
+                        { key: "privileged", label: "Privileged Leave", color: "text-purple-600" },
+                        { key: "compOff", label: "Comp Off", color: "text-orange-600" },
+                        { key: "maternity", label: "MtL", color: "text-pink-600" },
+                        { key: "paternity", label: "PtL", color: "text-teal-600" },
+                      ]).map(({ key, label, color }) => leaveBalance[key] ? (
+                        <div key={key} className="text-center">
+                          <div className="text-xs font-medium text-gray-600">{label}</div>
+                          <div className={`text-base font-bold ${color}`}>
+                            {leaveBalance[key].used}/{leaveBalance[key].total}
+                          </div>
+                          <div className="text-xs text-gray-500">{leaveBalance[key].remaining} remaining</div>
+                        </div>
+                      ) : null)}
+                    </div>
+                  )}
+
+                  {/* Leave Type */}
+                  <div className="space-y-2">
+                    <Label htmlFor="leaveType">Leave Type *</Label>
+                    <select
+                      id="leaveType"
+                      value={formData.leaveType}
+                      onChange={(e) => setFormData(prev => ({ ...prev, leaveType: e.target.value }))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-sm border-[#d0d0d0] focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-900/15 focus-visible:border-[#b0b0b0]"
+                      required
+                    >
+                      <option value="">Select Leave Type</option>
+                      {availableLeaveTypes.map((type) => (
+                        <option key={type} value={type}>{leaveTypeLabel(type)}</option>
+                      ))}
+                    </select>
+                  </div>
+
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                    
                     <div className="space-y-2">

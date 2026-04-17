@@ -169,9 +169,6 @@ export function CompanyManagement() {
 
       if (user?.role === "SERVICE_PROVIDER") {
         const ctx = getSidebarContext()
-        const usersRes = await fetch("/backend/users")
-        const users = await usersRes.json()
-        const currentUser = users.find((u: any) => u.username === user.username)
 
         if (ctx?.companyID) {
           // Show only the selected company from sidebar
@@ -180,51 +177,35 @@ export function CompanyManagement() {
           return
         }
 
-        if (currentUser) {
-          let filtered;
-          if (currentUser.serviceProviderID) {
-            filtered = all.filter(
-              (c: any) => c.serviceProviderID === currentUser.serviceProviderID
-            )
-          } else {
-            filtered = []
-          }
+        if (user.serviceProviderID) {
+          const filtered = all.filter(
+            (c: any) => c.serviceProviderID === user.serviceProviderID
+          )
           setCompanies(filtered)
           return
         }
       }
 
       if (user?.role === "COMPANY_ADMIN") {
-        const usersRes = await fetch("/backend/users")
-        const users = await usersRes.json()
-        const currentUser = users.find((u: any) => u.username === user.username)
-
-        if (currentUser) {
-          let filtered;
-          if (currentUser.companyID) {
-            filtered = all.filter(
-              (c: any) => c.id === currentUser.companyID
-            )
-          } else if (currentUser.serviceProviderID) {
-            filtered = all.filter(
-              (c: any) => c.serviceProviderID === currentUser.serviceProviderID
-            )
-          } else {
-            filtered = []
-          }
+        if (user.companyID) {
+          const filtered = all.filter(
+            (c: any) => c.id === user.companyID
+          )
+          setCompanies(filtered)
+          return
+        } else if (user.serviceProviderID) {
+          const filtered = all.filter(
+            (c: any) => c.serviceProviderID === user.serviceProviderID
+          )
           setCompanies(filtered)
           return
         }
       }
 
       if (user?.role === "BRANCH_ADMIN") {
-        const usersRes = await fetch("/backend/users")
-        const users = await usersRes.json()
-        const currentUser = users.find((u: any) => u.username === user.username)
-
-        if (currentUser && currentUser.companyID) {
+        if (user.companyID) {
           const filtered = all.filter(
-            (c: any) => c.id === currentUser.companyID
+            (c: any) => c.id === user.companyID
           )
           setCompanies(filtered)
           return

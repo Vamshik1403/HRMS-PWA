@@ -51,12 +51,19 @@ interface SelectedItem {
 
 interface DayStatus {
   date: string
-  status: "Sick" | "Casual" | "LoP" | ""
+  status: "Sick" | "Casual" | "Privileged" | "ShortLeave" | "CompOff" | "LoP" | "MtL" | "PtL" | ""
+  dayType?: "Present" | "LateMark" | "Halfday" | "Absent" | ""
 }
 
+interface LeaveBalanceEntry { used: number; total: number; remaining: number }
+
 interface LeaveBalance {
-  sick: { used: number; total: number; remaining: number }
-  casual: { used: number; total: number; remaining: number }
+  sick: LeaveBalanceEntry
+  casual: LeaveBalanceEntry
+  privileged: LeaveBalanceEntry
+  compOff: LeaveBalanceEntry
+  maternity: LeaveBalanceEntry
+  paternity: LeaveBalanceEntry
 }
 
 // Backend URL
@@ -90,7 +97,11 @@ export function LeaveApplicationsManagement() {
   const [isEmployeeSelected, setIsEmployeeSelected] = useState(false)
   const [leaveBalance, setLeaveBalance] = useState<LeaveBalance>({
     sick: { used: 0, total: 0, remaining: 0 },
-    casual: { used: 0, total: 0, remaining: 0 }
+    casual: { used: 0, total: 0, remaining: 0 },
+    privileged: { used: 0, total: 0, remaining: 0 },
+    compOff: { used: 0, total: 0, remaining: 0 },
+    maternity: { used: 0, total: 0, remaining: 0 },
+    paternity: { used: 0, total: 0, remaining: 0 },
   })
 
   const user = useCurrentUser()
@@ -110,7 +121,11 @@ export function LeaveApplicationsManagement() {
   const [availableLeaveTypesForManager, setAvailableLeaveTypesForManager] = useState<string[]>(["LoP"])
   const [managerLeaveBalance, setManagerLeaveBalance] = useState<LeaveBalance>({
     sick: { used: 0, total: 0, remaining: 0 },
-    casual: { used: 0, total: 0, remaining: 0 }
+    casual: { used: 0, total: 0, remaining: 0 },
+    privileged: { used: 0, total: 0, remaining: 0 },
+    compOff: { used: 0, total: 0, remaining: 0 },
+    maternity: { used: 0, total: 0, remaining: 0 },
+    paternity: { used: 0, total: 0, remaining: 0 },
   })
   const [currentAvailableTypes, setCurrentAvailableTypes] = useState<string[]>(["LoP"])
 
@@ -171,6 +186,34 @@ export function LeaveApplicationsManagement() {
       const totalSick = Number(policy.sickLeaveCount) || 0;
       const totalCasual = Number(policy.casualLeaveCount) || 0;
 
+      // Privileged Leave: fetch from ledger
+      let totalPrivileged = 0;
+      try {
+        const plRes = await fetch(`${BACKEND_URL}/privileged-leave/employee/${employeeId}`, { cache: "no-store" });
+        if (plRes.ok) {
+          const plData = await plRes.json();
+          if (Array.isArray(plData)) {
+            totalPrivileged = plData.reduce((sum: number, entry: any) => sum + (Number(entry.balanceLeaves) || 0), 0);
+          }
+        }
+      } catch { /* no PL data */ }
+
+      // CompOff: count approved week-off/holiday overrides that are unused
+      let totalCompOff = 0;
+      try {
+        const woRes = await fetch(`${BACKEND_URL}/employee-weekly-off?employeeID=${employeeId}`, { cache: "no-store" });
+        if (woRes.ok) {
+          const woData = await woRes.json();
+          if (Array.isArray(woData)) {
+            totalCompOff += woData.filter((w: any) => w.status === "Present").length;
+          }
+        }
+      } catch { /* no compoff data */ }
+
+      // Maternity / Paternity: static policy-based (commonly 180/15 days)
+      const totalMaternity = 180;
+      const totalPaternity = 15;
+
       // 2. Fetch all leave applications for this employee
       const leaveRes = await fetch(`${BACKEND_URL}/leave-application`);
       const allLeaves = await leaveRes.json();
@@ -183,58 +226,54 @@ export function LeaveApplicationsManagement() {
       // 3. Calculate USED leave counts by type using dayStatuses
       let usedSick = 0;
       let usedCasual = 0;
+      let usedPrivileged = 0;
+      let usedCompOff = 0;
+      let usedMaternity = 0;
+      let usedPaternity = 0;
 
       employeeApprovedLeaves.forEach((leave: any) => {
-        // Count by day status if available
         if (leave.dayStatuses && Array.isArray(leave.dayStatuses)) {
           leave.dayStatuses.forEach((day: any) => {
             switch (day.status) {
-              case "Sick":
-                usedSick += 1;
-                break;
-              case "Casual":
-                usedCasual += 1;
-                break;
+              case "Sick": usedSick += 1; break;
+              case "Casual": usedCasual += 1; break;
+              case "Privileged": usedPrivileged += 1; break;
+              case "CompOff": usedCompOff += 1; break;
+              case "MtL": usedMaternity += 1; break;
+              case "PtL": usedPaternity += 1; break;
             }
           });
         } else {
-          // Fallback to old method
           if (!leave.fromDate || !leave.toDate) return;
-          
           const from = new Date(leave.fromDate);
           const to = new Date(leave.toDate);
-          
           if (isNaN(from.getTime()) || isNaN(to.getTime())) return;
-          
-          const diffTime = Math.abs(to.getTime() - from.getTime());
-          const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+          const diffDays = Math.ceil(Math.abs(to.getTime() - from.getTime()) / (1000 * 60 * 60 * 24)) + 1;
 
           switch (leave.appliedLeaveType) {
-            case "Sick":
-              usedSick += diffDays;
-              break;
-            case "Casual":
-              usedCasual += diffDays;
-              break;
+            case "Sick": usedSick += diffDays; break;
+            case "Casual": usedCasual += diffDays; break;
+            case "Privileged": usedPrivileged += diffDays; break;
+            case "CompOff": usedCompOff += diffDays; break;
+            case "MtL": usedMaternity += diffDays; break;
+            case "PtL": usedPaternity += diffDays; break;
           }
         }
       });
 
-      // 4. Calculate REMAINING leave counts
-      const remainingSick = Math.max(totalSick - usedSick, 0);
-      const remainingCasual = Math.max(totalCasual - usedCasual, 0);
+      const mkEntry = (used: number, total: number) => ({
+        used: Math.min(used, total),
+        total,
+        remaining: Math.max(total - used, 0),
+      });
 
-      const balance = {
-        sick: { 
-          used: Math.min(usedSick, totalSick), 
-          total: totalSick, 
-          remaining: remainingSick 
-        },
-        casual: { 
-          used: Math.min(usedCasual, totalCasual), 
-          total: totalCasual, 
-          remaining: remainingCasual 
-        }
+      const balance: LeaveBalance = {
+        sick: mkEntry(usedSick, totalSick),
+        casual: mkEntry(usedCasual, totalCasual),
+        privileged: mkEntry(usedPrivileged, totalPrivileged),
+        compOff: mkEntry(usedCompOff, totalCompOff),
+        maternity: mkEntry(usedMaternity, totalMaternity),
+        paternity: mkEntry(usedPaternity, totalPaternity),
       };
 
       setLeaveBalance(balance);
@@ -243,9 +282,10 @@ export function LeaveApplicationsManagement() {
     } catch (error) {
       console.error("Error calculating leave balance:", error);
       toast.error("Operation failed. Please try again.");
+      const zero = { used: 0, total: 0, remaining: 0 };
       return {
-        sick: { used: 0, total: 0, remaining: 0 },
-        casual: { used: 0, total: 0, remaining: 0 }
+        sick: zero, casual: zero, privileged: zero,
+        compOff: zero, maternity: zero, paternity: zero,
       };
     }
   };
@@ -258,15 +298,14 @@ export function LeaveApplicationsManagement() {
       // Build available Leave Types based on remaining leaves
       const types: string[] = [];
 
-      if (balance.sick.remaining > 0) {
-        types.push("Sick");
-      }
-      if (balance.casual.remaining > 0) {
-        types.push("Casual");
-      }
-
-      // Always add LoP as an option
-      types.push("LoP");
+      if (balance.sick.remaining > 0) types.push("Sick");
+      if (balance.casual.remaining > 0) types.push("Casual");
+      if (balance.privileged.remaining > 0) types.push("Privileged");
+      types.push("ShortLeave"); // Always available - marks as Present/LateMark/Halfday/Absent
+      if (balance.compOff.remaining > 0) types.push("CompOff");
+      types.push("LoP"); // Always available - unpaid absent
+      if (balance.maternity.remaining > 0) types.push("MtL");
+      if (balance.paternity.remaining > 0) types.push("PtL");
 
       console.log("Final Available Leave Types:", types);
       setAvailableLeaveTypes(types);
@@ -274,8 +313,7 @@ export function LeaveApplicationsManagement() {
     } catch (error) {
       console.error("Error loading employee leave types:", error);
       toast.error("Failed to load data.");
-      // Fallback to only LoP if there's an error
-      setAvailableLeaveTypes(["LoP"]);
+      setAvailableLeaveTypes(["ShortLeave", "LoP"]);
     }
   };
 
@@ -309,29 +347,43 @@ export function LeaveApplicationsManagement() {
 
   // Function to update available leave types
   const updateAvailableLeaveTypes = (currentDayStatuses: DayStatus[]) => {
-    // Use the original balance that was set when modal opened
-    const originalBalance = { ...managerLeaveBalance };
+    const ob = { ...managerLeaveBalance };
     
-    // Calculate assigned days from current statuses
-    const sickDays = currentDayStatuses.filter(day => day.status === "Sick").length;
-    const casualDays = currentDayStatuses.filter(day => day.status === "Casual").length;
+    const countType = (t: string) => currentDayStatuses.filter(day => day.status === t).length;
+    const sickDays = countType("Sick");
+    const casualDays = countType("Casual");
+    const privilegedDays = countType("Privileged");
+    const compOffDays = countType("CompOff");
+    const maternityDays = countType("MtL");
+    const paternityDays = countType("PtL");
 
-    // Calculate remaining leaves
-    const remainingSick = Math.max(originalBalance.sick.total - (originalBalance.sick.used + sickDays), 0);
-    const remainingCasual = Math.max(originalBalance.casual.total - (originalBalance.casual.used + casualDays), 0);
+    const calc = (entry: LeaveBalanceEntry, used: number) => Math.max(entry.total - (entry.used + used), 0);
+    const remainingSick = calc(ob.sick, sickDays);
+    const remainingCasual = calc(ob.casual, casualDays);
+    const remainingPrivileged = calc(ob.privileged, privilegedDays);
+    const remainingCompOff = calc(ob.compOff, compOffDays);
+    const remainingMaternity = calc(ob.maternity, maternityDays);
+    const remainingPaternity = calc(ob.paternity, paternityDays);
 
-    // Build available types
     const types: string[] = [];
     if (remainingSick > 0) types.push("Sick");
     if (remainingCasual > 0) types.push("Casual");
+    if (remainingPrivileged > 0) types.push("Privileged");
+    types.push("ShortLeave");
+    if (remainingCompOff > 0) types.push("CompOff");
     types.push("LoP");
+    if (remainingMaternity > 0) types.push("MtL");
+    if (remainingPaternity > 0) types.push("PtL");
 
-    console.log("Available types updated:", types);
     setCurrentAvailableTypes(types);
     
     return {
-      sick: { ...originalBalance.sick, remaining: remainingSick },
-      casual: { ...originalBalance.casual, remaining: remainingCasual }
+      sick: { ...ob.sick, remaining: remainingSick },
+      casual: { ...ob.casual, remaining: remainingCasual },
+      privileged: { ...ob.privileged, remaining: remainingPrivileged },
+      compOff: { ...ob.compOff, remaining: remainingCompOff },
+      maternity: { ...ob.maternity, remaining: remainingMaternity },
+      paternity: { ...ob.paternity, remaining: remainingPaternity },
     };
   };
 
@@ -367,16 +419,18 @@ export function LeaveApplicationsManagement() {
     // Calculate leave balance for this employee
     if (application.manageEmployeeID) {
       const balance = await calculateLeaveBalance(application.manageEmployeeID);
-      console.log("Initial balance loaded:", balance);
       setManagerLeaveBalance(balance);
       
-      // Build initial available leave types
       const types: string[] = [];
       if (balance.sick.remaining > 0) types.push("Sick");
       if (balance.casual.remaining > 0) types.push("Casual");
+      if (balance.privileged.remaining > 0) types.push("Privileged");
+      types.push("ShortLeave");
+      if (balance.compOff.remaining > 0) types.push("CompOff");
       types.push("LoP");
+      if (balance.maternity.remaining > 0) types.push("MtL");
+      if (balance.paternity.remaining > 0) types.push("PtL");
       
-      console.log("Initial available types:", types);
       setAvailableLeaveTypesForManager(types);
       setCurrentAvailableTypes(types);
     }
@@ -406,7 +460,6 @@ export function LeaveApplicationsManagement() {
     if (!managerApprovalApplication) return
 
     try {
-      // Check if all days have status assigned
       if (pendingDaysCount > 0) {
         toast.error("Please assign leave types for all days before approving.")
         return
@@ -415,12 +468,11 @@ export function LeaveApplicationsManagement() {
       // Calculate the main leave type (most frequent type used)
       const leaveTypeCounts: Record<string, number> = {};
       dayStatuses.forEach(day => {
-        if (day.status && day.status !== "LoP") {
+        if (day.status && day.status !== "LoP" && day.status !== "ShortLeave") {
           leaveTypeCounts[day.status] = (leaveTypeCounts[day.status] || 0) + 1;
         }
       });
 
-      // Determine the main appliedLeaveType
       let mainLeaveType = "LoP";
       let maxCount = 0;
       Object.entries(leaveTypeCounts).forEach(([type, count]) => {
@@ -430,23 +482,20 @@ export function LeaveApplicationsManagement() {
         }
       });
 
-      // If all days are LoP, set as LoP
       if (maxCount === 0) {
-        mainLeaveType = "LoP";
+        // Check if all are ShortLeave
+        const shortLeaveDays = dayStatuses.filter(day => day.status === "ShortLeave").length;
+        mainLeaveType = shortLeaveDays > 0 ? "ShortLeave" : "LoP";
       }
 
-      // Calculate assigned days by type
-      const sickDays = dayStatuses.filter(day => day.status === "Sick").length;
-      const casualDays = dayStatuses.filter(day => day.status === "Casual").length;
+      const countType = (t: string) => dayStatuses.filter(day => day.status === t).length;
 
-      // Update the application status to Approved with dayStatuses
       const updateData = {
         status: "Approved" as const,
         appliedLeaveType: mainLeaveType,
         dayStatuses: dayStatuses,
-        // Update remaining leaves based on assigned days
-        remainingSickLeave: Math.max(managerLeaveBalance.sick.total - (managerLeaveBalance.sick.used + sickDays), 0),
-        remainingCasualLeave: Math.max(managerLeaveBalance.casual.total - (managerLeaveBalance.casual.used + casualDays), 0),
+        remainingSickLeave: Math.max(managerLeaveBalance.sick.total - (managerLeaveBalance.sick.used + countType("Sick")), 0),
+        remainingCasualLeave: Math.max(managerLeaveBalance.casual.total - (managerLeaveBalance.casual.used + countType("Casual")), 0),
       };
 
       console.log("Sending update data:", updateData);
@@ -1037,7 +1086,7 @@ export function LeaveApplicationsManagement() {
 
   const resetEmployeeState = () => {
     setSelectedEmployee(null)
-    setAvailableLeaveTypes(["LoP"])
+    setAvailableLeaveTypes(["ShortLeave", "LoP"])
     setIsEmployeeSelected(false)
   }
 
@@ -1108,6 +1157,20 @@ export function LeaveApplicationsManagement() {
       setAvailableLeaveTypes(["LoP"]);
     }
   }
+
+  const leaveTypeLabel = (type: string) => {
+    const map: Record<string, string> = {
+      Sick: "Sick Leave",
+      Casual: "Casual Leave",
+      Privileged: "Privileged Leave",
+      ShortLeave: "Short Leave",
+      CompOff: "Comp Off",
+      LoP: "Loss of Pay (LoP)",
+      MtL: "Maternity Leave (MtL)",
+      PtL: "Paternity Leave (PtL)",
+    };
+    return map[type] || type;
+  };
 
   const calculateDays = (fromDate: string, toDate: string) => {
     if (!fromDate || !toDate) return 0
@@ -1192,10 +1255,14 @@ export function LeaveApplicationsManagement() {
     })
     setSelectedEmployee(null)
     setEditingApplication(null)
-    setAvailableLeaveTypes(["LoP"])
+    setAvailableLeaveTypes(["ShortLeave", "LoP"])
     setLeaveBalance({
       sick: { used: 0, total: 0, remaining: 0 },
-      casual: { used: 0, total: 0, remaining: 0 }
+      casual: { used: 0, total: 0, remaining: 0 },
+      privileged: { used: 0, total: 0, remaining: 0 },
+      compOff: { used: 0, total: 0, remaining: 0 },
+      maternity: { used: 0, total: 0, remaining: 0 },
+      paternity: { used: 0, total: 0, remaining: 0 },
     })
     setIsEmployeeSelected(isNormalUser) // For normal users, employee is pre-selected
   }
@@ -1345,25 +1412,25 @@ export function LeaveApplicationsManagement() {
                   
                   {/* Leave Balance Display */}
                   {(isEmployeeSelected || isNormalUser) && (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 bg-gray-50 rounded-lg">
-                      <div className="text-center">
-                        <div className="text-sm font-medium text-gray-600">Sick Leave</div>
-                        <div className="text-lg font-bold text-blue-600">
-                          {leaveBalance.sick.used}/{leaveBalance.sick.total}
+                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 p-4 bg-gray-50 rounded-lg">
+                      {([
+                        { key: "sick" as const, label: "Sick Leave", color: "text-blue-600" },
+                        { key: "casual" as const, label: "Casual Leave", color: "text-green-600" },
+                        { key: "privileged" as const, label: "Privileged Leave", color: "text-purple-600" },
+                        { key: "compOff" as const, label: "Comp Off", color: "text-orange-600" },
+                        { key: "maternity" as const, label: "Maternity (MtL)", color: "text-pink-600" },
+                        { key: "paternity" as const, label: "Paternity (PtL)", color: "text-teal-600" },
+                      ] as const).map(({ key, label, color }) => (
+                        <div key={key} className="text-center">
+                          <div className="text-xs font-medium text-gray-600">{label}</div>
+                          <div className={`text-base font-bold ${color}`}>
+                            {leaveBalance[key].used}/{leaveBalance[key].total}
+                          </div>
+                          <div className="text-xs text-gray-500">
+                            {leaveBalance[key].remaining} remaining
+                          </div>
                         </div>
-                        <div className="text-xs text-gray-500">
-                          {leaveBalance.sick.remaining} remaining
-                        </div>
-                      </div>
-                      <div className="text-center">
-                        <div className="text-sm font-medium text-gray-600">Casual Leave</div>
-                        <div className="text-lg font-bold text-green-600">
-                          {leaveBalance.casual.used}/{leaveBalance.casual.total}
-                        </div>
-                        <div className="text-xs text-gray-500">
-                          {leaveBalance.casual.remaining} remaining
-                        </div>
-                      </div>
+                      ))}
                     </div>
                   )}
                   
@@ -1380,14 +1447,9 @@ export function LeaveApplicationsManagement() {
                       >
                         <option value="">Select Leave Type</option>
                         {availableLeaveTypes.map((type) => (
-                          <option key={type} value={type}>{type}</option>
+                          <option key={type} value={type}>{leaveTypeLabel(type)}</option>
                         ))}
                       </select>
-                      <p className="text-xs text-gray-500">
-                        Available types: {availableLeaveTypes.join(", ")}
-                        {availableLeaveTypes.length === 1 && availableLeaveTypes[0] === "LoP" && 
-                          " - No paid leaves available, only Loss of Pay"}
-                      </p>
                     </div>
                   )}
 
@@ -1518,33 +1580,31 @@ export function LeaveApplicationsManagement() {
                 </div>
 
                 {/* Leave Balance Display for Manager */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 bg-blue-50 rounded-lg">
-                  <div className="text-center">
-                    <div className="text-sm font-medium text-gray-600">Sick Leave</div>
-                    <div className="text-lg font-bold text-blue-600">
-                      {managerLeaveBalance.sick.used + (dayStatuses.filter(day => day.status === "Sick").length)}/{managerLeaveBalance.sick.total}
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 p-4 bg-blue-50 rounded-lg">
+                  {([
+                    { key: "sick" as const, label: "Sick Leave", color: "text-blue-600", statusKey: "Sick" },
+                    { key: "casual" as const, label: "Casual Leave", color: "text-green-600", statusKey: "Casual" },
+                    { key: "privileged" as const, label: "Privileged Leave", color: "text-purple-600", statusKey: "Privileged" },
+                    { key: "compOff" as const, label: "Comp Off", color: "text-orange-600", statusKey: "CompOff" },
+                    { key: "maternity" as const, label: "Maternity (MtL)", color: "text-pink-600", statusKey: "MtL" },
+                    { key: "paternity" as const, label: "Paternity (PtL)", color: "text-teal-600", statusKey: "PtL" },
+                  ] as const).map(({ key, label, color, statusKey }) => (
+                    <div key={key} className="text-center">
+                      <div className="text-xs font-medium text-gray-600">{label}</div>
+                      <div className={`text-base font-bold ${color}`}>
+                        {managerLeaveBalance[key].used + dayStatuses.filter(day => day.status === statusKey).length}/{managerLeaveBalance[key].total}
+                      </div>
+                      <div className="text-xs text-gray-500">
+                        {managerLeaveBalance[key].remaining} remaining
+                      </div>
                     </div>
-                    <div className="text-xs text-gray-500">
-                      {managerLeaveBalance.sick.remaining} remaining
-                    </div>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-sm font-medium text-gray-600">Casual Leave</div>
-                    <div className="text-lg font-bold text-green-600">
-                      {managerLeaveBalance.casual.used + (dayStatuses.filter(day => day.status === "Casual").length)}/{managerLeaveBalance.casual.total}
-                    </div>
-                    <div className="text-xs text-gray-500">
-                      {managerLeaveBalance.casual.remaining} remaining
-                    </div>
-                  </div>
+                  ))}
                 </div>
 
                 {/* Available Leave Types Info */}
                 <div className="p-3 bg-yellow-50 rounded-md">
                   <p className="text-sm text-yellow-700">
-                    <strong>Available Leave Types:</strong> {currentAvailableTypes.join(", ")}
-                    {currentAvailableTypes.length === 1 && currentAvailableTypes[0] === "LoP" && 
-                      " - No paid leaves available, only Loss of Pay"}
+                    <strong>Available Leave Types:</strong> {currentAvailableTypes.map(t => leaveTypeLabel(t)).join(", ")}
                   </p>
                 </div>
               </>
@@ -1555,15 +1615,17 @@ export function LeaveApplicationsManagement() {
               {dayStatuses.map((day, index) => {
                 // Calculate if a type should be available for this specific day
                 const getAvailableTypesForDay = () => {
-                  const types: string[] = ["LoP"]; // LoP is always available
+                  const getAvailableTypesForDay = () => {
+                  const types: string[] = [];
                   
-                  // Check each paid leave type
-                  if (managerLeaveBalance.sick.remaining > 0 || day.status === "Sick") {
-                    types.push("Sick");
-                  }
-                  if (managerLeaveBalance.casual.remaining > 0 || day.status === "Casual") {
-                    types.push("Casual");
-                  }
+                  if (managerLeaveBalance.sick.remaining > 0 || day.status === "Sick") types.push("Sick");
+                  if (managerLeaveBalance.casual.remaining > 0 || day.status === "Casual") types.push("Casual");
+                  if (managerLeaveBalance.privileged.remaining > 0 || day.status === "Privileged") types.push("Privileged");
+                  types.push("ShortLeave");
+                  if (managerLeaveBalance.compOff.remaining > 0 || day.status === "CompOff") types.push("CompOff");
+                  types.push("LoP");
+                  if (managerLeaveBalance.maternity.remaining > 0 || day.status === "MtL") types.push("MtL");
+                  if (managerLeaveBalance.paternity.remaining > 0 || day.status === "PtL") types.push("PtL");
                   
                   return types;
                 };
@@ -1586,29 +1648,27 @@ export function LeaveApplicationsManagement() {
                         className="w-full px-3 py-2 border border-gray-300 rounded-sm border-[#d0d0d0] focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-900/15 focus-visible:border-[#b0b0b0]"
                       >
                         <option value="">Select Type</option>
-                        {availableTypesForThisDay.map((type) => {
-                          // Check if this type has balance (for display purposes only)
-                          const hasBalance = type === "LoP" || 
-                            managerLeaveBalance[type.toLowerCase() as keyof LeaveBalance]?.remaining > 0;
-                          
-                          return (
-                            <option 
-                              key={type} 
-                              value={type}
-                              className={!hasBalance ? "text-gray-400" : ""}
-                            >
-                              {type} {!hasBalance ? "(No balance)" : ""}
-                            </option>
-                          );
-                        })}
+                        {availableTypesForThisDay.map((type) => (
+                          <option key={type} value={type}>{leaveTypeLabel(type)}</option>
+                        ))}
                       </select>
-                      
-                      {/* Show warning if selected type has no balance */}
-                      {day.status && day.status !== "LoP" && 
-                       managerLeaveBalance[day.status.toLowerCase() as keyof LeaveBalance]?.remaining <= 0 && (
-                        <p className="text-xs text-orange-600 mt-1">
-                          Warning: No {day.status} leave balance remaining, but keeping selection
-                        </p>
+                      {day.status === "ShortLeave" && (
+                        <select
+                          value={day.dayType || ""}
+                          onChange={(e) => {
+                            const updated = dayStatuses.map((d, i) => 
+                              i === index ? { ...d, dayType: e.target.value as DayStatus["dayType"] } : d
+                            );
+                            setDayStatuses(updated);
+                          }}
+                          className="w-full mt-2 px-3 py-2 border border-gray-300 rounded-sm border-[#d0d0d0] focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-900/15 focus-visible:border-[#b0b0b0]"
+                        >
+                          <option value="">Mark As...</option>
+                          <option value="Present">Present</option>
+                          <option value="LateMark">Late Mark</option>
+                          <option value="Halfday">Half Day</option>
+                          <option value="Absent">Absent</option>
+                        </select>
                       )}
                     </div>
                   </div>

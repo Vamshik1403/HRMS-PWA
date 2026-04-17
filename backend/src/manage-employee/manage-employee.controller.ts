@@ -88,6 +88,15 @@ searchCredentials(
     return this.service.resetPassword(+id);
   }
 
+  // 5b. Employee changes own password
+  @Post(':id/change-password')
+  async changePassword(
+    @Param('id') id: string,
+    @Body() body: { oldPassword: string; newPassword: string },
+  ) {
+    return this.service.changePassword(+id, body.oldPassword, body.newPassword);
+  }
+
   // 6. Activate/Deactivate credentials
   @Patch(':id/credentials/status')
   updateCredentialStatus(

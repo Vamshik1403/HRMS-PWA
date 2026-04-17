@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
+import { toast } from "sonner";
 import {
   SidebarProvider,
   Sidebar,
@@ -25,6 +26,10 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "../../components/ui/dropdown-menu";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../../components/ui/dialog";
+import { Button } from "../../components/ui/button";
+import { Input } from "../../components/ui/input";
+import { Label } from "../../components/ui/label";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 
@@ -34,6 +39,38 @@ interface EmpLayoutProps {
 
 export default function EmpLayout({ children }: EmpLayoutProps) {
   const pathname = usePathname();
+  const [showChangePassword, setShowChangePassword] = useState(false);
+  const [pwdForm, setPwdForm] = useState({ oldPassword: "", newPassword: "", confirmPassword: "" });
+  const [pwdLoading, setPwdLoading] = useState(false);
+
+  const handleChangePassword = async () => {
+    if (!pwdForm.oldPassword || !pwdForm.newPassword) { toast.error("All fields are required"); return; }
+    if (pwdForm.newPassword !== pwdForm.confirmPassword) { toast.error("Passwords do not match"); return; }
+    if (pwdForm.newPassword.length < 4) { toast.error("Password must be at least 4 characters"); return; }
+    try {
+      setPwdLoading(true);
+      const user = JSON.parse(localStorage.getItem("user") || "{}");
+      const empId = user?.employee?.id;
+      if (!empId) { toast.error("Employee not found"); return; }
+      const res = await fetch(`/backend/manage-emp/${empId}/change-password`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ oldPassword: pwdForm.oldPassword, newPassword: pwdForm.newPassword }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => null);
+        throw new Error(err?.message || "Failed to change password");
+      }
+      toast.success("Password changed successfully");
+      setShowChangePassword(false);
+      setPwdForm({ oldPassword: "", newPassword: "", confirmPassword: "" });
+    } catch (err: any) {
+      toast.error(err.message || "Failed to change password");
+    } finally {
+      setPwdLoading(false);
+    }
+  };
+
   const [openSections, setOpenSections] = useState({
     salary: false,
     leave: false,
@@ -218,6 +255,13 @@ export default function EmpLayout({ children }: EmpLayoutProps) {
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-48">
                     <DropdownMenuItem
+                      className="cursor-pointer"
+                      onClick={() => setShowChangePassword(true)}
+                    >
+                      <Icon icon="mdi:lock-outline" className="w-4 h-4 mr-2" />
+                      Change Password
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
                       className="cursor-pointer text-red-600 focus:text-red-600"
                       onClick={() => {
                         localStorage.removeItem("accessToken");
@@ -238,6 +282,31 @@ export default function EmpLayout({ children }: EmpLayoutProps) {
           </div>
         </SidebarInset>
       </SidebarProvider>
+
+      <Dialog open={showChangePassword} onOpenChange={setShowChangePassword}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Change Password</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label>Current Password</Label>
+              <Input type="password" value={pwdForm.oldPassword} onChange={(e) => setPwdForm({ ...pwdForm, oldPassword: e.target.value })} />
+            </div>
+            <div>
+              <Label>New Password</Label>
+              <Input type="password" value={pwdForm.newPassword} onChange={(e) => setPwdForm({ ...pwdForm, newPassword: e.target.value })} />
+            </div>
+            <div>
+              <Label>Confirm New Password</Label>
+              <Input type="password" value={pwdForm.confirmPassword} onChange={(e) => setPwdForm({ ...pwdForm, confirmPassword: e.target.value })} />
+            </div>
+            <Button onClick={handleChangePassword} disabled={pwdLoading} className="w-full">
+              {pwdLoading ? "Changing..." : "Change Password"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -101,12 +101,39 @@ export function PageLayout({ children }: PageLayoutProps) {
 
   // Profile modal state
   const [profileOpen, setProfileOpen] = useState(false)
-  const [profileForm, setProfileForm] = useState({ username: "", password: "", confirmPassword: "" })
+  const [profileForm, setProfileForm] = useState({
+    username: "", password: "", confirmPassword: "",
+    fullName: "", email: "", mobileNo: "", address: "", city: "", state: "", pincode: "",
+  })
   const [profileSaving, setProfileSaving] = useState(false)
+  const [profileLoading, setProfileLoading] = useState(false)
 
-  const handleProfileOpen = () => {
-    setProfileForm({ username: currentUser?.username || "", password: "", confirmPassword: "" })
+  const handleProfileOpen = async () => {
+    setProfileForm({
+      username: currentUser?.username || "", password: "", confirmPassword: "",
+      fullName: "", email: "", mobileNo: "", address: "", city: "", state: "", pincode: "",
+    })
     setProfileOpen(true)
+    setProfileLoading(true)
+    try {
+      const res = await fetch(`/backend/users/${currentUser?.id}/profile`)
+      if (res.ok) {
+        const data = await res.json()
+        if (data) {
+          setProfileForm(prev => ({
+            ...prev,
+            fullName: data.fullName || "",
+            email: data.email || "",
+            mobileNo: data.mobileNo || "",
+            address: data.address || "",
+            city: data.city || "",
+            state: data.state || "",
+            pincode: data.pincode || "",
+          }))
+        }
+      }
+    } catch { /* ignore */ }
+    finally { setProfileLoading(false) }
   }
 
   const handleProfileSubmit = async (e: React.FormEvent) => {
@@ -121,6 +148,7 @@ export function PageLayout({ children }: PageLayoutProps) {
     }
     setProfileSaving(true)
     try {
+      // Save user credentials (username / password)
       const payload: any = { username: profileForm.username }
       if (profileForm.password) payload.password = profileForm.password
       const res = await fetch(`/backend/users/${currentUser?.id}`, {
@@ -129,6 +157,22 @@ export function PageLayout({ children }: PageLayoutProps) {
         body: JSON.stringify(payload),
       })
       if (!res.ok) throw new Error(await res.text())
+
+      // Save profile details
+      await fetch(`/backend/users/${currentUser?.id}/profile`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fullName: profileForm.fullName,
+          email: profileForm.email,
+          mobileNo: profileForm.mobileNo,
+          address: profileForm.address,
+          city: profileForm.city,
+          state: profileForm.state,
+          pincode: profileForm.pincode,
+        }),
+      })
+
       // Update localStorage
       const userData = JSON.parse(localStorage.getItem("user") || "{}")
       userData.username = profileForm.username
@@ -460,7 +504,7 @@ export function PageLayout({ children }: PageLayoutProps) {
             <CollapsibleContent>
               <SidebarMenuSub className="ml-5 mt-1 space-y-0.5 border-l border-[#f0f0f0] pl-3">
                 <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/attendance-regularisation" className={cn(sbSubRow, isActiveLink('/attendance-regularisation', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium" style={{ display: "block" }}>Attendance Regularisation</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
-                <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/field-attendance-schedule" className={cn(sbSubRow, isActiveLink('/field-attendance-schedule', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium" style={{ display: "block" }}>Field Attendance Schedule</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
+                {/* Field Attendance Schedule - temporarily hidden */}
                 {(isSuperAdmin || isServiceProvider || isCompanyAdmin || isBranchAdmin) && (
                   <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/roster" className={cn(sbSubRow, isActiveLink('/roster', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Workshift Roster</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
                 )}
@@ -548,19 +592,19 @@ export function PageLayout({ children }: PageLayoutProps) {
           <SidebarHeader className="px-4 py-6 border-0">
             <div className="flex items-center justify-between">
               <Link href="/dashboard" className="flex items-center gap-3">
-                <img src="/img/OpenHRM_Logo.png" alt="OpenHRM" className="w-11 h-11 rounded-full object-cover shrink-0 shadow-[0_6px_16px_rgba(79,70,229,0.35)]" />
+                <img src="/img/OpenHRM_Logo.png" alt="OpenHRM" className="w-14 h-14 rounded-full object-cover shrink-0 shadow-[0_6px_16px_rgba(79,70,229,0.35)]" />
                 <div className="min-w-0">
-                  <span className="text-[#111827] font-bold text-sm tracking-tight block truncate">OpenHRM</span>
-                  <p className="text-[11px] text-gray-400">Human resources</p>
+                  <span className="text-[#111827] font-bold text-base tracking-tight block truncate">OpenHRM</span>
+                  <p className="text-xs text-gray-400">Human resources</p>
                 </div>
               </Link>
               <button
                 type="button"
                 onClick={() => setSidebarRefreshKey(k => k + 1)}
-                className="p-1.5 rounded-md text-gray-400 hover:text-[#4f46e5] hover:bg-[#eef2ff] transition-colors shrink-0"
+                className="p-2.5 rounded-md text-gray-400 hover:text-[#4f46e5] hover:bg-[#eef2ff] transition-colors shrink-0"
                 title="Refresh sidebar"
               >
-                <Icon icon="mdi:refresh" className="w-4 h-4" />
+                <Icon icon="mdi:refresh" className="w-6 h-6" />
               </button>
             </div>
           </SidebarHeader>
@@ -752,43 +796,113 @@ export function PageLayout({ children }: PageLayoutProps) {
 
       {/* User Profile Modal */}
       <Dialog open={profileOpen} onOpenChange={setProfileOpen}>
-        <DialogContent className="!w-full !max-w-md !left-1/2 !top-1/2 !-translate-x-1/2 !-translate-y-1/2 !right-auto !bottom-auto !h-auto !min-h-0 rounded-2xl">
+        <DialogContent className="!w-full !max-w-lg !left-1/2 !top-1/2 !-translate-x-1/2 !-translate-y-1/2 !right-auto !bottom-auto !h-auto !max-h-[90vh] !min-h-0 rounded-2xl overflow-y-auto">
           <DialogHeader>
             <DialogTitle>User Profile</DialogTitle>
           </DialogHeader>
+          {profileLoading ? (
+            <div className="py-8 text-center text-gray-400">Loading profile…</div>
+          ) : (
           <form onSubmit={handleProfileSubmit} className="space-y-4 mt-4">
-            <div className="space-y-2">
-              <Label>Username</Label>
-              <Input
-                value={profileForm.username}
-                onChange={(e) => setProfileForm(p => ({ ...p, username: e.target.value }))}
-                placeholder="Username"
-                required
-              />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Full Name</Label>
+                <Input
+                  value={profileForm.fullName}
+                  onChange={(e) => setProfileForm(p => ({ ...p, fullName: e.target.value }))}
+                  placeholder="Full Name"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Email</Label>
+                <Input
+                  type="email"
+                  value={profileForm.email}
+                  onChange={(e) => setProfileForm(p => ({ ...p, email: e.target.value }))}
+                  placeholder="Email"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Mobile Number</Label>
+                <Input
+                  value={profileForm.mobileNo}
+                  onChange={(e) => setProfileForm(p => ({ ...p, mobileNo: e.target.value }))}
+                  placeholder="Mobile Number"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Username</Label>
+                <Input
+                  value={profileForm.username}
+                  onChange={(e) => setProfileForm(p => ({ ...p, username: e.target.value }))}
+                  placeholder="Username"
+                  required
+                />
+              </div>
             </div>
             <div className="space-y-2">
-              <Label>New Password (leave blank to keep current)</Label>
+              <Label>Address</Label>
               <Input
-                type="password"
-                value={profileForm.password}
-                onChange={(e) => setProfileForm(p => ({ ...p, password: e.target.value }))}
-                placeholder="Enter new password"
+                value={profileForm.address}
+                onChange={(e) => setProfileForm(p => ({ ...p, address: e.target.value }))}
+                placeholder="Address"
               />
             </div>
-            <div className="space-y-2">
-              <Label>Confirm Password</Label>
-              <Input
-                type="password"
-                value={profileForm.confirmPassword}
-                onChange={(e) => setProfileForm(p => ({ ...p, confirmPassword: e.target.value }))}
-                placeholder="Confirm new password"
-              />
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="space-y-2">
+                <Label>City</Label>
+                <Input
+                  value={profileForm.city}
+                  onChange={(e) => setProfileForm(p => ({ ...p, city: e.target.value }))}
+                  placeholder="City"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>State</Label>
+                <Input
+                  value={profileForm.state}
+                  onChange={(e) => setProfileForm(p => ({ ...p, state: e.target.value }))}
+                  placeholder="State"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Pincode</Label>
+                <Input
+                  value={profileForm.pincode}
+                  onChange={(e) => setProfileForm(p => ({ ...p, pincode: e.target.value }))}
+                  placeholder="Pincode"
+                />
+              </div>
+            </div>
+            <div className="border-t border-gray-200 pt-4 space-y-4">
+              <p className="text-sm text-gray-500 font-medium">Change Password</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>New Password (leave blank to keep current)</Label>
+                  <Input
+                    type="password"
+                    value={profileForm.password}
+                    onChange={(e) => setProfileForm(p => ({ ...p, password: e.target.value }))}
+                    placeholder="Enter new password"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Confirm Password</Label>
+                  <Input
+                    type="password"
+                    value={profileForm.confirmPassword}
+                    onChange={(e) => setProfileForm(p => ({ ...p, confirmPassword: e.target.value }))}
+                    placeholder="Confirm new password"
+                  />
+                </div>
+              </div>
             </div>
             <div className="flex justify-end gap-2 pt-2">
               <Button type="button" variant="outline" onClick={() => setProfileOpen(false)}>Cancel</Button>
               <Button type="submit" disabled={profileSaving}>{profileSaving ? "Saving…" : "Update"}</Button>
             </div>
           </form>
+          )}
         </DialogContent>
       </Dialog>
     </div>

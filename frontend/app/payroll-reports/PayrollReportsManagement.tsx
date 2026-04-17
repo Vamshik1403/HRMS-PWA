@@ -81,6 +81,13 @@ export function PayrollReportsManagement() {
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [employeeFilter, setEmployeeFilter] = useState("");
+  const [columnPickerOpen, setColumnPickerOpen] = useState(false);
+  const [visibleColumns, setVisibleColumns] = useState<Record<string, boolean>>({
+    sno: true, employeeID: true, employeeName: true, company: true,
+    branch: true, department: true, designation: true, monthPeriod: true,
+    paymentMode: true, paymentDate: true, status: true,
+  });
+  const toggleColumn = (key: string) => setVisibleColumns(prev => ({ ...prev, [key]: !prev[key] }));
 
   const [formData, setFormData] = useState({
     companyID: null as number | null,
@@ -545,6 +552,28 @@ export function PayrollReportsManagement() {
                   <Download className="w-4 h-4" />
                   Download Excel
                 </Button>
+                <div className="relative">
+                  <Button variant="outline" onClick={() => setColumnPickerOpen(v => !v)} className="flex items-center gap-2">
+                    <FileText className="w-4 h-4" /> Columns
+                  </Button>
+                  {columnPickerOpen && (
+                    <div className="absolute right-0 top-full mt-1 z-50 bg-white border border-gray-200 rounded-lg shadow-lg p-3 min-w-[200px] max-h-[300px] overflow-y-auto">
+                      {[
+                        { key: "sno", label: "S.NO" }, { key: "employeeID", label: "Employee ID" },
+                        { key: "employeeName", label: "Employee Name" }, { key: "company", label: "Company" },
+                        { key: "branch", label: "Branch" }, { key: "department", label: "Department" },
+                        { key: "designation", label: "Designation" }, { key: "monthPeriod", label: "Month Period" },
+                        { key: "paymentMode", label: "Payment Mode" }, { key: "paymentDate", label: "Payment Date" },
+                        { key: "status", label: "Status" },
+                      ].map(col => (
+                        <label key={col.key} className="flex items-center gap-2 py-1 cursor-pointer text-sm">
+                          <input type="checkbox" checked={visibleColumns[col.key] !== false} onChange={() => toggleColumn(col.key)} className="w-3.5 h-3.5 rounded" />
+                          {col.label}
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           </CardHeader>
@@ -554,33 +583,33 @@ export function PayrollReportsManagement() {
               <table className="min-w-full border-collapse text-xs">
                 <thead className="bg-gray-900 text-white">
                   <tr>
-                    <th className="px-3 py-2 text-center">S.NO</th>
-                    <th className="px-3 py-2 text-left">EMPLOYEE ID</th>
-                    <th className="px-3 py-2 text-left">EMPLOYEE NAME</th>
-                    <th className="px-3 py-2 text-left">COMPANY</th>
-                    <th className="px-3 py-2 text-left">BRANCH</th>
-                    <th className="px-3 py-2 text-left">DEPARTMENT</th>
-                    <th className="px-3 py-2 text-left">DESIGNATION</th>
-                    <th className="px-3 py-2 text-center">MONTH PERIOD</th>
-                    <th className="px-3 py-2 text-center">PAYMENT MODE</th>
-                    <th className="px-3 py-2 text-center">PAYMENT DATE</th>
-                    <th className="px-3 py-2 text-center">STATUS</th>
+                    {visibleColumns.sno && <th className="px-3 py-2 text-center">S.NO</th>}
+                    {visibleColumns.employeeID && <th className="px-3 py-2 text-left">EMPLOYEE ID</th>}
+                    {visibleColumns.employeeName && <th className="px-3 py-2 text-left">EMPLOYEE NAME</th>}
+                    {visibleColumns.company && <th className="px-3 py-2 text-left">COMPANY</th>}
+                    {visibleColumns.branch && <th className="px-3 py-2 text-left">BRANCH</th>}
+                    {visibleColumns.department && <th className="px-3 py-2 text-left">DEPARTMENT</th>}
+                    {visibleColumns.designation && <th className="px-3 py-2 text-left">DESIGNATION</th>}
+                    {visibleColumns.monthPeriod && <th className="px-3 py-2 text-center">MONTH PERIOD</th>}
+                    {visibleColumns.paymentMode && <th className="px-3 py-2 text-center">PAYMENT MODE</th>}
+                    {visibleColumns.paymentDate && <th className="px-3 py-2 text-center">PAYMENT DATE</th>}
+                    {visibleColumns.status && <th className="px-3 py-2 text-center">STATUS</th>}
                   </tr>
                 </thead>
                 <tbody>
                   {filteredData.map((row, i) => (
                     <tr key={i} className="odd:bg-gray-50 border-b">
-                      <td className="px-3 py-2 text-center text-[11px]">{row.sno}</td>
-                      <td className="px-3 py-2 text-[11px]">{row.employeeID}</td>
-                      <td className="px-3 py-2 text-[11px]">{row.employeeName}</td>
-                      <td className="px-3 py-2 text-[11px]">{row.companyName}</td>
-                      <td className="px-3 py-2 text-[11px]">{row.branchName}</td>
-                      <td className="px-3 py-2 text-[11px]">{row.departmentName}</td>
-                      <td className="px-3 py-2 text-[11px]">{row.designation}</td>
-                      <td className="px-3 py-2 text-center text-[11px]">{row.monthPeriod}</td>
-                      <td className="px-3 py-2 text-center text-[11px]">{row.paymentMode}</td>
-                      <td className="px-3 py-2 text-center text-[11px]">{row.paymentDate}</td>
-                      <td className="px-3 py-2 text-center text-[11px]">
+                      {visibleColumns.sno && <td className="px-3 py-2 text-center text-[11px]">{row.sno}</td>}
+                      {visibleColumns.employeeID && <td className="px-3 py-2 text-[11px]">{row.employeeID}</td>}
+                      {visibleColumns.employeeName && <td className="px-3 py-2 text-[11px]">{row.employeeName}</td>}
+                      {visibleColumns.company && <td className="px-3 py-2 text-[11px]">{row.companyName}</td>}
+                      {visibleColumns.branch && <td className="px-3 py-2 text-[11px]">{row.branchName}</td>}
+                      {visibleColumns.department && <td className="px-3 py-2 text-[11px]">{row.departmentName}</td>}
+                      {visibleColumns.designation && <td className="px-3 py-2 text-[11px]">{row.designation}</td>}
+                      {visibleColumns.monthPeriod && <td className="px-3 py-2 text-center text-[11px]">{row.monthPeriod}</td>}
+                      {visibleColumns.paymentMode && <td className="px-3 py-2 text-center text-[11px]">{row.paymentMode}</td>}
+                      {visibleColumns.paymentDate && <td className="px-3 py-2 text-center text-[11px]">{row.paymentDate}</td>}
+                      {visibleColumns.status && <td className="px-3 py-2 text-center text-[11px]">
                         <span className={`px-2 py-0.5 rounded text-[10px] font-semibold ${
                           row.status === "Paid"
                             ? "bg-green-100 text-green-700"
@@ -590,7 +619,7 @@ export function PayrollReportsManagement() {
                         }`}>
                           {row.status}
                         </span>
-                      </td>
+                      </td>}
                     </tr>
                   ))}
                 </tbody>

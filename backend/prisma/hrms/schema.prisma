@@ -36,6 +36,7 @@ model AttendancePolicy {
   otMealApply                            Boolean?         @default(false)
   minsForOTMealToken                     Int?             @default(0)
   minsForBreakTimeForMeal                Int?             @default(0)
+  leaveAroundHolidayCounted              Boolean?         @default(false)
   branches                               Branches?        @relation(fields: [branchesID], references: [id], onDelete: NoAction, onUpdate: NoAction)
   company                                Company?         @relation(fields: [companyID], references: [id], onDelete: NoAction, onUpdate: NoAction)
   serviceProvider                        ServiceProvider? @relation(fields: [serviceProviderID], references: [id], onDelete: NoAction, onUpdate: NoAction)
@@ -1172,9 +1173,12 @@ model WorkShiftDay {
   id           Int        @id @default(autoincrement())
   workShiftID  Int?
   weekDay      String?    @db.VarChar
+  shiftType    String?    @db.VarChar  // "WORK" or "OT"
   weeklyOff    Boolean?
   startTime    String?
   endTime      String?
+  breakStart   String?
+  breakEnd     String?
   totalMinutes Int?
   workShift    WorkShift? @relation(fields: [workShiftID], references: [id], onDelete: NoAction, onUpdate: NoAction)
 }
@@ -1293,6 +1297,22 @@ model User {
   branches          Branches?        @relation(fields: [branchesID], references: [id], onDelete: NoAction, onUpdate: NoAction)
   company           Company?         @relation(fields: [companyID], references: [id], onDelete: NoAction, onUpdate: NoAction)
   serviceProvider   ServiceProvider? @relation(fields: [serviceProviderID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  profile           UserProfile?
+}
+
+model UserProfile {
+  id          Int      @id @default(autoincrement())
+  userId      Int      @unique
+  fullName    String?  @db.VarChar
+  email       String?  @db.VarChar
+  mobileNo    String?  @db.VarChar
+  address     String?  @db.VarChar
+  city        String?  @db.VarChar
+  state       String?  @db.VarChar
+  pincode     String?  @db.VarChar
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
 }
 
 model Overtime {

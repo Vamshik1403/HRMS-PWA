@@ -154,6 +154,20 @@ export function LeaveReportsManagement() {
     dateTo: getTodayStr(),
   });
 
+  const [visibleColumns, setVisibleColumns] = useState<Record<string, boolean>>({ sno: true, company: true, branch: true, dept: true, emp: true });
+  const [columnPickerOpen, setColumnPickerOpen] = useState(false);
+  const toggleColumn = (key: string) => setVisibleColumns(prev => ({ ...prev, [key]: !prev[key] }));
+
+  const getStickyLeft = (key: string) => {
+    const order = ["sno", "company", "branch", "dept", "emp"];
+    let left = 0;
+    for (const k of order) {
+      if (k === key) return left;
+      if (visibleColumns[k]) left += LEFT_WIDTHS[k as keyof typeof LEFT_WIDTHS];
+    }
+    return left;
+  };
+
   // ─── Helpers ────────────────────────────────────────────────
 
   const buildDateRangeColumns = (): string[] => {
@@ -786,6 +800,25 @@ export function LeaveReportsManagement() {
                   <Download className="w-4 h-4" />
                   Download Excel
                 </Button>
+                <div className="relative">
+                  <Button variant="outline" onClick={() => setColumnPickerOpen(v => !v)} className="flex items-center gap-2">
+                    <FileText className="w-4 h-4" /> Columns
+                  </Button>
+                  {columnPickerOpen && (
+                    <div className="absolute right-0 top-full mt-1 z-50 bg-white border border-gray-200 rounded-lg shadow-lg p-3 min-w-[200px] max-h-[300px] overflow-y-auto">
+                      {[
+                        { key: "sno", label: "S.NO" }, { key: "company", label: "Company" },
+                        { key: "branch", label: "Branch" }, { key: "dept", label: "Dept" },
+                        { key: "emp", label: "Employee" },
+                      ].map(col => (
+                        <label key={col.key} className="flex items-center gap-2 py-1 cursor-pointer text-sm">
+                          <input type="checkbox" checked={visibleColumns[col.key] !== false} onChange={() => toggleColumn(col.key)} className="w-3.5 h-3.5 rounded" />
+                          {col.label}
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           </CardHeader>
@@ -795,56 +828,52 @@ export function LeaveReportsManagement() {
               <table className="min-w-full border-collapse text-xs">
                 <thead className="bg-gray-900 text-white">
                   <tr>
-                    <th
+                    {visibleColumns.sno && <th
                       className="sticky z-30 bg-gray-900 px-3 py-2 text-center"
-                      style={{ left: 0, width: LEFT_WIDTHS.sno, minWidth: LEFT_WIDTHS.sno }}
+                      style={{ left: getStickyLeft("sno"), width: LEFT_WIDTHS.sno, minWidth: LEFT_WIDTHS.sno }}
                     >
                       S.NO
-                    </th>
-                    <th
+                    </th>}
+                    {visibleColumns.company && <th
                       className="sticky z-30 bg-gray-900 px-3 py-2 text-left"
                       style={{
-                        left: LEFT_WIDTHS.sno,
+                        left: getStickyLeft("company"),
                         width: LEFT_WIDTHS.company,
                         minWidth: LEFT_WIDTHS.company,
                       }}
                     >
                       COMPANY
-                    </th>
-                    <th
+                    </th>}
+                    {visibleColumns.branch && <th
                       className="sticky z-30 bg-gray-900 px-3 py-2 text-left"
                       style={{
-                        left: LEFT_WIDTHS.sno + LEFT_WIDTHS.company,
+                        left: getStickyLeft("branch"),
                         width: LEFT_WIDTHS.branch,
                         minWidth: LEFT_WIDTHS.branch,
                       }}
                     >
                       BRANCH
-                    </th>
-                    <th
+                    </th>}
+                    {visibleColumns.dept && <th
                       className="sticky z-30 bg-gray-900 px-3 py-2 text-left"
                       style={{
-                        left: LEFT_WIDTHS.sno + LEFT_WIDTHS.company + LEFT_WIDTHS.branch,
+                        left: getStickyLeft("dept"),
                         width: LEFT_WIDTHS.dept,
                         minWidth: LEFT_WIDTHS.dept,
                       }}
                     >
                       DEPT
-                    </th>
-                    <th
+                    </th>}
+                    {visibleColumns.emp && <th
                       className="sticky z-30 bg-gray-900 px-3 py-2 text-left"
                       style={{
-                        left:
-                          LEFT_WIDTHS.sno +
-                          LEFT_WIDTHS.company +
-                          LEFT_WIDTHS.branch +
-                          LEFT_WIDTHS.dept,
+                        left: getStickyLeft("emp"),
                         width: LEFT_WIDTHS.emp,
                         minWidth: LEFT_WIDTHS.emp,
                       }}
                     >
                       EMPLOYEE
-                    </th>
+                    </th>}
                     {dateColumns.map((date) => {
                       const { dayName, dateStr } = formatHeaderDate(date);
                       return (
@@ -862,50 +891,46 @@ export function LeaveReportsManagement() {
                 <tbody>
                   {filteredReportData.map((row, index) => (
                     <tr key={row.employee.id} className="odd:bg-gray-50">
-                      <td
+                      {visibleColumns.sno && <td
                         className="sticky bg-white px-3 py-2 border-b border-r text-center text-[11px] z-20"
-                        style={{ left: 0, width: LEFT_WIDTHS.sno, minWidth: LEFT_WIDTHS.sno }}
+                        style={{ left: getStickyLeft("sno"), width: LEFT_WIDTHS.sno, minWidth: LEFT_WIDTHS.sno }}
                       >
                         {index + 1}
-                      </td>
-                      <td
+                      </td>}
+                      {visibleColumns.company && <td
                         className="sticky bg-white px-3 py-2 border-b border-r text-[11px] z-20 align-top"
                         style={{
-                          left: LEFT_WIDTHS.sno,
+                          left: getStickyLeft("company"),
                           width: LEFT_WIDTHS.company,
                           minWidth: LEFT_WIDTHS.company,
                         }}
                       >
                         {row.companyName}
-                      </td>
-                      <td
+                      </td>}
+                      {visibleColumns.branch && <td
                         className="sticky bg-white px-3 py-2 border-b border-r text-[11px] z-20 align-top"
                         style={{
-                          left: LEFT_WIDTHS.sno + LEFT_WIDTHS.company,
+                          left: getStickyLeft("branch"),
                           width: LEFT_WIDTHS.branch,
                           minWidth: LEFT_WIDTHS.branch,
                         }}
                       >
                         {row.branchName}
-                      </td>
-                      <td
+                      </td>}
+                      {visibleColumns.dept && <td
                         className="sticky bg-white px-3 py-2 border-b border-r text-[11px] z-20 align-top"
                         style={{
-                          left: LEFT_WIDTHS.sno + LEFT_WIDTHS.company + LEFT_WIDTHS.branch,
+                          left: getStickyLeft("dept"),
                           width: LEFT_WIDTHS.dept,
                           minWidth: LEFT_WIDTHS.dept,
                         }}
                       >
                         {row.departmentName || "N/A"}
-                      </td>
-                      <td
+                      </td>}
+                      {visibleColumns.emp && <td
                         className="sticky bg-white px-3 py-2 border-b border-r text-[11px] z-20 align-top"
                         style={{
-                          left:
-                            LEFT_WIDTHS.sno +
-                            LEFT_WIDTHS.company +
-                            LEFT_WIDTHS.branch +
-                            LEFT_WIDTHS.dept,
+                          left: getStickyLeft("emp"),
                           width: LEFT_WIDTHS.emp,
                           minWidth: LEFT_WIDTHS.emp,
                         }}
@@ -916,7 +941,7 @@ export function LeaveReportsManagement() {
                         <div className="text-[10px] text-gray-500">
                           ({row.employee.employeeID})
                         </div>
-                      </td>
+                      </td>}
                       {dateColumns.map((date) => {
                         const status = row.leaveDays[date];
                         return (

@@ -35,9 +35,12 @@ export class WorkShiftService {
       createData.workShiftDay = {
         create: workShiftDays.map((day) => ({
           weekDay: day.weekDay,
+          shiftType: day.shiftType || 'WORK',
           weeklyOff: day.weeklyOff,
           startTime: day.weeklyOff ? null : day.startTime,
           endTime: day.weeklyOff ? null : day.endTime,
+          breakStart: day.weeklyOff ? null : (day.breakStart || null),
+          breakEnd: day.weeklyOff ? null : (day.breakEnd || null),
           totalMinutes: day.weeklyOff ? 0 : day.totalMinutes,
         })),
       };
@@ -118,9 +121,12 @@ export class WorkShiftService {
         deleteMany: {}, // Delete all existing days
         create: workShiftDays.map((day) => ({
           weekDay: day.weekDay,
+          shiftType: day.shiftType || 'WORK',
           weeklyOff: day.weeklyOff,
           startTime: day.weeklyOff ? null : day.startTime,
           endTime: day.weeklyOff ? null : day.endTime,
+          breakStart: day.weeklyOff ? null : (day.breakStart || null),
+          breakEnd: day.weeklyOff ? null : (day.breakEnd || null),
           totalMinutes: day.weeklyOff ? 0 : day.totalMinutes,
         })),
       };

@@ -4,9 +4,12 @@ import { Type } from 'class-transformer';
 
 export class WorkShiftDayDto {
   @IsOptional() @IsString() weekDay?: string;
+  @IsOptional() @IsString() shiftType?: string;
   @IsOptional() weeklyOff?: boolean;
   @IsOptional() startTime?: Date;
   @IsOptional() endTime?: Date;
+  @IsOptional() @IsString() breakStart?: string;
+  @IsOptional() @IsString() breakEnd?: string;
   @IsOptional() @IsInt() totalMinutes?: number;
 }
 

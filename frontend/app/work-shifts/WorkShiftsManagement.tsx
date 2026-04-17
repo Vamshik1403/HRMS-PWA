@@ -27,13 +27,18 @@ import { useCurrentUser } from "../hooks/useCurrentUser";
 import { toast } from "sonner";
 import { getSidebarContext } from "../utils/sidebarContext";
 
-interface DaySchedule {
-  day: string;
+interface ShiftRow {
   startTime: string;
   endTime: string;
-  breakTimeMin: number;
-  totalHours: number;
+  breakStart: string;
+  breakEnd: string;
+}
+
+interface DaySchedule {
+  day: string;
   isWeeklyOff: boolean;
+  work: ShiftRow;
+  ot: ShiftRow;
 }
 
 interface WorkShift {
@@ -95,11 +100,9 @@ export function WorkShiftsManagement() {
     branchesID: undefined as number | undefined,
     weeklySchedule: DAYS_OF_WEEK.map((day) => ({
       day,
-      startTime: "10:00",
-      endTime: "18:00",
-      breakTimeMin: 0,
-      totalHours: 8,
       isWeeklyOff: false,
+      work: { startTime: "10:00", endTime: "19:00", breakStart: "14:00", breakEnd: "15:00" },
+      ot: { startTime: "", endTime: "", breakStart: "", breakEnd: "" },
     })),
   });
 
@@ -243,43 +246,54 @@ export function WorkShiftsManagement() {
       const all = Array.isArray(data) ? data : [];
 
       // Map & normalize shifts
-      const mapped = all.map((shift: any) => ({
-        id: shift.id.toString(),
-        serviceProviderID: shift.serviceProviderID,
-        companyID: shift.companyID,
-        branchesID: shift.branchesID,
-        serviceProvider: shift.serviceProvider?.companyName || "",
-        companyName: shift.company?.companyName || "",
-        branchName: shift.branches?.branchName || "",
-        workShiftName: shift.workShiftName,
-        isFlexible: shift.isFlexible || false,
-        isRotating: shift.isRotating || false,
-        workShiftType: shift.workShiftType || "",
-        breakTimeMin: shift.breakTimeMin || 0,
-        weeklySchedule:
-          shift.workShiftDay?.map((day: any) => {
-            const st = formatDbTime(day.startTime) || "10:00";
-            const et = formatDbTime(day.endTime) || "18:00";
-            const [sh, sm] = st.split(":").map(Number);
-            const [eh, em] = et.split(":").map(Number);
-            const rawDiffMin = (eh * 60 + em) - (sh * 60 + sm);
-            const storedTotalMin = day.totalMinutes || 0;
-            const derivedBreak = day.weeklyOff ? 0 : Math.max(0, rawDiffMin - storedTotalMin);
-            return {
-              day: day.weekDay,
-              startTime: st,
-              endTime: et,
-              breakTimeMin: derivedBreak,
-              totalHours: storedTotalMin
-                ? Math.round((storedTotalMin / 60) * 10) / 10
-                : 8,
-              isWeeklyOff: day.weeklyOff || false,
-            };
-          }) || [],
-        createdAt: shift.createdAt
-          ? new Date(shift.createdAt).toISOString().split("T")[0]
-          : new Date().toISOString().split("T")[0],
-      }));
+      const mapped = all.map((shift: any) => {
+        // Group workShiftDay records by weekDay
+        const dayMap: Record<string, DaySchedule> = {};
+        DAYS_OF_WEEK.forEach((d) => {
+          dayMap[d] = {
+            day: d,
+            isWeeklyOff: false,
+            work: { startTime: "10:00", endTime: "19:00", breakStart: "14:00", breakEnd: "15:00" },
+            ot: { startTime: "", endTime: "", breakStart: "", breakEnd: "" },
+          };
+        });
+
+        (shift.workShiftDay || []).forEach((rec: any) => {
+          const day = rec.weekDay;
+          if (!day || !dayMap[day]) return;
+          const st = formatDbTime(rec.startTime) || "";
+          const et = formatDbTime(rec.endTime) || "";
+          const bs = rec.breakStart || "";
+          const be = rec.breakEnd || "";
+          const type = rec.shiftType || "WORK";
+
+          if (type === "OT") {
+            dayMap[day].ot = { startTime: st, endTime: et, breakStart: bs, breakEnd: be };
+          } else {
+            dayMap[day].work = { startTime: st, endTime: et, breakStart: bs, breakEnd: be };
+            dayMap[day].isWeeklyOff = rec.weeklyOff || false;
+          }
+        });
+
+        return {
+          id: shift.id.toString(),
+          serviceProviderID: shift.serviceProviderID,
+          companyID: shift.companyID,
+          branchesID: shift.branchesID,
+          serviceProvider: shift.serviceProvider?.companyName || "",
+          companyName: shift.company?.companyName || "",
+          branchName: shift.branches?.branchName || "",
+          workShiftName: shift.workShiftName,
+          isFlexible: shift.isFlexible || false,
+          isRotating: shift.isRotating || false,
+          workShiftType: shift.workShiftType || "",
+          breakTimeMin: shift.breakTimeMin || 0,
+          weeklySchedule: DAYS_OF_WEEK.map((d) => dayMap[d]),
+          createdAt: shift.createdAt
+            ? new Date(shift.createdAt).toISOString().split("T")[0]
+            : new Date().toISOString().split("T")[0],
+        };
+      });
 
       // Role-based filtering
       if (user?.role === "SUPERADMIN") {
@@ -355,88 +369,57 @@ export function WorkShiftsManagement() {
         .includes(searchTerm.toLowerCase())
   );
 
-  const calculateTotalHours = (startTime: string, endTime: string, breakMin?: number): number => {
-    const [startHour, startMin] = startTime.split(":").map(Number);
-    const [endHour, endMin] = endTime.split(":").map(Number);
-
-    const startMinutes = startHour * 60 + startMin;
-    const endMinutes = endHour * 60 + endMin;
-
-    const diffMinutes = endMinutes - startMinutes - (breakMin || 0);
-    return Math.round((Math.max(0, diffMinutes) / 60) * 10) / 10;
+  const calcMinutes = (start: string, end: string): number => {
+    if (!start || !end) return 0;
+    const [sh, sm] = start.split(":").map(Number);
+    const [eh, em] = end.split(":").map(Number);
+    return Math.max(0, (eh * 60 + em) - (sh * 60 + sm));
   };
 
-  const handleTimeChange = (
+  const formatHrMin = (totalMin: number): string => {
+    if (totalMin <= 0) return "0h 0m";
+    const h = Math.floor(totalMin / 60);
+    const m = totalMin % 60;
+    return `${h}h ${m}m`;
+  };
+
+  const getBreakMin = (row: ShiftRow): number => calcMinutes(row.breakStart, row.breakEnd);
+  const getWorkMin = (row: ShiftRow): number => {
+    const span = calcMinutes(row.startTime, row.endTime);
+    const brk = getBreakMin(row);
+    return Math.max(0, span - brk);
+  };
+
+  const handleShiftRowChange = (
     dayIndex: number,
-    field: "startTime" | "endTime",
+    rowType: "work" | "ot",
+    field: keyof ShiftRow,
     value: string,
-    event?: React.ChangeEvent<HTMLInputElement>
   ) => {
-    const updatedSchedule = [...formData.weeklySchedule];
-    updatedSchedule[dayIndex] = {
-      ...updatedSchedule[dayIndex],
-      [field]: value,
-    };
-
-    const totalHours = calculateTotalHours(
-      updatedSchedule[dayIndex].startTime,
-      updatedSchedule[dayIndex].endTime,
-      updatedSchedule[dayIndex].breakTimeMin
-    );
-    updatedSchedule[dayIndex].totalHours = totalHours;
-
-    setFormData((prev) => ({
-      ...prev,
-      weeklySchedule: updatedSchedule,
-    }));
-
-    if (event?.target) {
-      event.target.blur();
-    }
+    setFormData((prev) => {
+      const updated = [...prev.weeklySchedule];
+      updated[dayIndex] = {
+        ...updated[dayIndex],
+        [rowType]: { ...updated[dayIndex][rowType], [field]: value },
+      };
+      return { ...prev, weeklySchedule: updated };
+    });
   };
 
   const handleWeeklyOffChange = (dayIndex: number, isWeeklyOff: boolean) => {
-    const updatedSchedule = [...formData.weeklySchedule];
-    updatedSchedule[dayIndex] = {
-      ...updatedSchedule[dayIndex],
-      isWeeklyOff,
-      totalHours: isWeeklyOff ? 0 : updatedSchedule[dayIndex].totalHours,
-    };
-
-    setFormData((prev) => ({
-      ...prev,
-      weeklySchedule: updatedSchedule,
-    }));
+    setFormData((prev) => {
+      const updated = [...prev.weeklySchedule];
+      updated[dayIndex] = { ...updated[dayIndex], isWeeklyOff };
+      return { ...prev, weeklySchedule: updated };
+    });
   };
 
-  const handleBreakTimeChange = (dayIndex: number, value: string) => {
-    const breakMin = parseInt(value.replace(/\D/g, "")) || 0;
-    const updatedSchedule = [...formData.weeklySchedule];
-    updatedSchedule[dayIndex] = {
-      ...updatedSchedule[dayIndex],
-      breakTimeMin: breakMin,
-      totalHours: updatedSchedule[dayIndex].isWeeklyOff
-        ? 0
-        : calculateTotalHours(
-            updatedSchedule[dayIndex].startTime,
-            updatedSchedule[dayIndex].endTime,
-            breakMin
-          ),
-    };
-    setFormData((prev) => ({ ...prev, weeklySchedule: updatedSchedule }));
-  };
-
-  // New function to handle isRotating change and reset weekly off checkboxes
   const handleIsRotatingChange = (checked: boolean) => {
     setFormData(prev => ({
       ...prev,
       isRotating: checked,
-      // If isRotating is checked, set all weekly off checkboxes to false and disable them
       weeklySchedule: checked 
-        ? prev.weeklySchedule.map(day => ({
-            ...day,
-            isWeeklyOff: false // Reset all weekly off to false
-          }))
+        ? prev.weeklySchedule.map(day => ({ ...day, isWeeklyOff: false }))
         : prev.weeklySchedule
     }));
   };
@@ -454,18 +437,39 @@ export function WorkShiftsManagement() {
 
     try {
       const toDateTime = (time: string) => {
+        if (!time) return null;
         const [h, m] = time.split(":").map(Number);
         const now = new Date();
         return new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate(), h, m, 0));
       };
 
-      const workShiftDays = formData.weeklySchedule.map((day) => ({
-        weekDay: day.day,
-        weeklyOff: day.isWeeklyOff,
-        startTime: day.isWeeklyOff ? null : toDateTime(day.startTime),
-        endTime: day.isWeeklyOff ? null : toDateTime(day.endTime),
-        totalMinutes: day.isWeeklyOff ? 0 : Math.max(0, Math.round(day.totalHours * 60)),
-      }));
+      const workShiftDays: any[] = [];
+      formData.weeklySchedule.forEach((day) => {
+        // WORK row
+        workShiftDays.push({
+          weekDay: day.day,
+          shiftType: "WORK",
+          weeklyOff: day.isWeeklyOff,
+          startTime: day.isWeeklyOff ? null : toDateTime(day.work.startTime),
+          endTime: day.isWeeklyOff ? null : toDateTime(day.work.endTime),
+          breakStart: day.isWeeklyOff ? null : (day.work.breakStart || null),
+          breakEnd: day.isWeeklyOff ? null : (day.work.breakEnd || null),
+          totalMinutes: day.isWeeklyOff ? 0 : getWorkMin(day.work),
+        });
+        // OT row (only if times are filled)
+        if (day.ot.startTime && day.ot.endTime) {
+          workShiftDays.push({
+            weekDay: day.day,
+            shiftType: "OT",
+            weeklyOff: false,
+            startTime: toDateTime(day.ot.startTime),
+            endTime: toDateTime(day.ot.endTime),
+            breakStart: day.ot.breakStart || null,
+            breakEnd: day.ot.breakEnd || null,
+            totalMinutes: getWorkMin(day.ot),
+          });
+        }
+      });
 
       const workShiftData = {
         serviceProviderID:
@@ -529,11 +533,9 @@ export function WorkShiftsManagement() {
       branchesID: undefined,
       weeklySchedule: DAYS_OF_WEEK.map((day) => ({
         day,
-        startTime: "10:00",
-        endTime: "18:00",
-        breakTimeMin: 0,
-        totalHours: 8,
         isWeeklyOff: false,
+        work: { startTime: "10:00", endTime: "19:00", breakStart: "14:00", breakEnd: "15:00" },
+        ot: { startTime: "", endTime: "", breakStart: "", breakEnd: "" },
       })),
     });
     setEditingWorkShift(null);
@@ -581,18 +583,7 @@ export function WorkShiftsManagement() {
       serviceProviderID: workShift.serviceProviderID,
       companyID: workShift.companyID,
       branchesID: workShift.branchesID,
-      weeklySchedule: workShift.weeklySchedule.map((day) => {
-        const st = formatDbTime(day.startTime) || "10:00";
-        const et = formatDbTime(day.endTime) || "18:00";
-        const dayBreak = day.breakTimeMin || 0;
-        return {
-          ...day,
-          startTime: st,
-          endTime: et,
-          breakTimeMin: dayBreak,
-          totalHours: day.isWeeklyOff ? 0 : calculateTotalHours(st, et, dayBreak),
-        };
-      }),
+      weeklySchedule: workShift.weeklySchedule,
     });
     setEditingWorkShift(workShift);
     setIsDialogOpen(true);
@@ -800,99 +791,109 @@ export function WorkShiftsManagement() {
               <div className="space-y-4">
                 <h3 className="text-lg font-semibold">Default Working Hours</h3>
                 <div className="overflow-x-auto">
-                  <table className="w-full border-collapse border border-gray-300">
+                  <table className="w-full border-collapse border border-gray-300 text-sm">
                     <thead>
                       <tr className="bg-gray-50">
-                        <th className="border border-gray-300 px-3 py-2 text-left font-medium">
-                          Day
-                        </th>
-                        <th className="border border-gray-300 px-3 py-2 text-left font-medium">
-                          Start Time
-                        </th>
-                        <th className="border border-gray-300 px-3 py-2 text-left font-medium">
-                          End Time
-                        </th>
-                        <th className="border border-gray-300 px-3 py-2 text-left font-medium">
-                          Break Time (Min)
-                        </th>
-                        <th className="border border-gray-300 px-3 py-2 text-left font-medium">
-                          Total Hours
-                        </th>
-                        <th className="border border-gray-300 px-3 py-2 text-left font-medium">
-                          Weekly Off
-                        </th>
-                       </tr>
+                        <th className="border border-gray-300 px-2 py-2 text-left font-medium w-[90px]">Day</th>
+                        <th className="border border-gray-300 px-2 py-2 text-left font-medium w-[70px]">Type</th>
+                        <th className="border border-gray-300 px-2 py-2 text-left font-medium">Start Time</th>
+                        <th className="border border-gray-300 px-2 py-2 text-left font-medium">End Time</th>
+                        <th className="border border-gray-300 px-2 py-2 text-left font-medium">Break Start</th>
+                        <th className="border border-gray-300 px-2 py-2 text-left font-medium">Break End</th>
+                        <th className="border border-gray-300 px-2 py-2 text-center font-medium w-[80px]">Total Break</th>
+                        <th className="border border-gray-300 px-2 py-2 text-center font-medium w-[80px]">Total Work</th>
+                        <th className="border border-gray-300 px-2 py-2 text-center font-medium w-[70px]">Weekly Off</th>
+                      </tr>
                     </thead>
                     <tbody>
-                      {formData.weeklySchedule.map((daySchedule, index) => (
-                        <tr key={daySchedule.day}>
-                          <td className="border border-gray-300 px-3 py-2 font-medium">
-                            {daySchedule.day}
-                           </td>
-                          <td className="border border-gray-300 px-3 py-2">
-                            <Input
-                              type="time"
-                              value={daySchedule.startTime}
-                              onChange={(e) =>
-                                handleTimeChange(
-                                  index,
-                                  "startTime",
-                                  e.target.value,
-                                  e
-                                )
-                              }
-                              disabled={daySchedule.isWeeklyOff || formData.isRotating}
-                              className="w-full"
-                            />
-                           </td>
-                          <td className="border border-gray-300 px-3 py-2">
-                            <Input
-                              type="time"
-                              value={daySchedule.endTime}
-                              onChange={(e) =>
-                                handleTimeChange(
-                                  index,
-                                  "endTime",
-                                  e.target.value,
-                                  e
-                                )
-                              }
-                              disabled={daySchedule.isWeeklyOff || formData.isRotating}
-                              className="w-full"
-                            />
-                           </td>
-                          <td className="border border-gray-300 px-3 py-2">
-                            <Input
-                              type="text"
-                              value={daySchedule.breakTimeMin || 0}
-                              onChange={(e) =>
-                                handleBreakTimeChange(index, e.target.value)
-                              }
-                              disabled={daySchedule.isWeeklyOff || formData.isRotating}
-                              className="w-full text-center"
-                              placeholder="0"
-                            />
-                           </td>
-                          <td className="border border-gray-300 px-3 py-2 text-center">
-                            <span className="font-medium">
-                              {daySchedule.totalHours}h
-                            </span>
-                           </td>
-                          <td className="border border-gray-300 px-3 py-2 text-center">
-                            <input
-                              type="checkbox"
-                              checked={daySchedule.isWeeklyOff}
-                              onChange={(e) =>
-                                handleWeeklyOffChange(index, e.target.checked)
-                              }
-                              disabled={formData.isRotating}
-                              className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                            />
-                           </td>
-                         </tr>
-                      ))}
+                      {formData.weeklySchedule.map((daySchedule, index) => {
+                        const isOff = daySchedule.isWeeklyOff;
+                        const disabled = isOff || formData.isRotating;
+                        return (
+                          <>
+                            {/* WORK row */}
+                            <tr key={`${daySchedule.day}-work`} className={isOff ? "bg-gray-50 opacity-60" : ""}>
+                              <td className="border border-gray-300 px-2 py-1.5 font-medium" rowSpan={2}>
+                                {daySchedule.day}
+                              </td>
+                              <td className="border border-gray-300 px-2 py-1.5">
+                                <Badge variant="outline" className="text-xs">Work</Badge>
+                              </td>
+                              <td className="border border-gray-300 px-1 py-1">
+                                <Input type="time" value={daySchedule.work.startTime} onChange={(e) => handleShiftRowChange(index, "work", "startTime", e.target.value)} disabled={disabled} className="h-8 text-xs" />
+                              </td>
+                              <td className="border border-gray-300 px-1 py-1">
+                                <Input type="time" value={daySchedule.work.endTime} onChange={(e) => handleShiftRowChange(index, "work", "endTime", e.target.value)} disabled={disabled} className="h-8 text-xs" />
+                              </td>
+                              <td className="border border-gray-300 px-1 py-1">
+                                <Input type="time" value={daySchedule.work.breakStart} onChange={(e) => handleShiftRowChange(index, "work", "breakStart", e.target.value)} disabled={disabled} className="h-8 text-xs" />
+                              </td>
+                              <td className="border border-gray-300 px-1 py-1">
+                                <Input type="time" value={daySchedule.work.breakEnd} onChange={(e) => handleShiftRowChange(index, "work", "breakEnd", e.target.value)} disabled={disabled} className="h-8 text-xs" />
+                              </td>
+                              <td className="border border-gray-300 px-2 py-1.5 text-center text-xs font-medium">
+                                {isOff ? "—" : formatHrMin(getBreakMin(daySchedule.work))}
+                              </td>
+                              <td className="border border-gray-300 px-2 py-1.5 text-center text-xs font-medium">
+                                {isOff ? "—" : formatHrMin(getWorkMin(daySchedule.work))}
+                              </td>
+                              <td className="border border-gray-300 px-2 py-1.5 text-center" rowSpan={2}>
+                                <input
+                                  type="checkbox"
+                                  checked={daySchedule.isWeeklyOff}
+                                  onChange={(e) => handleWeeklyOffChange(index, e.target.checked)}
+                                  disabled={formData.isRotating}
+                                  className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                                />
+                              </td>
+                            </tr>
+                            {/* OT row */}
+                            <tr key={`${daySchedule.day}-ot`} className={isOff ? "bg-gray-50 opacity-60" : "bg-orange-50/30"}>
+                              <td className="border border-gray-300 px-2 py-1.5">
+                                <Badge variant="outline" className="text-xs bg-orange-50 text-orange-700 border-orange-300">OT</Badge>
+                              </td>
+                              <td className="border border-gray-300 px-1 py-1">
+                                <Input type="time" value={daySchedule.ot.startTime} onChange={(e) => handleShiftRowChange(index, "ot", "startTime", e.target.value)} disabled={disabled} className="h-8 text-xs" />
+                              </td>
+                              <td className="border border-gray-300 px-1 py-1">
+                                <Input type="time" value={daySchedule.ot.endTime} onChange={(e) => handleShiftRowChange(index, "ot", "endTime", e.target.value)} disabled={disabled} className="h-8 text-xs" />
+                              </td>
+                              <td className="border border-gray-300 px-1 py-1">
+                                <Input type="time" value={daySchedule.ot.breakStart} onChange={(e) => handleShiftRowChange(index, "ot", "breakStart", e.target.value)} disabled={disabled} className="h-8 text-xs" />
+                              </td>
+                              <td className="border border-gray-300 px-1 py-1">
+                                <Input type="time" value={daySchedule.ot.breakEnd} onChange={(e) => handleShiftRowChange(index, "ot", "breakEnd", e.target.value)} disabled={disabled} className="h-8 text-xs" />
+                              </td>
+                              <td className="border border-gray-300 px-2 py-1.5 text-center text-xs font-medium">
+                                {(isOff || !daySchedule.ot.startTime) ? "—" : formatHrMin(getBreakMin(daySchedule.ot))}
+                              </td>
+                              <td className="border border-gray-300 px-2 py-1.5 text-center text-xs font-medium">
+                                {(isOff || !daySchedule.ot.startTime) ? "—" : formatHrMin(getWorkMin(daySchedule.ot))}
+                              </td>
+                            </tr>
+                          </>
+                        );
+                      })}
                     </tbody>
-                   </table>
+                    <tfoot>
+                      <tr className="bg-gray-100 font-semibold">
+                        <td colSpan={7} className="border border-gray-300 px-2 py-2 text-right text-sm">
+                          Total Weekly Working Hours
+                        </td>
+                        <td className="border border-gray-300 px-2 py-2 text-center text-sm">
+                          {(() => {
+                            const totalMin = formData.weeklySchedule
+                              .filter((d) => !d.isWeeklyOff)
+                              .reduce((sum, d) => sum + getWorkMin(d.work), 0);
+                            return formatHrMin(totalMin);
+                          })()}
+                        </td>
+                        <td className="border border-gray-300 px-2 py-2 text-center text-xs text-gray-500">
+                          Max 48h
+                        </td>
+                      </tr>
+                    </tfoot>
+                  </table>
                 </div>
               </div>
 
@@ -980,13 +981,17 @@ export function WorkShiftsManagement() {
                   </TableRow>
                 ) : (
                   filteredWorkShifts.map((workShift) => {
-                    const totalWeeklyHours = workShift.weeklySchedule
+                    const totalWeeklyMin = workShift.weeklySchedule
                       .filter((day) => !day.isWeeklyOff)
-                      .reduce((sum, day) => sum + day.totalHours, 0);
+                      .reduce((sum, day) => {
+                        const span = calcMinutes(day.work.startTime, day.work.endTime);
+                        const brk = calcMinutes(day.work.breakStart, day.work.breakEnd);
+                        return sum + Math.max(0, span - brk);
+                      }, 0);
 
                     const scheduleSummary = workShift.weeklySchedule
                       .filter((day) => !day.isWeeklyOff)
-                      .map((day) => `${day.day}: ${formatDbTime(day.startTime)}-${formatDbTime(day.endTime)}`)
+                      .map((day) => `${day.day}: ${day.work.startTime}-${day.work.endTime}`)
                       .join(", ");
 
                     const shiftType = [];
@@ -1021,13 +1026,13 @@ export function WorkShiftsManagement() {
                         </TableCell>
                         <TableCell className="whitespace-nowrap text-center">
                           <Badge variant="outline">
-                            {workShift.weeklySchedule.filter(d => !d.isWeeklyOff).some(d => (d.breakTimeMin || 0) > 0)
-                              ? workShift.weeklySchedule.filter(d => !d.isWeeklyOff).map(d => `${d.breakTimeMin || 0}`).join("/") + "m"
+                            {workShift.weeklySchedule.filter(d => !d.isWeeklyOff).some(d => calcMinutes(d.work.breakStart, d.work.breakEnd) > 0)
+                              ? workShift.weeklySchedule.filter(d => !d.isWeeklyOff).map(d => `${calcMinutes(d.work.breakStart, d.work.breakEnd)}`).join("/") + "m"
                               : "—"}
                           </Badge>
                         </TableCell>
                         <TableCell className="whitespace-nowrap text-center">
-                          <Badge variant="outline">{Math.round(totalWeeklyHours * 10) / 10}h</Badge>
+                          <Badge variant="outline">{formatHrMin(totalWeeklyMin)}</Badge>
                         </TableCell>
                         <TableCell className="whitespace-nowrap">
                           {workShift.createdAt}

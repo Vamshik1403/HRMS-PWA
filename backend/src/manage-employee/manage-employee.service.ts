@@ -58,6 +58,16 @@ export class ManageEmployeeService {
     } = dto;
 
     return this.prisma.$transaction(async (tx) => {
+      // Check for duplicate employeeID within the same company
+      if (scalars.employeeID && companyID) {
+        const existing = await tx.manageEmployee.findFirst({
+          where: { employeeID: scalars.employeeID, companyID },
+        });
+        if (existing) {
+          throw new Error(`Employee ID "${scalars.employeeID}" already exists in this company`);
+        }
+      }
+
       // Create the employee
       const employee = await tx.manageEmployee.create({
         data: {
@@ -520,6 +530,25 @@ export class ManageEmployeeService {
         updatedAt: true,
       }
     });
+  }
+
+  async changePassword(employeeID: number, oldPassword: string, newPassword: string) {
+    const credentials = await this.prisma.employeeCredentials.findUnique({
+      where: { employeeID },
+    });
+    if (!credentials) {
+      throw new Error('Employee credentials not found');
+    }
+    const isValid = await this.verifyPassword(oldPassword, credentials.password);
+    if (!isValid) {
+      throw new Error('Current password is incorrect');
+    }
+    const hashed = await this.hashPassword(newPassword);
+    await this.prisma.employeeCredentials.update({
+      where: { employeeID },
+      data: { password: hashed },
+    });
+    return { message: 'Password changed successfully' };
   }
 
   // Method for employee login verification

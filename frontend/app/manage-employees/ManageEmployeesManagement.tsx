@@ -4542,6 +4542,29 @@ const addCombinedDevMap = () => {
                                 </Button>
                               )}
 
+                              {/* 🔑 SUPERADMIN and MANAGER can reset password */}
+                              {canManage && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={async () => {
+                                    if (!confirm(`Reset password for ${r.employeeFirstName} ${r.employeeLastName} (${r.employeeID})?\nPassword will be reset to their mobile number.`)) return;
+                                    try {
+                                      const res = await fetch(`/backend/manage-emp/${r.id}/reset-password`, { method: "POST" });
+                                      if (!res.ok) throw new Error(`Failed: ${res.status}`);
+                                      toast.success(`Password reset for ${r.employeeID}`);
+                                    } catch (err) {
+                                      console.error(err);
+                                      toast.error("Failed to reset password");
+                                    }
+                                  }}
+                                  className="h-7 w-7 p-0 text-orange-600 hover:text-orange-700 hover:bg-orange-50"
+                                  title="Reset Password"
+                                >
+                                  <Icon icon="mdi:lock-reset" className="w-3 h-3" />
+                                </Button>
+                              )}
+
                               {/* 📜 History */}
                               <Button
                                 variant="ghost"

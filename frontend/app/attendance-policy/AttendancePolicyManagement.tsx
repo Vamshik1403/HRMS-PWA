@@ -111,6 +111,7 @@ export function AttendancePolicyManagement() {
     otMealApply: false,
     minsForOTMealToken: 0,
     minsForBreakTimeForMeal: 0,
+    leaveAroundHolidayCounted: false,
   });
 
   const BACKEND_URL =
@@ -262,6 +263,7 @@ export function AttendancePolicyManagement() {
         otMealApply: p.otMealApply ?? false,
         minsForOTMealToken: p.minsForOTMealToken ?? 0,
         minsForBreakTimeForMeal: p.minsForBreakTimeForMeal ?? 0,
+        leaveAroundHolidayCounted: p.leaveAroundHolidayCounted ?? false,
       }));
 
       if (user?.role === "SUPERADMIN") {
@@ -377,6 +379,7 @@ export function AttendancePolicyManagement() {
         minsForOTMealToken: formData.minsForOTMealToken,
         minsForBreakTimeForMeal: formData.minsForBreakTimeForMeal,
         breakTimeForOT: formData.breakTimeForOT,
+        leaveAroundHolidayCounted: formData.leaveAroundHolidayCounted,
       };
 
       const url = editingPolicy
@@ -435,6 +438,7 @@ export function AttendancePolicyManagement() {
       otMealApply: false,
       minsForOTMealToken: 0,
       minsForBreakTimeForMeal: 0,
+      leaveAroundHolidayCounted: false,
     });
     setEditingPolicy(null);
   };
@@ -500,6 +504,7 @@ export function AttendancePolicyManagement() {
       otMealApply: policy.otMealApply || false,
       minsForOTMealToken: policy.minsForOTMealToken || 0,
       minsForBreakTimeForMeal: policy.minsForBreakTimeForMeal || 0,
+      leaveAroundHolidayCounted: (policy as any).leaveAroundHolidayCounted || false,
     });
     setEditingPolicy(policy);
     setIsDialogOpen(true);
@@ -780,7 +785,7 @@ export function AttendancePolicyManagement() {
               </div>
 
               {/* Mark As + Late Marks */}
-              <div className="flex items-center space-x-3">
+              <div className="flex items-center space-x-3 flex-wrap gap-y-2">
                 <Label className="whitespace-nowrap">Mark as</Label>
                 <select
                   value={formData.markAs}
@@ -812,7 +817,7 @@ export function AttendancePolicyManagement() {
                   placeholder="0"
                 />
 
-                <Label className="whitespace-nowrap">Late Marks</Label>
+                <Label className="whitespace-nowrap">No Check-out Punches</Label>
               </div>
 
               {/* Page Break - Overtime Configuration Section */}
@@ -821,18 +826,18 @@ export function AttendancePolicyManagement() {
                   <div className="flex items-center space-x-3">
                     <input
                       type="checkbox"
-                      id="countWorkhoursInMinutes"
-                      checked={formData.countWorkhoursInMinutes}
+                      id="leaveAroundHolidayCounted"
+                      checked={formData.leaveAroundHolidayCounted || false}
                       onChange={(e) =>
                         setFormData((prev) => ({
                           ...prev,
-                          countWorkhoursInMinutes: e.target.checked,
+                          leaveAroundHolidayCounted: e.target.checked,
                         }))
                       }
                       className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
                     />
-                    <Label htmlFor="countWorkhoursInMinutes" className="text-sm font-medium">
-                      Count total workhours in minutes &amp; count OT minutes after total shift hours
+                    <Label htmlFor="leaveAroundHolidayCounted" className="text-sm font-medium">
+                      If an employee takes leave before and after weekly off / holiday, then the holiday in between is also counted as leave
                     </Label>
                   </div>
                   <div className="flex items-center space-x-3">
@@ -897,92 +902,7 @@ export function AttendancePolicyManagement() {
                             <span className="text-sm text-gray-500">Min</span>
                           </div>
                         </div>
-
-                        <div className="space-y-2">
-                          <Label htmlFor="breakTimeForOT">Break Time for OT (Minutes)</Label>
-                          <div className="flex items-center space-x-2">
-                            <Input
-                              id="breakTimeForOT"
-                              type="text"
-                              value={formData.breakTimeForOT ?? 0}
-                              onChange={(e) => {
-                                const value = e.target.value.replace(/\D/g, "");
-                                setFormData((prev) => ({
-                                  ...prev,
-                                  breakTimeForOT: parseInt(value) || 0,
-                                }));
-                              }}
-                              className="flex-1"
-                              placeholder="Enter break time for OT"
-                            />
-                            <span className="text-sm text-gray-500">Min</span>
-                          </div>
-                        </div>
                       </div>
-
-                      {/* OT Meal Apply */}
-                      <div className="flex items-center space-x-3 pt-2">
-                        <input
-                          type="checkbox"
-                          id="otMealApply"
-                          checked={formData.otMealApply}
-                          onChange={(e) =>
-                            setFormData((prev) => ({
-                              ...prev,
-                              otMealApply: e.target.checked,
-                            }))
-                          }
-                          className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
-                        />
-                        <Label htmlFor="otMealApply" className="text-sm font-medium">
-                          OT Meal Apply
-                        </Label>
-                      </div>
-
-                      {formData.otMealApply && (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 ml-6">
-                          <div className="space-y-2">
-                            <Label htmlFor="minsForOTMealToken">Mins for OT Hours for Meal Token</Label>
-                            <div className="flex items-center space-x-2">
-                              <Input
-                                id="minsForOTMealToken"
-                                type="text"
-                                value={formData.minsForOTMealToken}
-                                onChange={(e) => {
-                                  const value = e.target.value.replace(/\D/g, "");
-                                  setFormData((prev) => ({
-                                    ...prev,
-                                    minsForOTMealToken: parseInt(value) || 0,
-                                  }));
-                                }}
-                                className="flex-1"
-                                placeholder="Enter minutes"
-                              />
-                              <span className="text-sm text-gray-500">Min</span>
-                            </div>
-                          </div>
-                          <div className="space-y-2">
-                            <Label htmlFor="minsForBreakTimeForMeal">Mins for Break Time for Meal</Label>
-                            <div className="flex items-center space-x-2">
-                              <Input
-                                id="minsForBreakTimeForMeal"
-                                type="text"
-                                value={formData.minsForBreakTimeForMeal}
-                                onChange={(e) => {
-                                  const value = e.target.value.replace(/\D/g, "");
-                                  setFormData((prev) => ({
-                                    ...prev,
-                                    minsForBreakTimeForMeal: parseInt(value) || 0,
-                                  }));
-                                }}
-                                className="flex-1"
-                                placeholder="Enter minutes"
-                              />
-                              <span className="text-sm text-gray-500">Min</span>
-                            </div>
-                          </div>
-                        </div>
-                      )}
                     </div>
                   )}
                 </div>
