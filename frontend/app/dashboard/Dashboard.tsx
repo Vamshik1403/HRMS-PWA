@@ -177,12 +177,10 @@ export default function DashboardPage() {
         }
       } else if (user!.role === "COMPANY_ADMIN" && currentUserMapping) {
         scopedEmployees = allEmployees.filter(
-          (e) =>
-            e.companyID === currentUserMapping.companyID && e.branchesID === currentUserMapping.branchesID
+          (e) => e.companyID === currentUserMapping.companyID
         );
         scopedDepartments = allDepartments.filter(
-          (d) =>
-            d.companyID === currentUserMapping.companyID && d.branchesID === currentUserMapping.branchesID
+          (d) => d.companyID === currentUserMapping.companyID
         );
       } else if (user!.role === "EMPLOYEE") {
         scopedEmployees = allEmployees.filter(
