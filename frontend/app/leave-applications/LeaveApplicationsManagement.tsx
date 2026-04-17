@@ -1615,7 +1615,6 @@ export function LeaveApplicationsManagement() {
               {dayStatuses.map((day, index) => {
                 // Calculate if a type should be available for this specific day
                 const getAvailableTypesForDay = () => {
-                  const getAvailableTypesForDay = () => {
                   const types: string[] = [];
                   
                   if (managerLeaveBalance.sick.remaining > 0 || day.status === "Sick") types.push("Sick");
