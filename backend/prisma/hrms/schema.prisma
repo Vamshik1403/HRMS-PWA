@@ -687,6 +687,8 @@ model ManageEmployee {
   empLeavePolicy                 EmpLeavePolicy[]
   empContractor                  EmpContractor[]
   employeeMemo                   EmployeeMemo[]
+
+  @@unique([employeeID, companyID], name: "unique_employee_id_per_company")
 }
 
 model EmployeeFieldHistory {

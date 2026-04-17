@@ -84,6 +84,14 @@ export function PageLayout({ children }: PageLayoutProps) {
   const [fetchedCompanies, setFetchedCompanies] = useState<any[]>([])
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({})
   const [sidebarRefreshKey, setSidebarRefreshKey] = useState(0)
+  const [sidebarCtx, setSidebarCtxState] = useState<{ serviceProviderID: number; serviceProviderName: string; companyID: number; companyName: string } | null>(getSidebarContext())
+
+  // Keep sidebarCtx in sync with localStorage changes
+  useEffect(() => {
+    const handleCtxChange = () => setSidebarCtxState(getSidebarContext())
+    window.addEventListener("sidebar-context-changed", handleCtxChange)
+    return () => window.removeEventListener("sidebar-context-changed", handleCtxChange)
+  }, [])
 
   const isSuperAdmin = currentUser?.role === 'SUPERADMIN'
   const isManager = currentUser?.role === 'MANAGER'
@@ -215,8 +223,7 @@ export function PageLayout({ children }: PageLayoutProps) {
     const inAdmin = ADMIN_PATHS.includes(pathname)
 
     if (inSection) {
-      const ctx = getSidebarContext();
-      const activeCompanyID = ctx?.companyID;
+      const activeCompanyID = sidebarCtx?.companyID;
       for (const sp of displaySPs) {
         if (activeCompanyID) {
           // Only expand the SP that contains the active company
@@ -248,7 +255,7 @@ export function PageLayout({ children }: PageLayoutProps) {
       if (firstComps.length > 0) newOpen[`company_${firstComps[0].id}`] = true
     }
     setOpenSections(newOpen)
-  }, [pathname, displaySPs, companiesBySP])
+  }, [pathname, displaySPs, companiesBySP, sidebarCtx])
 
   const pageTitle = (() => {
     if (pathname === "/dashboard") return "Dashboard";
@@ -258,7 +265,7 @@ export function PageLayout({ children }: PageLayoutProps) {
     return raw.split("-").map(s => s.charAt(0).toUpperCase() + s.slice(1)).join(" ");
   })();
 
-  const activeCtx = getSidebarContext();
+  const activeCtx = sidebarCtx;
   const activeCompanyID = activeCtx?.companyID;
 
   const isActiveLink = (href: string, companyId?: number) => {

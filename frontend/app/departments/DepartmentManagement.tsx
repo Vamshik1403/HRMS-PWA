@@ -169,7 +169,18 @@ export function DepartmentManagement() {
           } else {
             filtered = [];
           }
-          console.log("Manager filtered departments:", filtered); // Debug
+          setRows(filtered);
+        } else if (user?.role === "COMPANY_ADMIN") {
+          const filtered = all.filter(
+            (r: any) => r.companyID === currentUser.companyID
+          );
+          setRows(filtered);
+        } else if (user?.role === "BRANCH_ADMIN") {
+          const filtered = all.filter(
+            (r: any) =>
+              r.companyID === currentUser.companyID &&
+              r.branchesID === currentUser.branchesID
+          );
           setRows(filtered);
         } else if (user?.role === "EMPLOYEE") {
           // For EMPLOYEE, filter by both companyID and branchesID

@@ -2017,7 +2017,40 @@ const addCombinedDevMap = () => {
 
     // Validation
     const validationErrors: string[] = [];
-    if (!formData.employeeFirstName?.trim()) validationErrors.push("Employee First Name is required");
+    if (!formData.employeeFirstName?.trim()) validationErrors.push("Employee First Name is mandatory");
+    if (!formData.employeeLastName?.trim()) validationErrors.push("Employee Last Name is mandatory");
+    if (!formData.employeeID?.trim()) validationErrors.push("Employee ID is mandatory");
+    if (!formData.personalPhoneNo?.trim()) validationErrors.push("Mobile Number is mandatory");
+    if (!formData.joiningDate?.trim()) validationErrors.push("Joining Date is mandatory");
+
+    // Duplicate Employee ID check (within the same company)
+    if (formData.employeeID?.trim()) {
+      try {
+        const res = await fetch("/backend/manage-emp");
+        const allEmps = await res.json();
+        const emps = Array.isArray(allEmps) ? allEmps : [];
+        const duplicate = emps.find(
+          (r: any) =>
+            r.employeeID?.toLowerCase() === formData.employeeID.trim().toLowerCase() &&
+            r.companyID === formData.companyID &&
+            (!editingRow || r.id !== editingRow.id)
+        );
+        if (duplicate) {
+          validationErrors.push("Employee ID already exists in this company. Please use a unique Employee ID.");
+        }
+      } catch {
+        // If fetch fails, fall back to local rows check
+        const duplicate = rows.find(
+          (r) =>
+            r.employeeID?.toLowerCase() === formData.employeeID.trim().toLowerCase() &&
+            (!editingRow || r.id !== editingRow.id)
+        );
+        if (duplicate) {
+          validationErrors.push("Employee ID already exists. Please use a unique Employee ID.");
+        }
+      }
+    }
+
     if (validationErrors.length > 0) {
       validationErrors.forEach(msg => toast.error(msg));
       return;
@@ -2840,26 +2873,39 @@ const addCombinedDevMap = () => {
               </div>
 
               {/* Basic info */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label>First Name</Label>
+                  <Label>First Name <span className="text-red-500">*</span></Label>
                   <Input
                     value={formData.employeeFirstName}
                     onChange={(e) => setFormData((p) => ({ ...p, employeeFirstName: e.target.value }))}
+                    required
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>Last Name</Label>
+                  <Label>Last Name <span className="text-red-500">*</span></Label>
                   <Input
                     value={formData.employeeLastName}
                     onChange={(e) => setFormData((p) => ({ ...p, employeeLastName: e.target.value }))}
+                    required
                   />
                 </div>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label>Employee ID</Label>
+                  <Label>Employee ID <span className="text-red-500">*</span></Label>
                   <Input
                     value={formData.employeeID}
                     onChange={(e) => setFormData((p) => ({ ...p, employeeID: e.target.value }))}
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Mobile Number <span className="text-red-500">*</span></Label>
+                  <Input
+                    value={formData.personalPhoneNo}
+                    onChange={(e) => setFormData((p) => ({ ...p, personalPhoneNo: e.target.value }))}
+                    required
                   />
                 </div>
               </div>
@@ -2867,11 +2913,12 @@ const addCombinedDevMap = () => {
               {/* Codes / Date */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div className="space-y-2">
-                  <Label>Joining Date</Label>
+                  <Label>Joining Date <span className="text-red-500">*</span></Label>
                   <Input
                     type="date"
                     value={formData.joiningDate}
                     onChange={(e) => setFormData((p) => ({ ...p, joiningDate: e.target.value }))}
+                    required
                   />
                 </div>
 
@@ -3566,13 +3613,6 @@ const addCombinedDevMap = () => {
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Personal Phone</Label>
-                  <Input
-                    value={formData.personalPhoneNo}
-                    onChange={(e) => setFormData((p) => ({ ...p, personalPhoneNo: e.target.value }))}
-                  />
-                </div>
                 <div className="space-y-2">
                   <Label>Personal Email</Label>
                   <Input
@@ -4293,6 +4333,7 @@ const addCombinedDevMap = () => {
                 <div className="p-3 bg-gray-50 rounded-lg"><strong>Branch:</strong> {brName(viewRow)}</div>
                 <div className="p-3 bg-gray-50 rounded-lg"><strong>Business Email:</strong> {viewRow.businessEmail}</div>
                 <div className="p-3 bg-gray-50 rounded-lg"><strong>Business Phone:</strong> {viewRow.businessPhoneNo}</div>
+                <div className="p-3 bg-gray-50 rounded-lg"><strong>Mobile Number:</strong> {viewRow.personalPhoneNo}</div>
                 <div className="p-3 bg-gray-50 rounded-lg"><strong>Present Address:</strong> {viewRow.presentAddress}</div>
                 <div className="p-3 bg-gray-50 rounded-lg col-span-2"><strong>Permanent Address:</strong> {viewRow.permenantAddress}</div>
               </div>
