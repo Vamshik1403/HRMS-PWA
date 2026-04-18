@@ -961,7 +961,15 @@ miniOTTime: x.miniOTTime ?? 0,
                 <h3 className="text-lg font-semibold">Salary Configuration</h3>
 
                 <div className="space-y-2">
-                  <Label htmlFor="grossSalary">Gross Salary *</Label>
+                  <div className="flex items-center gap-1">
+                    <Label htmlFor="grossSalary">Gross Salary *</Label>
+                    <span className="relative group">
+                      <Info className="w-3.5 h-3.5 text-gray-400 cursor-help flex-shrink-0" />
+                      <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-72 p-3 text-xs bg-gray-800 text-white rounded shadow-lg opacity-0 group-hover:opacity-100 transition pointer-events-none z-50 whitespace-pre-line leading-relaxed text-left">
+                        {`Manual Value — Total Salary inclusive of all Allowances and Deductions`}
+                      </span>
+                    </span>
+                  </div>
                   <div className="flex items-center gap-2">
                     <Input
                       id="grossSalary"
@@ -1023,9 +1031,17 @@ miniOTTime: x.miniOTTime ?? 0,
 
                   {/* Basic Salary */}
                   <div className="space-y-2 flex-1 min-w-[200px]">
-                    <Label htmlFor="basicSalary">
-                      Basic Salary {formData.salType === "Percentage" ? "(Calculated)" : "(Editable)"}
-                    </Label>
+                    <div className="flex items-center gap-1">
+                      <Label htmlFor="basicSalary">
+                        Basic Salary {formData.salType === "Percentage" ? "(Calculated)" : "(Editable)"}
+                      </Label>
+                      <span className="relative group">
+                        <Info className="w-3.5 h-3.5 text-gray-400 cursor-help flex-shrink-0" />
+                        <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-72 p-3 text-xs bg-gray-800 text-white rounded shadow-lg opacity-0 group-hover:opacity-100 transition pointer-events-none z-50 whitespace-pre-line leading-relaxed text-left">
+                          {`Part of Basic Salary inclusive of DA (if DA apply) from Gross Salary`}
+                        </span>
+                      </span>
+                    </div>
                     <div className="flex items-center gap-2">
                       <Input
                         id="basicSalary"
@@ -1051,7 +1067,15 @@ miniOTTime: x.miniOTTime ?? 0,
 
               {/* OT Configuration */}
               <div className="space-y-4">
-                <h3 className="text-lg font-semibold">OT Configuration</h3>
+                <div className="flex items-center gap-1">
+                  <h3 className="text-lg font-semibold">OT Configuration</h3>
+                  <span className="relative group">
+                    <Info className="w-3.5 h-3.5 text-gray-400 cursor-help flex-shrink-0" />
+                    <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-72 p-3 text-xs bg-gray-800 text-white rounded shadow-lg opacity-0 group-hover:opacity-100 transition pointer-events-none z-50 whitespace-pre-line leading-relaxed text-left">
+                      {`Overtime Rate configuration`}
+                    </span>
+                  </span>
+                </div>
 
                 <div className="flex items-center space-x-3">
                   <input
@@ -1125,7 +1149,15 @@ miniOTTime: x.miniOTTime ?? 0,
 
               {/* Allowance Selection */}
               <div className="space-y-4">
-                <h3 className="text-lg font-semibold">Allowance Selection</h3>
+                <div className="flex items-center gap-1">
+                  <h3 className="text-lg font-semibold">Allowance Selection</h3>
+                  <span className="relative group">
+                    <Info className="w-3.5 h-3.5 text-gray-400 cursor-help flex-shrink-0" />
+                    <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-72 p-3 text-xs bg-gray-800 text-white rounded shadow-lg opacity-0 group-hover:opacity-100 transition pointer-events-none z-50 whitespace-pre-line leading-relaxed text-left">
+                      {`Part of Allowance from Gross Salary`}
+                    </span>
+                  </span>
+                </div>
                 <div className="border rounded-lg p-4 bg-gray-50">
                   <p className="text-sm text-gray-600 mb-4">Select allowances and bonuses for this pay grade:</p>
                   <div className="space-y-2 max-h-60 overflow-y-auto">
@@ -1247,7 +1279,15 @@ miniOTTime: x.miniOTTime ?? 0,
 
               {/* Deduction Selection */}
               <div className="space-y-4">
-                <h3 className="text-lg font-semibold">Deduction Selection</h3>
+                <div className="flex items-center gap-1">
+                  <h3 className="text-lg font-semibold">Deduction Selection</h3>
+                  <span className="relative group">
+                    <Info className="w-3.5 h-3.5 text-gray-400 cursor-help flex-shrink-0" />
+                    <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-72 p-3 text-xs bg-gray-800 text-white rounded shadow-lg opacity-0 group-hover:opacity-100 transition pointer-events-none z-50 whitespace-pre-line leading-relaxed text-left">
+                      {`Part of Deduction from Gross Salary`}
+                    </span>
+                  </span>
+                </div>
                 <div className="border rounded-lg p-4 bg-gray-50">
                   <p className="text-sm text-gray-600 mb-4">Select deductions for this pay grade:</p>
                   <div className="space-y-2 max-h-60 overflow-y-auto">
