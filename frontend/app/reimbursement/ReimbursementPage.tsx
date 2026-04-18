@@ -424,14 +424,16 @@ const isEmployee = !canManage
   const pdfRef = useRef<HTMLDivElement>(null);
 
 
+  const ctx = getSidebarContext();
+
   const resolvedServiceProviderID =
   user?.role === "SERVICE_PROVIDER"
-    ? managerData?.serviceProviderID
+    ? (managerData?.serviceProviderID ?? ctx?.serviceProviderID ?? user?.serviceProviderID)
     : formData.serviceProviderID;
 
 const resolvedCompanyID =
   user?.role === "SERVICE_PROVIDER"
-    ? managerData?.companyID
+    ? (managerData?.companyID ?? ctx?.companyID ?? user?.companyID)
     : formData.companyID;
 
 const resolvedBranchID = formData.branchesID;

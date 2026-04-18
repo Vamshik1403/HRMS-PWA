@@ -236,7 +236,8 @@ export function PublicHolidayManagement() {
       if (user?.role === "SUPERADMIN") {
         companyIdToUse = formData.companyID;
       } else if (user?.role === "SERVICE_PROVIDER") {
-        companyIdToUse = managerData?.companyID;
+        const ctx = getSidebarContext();
+        companyIdToUse = managerData?.companyID ?? ctx?.companyID ?? user?.companyID;
       } else if (user?.role === "EMPLOYEE") {
         companyIdToUse = empCreds?.companyID;
       } else {

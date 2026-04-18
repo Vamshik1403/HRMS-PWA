@@ -667,16 +667,20 @@ export function LeaveApplicationsManagement() {
           : filteredData
       }
 
-      // MANAGER → only mapped branches (filtered by search)
-      if (user?.role === "SERVICE_PROVIDER" && managerData) {
+      // SERVICE_PROVIDER → use managerData, sidebar context, or user object as fallback
+      if (user?.role === "SERVICE_PROVIDER") {
+        const ctx = getSidebarContext();
+        const companyID = managerData?.companyID ?? ctx?.companyID ?? user?.companyID;
+        const spID = managerData?.serviceProviderID ?? ctx?.serviceProviderID ?? user?.serviceProviderID;
+
         let filteredByCompany;
-        if (managerData.companyID) {
+        if (companyID) {
           filteredByCompany = data.filter(
-            (item: any) => item.companyID === managerData.companyID
+            (item: any) => item.companyID === companyID
           )
-        } else if (managerData.serviceProviderID) {
+        } else if (spID) {
           filteredByCompany = data.filter(
-            (item: any) => item.serviceProviderID === managerData.serviceProviderID
+            (item: any) => item.serviceProviderID === spID
           )
         } else {
           filteredByCompany = []
@@ -700,16 +704,20 @@ export function LeaveApplicationsManagement() {
           : filteredByCompany
       }
 
-      // COMPANY_ADMIN / BRANCH_ADMIN → filter by formData.companyID
-      if (formData.companyID) {
-        const filteredByCompany = data.filter(
-          (item: any) => item.companyID === formData.companyID
-        )
-        return q
-          ? filteredByCompany.filter((item: any) =>
-              (item?.branchName || "").toLowerCase().includes(q)
-            )
-          : filteredByCompany
+      // COMPANY_ADMIN / BRANCH_ADMIN → filter by formData.companyID or sidebar context
+      {
+        const ctx = getSidebarContext();
+        const companyID = formData.companyID ?? ctx?.companyID ?? user?.companyID;
+        if (companyID) {
+          const filteredByCompany = data.filter(
+            (item: any) => item.companyID === companyID
+          )
+          return q
+            ? filteredByCompany.filter((item: any) =>
+                (item?.branchName || "").toLowerCase().includes(q)
+              )
+            : filteredByCompany
+        }
       }
 
       return []
@@ -751,22 +759,25 @@ export function LeaveApplicationsManagement() {
           }))
       }
 
-      // SERVICE_PROVIDER → Filter by sidebar context company AND selected branch
+      // SERVICE_PROVIDER → Filter by company AND selected branch
       if (user?.role === "SERVICE_PROVIDER") {
         if (!formData.branchesID) {
           return [] // No employees shown until branch is selected
         }
         
         const ctx = getSidebarContext();
+        const companyID = managerData?.companyID ?? ctx?.companyID ?? user?.companyID;
+        const spID = managerData?.serviceProviderID ?? ctx?.serviceProviderID ?? user?.serviceProviderID;
+
         let filteredData;
-        if (ctx?.companyID) {
+        if (companyID) {
           filteredData = data.filter((item: any) => 
-            item.companyID === ctx.companyID && 
+            item.companyID === companyID && 
             item.branchesID === formData.branchesID
           )
-        } else if (managerData?.serviceProviderID) {
+        } else if (spID) {
           filteredData = data.filter((item: any) => 
-            item.serviceProviderID === managerData?.serviceProviderID && 
+            item.serviceProviderID === spID && 
             item.branchesID === formData.branchesID
           )
         } else {
@@ -802,22 +813,26 @@ export function LeaveApplicationsManagement() {
           }))
       }
 
-      // COMPANY_ADMIN / BRANCH_ADMIN → filter by formData
-      if (formData.companyID && formData.branchesID) {
-        const filteredData = data.filter((item: any) =>
-          item.companyID === formData.companyID &&
-          item.branchesID === formData.branchesID
-        )
-        return filteredData
-          .filter((item: any) => {
-            const fullName = `${item?.employeeFirstName || ""} ${item?.employeeLastName || ""}`.trim().toLowerCase()
-            const employeeId = (item?.employeeID || "").toLowerCase()
-            return fullName.includes(q) || employeeId.includes(q)
-          })
-          .map((item: any) => ({
-            ...item,
-            displayName: `${item?.employeeFirstName || ""} ${item?.employeeLastName || ""}`.trim() + (item?.employeeID ? ` (${item.employeeID})` : "")
-          }))
+      // COMPANY_ADMIN / BRANCH_ADMIN → filter by formData or sidebar context
+      {
+        const ctx = getSidebarContext();
+        const companyID = formData.companyID ?? ctx?.companyID ?? user?.companyID;
+        if (companyID && formData.branchesID) {
+          const filteredData = data.filter((item: any) =>
+            item.companyID === companyID &&
+            item.branchesID === formData.branchesID
+          )
+          return filteredData
+            .filter((item: any) => {
+              const fullName = `${item?.employeeFirstName || ""} ${item?.employeeLastName || ""}`.trim().toLowerCase()
+              const employeeId = (item?.employeeID || "").toLowerCase()
+              return fullName.includes(q) || employeeId.includes(q)
+            })
+            .map((item: any) => ({
+              ...item,
+              displayName: `${item?.employeeFirstName || ""} ${item?.employeeLastName || ""}`.trim() + (item?.employeeID ? ` (${item.employeeID})` : "")
+            }))
+        }
       }
 
       return []

@@ -139,16 +139,16 @@ export function SalaryAdvanceManagement() {
   const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN"
   const isEmployee = !canManage
 
-
+  const ctx = getSidebarContext();
 
   const resolvedServiceProviderID =
   user?.role === "SERVICE_PROVIDER"
-    ? managerData?.serviceProviderID
+    ? (managerData?.serviceProviderID ?? ctx?.serviceProviderID ?? user?.serviceProviderID)
     : formData.serviceProviderID;
 
 const resolvedCompanyID =
   user?.role === "SERVICE_PROVIDER"
-    ? managerData?.companyID
+    ? (managerData?.companyID ?? ctx?.companyID ?? user?.companyID)
     : formData.companyID;
 
 const resolvedBranchID = formData.branchesID;

@@ -1458,7 +1458,6 @@ export function RosterManagement() {
                 >
                   <option value="SHIFT">Shift</option>
                   <option value="WEEKLY_OFF">Weekly Off</option>
-                  <option value="LEAVE">Leave</option>
                 </select>
               </div>
 

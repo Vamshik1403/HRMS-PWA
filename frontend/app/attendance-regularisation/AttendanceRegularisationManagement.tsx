@@ -197,15 +197,18 @@ export function AttendanceRegularisationManagement() {
       }
 
       // MANAGER → only mapped branches (filtered by search)
-      if (user?.role === "SERVICE_PROVIDER" && managerData) {
+      if (user?.role === "SERVICE_PROVIDER") {
+        const ctx = getSidebarContext();
+        const companyID = managerData?.companyID ?? ctx?.companyID ?? user?.companyID;
+        const spID = managerData?.serviceProviderID ?? ctx?.serviceProviderID ?? user?.serviceProviderID;
         let filteredByCompany;
-        if (managerData.companyID) {
+        if (companyID) {
           filteredByCompany = data.filter(
-            (item: any) => item.companyID === managerData.companyID
+            (item: any) => item.companyID === companyID
           )
-        } else if (managerData.serviceProviderID) {
+        } else if (spID) {
           filteredByCompany = data.filter(
-            (item: any) => item.serviceProviderID === managerData.serviceProviderID
+            (item: any) => item.serviceProviderID === spID
           )
         } else {
           filteredByCompany = []
@@ -258,17 +261,20 @@ export function AttendanceRegularisationManagement() {
       }
 
       // MANAGER → only employees from same company and branch
-      if (user?.role === "SERVICE_PROVIDER" && managerData) {
+      if (user?.role === "SERVICE_PROVIDER") {
+        const ctx = getSidebarContext();
+        const companyID = managerData?.companyID ?? ctx?.companyID ?? user?.companyID;
+        const spID = managerData?.serviceProviderID ?? ctx?.serviceProviderID ?? user?.serviceProviderID;
         let filtered;
-        if (managerData.companyID) {
+        if (companyID) {
           filtered = data.filter(
             (item: any) => 
-              item.companyID === managerData.companyID && 
-              item.branchesID === managerData.branchesID
+              item.companyID === companyID && 
+              item.branchesID === (managerData?.branchesID ?? formData.branchesID)
           )
-        } else if (managerData.serviceProviderID) {
+        } else if (spID) {
           filtered = data.filter(
-            (item: any) => item.serviceProviderID === managerData.serviceProviderID
+            (item: any) => item.serviceProviderID === spID
           )
         } else {
           filtered = []
@@ -852,11 +858,12 @@ export function AttendanceRegularisationManagement() {
                       >
                         <option value="">Select Requested Status</option>
                         <option value="PRESENT">Present</option>
+                        <option value="SL">Late Mark</option>
+                        <option value="SL">Half Day</option>
                         <option value="SL">Sick Leave (SL)</option>
                         <option value="CL">Casual Leave (CL)</option>
                         <option value="PL">Privilege Leave (PL)</option>
                         <option value="LOP">Loss of Pay (LOP)</option>
-                        <option value="WEEKOFF">Week Off</option>
                       </select>
                     </div>
                   </div>
