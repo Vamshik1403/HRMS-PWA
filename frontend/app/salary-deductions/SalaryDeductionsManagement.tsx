@@ -16,7 +16,7 @@ import {
 } from "../components/ui/table";
 import { Badge } from "../components/ui/badge";
 import { Icon } from "@iconify/react";
-import { Plus, Search, Edit, Trash2, Info } from "lucide-react";
+import { Plus, Search, Edit, Trash2, Info, ArrowLeft } from "lucide-react";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import { toast } from "sonner";
 import { getSidebarContext } from "../utils/sidebarContext";
@@ -473,15 +473,25 @@ const loadDeductions = async () => {
         <div className="min-w-0 flex-1">
           <p className="text-gray-600 mt-1 text-sm">Manage salary deductions and withholdings</p>
         </div>
-        {canManage && (
-  <Button
-    onClick={() => { resetForm(); setIsDialogOpen(true); }}
-    className="flex-shrink-0 text-sm px-3 py-2"
-  >
-    <Plus className="w-4 h-4 mr-1" />
-    Add Deduction
-  </Button>
-)}
+        {canManage && !isDialogOpen && (
+          <Button
+            onClick={() => { resetForm(); setIsDialogOpen(true); }}
+            className="flex-shrink-0 text-sm px-3 py-2"
+          >
+            <Plus className="w-4 h-4 mr-1" />
+            Add Deduction
+          </Button>
+        )}
+        {isDialogOpen && (
+          <Button
+            variant="outline"
+            onClick={() => { setIsDialogOpen(false); }}
+            className="flex-shrink-0 text-sm px-3 py-2"
+          >
+            <ArrowLeft className="w-4 h-4 mr-1" />
+            Back
+          </Button>
+        )}
       </div>
 
       <FormDrawer open={isDialogOpen} onOpenChange={(o) => { setIsDialogOpen(o); if (!o) resetForm(); }} title={editingDeduction ? "Edit Salary Deduction" : "Add New Salary Deduction"} description={editingDeduction ? "Update the salary deduction information below." : "Fill in the details to add a new salary deduction."}>

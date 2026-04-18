@@ -5,15 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card"
 import { Button } from "../components/ui/button"
 import { Input } from "../components/ui/input"
 import { Label } from "../components/ui/label"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "../components/ui/dialog"
+import { FormDrawer } from "../components/ui/form-drawer"
 import {
   Table,
   TableBody,
@@ -24,7 +16,7 @@ import {
 } from "../components/ui/table"
 import { Badge } from "../components/ui/badge"
 import { Icon } from "@iconify/react"
-import { Plus, Search, Edit, Trash2, Clock, Check, X } from "lucide-react"
+import { Plus, Search, Edit, Trash2, Clock, Check, X, ArrowLeft } from "lucide-react"
 import { SearchSuggestInput } from "../components/SearchSuggestInput"
 import { useCurrentUser } from "../hooks/useCurrentUser"
 import { toast } from "sonner";
@@ -692,25 +684,26 @@ export function AttendanceRegularisationManagement() {
           <p className="text-gray-600 mt-1 text-sm">Manage attendance corrections and time adjustments</p>
         </div>
         <div className="flex items-center gap-3">
-          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-            <DialogTrigger asChild>
-              <Button onClick={resetForm} className="flex-shrink-0 text-sm px-3 py-2">
-                <Plus className="w-4 h-4 mr-1" />
-                Submit Regularisation
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>
-                  {editingRegularisation ? "Edit Attendance Regularisation" : "Submit Attendance Regularisation"}
-                </DialogTitle>
-                <DialogDescription>
-                  {editingRegularisation
-                    ? "Update the attendance regularisation information below."
-                    : "Fill in the details to submit a new attendance regularisation."
-                  }
-                </DialogDescription>
-              </DialogHeader>
+          {!isDialogOpen && (
+            <Button onClick={() => { resetForm(); setIsDialogOpen(true); }} className="flex-shrink-0 text-sm px-3 py-2">
+              <Plus className="w-4 h-4 mr-1" />
+              Submit Regularisation
+            </Button>
+          )}
+          {isDialogOpen && (
+            <Button
+              variant="outline"
+              onClick={() => { setIsDialogOpen(false); }}
+              className="flex-shrink-0 text-sm px-3 py-2"
+            >
+              <ArrowLeft className="w-4 h-4 mr-1" />
+              Back
+            </Button>
+          )}
+        </div>
+      </div>
+
+      <FormDrawer open={isDialogOpen} onOpenChange={setIsDialogOpen} title={editingRegularisation ? "Edit Attendance Regularisation" : "Submit Attendance Regularisation"} description={editingRegularisation ? "Update the attendance regularisation information below." : "Fill in the details to submit a new attendance regularisation."}>
               <form onSubmit={handleSubmit} className="space-y-6">
                 {/* Organization Selection */}
                 <div className="space-y-4">
@@ -961,20 +954,18 @@ export function AttendanceRegularisationManagement() {
                   </div>
                 </div>
 
-                <DialogFooter>
+                <div className="flex justify-end gap-3 pt-4">
                   <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
                     Cancel
                   </Button>
                   <Button type="submit" className="">
                     {editingRegularisation ? "Update Regularisation" : "Submit Regularisation"}
                   </Button>
-                </DialogFooter>
+                </div>
               </form>
-            </DialogContent>
-          </Dialog>
-        </div>
-      </div>
+      </FormDrawer>
 
+      {!isDialogOpen && (<>
       {/* Search and Filters */}
       <Card>
         <CardContent className="p-6">
@@ -1114,6 +1105,8 @@ export function AttendanceRegularisationManagement() {
           </div>
         </CardContent>
       </Card>
+  </>
+  )}
     </div>
   )
 }

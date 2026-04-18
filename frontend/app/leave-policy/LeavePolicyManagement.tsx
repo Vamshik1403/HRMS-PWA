@@ -16,7 +16,7 @@ import {
 } from "../components/ui/table"
 import { Badge } from "../components/ui/badge"
 import { Icon } from "@iconify/react"
-import { Plus, Search, Edit, Trash2 } from "lucide-react"
+import { Plus, Search, Edit, Trash2, ArrowLeft } from "lucide-react"
 import { SearchSuggestInput } from "../components/SearchSuggestInput"
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import { toast } from "sonner";
@@ -585,15 +585,25 @@ const handleCompanySelect = (selected: SelectedItem) => {
         <div className="min-w-0 flex-1">
           <p className="text-gray-600 mt-1 text-sm">Manage leave policies and holiday configurations</p>
         </div>
-        {canManage && (
-              <Button
-                onClick={() => { resetForm(); setIsDialogOpen(true); }}
-                className="flex-shrink-0 text-sm px-3 py-2"
-              >
-                <Plus className="w-4 h-4 mr-1" />
-                Add Leave Policy
-              </Button>
-            )}
+        {canManage && !isDialogOpen && (
+          <Button
+            onClick={() => { resetForm(); setIsDialogOpen(true); }}
+            className="flex-shrink-0 text-sm px-3 py-2"
+          >
+            <Plus className="w-4 h-4 mr-1" />
+            Add Leave Policy
+          </Button>
+        )}
+        {isDialogOpen && (
+          <Button
+            variant="outline"
+            onClick={() => { setIsDialogOpen(false); }}
+            className="flex-shrink-0 text-sm px-3 py-2"
+          >
+            <ArrowLeft className="w-4 h-4 mr-1" />
+            Back
+          </Button>
+        )}
       </div>
 
       <FormDrawer open={isDialogOpen} onOpenChange={setIsDialogOpen} title={editingPolicy ? "Edit Leave Policy" : "Add New Leave Policy"} description={editingPolicy ? "Update the leave policy information below." : "Fill in the details to add a new leave policy."}>

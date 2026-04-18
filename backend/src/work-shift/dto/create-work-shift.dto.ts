@@ -6,8 +6,8 @@ export class WorkShiftDayDto {
   @IsOptional() @IsString() weekDay?: string;
   @IsOptional() @IsString() shiftType?: string;
   @IsOptional() weeklyOff?: boolean;
-  @IsOptional() startTime?: Date;
-  @IsOptional() endTime?: Date;
+  @IsOptional() @IsString() startTime?: string;
+  @IsOptional() @IsString() endTime?: string;
   @IsOptional() @IsString() breakStart?: string;
   @IsOptional() @IsString() breakEnd?: string;
   @IsOptional() @IsInt() totalMinutes?: number;

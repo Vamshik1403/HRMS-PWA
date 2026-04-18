@@ -21,7 +21,7 @@ import {
 } from "../components/ui/table";
 import { Badge } from "../components/ui/badge";
 import { Icon } from "@iconify/react";
-import { Plus, Search, Edit, Trash2 } from "lucide-react";
+import { Plus, Search, Edit, Trash2, ArrowLeft } from "lucide-react";
 import { SearchSuggestInput } from "../components/SearchSuggestInput";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import { toast } from "sonner";
@@ -436,13 +436,6 @@ export function WorkShiftsManagement() {
     }
 
     try {
-      const toDateTime = (time: string) => {
-        if (!time) return null;
-        const [h, m] = time.split(":").map(Number);
-        const now = new Date();
-        return new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate(), h, m, 0));
-      };
-
       const workShiftDays: any[] = [];
       formData.weeklySchedule.forEach((day) => {
         // WORK row
@@ -450,10 +443,10 @@ export function WorkShiftsManagement() {
           weekDay: day.day,
           shiftType: "WORK",
           weeklyOff: day.isWeeklyOff,
-          startTime: day.isWeeklyOff ? null : toDateTime(day.work.startTime),
-          endTime: day.isWeeklyOff ? null : toDateTime(day.work.endTime),
-          breakStart: day.isWeeklyOff ? null : (day.work.breakStart || null),
-          breakEnd: day.isWeeklyOff ? null : (day.work.breakEnd || null),
+          startTime: day.work.startTime || null,
+          endTime: day.work.endTime || null,
+          breakStart: day.work.breakStart || null,
+          breakEnd: day.work.breakEnd || null,
           totalMinutes: day.isWeeklyOff ? 0 : getWorkMin(day.work),
         });
         // OT row (only if times are filled)
@@ -462,8 +455,8 @@ export function WorkShiftsManagement() {
             weekDay: day.day,
             shiftType: "OT",
             weeklyOff: false,
-            startTime: toDateTime(day.ot.startTime),
-            endTime: toDateTime(day.ot.endTime),
+            startTime: day.ot.startTime || null,
+            endTime: day.ot.endTime || null,
             breakStart: day.ot.breakStart || null,
             breakEnd: day.ot.breakEnd || null,
             totalMinutes: getWorkMin(day.ot),
@@ -614,15 +607,25 @@ export function WorkShiftsManagement() {
             Manage work shifts and schedules
           </p>
         </div>
-        {canManage && (
-              <Button
-                onClick={() => { resetForm(); setIsDialogOpen(true); }}
-                className="flex-shrink-0 text-sm px-3 py-2"
-              >
-                <Plus className="w-4 h-4 mr-1" />
-                Add Work Shift
-              </Button>
-            )}
+        {canManage && !isDialogOpen && (
+          <Button
+            onClick={() => { resetForm(); setIsDialogOpen(true); }}
+            className="flex-shrink-0 text-sm px-3 py-2"
+          >
+            <Plus className="w-4 h-4 mr-1" />
+            Add Work Shift
+          </Button>
+        )}
+        {isDialogOpen && (
+          <Button
+            variant="outline"
+            onClick={() => { setIsDialogOpen(false); }}
+            className="flex-shrink-0 text-sm px-3 py-2"
+          >
+            <ArrowLeft className="w-4 h-4 mr-1" />
+            Back
+          </Button>
+        )}
       </div>
 
       <FormDrawer
@@ -798,10 +801,10 @@ export function WorkShiftsManagement() {
                         <th className="border border-gray-300 px-2 py-2 text-left font-medium w-[70px]">Type</th>
                         <th className="border border-gray-300 px-2 py-2 text-left font-medium">Start Time</th>
                         <th className="border border-gray-300 px-2 py-2 text-left font-medium">End Time</th>
-                        <th className="border border-gray-300 px-2 py-2 text-left font-medium">Break Start</th>
-                        <th className="border border-gray-300 px-2 py-2 text-left font-medium">Break End</th>
-                        <th className="border border-gray-300 px-2 py-2 text-center font-medium w-[80px]">Total Break</th>
-                        <th className="border border-gray-300 px-2 py-2 text-center font-medium w-[80px]">Total Work</th>
+                        <th className="border border-gray-300 px-2 py-2 text-left font-medium">Break Start Time</th>
+                        <th className="border border-gray-300 px-2 py-2 text-left font-medium">Break End Time</th>
+                        <th className="border border-gray-300 px-2 py-2 text-center font-medium w-[80px]">Total Break Time</th>
+                        <th className="border border-gray-300 px-2 py-2 text-center font-medium w-[80px]">Total Work Time</th>
                         <th className="border border-gray-300 px-2 py-2 text-center font-medium w-[70px]">Weekly Off</th>
                       </tr>
                     </thead>
@@ -881,7 +884,7 @@ export function WorkShiftsManagement() {
                     <tfoot>
                       <tr className="bg-gray-100 font-semibold">
                         <td colSpan={6} className="border border-gray-300 px-2 py-2 text-right text-sm">
-                          Total Weekly Break
+                          Total Weekly Time
                         </td>
                         <td className="border border-gray-300 px-2 py-2 text-center text-sm">
                           {(() => {
@@ -904,7 +907,7 @@ export function WorkShiftsManagement() {
                           })()}
                         </td>
                         <td className="border border-gray-300 px-2 py-2 text-center text-xs text-gray-500">
-                          Max 48h
+                          {/* Max 48h */}
                         </td>
                       </tr>
                     </tfoot>

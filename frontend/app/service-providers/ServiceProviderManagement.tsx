@@ -17,7 +17,7 @@ import {
 } from "../components/ui/table"
 import { Badge } from "../components/ui/badge"
 import { Icon } from "@iconify/react"
-import { Plus, Search, Edit, Trash2, Eye } from "lucide-react"
+import { Plus, Search, Edit, Trash2, Eye, ArrowLeft } from "lucide-react"
 import { toast } from "sonner"
 
 interface ServiceProvider {
@@ -194,13 +194,25 @@ const handleSubmit = async (e: React.FormEvent) => {
         <div className="min-w-0 flex-1">
           <p className="text-gray-600 text-sm">Manage your service provider relationships</p>
         </div>
-        <Button
-              onClick={() => { resetForm(); setIsDialogOpen(true); }}
-              className="flex-shrink-0 text-sm px-3 py-2"
-            >
-              <Plus className="w-4 h-4 mr-1" />
-              Add Service Provider
-            </Button>
+        {!isDialogOpen && (
+          <Button
+            onClick={() => { resetForm(); setIsDialogOpen(true); }}
+            className="flex-shrink-0 text-sm px-3 py-2"
+          >
+            <Plus className="w-4 h-4 mr-1" />
+            Add Service Provider
+          </Button>
+        )}
+        {isDialogOpen && (
+          <Button
+            variant="outline"
+            onClick={() => { setIsDialogOpen(false); }}
+            className="flex-shrink-0 text-sm px-3 py-2"
+          >
+            <ArrowLeft className="w-4 h-4 mr-1" />
+            Back
+          </Button>
+        )}
       </div>
 
       {/* Add/Edit Drawer */}
