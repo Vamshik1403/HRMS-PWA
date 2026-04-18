@@ -37,6 +37,11 @@ model AttendancePolicy {
   minsForOTMealToken                     Int?             @default(0)
   minsForBreakTimeForMeal                Int?             @default(0)
   leaveAroundHolidayCounted              Boolean?         @default(false)
+  lateMarkMarkAs                         String?
+  lateMarkMarkCount                      String?
+  maxLateCheckinMarkAs                   String?
+  trimPreshiftMin                        Int?             @default(0)
+  trimPostshiftMin                       Int?             @default(0)
   branches                               Branches?        @relation(fields: [branchesID], references: [id], onDelete: NoAction, onUpdate: NoAction)
   company                                Company?         @relation(fields: [companyID], references: [id], onDelete: NoAction, onUpdate: NoAction)
   serviceProvider                        ServiceProvider? @relation(fields: [serviceProviderID], references: [id], onDelete: NoAction, onUpdate: NoAction)

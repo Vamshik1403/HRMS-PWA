@@ -832,10 +832,10 @@ export function WorkShiftsManagement() {
                                 <Input type="time" value={daySchedule.work.breakEnd} onChange={(e) => handleShiftRowChange(index, "work", "breakEnd", e.target.value)} disabled={disabled} className="h-8 text-xs" />
                               </td>
                               <td className="border border-gray-300 px-2 py-1.5 text-center text-xs font-medium">
-                                {isOff ? "—" : formatHrMin(getBreakMin(daySchedule.work))}
+                                {isOff ? "—" : `${formatHrMin(getBreakMin(daySchedule.work))} (${getBreakMin(daySchedule.work)} mins)`}
                               </td>
                               <td className="border border-gray-300 px-2 py-1.5 text-center text-xs font-medium">
-                                {isOff ? "—" : formatHrMin(getWorkMin(daySchedule.work))}
+                                {isOff ? "—" : `${formatHrMin(getWorkMin(daySchedule.work))} (${getWorkMin(daySchedule.work)} mins)`}
                               </td>
                               <td className="border border-gray-300 px-2 py-1.5 text-center" rowSpan={2}>
                                 <input
@@ -865,10 +865,10 @@ export function WorkShiftsManagement() {
                                 <Input type="time" value={daySchedule.ot.breakEnd} onChange={(e) => handleShiftRowChange(index, "ot", "breakEnd", e.target.value)} disabled={disabled} className="h-8 text-xs" />
                               </td>
                               <td className="border border-gray-300 px-2 py-1.5 text-center text-xs font-medium">
-                                {(isOff || !daySchedule.ot.startTime) ? "—" : formatHrMin(getBreakMin(daySchedule.ot))}
+                                {(isOff || !daySchedule.ot.startTime || !daySchedule.ot.endTime) ? "—" : `${formatHrMin(getBreakMin(daySchedule.ot))} (${getBreakMin(daySchedule.ot)} mins)`}
                               </td>
                               <td className="border border-gray-300 px-2 py-1.5 text-center text-xs font-medium">
-                                {(isOff || !daySchedule.ot.startTime) ? "—" : formatHrMin(getWorkMin(daySchedule.ot))}
+                                {(isOff || !daySchedule.ot.startTime || !daySchedule.ot.endTime) ? "—" : `${formatHrMin(getWorkMin(daySchedule.ot))} (${getWorkMin(daySchedule.ot)} mins)`}
                               </td>
                             </tr>
                           </>
@@ -877,15 +877,27 @@ export function WorkShiftsManagement() {
                     </tbody>
                     <tfoot>
                       <tr className="bg-gray-100 font-semibold">
-                        <td colSpan={7} className="border border-gray-300 px-2 py-2 text-right text-sm">
-                          Total Weekly Working Hours
+                        <td colSpan={6} className="border border-gray-300 px-2 py-2 text-right text-sm">
+                          Total Weekly Break
                         </td>
                         <td className="border border-gray-300 px-2 py-2 text-center text-sm">
                           {(() => {
-                            const totalMin = formData.weeklySchedule
+                            const totalBreakMin = formData.weeklySchedule
                               .filter((d) => !d.isWeeklyOff)
-                              .reduce((sum, d) => sum + getWorkMin(d.work), 0);
-                            return formatHrMin(totalMin);
+                              .reduce((sum, d) => sum + getBreakMin(d.work) + (d.ot.startTime && d.ot.endTime ? getBreakMin(d.ot) : 0), 0);
+                            const h = Math.floor(totalBreakMin / 60);
+                            const m = totalBreakMin % 60;
+                            return `${h}h ${m}m (${totalBreakMin} mins)`;
+                          })()}
+                        </td>
+                        <td className="border border-gray-300 px-2 py-2 text-center text-sm">
+                          {(() => {
+                            const totalWorkMin = formData.weeklySchedule
+                              .filter((d) => !d.isWeeklyOff)
+                              .reduce((sum, d) => sum + getWorkMin(d.work) + (d.ot.startTime && d.ot.endTime ? getWorkMin(d.ot) : 0), 0);
+                            const h = Math.floor(totalWorkMin / 60);
+                            const m = totalWorkMin % 60;
+                            return `${h}h ${m}m (${totalWorkMin} mins)`;
                           })()}
                         </td>
                         <td className="border border-gray-300 px-2 py-2 text-center text-xs text-gray-500">
@@ -984,9 +996,11 @@ export function WorkShiftsManagement() {
                     const totalWeeklyMin = workShift.weeklySchedule
                       .filter((day) => !day.isWeeklyOff)
                       .reduce((sum, day) => {
-                        const span = calcMinutes(day.work.startTime, day.work.endTime);
-                        const brk = calcMinutes(day.work.breakStart, day.work.breakEnd);
-                        return sum + Math.max(0, span - brk);
+                        const workSpan = calcMinutes(day.work.startTime, day.work.endTime);
+                        const workBrk = calcMinutes(day.work.breakStart, day.work.breakEnd);
+                        const otSpan = (day.ot.startTime && day.ot.endTime) ? calcMinutes(day.ot.startTime, day.ot.endTime) : 0;
+                        const otBrk = (day.ot.startTime && day.ot.endTime) ? calcMinutes(day.ot.breakStart, day.ot.breakEnd) : 0;
+                        return sum + Math.max(0, workSpan - workBrk) + Math.max(0, otSpan - otBrk);
                       }, 0);
 
                     const scheduleSummary = workShift.weeklySchedule
@@ -1032,7 +1046,7 @@ export function WorkShiftsManagement() {
                           </Badge>
                         </TableCell>
                         <TableCell className="whitespace-nowrap text-center">
-                          <Badge variant="outline">{formatHrMin(totalWeeklyMin)}</Badge>
+                          <Badge variant="outline">{formatHrMin(totalWeeklyMin)} ({totalWeeklyMin} mins)</Badge>
                         </TableCell>
                         <TableCell className="whitespace-nowrap">
                           {workShift.createdAt}

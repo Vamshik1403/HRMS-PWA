@@ -21,7 +21,7 @@ import {
 } from "../components/ui/table";
 import { Badge } from "../components/ui/badge";
 import { Icon } from "@iconify/react";
-import { Plus, Search, Edit, Trash2 } from "lucide-react";
+import { Plus, Search, Edit, Trash2, Info } from "lucide-react";
 import { SearchSuggestInput } from "../components/SearchSuggestInput";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import { toast } from "sonner";
@@ -46,6 +46,11 @@ interface AttendancePolicy {
   earlyCheckoutBeforeEndMin: number;
   markAs?: string;
   lateMarkCount?: string;
+  lateMarkMarkAs?: string;
+  lateMarkMarkCount?: string;
+  maxLateCheckinMarkAs?: string;
+  trimPreshiftMin?: number;
+  trimPostshiftMin?: number;
   allow_self_mark_attendance: boolean;
   allow_manager_update_ot: boolean;
   max_ot_hours_per_day_min: number;
@@ -98,6 +103,11 @@ export function AttendancePolicyManagement() {
     earlyCheckoutBeforeEndMin: 0,
     markAs: "" as "Absent" | "Half Day" | "",
     lateMarkCount: "",
+    lateMarkMarkAs: "" as "Absent" | "Half Day" | "",
+    lateMarkMarkCount: "",
+    maxLateCheckinMarkAs: "" as "Absent" | "Half Day" | "",
+    trimPreshiftMin: 0,
+    trimPostshiftMin: 0,
     allow_self_mark_attendance: false,
     allow_manager_update_ot: false,
     max_ot_hours_per_day_min: 0,
@@ -251,6 +261,11 @@ export function AttendancePolicyManagement() {
         earlyCheckoutBeforeEndMin: p.earlyCheckoutBeforeEndMin ?? 0,
         markAs: p.markAs ?? "",
         lateMarkCount: p.lateMarkCount ?? "",
+        lateMarkMarkAs: p.lateMarkMarkAs ?? "",
+        lateMarkMarkCount: p.lateMarkMarkCount ?? "",
+        maxLateCheckinMarkAs: p.maxLateCheckinMarkAs ?? "",
+        trimPreshiftMin: p.trimPreshiftMin ?? 0,
+        trimPostshiftMin: p.trimPostshiftMin ?? 0,
         allow_self_mark_attendance: p.allow_self_mark_attendance ?? false,
         allow_manager_update_ot: p.allow_manager_update_ot ?? false,
         max_ot_hours_per_day_min: p.max_ot_hours_per_day_min ?? 0,
@@ -338,6 +353,23 @@ export function AttendancePolicyManagement() {
     // Validation
     const validationErrors: string[] = [];
     if (!formData.attendancePolicyName?.trim()) validationErrors.push("Attendance Policy Name is required");
+
+    // Check unique policy name per company
+    const targetCompanyID = user?.role === "SERVICE_PROVIDER"
+      ? currentUserMapping?.companyID
+      : formData.companyID;
+    if (formData.attendancePolicyName?.trim() && targetCompanyID) {
+      const duplicate = policies.find(
+        (p) =>
+          p.companyID === targetCompanyID &&
+          p.attendancePolicyName.toLowerCase() === formData.attendancePolicyName.trim().toLowerCase() &&
+          (!editingPolicy || p.id !== editingPolicy.id)
+      );
+      if (duplicate) {
+        validationErrors.push("An attendance policy with this name already exists for this company.");
+      }
+    }
+
     if (validationErrors.length > 0) {
       validationErrors.forEach(msg => toast.error(msg));
       return;
@@ -364,6 +396,11 @@ export function AttendancePolicyManagement() {
         checkin_grace_time_min: formData.checkin_grace_time_min,
         markAs: formData.markAs,
         lateMarkCount: formData.lateMarkCount,
+        lateMarkMarkAs: formData.lateMarkMarkAs,
+        lateMarkMarkCount: formData.lateMarkMarkCount,
+        maxLateCheckinMarkAs: formData.maxLateCheckinMarkAs,
+        trimPreshiftMin: formData.trimPreshiftMin,
+        trimPostshiftMin: formData.trimPostshiftMin,
         min_work_hours_half_day_min: formData.min_work_hours_half_day_min,
         max_late_check_in_time: formData.max_late_check_in_time,
         earlyCheckoutBeforeEndMin: formData.earlyCheckoutBeforeEndMin,
@@ -422,6 +459,11 @@ export function AttendancePolicyManagement() {
       checkin_grace_time_min: 0,
       markAs: "",
       lateMarkCount: "",
+      lateMarkMarkAs: "",
+      lateMarkMarkCount: "",
+      maxLateCheckinMarkAs: "",
+      trimPreshiftMin: 0,
+      trimPostshiftMin: 0,
       min_work_hours_half_day_min: 0,
       max_late_check_in_time: 0,
       earlyCheckoutBeforeEndMin: 0,
@@ -488,6 +530,11 @@ export function AttendancePolicyManagement() {
       checkin_grace_time_min: policy.checkin_grace_time_min,
       markAs: (policy.markAs as "Absent" | "Half Day") ?? "",
       lateMarkCount: policy.lateMarkCount || "",
+      lateMarkMarkAs: ((policy as any).lateMarkMarkAs as "Absent" | "Half Day") ?? "",
+      lateMarkMarkCount: (policy as any).lateMarkMarkCount || "",
+      maxLateCheckinMarkAs: ((policy as any).maxLateCheckinMarkAs as "Absent" | "Half Day") ?? "",
+      trimPreshiftMin: (policy as any).trimPreshiftMin ?? 0,
+      trimPostshiftMin: (policy as any).trimPostshiftMin ?? 0,
       min_work_hours_half_day_min: policy.min_work_hours_half_day_min,
       max_late_check_in_time: policy.max_late_check_in_time,
       earlyCheckoutBeforeEndMin: policy.earlyCheckoutBeforeEndMin,
@@ -555,7 +602,7 @@ export function AttendancePolicyManagement() {
               className="space-y-6"
             >
               {/* Basic Information */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {/* SP + Company auto-filled from sidebar context */}
                 {false && (
                   <>
@@ -628,7 +675,7 @@ export function AttendancePolicyManagement() {
                 )}
               </div>
 
-              <div className="space-y-2">
+              <div className="space-y-2 w-full">
                 <Label htmlFor="attendancePolicyName">Attendance Policy Name *</Label>
                 <Input
                   id="attendancePolicyName"
@@ -640,6 +687,7 @@ export function AttendancePolicyManagement() {
                     }))
                   }
                   placeholder="Enter attendance policy name"
+                  className="w-full"
                   required
                 />
               </div>
@@ -647,10 +695,18 @@ export function AttendancePolicyManagement() {
               {/* Check-In/Check-Out Configuration */}
               <div className="space-y-4">
                 <h3 className="text-lg font-semibold">Check-In/Check-Out Configuration</h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="checkin_begin_before_min">Check-In Begin Before (Minutes)</Label>
-                    <div className="flex items-center space-x-2">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2 w-full">
+                    <div className="flex items-center gap-1">
+                      <Label htmlFor="checkin_begin_before_min">Check-In Begin Before (Minutes)</Label>
+                      <span className="relative group">
+                        <Info className="w-3.5 h-3.5 text-gray-400 cursor-help flex-shrink-0" />
+                        <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 w-64 p-2 text-xs text-left leading-relaxed bg-gray-800 text-white rounded shadow-lg opacity-0 group-hover:opacity-100 transition pointer-events-none z-50">
+                          Flexible Shift: Allows employees to start work before shift time. Fixed Shift: Not applicable. Work starts at shift start time.
+                        </span>
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2 w-full">
                       <Input
                         id="checkin_begin_before_min"
                         type="text"
@@ -662,16 +718,24 @@ export function AttendancePolicyManagement() {
                             checkin_begin_before_min: parseInt(value) || 0,
                           }));
                         }}
-                        className="flex-1"
+                        className="w-full"
                         required
                       />
-                      <span className="text-sm text-gray-500">Min</span>
+                      <span className="text-sm text-gray-500 flex-shrink-0">Min</span>
                     </div>
                   </div>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="checkout_end_after_min">Check-Out End After (Minutes)</Label>
-                    <div className="flex items-center space-x-2">
+                  <div className="space-y-2 w-full">
+                    <div className="flex items-center gap-1">
+                      <Label htmlFor="checkout_end_after_min">Check-Out End After (Minutes)</Label>
+                      <span className="relative group">
+                        <Info className="w-3.5 h-3.5 text-gray-400 cursor-help flex-shrink-0" />
+                        <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 w-64 p-2 text-xs text-left leading-relaxed bg-gray-800 text-white rounded shadow-lg opacity-0 group-hover:opacity-100 transition pointer-events-none z-50">
+                          Flexible Shift: Allows working after shift end to complete required hours including overtime. Fixed Shift: Allows working after shift end only for overtime.
+                        </span>
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2 w-full">
                       <Input
                         id="checkout_end_after_min"
                         type="text"
@@ -683,10 +747,10 @@ export function AttendancePolicyManagement() {
                             checkout_end_after_min: parseInt(value) || 0,
                           }));
                         }}
-                        className="flex-1"
+                        className="w-full"
                         required
                       />
-                      <span className="text-sm text-gray-500">Min</span>
+                      <span className="text-sm text-gray-500 flex-shrink-0">Min</span>
                     </div>
                   </div>
                 </div>
@@ -695,10 +759,18 @@ export function AttendancePolicyManagement() {
               {/* Grace Time and Minimum Hours */}
               <div className="space-y-4">
                 <h3 className="text-lg font-semibold">Grace Time and Minimum Hours</h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="checkin_grace_time_min">Check-In Grace Time (Minutes)</Label>
-                    <div className="flex items-center space-x-2">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2 w-full">
+                    <div className="flex items-center gap-1">
+                      <Label htmlFor="checkin_grace_time_min">Check-In Grace Time (Minutes)</Label>
+                      <span className="relative group">
+                        <Info className="w-3.5 h-3.5 text-gray-400 cursor-help flex-shrink-0" />
+                        <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 w-64 p-2 text-xs text-left leading-relaxed bg-gray-800 text-white rounded shadow-lg opacity-0 group-hover:opacity-100 transition pointer-events-none z-50">
+                          Flexible Shift: Not applicable. Fixed Shift: Buffer time after shift start without marking late or deduction.
+                        </span>
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2 w-full">
                       <Input
                         id="checkin_grace_time_min"
                         type="text"
@@ -710,18 +782,26 @@ export function AttendancePolicyManagement() {
                             checkin_grace_time_min: parseInt(value) || 0,
                           }));
                         }}
-                        className="flex-1"
+                        className="w-full"
                         required
                       />
-                      <span className="text-sm text-gray-500">Min</span>
+                      <span className="text-sm text-gray-500 flex-shrink-0">Min</span>
                     </div>
                   </div>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="min_work_hours_half_day_min">
-                      Minimum Work Hours for Half Day (Minutes)
-                    </Label>
-                    <div className="flex items-center space-x-2">
+                  <div className="space-y-2 w-full">
+                    <div className="flex items-center gap-1">
+                      <Label htmlFor="min_work_hours_half_day_min">
+                        Min Work Hours for Half Day (Minutes)
+                      </Label>
+                      <span className="relative group">
+                        <Info className="w-3.5 h-3.5 text-gray-400 cursor-help flex-shrink-0" />
+                        <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 w-64 p-2 text-xs text-left leading-relaxed bg-gray-800 text-white rounded shadow-lg opacity-0 group-hover:opacity-100 transition pointer-events-none z-50">
+                          If total work hours fall below this value, employee is marked absent (applies to both shift types).
+                        </span>
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2 w-full">
                       <Input
                         id="min_work_hours_half_day_min"
                         type="text"
@@ -733,37 +813,24 @@ export function AttendancePolicyManagement() {
                             min_work_hours_half_day_min: parseInt(value) || 0,
                           }));
                         }}
-                        className="flex-1"
+                        className="w-full"
                         required
                       />
-                      <span className="text-sm text-gray-500">Min</span>
+                      <span className="text-sm text-gray-500 flex-shrink-0">Min</span>
                     </div>
                   </div>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="max_late_check_in_time">Max Late Check-In Time (Minutes)</Label>
-                    <div className="flex items-center space-x-2">
-                      <Input
-                        id="max_late_check_in_time"
-                        type="text"
-                        value={formData.max_late_check_in_time}
-                        onChange={(e) => {
-                          const value = e.target.value.replace(/\D/g, "");
-                          setFormData((prev) => ({
-                            ...prev,
-                            max_late_check_in_time: parseInt(value) || 0,
-                          }));
-                        }}
-                        className="flex-1"
-                        required
-                      />
-                      <span className="text-sm text-gray-500">Min</span>
+                  <div className="space-y-2 w-full">
+                    <div className="flex items-center gap-1">
+                      <Label htmlFor="earlyCheckoutBeforeEndMin">Early Checkout Before End (Minutes)</Label>
+                      <span className="relative group">
+                        <Info className="w-3.5 h-3.5 text-gray-400 cursor-help flex-shrink-0" />
+                        <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 w-64 p-2 text-xs text-left leading-relaxed bg-gray-800 text-white rounded shadow-lg opacity-0 group-hover:opacity-100 transition pointer-events-none z-50">
+                          Flexible Shift: Not applicable. Fixed Shift: Allows early checkout before shift end without penalty.
+                        </span>
+                      </span>
                     </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="earlyCheckoutBeforeEndMin">Early Checkout Before End (Minutes)</Label>
-                    <div className="flex items-center space-x-2">
+                    <div className="flex items-center gap-2 w-full">
                       <Input
                         id="earlyCheckoutBeforeEndMin"
                         type="text"
@@ -775,193 +842,312 @@ export function AttendancePolicyManagement() {
                             earlyCheckoutBeforeEndMin: parseInt(value) || 0,
                           }));
                         }}
-                        className="flex-1"
+                        className="w-full"
                         required
                       />
-                      <span className="text-sm text-gray-500">Min</span>
+                      <span className="text-sm text-gray-500 flex-shrink-0">Min</span>
                     </div>
                   </div>
                 </div>
               </div>
 
-              {/* Mark As + Late Marks */}
-              <div className="flex items-center space-x-3 flex-wrap gap-y-2">
-                <Label className="whitespace-nowrap">Mark as</Label>
-                <select
-                  value={formData.markAs}
-                  onChange={(e) =>
-                    setFormData((p) => ({
-                      ...p,
-                      markAs: e.target.value as "Absent" | "Half Day" | "",
-                    }))
-                  }
-                  className="px-3 py-2 border border-gray-300 rounded-sm border-[#d0d0d0] focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-900/15 focus-visible:border-[#b0b0b0]"
-                >
-                  <option value="">Select</option>
-                  <option value="Absent">Absent</option>
-                  <option value="Half Day">Half Day</option>
-                </select>
-
-                <Label className="whitespace-nowrap">After</Label>
-                <Input
-                  type="text"
-                  min={0}
-                  value={formData.lateMarkCount}
-                  onChange={(e) =>
-                    setFormData((p) => ({
-                      ...p,
-                      lateMarkCount: e.target.value,
-                    }))
-                  }
-                  className="w-20"
-                  placeholder="0"
-                />
-
-                <Label className="whitespace-nowrap">No Check-out Punches</Label>
+              {/* Late Check-In Rule */}
+              <div className="space-y-3">
+                <div className="flex items-center gap-1">
+                  <Label className="text-base font-semibold">Late Check-In Rule</Label>
+                  <span className="relative group">
+                    <Info className="w-3.5 h-3.5 text-gray-400 cursor-help flex-shrink-0" />
+                    <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 w-64 p-2 text-xs text-left leading-relaxed bg-gray-800 text-white rounded shadow-lg opacity-0 group-hover:opacity-100 transition pointer-events-none z-50">
+                      Flexible Shift: Not applicable. Fixed Shift: If check-in exceeds this limit, mark as Half Day or Absent.
+                    </span>
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-gray-500">Mark as</Label>
+                    <select
+                      value={formData.maxLateCheckinMarkAs}
+                      onChange={(e) =>
+                        setFormData((p) => ({
+                          ...p,
+                          maxLateCheckinMarkAs: e.target.value as "Absent" | "Half Day" | "",
+                        }))
+                      }
+                      className="w-full h-9 px-3 py-2 text-sm border rounded-md border-gray-300 bg-white focus:outline-none focus:ring-2 focus:ring-gray-900/15"
+                    >
+                      <option value="">Select</option>
+                      <option value="Absent">Absent</option>
+                      <option value="Half Day">Half Day</option>
+                    </select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-gray-500">if Check-In After</Label>
+                    <div className="flex items-center gap-2 w-full">
+                      <Input
+                        type="text"
+                        value={formData.max_late_check_in_time}
+                        onChange={(e) => {
+                          const value = e.target.value.replace(/\D/g, "");
+                          setFormData((p) => ({
+                            ...p,
+                            max_late_check_in_time: parseInt(value) || 0,
+                          }));
+                        }}
+                        className="w-full"
+                        placeholder="0"
+                      />
+                      <span className="text-sm text-gray-500 flex-shrink-0">Min</span>
+                    </div>
+                  </div>
+                </div>
               </div>
 
-              {/* Page Break - Overtime Configuration Section */}
-              <div className="border-t border-gray-200 pt-4">
-                <div className="space-y-4">
-                  <div className="flex items-center space-x-3">
-                    <input
-                      type="checkbox"
-                      id="leaveAroundHolidayCounted"
-                      checked={formData.leaveAroundHolidayCounted || false}
+              {/* Late Marks Rule */}
+              <div className="space-y-3">
+                <div className="flex items-center gap-1">
+                  <Label className="text-base font-semibold">Late Marks Rule</Label>
+                  <span className="relative group">
+                    <Info className="w-3.5 h-3.5 text-gray-400 cursor-help flex-shrink-0" />
+                    <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 w-64 p-2 text-xs text-left leading-relaxed bg-gray-800 text-white rounded shadow-lg opacity-0 group-hover:opacity-100 transition pointer-events-none z-50">
+                      Flexible Shift: Not applicable. Fixed Shift: After repeated late marks, mark as Half Day or Absent.
+                    </span>
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-gray-500">Mark as</Label>
+                    <select
+                      value={formData.lateMarkMarkAs}
                       onChange={(e) =>
-                        setFormData((prev) => ({
-                          ...prev,
-                          leaveAroundHolidayCounted: e.target.checked,
+                        setFormData((p) => ({
+                          ...p,
+                          lateMarkMarkAs: e.target.value as "Absent" | "Half Day" | "",
                         }))
                       }
-                      className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
-                    />
-                    <Label htmlFor="leaveAroundHolidayCounted" className="text-sm font-medium">
-                      If an employee takes leave before and after weekly off / holiday, then the holiday in between is also counted as leave
-                    </Label>
+                      className="w-full h-9 px-3 py-2 text-sm border rounded-md border-gray-300 bg-white focus:outline-none focus:ring-2 focus:ring-gray-900/15"
+                    >
+                      <option value="">Select</option>
+                      <option value="Absent">Absent</option>
+                      <option value="Half Day">Half Day</option>
+                    </select>
                   </div>
-                  <div className="flex items-center space-x-3">
-                    <input
-                      type="checkbox"
-                      id="overtimeApplicable"
-                      checked={formData.overtimeApplicable}
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-gray-500">After (count)</Label>
+                    <Input
+                      type="text"
+                      value={formData.lateMarkMarkCount}
                       onChange={(e) =>
-                        setFormData((prev) => ({
-                          ...prev,
-                          overtimeApplicable: e.target.checked,
+                        setFormData((p) => ({
+                          ...p,
+                          lateMarkMarkCount: e.target.value,
                         }))
                       }
-                      className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
+                      className="w-full"
+                      placeholder="0"
                     />
-                    <Label htmlFor="overtimeApplicable" className="text-sm font-medium">
-                      Overtime Applicable
-                    </Label>
                   </div>
+                  <div className="flex items-end h-9">
+                    <span className="text-sm text-gray-500">Late Marks</span>
+                  </div>
+                </div>
+              </div>
 
-                  {formData.overtimeApplicable && (
-                    <div className="ml-6 space-y-4">
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                          <Label htmlFor="minOvertimeHrs">Min Overtime Hrs (Minutes)</Label>
-                          <div className="flex items-center space-x-2">
-                            <Input
-                              id="minOvertimeHrs"
-                              type="text"
-                              value={formData.minOvertimeHrs}
-                              onChange={(e) => {
-                                const value = e.target.value.replace(/\D/g, "");
-                                setFormData((prev) => ({
-                                  ...prev,
-                                  minOvertimeHrs: parseInt(value) || 0,
-                                }));
-                              }}
-                              className="flex-1"
-                              placeholder="Enter minimum overtime hours"
-                            />
-                            <span className="text-sm text-gray-500">Min</span>
-                          </div>
+              {/* No Check-out Punch Rule */}
+              <div className="space-y-3">
+                <div className="flex items-center gap-1">
+                  <Label className="text-base font-semibold">No Check-out Punch Rule</Label>
+                  <span className="relative group">
+                    <Info className="w-3.5 h-3.5 text-gray-400 cursor-help flex-shrink-0" />
+                    <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 w-64 p-2 text-xs text-left leading-relaxed bg-gray-800 text-white rounded shadow-lg opacity-0 group-hover:opacity-100 transition pointer-events-none z-50">
+                      If employee fails to check out, mark as Half Day or Absent (applies to all shifts).
+                    </span>
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-gray-500">Mark as</Label>
+                    <select
+                      value={formData.markAs}
+                      onChange={(e) =>
+                        setFormData((p) => ({
+                          ...p,
+                          markAs: e.target.value as "Absent" | "Half Day" | "",
+                        }))
+                      }
+                      className="w-full h-9 px-3 py-2 text-sm border rounded-md border-gray-300 bg-white focus:outline-none focus:ring-2 focus:ring-gray-900/15"
+                    >
+                      <option value="">Select</option>
+                      <option value="Absent">Absent</option>
+                      <option value="Half Day">Half Day</option>
+                    </select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-gray-500">After (count)</Label>
+                    <Input
+                      type="text"
+                      value={formData.lateMarkCount}
+                      onChange={(e) =>
+                        setFormData((p) => ({
+                          ...p,
+                          lateMarkCount: e.target.value,
+                        }))
+                      }
+                      className="w-full"
+                      placeholder="0"
+                    />
+                  </div>
+                  <div className="flex items-end h-9">
+                    <span className="text-sm text-gray-500">No Check-out Punches</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Trim Working Hours */}
+              <div className="space-y-4">
+                <h3 className="text-lg font-semibold">Trim Working Hours</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2 w-full">
+                    <div className="flex items-center gap-1">
+                      <Label htmlFor="trimPreshiftMin">Trim Preshift Time (Minutes)</Label>
+                      <span className="relative group">
+                        <Info className="w-3.5 h-3.5 text-gray-400 cursor-help flex-shrink-0" />
+                        <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 w-64 p-2 text-xs text-left leading-relaxed bg-gray-800 text-white rounded shadow-lg opacity-0 group-hover:opacity-100 transition pointer-events-none z-50">
+                          Removes preshift time from total working hours (Fixed Shift only).
+                        </span>
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2 w-full">
+                      <Input
+                        id="trimPreshiftMin"
+                        type="text"
+                        value={formData.trimPreshiftMin}
+                        onChange={(e) => {
+                          const value = e.target.value.replace(/\D/g, "");
+                          setFormData((prev) => ({
+                            ...prev,
+                            trimPreshiftMin: parseInt(value) || 0,
+                          }));
+                        }}
+                        className="w-full"
+                      />
+                      <span className="text-sm text-gray-500 flex-shrink-0">Min</span>
+                    </div>
+                  </div>
+                  <div className="space-y-2 w-full">
+                    <div className="flex items-center gap-1">
+                      <Label htmlFor="trimPostshiftMin">Trim Postshift Time (Minutes)</Label>
+                      <span className="relative group">
+                        <Info className="w-3.5 h-3.5 text-gray-400 cursor-help flex-shrink-0" />
+                        <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 w-64 p-2 text-xs text-left leading-relaxed bg-gray-800 text-white rounded shadow-lg opacity-0 group-hover:opacity-100 transition pointer-events-none z-50">
+                          Removes postshift time from total working hours (Fixed Shift only).
+                        </span>
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2 w-full">
+                      <Input
+                        id="trimPostshiftMin"
+                        type="text"
+                        value={formData.trimPostshiftMin}
+                        onChange={(e) => {
+                          const value = e.target.value.replace(/\D/g, "");
+                          setFormData((prev) => ({
+                            ...prev,
+                            trimPostshiftMin: parseInt(value) || 0,
+                          }));
+                        }}
+                        className="w-full"
+                      />
+                      <span className="text-sm text-gray-500 flex-shrink-0">Min</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Additional Settings */}
+              <div className="border-t border-gray-200 pt-4 space-y-4">
+                <div className="flex items-center space-x-3">
+                  <input
+                    type="checkbox"
+                    id="leaveAroundHolidayCounted"
+                    checked={formData.leaveAroundHolidayCounted || false}
+                    onChange={(e) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        leaveAroundHolidayCounted: e.target.checked,
+                      }))
+                    }
+                    className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
+                  />
+                  <Label htmlFor="leaveAroundHolidayCounted" className="text-sm font-medium">
+                    If an employee takes leave before and after weekly off / holiday, then the holiday in between is also counted as leave
+                  </Label>
+                </div>
+                <div className="flex items-center space-x-3">
+                  <input
+                    type="checkbox"
+                    id="overtimeApplicable"
+                    checked={formData.overtimeApplicable}
+                    onChange={(e) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        overtimeApplicable: e.target.checked,
+                      }))
+                    }
+                    className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
+                  />
+                  <Label htmlFor="overtimeApplicable" className="text-sm font-medium">
+                    Overtime Applicable
+                  </Label>
+                </div>
+
+                {formData.overtimeApplicable && (
+                  <div className="ml-6 space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-2 w-full">
+                        <Label htmlFor="minOvertimeHrs">Min Overtime Hrs (Minutes)</Label>
+                        <div className="flex items-center gap-2 w-full">
+                          <Input
+                            id="minOvertimeHrs"
+                            type="text"
+                            value={formData.minOvertimeHrs}
+                            onChange={(e) => {
+                              const value = e.target.value.replace(/\D/g, "");
+                              setFormData((prev) => ({
+                                ...prev,
+                                minOvertimeHrs: parseInt(value) || 0,
+                              }));
+                            }}
+                            className="w-full"
+                            placeholder="Enter minimum overtime hours"
+                          />
+                          <span className="text-sm text-gray-500 flex-shrink-0">Min</span>
                         </div>
+                      </div>
 
-                        <div className="space-y-2">
-                          <Label htmlFor="maxOvertimeHrs">Max Overtime Hrs (Minutes)</Label>
-                          <div className="flex items-center space-x-2">
-                            <Input
-                              id="maxOvertimeHrs"
-                              type="text"
-                              value={formData.maxOvertimeHrs}
-                              onChange={(e) => {
-                                const value = e.target.value.replace(/\D/g, "");
-                                setFormData((prev) => ({
-                                  ...prev,
-                                  maxOvertimeHrs: parseInt(value) || 0,
-                                }));
-                              }}
-                              className="flex-1"
-                              placeholder="Enter maximum overtime hours"
-                            />
-                            <span className="text-sm text-gray-500">Min</span>
-                          </div>
+                      <div className="space-y-2 w-full">
+                        <Label htmlFor="maxOvertimeHrs">Max Overtime Hrs (Minutes)</Label>
+                        <div className="flex items-center gap-2 w-full">
+                          <Input
+                            id="maxOvertimeHrs"
+                            type="text"
+                            value={formData.maxOvertimeHrs}
+                            onChange={(e) => {
+                              const value = e.target.value.replace(/\D/g, "");
+                              setFormData((prev) => ({
+                                ...prev,
+                                maxOvertimeHrs: parseInt(value) || 0,
+                              }));
+                            }}
+                            className="w-full"
+                            placeholder="Enter maximum overtime hours"
+                          />
+                          <span className="text-sm text-gray-500 flex-shrink-0">Min</span>
                         </div>
                       </div>
                     </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Page Break - Overtime Trimming Section (temporarily hidden) */}
-              {/* <div className="border-t border-gray-200 pt-4">
-                <div className="space-y-4">
-                  <div className="flex items-center space-x-3">
-                    <input
-                      type="checkbox"
-                      id="overtimeTrimmingApply"
-                      checked={formData.overtimeTrimmingApply}
-                      onChange={(e) =>
-                        setFormData((prev) => ({
-                          ...prev,
-                          overtimeTrimmingApply: e.target.checked,
-                        }))
-                      }
-                      className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
-                    />
-                    <Label htmlFor="overtimeTrimmingApply" className="text-sm font-medium">
-                      Overtime Trimming Apply
-                    </Label>
                   </div>
-
-                  {formData.overtimeTrimmingApply && (
-                    <div className="ml-6 space-y-4">
-                      <div className="grid grid-cols-1 gap-4">
-                        <div className="space-y-2">
-                          <Label htmlFor="checkoutGracePeriodForOvertimeTrimming">
-                            Checkout grace period for overtime trimming (Minutes)
-                          </Label>
-                          <div className="flex items-center space-x-2">
-                            <Input
-                              id="checkoutGracePeriodForOvertimeTrimming"
-                              type="text"
-                              value={formData.checkoutGracePeriodForOvertimeTrimming}
-                              onChange={(e) => {
-                                const value = e.target.value.replace(/\D/g, "");
-                                setFormData((prev) => ({
-                                  ...prev,
-                                  checkoutGracePeriodForOvertimeTrimming: parseInt(value) || 0,
-                                }));
-                              }}
-                              className="flex-1"
-                              placeholder="Enter grace period in minutes"
-                            />
-                            <span className="text-sm text-gray-500">Min</span>
-                          </div>
-                          <p className="text-xs text-gray-500">
-                            Grace period after checkout before overtime trimming is applied
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div> */}
+                )}
+              </div>
 
               <div className="flex justify-end gap-3 pt-4">
                 <Button
@@ -971,7 +1157,7 @@ export function AttendancePolicyManagement() {
                 >
                   Cancel
                 </Button>
-                <Button type="submit" className="">
+                <Button type="submit">
                   {editingPolicy ? "Update Attendance Policy" : "Add Attendance Policy"}
                 </Button>
               </div>

@@ -17,11 +17,17 @@ export class CreateAttendancePolicyDto {
 
   @IsOptional() @IsBoolean() allow_self_mark_attendance?: boolean;
   @IsOptional() @IsBoolean() allow_manager_update_ot?: boolean;
-    @IsString()
-    markAs: string;
+    @IsOptional() @IsString()
+    markAs?: string;
   
-    @IsString()
-    lateMarkCount: string;
+    @IsOptional() @IsString()
+    lateMarkCount?: string;
+
+  @IsOptional() @IsString() lateMarkMarkAs?: string;
+  @IsOptional() @IsString() lateMarkMarkCount?: string;
+  @IsOptional() @IsString() maxLateCheckinMarkAs?: string;
+  @IsOptional() @IsInt() trimPreshiftMin?: number;
+  @IsOptional() @IsInt() trimPostshiftMin?: number;
 
   @IsOptional() @IsInt() max_ot_hours_per_day_min?: number;
 

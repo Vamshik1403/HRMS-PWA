@@ -1,5 +1,5 @@
 // attendance-policy.service.ts
-import { Injectable } from '@nestjs/common';
+import { Injectable, ConflictException } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { CreateAttendancePolicyDto } from './dto/create-attendance-policy.dto';
 import { UpdateAttendancePolicyDto } from './dto/update-attendance-policy.dto';
@@ -8,7 +8,21 @@ import { UpdateAttendancePolicyDto } from './dto/update-attendance-policy.dto';
 export class AttendancePolicyService {
   constructor(private prisma: PrismaService) {}
 
-  create(data: CreateAttendancePolicyDto) {
+  async create(data: CreateAttendancePolicyDto) {
+    // Check unique policy name per company
+    if (data.companyID && data.attendancePolicyName) {
+      const existing = await this.prisma.attendancePolicy.findFirst({
+        where: {
+          companyID: data.companyID,
+          attendancePolicyName: data.attendancePolicyName,
+        },
+      });
+      if (existing) {
+        throw new ConflictException(
+          `Attendance policy name "${data.attendancePolicyName}" already exists for this company.`,
+        );
+      }
+    }
     return this.prisma.attendancePolicy.create({
       data: {
         serviceProviderID: data.serviceProviderID,
@@ -37,6 +51,11 @@ export class AttendancePolicyService {
         otMealApply: data.otMealApply ?? false,
         minsForOTMealToken: data.minsForOTMealToken ?? 0,
         minsForBreakTimeForMeal: data.minsForBreakTimeForMeal ?? 0,
+        lateMarkMarkAs: data.lateMarkMarkAs ?? null,
+        lateMarkMarkCount: data.lateMarkMarkCount ?? null,
+        maxLateCheckinMarkAs: data.maxLateCheckinMarkAs ?? null,
+        trimPreshiftMin: data.trimPreshiftMin ?? 0,
+        trimPostshiftMin: data.trimPostshiftMin ?? 0,
       },
       include: {
         branches: true,
@@ -67,7 +86,25 @@ export class AttendancePolicyService {
     });
   }
 
-  update(id: number, data: UpdateAttendancePolicyDto) {
+  async update(id: number, data: UpdateAttendancePolicyDto) {
+    // Check unique policy name per company on update
+    if (data.attendancePolicyName !== undefined) {
+      const companyID = data.companyID;
+      if (companyID) {
+        const existing = await this.prisma.attendancePolicy.findFirst({
+          where: {
+            companyID,
+            attendancePolicyName: data.attendancePolicyName,
+            id: { not: id },
+          },
+        });
+        if (existing) {
+          throw new ConflictException(
+            `Attendance policy name "${data.attendancePolicyName}" already exists for this company.`,
+          );
+        }
+      }
+    }
     const updateData: any = {};
 
     // Only include fields that are provided
@@ -98,6 +135,11 @@ export class AttendancePolicyService {
     if (data.otMealApply !== undefined) updateData.otMealApply = data.otMealApply;
     if (data.minsForOTMealToken !== undefined) updateData.minsForOTMealToken = data.minsForOTMealToken;
     if (data.minsForBreakTimeForMeal !== undefined) updateData.minsForBreakTimeForMeal = data.minsForBreakTimeForMeal;
+    if (data.lateMarkMarkAs !== undefined) updateData.lateMarkMarkAs = data.lateMarkMarkAs;
+    if (data.lateMarkMarkCount !== undefined) updateData.lateMarkMarkCount = data.lateMarkMarkCount;
+    if (data.maxLateCheckinMarkAs !== undefined) updateData.maxLateCheckinMarkAs = data.maxLateCheckinMarkAs;
+    if (data.trimPreshiftMin !== undefined) updateData.trimPreshiftMin = data.trimPreshiftMin;
+    if (data.trimPostshiftMin !== undefined) updateData.trimPostshiftMin = data.trimPostshiftMin;
 
     return this.prisma.attendancePolicy.update({
       where: { id },
