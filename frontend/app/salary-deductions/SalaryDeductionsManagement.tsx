@@ -16,7 +16,7 @@ import {
 } from "../components/ui/table";
 import { Badge } from "../components/ui/badge";
 import { Icon } from "@iconify/react";
-import { Plus, Search, Edit, Trash2 } from "lucide-react";
+import { Plus, Search, Edit, Trash2, Info } from "lucide-react";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import { toast } from "sonner";
 import { getSidebarContext } from "../utils/sidebarContext";
@@ -634,7 +634,15 @@ const loadDeductions = async () => {
 
 
   <div className="space-y-2">
-    <Label htmlFor="deductionTypeField">Deduction Type *</Label>
+    <div className="flex items-center gap-1">
+      <Label htmlFor="deductionTypeField">Deduction Type *</Label>
+      <span className="relative group">
+        <Info className="w-3.5 h-3.5 text-gray-400 cursor-help flex-shrink-0" />
+        <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-72 p-3 text-xs bg-gray-800 text-white rounded shadow-lg opacity-0 group-hover:opacity-100 transition pointer-events-none z-50 whitespace-pre-line leading-relaxed text-left">
+          {`PF / ESI / PT / TDS`}
+        </span>
+      </span>
+    </div>
     <select
       id="deductionTypeField"
       value={formData.deductionTypeField}
@@ -659,7 +667,15 @@ const loadDeductions = async () => {
 
 
               <div className="space-y-2">
-                <Label htmlFor="deductionName">Deduction Name *</Label>
+                <div className="flex items-center gap-1">
+                  <Label htmlFor="deductionName">Deduction Name *</Label>
+                  <span className="relative group">
+                    <Info className="w-3.5 h-3.5 text-gray-400 cursor-help flex-shrink-0" />
+                    <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-72 p-3 text-xs bg-gray-800 text-white rounded shadow-lg opacity-0 group-hover:opacity-100 transition pointer-events-none z-50 whitespace-pre-line leading-relaxed text-left">
+                      {`Make Unique Name - Duplicate not allowed under same company`}
+                    </span>
+                  </span>
+                </div>
                 <Input
                   id="deductionName"
                   value={formData.deductionName}
@@ -670,7 +686,15 @@ const loadDeductions = async () => {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="displayName">Display Name</Label>
+                <div className="flex items-center gap-1">
+                  <Label htmlFor="displayName">Display Name</Label>
+                  <span className="relative group">
+                    <Info className="w-3.5 h-3.5 text-gray-400 cursor-help flex-shrink-0" />
+                    <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-72 p-3 text-xs bg-gray-800 text-white rounded shadow-lg opacity-0 group-hover:opacity-100 transition pointer-events-none z-50 whitespace-pre-line leading-relaxed text-left">
+                      {`To show in Salary Slip and Reports`}
+                    </span>
+                  </span>
+                </div>
                 <Input
                   id="displayName"
                   value={formData.displayName}
@@ -681,11 +705,27 @@ const loadDeductions = async () => {
 
               {/* Deduction Configuration */}
               <div className="space-y-4">
-                <h3 className="text-lg font-semibold">Deduction Configuration</h3>
+                <div className="flex items-center gap-1">
+                  <h3 className="text-lg font-semibold">Deduction Configuration</h3>
+                  <span className="relative group">
+                    <Info className="w-3.5 h-3.5 text-gray-400 cursor-help flex-shrink-0" />
+                    <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-72 p-3 text-xs bg-gray-800 text-white rounded shadow-lg opacity-0 group-hover:opacity-100 transition pointer-events-none z-50 whitespace-pre-line leading-relaxed text-left">
+                      {`Deduction Value Configuration`}
+                    </span>
+                  </span>
+                </div>
 
                 {/* Based On Dropdown */}
                   <div className="space-y-2">
-                    <Label htmlFor="basedOn">Based On *</Label>
+                    <div className="flex items-center gap-1">
+                      <Label htmlFor="basedOn">Based On *</Label>
+                      <span className="relative group">
+                        <Info className="w-3.5 h-3.5 text-gray-400 cursor-help flex-shrink-0" />
+                        <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-72 p-3 text-xs bg-gray-800 text-white rounded shadow-lg opacity-0 group-hover:opacity-100 transition pointer-events-none z-50 whitespace-pre-line leading-relaxed text-left">
+                          {`* Basic Salary\n* Gross Salary\n* Fixed Value`}
+                        </span>
+                      </span>
+                    </div>
                     <select
                       id="basedOn"
                       value={formData.basedOn}
@@ -707,7 +747,15 @@ const loadDeductions = async () => {
                   
 
                 <div className="space-y-2">
-                  <Label htmlFor="deductionType">Deduction Type *</Label>
+                  <div className="flex items-center gap-1">
+                    <Label htmlFor="deductionType">Deduction Type *</Label>
+                    <span className="relative group">
+                      <Info className="w-3.5 h-3.5 text-gray-400 cursor-help flex-shrink-0" />
+                      <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-72 p-3 text-xs bg-gray-800 text-white rounded shadow-lg opacity-0 group-hover:opacity-100 transition pointer-events-none z-50 whitespace-pre-line leading-relaxed text-left">
+                        {`Show 'Percentage' for Basic Salary or Gross Salary\nShow 'Fixed Amount' for Fixed Value`}
+                      </span>
+                    </span>
+                  </div>
                   <select
                     id="deductionType"
                     value={formData.deductionType}

@@ -16,7 +16,7 @@ import {
 } from "../components/ui/table";
 import { Badge } from "../components/ui/badge";
 import { Icon } from "@iconify/react";
-import { Plus, Search, Edit, Trash2 } from "lucide-react";
+import { Plus, Search, Edit, Trash2, Info } from "lucide-react";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import { toast } from "sonner";
 import { getSidebarContext } from "../utils/sidebarContext";
@@ -27,6 +27,7 @@ interface SalaryAllowance {
   serviceProvider: string;
   companyName: string;
   branchName: string;
+  companyID: number | null;
   allowanceName: string;
   displayName: string;
   allowanceType: string;
@@ -214,6 +215,7 @@ const resolvedCompanyID =
       id: String(x.id),
       serviceProvider: x.serviceProvider?.companyName ?? "-",
       companyName: x.company?.companyName ?? "-",
+      companyID: x.companyID ?? null,
       branchName: x.branches?.branchName ?? "-",
       allowanceName: x.salaryAllowanceName ?? "-",
       displayName: x.displayName ?? "",
@@ -345,6 +347,24 @@ const resolvedCompanyID =
     // Validation
     const validationErrors: string[] = [];
     if (!formData.allowanceName?.trim()) validationErrors.push("Allowance Name is required");
+
+    // Unique allowance name per company check
+    const targetCompanyID =
+      user?.role === "SERVICE_PROVIDER"
+        ? currentUserMapping?.companyID
+        : formData.companyID;
+    if (formData.allowanceName?.trim() && targetCompanyID) {
+      const duplicate = allowances.find(
+        (a) =>
+          a.companyID === targetCompanyID &&
+          a.allowanceName.toLowerCase().trim() === formData.allowanceName.toLowerCase().trim() &&
+          (!editingAllowance || a.id !== editingAllowance.id)
+      );
+      if (duplicate) {
+        validationErrors.push("Allowance name already exists for this company");
+      }
+    }
+
     if (validationErrors.length > 0) {
       validationErrors.forEach(msg => toast.error(msg));
       return;
@@ -612,7 +632,17 @@ const resolvedCompanyID =
 
 
   <div className="space-y-2">
-    <Label htmlFor="allowanceType">Allowance Type *</Label>
+    <div className="flex items-center gap-1">
+      <Label htmlFor="allowanceType">Allowance Type *</Label>
+      <span className="relative group">
+        <Info className="w-3.5 h-3.5 text-gray-400 cursor-help flex-shrink-0" />
+        <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-72 p-3 text-xs bg-gray-800 text-white rounded shadow-lg opacity-0 group-hover:opacity-100 transition pointer-events-none z-50 whitespace-pre-line leading-relaxed text-left">
+          {`* HRA - House Rent Allowance
+* Travelling Allowance - Travelling allowance for travel between home and office
+* Special Allowance - Any additional allowance offers in salary`}
+        </span>
+      </span>
+    </div>
     <select
       id="allowanceType"
       value={formData.allowanceType}
@@ -636,7 +666,9 @@ const resolvedCompanyID =
 
 
               <div className="space-y-2">
-                <Label htmlFor="allowanceName">Allowance Name *</Label>
+                <div className="flex items-center gap-1">
+                  <Label htmlFor="allowanceName">Allowance Name *</Label>
+                </div>
                 <Input
                   id="allowanceName"
                   value={formData.allowanceName}
@@ -647,7 +679,15 @@ const resolvedCompanyID =
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="displayName">Display Name</Label>
+                <div className="flex items-center gap-1">
+                  <Label htmlFor="displayName">Display Name</Label>
+                  <span className="relative group">
+                    <Info className="w-3.5 h-3.5 text-gray-400 cursor-help flex-shrink-0" />
+                    <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-72 p-3 text-xs bg-gray-800 text-white rounded shadow-lg opacity-0 group-hover:opacity-100 transition pointer-events-none z-50 whitespace-pre-line leading-relaxed text-left">
+                      {`To show in Salary Slip and Reports`}
+                    </span>
+                  </span>
+                </div>
                 <Input
                   id="displayName"
                   value={formData.displayName}
@@ -658,7 +698,15 @@ const resolvedCompanyID =
 
             {/* Allowance Configuration */}
 <div className="space-y-4">
-  <h3 className="text-lg font-semibold">Allowance Configuration</h3>
+  <div className="flex items-center gap-1">
+    <h3 className="text-lg font-semibold">Allowance Configuration</h3>
+    <span className="relative group">
+      <Info className="w-3.5 h-3.5 text-gray-400 cursor-help flex-shrink-0" />
+      <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-72 p-3 text-xs bg-gray-800 text-white rounded shadow-lg opacity-0 group-hover:opacity-100 transition pointer-events-none z-50 whitespace-pre-line leading-relaxed text-left">
+        {`Allowance Value Configuration`}
+      </span>
+    </span>
+  </div>
   
   {/* Based On Dropdown */}
   <div className="space-y-2">
@@ -683,7 +731,15 @@ const resolvedCompanyID =
   </div>
   
   <div className="space-y-2">
-    <Label htmlFor="salaryAllowanceType">Type *</Label>
+    <div className="flex items-center gap-1">
+      <Label htmlFor="salaryAllowanceType">Type *</Label>
+      <span className="relative group">
+        <Info className="w-3.5 h-3.5 text-gray-400 cursor-help flex-shrink-0" />
+        <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-72 p-3 text-xs bg-gray-800 text-white rounded shadow-lg opacity-0 group-hover:opacity-100 transition pointer-events-none z-50 whitespace-pre-line leading-relaxed text-left">
+          {`Show 'Percentage for Basic Salary or Gross Salary,  Show "Fixed Amount' for Fixed Value`}
+        </span>
+      </span>
+    </div>
     <select
       id="salaryAllowanceType"
       value={formData.salaryAllowanceType}

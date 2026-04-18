@@ -27,6 +27,8 @@ model AttendancePolicy {
   allow_manager_update_ot                Boolean?         @default(false)
   max_ot_hours_per_day_min               Int?
   checkoutGracePeriodForOvertimeTrimming Int?             @default(0)
+  breakTimeForOT                         Int?             @default(0)
+  otMealApply                            Boolean?         @default(false)
   maxOvertimeHrs                         Int?             @default(0)
   minOvertimeHrs                         Int?             @default(0)
   countWorkhoursInMinutes                Boolean?         @default(false)

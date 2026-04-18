@@ -9,7 +9,7 @@ import { FormDrawer } from "../components/ui/form-drawer";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../components/ui/table";
 import { Badge } from "../components/ui/badge";
 import { Icon } from "@iconify/react";
-import { Plus, Search, Edit, Trash2 } from "lucide-react";
+import { Plus, Search, Edit, Trash2, Info } from "lucide-react";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import { toast } from "sonner";
 import { getSidebarContext } from "../utils/sidebarContext";
@@ -202,6 +202,7 @@ export function MonthlyPayGradeManagement() {
     otRate: "",
     miniOTTime: 0,
     otStatus: false,
+    otPayoutUnit: "Per Hour" as "Per Minute" | "Per Hour",
     salType: "Percentage" as "Percentage" | "Fixed",
     grossSalary: 0,
     percentageOfBasic: 0,
@@ -684,6 +685,7 @@ miniOTTime: x.miniOTTime ?? 0,
       otStatus: pg.otStatus,
       otRate: String(pg.otRate || 0),
       miniOTTime: pg.miniOTTime,
+      otPayoutUnit: formData.otPayoutUnit,
       salType: pg.salType === "Fixed" || pg.salType === "Percentage" ? pg.salType : "Percentage",
       grossSalary: pg.grossSalary,
       percentageOfBasic: pg.percentageOfBasic,
@@ -719,6 +721,7 @@ miniOTTime: x.miniOTTime ?? 0,
       otStatus: false,
       otRate: "",
       miniOTTime: 0,
+      otPayoutUnit: "Per Hour" as "Per Minute" | "Per Hour",
       salType: "Percentage",
       grossSalary: 0,
       percentageOfBasic: 0,
@@ -1045,6 +1048,80 @@ miniOTTime: x.miniOTTime ?? 0,
               </div>
 
               
+
+              {/* OT Configuration */}
+              <div className="space-y-4">
+                <h3 className="text-lg font-semibold">OT Configuration</h3>
+
+                <div className="flex items-center space-x-3">
+                  <input
+                    type="checkbox"
+                    id="otStatus"
+                    checked={formData.otStatus}
+                    onChange={(e) => setFormData((p) => ({ ...p, otStatus: e.target.checked }))}
+                    className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
+                  />
+                  <Label htmlFor="otStatus" className="text-sm font-medium">Overtime Applicable</Label>
+                </div>
+
+                {formData.otStatus && (
+                  <div className="ml-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* OT Payout Unit */}
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-1">
+                        <Label htmlFor="otPayoutUnit">OT Payout Unit</Label>
+                        <span className="relative group">
+                          <Info className="w-3.5 h-3.5 text-gray-400 cursor-help flex-shrink-0" />
+                          <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-72 p-3 text-xs bg-gray-800 text-white rounded shadow-lg opacity-0 group-hover:opacity-100 transition pointer-events-none z-50 whitespace-pre-line leading-relaxed text-left">
+                            {`* OT Payout calculate as Per Minute Rate = (Gross Salary / Total Month's Day) / Total Workshift Hours in Minute\n* OT Payout calculate as Per Hour Rate = (Gross Salary / Total Month's Day) / Total Workshift Hours in Hours`}
+                          </span>
+                        </span>
+                      </div>
+                      <select
+                        id="otPayoutUnit"
+                        value={formData.otPayoutUnit}
+                        onChange={(e) =>
+                          setFormData((p) => ({
+                            ...p,
+                            otPayoutUnit: e.target.value as "Per Minute" | "Per Hour",
+                          }))
+                        }
+                        className="w-full border rounded-md px-3 py-2"
+                      >
+                        <option value="Per Minute">Per Minute</option>
+                        <option value="Per Hour">Per Hour</option>
+                      </select>
+                    </div>
+
+                    {/* OT Payout Rate */}
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-1">
+                        <Label htmlFor="otRate">OT Payout Rate</Label>
+                        <span className="relative group">
+                          <Info className="w-3.5 h-3.5 text-gray-400 cursor-help flex-shrink-0" />
+                          <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-72 p-3 text-xs bg-gray-800 text-white rounded shadow-lg opacity-0 group-hover:opacity-100 transition pointer-events-none z-50 whitespace-pre-line leading-relaxed text-left">
+                            {`OT Payout rate consider as multiply of this value.`}
+                          </span>
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Input
+                          id="otRate"
+                          type="text"
+                          value={formData.otRate}
+                          onChange={(e) =>
+                            setFormData((p) => ({ ...p, otRate: e.target.value }))
+                          }
+                          placeholder="e.g. 2"
+                          className="w-full"
+                        />
+                        <span className="text-sm text-gray-500 flex-shrink-0">x</span>
+                      </div>
+                      <p className="text-xs text-gray-500">e.g. 2x</p>
+                    </div>
+                  </div>
+                )}
+              </div>
 
               {/* Allowance Selection */}
               <div className="space-y-4">

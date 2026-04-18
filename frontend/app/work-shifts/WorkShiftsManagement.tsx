@@ -808,13 +808,16 @@ export function WorkShiftsManagement() {
                     <tbody>
                       {formData.weeklySchedule.map((daySchedule, index) => {
                         const isOff = daySchedule.isWeeklyOff;
-                        const disabled = isOff || formData.isRotating;
+                        const disabled = formData.isRotating;
                         return (
                           <>
                             {/* WORK row */}
-                            <tr key={`${daySchedule.day}-work`} className={isOff ? "bg-gray-50 opacity-60" : ""}>
+                            <tr key={`${daySchedule.day}-work`} className={isOff ? "bg-amber-50 border-l-4 border-l-amber-400" : ""}>
                               <td className="border border-gray-300 px-2 py-1.5 font-medium" rowSpan={2}>
-                                {daySchedule.day}
+                                <div className="flex flex-col gap-0.5">
+                                  <span>{daySchedule.day}</span>
+                                  {isOff && <span className="text-[10px] font-semibold text-amber-700 bg-amber-200 rounded px-1 py-0 leading-4 self-start">Off</span>}
+                                </div>
                               </td>
                               <td className="border border-gray-300 px-2 py-1.5">
                                 <Badge variant="outline" className="text-xs">Work</Badge>
@@ -848,7 +851,7 @@ export function WorkShiftsManagement() {
                               </td>
                             </tr>
                             {/* OT row */}
-                            <tr key={`${daySchedule.day}-ot`} className={isOff ? "bg-gray-50 opacity-60" : "bg-orange-50/30"}>
+                            <tr key={`${daySchedule.day}-ot`} className={isOff ? "bg-amber-50/60 border-l-4 border-l-amber-400" : "bg-orange-50/30"}>
                               <td className="border border-gray-300 px-2 py-1.5">
                                 <Badge variant="outline" className="text-xs bg-orange-50 text-orange-700 border-orange-300">OT</Badge>
                               </td>

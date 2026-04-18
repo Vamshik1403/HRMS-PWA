@@ -701,8 +701,10 @@ export function AttendancePolicyManagement() {
                       <Label htmlFor="checkin_begin_before_min">Check-In Begin Before (Minutes)</Label>
                       <span className="relative group">
                         <Info className="w-3.5 h-3.5 text-gray-400 cursor-help flex-shrink-0" />
-                        <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 w-64 p-2 text-xs text-left leading-relaxed bg-gray-800 text-white rounded shadow-lg opacity-0 group-hover:opacity-100 transition pointer-events-none z-50">
-                          Flexible Shift: Allows employees to start work before shift time. Fixed Shift: Not applicable. Work starts at shift start time.
+                        <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-72 p-3 text-xs bg-gray-800 text-white rounded shadow-lg opacity-0 group-hover:opacity-100 transition pointer-events-none z-50 whitespace-pre-line leading-relaxed text-left">
+                          {`* For Flexible shift, Allow employee to start work before shift time
+* For Fixed shift, Not Applicable , Actual Shift start time considered as work start time
+* Applicable in Rotating Shift`}
                         </span>
                       </span>
                     </div>
@@ -730,8 +732,10 @@ export function AttendancePolicyManagement() {
                       <Label htmlFor="checkout_end_after_min">Check-Out End After (Minutes)</Label>
                       <span className="relative group">
                         <Info className="w-3.5 h-3.5 text-gray-400 cursor-help flex-shrink-0" />
-                        <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 w-64 p-2 text-xs text-left leading-relaxed bg-gray-800 text-white rounded shadow-lg opacity-0 group-hover:opacity-100 transition pointer-events-none z-50">
-                          Flexible Shift: Allows working after shift end to complete required hours including overtime. Fixed Shift: Allows working after shift end only for overtime.
+                        <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-72 p-3 text-xs bg-gray-800 text-white rounded shadow-lg opacity-0 group-hover:opacity-100 transition pointer-events-none z-50 whitespace-pre-line leading-relaxed text-left">
+                          {`* For Flexible shift, Allow employee to work till this buffer time after actual shift end time to complete Shift hours including OT.
+* For Fixed shift, Allow employee to work till this buffer time after shift actual time to complete OT.
+* Applicable in Rotating Shift`}
                         </span>
                       </span>
                     </div>
@@ -765,8 +769,10 @@ export function AttendancePolicyManagement() {
                       <Label htmlFor="checkin_grace_time_min">Check-In Grace Time (Minutes)</Label>
                       <span className="relative group">
                         <Info className="w-3.5 h-3.5 text-gray-400 cursor-help flex-shrink-0" />
-                        <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 w-64 p-2 text-xs text-left leading-relaxed bg-gray-800 text-white rounded shadow-lg opacity-0 group-hover:opacity-100 transition pointer-events-none z-50">
-                          Flexible Shift: Not applicable. Fixed Shift: Buffer time after shift start without marking late or deduction.
+                        <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-72 p-3 text-xs bg-gray-800 text-white rounded shadow-lg opacity-0 group-hover:opacity-100 transition pointer-events-none z-50 whitespace-pre-line leading-relaxed text-left">
+                          {`* For Flexible Shift, not applicable
+* For Fixed shift, After Shift start time allow this buffer time to start work without latemark or deduction
+* Applicable in Rotating Shift`}
                         </span>
                       </span>
                     </div>
@@ -796,8 +802,10 @@ export function AttendancePolicyManagement() {
                       </Label>
                       <span className="relative group">
                         <Info className="w-3.5 h-3.5 text-gray-400 cursor-help flex-shrink-0" />
-                        <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 w-64 p-2 text-xs text-left leading-relaxed bg-gray-800 text-white rounded shadow-lg opacity-0 group-hover:opacity-100 transition pointer-events-none z-50">
-                          If total work hours fall below this value, employee is marked absent (applies to both shift types).
+                        <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-72 p-3 text-xs bg-gray-800 text-white rounded shadow-lg opacity-0 group-hover:opacity-100 transition pointer-events-none z-50 whitespace-pre-line leading-relaxed text-left">
+                          {`* For Flexible shift, if total work hours is below this value, mark as absent
+* For Fixed shift, if total work hours is below this value, mark as absent
+* Applicable in Rotating Shift`}
                         </span>
                       </span>
                     </div>
@@ -825,8 +833,10 @@ export function AttendancePolicyManagement() {
                       <Label htmlFor="earlyCheckoutBeforeEndMin">Early Checkout Before End (Minutes)</Label>
                       <span className="relative group">
                         <Info className="w-3.5 h-3.5 text-gray-400 cursor-help flex-shrink-0" />
-                        <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 w-64 p-2 text-xs text-left leading-relaxed bg-gray-800 text-white rounded shadow-lg opacity-0 group-hover:opacity-100 transition pointer-events-none z-50">
-                          Flexible Shift: Not applicable. Fixed Shift: Allows early checkout before shift end without penalty.
+                        <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-72 p-3 text-xs bg-gray-800 text-white rounded shadow-lg opacity-0 group-hover:opacity-100 transition pointer-events-none z-50 whitespace-pre-line leading-relaxed text-left">
+                          {`* For Flexible shift : Not Applicable
+* For Fixed shift : All employee to checkout early before shift time end without latemark or deduction
+* Applicable in Rotating Shift`}
                         </span>
                       </span>
                     </div>
@@ -857,8 +867,10 @@ export function AttendancePolicyManagement() {
                   <Label className="text-base font-semibold">Late Check-In Rule</Label>
                   <span className="relative group">
                     <Info className="w-3.5 h-3.5 text-gray-400 cursor-help flex-shrink-0" />
-                    <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 w-64 p-2 text-xs text-left leading-relaxed bg-gray-800 text-white rounded shadow-lg opacity-0 group-hover:opacity-100 transition pointer-events-none z-50">
-                      Flexible Shift: Not applicable. Fixed Shift: If check-in exceeds this limit, mark as Half Day or Absent.
+                    <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-72 p-3 text-xs bg-gray-800 text-white rounded shadow-lg opacity-0 group-hover:opacity-100 transition pointer-events-none z-50 whitespace-pre-line leading-relaxed text-left">
+                      {`* For Flexible Shift, Not Applicable
+* For Fixed shift, If check-in after this buffer time mark as cumpulsory halfday / Absent as per policy
+* Applicable in Rotating Shift`}
                     </span>
                   </span>
                 </div>
@@ -908,8 +920,10 @@ export function AttendancePolicyManagement() {
                   <Label className="text-base font-semibold">Late Marks Rule</Label>
                   <span className="relative group">
                     <Info className="w-3.5 h-3.5 text-gray-400 cursor-help flex-shrink-0" />
-                    <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 w-64 p-2 text-xs text-left leading-relaxed bg-gray-800 text-white rounded shadow-lg opacity-0 group-hover:opacity-100 transition pointer-events-none z-50">
-                      Flexible Shift: Not applicable. Fixed Shift: After repeated late marks, mark as Half Day or Absent.
+                    <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-72 p-3 text-xs bg-gray-800 text-white rounded shadow-lg opacity-0 group-hover:opacity-100 transition pointer-events-none z-50 whitespace-pre-line leading-relaxed text-left">
+                      {`* For Flexible shift, Not applicable
+* For Fixed shift, Consider latemark as halfday/absent after no. of repeated latemarks as per policy
+* Applicable in Rotating Shift`}
                     </span>
                   </span>
                 </div>
@@ -958,8 +972,10 @@ export function AttendancePolicyManagement() {
                   <Label className="text-base font-semibold">No Check-out Punch Rule</Label>
                   <span className="relative group">
                     <Info className="w-3.5 h-3.5 text-gray-400 cursor-help flex-shrink-0" />
-                    <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 w-64 p-2 text-xs text-left leading-relaxed bg-gray-800 text-white rounded shadow-lg opacity-0 group-hover:opacity-100 transition pointer-events-none z-50">
-                      If employee fails to check out, mark as Half Day or Absent (applies to all shifts).
+                    <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-72 p-3 text-xs bg-gray-800 text-white rounded shadow-lg opacity-0 group-hover:opacity-100 transition pointer-events-none z-50 whitespace-pre-line leading-relaxed text-left">
+                      {`* For Flexible shift, if employee not mark checkout attandace in system, considered as halfday/absent as per policy
+* For Fixed shift, if employee not mark checkout attandace in system, considered as halfday/absent as per policy
+* Applicable in Rotating Shift`}
                     </span>
                   </span>
                 </div>
@@ -1011,8 +1027,10 @@ export function AttendancePolicyManagement() {
                       <Label htmlFor="trimPreshiftMin">Trim Preshift Time (Minutes)</Label>
                       <span className="relative group">
                         <Info className="w-3.5 h-3.5 text-gray-400 cursor-help flex-shrink-0" />
-                        <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 w-64 p-2 text-xs text-left leading-relaxed bg-gray-800 text-white rounded shadow-lg opacity-0 group-hover:opacity-100 transition pointer-events-none z-50">
-                          Removes preshift time from total working hours (Fixed Shift only).
+                        <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-72 p-3 text-xs bg-gray-800 text-white rounded shadow-lg opacity-0 group-hover:opacity-100 transition pointer-events-none z-50 whitespace-pre-line leading-relaxed text-left">
+                          {`* For Fixed Shift, Trim Preshifttime as non working hours from total time between Check-in to Checkout
+* For Fixed Shift, Trim Preshifttime as non working hours from total time between Check-in to Checkout
+* Applicable in Rotating Shift`}
                         </span>
                       </span>
                     </div>
@@ -1038,8 +1056,10 @@ export function AttendancePolicyManagement() {
                       <Label htmlFor="trimPostshiftMin">Trim Postshift Time (Minutes)</Label>
                       <span className="relative group">
                         <Info className="w-3.5 h-3.5 text-gray-400 cursor-help flex-shrink-0" />
-                        <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 w-64 p-2 text-xs text-left leading-relaxed bg-gray-800 text-white rounded shadow-lg opacity-0 group-hover:opacity-100 transition pointer-events-none z-50">
-                          Removes postshift time from total working hours (Fixed Shift only).
+                        <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-72 p-3 text-xs bg-gray-800 text-white rounded shadow-lg opacity-0 group-hover:opacity-100 transition pointer-events-none z-50 whitespace-pre-line leading-relaxed text-left">
+                          {`* For Fixed Shift, Trim Postshifttime as non working hours from total time between Check-in to Checkout
+* For Fixed Shift, Trim Postshifttime as non working hours from total time between Check-in to Checkout
+* Applicable in Rotating Shift`}
                         </span>
                       </span>
                     </div>
@@ -1081,6 +1101,12 @@ export function AttendancePolicyManagement() {
                   <Label htmlFor="leaveAroundHolidayCounted" className="text-sm font-medium">
                     If an employee takes leave before and after weekly off / holiday, then the holiday in between is also counted as leave
                   </Label>
+                  <span className="relative group">
+                    <Info className="w-3.5 h-3.5 text-gray-400 cursor-help flex-shrink-0" />
+                    <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-72 p-3 text-xs bg-gray-800 text-white rounded shadow-lg opacity-0 group-hover:opacity-100 transition pointer-events-none z-50 whitespace-pre-line leading-relaxed text-left">
+                      {`* For Flexible shift, To restrict employee from tacking leave continue to weekoff or holiday,\n* For Fixed shift, To restrict employee from tacking leave continue to weekoff or holiday,\n* Applicable in Rotating Shift`}
+                    </span>
+                  </span>
                 </div>
                 <div className="flex items-center space-x-3">
                   <input
@@ -1095,16 +1121,32 @@ export function AttendancePolicyManagement() {
                     }
                     className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
                   />
-                  <Label htmlFor="overtimeApplicable" className="text-sm font-medium">
-                    Overtime Applicable
-                  </Label>
+                  <div className="flex items-center gap-1">
+                    <Label htmlFor="overtimeApplicable" className="text-sm font-medium">
+                      Overtime Applicable
+                    </Label>
+                    <span className="relative group">
+                      <Info className="w-3.5 h-3.5 text-gray-400 cursor-help flex-shrink-0" />
+                      <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-72 p-3 text-xs bg-gray-800 text-white rounded shadow-lg opacity-0 group-hover:opacity-100 transition pointer-events-none z-50 whitespace-pre-line leading-relaxed text-left">
+                        {`* For Flexible shift, If enable then only Overtime Hours calculate\n* For Fixed shift, If enable then only Overtime Hours calculate\n* Applicable in Rotating Shift`}
+                      </span>
+                    </span>
+                  </div>
                 </div>
 
                 {formData.overtimeApplicable && (
                   <div className="ml-6 space-y-4">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div className="space-y-2 w-full">
-                        <Label htmlFor="minOvertimeHrs">Min Overtime Hrs (Minutes)</Label>
+                        <div className="flex items-center gap-1">
+                          <Label htmlFor="minOvertimeHrs">Min Overtime Hrs (Minutes)</Label>
+                          <span className="relative group">
+                            <Info className="w-3.5 h-3.5 text-gray-400 cursor-help flex-shrink-0" />
+                            <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-72 p-3 text-xs bg-gray-800 text-white rounded shadow-lg opacity-0 group-hover:opacity-100 transition pointer-events-none z-50 whitespace-pre-line leading-relaxed text-left">
+                              {`* For Flexible shift, If Overtime Hours below this value after normal working hours, not counted as OT Hours\n* For Fixed shift, If Overtime Hours below this value after normal working hours, not counted as OT Hours\n* Applicable in Rotating Shift`}
+                            </span>
+                          </span>
+                        </div>
                         <div className="flex items-center gap-2 w-full">
                           <Input
                             id="minOvertimeHrs"
@@ -1125,7 +1167,15 @@ export function AttendancePolicyManagement() {
                       </div>
 
                       <div className="space-y-2 w-full">
-                        <Label htmlFor="maxOvertimeHrs">Max Overtime Hrs (Minutes)</Label>
+                        <div className="flex items-center gap-1">
+                          <Label htmlFor="maxOvertimeHrs">Max Overtime Hrs (Minutes)</Label>
+                          <span className="relative group">
+                            <Info className="w-3.5 h-3.5 text-gray-400 cursor-help flex-shrink-0" />
+                            <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-72 p-3 text-xs bg-gray-800 text-white rounded shadow-lg opacity-0 group-hover:opacity-100 transition pointer-events-none z-50 whitespace-pre-line leading-relaxed text-left">
+                              {`* For Flexible shift, If Overtime Hours above this value after normal working hours, not counted as OT Hours\n* For Fixed shift, If Overtime Hours above this value after normal working hours, not counted as OT Hours\n* Applicable in Rotating Shift`}
+                            </span>
+                          </span>
+                        </div>
                         <div className="flex items-center gap-2 w-full">
                           <Input
                             id="maxOvertimeHrs"
