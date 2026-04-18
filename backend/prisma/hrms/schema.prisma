@@ -32,8 +32,6 @@ model AttendancePolicy {
   countWorkhoursInMinutes                Boolean?         @default(false)
   overtimeApplicable                     Boolean?         @default(false)
   overtimeTrimmingApply                  Boolean?         @default(false)
-  breakTimeForOT                         Int?             @default(0)
-  otMealApply                            Boolean?         @default(false)
   minsForOTMealToken                     Int?             @default(0)
   minsForBreakTimeForMeal                Int?             @default(0)
   leaveAroundHolidayCounted              Boolean?         @default(false)
