@@ -62,18 +62,20 @@ const sbSubIdle =
   "text-[#6b7280] hover:bg-[#eef2ff] hover:text-[#4f46e5] !bg-transparent";
 
 // Path groups for section active-state detection
-const SETUP_PATHS = ["/company", "/branches", "/devices", "/contractors", "/contractor-rates", "/contractor-payout"];
+const SETUP_PATHS = ["/company", "/branches", "/devices"];
+const CONTRACTOR_MANAGEMENT_PATHS = ["/contractors", "/contractor-rates"];
 const EMPLOYEE_PATHS = ["/departments", "/designations", "/manage-employees", "/employees-promotions", "/employee-memo", "/termination"];
 const PAYROLL_PATHS = ["/work-shifts", "/attendance-policy"];
-const SALARY_PATHS = ["/salary-advance", "/reimbursement", "/bonus-allocations", "/generate-salary"];
+const SALARY_PATHS = ["/salary-advance", "/reimbursement", "/bonus-allocations", "/generate-salary", "/contractor-payout"];
 const PAYROLL_POLICY_PATHS = ["/monthly-salary-cycle", "/salary-allowances", "/salary-deductions", "/monthly-pay-grade", "/bonus-setup"];
 const LEAVE_PATHS = ["/manage-holidays", "/public-holiday", "/leave-policy"];
-const ATTENDANCE_PATHS = ["/field-attendance-schedule", "/attendance-regularisation", "/roster", "/leave-applications", "/privileged-leave"];
-const REPORTS_PATHS = ["/attendance-reports", "/leave-reports", "/salary-statements", "/canteen/reports", "/payroll-reports", "/contractor-reports"];
-const CANTEEN_PATHS = ["/canteen", "/canteen/setup"];
+const ATTENDANCE_PATHS = ["/field-attendance-schedule", "/attendance-regularisation", "/roster"];
+const LEAVE_MANAGEMENT_PATHS = ["/leave-applications", "/privileged-leave"];
+const REPORTS_PATHS = ["/attendance-reports", "/payroll-reports"];
+const CANTEEN_PATHS = ["/canteen", "/canteen/setup", "/canteen/reports"];
 const SETTINGS_PATHS = ["/import-attendance"];
 const ADMIN_PATHS = ["/system-users", "/backup-restore", "/system-settings"];
-const ALL_SECTION_PATHS = [...SETUP_PATHS, ...EMPLOYEE_PATHS, ...PAYROLL_PATHS, ...SALARY_PATHS, ...PAYROLL_POLICY_PATHS, ...LEAVE_PATHS, ...ATTENDANCE_PATHS, ...REPORTS_PATHS, ...CANTEEN_PATHS, ...SETTINGS_PATHS];
+const ALL_SECTION_PATHS = [...SETUP_PATHS, ...CONTRACTOR_MANAGEMENT_PATHS, ...EMPLOYEE_PATHS, ...PAYROLL_PATHS, ...SALARY_PATHS, ...PAYROLL_POLICY_PATHS, ...LEAVE_PATHS, ...LEAVE_MANAGEMENT_PATHS, ...ATTENDANCE_PATHS, ...REPORTS_PATHS, ...CANTEEN_PATHS, ...SETTINGS_PATHS];
 
 export function PageLayout({ children }: PageLayoutProps) {
   const pathname = usePathname()
@@ -280,6 +282,7 @@ export function PageLayout({ children }: PageLayoutProps) {
           if (activeCompanyID && comp.id !== activeCompanyID) continue;
           newOpen[`company_${comp.id}`] = true
           if (SETUP_PATHS.includes(pathname)) newOpen[`c${comp.id}_setup`] = true
+          if (CONTRACTOR_MANAGEMENT_PATHS.includes(pathname)) newOpen[`c${comp.id}_contractorMgmt`] = true
           if (EMPLOYEE_PATHS.includes(pathname)) newOpen[`c${comp.id}_employee`] = true
           if (PAYROLL_PATHS.includes(pathname)) newOpen[`c${comp.id}_payroll`] = true
           if (SALARY_PATHS.includes(pathname)) newOpen[`c${comp.id}_salary`] = true
@@ -330,14 +333,16 @@ export function PageLayout({ children }: PageLayoutProps) {
     const onNav = () => setSidebarContext(spId, spName, companyId, companyName)
 
     const setupSectionActive = isSectionActiveForCompany(SETUP_PATHS, companyId);
+    const contractorManagementSectionActive = isSectionActiveForCompany(CONTRACTOR_MANAGEMENT_PATHS, companyId);
     const employeeSectionActive = isSectionActiveForCompany(EMPLOYEE_PATHS, companyId);
     const payrollSectionActive = isSectionActiveForCompany(PAYROLL_PATHS, companyId);
     const salarySectionActive = isSectionActiveForCompany(SALARY_PATHS, companyId);
     const payrollPolicySectionActive = isSectionActiveForCompany(PAYROLL_POLICY_PATHS, companyId);
     const leaveSectionActive = isSectionActiveForCompany(LEAVE_PATHS, companyId);
     const attendanceSectionActive = isSectionActiveForCompany(ATTENDANCE_PATHS, companyId);
+    const leaveManagementSectionActive = isSectionActiveForCompany(LEAVE_MANAGEMENT_PATHS, companyId);
     const reportsSectionActive = isSectionActiveForCompany(REPORTS_PATHS, companyId);
-    const canteenSectionActive = (pathname === "/canteen" || pathname === "/canteen/setup") && activeCompanyID === companyId;
+    const canteenSectionActive = isSectionActiveForCompany(CANTEEN_PATHS, companyId);
     const settingsSectionActive = isSectionActiveForCompany(SETTINGS_PATHS, companyId);
     return (
       <div className="ml-2 border-l border-[#f0f0f0] pl-1">
@@ -361,9 +366,27 @@ export function PageLayout({ children }: PageLayoutProps) {
                 )}
                 <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/branches" className={cn(sbSubRow, isActiveLink('/branches', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Branches</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
                 <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/devices" className={cn(sbSubRow, isActiveLink('/devices', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Devices</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
+              </SidebarMenuSub>
+            </CollapsibleContent>
+          </Collapsible>
+        )}
+
+        {/* Contractor Management */}
+        {(isSuperAdmin || isServiceProvider || isCompanyAdmin || isBranchAdmin) && (
+          <Collapsible open={openSections[k('contractorMgmt')]} onOpenChange={o => toggleSection(k('contractorMgmt'), o)}>
+            <CollapsibleTrigger asChild>
+              <SidebarMenuButton size="lg" className={cn(sbMenuBtnReset, sbRow, "mx-0 justify-between", contractorManagementSectionActive ? sbActive : cn(sbIdle, openSections[k('contractorMgmt')] && "font-semibold text-[#4f46e5]"))}>
+                <span className="flex items-center gap-3 min-w-0">
+                  <Icon icon="mdi:briefcase-outline" className={cn("w-5 h-5 shrink-0", contractorManagementSectionActive ? "text-[#4f46e5]" : "text-gray-400")} />
+                  <span className="truncate font-semibold text-sm">Contractor Management</span>
+                </span>
+                <Icon icon="mdi:chevron-down" className={cn("w-4 h-4 shrink-0 text-gray-500 transition-transform duration-300", openSections[k('contractorMgmt')] && "rotate-180")} />
+              </SidebarMenuButton>
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <SidebarMenuSub className="ml-5 mt-1 space-y-0.5 border-l border-[#f0f0f0] pl-3">
                 <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/contractors" className={cn(sbSubRow, isActiveLink('/contractors', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Contractors</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
                 <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/contractor-rates" className={cn(sbSubRow, isActiveLink('/contractor-rates', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Contractor Rates</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
-                <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/contractor-payout" className={cn(sbSubRow, isActiveLink('/contractor-payout', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Contractor Payouts</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
               </SidebarMenuSub>
             </CollapsibleContent>
           </Collapsible>
@@ -485,6 +508,7 @@ export function PageLayout({ children }: PageLayoutProps) {
                 <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/salary-advance" className={cn(sbSubRow, isActiveLink('/salary-advance', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Salary Advances</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
                 <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/reimbursement" className={cn(sbSubRow, isActiveLink('/reimbursement', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Reimbursements</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
                 <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/generate-salary" className={cn(sbSubRow, isActiveLink('/generate-salary', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Run Payroll</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
+                <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/contractor-payout" className={cn(sbSubRow, isActiveLink('/contractor-payout', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Contractor Payouts</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
               </SidebarMenuSub>
             </CollapsibleContent>
           </Collapsible>
@@ -509,6 +533,25 @@ export function PageLayout({ children }: PageLayoutProps) {
                 {(isSuperAdmin || isServiceProvider || isCompanyAdmin || isBranchAdmin) && (
                   <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/roster" className={cn(sbSubRow, isActiveLink('/roster', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Workshift Roster</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
                 )}
+              </SidebarMenuSub>
+            </CollapsibleContent>
+          </Collapsible>
+        )}
+
+        {/* Leave Management */}
+        {(isSuperAdmin || isServiceProvider || isCompanyAdmin || isRegularUser) && (
+          <Collapsible open={openSections[k('leaveManagement')]} onOpenChange={o => toggleSection(k('leaveManagement'), o)}>
+            <CollapsibleTrigger asChild>
+              <SidebarMenuButton size="lg" className={cn(sbMenuBtnReset, sbRow, "mx-0 justify-between", leaveManagementSectionActive ? sbActive : cn(sbIdle, openSections[k('leaveManagement')] && "font-semibold text-[#4f46e5]"))}>
+                <span className="flex items-center gap-3 min-w-0">
+                  <Icon icon="mdi:calendar-check" className={cn("w-5 h-5 shrink-0", leaveManagementSectionActive ? "text-[#4f46e5]" : "text-gray-400")} />
+                  <span className="truncate font-semibold text-sm">Leave Management</span>
+                </span>
+                <Icon icon="mdi:chevron-down" className={cn("w-4 h-4 shrink-0 text-gray-500 transition-transform duration-300", openSections[k('leaveManagement')] && "rotate-180")} />
+              </SidebarMenuButton>
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <SidebarMenuSub className="ml-5 mt-1 space-y-0.5 border-l border-[#f0f0f0] pl-3">
                 <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/leave-applications" className={cn(sbSubRow, isActiveLink('/leave-applications', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Leave Application</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
                 {(isSuperAdmin || isServiceProvider || isCompanyAdmin || isBranchAdmin) && (
                   <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/privileged-leave" className={cn(sbSubRow, isActiveLink('/privileged-leave', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Privileged Leave</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
@@ -534,6 +577,7 @@ export function PageLayout({ children }: PageLayoutProps) {
               <SidebarMenuSub className="ml-5 mt-1 space-y-0.5 border-l border-[#f0f0f0] pl-3">
                 <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/canteen" className={cn(sbSubRow, isActiveLink('/canteen', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Dashboard</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
                 <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/canteen/setup" className={cn(sbSubRow, isActiveLink('/canteen/setup', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Configuration</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
+                <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/canteen/reports" className={cn(sbSubRow, isActiveLink('/canteen/reports', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Reports</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
               </SidebarMenuSub>
             </CollapsibleContent>
           </Collapsible>
@@ -554,10 +598,10 @@ export function PageLayout({ children }: PageLayoutProps) {
             <CollapsibleContent>
               <SidebarMenuSub className="ml-5 mt-1 space-y-0.5 border-l border-[#f0f0f0] pl-3">
                 <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/attendance-reports" className={cn(sbSubRow, isActiveLink('/attendance-reports', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Attendance Reports</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
-                <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/leave-reports" className={cn(sbSubRow, isActiveLink('/leave-reports', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Leave Reports</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
                 <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/payroll-reports" className={cn(sbSubRow, isActiveLink('/payroll-reports', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Payroll Reports</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
-                <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/canteen/reports" className={cn(sbSubRow, isActiveLink('/canteen/reports', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Canteen Reports</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
-                <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/contractor-reports" className={cn(sbSubRow, isActiveLink('/contractor-reports', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Contractor Reports</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
+                {/* Leave Reports - temporarily hidden */}
+                {/* Canteen Reports - moved to Canteen Management */}
+                {/* Contractor Reports - temporarily hidden */}
               </SidebarMenuSub>
             </CollapsibleContent>
           </Collapsible>

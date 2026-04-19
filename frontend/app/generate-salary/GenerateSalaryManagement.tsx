@@ -1635,6 +1635,18 @@ export function GenerateSalaryManagement() {
         }
       }
 
+      // COMPANY_ADMIN / BRANCH_ADMIN: filter by company
+      if (user?.role === "COMPANY_ADMIN" || user?.role === "BRANCH_ADMIN") {
+        const ctx = getSidebarContext()
+        const companyID = ctx?.companyID ?? user?.companyID
+        if (companyID) {
+          setItems(allItems.filter((r: any) => r.companyID === companyID))
+        } else {
+          setItems([])
+        }
+        return
+      }
+
       const creds = await robustGet(`${BACKEND_URL}/manage-emp/credentials/all`);
       const emp = user ? creds.find((c: any) => c.username === user.username) : null;
 

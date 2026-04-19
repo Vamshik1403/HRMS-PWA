@@ -352,7 +352,19 @@ export function BonusAllocationsManagement() {
         }
       }
 
-      // 🔵 EMPLOYEE — filter from /manage-emp/credentials/all
+      // � COMPANY_ADMIN / BRANCH_ADMIN → filter by company
+      if (user?.role === "COMPANY_ADMIN" || user?.role === "BRANCH_ADMIN") {
+        const ctx = getSidebarContext();
+        const companyID = ctx?.companyID ?? user?.companyID;
+        if (companyID) {
+          setAllocations(all.filter((a: any) => a.companyID === companyID));
+        } else {
+          setAllocations([]);
+        }
+        return;
+      }
+
+      // �🔵 EMPLOYEE — filter from /manage-emp/credentials/all
       const credsRes = await fetch("/backend/manage-emp/credentials/all");
       const creds = await credsRes.json();
       const emp = creds.find((c: any) => c.username === user?.username);
@@ -410,13 +422,19 @@ export function BonusAllocationsManagement() {
 
       const list: EmployeeApi[] = await robustGet(employeesUrl, val);
       
-      // Additional client-side filtering for MANAGER role
+      // Additional client-side filtering by company
       let filtered = list;
       if (user?.role === "SERVICE_PROVIDER" && currentUserMapping) {
         filtered = list.filter(employee => {
           return employee.companyID === currentUserMapping.companyID && 
                  employee.branchesID === currentUserMapping.branchesID;
         });
+      } else if (user?.role !== "SERVICE_PROVIDER") {
+        const ctx = getSidebarContext();
+        const companyID = ctx?.companyID ?? user?.companyID;
+        if (companyID) {
+          filtered = list.filter((employee: any) => employee.companyID === companyID);
+        }
       }
 
       const lc = val.toLowerCase();

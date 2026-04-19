@@ -227,6 +227,18 @@ const resolvedCompanyID =
         }
       }
 
+      // COMPANY_ADMIN / BRANCH_ADMIN → filter by company
+      if (user?.role === "COMPANY_ADMIN" || user?.role === "BRANCH_ADMIN") {
+        const ctx = getSidebarContext();
+        const companyID = ctx?.companyID ?? user?.companyID;
+        if (companyID) {
+          setBonuses(all.filter((b: any) => b.companyID === companyID));
+        } else {
+          setBonuses([]);
+        }
+        return;
+      }
+
       // EMPLOYEE → filter from /manage-emp/credentials/all
       const credsRes = await fetch("/backend/manage-emp/credentials/all");
       const creds = await credsRes.json();

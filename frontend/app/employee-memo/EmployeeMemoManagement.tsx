@@ -80,6 +80,18 @@ export function EmployeeMemoManagement() {
         if (ctx?.companyID) {
           result = result.filter((r: any) => r.companyID === ctx.companyID);
         }
+      } else if (user?.role === "SERVICE_PROVIDER") {
+        const ctx = getSidebarContext();
+        const companyID = ctx?.companyID ?? user?.companyID;
+        if (companyID) {
+          result = result.filter((r: any) => r.companyID === companyID);
+        }
+      } else if (user?.role === "COMPANY_ADMIN" || user?.role === "BRANCH_ADMIN") {
+        const ctx = getSidebarContext();
+        const companyID = ctx?.companyID ?? user?.companyID;
+        if (companyID) {
+          result = result.filter((r: any) => r.companyID === companyID);
+        }
       }
       setRows(result);
     } catch {
@@ -105,7 +117,13 @@ export function EmployeeMemoManagement() {
       try {
         const res = await fetch(EMP_API);
         const raw = await res.json();
-        const all = Array.isArray(raw) ? raw : raw?.data ?? [];
+        let all = Array.isArray(raw) ? raw : raw?.data ?? [];
+        // Filter by company from sidebar context
+        const ctx = getSidebarContext();
+        const companyID = ctx?.companyID ?? user?.companyID;
+        if (companyID) {
+          all = all.filter((e: any) => e.companyID === companyID);
+        }
         const ql = q.toLowerCase();
         const filtered = all.filter((e: any) => {
           const name = `${e.employeeFirstName ?? ""} ${e.employeeLastName ?? ""}`.toLowerCase();

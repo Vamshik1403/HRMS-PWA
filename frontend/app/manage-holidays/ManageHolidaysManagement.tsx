@@ -285,6 +285,16 @@ export function ManageHolidaysManagement() {
         return;
       }
 
+      // 🟠 COMPANY_ADMIN / BRANCH_ADMIN → filter by company
+      {
+        const ctx = getSidebarContext();
+        const companyID = ctx?.companyID ?? user?.companyID;
+        if (companyID) {
+          setHolidays(holidaysData.filter((r: any) => r.companyID === companyID));
+          return;
+        }
+      }
+
       // If no specific filtering applied, show empty
       setHolidays([]);
       

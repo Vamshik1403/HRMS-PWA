@@ -832,6 +832,18 @@ useEffect(() => {
     }
   }
 
+  // COMPANY_ADMIN / BRANCH_ADMIN: filter by company
+  if (user?.role === "COMPANY_ADMIN" || user?.role === "BRANCH_ADMIN") {
+    const ctx = getSidebarContext()
+    const companyID = ctx?.companyID ?? user?.companyID
+    if (companyID) {
+      setReimbursements(mapped.filter((r: any) => r.companyID === companyID))
+    } else {
+      setReimbursements([])
+    }
+    return
+  }
+
   // Normal user: filter by /manage-emp/credentials/all
   try {
     const creds = await robustGet<any[]>(`${BACKEND_URL}/manage-emp/credentials/all`)

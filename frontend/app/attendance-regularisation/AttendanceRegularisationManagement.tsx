@@ -173,63 +173,52 @@ export function AttendanceRegularisationManagement() {
   // Updated fetchBranches with role-based filtering
   const fetchBranches = async (query: string = "") => {
     try {
-      const res = await fetch(`${BACKEND_URL}/branches`, { cache: "no-store" })
-      let data = await res.json()
-      
-      // Include company information in branch data for non-superadmin
-      if (user?.role !== "SUPERADMIN") {
-        const companies = await fetch(`${BACKEND_URL}/company`).then(r => r.json())
-        data = data.map((branch: any) => ({
-          ...branch,
-          company: companies.find((c: any) => c.id === branch.companyID) || {}
-        }))
+      // SUPERADMIN: filter by sidebar context companyID
+      if (user?.role === "SUPERADMIN") {
+        const ctx = getSidebarContext();
+        const companyID = formData.companyID ?? ctx?.companyID;
+        if (!companyID) return [];
+        const res = await fetch(`${BACKEND_URL}/branches`, { cache: "no-store" })
+        const data = await res.json()
+        const q = query.toLowerCase()
+        const filtered = data.filter((item: any) => item.companyID === companyID)
+        return q ? filtered.filter((item: any) => (item?.branchName || "").toLowerCase().includes(q)) : filtered
       }
 
+      const res = await fetch(`${BACKEND_URL}/branches`, { cache: "no-store" })
+      const data = await res.json()
       const q = query.toLowerCase()
 
-      // SUPERADMIN → ALL (filtered by search)
-      if (user?.role === "SUPERADMIN") {
-        return q 
-          ? data.filter((item: any) =>
-              (item?.branchName || "").toLowerCase().includes(q)
-            )
-          : data
-      }
-
-      // MANAGER → only mapped branches (filtered by search)
+      // SERVICE_PROVIDER → filter by company from sidebar context
       if (user?.role === "SERVICE_PROVIDER") {
         const ctx = getSidebarContext();
         const companyID = managerData?.companyID ?? ctx?.companyID ?? user?.companyID;
         const spID = managerData?.serviceProviderID ?? ctx?.serviceProviderID ?? user?.serviceProviderID;
         let filteredByCompany;
         if (companyID) {
-          filteredByCompany = data.filter(
-            (item: any) => item.companyID === companyID
-          )
+          filteredByCompany = data.filter((item: any) => item.companyID === companyID)
         } else if (spID) {
-          filteredByCompany = data.filter(
-            (item: any) => item.serviceProviderID === spID
-          )
+          filteredByCompany = data.filter((item: any) => item.serviceProviderID === spID)
         } else {
           filteredByCompany = []
         }
-        return q
-          ? filteredByCompany.filter((item: any) =>
-              (item?.branchName || "").toLowerCase().includes(q)
-            )
-          : filteredByCompany
+        return q ? filteredByCompany.filter((item: any) => (item?.branchName || "").toLowerCase().includes(q)) : filteredByCompany
       }
 
-      // EMPLOYEE → only mapped branches (filtered by search)
+      // EMPLOYEE → only branches of their company
       if (user?.role === "EMPLOYEE" && empCreds) {
-        const filteredByCompany = data.filter(
-          (item: any) => item.companyID === empCreds.companyID
-        )
-        return q
-          ? filteredByCompany.filter((item: any) =>
-              (item?.branchName || "").toLowerCase().includes(q)
-            )
-          : filteredByCompany
+        const filteredByCompany = data.filter((item: any) => item.companyID === empCreds.companyID)
+        return q ? filteredByCompany.filter((item: any) => (item?.branchName || "").toLowerCase().includes(q)) : filteredByCompany
+      }
+
+      // COMPANY_ADMIN / BRANCH_ADMIN → filter by sidebar context or user companyID
+      {
+        const ctx = getSidebarContext();
+        const companyID = formData.companyID ?? ctx?.companyID ?? user?.companyID;
+        if (companyID) {
+          const filteredByCompany = data.filter((item: any) => item.companyID === companyID)
+          return q ? filteredByCompany.filter((item: any) => (item?.branchName || "").toLowerCase().includes(q)) : filteredByCompany
+        }
       }
 
       return []
@@ -243,69 +232,56 @@ export function AttendanceRegularisationManagement() {
   const fetchEmployees = async (query: string) => {
     try {
       const res = await fetch(`${BACKEND_URL}/manage-emp`, { cache: "no-store" })
-      let data = await res.json()
+      const data = await res.json()
       const q = query.toLowerCase()
 
-      // SUPERADMIN → ALL employees
+      const mapDisplay = (item: any) => ({
+        ...item,
+        displayName: `${item?.employeeFirstName || ""} ${item?.employeeLastName || ""}`.trim() + (item?.employeeID ? ` (${item.employeeID})` : "")
+      })
+      const applySearch = (arr: any[]) => arr.filter((item: any) => {
+        const fullName = `${item?.employeeFirstName || ""} ${item?.employeeLastName || ""}`.trim().toLowerCase()
+        const employeeId = (item?.employeeID || "").toLowerCase()
+        return fullName.includes(q) || employeeId.includes(q)
+      }).map(mapDisplay)
+
+      // SUPERADMIN → filter by sidebar context company + selected branch
       if (user?.role === "SUPERADMIN") {
-        return data
-          .filter((item: any) => {
-            const fullName = `${item?.employeeFirstName || ""} ${item?.employeeLastName || ""}`.trim().toLowerCase()
-            const employeeId = (item?.employeeID || "").toLowerCase()
-            return fullName.includes(q) || employeeId.includes(q)
-          })
-          .map((item: any) => ({
-            ...item,
-            displayName: `${item?.employeeFirstName || ""} ${item?.employeeLastName || ""}`.trim() + (item?.employeeID ? ` (${item.employeeID})` : "")
-          }))
+        const ctx = getSidebarContext();
+        const companyID = formData.companyID ?? ctx?.companyID;
+        if (!companyID || !formData.branchesID) return []
+        return applySearch(data.filter((item: any) => item.companyID === companyID && item.branchesID === formData.branchesID))
       }
 
-      // MANAGER → only employees from same company and branch
+      // SERVICE_PROVIDER → filter by company + selected branch
       if (user?.role === "SERVICE_PROVIDER") {
+        if (!formData.branchesID) return []
         const ctx = getSidebarContext();
         const companyID = managerData?.companyID ?? ctx?.companyID ?? user?.companyID;
         const spID = managerData?.serviceProviderID ?? ctx?.serviceProviderID ?? user?.serviceProviderID;
         let filtered;
         if (companyID) {
-          filtered = data.filter(
-            (item: any) => 
-              item.companyID === companyID && 
-              item.branchesID === (managerData?.branchesID ?? formData.branchesID)
-          )
+          filtered = data.filter((item: any) => item.companyID === companyID && item.branchesID === formData.branchesID)
         } else if (spID) {
-          filtered = data.filter(
-            (item: any) => item.serviceProviderID === spID
-          )
+          filtered = data.filter((item: any) => item.serviceProviderID === spID && item.branchesID === formData.branchesID)
         } else {
           filtered = []
         }
-        return filtered
-          .filter((item: any) => {
-            const fullName = `${item?.employeeFirstName || ""} ${item?.employeeLastName || ""}`.trim().toLowerCase()
-            const employeeId = (item?.employeeID || "").toLowerCase()
-            return fullName.includes(q) || employeeId.includes(q)
-          })
-          .map((item: any) => ({
-            ...item,
-            displayName: `${item?.employeeFirstName || ""} ${item?.employeeLastName || ""}`.trim() + (item?.employeeID ? ` (${item.employeeID})` : "")
-          }))
+        return applySearch(filtered)
       }
 
-      // EMPLOYEE → only show themselves
+      // EMPLOYEE → only themselves
       if (user?.role === "EMPLOYEE" && empCreds) {
-        const filtered = data.filter(
-          (item: any) => item.id === empCreds.manageEmployeeID
-        )
-        return filtered
-          .filter((item: any) => {
-            const fullName = `${item?.employeeFirstName || ""} ${item?.employeeLastName || ""}`.trim().toLowerCase()
-            const employeeId = (item?.employeeID || "").toLowerCase()
-            return fullName.includes(q) || employeeId.includes(q)
-          })
-          .map((item: any) => ({
-            ...item,
-            displayName: `${item?.employeeFirstName || ""} ${item?.employeeLastName || ""}`.trim() + (item?.employeeID ? ` (${item.employeeID})` : "")
-          }))
+        return applySearch(data.filter((item: any) => item.id === empCreds.manageEmployeeID))
+      }
+
+      // COMPANY_ADMIN / BRANCH_ADMIN → filter by sidebar context company + selected branch
+      {
+        const ctx = getSidebarContext();
+        const companyID = formData.companyID ?? ctx?.companyID ?? user?.companyID;
+        if (companyID && formData.branchesID) {
+          return applySearch(data.filter((item: any) => item.companyID === companyID && item.branchesID === formData.branchesID))
+        }
       }
 
       return []
@@ -394,6 +370,18 @@ export function AttendanceRegularisationManagement() {
           setRegularisations(regularisationsData.filter((a: any) => a.serviceProviderID === currentUser.serviceProviderID))
           return
         }
+      }
+
+      // COMPANY_ADMIN / BRANCH_ADMIN → filter by company
+      if (user.role === "COMPANY_ADMIN" || user.role === "BRANCH_ADMIN") {
+        const ctx = getSidebarContext()
+        const companyID = ctx?.companyID ?? user?.companyID
+        if (companyID) {
+          setRegularisations(regularisationsData.filter((a: any) => a.companyID === companyID))
+        } else {
+          setRegularisations([])
+        }
+        return
       }
 
       // For employees or others → get from /manage-emp/credentials/all

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { getSidebarContext } from "../utils/sidebarContext";
 import {
   Card,
   CardContent,
@@ -112,12 +113,21 @@ export default function TerminationManagement() {
 
       const empRes = await fetch(`${API.employees}?status=ACTIVE`);
       const empRaw = await empRes.json();
-      const empData = Array.isArray(empRaw) ? empRaw : empRaw?.data ?? [];
+      let empData = Array.isArray(empRaw) ? empRaw : empRaw?.data ?? [];
+      // Filter by company from sidebar context
+      const ctx = getSidebarContext();
+      const companyID = ctx?.companyID ?? user?.companyID;
+      if (companyID) {
+        empData = empData.filter((e: any) => e.companyID === companyID);
+      }
       setEmployees(empData);
 
       const termRes = await fetch(API.terminations);
       const raw = await termRes.json();
-      const termData = Array.isArray(raw) ? raw : raw?.data ?? [];
+      let termData = Array.isArray(raw) ? raw : raw?.data ?? [];
+      if (companyID) {
+        termData = termData.filter((t: any) => t.employee?.companyID === companyID || t.companyID === companyID);
+      }
       setTerminations(termData);
     } catch (e) {
       console.error("Load error", e);

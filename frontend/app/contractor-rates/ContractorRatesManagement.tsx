@@ -182,6 +182,12 @@ export function ContractorRatesManagement() {
         } else if (currentUserMapping?.serviceProviderID) {
           data = data.filter((c: any) => c.serviceProviderID === currentUserMapping.serviceProviderID);
         }
+      } else if (user?.role === "COMPANY_ADMIN" || user?.role === "BRANCH_ADMIN") {
+        const ctx = getSidebarContext();
+        const companyID = ctx?.companyID ?? user?.companyID;
+        if (companyID) {
+          data = data.filter((c: any) => c.companyID === companyID);
+        }
       }
       setContractors(data);
       await loadAllRateCards(data);
@@ -711,6 +717,8 @@ export function ContractorRatesManagement() {
                       <TableHead>Department</TableHead>
                       <TableHead>Designation</TableHead>
                       <TableHead>Work Shift</TableHead>
+                      <TableHead>Per Minute (₹)</TableHead>
+                      <TableHead>Per Hour (₹)</TableHead>
                       <TableHead>Per Day (₹)</TableHead>
                       <TableHead>Per Month (₹)</TableHead>
                       <TableHead>OT Multiplier</TableHead>
@@ -721,7 +729,7 @@ export function ContractorRatesManagement() {
                   <TableBody>
                     {allRateCards.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={11} className="text-center py-8 text-gray-500">
+                        <TableCell colSpan={13} className="text-center py-8 text-gray-500">
                           <div className="flex flex-col items-center gap-2">
                             <IndianRupee className="w-12 h-12 text-gray-300" />
                             <p>No rate cards found</p>
@@ -765,6 +773,16 @@ export function ContractorRatesManagement() {
                             <TableCell>{rc.departmentName || "—"}</TableCell>
                             <TableCell>{rc.designation || "—"}</TableCell>
                             <TableCell>{rc.workShiftName || "—"}</TableCell>
+                            <TableCell>
+                              {rc.payoutType === "COMMISSION_ONLY"
+                                ? "—"
+                                : rc.perMinuteRate || "0"}
+                            </TableCell>
+                            <TableCell>
+                              {rc.payoutType === "COMMISSION_ONLY"
+                                ? "—"
+                                : rc.perHourRate || "0"}
+                            </TableCell>
                             <TableCell>
                               {rc.payoutType === "COMMISSION_ONLY"
                                 ? "—"

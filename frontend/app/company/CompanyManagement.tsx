@@ -436,6 +436,15 @@ export function CompanyManagement() {
             <Button
               onClick={() => {
                 resetForm()
+                // Auto-populate serviceProviderID from sidebar context
+                const ctx = getSidebarContext()
+                if (ctx?.serviceProviderID) {
+                  setFormData(prev => ({
+                    ...prev,
+                    serviceProviderID: ctx.serviceProviderID,
+                    autocompleteName: ctx.serviceProviderName || "",
+                  }))
+                }
                 setIsAddingNew(true)
               }}
               className="text-sm px-3 py-2"

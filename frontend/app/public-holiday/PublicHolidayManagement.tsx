@@ -362,6 +362,16 @@ export function PublicHolidayManagement() {
         return
       }
 
+      // COMPANY_ADMIN / BRANCH_ADMIN → filter by company
+      {
+        const ctx = getSidebarContext();
+        const companyID = ctx?.companyID ?? user?.companyID;
+        if (companyID) {
+          setPublicHolidays(mapped.filter((h: any) => h.companyID === companyID));
+          return;
+        }
+      }
+
       // If no specific filtering applied, show empty
       setPublicHolidays([]);
       

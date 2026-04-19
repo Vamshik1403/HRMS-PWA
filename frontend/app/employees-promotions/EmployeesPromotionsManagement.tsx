@@ -628,7 +628,19 @@ export function EmployeesPromotionsManagement() {
         }
       }
 
-      // 🔵 EMPLOYEE → Filter by /manage-emp/credentials/all mapping
+      // � COMPANY_ADMIN / BRANCH_ADMIN → filter by company
+      if (user?.role === "COMPANY_ADMIN" || user?.role === "BRANCH_ADMIN") {
+        const ctx = getSidebarContext();
+        const companyID = ctx?.companyID ?? user?.companyID;
+        if (companyID) {
+          setRows(list.filter((r: any) => r.companyID === companyID));
+        } else {
+          setRows([]);
+        }
+        return;
+      }
+
+      // �🔵 EMPLOYEE → Filter by /manage-emp/credentials/all mapping
       const credsRes = await fetch("/backend/manage-emp/credentials/all");
       const creds = await credsRes.json();
       const emp = creds.find((c: any) => c.username === user?.username);

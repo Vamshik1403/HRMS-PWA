@@ -523,6 +523,18 @@ const fetchCompanies = useCallback(
         }
       }
 
+      // COMPANY_ADMIN / BRANCH_ADMIN: filter by company
+      if (user?.role === "COMPANY_ADMIN" || user?.role === "BRANCH_ADMIN") {
+        const ctx = getSidebarContext()
+        const companyID = ctx?.companyID ?? user?.companyID
+        if (companyID) {
+          setAdvances(mapped.filter((a: any) => a.companyID === companyID))
+        } else {
+          setAdvances([])
+        }
+        return
+      }
+
       const creds = await robustGet<any[]>(`${BACKEND_URL}/manage-emp/credentials/all`)
       const emp = creds.find(c => c.username === user?.username)
       if (emp) {

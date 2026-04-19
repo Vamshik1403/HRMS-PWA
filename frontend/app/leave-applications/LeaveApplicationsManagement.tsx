@@ -1016,6 +1016,18 @@ export function LeaveApplicationsManagement() {
         }
       }
 
+      // COMPANY_ADMIN / BRANCH_ADMIN → filter by company
+      if (user.role === "COMPANY_ADMIN" || user.role === "BRANCH_ADMIN") {
+        const ctx = getSidebarContext()
+        const companyID = ctx?.companyID ?? user?.companyID
+        if (companyID) {
+          setLeaveApplications(splitApplications.filter((a: any) => a.companyID === companyID))
+        } else {
+          setLeaveApplications([])
+        }
+        return
+      }
+
       // For employees or others → get from /manage-emp/credentials/all
       const creds = await fetch(`${BACKEND_URL}/manage-emp/credentials/all`).then((r) => r.json())
       const emp = creds.find((c: any) => c.username === user.username)
