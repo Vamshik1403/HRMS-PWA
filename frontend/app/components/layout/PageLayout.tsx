@@ -306,6 +306,7 @@ export function PageLayout({ children }: PageLayoutProps) {
 
   const pageTitle = (() => {
     if (pathname === "/dashboard") return "Dashboard";
+    if (pathname === "/employee-memo") return "Employee Warnings";
     const parts = pathname.split("/").filter(Boolean);
     if (parts.length === 0) return "Dashboard";
     const raw = parts[parts.length - 1];

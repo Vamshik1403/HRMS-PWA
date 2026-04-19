@@ -25,6 +25,7 @@ const EMP_API = "/backend/manage-emp";
 interface MemoRow {
   id: number;
   employeeID: number;
+  companyID?: number;
   memoType?: string;
   subject?: string;
   description?: string;
@@ -33,6 +34,7 @@ interface MemoRow {
   createdAt?: string;
   manageEmployee?: {
     id: number;
+    companyID?: number;
     employeeFirstName?: string;
     employeeLastName?: string;
     employeeID?: string;
@@ -75,22 +77,24 @@ export function EmployeeMemoManagement() {
       const res = await fetch(API);
       const data = await res.json();
       let result = Array.isArray(data) ? data : data?.data ?? [];
+      // Helper: get companyID from memo itself or from the linked employee
+      const getCompanyID = (r: any) => r.companyID ?? r.manageEmployee?.companyID;
       if (user?.role === "SUPERADMIN") {
         const ctx = getSidebarContext();
         if (ctx?.companyID) {
-          result = result.filter((r: any) => r.companyID === ctx.companyID);
+          result = result.filter((r: any) => Number(getCompanyID(r)) === Number(ctx.companyID));
         }
       } else if (user?.role === "SERVICE_PROVIDER") {
         const ctx = getSidebarContext();
         const companyID = ctx?.companyID ?? user?.companyID;
         if (companyID) {
-          result = result.filter((r: any) => r.companyID === companyID);
+          result = result.filter((r: any) => Number(getCompanyID(r)) === Number(companyID));
         }
       } else if (user?.role === "COMPANY_ADMIN" || user?.role === "BRANCH_ADMIN") {
         const ctx = getSidebarContext();
         const companyID = ctx?.companyID ?? user?.companyID;
         if (companyID) {
-          result = result.filter((r: any) => r.companyID === companyID);
+          result = result.filter((r: any) => Number(getCompanyID(r)) === Number(companyID));
         }
       }
       setRows(result);
@@ -101,7 +105,7 @@ export function EmployeeMemoManagement() {
     }
   };
 
-  useEffect(() => { fetchRows(); }, []);
+  useEffect(() => { if (user) fetchRows(); }, [user]);
 
   useEffect(() => {
     const handler = () => { fetchRows(); };
