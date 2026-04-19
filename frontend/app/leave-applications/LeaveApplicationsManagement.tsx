@@ -644,20 +644,18 @@ export function LeaveApplicationsManagement() {
   // Updated fetchBranches function - filters by selected Company
   const fetchBranches = async (query: string = "") => {
     try {
-      // SUPERADMIN: Only fetch if company is selected
-      if (user?.role === "SUPERADMIN" && !formData.companyID) {
-        return []
-      }
-
-      const res = await fetch(`${BACKEND_URL}/branches`, { cache: "no-store" })
-      let data = await res.json()
-      
-      const q = query.toLowerCase()
-
-      // SUPERADMIN → Filter by selected company
+      // SUPERADMIN: Resolve companyID from formData or sidebar context
       if (user?.role === "SUPERADMIN") {
+        const ctx = getSidebarContext();
+        const companyID = formData.companyID ?? ctx?.companyID;
+        if (!companyID) return [];
+
+        const res = await fetch(`${BACKEND_URL}/branches`, { cache: "no-store" })
+        let data = await res.json()
+        const q = query.toLowerCase()
+
         let filteredData = data.filter((item: any) => 
-          item.companyID === formData.companyID
+          item.companyID === companyID
         )
         
         return q 
@@ -666,6 +664,11 @@ export function LeaveApplicationsManagement() {
             )
           : filteredData
       }
+
+      const res = await fetch(`${BACKEND_URL}/branches`, { cache: "no-store" })
+      let data = await res.json()
+      
+      const q = query.toLowerCase()
 
       // SERVICE_PROVIDER → use managerData, sidebar context, or user object as fallback
       if (user?.role === "SERVICE_PROVIDER") {
@@ -737,13 +740,15 @@ export function LeaveApplicationsManagement() {
 
       // SUPERADMIN → Filter by selected company AND branch
       if (user?.role === "SUPERADMIN") {
+        const ctx = getSidebarContext();
+        const companyID = formData.companyID ?? ctx?.companyID;
         // SUPERADMIN REQUIREMENT: Must have both companyID AND branchesID
-        if (!formData.companyID || !formData.branchesID) {
+        if (!companyID || !formData.branchesID) {
           return [] // No employees shown until both are selected
         }
         
         const filteredData = data.filter((item: any) => 
-          item.companyID === formData.companyID && 
+          item.companyID === companyID && 
           item.branchesID === formData.branchesID
         )
         
@@ -1200,12 +1205,13 @@ export function LeaveApplicationsManagement() {
     e.preventDefault()
     
     // Auto-populate serviceProviderID and companyID for MANAGER/EMPLOYEE
+    const ctx = getSidebarContext();
     const serviceProviderID = user?.role === "SUPERADMIN" 
-      ? formData.serviceProviderID 
+      ? (formData.serviceProviderID ?? ctx?.serviceProviderID)
       : managerData?.serviceProviderID || empCreds?.serviceProviderID;
 
     const companyID = user?.role === "SUPERADMIN" 
-      ? formData.companyID 
+      ? (formData.companyID ?? ctx?.companyID)
       : managerData?.companyID || empCreds?.companyID;
 
     // Ensure we have the required IDs
