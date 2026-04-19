@@ -138,7 +138,7 @@ export function ContractorRatesManagement() {
 
   useEffect(() => {
     if (!user) return;
-    if (user.role === "SERVICE_PROVIDER") {
+    if (user.role === "SERVICE_PROVIDER" || user.role === "COMPANY_ADMIN" || user.role === "BRANCH_ADMIN") {
       fetch("/backend/users")
         .then((r) => r.json())
         .then((users) => {
@@ -151,6 +151,8 @@ export function ContractorRatesManagement() {
 
   useEffect(() => {
     if (!user) return;
+    // For roles that need user mapping, wait for it
+    if ((user.role === "SERVICE_PROVIDER" || user.role === "COMPANY_ADMIN" || user.role === "BRANCH_ADMIN") && !currentUserMapping) return;
     loadContractors();
   }, [user, currentUserMapping]);
 
@@ -168,25 +170,29 @@ export function ContractorRatesManagement() {
         const ctx = getSidebarContext();
         if (ctx?.companyID) {
           data = data.filter((c: any) =>
-            c.companyID === ctx.companyID ||
-            (c.companyID == null && c.serviceProviderID === ctx.serviceProviderID)
+            Number(c.companyID) === Number(ctx.companyID) ||
+            (c.companyID == null && Number(c.serviceProviderID) === Number(ctx.serviceProviderID))
           );
         }
       } else if (user?.role === "SERVICE_PROVIDER") {
         const ctx = getSidebarContext();
         if (ctx?.companyID) {
           data = data.filter((c: any) =>
-            c.companyID === ctx.companyID ||
-            (c.companyID == null && c.serviceProviderID === ctx.serviceProviderID)
+            Number(c.companyID) === Number(ctx.companyID) ||
+            (c.companyID == null && Number(c.serviceProviderID) === Number(ctx.serviceProviderID))
           );
         } else if (currentUserMapping?.serviceProviderID) {
-          data = data.filter((c: any) => c.serviceProviderID === currentUserMapping.serviceProviderID);
+          data = data.filter((c: any) => Number(c.serviceProviderID) === Number(currentUserMapping.serviceProviderID));
         }
       } else if (user?.role === "COMPANY_ADMIN" || user?.role === "BRANCH_ADMIN") {
         const ctx = getSidebarContext();
-        const companyID = ctx?.companyID ?? user?.companyID;
+        const companyID = ctx?.companyID ?? currentUserMapping?.companyID ?? user?.companyID;
+        const spID = ctx?.serviceProviderID ?? currentUserMapping?.serviceProviderID ?? user?.serviceProviderID;
         if (companyID) {
-          data = data.filter((c: any) => c.companyID === companyID);
+          data = data.filter((c: any) =>
+            Number(c.companyID) === Number(companyID) ||
+            (c.companyID == null && spID && Number(c.serviceProviderID) === Number(spID))
+          );
         }
       }
       setContractors(data);
@@ -231,7 +237,33 @@ export function ContractorRatesManagement() {
       try {
         let all = await fetchJSONSafe<ContractorRead[]>(API.contractors);
         if (user?.role === "SERVICE_PROVIDER" && currentUserMapping) {
-          all = all.filter((c) => c.companyID === currentUserMapping.companyID);
+          const ctx = getSidebarContext();
+          if (ctx?.companyID) {
+            all = all.filter((c) =>
+              Number(c.companyID) === Number(ctx.companyID) ||
+              (c.companyID == null && Number(c.serviceProviderID) === Number(ctx.serviceProviderID))
+            );
+          } else {
+            all = all.filter((c) => Number(c.serviceProviderID) === Number(currentUserMapping.serviceProviderID));
+          }
+        } else if (user?.role === "COMPANY_ADMIN" || user?.role === "BRANCH_ADMIN") {
+          const ctx = getSidebarContext();
+          const companyID = ctx?.companyID ?? currentUserMapping?.companyID ?? user?.companyID;
+          const spID = ctx?.serviceProviderID ?? currentUserMapping?.serviceProviderID ?? user?.serviceProviderID;
+          if (companyID) {
+            all = all.filter((c) =>
+              Number(c.companyID) === Number(companyID) ||
+              (c.companyID == null && spID && Number(c.serviceProviderID) === Number(spID))
+            );
+          }
+        } else if (user?.role === "SUPERADMIN") {
+          const ctx = getSidebarContext();
+          if (ctx?.companyID) {
+            all = all.filter((c) =>
+              Number(c.companyID) === Number(ctx.companyID) ||
+              (c.companyID == null && Number(c.serviceProviderID) === Number(ctx.serviceProviderID))
+            );
+          }
         }
         const ql = q.trim().toLowerCase();
         const filtered = ql
@@ -263,10 +295,10 @@ export function ContractorRatesManagement() {
         fetchJSONSafe<any[]>(API.branches),
       ]);
       const cid = companyID;
-      setRcDepartments((deptRes || []).filter((d: any) => !cid || d.companyID === cid));
-      setRcDesignations((desigRes || []).filter((d: any) => !cid || d.companyID === cid));
-      setRcWorkShifts((wsRes || []).filter((w: any) => !cid || w.companyID === cid));
-      setRcBranches((brRes || []).filter((b: any) => !cid || b.companyID === cid));
+      setRcDepartments((deptRes || []).filter((d: any) => !cid || Number(d.companyID) === Number(cid)));
+      setRcDesignations((desigRes || []).filter((d: any) => !cid || Number(d.companyID) === Number(cid)));
+      setRcWorkShifts((wsRes || []).filter((w: any) => !cid || Number(w.companyID) === Number(cid)));
+      setRcBranches((brRes || []).filter((b: any) => !cid || Number(b.companyID) === Number(cid)));
     } catch {
       setRcDepartments([]);
       setRcDesignations([]);
@@ -776,12 +808,12 @@ export function ContractorRatesManagement() {
                             <TableCell>
                               {rc.payoutType === "COMMISSION_ONLY"
                                 ? "—"
-                                : rc.perMinuteRate || "0"}
+                                : rc.dailyRateMinute || "0"}
                             </TableCell>
                             <TableCell>
                               {rc.payoutType === "COMMISSION_ONLY"
                                 ? "—"
-                                : rc.perHourRate || "0"}
+                                : rc.dailyRateHour || "0"}
                             </TableCell>
                             <TableCell>
                               {rc.payoutType === "COMMISSION_ONLY"
