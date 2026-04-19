@@ -125,10 +125,12 @@ export function ContractorRatesManagement() {
     dailyRateHour: "",
     monthlyRateMinute: "",
     monthlyRateHours: "",
+    otType: "PERCENTAGE",
     otPerMinuteRate: "",
     otPerHourRate: "",
     otRateMultiplier: "",
     commissionType: "PERCENTAGE",
+    commissionBasedOn: "HOURLY",
     commissionValue: "",
   });
 
@@ -165,12 +167,18 @@ export function ContractorRatesManagement() {
       if (user?.role === "SUPERADMIN") {
         const ctx = getSidebarContext();
         if (ctx?.companyID) {
-          data = data.filter((c) => c.companyID === ctx.companyID);
+          data = data.filter((c: any) =>
+            c.companyID === ctx.companyID ||
+            (c.companyID == null && c.serviceProviderID === ctx.serviceProviderID)
+          );
         }
       } else if (user?.role === "SERVICE_PROVIDER") {
         const ctx = getSidebarContext();
         if (ctx?.companyID) {
-          data = data.filter((c: any) => c.companyID === ctx.companyID);
+          data = data.filter((c: any) =>
+            c.companyID === ctx.companyID ||
+            (c.companyID == null && c.serviceProviderID === ctx.serviceProviderID)
+          );
         } else if (currentUserMapping?.serviceProviderID) {
           data = data.filter((c: any) => c.serviceProviderID === currentUserMapping.serviceProviderID);
         }
@@ -283,10 +291,12 @@ export function ContractorRatesManagement() {
         dailyRateHour: rateCard.dailyRateHour?.toString() || "",
         monthlyRateMinute: rateCard.monthlyRateMinute?.toString() || "",
         monthlyRateHours: rateCard.monthlyRateHours?.toString() || "",
+        otType: rateCard.otType || "PERCENTAGE",
         otPerMinuteRate: rateCard.otPerMinuteRate?.toString() || "",
         otPerHourRate: rateCard.otPerHourRate?.toString() || "",
         otRateMultiplier: rateCard.otRateMultiplier?.toString() || "",
         commissionType: rateCard.commissionType || "PERCENTAGE",
+        commissionBasedOn: rateCard.commissionBasedOn || "HOURLY",
         commissionValue: rateCard.commissionValue?.toString() || "",
       };
       setFormData(f);
@@ -341,10 +351,12 @@ export function ContractorRatesManagement() {
             dailyRateHour: formData.dailyRateHour ? parseFloat(formData.dailyRateHour) : 0,
             monthlyRateMinute: formData.monthlyRateMinute ? parseFloat(formData.monthlyRateMinute) : 0,
             monthlyRateHours: formData.monthlyRateHours ? parseFloat(formData.monthlyRateHours) : 0,
+            otType: formData.otType || "PERCENTAGE",
             otPerMinuteRate: formData.otPerMinuteRate ? parseFloat(formData.otPerMinuteRate) : 0,
             otPerHourRate: formData.otPerHourRate ? parseFloat(formData.otPerHourRate) : 0,
             otRateMultiplier: formData.otRateMultiplier ? parseFloat(formData.otRateMultiplier) : 0,
             commissionType: formData.commissionType || undefined,
+            commissionBasedOn: formData.commissionBasedOn || undefined,
             commissionValue: formData.commissionValue ? parseFloat(formData.commissionValue) : 0,
           },
         ],
@@ -514,44 +526,66 @@ export function ContractorRatesManagement() {
           {isAllInclusive && (
             <>
               <h4 className="text-xs font-semibold text-gray-600 uppercase tracking-wide mt-2">
-                Daily &amp; Monthly Rates
+                Working Rates
               </h4>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 <div className="space-y-1">
-                  <label className="text-xs font-medium text-gray-500 block">Daily Rate - Minute (₹)</label>
+                  <label className="text-xs font-medium text-gray-500 block">Per Minute (₹)</label>
                   <Input type="number" value={formData.dailyRateMinute} onChange={(e) => setFormData((p) => ({ ...p, dailyRateMinute: e.target.value }))} placeholder="0" min="0" />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-xs font-medium text-gray-500 block">Daily Rate - Hour (₹)</label>
+                  <label className="text-xs font-medium text-gray-500 block">Per Hour (₹)</label>
                   <Input type="number" value={formData.dailyRateHour} onChange={(e) => setFormData((p) => ({ ...p, dailyRateHour: e.target.value }))} placeholder="0" min="0" />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-xs font-medium text-gray-500 block">Monthly Rate - Minute (₹)</label>
-                  <Input type="number" value={formData.monthlyRateMinute} onChange={(e) => setFormData((p) => ({ ...p, monthlyRateMinute: e.target.value }))} placeholder="0" min="0" />
+                  <label className="text-xs font-medium text-gray-500 block">Per Day (₹)</label>
+                  <Input type="number" value={formData.perDayRate} onChange={(e) => setFormData((p) => ({ ...p, perDayRate: e.target.value }))} placeholder="0" min="0" />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-xs font-medium text-gray-500 block">Monthly Rate - Hours (₹)</label>
-                  <Input type="number" value={formData.monthlyRateHours} onChange={(e) => setFormData((p) => ({ ...p, monthlyRateHours: e.target.value }))} placeholder="0" min="0" />
+                  <label className="text-xs font-medium text-gray-500 block">Per Month (₹)</label>
+                  <Input type="number" value={formData.perMonthRate} onChange={(e) => setFormData((p) => ({ ...p, perMonthRate: e.target.value }))} placeholder="0" min="0" />
                 </div>
               </div>
 
               <h4 className="text-xs font-semibold text-gray-600 uppercase tracking-wide mt-2">
-                Overtime (OT) Rates
+                Overtime (OT) Hours Rates
               </h4>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1">
-                  <label className="text-xs font-medium text-gray-500 block">OT Per Minute (₹)</label>
-                  <Input type="number" value={formData.otPerMinuteRate} onChange={(e) => setFormData((p) => ({ ...p, otPerMinuteRate: e.target.value }))} placeholder="0" min="0" />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-xs font-medium text-gray-500 block">OT Per Hour (₹)</label>
-                  <Input type="number" value={formData.otPerHourRate} onChange={(e) => setFormData((p) => ({ ...p, otPerHourRate: e.target.value }))} placeholder="0" min="0" />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-xs font-medium text-gray-500 block">OT Rate Calculation</label>
-                  <Input type="number" value={formData.otRateMultiplier} onChange={(e) => setFormData((p) => ({ ...p, otRateMultiplier: e.target.value }))} placeholder="e.g. 1.5" min="0" step="0.1" />
+                  <label className="text-xs font-medium text-gray-500 block">OT Type *</label>
+                  <select
+                    className={SELECT_CLASS}
+                    value={formData.otType}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, otType: e.target.value }))}
+                  >
+                    <option value="PERCENTAGE">Percentage</option>
+                    <option value="FIXED">Fixed</option>
+                  </select>
                 </div>
               </div>
+
+              {formData.otType === "FIXED" && (
+                <div className="grid grid-cols-2 sm:grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <label className="text-xs font-medium text-gray-500 block">Per Minute (₹)</label>
+                    <Input type="number" value={formData.otPerMinuteRate} onChange={(e) => setFormData((p) => ({ ...p, otPerMinuteRate: e.target.value }))} placeholder="0" min="0" />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs font-medium text-gray-500 block">Per Hour (₹)</label>
+                    <Input type="number" value={formData.otPerHourRate} onChange={(e) => setFormData((p) => ({ ...p, otPerHourRate: e.target.value }))} placeholder="0" min="0" />
+                  </div>
+                </div>
+              )}
+
+              {formData.otType === "PERCENTAGE" && (
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-gray-500 block">OT Rate (x)</label>
+                  <div className="flex items-center gap-2">
+                    <Input type="number" value={formData.otRateMultiplier} onChange={(e) => setFormData((p) => ({ ...p, otRateMultiplier: e.target.value }))} placeholder="e.g. 1.5" min="0" step="0.1" />
+                    <span className="text-sm font-medium text-gray-600">x</span>
+                  </div>
+                </div>
+              )}
             </>
           )}
 
@@ -563,6 +597,18 @@ export function ContractorRatesManagement() {
               </h4>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1">
+                  <label className="text-xs font-medium text-gray-500 block">Commission Based On *</label>
+                  <select
+                    className={SELECT_CLASS}
+                    value={formData.commissionBasedOn}
+                    onChange={(e) => setFormData((p) => ({ ...p, commissionBasedOn: e.target.value }))}
+                  >
+                    <option value="HOURLY">Hourly</option>
+                    <option value="DAILY">Daily</option>
+                    <option value="MONTHLY">Monthly</option>
+                  </select>
+                </div>
+                <div className="space-y-1">
                   <label className="text-xs font-medium text-gray-500 block">Commission Type</label>
                   <select
                     className={SELECT_CLASS}
@@ -573,19 +619,19 @@ export function ContractorRatesManagement() {
                     <option value="FIXED">Fixed Amount (₹)</option>
                   </select>
                 </div>
-                <div className="space-y-1">
-                  <label className="text-xs font-medium text-gray-500 block">
-                    Commission Value {formData.commissionType === "PERCENTAGE" ? "(%)" : "(₹)"}
-                  </label>
-                  <Input
-                    type="number"
-                    value={formData.commissionValue}
-                    onChange={(e) => setFormData((p) => ({ ...p, commissionValue: e.target.value }))}
-                    placeholder="0"
-                    min="0"
-                    step={formData.commissionType === "PERCENTAGE" ? "0.01" : "1"}
-                  />
-                </div>
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-gray-500 block">
+                  Commission Value {formData.commissionType === "PERCENTAGE" ? "(%)" : "(₹)"}
+                </label>
+                <Input
+                  type="number"
+                  value={formData.commissionValue}
+                  onChange={(e) => setFormData((p) => ({ ...p, commissionValue: e.target.value }))}
+                  placeholder="0"
+                  min="0"
+                  step={formData.commissionType === "PERCENTAGE" ? "0.01" : "1"}
+                />
               </div>
             </>
           )}
@@ -692,10 +738,16 @@ export function ContractorRatesManagement() {
                             .toLowerCase()
                             .includes(searchTerm.toLowerCase())
                         )
-                        .map((rc, index) => (
+                        .map((rc, index) => {
+                          const displayType = rc.payoutType === "COMMISSION_ONLY" 
+                            ? `commission ${rc.commissionBasedOn?.toLowerCase() || 'hourly'}`
+                            : "all inclusive";
+                          const displayName = rc.contractorDisplayName || rc.contractorName || "";
+                          const fullName = `${displayName}(${displayType})`;
+                          return (
                           <TableRow key={`${rc.contractorId}-${index}`}>
                             <TableCell>
-                              {rc.contractorDisplayName || rc.contractorName || ""}
+                              {fullName}
                             </TableCell>
                             <TableCell>
                               <Badge
@@ -752,7 +804,8 @@ export function ContractorRatesManagement() {
                               )}
                             </TableCell>
                           </TableRow>
-                        ))
+                          );
+                        })
                     )}
                   </TableBody>
                 </Table>

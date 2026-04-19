@@ -130,7 +130,7 @@ export function ContractorReportsManagement() {
 
   const filteredContractors = contractors.filter((c) => {
     const cid = user?.role !== "SUPERADMIN" && user?.companyID ? user.companyID : formData.companyID;
-    return !cid || c.companyID === cid;
+    return !cid || c.companyID === cid || c.companyID == null;
   });
 
   // ── Filtered shifts by company/branch ──

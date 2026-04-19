@@ -57,6 +57,7 @@ import { PrivilegedLeaveModule } from './privileged-leave/privileged-leave.modul
 import { EmployeeHolidayOverrideModule } from './employee-holiday-override/employee-holiday-override.module';
 import { EmployeeWeeklyOffModule } from './employee-weekly-off/employee-weekly-off.module';
 import { ImportAttendanceModule } from './import-attendance/import-attendance.module';
+import { ContractorPayoutModule } from './contractor-payout/contractor-payout.module';
 
 
 @Module({
@@ -119,6 +120,7 @@ import { ImportAttendanceModule } from './import-attendance/import-attendance.mo
     EmployeeHolidayOverrideModule,
     EmployeeWeeklyOffModule,
     ImportAttendanceModule,
+    ContractorPayoutModule,
   ],
   providers: [AuthService],
   controllers: [AuthController],

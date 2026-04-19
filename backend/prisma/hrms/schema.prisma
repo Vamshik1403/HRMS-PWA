@@ -247,6 +247,23 @@ model Contractors {
   manageEmployee     ManageEmployee[]
   empContractor      EmpContractor[]     @relation("EmpContractorLink")
   contractorRateCards ContractorRateCard[]
+  contractorPayouts  ContractorPayout[]
+}
+
+model ContractorPayout {
+  id             Int          @id @default(autoincrement())
+  contractorID   Int
+  branchID       Int?
+  departmentIDs  String?      @db.VarChar
+  designationIDs String?      @db.VarChar
+  employeeIDs    String?      @db.VarChar
+  workshiftIDs   String?      @db.VarChar
+  rateCardID     Int?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  contractor     Contractors  @relation(fields: [contractorID], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([contractorID])
 }
 
 model ContractorRateCard {
@@ -266,10 +283,12 @@ model ContractorRateCard {
   dailyRateHour    Float?      @default(0)
   monthlyRateMinute Float?    @default(0)
   monthlyRateHours  Float?    @default(0)
+  otType          String?      @db.VarChar
   otPerMinuteRate Float?       @default(0)
   otPerHourRate   Float?       @default(0)
   otRateMultiplier Float?     @default(0)
   commissionType  String?      @db.VarChar
+  commissionBasedOn String?    @db.VarChar
   commissionValue Float?       @default(0)
   contractor      Contractors  @relation(fields: [contractorID], references: [id], onDelete: Cascade, onUpdate: NoAction)
 

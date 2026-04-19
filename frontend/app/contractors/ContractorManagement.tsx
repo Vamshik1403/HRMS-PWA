@@ -273,7 +273,10 @@ export function ContractorManagement() {
       if (user?.role === "SUPERADMIN") {
         const ctx = getSidebarContext();
         if (ctx?.companyID) {
-          setRows(all.filter((r: any) => r.companyID === ctx.companyID));
+          setRows(all.filter((r: any) =>
+            r.companyID === ctx.companyID ||
+            (r.companyID == null && r.serviceProviderID === ctx.serviceProviderID)
+          ));
         } else {
           setRows(all);
         }
@@ -292,9 +295,24 @@ export function ContractorManagement() {
         if (user?.role === "SERVICE_PROVIDER") {
           const ctx = getSidebarContext();
           if (ctx?.companyID) {
-            setRows(all.filter((c: any) => c.companyID === ctx.companyID));
+            setRows(all.filter((c: any) =>
+              c.companyID === ctx.companyID ||
+              (c.companyID == null && c.serviceProviderID === ctx.serviceProviderID)
+            ));
           } else if (currentUser.serviceProviderID) {
             setRows(all.filter((c: any) => c.serviceProviderID === currentUser.serviceProviderID));
+          } else {
+            setRows([]);
+          }
+        } else if (user?.role === "COMPANY_ADMIN" || user?.role === "BRANCH_ADMIN") {
+          const ctx = getSidebarContext();
+          const companyID = ctx?.companyID ?? currentUser.companyID ?? user?.companyID;
+          const spID = ctx?.serviceProviderID ?? currentUser.serviceProviderID ?? user?.serviceProviderID;
+          if (companyID) {
+            setRows(all.filter((c: any) =>
+              c.companyID === companyID ||
+              (c.companyID == null && c.serviceProviderID === spID)
+            ));
           } else {
             setRows([]);
           }
@@ -304,6 +322,8 @@ export function ContractorManagement() {
               c.companyID === currentUser.companyID
           );
           setRows(filtered);
+        } else {
+          setRows(all);
         }
       } else {
         console.warn("User not found in /users mapping.");
@@ -474,7 +494,7 @@ export function ContractorManagement() {
       coAutocomplete: "",
     };
 
-    // Auto-set Service Provider and Company for MANAGER
+    // Auto-set Service Provider and Company based on role
     if (user?.role === "SERVICE_PROVIDER" && currentUserMapping) {
       baseFormData.serviceProviderID = currentUserMapping.serviceProviderID;
       baseFormData.companyID = currentUserMapping.companyID;
@@ -488,6 +508,12 @@ export function ContractorManagement() {
         baseFormData.spAutocomplete = ctx.serviceProviderName;
         baseFormData.coAutocomplete = ctx.companyName;
       }
+    } else if (user?.role === "COMPANY_ADMIN" || user?.role === "BRANCH_ADMIN") {
+      const ctx = getSidebarContext();
+      baseFormData.serviceProviderID = ctx?.serviceProviderID ?? user?.serviceProviderID ?? currentUserMapping?.serviceProviderID ?? null;
+      baseFormData.companyID = ctx?.companyID ?? user?.companyID ?? currentUserMapping?.companyID ?? null;
+      baseFormData.spAutocomplete = ctx?.serviceProviderName ?? currentUserMapping?.serviceProvider?.companyName ?? "";
+      baseFormData.coAutocomplete = ctx?.companyName ?? currentUserMapping?.company?.companyName ?? "";
     }
 
     setFormData(baseFormData);
@@ -584,13 +610,17 @@ export function ContractorManagement() {
     setSaving(true);
     setError(null);
 
-    // For MANAGER, ensure serviceProviderID and companyID are set from user mapping
+    // Ensure serviceProviderID and companyID are set from user mapping / sidebar context
     let finalServiceProviderID = formData.serviceProviderID;
     let finalCompanyID = formData.companyID;
 
     if (user?.role === "SERVICE_PROVIDER" && currentUserMapping) {
       finalServiceProviderID = currentUserMapping.serviceProviderID;
       finalCompanyID = currentUserMapping.companyID;
+    } else if ((user?.role === "COMPANY_ADMIN" || user?.role === "BRANCH_ADMIN") && !finalCompanyID) {
+      const ctx = getSidebarContext();
+      finalServiceProviderID = ctx?.serviceProviderID ?? user?.serviceProviderID ?? currentUserMapping?.serviceProviderID ?? null;
+      finalCompanyID = ctx?.companyID ?? user?.companyID ?? currentUserMapping?.companyID ?? null;
     }
 
     try {

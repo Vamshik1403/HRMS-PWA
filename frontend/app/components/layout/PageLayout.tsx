@@ -62,7 +62,7 @@ const sbSubIdle =
   "text-[#6b7280] hover:bg-[#eef2ff] hover:text-[#4f46e5] !bg-transparent";
 
 // Path groups for section active-state detection
-const SETUP_PATHS = ["/company", "/branches", "/devices", "/contractors", "/contractor-rates"];
+const SETUP_PATHS = ["/company", "/branches", "/devices", "/contractors", "/contractor-rates", "/contractor-payout"];
 const EMPLOYEE_PATHS = ["/departments", "/designations", "/manage-employees", "/employees-promotions", "/employee-memo", "/termination"];
 const PAYROLL_PATHS = ["/work-shifts", "/attendance-policy"];
 const SALARY_PATHS = ["/salary-advance", "/reimbursement", "/bonus-allocations", "/generate-salary"];
@@ -363,6 +363,7 @@ export function PageLayout({ children }: PageLayoutProps) {
                 <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/devices" className={cn(sbSubRow, isActiveLink('/devices', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Devices</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
                 <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/contractors" className={cn(sbSubRow, isActiveLink('/contractors', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Contractors</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
                 <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/contractor-rates" className={cn(sbSubRow, isActiveLink('/contractor-rates', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Contractor Rates</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
+                <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/contractor-payout" className={cn(sbSubRow, isActiveLink('/contractor-payout', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Contractor Payouts</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
               </SidebarMenuSub>
             </CollapsibleContent>
           </Collapsible>
