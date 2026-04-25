@@ -514,6 +514,16 @@ const DateCell = ({ punches, date, employeeID, formData, reportData, selectedCom
       );
     }
     
+    // Sandwich - show Absent + SW badge
+    if (status.type === "SANDWICH") {
+      return (
+        <td className="px-2 py-1 border-b min-w-[80px] text-center align-top">
+          <div className="inline-block px-2 py-0.5 bg-red-100 text-red-800 text-[9px] font-medium rounded-full mb-1">Absent</div>
+          <div className="inline-block px-2 py-0.5 bg-amber-100 text-amber-800 text-[9px] font-bold rounded-full">SW</div>
+        </td>
+      );
+    }
+
     return (
       <td className="px-2 py-1 border-b min-w-[80px] text-center align-top">
         <div className={`text-[10px] font-bold py-1 px-2 rounded ${statusClass}`}>{status.label}</div>
@@ -1458,9 +1468,20 @@ const employeeOptions = filteredEmployees.map((e: Employee) => ({
       const dateColumnsFull = buildDateRangeColumns();
       const filteredHols = holidaysData.filter((h: any) => h.companyID === selectedCompanyID && h.branchesID === selectedBranchID);
       const filteredLvs = leavesData.filter((l: any) => l.companyID === selectedCompanyID && l.branchesID === selectedBranchID && l.status === "Approved");
+
+      // Enrich emp-to-workshift mappings with full workShiftDay data from the already-fetched shiftsData,
+      // because the /manage-emp endpoint includes workShift but NOT workShiftDay.
+      const enrichedShifts = shifts.map(s => {
+        if (!s.workShift?.workShiftDay?.length) {
+          const fullShift = shiftsData.find((ws: WorkShift) => ws.id === s.workShiftID);
+          if (fullShift) return { ...s, workShift: fullShift };
+        }
+        return s;
+      });
+
       const newSandwichOverrides = new Map<number, Set<string>>();
       for (const row of rows) {
-        const swDates = detectSandwichDates(row, dateColumnsFull, shifts, filteredLvs, filteredHols, rostersData);
+        const swDates = detectSandwichDates(row, dateColumnsFull, enrichedShifts, filteredLvs, filteredHols, rostersData);
         if (swDates.size > 0) newSandwichOverrides.set(Number(row.employee.id), swDates);
       }
       setSandwichOverrides(newSandwichOverrides);
