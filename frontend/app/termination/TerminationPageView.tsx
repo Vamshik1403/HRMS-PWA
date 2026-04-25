@@ -69,7 +69,7 @@ const API = {
 
 export default function TerminationManagement() {
   const user = useCurrentUser();
-  const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN";
+  const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN" || user?.role === "BRANCH_ADMIN";
 
   const [terminations, setTerminations] = useState<Termination[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -137,15 +137,22 @@ export default function TerminationManagement() {
   };
 
   useEffect(() => {
-    fetchData();
-  }, []);
+    if (user) fetchData();
+  }, [user]);
 
   const runFetchEmp = (q: string) => {
     if (empTimerRef.current) clearTimeout(empTimerRef.current);
     empTimerRef.current = setTimeout(() => {
       if (q.length < 1) { setEmpList([]); return; }
       const ql = q.toLowerCase();
+      // Exclude employees who already have an active/approved termination
+      const activeTerminatedIds = new Set(
+        terminations
+          .filter((t) => t.exitStatus === "DRAFT" || t.exitStatus === "APPROVED" || t.exitStatus === "NOTICE_RUNNING")
+          .map((t) => t.employeeId)
+      );
       const filtered = employees.filter((e) => {
+        if (activeTerminatedIds.has(e.id)) return false;
         const name = `${e.employeeFirstName ?? ""} ${e.employeeLastName ?? ""}`.toLowerCase();
         const eid = (e.employeeID ?? "").toLowerCase();
         return name.includes(ql) || eid.includes(ql);
@@ -170,7 +177,7 @@ export default function TerminationManagement() {
     setSaving(true);
 
     try {
-      await fetch(API.terminations, {
+      const createRes = await fetch(API.terminations, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -182,6 +189,24 @@ export default function TerminationManagement() {
           noticeDays: form.noticePeriod ? Number(form.noticePeriod) : undefined,
         }),
       });
+
+      const created = await createRes.json();
+
+      // For admin roles, auto-approve immediately — no separate approval step needed
+      if (canManage && created?.id) {
+        const noticeDays = form.noticePeriod ? Number(form.noticePeriod) : 0;
+        const startDate = form.initiatedOn
+          ? new Date(form.initiatedOn)
+          : new Date();
+        startDate.setDate(startDate.getDate() + noticeDays);
+        const lastWorkingDay = startDate.toISOString().split("T")[0];
+
+        await fetch(`${API.terminations}/${created.id}/approve`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ lastWorkingDay }),
+        });
+      }
 
       setIsAdding(false);
       setEmpSearch("");
@@ -488,7 +513,7 @@ export default function TerminationManagement() {
                     </TableCell>
 
                     <TableCell className="text-right space-x-2">
-                      {t.exitStatus === "DRAFT" && (
+                      {t.exitStatus === "DRAFT" && !canManage && (
                         <>
                           <Button
                             size="sm"
@@ -505,6 +530,16 @@ export default function TerminationManagement() {
                             Cancel
                           </Button>
                         </>
+                      )}
+
+                      {t.exitStatus === "DRAFT" && canManage && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleCancel(t.id)}
+                        >
+                          Cancel
+                        </Button>
                       )}
 
                       {t.exitStatus === "APPROVED" && (

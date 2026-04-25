@@ -125,7 +125,7 @@ export function ManageHolidaysManagement() {
   })
   
   const user = useCurrentUser();
-  const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN";
+  const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN" || user?.role === "BRANCH_ADMIN";
 
   const [managerData, setManagerData] = useState<any>(null);
   const [empCreds, setEmpCreds] = useState<any>(null);
@@ -285,12 +285,16 @@ export function ManageHolidaysManagement() {
         return;
       }
 
-      // 🟠 COMPANY_ADMIN / BRANCH_ADMIN → filter by company
+      // 🟠 COMPANY_ADMIN / BRANCH_ADMIN → filter by company (branch admin also by branch)
       {
         const ctx = getSidebarContext();
         const companyID = ctx?.companyID ?? user?.companyID;
         if (companyID) {
-          setHolidays(holidaysData.filter((r: any) => r.companyID === companyID));
+          if (user?.role === "BRANCH_ADMIN" && user?.branchesID) {
+            setHolidays(holidaysData.filter((r: any) => r.companyID === companyID && r.branchesID === user.branchesID));
+          } else {
+            setHolidays(holidaysData.filter((r: any) => r.companyID === companyID));
+          }
           return;
         }
       }
@@ -336,6 +340,11 @@ export function ManageHolidaysManagement() {
         serviceProviderID = managerData?.serviceProviderID;
         companyID = managerData?.companyID;
         branchesID = formData.branchesID; // MANAGER can select branch
+      } else if (user?.role === "COMPANY_ADMIN" || user?.role === "BRANCH_ADMIN") {
+        const ctx = getSidebarContext();
+        serviceProviderID = ctx?.serviceProviderID ?? formData.serviceProviderID;
+        companyID = formData.companyID ?? ctx?.companyID ?? user?.companyID;
+        branchesID = formData.branchesID;
       } else if (user?.role === "EMPLOYEE") {
         serviceProviderID = empCreds?.serviceProviderID;
         companyID = empCreds?.companyID;
@@ -414,7 +423,7 @@ export function ManageHolidaysManagement() {
       setFormData({
         ...baseForm,
         serviceProviderID: ctx?.serviceProviderID ?? undefined,
-        companyID: ctx?.companyID ?? undefined,
+        companyID: ctx?.companyID ?? user?.companyID ?? undefined,
         serviceProvider: ctx?.serviceProviderName ?? "",
         companyName: ctx?.companyName ?? "",
       });
@@ -572,7 +581,8 @@ export function ManageHolidaysManagement() {
         companyIdToUse = empCreds?.companyID;
       } else {
         // COMPANY_ADMIN / BRANCH_ADMIN
-        companyIdToUse = formData.companyID;
+        const ctx = getSidebarContext();
+        companyIdToUse = formData.companyID ?? ctx?.companyID ?? user?.companyID;
       }
 
       if (!companyIdToUse) return [];
@@ -647,8 +657,8 @@ export function ManageHolidaysManagement() {
 
                      
 
-                    {/* Branch - For SUPERADMIN and MANAGER */}
-                    {(user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER") && (
+                    {/* Branch - For SUPERADMIN, MANAGER, and COMPANY_ADMIN */}
+                    {(user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN") && (
                       <div className={`${user?.role === "SUPERADMIN" ? "col-span-1" : "col-span-3"}`}>
                         <SearchSuggestInput
                           label="Branch Name"
@@ -756,8 +766,6 @@ export function ManageHolidaysManagement() {
             <Table className="w-full">
               <TableHeader>
                 <TableRow>
-                  <TableHead>Service Provider</TableHead>
-                  <TableHead>Company Name</TableHead>
                   <TableHead>Branch Name</TableHead>
                   <TableHead>Holiday Name</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
@@ -766,7 +774,7 @@ export function ManageHolidaysManagement() {
               <TableBody>
                 {isLoading ? (
                   <TableRow>
-                    <TableCell colSpan={5} className="text-center py-8 text-gray-500">
+                    <TableCell colSpan={4} className="text-center py-8 text-gray-500">
                       <div className="flex flex-col items-center gap-2">
                         <Icon icon="mdi:loading" className="w-8 h-8 animate-spin text-gray-400" />
                         <p>Loading holidays...</p>
@@ -775,7 +783,7 @@ export function ManageHolidaysManagement() {
                   </TableRow>
                 ) : filteredHolidays.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={5} className="text-center py-8 text-gray-500">
+                    <TableCell colSpan={4} className="text-center py-8 text-gray-500">
                       <div className="flex flex-col items-center gap-2">
                         <Icon icon="mdi:calendar-star" className="w-12 h-12 text-gray-300" />
                         <p>No holidays found</p>
@@ -789,8 +797,6 @@ export function ManageHolidaysManagement() {
                 ) : (
                   filteredHolidays.map((holiday) => (
                     <TableRow key={holiday.id}>
-                      <TableCell>{holiday.serviceProvider || "-"}</TableCell>
-                      <TableCell>{holiday.companyName || "-"}</TableCell>
                       <TableCell>{holiday.branchName || "-"}</TableCell>
                       <TableCell>{holiday.holidayName}</TableCell>
                       <TableCell className="text-right">

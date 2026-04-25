@@ -49,6 +49,8 @@ interface Employee {
   workShiftID?: number | null;
   contractorID?: number | null;
   designationID?: number | null;
+  empContractor?: { contractorID: number }[];
+  empWorkShift?: { workShiftID: number }[];
 }
 interface Workshift {
   id: number;
@@ -384,6 +386,11 @@ export function ContractorPayoutsManagement() {
   const [selectedShifts, setSelectedShifts] = useState<Workshift[]>([]);
   const [allShiftsSelected, setAllShiftsSelected] = useState(false);
 
+  // Report type & period
+  const [reportType, setReportType] = useState<string>("");
+  const [periodFrom, setPeriodFrom] = useState<string>("");
+  const [periodTo, setPeriodTo] = useState<string>("");
+
   // Rate cards & UI state
   const [rateCards, setRateCards] = useState<RateCard[]>([]);
   const [rateCardLoading, setRateCardLoading] = useState(false);
@@ -407,20 +414,44 @@ export function ContractorPayoutsManagement() {
       fetchJSON<Workshift[]>(API_BASE.workshifts),
     ])
       .then(([contractors, branches, departments, designations, employees, workshifts]) => {
-        let filteredContractors = contractors;
         const ctx = getSidebarContext();
-        if ((user.role === "SUPERADMIN" || user.role === "SERVICE_PROVIDER") && ctx?.companyID) {
-          filteredContractors = (contractors as Contractor[]).filter(
-            (c: any) =>
-              c.companyID === ctx.companyID ||
-              (c.companyID == null && c.serviceProviderID === ctx.serviceProviderID)
+        const companyID = ctx?.companyID;
+        const spID = ctx?.serviceProviderID;
+
+        // Filter contractors & branches by company context
+        let filteredContractors = contractors as Contractor[];
+        let filteredBranches = branches as Branch[];
+
+        if (companyID) {
+          filteredContractors = filteredContractors.filter(
+            (c: any) => c.companyID === companyID
           );
+          filteredBranches = filteredBranches.filter((b) => b.companyID === companyID);
+        } else if (spID) {
+          filteredContractors = filteredContractors.filter(
+            (c: any) => c.serviceProviderID === spID
+          );
+          filteredBranches = filteredBranches.filter((b) => (b as any).serviceProviderID === spID);
         }
-        setAllContractors(filteredContractors as Contractor[]);
-        setAllBranches(branches as Branch[]);
+
+        // Filter employees only by contractor set (company scoping via contractor)
+        // The contractorID scalar is often null; use empContractor junction array instead
+        const contractorIDSet = new Set(filteredContractors.map((c) => c.id));
+        const filteredEmps = (employees as Employee[]).filter(
+          (e) =>
+            (e.contractorID != null && contractorIDSet.has(e.contractorID)) ||
+            (e.empContractor ?? []).some((ec) => contractorIDSet.has(ec.contractorID))
+        );
+
+        // Keep departments, designations, and workshifts unfiltered — they are scoped
+        // naturally by the cascade (branch → dept → desig → emp) and pre-filtering
+        // them breaks employee lookup when designation records don't perfectly trace
+        // back through the branch chain (duplicated data scenario).
+        setAllContractors(filteredContractors);
+        setAllBranches(filteredBranches);
         setAllDepartments(departments as Department[]);
         setAllDesignations(designations as Designation[]);
-        setAllEmployees(employees as Employee[]);
+        setAllEmployees(filteredEmps);
         setAllWorkshifts(workshifts as Workshift[]);
       })
       .catch(() => toast.error("Failed to load data"));
@@ -482,7 +513,17 @@ export function ContractorPayoutsManagement() {
     branchSuggest.setQuery(b.branchName || "");
     branchSuggest.setOpen(false);
     resetFromDept();
-    setDeptOptions(allDepartments.filter((d) => d.branchesID === b.id));
+    // Deduplicate departments by name — multiple DB records can share the same name
+    const raw = allDepartments.filter((d) => d.branchesID === b.id);
+    const seen = new Set<string>();
+    setDeptOptions(
+      raw.filter((d) => {
+        const key = (d.departmentName || "").toLowerCase().trim();
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      })
+    );
   };
 
   // ── Departments ──
@@ -491,14 +532,32 @@ export function ContractorPayoutsManagement() {
     [allDeptsSelected, deptOptions, selectedDepts]
   );
 
-  const applyDeptChange = (depts: Department[], allSel: boolean) => {
+  const applyDeptChange = (depts: Department[], allSel: boolean, branchForExpand?: Branch | null) => {
     setSelectedDepts(depts);
     setAllDeptsSelected(allSel);
     resetFromDesig();
-    const ids = allSel ? deptOptions.map((d) => d.id) : depts.map((d) => d.id);
-    if (ids.length) {
-      setDesigOptions(allDesignations.filter((d) => d.departmentID != null && ids.includes(d.departmentID)));
-    }
+    const selectedNames = new Set(
+      (allSel ? deptOptions : depts).map((d) => (d.departmentName || "").toLowerCase().trim())
+    );
+    if (!selectedNames.size) return;
+    // Expand: find ALL dept IDs with matching names in this branch (handles duplicate DB records)
+    const branchID = (branchForExpand ?? selectedBranch)?.id;
+    const allMatchingDeptIDs = allDepartments
+      .filter((d) => d.branchesID === branchID && selectedNames.has((d.departmentName || "").toLowerCase().trim()))
+      .map((d) => d.id);
+    const rawDesigs = allDesignations.filter(
+      (d) => d.departmentID != null && allMatchingDeptIDs.includes(d.departmentID)
+    );
+    // Deduplicate designations by name
+    const seenD = new Set<string>();
+    setDesigOptions(
+      rawDesigs.filter((d) => {
+        const key = (d.designation || "").toLowerCase().trim();
+        if (seenD.has(key)) return false;
+        seenD.add(key);
+        return true;
+      })
+    );
   };
   const handleAddDept = (d: Department) => {
     if (!selectedDepts.find((x) => x.id === d.id)) applyDeptChange([...selectedDepts, d], false);
@@ -517,14 +576,26 @@ export function ContractorPayoutsManagement() {
     setSelectedDesigs(desigs);
     setAllDesigSelected(allSel);
     resetFromEmp();
-    const ids = allSel ? desigOptions.map((d) => d.id) : desigs.map((d) => d.id);
-    if (ids.length) {
-      setEmpOptions(
-        allEmployees.filter(
-          (e) => e.contractorID === selectedContractor?.id && e.designationID != null && ids.includes(e.designationID)
-        )
-      );
-    }
+    const selectedNames = new Set(
+      (allSel ? desigOptions : desigs).map((d) => (d.designation || "").toLowerCase().trim())
+    );
+    if (!selectedNames.size) return;
+    // Expand: find ALL desig IDs with matching names (handles duplicate DB records)
+    const allMatchingDesigIDs = allDesignations
+      .filter((d) => selectedNames.has((d.designation || "").toLowerCase().trim()))
+      .map((d) => d.id);
+    const selectedContractorID = selectedContractor?.id;
+  setEmpOptions(
+      allEmployees.filter(
+        (e) =>
+          e.designationID != null &&
+          allMatchingDesigIDs.includes(e.designationID) &&
+          (
+            e.contractorID === selectedContractorID ||
+            (e.empContractor ?? []).some((ec) => ec.contractorID === selectedContractorID)
+          )
+      )
+    );
   };
   const handleAddDesig = (d: Designation) => {
     if (!selectedDesigs.find((x) => x.id === d.id)) applyDesigChange([...selectedDesigs, d], false);
@@ -544,9 +615,24 @@ export function ContractorPayoutsManagement() {
     setAllEmpsSelected(allSel);
     resetFromShift();
     const list = allSel ? empOptions : emps;
-    const shiftIDSet = new Set(list.map((e) => e.workShiftID).filter(Boolean) as number[]);
+    // workShiftID scalar is often null; also check empWorkShift junction array
+    const shiftIDSet = new Set<number>();
+    list.forEach((e) => {
+      if (e.workShiftID != null) shiftIDSet.add(e.workShiftID);
+      (e.empWorkShift ?? []).forEach((ew) => shiftIDSet.add(ew.workShiftID));
+    });
     if (shiftIDSet.size) {
-      setShiftOptions(allWorkshifts.filter((w) => shiftIDSet.has(w.id)));
+      const rawShifts = allWorkshifts.filter((w) => shiftIDSet.has(w.id));
+      // Deduplicate workshifts by name
+      const seenS = new Set<string>();
+      setShiftOptions(
+        rawShifts.filter((w) => {
+          const key = (w.workShiftName || "").toLowerCase().trim();
+          if (seenS.has(key)) return false;
+          seenS.add(key);
+          return true;
+        })
+      );
     }
   };
   const handleAddEmp = (e: Employee) => {
@@ -592,6 +678,10 @@ export function ContractorPayoutsManagement() {
   // ── Save ──
   const handleSave = async () => {
     if (!selectedContractor) { toast.error("Please select a contractor first"); return; }
+    if (!reportType) { toast.error("Please select a report type"); return; }
+    if (!periodFrom) { toast.error("Please select a period from date"); return; }
+    if (!periodTo) { toast.error("Please select a period to date"); return; }
+    if (periodFrom > periodTo) { toast.error("Period From date must be before Period To date"); return; }
     setSaving(true);
     try {
       const deptIDs = getEffectiveDeptIDs();
@@ -618,6 +708,9 @@ export function ContractorPayoutsManagement() {
       setSelectedContractor(null);
       contrSuggest.setQuery("");
       resetFromBranch();
+      setReportType("");
+      setPeriodFrom("");
+      setPeriodTo("");
     } catch (err: any) {
       toast.error(err?.message || "Failed to save");
     } finally {
@@ -751,6 +844,48 @@ export function ContractorPayoutsManagement() {
                 disabled={!selectedEmps.length && !allEmpsSelected}
                 disabledPlaceholder="Select employee(s) first"
               />
+
+              {/* 7. Report Type */}
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-gray-500 block">
+                  Report Type <span className="text-red-500 ml-0.5">*</span>
+                </label>
+                <select
+                  value={reportType}
+                  onChange={(e) => setReportType(e.target.value)}
+                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                >
+                  <option value="">Select report type…</option>
+                  <option value="working_hours_summary">Working Hours Summary Report</option>
+                  <option value="payout_report">Payout Report</option>
+                </select>
+              </div>
+
+              {/* 8. Period From */}
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-gray-500 block">
+                  Period From <span className="text-red-500 ml-0.5">*</span>
+                </label>
+                <input
+                  type="date"
+                  value={periodFrom}
+                  onChange={(e) => setPeriodFrom(e.target.value)}
+                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                />
+              </div>
+
+              {/* 9. Period To */}
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-gray-500 block">
+                  Period To <span className="text-red-500 ml-0.5">*</span>
+                </label>
+                <input
+                  type="date"
+                  value={periodTo}
+                  onChange={(e) => setPeriodTo(e.target.value)}
+                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                />
+              </div>
 
             </div>
 

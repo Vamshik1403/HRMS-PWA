@@ -337,6 +337,25 @@ async function resolveLabelsForEdit(
 
 const uid = () => Math.random().toString(36).slice(2, 10);
 
+function upsertHistoryEntry<T extends { _localId: string; id?: ID; effectFrom?: string }>(
+  items: T[],
+  newEntry: T,
+  isSameEntry: (item: T) => boolean,
+) {
+  const existingIndex = items.findIndex((item) => isSameEntry(item) && !item.effectFrom);
+  if (existingIndex === -1) return [...items, newEntry];
+
+  const existing = items[existingIndex];
+  const merged = {
+    ...existing,
+    ...newEntry,
+    id: existing.id,
+    _localId: existing._localId,
+  };
+
+  return [...items.slice(0, existingIndex), ...items.slice(existingIndex + 1), merged];
+}
+
 /* =========================
    Component
    ========================= */
@@ -346,8 +365,9 @@ export function ManageEmployeesManagement() {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [terminationMap, setTerminationMap] = useState<Record<number, { daysLeft: number; lastWorkingDay: string }>>({});
   const user = useCurrentUser();
-  const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN";
+  const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN" || user?.role === "BRANCH_ADMIN";
   const isEmployee = user?.role === "EMPLOYEE";
 
   // UI
@@ -634,14 +654,19 @@ export function ManageEmployeesManagement() {
   const [currentUserMapping, setCurrentUserMapping] = useState<any>(null);
 
   useEffect(() => {
-    if (user?.role !== "SERVICE_PROVIDER") return;
+    if (user?.role !== "SERVICE_PROVIDER" && user?.role !== "BRANCH_ADMIN") return;
 
-    (async () => {
-      const res = await fetch("/backend/users");
-      const list = await res.json();
-      const me = list.find((u: any) => u.username === user.username);
-      setCurrentUserMapping(me || null);
-    })();
+    if (user?.role === "SERVICE_PROVIDER") {
+      (async () => {
+        const res = await fetch("/backend/users");
+        const list = await res.json();
+        const me = list.find((u: any) => u.username === user.username);
+        setCurrentUserMapping(me || null);
+      })();
+    } else if (user?.role === "BRANCH_ADMIN") {
+      // BRANCH_ADMIN: user object from localStorage already has full details
+      setCurrentUserMapping(user);
+    }
   }, [user]);
 
   useEffect(() => {
@@ -653,6 +678,15 @@ export function ManageEmployeesManagement() {
         branchesID: null,
         coAutocomplete: currentUserMapping.companyName ?? "",
         brAutocomplete: "",
+      }));
+    } else if (user?.role === "BRANCH_ADMIN" && currentUserMapping) {
+      setFormData(p => ({
+        ...p,
+        serviceProviderID: currentUserMapping.serviceProviderID ?? null,
+        companyID: currentUserMapping.companyID ?? null,
+        branchesID: currentUserMapping.branchesID ?? null,
+        coAutocomplete: currentUserMapping.company?.companyName ?? currentUserMapping.companyName ?? "",
+        brAutocomplete: currentUserMapping.branches?.branchName ?? currentUserMapping.branchName ?? "",
       }));
     }
   }, [user, currentUserMapping]);
@@ -776,6 +810,28 @@ export function ManageEmployeesManagement() {
   try {
     setLoading(true);
     const all = await fetchJSONSafe<ManageEmpRead[]>(API.manageEmp);
+    
+    // Fetch active terminations to show offboarding countdown
+    try {
+      const termRes = await fetch("/backend/termination");
+      const termData = await termRes.json();
+      const terminations: any[] = Array.isArray(termData) ? termData : termData?.data ?? [];
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const newTermMap: Record<number, { daysLeft: number; lastWorkingDay: string }> = {};
+      terminations.forEach((t: any) => {
+        if (t.exitStatus === "APPROVED" && t.lastWorkingDay && t.employeeId) {
+          const lwd = new Date(t.lastWorkingDay);
+          lwd.setHours(0, 0, 0, 0);
+          const daysLeft = Math.ceil((lwd.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+          // Include all approved terminations: daysLeft > 0 means countdown, <= 0 means inactive now
+          newTermMap[t.employeeId] = { daysLeft, lastWorkingDay: lwd.toLocaleDateString() };
+        }
+      });
+      setTerminationMap(newTermMap);
+    } catch {
+      // Non-critical, swallow error
+    }
     
     // For each employee, fetch both device mappings
     const enrichedEmployees = await Promise.all(
@@ -1328,6 +1384,10 @@ const runFetchCombinedDev = (q: string) => {
         let all = await fetchJSONSafe<BR[]>(API.branches, ctrl.signal);
 
         all = all.filter(b => b.companyID === companyID);
+        // 🔒 BRANCH_ADMIN — restrict to their own branch only
+        if (user?.role === "BRANCH_ADMIN" && user?.branchesID) {
+          all = all.filter(b => Number(b.id) === Number(user.branchesID));
+        }
 
         const ql = query.toLowerCase();
         const filtered = all.filter(b =>
@@ -1527,6 +1587,7 @@ const addCombinedDevMap = () => {
       _localId: uid(),
       designationID: null,
       _desgAutocomplete: "",
+      effectFrom: today,
     }]
   }));
 
@@ -1548,7 +1609,7 @@ const addCombinedDevMap = () => {
     setFormData(p => ({ ...p, empDesignationForm: p.empDesignationForm.map(x => x._localId === lid ? { ...x, ...patch } : x) }));
 
   // Department multi-entry helpers
-  const addEmpDepartment = () => setFormData(p => ({ ...p, empDepartmentForm: [...p.empDepartmentForm, { _localId: uid(), departmentNameID: null, _deptAutocomplete: "" }] }));
+  const addEmpDepartment = () => setFormData(p => ({ ...p, empDepartmentForm: [...p.empDepartmentForm, { _localId: uid(), departmentNameID: null, _deptAutocomplete: "", effectFrom: today }] }));
   const removeEmpDepartment = (lid: string) => setFormData(p => {
     const updated = p.empDepartmentForm.filter(x => x._localId !== lid);
     const last = updated[updated.length - 1];
@@ -1561,7 +1622,7 @@ const addCombinedDevMap = () => {
   });
 
   // Branch multi-entry helpers
-  const addEmpBranch = () => setFormData(p => ({ ...p, empBranchForm: [...p.empBranchForm, { _localId: uid(), branchesID: null, _brAutocomplete: "" }] }));
+  const addEmpBranch = () => setFormData(p => ({ ...p, empBranchForm: [...p.empBranchForm, { _localId: uid(), branchesID: null, _brAutocomplete: "", effectFrom: today }] }));
   const removeEmpBranch = (lid: string) => setFormData(p => {
     const updated = p.empBranchForm.filter(x => x._localId !== lid);
     const last = updated[updated.length - 1];
@@ -1578,7 +1639,7 @@ const addCombinedDevMap = () => {
     if (!stagingET.employmentType) return;
     const newEntry: EmpEmploymentTypeForm = { _localId: uid(), employmentType: stagingET.employmentType, effectFrom: stagingET.effectFrom };
     setFormData(p => {
-      const updated = [...p.empEmploymentTypeForm, newEntry];
+      const updated = upsertHistoryEntry(p.empEmploymentTypeForm, newEntry, (item) => item.employmentType === newEntry.employmentType);
       const last = updated[updated.length - 1];
       return { ...p, empEmploymentTypeForm: updated, promotion: { ...p.promotion, employmentType: last?.employmentType ?? "" } };
     });
@@ -1600,7 +1661,11 @@ const addCombinedDevMap = () => {
     if (!stagingES.employmentStatus) return;
     const newEntry: EmpEmploymentStatusForm = { _localId: uid(), employmentStatus: stagingES.employmentStatus, probationPeriod: stagingES.probationPeriod, effectFrom: stagingES.effectFrom };
     setFormData(p => {
-      const updated = [...p.empEmploymentStatusForm, newEntry];
+      const updated = upsertHistoryEntry(
+        p.empEmploymentStatusForm,
+        newEntry,
+        (item) => item.employmentStatus === newEntry.employmentStatus && item.probationPeriod === newEntry.probationPeriod,
+      );
       const last = updated[updated.length - 1];
       return { ...p, empEmploymentStatusForm: updated, promotion: { ...p.promotion, employmentStatus: last?.employmentStatus ?? "", probationPeriod: last?.probationPeriod ?? "" } };
     });
@@ -1618,7 +1683,7 @@ const addCombinedDevMap = () => {
   });
 
   // Work Shift multi-entry helpers
-  const addEmpWorkShift = () => setFormData(p => ({ ...p, empWorkShiftForm: [...p.empWorkShiftForm, { _localId: uid(), workShiftID: null, _wsAutocomplete: "" }] }));
+  const addEmpWorkShift = () => setFormData(p => ({ ...p, empWorkShiftForm: [...p.empWorkShiftForm, { _localId: uid(), workShiftID: null, _wsAutocomplete: "", effectFrom: today }] }));
   const removeEmpWorkShift = (lid: string) => setFormData(p => {
     const updated = p.empWorkShiftForm.filter(x => x._localId !== lid);
     const last = updated[updated.length - 1];
@@ -1631,7 +1696,7 @@ const addCombinedDevMap = () => {
   });
 
   // Leave Policy multi-entry helpers
-  const addEmpLeavePolicy = () => setFormData(p => ({ ...p, empLeavePolicyForm: [...p.empLeavePolicyForm, { _localId: uid(), leavePolicyID: null, _lpAutocomplete: "" }] }));
+  const addEmpLeavePolicy = () => setFormData(p => ({ ...p, empLeavePolicyForm: [...p.empLeavePolicyForm, { _localId: uid(), leavePolicyID: null, _lpAutocomplete: "", effectFrom: today }] }));
   const removeEmpLeavePolicy = (lid: string) => setFormData(p => {
     const updated = p.empLeavePolicyForm.filter(x => x._localId !== lid);
     const last = updated[updated.length - 1];
@@ -1644,7 +1709,7 @@ const addCombinedDevMap = () => {
   });
 
   // Attendance Policy multi-entry helpers
-  const addEmpAttendancePolicy = () => setFormData(p => ({ ...p, empAttendancePolicyForm: [...p.empAttendancePolicyForm, { _localId: uid(), attendancePolicyID: null, _apAutocomplete: "" }] }));
+  const addEmpAttendancePolicy = () => setFormData(p => ({ ...p, empAttendancePolicyForm: [...p.empAttendancePolicyForm, { _localId: uid(), attendancePolicyID: null, _apAutocomplete: "", effectFrom: today }] }));
   const removeEmpAttendancePolicy = (lid: string) => setFormData(p => {
     const updated = p.empAttendancePolicyForm.filter(x => x._localId !== lid);
     const last = updated[updated.length - 1];
@@ -1657,7 +1722,7 @@ const addCombinedDevMap = () => {
   });
 
   // Contractor multi-entry helpers
-  const addEmpContractor = () => setFormData(p => ({ ...p, empContractorForm: [...p.empContractorForm, { _localId: uid(), contractorID: null, _contrAutocomplete: "" }] }));
+  const addEmpContractor = () => setFormData(p => ({ ...p, empContractorForm: [...p.empContractorForm, { _localId: uid(), contractorID: null, _contrAutocomplete: "", effectFrom: today }] }));
   const removeEmpContractor = (lid: string) => setFormData(p => {
     const updated = p.empContractorForm.filter(x => x._localId !== lid);
     const last = updated[updated.length - 1];
@@ -1874,11 +1939,16 @@ const addCombinedDevMap = () => {
       case "department":
         setFormData((p) => ({
           ...p,
-          empDepartmentForm: [...p.empDepartmentForm, {
-            _localId: uid(),
-            departmentNameID: item.id,
-            _deptAutocomplete: item.departmentName ?? "",
-          }],
+          empDepartmentForm: upsertHistoryEntry(
+            p.empDepartmentForm,
+            {
+              _localId: uid(),
+              departmentNameID: item.id,
+              _deptAutocomplete: item.departmentName ?? "",
+              effectFrom: today,
+            },
+            (entry) => entry.departmentNameID === item.id,
+          ),
           departmentNameID: item.id,
           deptAutocomplete: item.departmentName ?? "",
           promotion: { ...p.promotion, departmentNameID: item.id },
@@ -1887,21 +1957,31 @@ const addCombinedDevMap = () => {
       case "designation":
         setFormData((p) => ({
           ...p,
-          empDesignationForm: [...p.empDesignationForm, {
-            _localId: uid(),
-            designationID: item.id,
-            _desgAutocomplete: item.designation ?? "",
-          }],
+          empDesignationForm: upsertHistoryEntry(
+            p.empDesignationForm,
+            {
+              _localId: uid(),
+              designationID: item.id,
+              _desgAutocomplete: item.designation ?? "",
+              effectFrom: today,
+            },
+            (entry) => entry.designationID === item.id,
+          ),
         }));
         break;
       case "contractor":
         setFormData((p) => ({
           ...p,
-          empContractorForm: [...p.empContractorForm, {
-            _localId: uid(),
-            contractorID: item.id,
-            _contrAutocomplete: item.contractorName ?? "",
-          }],
+          empContractorForm: upsertHistoryEntry(
+            p.empContractorForm,
+            {
+              _localId: uid(),
+              contractorID: item.id,
+              _contrAutocomplete: item.contractorName ?? "",
+              effectFrom: today,
+            },
+            (entry) => entry.contractorID === item.id,
+          ),
           contractorID: item.id,
           contrAutocomplete: item.contractorName ?? "",
         }));
@@ -1955,11 +2035,16 @@ const addCombinedDevMap = () => {
         case "department":
           setFormData((p) => ({
             ...p,
-            empDepartmentForm: [...p.empDepartmentForm, {
-              _localId: uid(),
-              departmentNameID: item.id,
-              _deptAutocomplete: item.departmentName ?? quickAddValue,
-            }],
+            empDepartmentForm: upsertHistoryEntry(
+              p.empDepartmentForm,
+              {
+                _localId: uid(),
+                departmentNameID: item.id,
+                _deptAutocomplete: item.departmentName ?? quickAddValue,
+                effectFrom: today,
+              },
+              (entry) => entry.departmentNameID === item.id,
+            ),
             departmentNameID: item.id,
             deptAutocomplete: item.departmentName ?? quickAddValue,
             promotion: { ...p.promotion, departmentNameID: item.id },
@@ -1968,21 +2053,31 @@ const addCombinedDevMap = () => {
         case "designation":
           setFormData((p) => ({
             ...p,
-            empDesignationForm: [...p.empDesignationForm, {
-              _localId: uid(),
-              designationID: item.id,
-              _desgAutocomplete: item.designation ?? quickAddValue,
-            }],
+            empDesignationForm: upsertHistoryEntry(
+              p.empDesignationForm,
+              {
+                _localId: uid(),
+                designationID: item.id,
+                _desgAutocomplete: item.designation ?? quickAddValue,
+                effectFrom: today,
+              },
+              (entry) => entry.designationID === item.id,
+            ),
           }));
           break;
         case "contractor":
           setFormData((p) => ({
             ...p,
-            empContractorForm: [...p.empContractorForm, {
-              _localId: uid(),
-              contractorID: item.id,
-              _contrAutocomplete: item.contractorName ?? quickAddValue,
-            }],
+            empContractorForm: upsertHistoryEntry(
+              p.empContractorForm,
+              {
+                _localId: uid(),
+                contractorID: item.id,
+                _contrAutocomplete: item.contractorName ?? quickAddValue,
+                effectFrom: today,
+              },
+              (entry) => entry.contractorID === item.id,
+            ),
             contractorID: item.id,
             contrAutocomplete: item.contractorName ?? quickAddValue,
           }));
@@ -2137,39 +2232,40 @@ const addCombinedDevMap = () => {
         .map(d => ({
           id: d.id,
           designationID: d.designationID!,
+          effectFrom: d.effectFrom || undefined,
         }));
 
       const empBranches = formData.empBranchForm
         .filter(b => b.branchesID != null)
-        .map(b => ({ id: b.id, branchesID: b.branchesID! }));
+        .map(b => ({ id: b.id, branchesID: b.branchesID!, effectFrom: b.effectFrom || undefined }));
 
       const empDepartments = formData.empDepartmentForm
         .filter(d => d.departmentNameID != null)
-        .map(d => ({ id: d.id, departmentNameID: d.departmentNameID! }));
+        .map(d => ({ id: d.id, departmentNameID: d.departmentNameID!, effectFrom: d.effectFrom || undefined }));
 
       const empEmploymentTypes = formData.empEmploymentTypeForm
         .filter(t => t.employmentType)
-        .map(t => ({ id: t.id, employmentType: t.employmentType }));
+        .map(t => ({ id: t.id, employmentType: t.employmentType, effectFrom: t.effectFrom || undefined }));
 
       const empEmploymentStatuses = formData.empEmploymentStatusForm
         .filter(s => s.employmentStatus)
-        .map(s => ({ id: s.id, employmentStatus: s.employmentStatus, probationPeriod: s.probationPeriod || undefined }));
+        .map(s => ({ id: s.id, employmentStatus: s.employmentStatus, probationPeriod: s.probationPeriod || undefined, effectFrom: s.effectFrom || undefined }));
 
       const empWorkShifts = formData.empWorkShiftForm
         .filter(w => w.workShiftID != null)
-        .map(w => ({ id: w.id, workShiftID: w.workShiftID! }));
+        .map(w => ({ id: w.id, workShiftID: w.workShiftID!, effectFrom: w.effectFrom || undefined }));
 
       const empAttendancePolicies = formData.empAttendancePolicyForm
         .filter(a => a.attendancePolicyID != null)
-        .map(a => ({ id: a.id, attendancePolicyID: a.attendancePolicyID! }));
+        .map(a => ({ id: a.id, attendancePolicyID: a.attendancePolicyID!, effectFrom: a.effectFrom || undefined }));
 
       const empLeavePolicies = formData.empLeavePolicyForm
         .filter(l => l.leavePolicyID != null)
-        .map(l => ({ id: l.id, leavePolicyID: l.leavePolicyID! }));
+        .map(l => ({ id: l.id, leavePolicyID: l.leavePolicyID!, effectFrom: l.effectFrom || undefined }));
 
       const empContractors = formData.empContractorForm
         .filter(c => c.contractorID != null)
-        .map(c => ({ id: c.id, contractorID: c.contractorID! }));
+        .map(c => ({ id: c.id, contractorID: c.contractorID!, effectFrom: c.effectFrom || undefined }));
 
             const eduRemaining = new Set(edu.filter(e => e.id != null).map(e => e.id as number));
       const expRemaining = new Set(exp.filter(x => x.id != null).map(x => x.id as number));
@@ -2418,6 +2514,7 @@ const addCombinedDevMap = () => {
       _localId: uid(),
       designationID: d.designationID ?? null,
       _desgAutocomplete: d.designation?.designation ?? "",
+      effectFrom: d.effectFrom ?? "",
     }));
 
     const latestPromotion = (freshData as any).empPromotion && (freshData as any).empPromotion.length
@@ -2517,14 +2614,14 @@ const addCombinedDevMap = () => {
       bankDetailsForm,
       empDesignationForm,
       // Multi-entry form arrays (populated from junction tables)
-      empDepartmentForm: (freshData.empDepartment ?? []).map((d: any) => ({ id: d.id, _localId: uid(), departmentNameID: d.departmentNameID ?? null, _deptAutocomplete: d.department?.departmentName ?? "" })),
-      empBranchForm: (freshData.empBranch ?? []).map((d: any) => ({ id: d.id, _localId: uid(), branchesID: d.branchesID ?? null, _brAutocomplete: d.branch?.branchName ?? "" })),
-      empEmploymentTypeForm: (freshData.empEmploymentType ?? []).map((d: any) => ({ id: d.id, _localId: uid(), employmentType: d.employmentType ?? "" })),
-      empEmploymentStatusForm: (freshData.empEmploymentStatus ?? []).map((d: any) => ({ id: d.id, _localId: uid(), employmentStatus: d.employmentStatus ?? "", probationPeriod: d.probationPeriod ?? "" })),
-      empWorkShiftForm: (freshData.empWorkShift ?? []).map((d: any) => ({ id: d.id, _localId: uid(), workShiftID: d.workShiftID ?? null, _wsAutocomplete: d.workShift?.workShiftName ?? "" })),
-      empLeavePolicyForm: (freshData.empLeavePolicy ?? []).map((d: any) => ({ id: d.id, _localId: uid(), leavePolicyID: d.leavePolicyID ?? null, _lpAutocomplete: d.leavePolicy?.leavePolicyName ?? "" })),
-      empAttendancePolicyForm: (freshData.empAttendancePolicy ?? []).map((d: any) => ({ id: d.id, _localId: uid(), attendancePolicyID: d.attendancePolicyID ?? null, _apAutocomplete: d.attendancePolicy?.attendancePolicyName ?? "" })),
-      empContractorForm: (freshData.empContractor ?? []).map((d: any) => ({ id: d.id, _localId: uid(), contractorID: d.contractorID ?? null, _contrAutocomplete: d.contractor?.contractorName ?? "" })),
+      empDepartmentForm: (freshData.empDepartment ?? []).map((d: any) => ({ id: d.id, _localId: uid(), departmentNameID: d.departmentNameID ?? null, _deptAutocomplete: d.department?.departmentName ?? "", effectFrom: d.effectFrom ?? "" })),
+      empBranchForm: (freshData.empBranch ?? []).map((d: any) => ({ id: d.id, _localId: uid(), branchesID: d.branchesID ?? null, _brAutocomplete: d.branch?.branchName ?? "", effectFrom: d.effectFrom ?? "" })),
+      empEmploymentTypeForm: (freshData.empEmploymentType ?? []).map((d: any) => ({ id: d.id, _localId: uid(), employmentType: d.employmentType ?? "", effectFrom: d.effectFrom ?? "" })),
+      empEmploymentStatusForm: (freshData.empEmploymentStatus ?? []).map((d: any) => ({ id: d.id, _localId: uid(), employmentStatus: d.employmentStatus ?? "", probationPeriod: d.probationPeriod ?? "", effectFrom: d.effectFrom ?? "" })),
+      empWorkShiftForm: (freshData.empWorkShift ?? []).map((d: any) => ({ id: d.id, _localId: uid(), workShiftID: d.workShiftID ?? null, _wsAutocomplete: d.workShift?.workShiftName ?? "", effectFrom: d.effectFrom ?? "" })),
+      empLeavePolicyForm: (freshData.empLeavePolicy ?? []).map((d: any) => ({ id: d.id, _localId: uid(), leavePolicyID: d.leavePolicyID ?? null, _lpAutocomplete: d.leavePolicy?.leavePolicyName ?? "", effectFrom: d.effectFrom ?? "" })),
+      empAttendancePolicyForm: (freshData.empAttendancePolicy ?? []).map((d: any) => ({ id: d.id, _localId: uid(), attendancePolicyID: d.attendancePolicyID ?? null, _apAutocomplete: d.attendancePolicy?.attendancePolicyName ?? "", effectFrom: d.effectFrom ?? "" })),
+      empContractorForm: (freshData.empContractor ?? []).map((d: any) => ({ id: d.id, _localId: uid(), contractorID: d.contractorID ?? null, _contrAutocomplete: d.contractor?.contractorName ?? "", effectFrom: d.effectFrom ?? "" })),
     });
 
     // Set token device mapping state
@@ -2835,7 +2932,7 @@ const addCombinedDevMap = () => {
                       if (!stagingBranch.branchesID) return;
                       const newEntry: EmpBranchForm = { _localId: uid(), branchesID: stagingBranch.branchesID, _brAutocomplete: stagingBranch.label, effectFrom: stagingBranch.effectFrom };
                       setFormData(p => {
-                        const updated = [...p.empBranchForm, newEntry];
+                        const updated = upsertHistoryEntry(p.empBranchForm, newEntry, (item) => item.branchesID === newEntry.branchesID);
                         const last = updated[updated.length - 1];
                         return { ...p, empBranchForm: updated, branchesID: last?.branchesID ?? null, brAutocomplete: last?._brAutocomplete ?? "" };
                       });
@@ -3007,7 +3104,7 @@ const addCombinedDevMap = () => {
                     if (!stagingDept.departmentNameID) return;
                     const newEntry: EmpDepartmentForm = { _localId: uid(), departmentNameID: stagingDept.departmentNameID, _deptAutocomplete: stagingDept.label, effectFrom: stagingDept.effectFrom };
                     setFormData(p => {
-                      const updated = [...p.empDepartmentForm, newEntry];
+                      const updated = upsertHistoryEntry(p.empDepartmentForm, newEntry, (item) => item.departmentNameID === newEntry.departmentNameID);
                       const last = updated[updated.length - 1];
                       return { ...p, empDepartmentForm: updated, departmentNameID: last?.departmentNameID ?? null, deptAutocomplete: last?._deptAutocomplete ?? "", promotion: { ...p.promotion, departmentNameID: last?.departmentNameID ?? null } };
                     });
@@ -3071,7 +3168,10 @@ const addCombinedDevMap = () => {
                   <Button type="button" size="sm" disabled={!stagingDesg.designationID} onClick={() => {
                     if (!stagingDesg.designationID) return;
                     const newEntry: EmpDesignationForm = { _localId: uid(), designationID: stagingDesg.designationID, _desgAutocomplete: stagingDesg.label, effectFrom: stagingDesg.effectFrom };
-                    setFormData(p => ({ ...p, empDesignationForm: [...p.empDesignationForm, newEntry] }));
+                    setFormData(p => ({
+                      ...p,
+                      empDesignationForm: upsertHistoryEntry(p.empDesignationForm, newEntry, (item) => item.designationID === newEntry.designationID),
+                    }));
                     setStagingDesg({ designationID: null, label: "", effectFrom: today });
                   }}>Add</Button>
                 </div>
@@ -3245,7 +3345,10 @@ const addCombinedDevMap = () => {
                   <Button type="button" size="sm" disabled={!stagingContr.contractorID} onClick={() => {
                     if (!stagingContr.contractorID) return;
                     const newEntry: EmpContractorForm = { _localId: uid(), contractorID: stagingContr.contractorID, _contrAutocomplete: stagingContr.label, effectFrom: stagingContr.effectFrom };
-                    setFormData(p => ({ ...p, empContractorForm: [...p.empContractorForm, newEntry] }));
+                    setFormData(p => ({
+                      ...p,
+                      empContractorForm: upsertHistoryEntry(p.empContractorForm, newEntry, (item) => item.contractorID === newEntry.contractorID),
+                    }));
                     setStagingContr({ contractorID: null, label: "", effectFrom: today });
                   }}>Add</Button>
                 </div>
@@ -3443,7 +3546,10 @@ const addCombinedDevMap = () => {
                   <Button type="button" size="sm" disabled={!stagingAP.attendancePolicyID} onClick={() => {
                     if (!stagingAP.attendancePolicyID) return;
                     const newEntry: EmpAttendancePolicyForm = { _localId: uid(), attendancePolicyID: stagingAP.attendancePolicyID, _apAutocomplete: stagingAP.label, effectFrom: stagingAP.effectFrom };
-                    setFormData(p => ({ ...p, empAttendancePolicyForm: [...p.empAttendancePolicyForm, newEntry] }));
+                    setFormData(p => ({
+                      ...p,
+                      empAttendancePolicyForm: upsertHistoryEntry(p.empAttendancePolicyForm, newEntry, (item) => item.attendancePolicyID === newEntry.attendancePolicyID),
+                    }));
                     setStagingAP({ attendancePolicyID: null, label: "", effectFrom: today });
                   }}>Add</Button>
                 </div>
@@ -3507,7 +3613,10 @@ const addCombinedDevMap = () => {
                   <Button type="button" size="sm" disabled={!stagingLP.leavePolicyID} onClick={() => {
                     if (!stagingLP.leavePolicyID) return;
                     const newEntry: EmpLeavePolicyForm = { _localId: uid(), leavePolicyID: stagingLP.leavePolicyID, _lpAutocomplete: stagingLP.label, effectFrom: stagingLP.effectFrom };
-                    setFormData(p => ({ ...p, empLeavePolicyForm: [...p.empLeavePolicyForm, newEntry] }));
+                    setFormData(p => ({
+                      ...p,
+                      empLeavePolicyForm: upsertHistoryEntry(p.empLeavePolicyForm, newEntry, (item) => item.leavePolicyID === newEntry.leavePolicyID),
+                    }));
                     setStagingLP({ leavePolicyID: null, label: "", effectFrom: today });
                   }}>Add</Button>
                 </div>
@@ -3571,7 +3680,10 @@ const addCombinedDevMap = () => {
                   <Button type="button" size="sm" disabled={!stagingWS.workShiftID} onClick={() => {
                     if (!stagingWS.workShiftID) return;
                     const newEntry: EmpWorkShiftForm = { _localId: uid(), workShiftID: stagingWS.workShiftID, _wsAutocomplete: stagingWS.label, effectFrom: stagingWS.effectFrom };
-                    setFormData(p => ({ ...p, empWorkShiftForm: [...p.empWorkShiftForm, newEntry] }));
+                    setFormData(p => ({
+                      ...p,
+                      empWorkShiftForm: upsertHistoryEntry(p.empWorkShiftForm, newEntry, (item) => item.workShiftID === newEntry.workShiftID),
+                    }));
                     setStagingWS({ workShiftID: null, label: "", effectFrom: today });
                   }}>Add</Button>
                 </div>
@@ -4464,12 +4576,12 @@ const addCombinedDevMap = () => {
                 <Table className="w-full">
                   <TableHeader>
                     <TableRow>
-                      <TableHead className="w-[110px]">Service Provider</TableHead>
-                      <TableHead className="w-[120px]">Company</TableHead>
-                      <TableHead className="w-[110px]">Branch</TableHead>
-                      <TableHead className="w-[140px]">Department</TableHead>
-                      <TableHead className="w-[140px]">Designation</TableHead>
                       <TableHead className="w-[180px]">Name</TableHead>
+                      <TableHead className="w-[140px]">Designation</TableHead>
+                      <TableHead className="w-[140px]">Department</TableHead>
+                      <TableHead className="w-[110px]">Branch</TableHead>
+                      <TableHead className="w-[130px]">Employment Type</TableHead>
+                      <TableHead className="w-[140px]">Employment Status</TableHead>
                       <TableHead className="w-[120px] text-right">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -4492,17 +4604,31 @@ const addCombinedDevMap = () => {
                       </TableRow>
                     ) : (
                       filteredRows.map((r) => (
-                        <TableRow key={r.id}>
-                          <TableCell className="whitespace-nowrap">{spName(r)}</TableCell>
-                          <TableCell className="whitespace-nowrap">{coName(r)}</TableCell>
-                          <TableCell className="whitespace-nowrap">{brName(r)}</TableCell>
-                          <TableCell className="whitespace-nowrap">{r.departments?.departmentName ?? "—"}</TableCell>
+                        <TableRow key={r.id} className={terminationMap[r.id] && terminationMap[r.id].daysLeft <= 0 ? "opacity-60 bg-gray-50" : ""}>
+                          <TableCell className="whitespace-nowrap">
+                            <div className="flex flex-col gap-0.5">
+                              <span>{r.employeeFirstName} {r.employeeLastName}</span>
+                              {terminationMap[r.id] && terminationMap[r.id].daysLeft > 0 && (
+                                <Badge className="bg-orange-100 text-orange-700 border border-orange-300 text-xs w-fit">
+                                  Offboarding: Inactive in {terminationMap[r.id].daysLeft} day{terminationMap[r.id].daysLeft !== 1 ? "s" : ""}
+                                </Badge>
+                              )}
+                              {terminationMap[r.id] && terminationMap[r.id].daysLeft <= 0 && (
+                                <Badge className="bg-gray-200 text-gray-600 border border-gray-400 text-xs w-fit">
+                                  Inactive
+                                </Badge>
+                              )}
+                            </div>
+                          </TableCell>
                           <TableCell className="whitespace-nowrap">
                             {(r as any).empDesignation?.length > 0
                               ? (r as any).empDesignation.map((d: any) => d.designation?.designation).filter(Boolean).join(", ") || r.designations?.designation || "—"
                               : r.designations?.designation ?? "—"}
                           </TableCell>
-                          <TableCell className="whitespace-nowrap">{r.employeeFirstName} {r.employeeLastName}</TableCell>
+                          <TableCell className="whitespace-nowrap">{r.departments?.departmentName ?? "—"}</TableCell>
+                          <TableCell className="whitespace-nowrap">{brName(r)}</TableCell>
+                          <TableCell className="whitespace-nowrap">{r.employmentType ?? "—"}</TableCell>
+                          <TableCell className="whitespace-nowrap">{r.employmentStatus ?? "—"}</TableCell>
                           <TableCell className="text-right whitespace-nowrap">
                             <div className="flex items-center justify-end gap-1">
                               {/* 👁 Everyone can view */}

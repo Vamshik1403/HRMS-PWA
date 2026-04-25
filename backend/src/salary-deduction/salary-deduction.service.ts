@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { PrismaService } from 'src/prisma/prisma.service';
+import { PrismaService } from '../prisma/prisma.service';
 import { CreateSalaryDeductionDto } from './dto/create-salary-deduction.dto';
 import { UpdateSalaryDeductionDto } from './dto/update-salary-deduction.dto';
 

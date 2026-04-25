@@ -473,6 +473,7 @@ export function CompanyManagement() {
         <div>
             <form onSubmit={handleSubmit} className="space-y-4">
               {/* Company Name with Service Provider Autocomplete - auto-filled from sidebar */}
+              {user?.role !== "COMPANY_ADMIN" && (
               <div ref={wrapperRef} className="space-y-2 relative">
                 <Label>Service Provider *</Label>
                 <Input
@@ -508,9 +509,10 @@ export function CompanyManagement() {
                   </div>
                 )}
               </div>
+              )}
 
               <div className="space-y-2">
-                <Label>Company Name (Manual / Override)</Label>
+                <Label>Company Name</Label>
                 <Input
                   value={formData.companyName || ""}
                   onChange={(e) => setFormData((p) => ({ ...p, companyName: e.target.value }))}

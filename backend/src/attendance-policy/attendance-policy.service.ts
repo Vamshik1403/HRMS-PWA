@@ -1,6 +1,6 @@
 // attendance-policy.service.ts
 import { Injectable, ConflictException } from '@nestjs/common';
-import { PrismaService } from 'src/prisma/prisma.service';
+import { PrismaService } from '../prisma/prisma.service';
 import { CreateAttendancePolicyDto } from './dto/create-attendance-policy.dto';
 import { UpdateAttendancePolicyDto } from './dto/update-attendance-policy.dto';
 

@@ -3,7 +3,7 @@ import {
   BadRequestException,
   NotFoundException,
 } from '@nestjs/common';
-import { PrismaService } from 'src/prisma/prisma.service';
+import { PrismaService } from '../prisma/prisma.service';
 import { CreateTerminationDto } from './dto/create-termination.dto';
 import { ApproveTerminationDto } from './dto/approve-termination.dto';
 
@@ -108,8 +108,11 @@ async findAll() {
     if (!dto.lastWorkingDay)
       throw new BadRequestException('Last working day required');
 
+    const lastWorkingDate = new Date(dto.lastWorkingDay);
+    lastWorkingDate.setHours(0, 0, 0, 0);
+
     return this.prisma.$transaction(async (tx) => {
-      // 1️⃣ Update termination
+      // 1️⃣ Update termination record — employee stays ACTIVE throughout notice period
       await tx.employeeTermination.update({
         where: { id },
         data: {
@@ -123,20 +126,8 @@ async findAll() {
         },
       });
 
-      // 2️⃣ Update employee lifecycle
-      await tx.manageEmployee.update({
-        where: { id: termination.employeeId },
-        data: {
-          lifecycleStatus: 'EXITED',
-          exitDate: new Date(dto.lastWorkingDay),
-        },
-      });
-
-      // 3️⃣ Disable credentials
-      await tx.employeeCredentials.updateMany({
-        where: { employeeID: termination.employeeId },
-        data: { isActive: false },
-      });
+      // NOTE: Employee lifecycleStatus and credentials are NOT changed here.
+      // The employee remains ACTIVE until finalSettle is called after the notice period ends.
 
       return { message: 'Termination approved successfully' };
     });
@@ -145,16 +136,35 @@ async findAll() {
   async finalSettle(id: number) {
     const termination = await this.prisma.employeeTermination.findUnique({
       where: { id },
+      include: {
+        employee: { include: { employeeCredentials: true } },
+      },
     });
 
     if (!termination)
       throw new NotFoundException('Termination not found');
 
-    return this.prisma.employeeTermination.update({
-      where: { id },
-      data: {
-        exitStatus: 'FINAL_SETTLED',
-      },
+    return this.prisma.$transaction(async (tx) => {
+      await tx.employeeTermination.update({
+        where: { id },
+        data: { exitStatus: 'FINAL_SETTLED' },
+      });
+
+      // Mark employee as EXITED and disable credentials on final settlement
+      await tx.manageEmployee.update({
+        where: { id: termination.employeeId },
+        data: {
+          lifecycleStatus: 'EXITED',
+          exitDate: termination.lastWorkingDay ?? new Date(),
+        },
+      });
+
+      await tx.employeeCredentials.updateMany({
+        where: { employeeID: termination.employeeId },
+        data: { isActive: false },
+      });
+
+      return { message: 'Final settlement complete' };
     });
   }
 

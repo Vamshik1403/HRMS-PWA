@@ -4,7 +4,7 @@ import * as XLSX from 'xlsx';
 
 @Injectable()
 export class ImportAttendanceService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService) { }
 
   async importFromBuffer(buffer: Buffer, originalName: string) {
     const ext = originalName.split('.').pop()?.toLowerCase();
@@ -12,272 +12,365 @@ export class ImportAttendanceService {
       throw new BadRequestException('Only CSV, XLSX, and XLS files are supported');
     }
 
-    const workbook = XLSX.read(buffer, { type: 'buffer' });
+    const workbook = XLSX.read(buffer, {
+      type: 'buffer',
+      cellDates: false,
+      raw: true,
+    });
+
     const sheetName = workbook.SheetNames[0];
     if (!sheetName) {
       throw new BadRequestException('The file contains no sheets');
     }
     const sheet = workbook.Sheets[sheetName];
-    const rows: Record<string, any>[] = XLSX.utils.sheet_to_json(sheet, { defval: null, raw: false });
+    const rows: Record<string, any>[] = XLSX.utils.sheet_to_json(sheet, { 
+      defval: null,
+      raw: true
+    });
 
     if (!rows.length) {
       throw new BadRequestException('The file contains no data rows');
     }
 
     // Validate required columns exist
-    const requiredCols = ['punch_time'];
     const headers = Object.keys(rows[0]);
-    const missing = requiredCols.filter(c => !headers.includes(c));
-    if (missing.length) {
+    const hasLogTime = headers.includes('log_time');
+    const hasPunchTime = headers.includes('punch_time');
+    
+    if (!hasLogTime && !hasPunchTime) {
       throw new BadRequestException(
-        `Missing required columns: ${missing.join(', ')}. ` +
-        `Found columns: ${headers.join(', ')}`
+        `Missing required column: log_time (or punch_time). Found columns: ${headers.join(', ')}`
       );
     }
 
-    const processAttLogRows: any[] = [];
-    const empAttLogRows: any[] = [];
+    const requiredCols = ['user_id', 'device_sn'];
+    const missing = requiredCols.filter(c => !headers.includes(c));
+    if (missing.length) {
+      throw new BadRequestException(
+        `Missing required columns: ${missing.join(', ')}. Found columns: ${headers.join(', ')}`
+      );
+    }
+
+    const esslRawAttlogRows: any[] = [];
+    const processAttLogsRows: any[] = [];
     const errors: { row: number; error: string }[] = [];
 
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i];
       try {
-        const punchTime = this.parseDateTime(row.punch_time);
-        if (!punchTime) {
-          errors.push({ row: i + 2, error: 'Invalid punch_time format' });
+        // Parse log_time to string format
+        const timeValue = row.log_time || row.punch_time;
+        const punchTimeString = this.parseDateTimeToString(timeValue);
+        const punchTimeDate = this.parseStringToDate(punchTimeString);
+        
+        if (!punchTimeString || !punchTimeDate) {
+          errors.push({ row: i + 2, error: 'Invalid log_time/punch_time format' });
           continue;
         }
 
-        // Build process_att_logs row
-        processAttLogRows.push({
-          device_sn: row.device_sn ? String(row.device_sn) : null,
-          user_id: row.user_id != null ? String(row.user_id) : null,
-          username: row.username ? String(row.username) : null,
-          punch_time: punchTime,
-          company_name: row.company_name ? String(row.company_name) : null,
-          branch_name: row.branch_name ? String(row.branch_name) : null,
-          department_name: row.department_name ? String(row.department_name) : null,
-          device_emp_code: row.device_emp_code ? String(row.device_emp_code) : null,
-          manage_employee_id: row.manage_employee_id ? parseInt(String(row.manage_employee_id)) : null,
-          device_id: row.device_id ? parseInt(String(row.device_id)) : null,
-          raw_body: row.raw_body ? String(row.raw_body) : `IMPORTED:${originalName}`,
-          status: row.status ? String(row.status) : '1',
-          device_name: row.device_name ? String(row.device_name) : null,
-          device_type: row.device_type ? String(row.device_type) : null,
+        // Validate required fields
+        if (!row.user_id) {
+          errors.push({ row: i + 2, error: 'user_id is required' });
+          continue;
+        }
+
+        if (!row.device_sn) {
+          errors.push({ row: i + 2, error: 'device_sn is required' });
+          continue;
+        }
+
+        // Build raw_body in ESSL format (matching device log format)
+        const rawBody = `IMPORTED ${row.user_id} ${punchTimeString} 1 1 ${row.auth_type || ''}`;
+
+        // Build essl_raw_attlog row (string date)
+        esslRawAttlogRows.push({
+          device_sn: String(row.device_sn),
+          user_id: String(row.user_id),
+          punch_time: punchTimeString,
+          auth_type: row.auth_type ? String(row.auth_type) : null,
+          raw_body: rawBody,
+          log_type: 'IMPORT',
+          is_valid: true,
+          export: 0,
+          created_at: new Date(),
         });
 
-        // Build EmpAttendanceLogs row if we have enough data
-        if (row.manage_employee_id || row.employee_id) {
-          const empId = parseInt(String(row.manage_employee_id || row.employee_id));
-          if (!isNaN(empId)) {
-            empAttLogRows.push({
-              serviceProviderID: row.service_provider_id ? parseInt(String(row.service_provider_id)) : 1,
-              companyID: row.company_id ? parseInt(String(row.company_id)) : 1,
-              branchesID: row.branches_id ? parseInt(String(row.branches_id)) : 1,
-              deviceID: row.device_id ? parseInt(String(row.device_id)) : 0,
-              employeeID: empId,
-              punchTimeStamp: this.formatDateTimeString(punchTime),
-              exported: 0,
-              latitude: null,
-              longitude: null,
-              googleMapLink: null,
-              location: null,
-              mobileDeviceID: null,
-              mobileDeviceInfo: null,
-            });
-          }
-        }
+        // Build process_att_logs row (Date object)
+        processAttLogsRows.push({
+          device_sn: String(row.device_sn),
+          user_id: String(row.user_id),
+          punch_time: punchTimeDate,
+          auth_type: row.auth_type ? String(row.auth_type) : null,
+          raw_body: rawBody,
+          status: '0',
+          processed_at: new Date(),
+        });
+
       } catch (err) {
         errors.push({ row: i + 2, error: (err as Error).message });
       }
     }
 
-    if (processAttLogRows.length === 0) {
+    if (esslRawAttlogRows.length === 0) {
       throw new BadRequestException(
         `No valid rows to import. ${errors.length} rows had errors. ` +
         `First error: ${errors[0]?.error || 'unknown'}`
       );
     }
 
-    // Insert into database using transactions
-    const result = await this.prisma.$transaction(async (tx) => {
-      const processResult = await tx.process_att_logs.createMany({
-        data: processAttLogRows,
-      });
+    // Insert into both tables
+    const rawResult = await this.prisma.essl_raw_attlog.createMany({
+      data: esslRawAttlogRows,
+      skipDuplicates: true,
+    });
 
-      let empResult = { count: 0 };
-      if (empAttLogRows.length > 0) {
-        empResult = await tx.empAttendanceLogs.createMany({
-          data: empAttLogRows,
-        });
-      }
-
-      return {
-        processAttLogsInserted: processResult.count,
-        empAttendanceLogsInserted: empResult.count,
-      };
+    const processResult = await this.prisma.process_att_logs.createMany({
+      data: processAttLogsRows,
+      skipDuplicates: true,
     });
 
     return {
       success: true,
       totalRowsInFile: rows.length,
-      processAttLogsInserted: result.processAttLogsInserted,
-      empAttendanceLogsInserted: result.empAttendanceLogsInserted,
+      recordsInserted: rawResult.count,
+      recordsProcessed: processResult.count,
       errorsCount: errors.length,
-      errors: errors.slice(0, 20), // Return first 20 errors max
+      errors: errors.slice(0, 20),
     };
   }
 
   async getImportedRecords() {
-    const processLogs = await this.prisma.process_att_logs.findMany({
+    const records = await this.prisma.essl_raw_attlog.findMany({
       where: {
-        raw_body: { startsWith: 'IMPORTED:' },
+        log_type: 'IMPORT',
       },
       orderBy: { id: 'desc' },
       take: 100,
     });
-    return processLogs;
+    return records;
   }
 
-  async deleteImportedRecords(fileName?: string) {
-    const whereClause = fileName
-      ? { raw_body: `IMPORTED:${fileName}` }
-      : { raw_body: { startsWith: 'IMPORTED:' } };
-
-    const result = await this.prisma.$transaction(async (tx) => {
-      // Get the employee IDs and punch times from imported process logs
-      // so we can remove matching EmpAttendanceLogs too
-      const importedLogs = await tx.process_att_logs.findMany({
-        where: whereClause,
-        select: { manage_employee_id: true, punch_time: true },
-      });
-
-      let empDeleteCount = 0;
-      // Delete matching EmpAttendanceLogs
-      for (const log of importedLogs) {
-        if (log.manage_employee_id && log.punch_time) {
-          const punchStr = this.formatDateTimeString(log.punch_time);
-          const deleted = await tx.empAttendanceLogs.deleteMany({
-            where: {
-              employeeID: log.manage_employee_id,
-              punchTimeStamp: punchStr,
-            },
-          });
-          empDeleteCount += deleted.count;
-        }
-      }
-
-      // Delete imported process_att_logs
-      const processDeleted = await tx.process_att_logs.deleteMany({
-        where: whereClause,
-      });
-
-      return {
-        processAttLogsDeleted: processDeleted.count,
-        empAttendanceLogsDeleted: empDeleteCount,
-      };
+  async deleteImportedRecords() {
+    // Delete from both tables
+    const rawResult = await this.prisma.essl_raw_attlog.deleteMany({
+      where: {
+        log_type: 'IMPORT',
+      },
     });
 
-    return { success: true, ...result };
+    const processResult = await this.prisma.process_att_logs.deleteMany({
+      where: {
+        raw_body: {
+          contains: 'IMPORTED',
+        },
+      },
+    });
+
+    return {
+      success: true,
+      deletedCount: rawResult.count,
+      processedDeletedCount: processResult.count,
+      message: `Successfully deleted ${rawResult.count} raw records and ${processResult.count} processed records`,
+    };
   }
 
   async downloadTemplate(): Promise<Buffer> {
     const headers = [
       'user_id',
-      'punch_time',
+      'log_time',
       'device_sn',
-      'username',
-      'company_name',
-      'branch_name',
-      'department_name',
-      'device_emp_code',
-      'manage_employee_id',
-      'device_id',
-      'device_name',
-      'device_type',
-      'service_provider_id',
-      'company_id',
-      'branches_id',
-      'employee_id',
-      'status',
+      'auth_type',
     ];
 
-    const sampleRow = {
-      user_id: '101',
-      punch_time: '2025-03-01 09:00:00',
-      device_sn: 'DEV001',
-      username: 'John Doe',
-      company_name: 'My Company',
-      branch_name: 'Main Branch',
-      department_name: 'Engineering',
-      device_emp_code: 'EMP101',
-      manage_employee_id: 1,
-      device_id: 1,
-      device_name: 'Main Gate Device',
-      device_type: 'bio',
-      service_provider_id: 1,
-      company_id: 1,
-      branches_id: 1,
-      employee_id: 1,
-      status: '1',
-    };
+    const sampleRows = [
+      {
+        user_id: '101',
+        log_time: '01/02/2026 09:00:00', // 1st Feb 2026
+        device_sn: 'CQZ7232160084',
+        auth_type: 'FINGER',
+      },
+      {
+        user_id: '102',
+        log_time: '15/12/2026 20:00:00', // 15th Dec 2026
+        device_sn: 'CQZ7232160084',
+        auth_type: 'CARD',
+      },
+    ];
 
-    const ws = XLSX.utils.json_to_sheet([sampleRow], { header: headers });
+    const ws = XLSX.utils.json_to_sheet(sampleRows, { header: headers });
+    
+    ws['!cols'] = [
+      { wch: 12 }, // user_id
+      { wch: 22 }, // log_time
+      { wch: 20 }, // device_sn
+      { wch: 15 }, // auth_type
+    ];
+    
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'AttendanceLogs');
+    XLSX.utils.book_append_sheet(wb, ws, 'Template (DD-MM-YYYY)');
+    
     return Buffer.from(XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }));
   }
 
-  private parseDateTime(value: any): Date | null {
-    if (!value) return null;
+  private parseDateTimeToString(value: any): string | null {
+    if (value == null || value === '') return null;
 
-    // Handle Date objects (from cellDates: true)
-    if (value instanceof Date) {
-      return isNaN(value.getTime()) ? null : value;
-    }
-
-    // Handle Excel serial date numbers (fallback if cellDates didn't convert)
+    // Handle Excel serial number
     if (typeof value === 'number') {
-      // Use UTC-based epoch to avoid timezone shifts
-      const excelEpochMs = Date.UTC(1899, 11, 30);
-      const date = new Date(excelEpochMs + value * 86400000);
-      return isNaN(date.getTime()) ? null : date;
+      const date = XLSX.SSF.parse_date_code(value);
+      if (date) {
+        const year = date.y;
+        const month = String(date.m).padStart(2, '0');
+        const day = String(date.d).padStart(2, '0');
+        const hour = String(date.H).padStart(2, '0');
+        const minute = String(date.M).padStart(2, '0');
+        const second = String(Math.round(date.S || 0)).padStart(2, '0');
+        
+        return `${year}-${month}-${day} ${hour}:${minute}:${second}`;
+      }
     }
 
-    const str = String(value).trim();
-
-    // Try DD/MM/YYYY HH:mm:ss first (before new Date which treats it as MM/DD)
-    const dmyMatch = str.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})\s+(\d{1,2}):(\d{2}):?(\d{2})?$/);
-    if (dmyMatch) {
-      const [, d, m, y, h, min, sec] = dmyMatch;
-      const date = new Date(parseInt(y), parseInt(m) - 1, parseInt(d), parseInt(h), parseInt(min), parseInt(sec || '0'));
-      return isNaN(date.getTime()) ? null : date;
+    // Handle string format
+    if (typeof value === 'string') {
+      return this.formatRawDateTimeString(value);
     }
 
-    // Try YYYY-MM-DD HH:mm:ss (ISO-like formats)
-    const isoMatch = str.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})\s+(\d{1,2}):(\d{2}):?(\d{2})?$/);
-    if (isoMatch) {
-      const [, y, m, d, h, min, sec] = isoMatch;
-      const date = new Date(parseInt(y), parseInt(m) - 1, parseInt(d), parseInt(h), parseInt(min), parseInt(sec || '0'));
-      return isNaN(date.getTime()) ? null : date;
+    // Handle Date object
+    if (value instanceof Date) {
+      const year = value.getFullYear();
+      const month = String(value.getMonth() + 1).padStart(2, '0');
+      const day = String(value.getDate()).padStart(2, '0');
+      const hour = String(value.getHours()).padStart(2, '0');
+      const minute = String(value.getMinutes()).padStart(2, '0');
+      const second = String(value.getSeconds()).padStart(2, '0');
+      
+      return `${year}-${month}-${day} ${hour}:${minute}:${second}`;
     }
-
-    // Fallback: try native Date constructor
-    const parsed = new Date(str);
-    if (!isNaN(parsed.getTime())) return parsed;
 
     return null;
   }
 
-  private formatDateTimeString(date: Date): string {
-    // Use local time methods for dates parsed from string (local),
-    // but handle UTC dates from cellDates/serial conversion properly
-    const y = date.getFullYear();
-    const mo = String(date.getMonth() + 1).padStart(2, '0');
-    const d = String(date.getDate()).padStart(2, '0');
-    const h = String(date.getHours()).padStart(2, '0');
-    const mi = String(date.getMinutes()).padStart(2, '0');
-    const s = String(date.getSeconds()).padStart(2, '0');
-    return `${y}-${mo}-${d} ${h}:${mi}:${s}`;
+  private formatRawDateTimeString(rawString: string): string | null {
+    const str = rawString.trim();
+    
+    // Format: DD/MM/YYYY HH:mm:ss (e.g., "01/02/2026 09:00:00" = 1st Feb 2026)
+    let match = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2}):(\d{2})$/);
+    if (match) {
+      const [, day, month, year, hour, minute, second] = match;
+      
+      // Validate ranges
+      const d = parseInt(day);
+      const m = parseInt(month);
+      const y = parseInt(year);
+      const h = parseInt(hour);
+      const min = parseInt(minute);
+      const sec = parseInt(second);
+      
+      if (m < 1 || m > 12) {
+        throw new Error(`Invalid month: ${month}. Month must be between 01-12`);
+      }
+      if (d < 1 || d > 31) {
+        throw new Error(`Invalid day: ${day}. Day must be between 01-31`);
+      }
+      if (h < 0 || h > 23) {
+        throw new Error(`Invalid hour: ${hour}. Hour must be between 00-23`);
+      }
+      if (min < 0 || min > 59) {
+        throw new Error(`Invalid minute: ${minute}. Minute must be between 00-59`);
+      }
+      
+      // Check if date is valid (e.g., 31/02/2026 is invalid)
+      const testDate = new Date(y, m - 1, d);
+      if (testDate.getMonth() !== m - 1 || testDate.getDate() !== d) {
+        throw new Error(`Invalid date: ${day}/${month}/${year} is not a valid calendar date`);
+      }
+      
+      return `${year}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')} ${String(h).padStart(2, '0')}:${String(min).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
+    }
+    
+    // Format: DD/MM/YYYY HH:mm (e.g., "1/2/2026 09:00" = 1st Feb 2026)
+    match = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2})$/);
+    if (match) {
+      const [, day, month, year, hour, minute] = match;
+      return this.formatRawDateTimeString(`${day}/${month}/${year} ${hour}:${minute}:00`);
+    }
+    
+    // Format: DD/MM/YYYY HH:mm:ss AM/PM (e.g., "01/02/2026 09:00:00 AM")
+    match = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2}):(\d{2})\s*(AM|PM)$/i);
+    if (match) {
+      const [, day, month, year, hour, minute, second, ampm] = match;
+      let h = parseInt(hour);
+      if (ampm.toUpperCase() === 'PM' && h < 12) h += 12;
+      if (ampm.toUpperCase() === 'AM' && h === 12) h = 0;
+      
+      return this.formatRawDateTimeString(`${day}/${month}/${year} ${String(h).padStart(2, '0')}:${minute}:${second}`);
+    }
+    
+    // Format: DD/MM/YYYY HH:mm AM/PM (e.g., "1/2/2026 9:00 PM")
+    match = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+    if (match) {
+      const [, day, month, year, hour, minute, ampm] = match;
+      let h = parseInt(hour);
+      if (ampm.toUpperCase() === 'PM' && h < 12) h += 12;
+      if (ampm.toUpperCase() === 'AM' && h === 12) h = 0;
+      
+      return this.formatRawDateTimeString(`${day}/${month}/${year} ${String(h).padStart(2, '0')}:${minute}:00`);
+    }
+    
+    // Format: YYYY-MM-DD HH:mm:ss (already formatted)
+    match = str.match(/^(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2}):(\d{2})$/);
+    if (match) {
+      return str;
+    }
+    
+    throw new Error(`Invalid date format: "${rawString}". Expected format: DD/MM/YYYY HH:mm:ss (e.g., 01/02/2026 09:00:00 for 1st Feb 2026)`);
+  }
+
+  private parseStringToDate(dateString: string | null): Date | null {
+    if (!dateString) return null;
+    
+    // Handle YYYY-MM-DD HH:mm:ss format
+    let match = dateString.match(/^(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2}):(\d{2})$/);
+    if (match) {
+      const [, year, month, day, hour, minute, second] = match;
+      // Note: month is 0-indexed in JavaScript Date
+      const date = new Date(
+        parseInt(year),
+        parseInt(month) - 1,
+        parseInt(day),
+        parseInt(hour),
+        parseInt(minute),
+        parseInt(second)
+      );
+      
+      // Validate the date is valid
+      if (isNaN(date.getTime())) {
+        throw new Error(`Invalid date: ${dateString}`);
+      }
+      
+      return date;
+    }
+    
+    // Handle DD/MM/YYYY HH:mm:ss format as fallback
+    match = dateString.match(/^(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2}):(\d{2})$/);
+    if (match) {
+      const [, day, month, year, hour, minute, second] = match;
+      const date = new Date(
+        parseInt(year),
+        parseInt(month) - 1,
+        parseInt(day),
+        parseInt(hour),
+        parseInt(minute),
+        parseInt(second)
+      );
+      
+      if (isNaN(date.getTime())) {
+        throw new Error(`Invalid date: ${dateString}`);
+      }
+      
+      return date;
+    }
+    
+    throw new Error(`Cannot parse date: ${dateString}`);
   }
 }

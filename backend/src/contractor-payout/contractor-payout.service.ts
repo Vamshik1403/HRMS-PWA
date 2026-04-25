@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { PrismaService } from 'src/prisma/prisma.service';
+import { PrismaService } from '../prisma/prisma.service';
 import { CreateContractorPayoutDto } from './dto/create-contractor-payout.dto';
 import { UpdateContractorPayoutDto } from './dto/update-contractor-payout.dto';
 

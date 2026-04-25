@@ -105,7 +105,9 @@ export function DeviceManagement() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const user = useCurrentUser();
-  const canManage = user?.role === "SUPERADMIN";
+  const canManage = user?.role === "SUPERADMIN" || user?.role === "COMPANY_ADMIN" || user?.role === "SERVICE_PROVIDER";
+  const canAdd = user?.role === "SUPERADMIN";
+  const canDelete = user?.role === "SUPERADMIN";
   
   // UI
   const [searchTerm, setSearchTerm] = useState("");
@@ -173,7 +175,19 @@ export function DeviceManagement() {
         return;
       }
 
-      // 🟡 Non-SUPERADMIN → Get user mapping first
+      // � COMPANY_ADMIN → filter by companyID from sidebar context / user object
+      if (user?.role === "COMPANY_ADMIN") {
+        const ctx = getSidebarContext();
+        const companyID = ctx?.companyID ?? user?.companyID;
+        if (companyID) {
+          setDevices(all.filter((d: any) => d.companyID === companyID));
+        } else {
+          setDevices([]);
+        }
+        return;
+      }
+
+      // �🟡 Non-SUPERADMIN → Get user mapping first
       const usersRes = await fetch("/backend/users");
       const users = await usersRes.json();
       const currentUser = users.find((u: any) => u.username === user?.username);
@@ -189,12 +203,6 @@ export function DeviceManagement() {
           } else {
             setDevices(all.filter((d: any) => d.serviceProviderID === currentUser.serviceProviderID));
           }
-        } else if (user?.role === "COMPANY_ADMIN") {
-          // Company admin sees all devices in their company
-          const filtered = all.filter(
-            (d: any) => d.companyID === currentUser.companyID
-          );
-          setDevices(filtered);
         } else if (user?.role === "BRANCH_ADMIN") {
           // Branch admin sees devices in their branch
           const filtered = all.filter(
@@ -300,17 +308,34 @@ export function DeviceManagement() {
       try {
         const all = await fetchJSONSafe<Branch[]>(API.branches, ctrl.signal);
 
-        // 🟡 If MANAGER, filter by companyID or serviceProviderID
+        // 🟡 Filter branches by the currently selected company from sidebar context
         let filtered = all || [];
-        if (user?.role === "SERVICE_PROVIDER" && currentUserMapping) {
-          if (currentUserMapping.companyID) {
-            filtered = filtered.filter(
-              (b: any) => b.companyID === currentUserMapping.companyID
-            );
-          } else if (currentUserMapping.serviceProviderID) {
+        if (user?.role === "SUPERADMIN") {
+          const ctx = getSidebarContext();
+          if (ctx?.companyID) {
+            filtered = filtered.filter((b: any) => b.companyID === ctx.companyID);
+          }
+        } else if (user?.role === "SERVICE_PROVIDER") {
+          const ctx = getSidebarContext();
+          const companyID = ctx?.companyID ?? currentUserMapping?.companyID;
+          if (companyID) {
+            filtered = filtered.filter((b: any) => b.companyID === companyID);
+          } else if (currentUserMapping?.serviceProviderID) {
             filtered = filtered.filter(
               (b: any) => b.serviceProviderID === currentUserMapping.serviceProviderID
             );
+          }
+        } else if (user?.role === "COMPANY_ADMIN" || user?.role === "BRANCH_ADMIN") {
+          const companyID = currentUserMapping?.companyID
+            ?? getSidebarContext()?.companyID
+            ?? user?.companyID;
+          if (companyID) {
+            filtered = filtered.filter((b: any) => b.companyID === companyID);
+          }
+          // 🔒 BRANCH_ADMIN — restrict to their own branch only
+          if (user?.role === "BRANCH_ADMIN") {
+            const branchesID = currentUserMapping?.branchesID ?? user?.branchesID;
+            if (branchesID) filtered = filtered.filter((b: any) => Number(b.id) === Number(branchesID));
           }
         }
 
@@ -378,6 +403,14 @@ export function DeviceManagement() {
       baseFormData.serviceProviderID = currentUserMapping.serviceProviderID;
       baseFormData.companyID = currentUserMapping.companyID;
       baseFormData.branchesID = currentUserMapping.branchesID;
+    } else if (user?.role === "COMPANY_ADMIN" || user?.role === "BRANCH_ADMIN") {
+      const ctx = getSidebarContext();
+      baseFormData.serviceProviderID = ctx?.serviceProviderID ?? null;
+      baseFormData.companyID = ctx?.companyID ?? user?.companyID ?? null;
+      if (user?.role === "BRANCH_ADMIN") {
+        baseFormData.branchesID = currentUserMapping?.branchesID ?? user?.branchesID ?? null;
+        baseFormData.brAutocomplete = currentUserMapping?.branches?.branchName ?? user?.branches?.branchName ?? "";
+      }
     } else if (user?.role === "SUPERADMIN") {
       const ctx = getSidebarContext();
       if (ctx) {
@@ -423,6 +456,13 @@ export function DeviceManagement() {
       finalServiceProviderID = currentUserMapping.serviceProviderID;
       finalCompanyID = currentUserMapping.companyID;
       finalBranchesID = currentUserMapping.branchesID;
+    } else if (user?.role === "COMPANY_ADMIN" || user?.role === "BRANCH_ADMIN") {
+      const ctx = getSidebarContext();
+      finalServiceProviderID = formData.serviceProviderID ?? ctx?.serviceProviderID ?? null;
+      finalCompanyID = formData.companyID ?? ctx?.companyID ?? user?.companyID ?? null;
+      if (user?.role === "BRANCH_ADMIN") {
+        finalBranchesID = formData.branchesID ?? currentUserMapping?.branchesID ?? user?.branchesID ?? null;
+      }
     }
 
     // Build authTypes from attendance and token register selections
@@ -601,7 +641,7 @@ export function DeviceManagement() {
         </div>
 
         <div className="flex items-center gap-3">
-          {!isAddingNew && canManage && (
+          {!isAddingNew && canAdd && (
             <Button
               onClick={() => { resetForm(); setIsAddingNew(true); }}
               className="flex-shrink-0 text-sm px-3 py-2"
@@ -896,27 +936,25 @@ export function DeviceManagement() {
               <Table className="w-full">
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="w-[120px]">Service Provider</TableHead>
-                    <TableHead className="w-[120px]">Company Name</TableHead>
-                    <TableHead className="w-[120px]">Branch Name</TableHead>
                     <TableHead className="w-[120px]">Device Name</TableHead>
-                    <TableHead className="w-[80px]">Type</TableHead>
+                    <TableHead className="w-[80px]">Device Type</TableHead>
                     <TableHead className="w-[100px]">Device Make</TableHead>
                     <TableHead className="w-[100px]">Device Model</TableHead>
                     <TableHead className="w-[120px]">Device SN</TableHead>
+                    <TableHead className="w-[120px]">Branch Name</TableHead>
                     <TableHead className="w-[80px] text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {loading ? (
                     <TableRow>
-                      <TableCell colSpan={10} className="text-center py-8 text-gray-500">
+                      <TableCell colSpan={7} className="text-center py-8 text-gray-500">
                         Loading...
                       </TableCell>
                     </TableRow>
                   ) : filteredDevices.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={10} className="text-center py-8 text-gray-500">
+                      <TableCell colSpan={7} className="text-center py-8 text-gray-500">
                         <div className="flex flex-col items-center gap-2">
                           <Icon icon="mdi:devices" className="w-12 h-12 text-gray-300" />
                           <p>No devices found</p>
@@ -927,9 +965,6 @@ export function DeviceManagement() {
                   ) : (
                     filteredDevices.map((device) => (
                       <TableRow key={device.id}>
-                        <TableCell className="whitespace-nowrap">{spName(device)}</TableCell>
-                        <TableCell className="whitespace-nowrap">{coName(device)}</TableCell>
-                        <TableCell className="whitespace-nowrap">{brName(device)}</TableCell>
                         <TableCell className="font-medium whitespace-nowrap">{device.deviceName}</TableCell>
                         <TableCell className="whitespace-nowrap">
                           {device.deviceType ? (() => {
@@ -949,9 +984,10 @@ export function DeviceManagement() {
                         <TableCell className="whitespace-nowrap">{device.deviceMake}</TableCell>
                         <TableCell className="whitespace-nowrap">{device.deviceModel}</TableCell>
                         <TableCell className="whitespace-nowrap">{device.deviceSN}</TableCell>
+                        <TableCell className="whitespace-nowrap">{brName(device)}</TableCell>
                         <TableCell className="text-right whitespace-nowrap">
                           <div className="flex items-center justify-end gap-1">
-                            {/* ✏️ SUPERADMIN & MANAGER can edit */}
+                            {/* ✏️ SUPERADMIN, SERVICE_PROVIDER & COMPANY_ADMIN can edit */}
                             {canManage && (
                               <Button
                                 variant="ghost"
@@ -964,8 +1000,8 @@ export function DeviceManagement() {
                               </Button>
                             )}
 
-                            {/* 🗑️ SUPERADMIN & MANAGER can delete */}
-                            {canManage && (
+                            {/* 🗑️ SUPERADMIN only can delete */}
+                            {canDelete && (
                               <Button
                                 variant="ghost"
                                 size="sm"

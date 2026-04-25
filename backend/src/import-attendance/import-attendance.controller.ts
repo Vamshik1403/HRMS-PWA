@@ -3,11 +3,11 @@ import {
   Post,
   Get,
   Delete,
-  Query,
   Res,
   UseInterceptors,
   UploadedFile,
   BadRequestException,
+  HttpStatus,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ImportAttendanceService } from './import-attendance.service';
@@ -22,14 +22,16 @@ export class ImportAttendanceController {
     FileInterceptor('file', {
       limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
       fileFilter: (_req, file, cb) => {
-        const allowed = [
+        const allowedMimes = [
           'text/csv',
-          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-          'application/vnd.ms-excel',
-          'application/octet-stream',
+          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', // .xlsx
+          'application/vnd.ms-excel', // .xls
+          'application/octet-stream', // sometimes for .xlsx
         ];
         const ext = file.originalname.split('.').pop()?.toLowerCase();
-        if (allowed.includes(file.mimetype) || ['csv', 'xlsx', 'xls'].includes(ext || '')) {
+        const allowedExts = ['csv', 'xlsx', 'xls'];
+        
+        if (allowedMimes.includes(file.mimetype) || allowedExts.includes(ext || '')) {
           cb(null, true);
         } else {
           cb(new BadRequestException('Only CSV, XLSX, and XLS files are allowed'), false);
@@ -50,8 +52,8 @@ export class ImportAttendanceController {
   }
 
   @Delete('imported')
-  async deleteImported(@Query('fileName') fileName?: string) {
-    return this.importService.deleteImportedRecords(fileName);
+  async deleteImported() {
+    return this.importService.deleteImportedRecords();
   }
 
   @Get('template')
@@ -62,6 +64,6 @@ export class ImportAttendanceController {
       'Content-Disposition': 'attachment; filename="attendance-import-template.xlsx"',
       'Content-Length': buffer.length,
     });
-    res.send(buffer);
+    res.status(HttpStatus.OK).send(buffer);
   }
 }

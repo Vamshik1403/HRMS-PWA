@@ -78,7 +78,7 @@ export function SalaryDeductionsManagement() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingDeduction, setEditingDeduction] = useState<SalaryDeduction | null>(null);
   const user = useCurrentUser();
-const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN";
+const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN" || user?.role === "BRANCH_ADMIN";
 const isEmployee = user?.role === "EMPLOYEE";
 const [currentUserMapping, setCurrentUserMapping] = useState<any>(null);
 
@@ -203,12 +203,15 @@ const loadDeductions = async () => {
       }
     }
 
-    // � COMPANY_ADMIN / BRANCH_ADMIN → filter by company
+    // 🔴 COMPANY_ADMIN / BRANCH_ADMIN → filter by company (+ branch for BRANCH_ADMIN)
     if (user?.role === "COMPANY_ADMIN" || user?.role === "BRANCH_ADMIN") {
       const ctx = getSidebarContext();
       const companyID = ctx?.companyID ?? user?.companyID;
       if (companyID) {
-        setDeductions(all.filter((d: any) => d.companyID === companyID));
+        setDeductions(all.filter((d: any) =>
+          d.companyID === companyID &&
+          (user?.role !== "BRANCH_ADMIN" || !d.branchesID || Number(d.branchesID) === Number(user?.branchesID))
+        ));
       } else {
         setDeductions([]);
       }
@@ -356,6 +359,7 @@ const loadDeductions = async () => {
     const filtered = list.filter(
       (b) =>
         b.companyID === resolvedCompanyID &&
+        (user?.role !== "BRANCH_ADMIN" || Number(b.id) === Number(user?.branchesID)) &&
         (b.branchName ?? "").toLowerCase().includes(val.toLowerCase())
     );
 
@@ -865,8 +869,6 @@ const loadDeductions = async () => {
             <Table className="w-full">
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-[120px]">Service Provider</TableHead>
-                  <TableHead className="w-[120px]">Company Name</TableHead>
                   <TableHead className="w-[120px]">Branch Name</TableHead>
                   <TableHead className="w-[150px]">Deduction Name</TableHead>
                   <TableHead className="w-[100px]">Type</TableHead>
@@ -877,7 +879,7 @@ const loadDeductions = async () => {
               <TableBody>
                 {filteredDeductions.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={9} className="text-center py-8 text-gray-500">
+                    <TableCell colSpan={7} className="text-center py-8 text-gray-500">
                       <div className="flex flex-col items-center gap-2">
                         <Icon icon="mdi:cash-minus" className="w-12 h-12 text-gray-300" />
                         <p>No salary deductions found</p>
@@ -888,8 +890,6 @@ const loadDeductions = async () => {
                 ) : (
                   filteredDeductions.map((deduction) => (
                     <TableRow key={deduction.id}>
-                      <TableCell className="whitespace-nowrap">{deduction.serviceProvider}</TableCell>
-                      <TableCell className="whitespace-nowrap">{deduction.companyName}</TableCell>
                       <TableCell className="whitespace-nowrap">{deduction.branchName}</TableCell>
                       <TableCell className="font-medium whitespace-nowrap">{deduction.deductionName}</TableCell>
                       <TableCell className="whitespace-nowrap">

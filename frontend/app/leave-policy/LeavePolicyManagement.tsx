@@ -90,7 +90,7 @@ export function LeavePolicyManagement() {
   })
   const [availableHolidays, setAvailableHolidays] = useState<Holiday[]>([])
   const user = useCurrentUser();
-  const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN";
+  const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN" || user?.role === "BRANCH_ADMIN";
 const [currentUserMapping, setCurrentUserMapping] = useState<any>(null);
 
 
@@ -106,19 +106,23 @@ const resolvedCompanyID =
 
 
 
-// Load mapping for MANAGER
+// Load mapping for MANAGER / BRANCH_ADMIN
 useEffect(() => {
-  if (user?.role !== "SERVICE_PROVIDER") return;
+  if (user?.role !== "SERVICE_PROVIDER" && user?.role !== "BRANCH_ADMIN") return;
 
-  (async () => {
-    const res = await fetch(`${BACKEND_URL}/users`);
-    const users = await res.json();
-    const me = users.find((u: any) => u.username === user.username);
-    setCurrentUserMapping(me || null);
-  })();
+  if (user?.role === "SERVICE_PROVIDER") {
+    (async () => {
+      const res = await fetch(`${BACKEND_URL}/users`);
+      const users = await res.json();
+      const me = users.find((u: any) => u.username === user.username);
+      setCurrentUserMapping(me || null);
+    })();
+  } else if (user?.role === "BRANCH_ADMIN") {
+    setCurrentUserMapping(user);
+  }
 }, [user]);
 
-// Auto-fill IDs for MANAGER
+// Auto-fill IDs for MANAGER / BRANCH_ADMIN
 useEffect(() => {
   if (user?.role === "SERVICE_PROVIDER" && currentUserMapping) {
     setFormData((p) => ({
@@ -126,6 +130,13 @@ useEffect(() => {
       serviceProviderID: currentUserMapping.serviceProviderID,
       companyID: currentUserMapping.companyID,
       branchesID: currentUserMapping.branchesID,
+    }));
+  } else if (user?.role === "BRANCH_ADMIN" && currentUserMapping) {
+    setFormData((p) => ({
+      ...p,
+      serviceProviderID: currentUserMapping.serviceProviderID ?? null,
+      companyID: currentUserMapping.companyID ?? null,
+      branchesID: currentUserMapping.branchesID ?? null,
     }));
   }
 }, [user, currentUserMapping]);
@@ -260,6 +271,7 @@ const fetchBranches = async (query: string) => {
       ? data.filter(
           (b: any) =>
             b.companyID === resolvedCompanyID &&
+            (user?.role !== "BRANCH_ADMIN" || Number(b.id) === Number(user?.branchesID)) &&
             (b.branchName ?? "").toLowerCase().includes(q)
         )
       : [];
@@ -941,8 +953,6 @@ const handleCompanySelect = (selected: SelectedItem) => {
             <Table className="w-full">
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-[120px]">Service Provider</TableHead>
-                  <TableHead className="w-[120px]">Company Name</TableHead>
                   <TableHead className="w-[120px]">Branch Name</TableHead>
                   <TableHead className="w-[150px]">Policy Name</TableHead>
                   <TableHead className="w-[100px]">Sick Leave</TableHead>
@@ -957,7 +967,7 @@ const handleCompanySelect = (selected: SelectedItem) => {
               <TableBody>
                 {filteredPolicies.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={11} className="text-center py-8 text-gray-500">
+                    <TableCell colSpan={9} className="text-center py-8 text-gray-500">
                       <div className="flex flex-col items-center gap-2">
                         <Icon icon="mdi:calendar-clock" className="w-12 h-12 text-gray-300" />
                         <p>No leave policies found</p>
@@ -968,8 +978,6 @@ const handleCompanySelect = (selected: SelectedItem) => {
                 ) : (
                   filteredPolicies.map((policy) => (
                     <TableRow key={policy.id}>
-                      <TableCell className="whitespace-nowrap">{policy.serviceProvider || "-"}</TableCell>
-                      <TableCell className="whitespace-nowrap">{policy.companyName || "-"}</TableCell>
                       <TableCell className="whitespace-nowrap">{policy.branchName || "-"}</TableCell>
                       <TableCell className="font-medium whitespace-nowrap">{policy.leavePolicyName || "-"}</TableCell>
                       <TableCell className="whitespace-nowrap text-center">{policy.sickLeaveCount || 0}</TableCell>

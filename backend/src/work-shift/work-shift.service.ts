@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { PrismaService } from 'src/prisma/prisma.service';
+import { PrismaService } from '../prisma/prisma.service';
 import { CreateWorkShiftDto } from './dto/create-work-shift.dto';
 import { UpdateWorkShiftDto } from './dto/update-work-shift.dto';
 

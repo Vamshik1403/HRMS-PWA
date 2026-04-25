@@ -11,10 +11,15 @@ const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "/backend";
 interface ImportResult {
   success: boolean;
   totalRowsInFile: number;
-  processAttLogsInserted: number;
-  empAttendanceLogsInserted: number;
+  recordsInserted: number;
   errorsCount: number;
   errors: { row: number; error: string }[];
+}
+
+interface DeleteResult {
+  success: boolean;
+  deletedCount: number;
+  message: string;
 }
 
 export function ImportAttendanceManagement() {
@@ -23,7 +28,7 @@ export function ImportAttendanceManagement() {
   const [result, setResult] = useState<ImportResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
-  const [deleteResult, setDeleteResult] = useState<string | null>(null);
+  const [deleteResult, setDeleteResult] = useState<DeleteResult | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
@@ -79,6 +84,7 @@ export function ImportAttendanceManagement() {
       a.click();
       a.remove();
       window.URL.revokeObjectURL(url);
+      toast.success("Template downloaded successfully");
     } catch (err: any) {
       setError(err.message || "Failed to download template");
       toast.error(err.message || "Failed to download template");
@@ -97,9 +103,8 @@ export function ImportAttendanceManagement() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || "Delete failed");
-      setDeleteResult(
-        `Deleted ${data.processAttLogsDeleted} process att logs and ${data.empAttendanceLogsDeleted} emp attendance logs.`
-      );
+      setDeleteResult(data);
+      toast.success(data.message || "Records deleted successfully");
     } catch (err: any) {
       setError(err.message || "Delete failed");
       toast.error(err.message || "Delete failed");
@@ -112,36 +117,70 @@ export function ImportAttendanceManagement() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
+          <h2 className="text-2xl font-bold">Import Attendance</h2>
           <p className="text-sm text-gray-500 mt-1">
-            Import attendance punch logs from CSV or Excel files into the system.
+            Import attendance logs from CSV or Excel files into the system.
           </p>
         </div>
       </div>
 
       {/* Instructions Card */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg flex items-center gap-2">
-            <FileSpreadsheet className="w-5 h-5 text-blue-600" />
-            Import Instructions
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-3 text-sm text-gray-600">
-            <p><strong>Supported formats:</strong> CSV (.csv), Excel (.xlsx, .xls)</p>
-            <p><strong>Required columns:</strong> <code className="bg-gray-100 px-1.5 py-0.5 rounded">punch_time</code></p>
-            <p><strong>Optional columns:</strong> <code className="bg-gray-100 px-1.5 py-0.5 rounded">user_id</code>, <code className="bg-gray-100 px-1.5 py-0.5 rounded">device_sn</code>, <code className="bg-gray-100 px-1.5 py-0.5 rounded">username</code>, <code className="bg-gray-100 px-1.5 py-0.5 rounded">company_name</code>, <code className="bg-gray-100 px-1.5 py-0.5 rounded">branch_name</code>, <code className="bg-gray-100 px-1.5 py-0.5 rounded">department_name</code>, <code className="bg-gray-100 px-1.5 py-0.5 rounded">device_emp_code</code>, <code className="bg-gray-100 px-1.5 py-0.5 rounded">manage_employee_id</code>, <code className="bg-gray-100 px-1.5 py-0.5 rounded">device_id</code>, <code className="bg-gray-100 px-1.5 py-0.5 rounded">device_name</code>, <code className="bg-gray-100 px-1.5 py-0.5 rounded">service_provider_id</code>, <code className="bg-gray-100 px-1.5 py-0.5 rounded">company_id</code>, <code className="bg-gray-100 px-1.5 py-0.5 rounded">branches_id</code></p>
-            <p><strong>Punch time format:</strong> <code className="bg-gray-100 px-1.5 py-0.5 rounded">YYYY-MM-DD HH:mm:ss</code> (e.g., 2025-03-01 09:00:00)</p>
-            <div className="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-              <p className="text-blue-800"><strong>Note:</strong> If <code className="bg-blue-100 px-1 py-0.5 rounded">manage_employee_id</code> (or <code className="bg-blue-100 px-1 py-0.5 rounded">employee_id</code>) is provided, records will also be inserted into the Employee Attendance Logs table, which is used for salary generation, overtime, and leave calculations.</p>
-            </div>
-            <Button variant="outline" size="sm" onClick={handleDownloadTemplate} className="mt-2">
-              <Download className="w-4 h-4 mr-2" />
-              Download Template
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+{/* Instructions Card */}
+<Card>
+  <CardHeader>
+    <CardTitle className="text-lg flex items-center gap-2">
+      <FileSpreadsheet className="w-5 h-5 text-blue-600" />
+      Import Instructions
+    </CardTitle>
+  </CardHeader>
+  <CardContent>
+    <div className="space-y-3 text-sm text-gray-600">
+      <p><strong>Supported formats:</strong> CSV (.csv), Excel (.xlsx, .xls)</p>
+      
+      <div>
+        <p><strong>Required columns:</strong></p>
+        <ul className="list-disc list-inside ml-4 space-y-1 mt-1">
+          <li><code className="bg-gray-100 px-1.5 py-0.5 rounded">user_id</code> - Employee ID</li>
+          <li><code className="bg-gray-100 px-1.5 py-0.5 rounded">log_time</code> - Punch time</li>
+          <li><code className="bg-gray-100 px-1.5 py-0.5 rounded">device_sn</code> - Device serial number</li>
+        </ul>
+      </div>
+      
+      <div>
+        <p><strong>Optional column:</strong></p>
+        <ul className="list-disc list-inside ml-4 mt-1">
+          <li><code className="bg-gray-100 px-1.5 py-0.5 rounded">auth_type</code> - Authentication type (FINGER, CARD, FACE, PIN)</li>
+        </ul>
+      </div>
+      
+      <div className="mt-2 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+        <p className="font-semibold text-yellow-800">⚠️ Date Format (DD/MM/YYYY):</p>
+        <p className="text-yellow-800 text-xs mt-1">
+          <strong>Day first, then Month.</strong> Use this exact format to avoid confusion.
+        </p>
+        <ul className="list-disc list-inside ml-4 mt-2 text-xs text-yellow-700 space-y-1">
+          <li><code className="bg-yellow-100 px-1 py-0.5 rounded">01/02/2026 09:00:00</code> = 1st February 2026, 9:00 AM</li>
+          <li><code className="bg-yellow-100 px-1 py-0.5 rounded">15/12/2026 20:00:00</code> = 15th December 2026, 8:00 PM</li>
+          <li><code className="bg-yellow-100 px-1 py-0.5 rounded">1/2/2026 9:00</code> = 1st February 2026, 9:00 AM (shorter format accepted)</li>
+        </ul>
+        <p className="text-red-600 text-xs mt-2">
+          ❌ Do NOT use MM/DD/YYYY (US format) - it will be rejected or misinterpreted!
+        </p>
+      </div>
+      
+      <div className="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+        <p className="text-blue-800 text-xs">
+          <strong>Note:</strong> The device must exist in the system with the provided device_sn.
+        </p>
+      </div>
+      
+      <Button variant="outline" size="sm" onClick={handleDownloadTemplate} className="mt-2">
+        <Download className="w-4 h-4 mr-2" />
+        Download Template (DD/MM/YYYY Format)
+      </Button>
+    </div>
+  </CardContent>
+</Card>
 
       {/* Upload Section */}
       <Card>
@@ -198,14 +237,13 @@ export function ImportAttendanceManagement() {
                 <h3 className="font-semibold text-green-800">Import Successful</h3>
                 <div className="text-sm text-green-700 space-y-1">
                   <p>Total rows in file: <strong>{result.totalRowsInFile}</strong></p>
-                  <p>Process Att Logs inserted: <strong>{result.processAttLogsInserted}</strong></p>
-                  <p>Emp Attendance Logs inserted: <strong>{result.empAttendanceLogsInserted}</strong></p>
+                  <p>Records inserted: <strong>{result.recordsInserted}</strong></p>
                   {result.errorsCount > 0 && (
                     <div className="mt-2">
                       <p className="text-orange-700">Rows with errors: <strong>{result.errorsCount}</strong></p>
-                      <ul className="list-disc list-inside mt-1 text-orange-600">
+                      <ul className="list-disc list-inside mt-1 text-orange-600 max-h-60 overflow-y-auto">
                         {result.errors.map((e, idx) => (
-                          <li key={idx}>Row {e.row}: {e.error}</li>
+                          <li key={idx} className="text-xs">Row {e.row}: {e.error}</li>
                         ))}
                       </ul>
                     </div>
@@ -238,7 +276,7 @@ export function ImportAttendanceManagement() {
               <CheckCircle2 className="w-6 h-6 text-blue-600 mt-0.5" />
               <div>
                 <h3 className="font-semibold text-blue-800">Delete Complete</h3>
-                <p className="text-sm text-blue-700">{deleteResult}</p>
+                <p className="text-sm text-blue-700">{deleteResult.message}</p>
               </div>
             </div>
           </CardContent>
@@ -255,8 +293,8 @@ export function ImportAttendanceManagement() {
         </CardHeader>
         <CardContent>
           <p className="text-sm text-gray-600 mb-4">
-            Remove all previously imported attendance records from the system. This will delete records from both
-            Process Att Logs and Emp Attendance Logs tables. Only records marked as imported will be affected.
+            Remove all previously imported attendance records from the system. 
+            Only records marked as imported will be affected.
           </p>
           <Button
             variant="destructive"

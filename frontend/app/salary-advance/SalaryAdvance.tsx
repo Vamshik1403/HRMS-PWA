@@ -136,7 +136,7 @@ export function SalaryAdvanceManagement() {
   const [selectedSalaryPeriod, setSelectedSalaryPeriod] = useState("")
   
   const user = useCurrentUser()
-  const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN"
+  const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN" || user?.role === "BRANCH_ADMIN"
   const isEmployee = !canManage
 
   const ctx = getSidebarContext();
@@ -149,6 +149,8 @@ export function SalaryAdvanceManagement() {
 const resolvedCompanyID =
   user?.role === "SERVICE_PROVIDER"
     ? (managerData?.companyID ?? ctx?.companyID ?? user?.companyID)
+    : (user?.role === "COMPANY_ADMIN" || user?.role === "BRANCH_ADMIN")
+    ? (formData.companyID ?? ctx?.companyID ?? user?.companyID)
     : formData.companyID;
 
 const resolvedBranchID = formData.branchesID;
@@ -247,10 +249,11 @@ const fetchCompanies = useCallback(
     return data.filter(
       (b) =>
         b.companyID === resolvedCompanyID &&
+        (user?.role !== "BRANCH_ADMIN" || Number(b.id) === Number(user?.branchesID)) &&
         (b.branchName || "").toLowerCase().includes(query)
     );
   },
-  [robustGet, resolvedCompanyID]
+  [robustGet, resolvedCompanyID, user?.role, user?.branchesID]
 );
 
 
@@ -620,6 +623,7 @@ const fetchCompanies = useCallback(
   }, [formData, editingAdvance, validateForm, robustFetch, loadAdvances, user?.role, managerData])
 
   const resetForm = useCallback(() => {
+    const ctx = getSidebarContext();
     setFormData({
       serviceProvider: "", 
       companyName: user?.role === "SERVICE_PROVIDER" ? managerData?.companyName || "" : "", 
@@ -630,12 +634,16 @@ const fetchCompanies = useCallback(
       reason: "", 
       status: "Pending", 
       serviceProviderID: user?.role === "SERVICE_PROVIDER" ? managerData?.serviceProviderID : undefined,
-      companyID: user?.role === "SERVICE_PROVIDER" ? managerData?.companyID : undefined,
+      companyID: user?.role === "SERVICE_PROVIDER"
+        ? managerData?.companyID
+        : (user?.role === "COMPANY_ADMIN" || user?.role === "BRANCH_ADMIN")
+        ? (ctx?.companyID ?? user?.companyID ?? undefined)
+        : undefined,
       branchesID: user?.role === "SERVICE_PROVIDER" ? managerData?.branchesID : undefined,
       manageEmployeeID: undefined
     })
     setEditingAdvance(null)
-  }, [user?.role, managerData])
+  }, [user?.role, user?.companyID, managerData])
 
   const handleEdit = useCallback((a: SalaryAdvance) => {
     setFormData({
@@ -918,6 +926,22 @@ const fetchCompanies = useCallback(
                 </div>
               )}
 
+              {/* For COMPANY_ADMIN / BRANCH_ADMIN - Show branch input */}
+              {(user?.role === "COMPANY_ADMIN" || user?.role === "BRANCH_ADMIN") && (
+                <div className="grid grid-cols-1 gap-4">
+                  <SearchSuggestInput 
+                    label="Branch" 
+                    placeholder="Select Branch" 
+                    value={formData.branchName} 
+                    onChange={v => setFormData(p => ({ ...p, branchName: v }))} 
+                    onSelect={s => setFormData(p => ({ ...p, branchName: s.display, branchesID: s.value }))} 
+                    fetchData={fetchBranches} 
+                    displayField="branchName" 
+                    valueField="id" 
+                  />
+                </div>
+              )}
+
               {/* Employee */}
               <SearchSuggestInput
                 label="Employee"
@@ -1027,7 +1051,6 @@ const fetchCompanies = useCallback(
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Company</TableHead>
                   <TableHead>Employee</TableHead>
                   <TableHead>Prev Due</TableHead>
                   <TableHead>Amount</TableHead>
@@ -1039,14 +1062,13 @@ const fetchCompanies = useCallback(
               <TableBody>
                 {filteredAdvances.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center py-8 text-gray-500">
+                    <TableCell colSpan={6} className="text-center py-8 text-gray-500">
                       No salary advances found
                     </TableCell>
                   </TableRow>
                 ) : (
                   filteredAdvances.map(a => (
                     <TableRow key={a.id}>
-                      <TableCell>{a.companyName}</TableCell>
                       <TableCell>{a.employeeName}</TableCell>
                       <TableCell>{a.previousAdvancesDue}</TableCell>
                       <TableCell>{a.advanceAmount}</TableCell>

@@ -227,7 +227,7 @@ export function RosterManagement() {
 
   // Get user from localStorage
   const [user, setUser] = useState<any>(null)
-  const [userRole, setUserRole] = useState<"SUPERADMIN" | "SERVICE_PROVIDER" | "EMPLOYEE" | null>(null)
+  const [userRole, setUserRole] = useState<"SUPERADMIN" | "COMPANY_ADMIN" | "EMPLOYEE" | null>(null)
 
   // ==================== USER AUTHENTICATION ====================
   useEffect(() => {
@@ -247,9 +247,8 @@ export function RosterManagement() {
     }
   }, [])
 
-  // Load user mapping for MANAGER
   useEffect(() => {
-    if (userRole !== "SERVICE_PROVIDER" || !user) return
+    if (userRole !== "COMPANY_ADMIN" || !user) return
 
     const loadUserMapping = async () => {
       try {
@@ -281,6 +280,7 @@ export function RosterManagement() {
             setManagerCompanies([company]) // Only one company
             setCoList([company])
             setCompanyID(me.companyID) // Auto-select mapped company
+            console.log("🏢 Company set:", company)
           }
 
           // Set only the mapped branch
@@ -294,6 +294,26 @@ export function RosterManagement() {
             setManagerBranches([branch]) // Only one branch
             setBrList([branch])
             setBranchesID(me.branchesID) // Auto-select mapped branch
+            console.log("🏢 Branch set:", branch)
+          } else {
+            console.warn("⚠️ No branch found in user mapping")
+            // Try to fetch branches for the company
+            try {
+              const allBranches = await safeFetch<Branch[]>(API.branches)
+              const companyBranches = allBranches.filter(b => 
+                b.serviceProviderID === me.serviceProviderID && 
+                b.companyID === me.companyID
+              )
+              if (companyBranches.length > 0) {
+                setBrList(companyBranches)
+                if (companyBranches.length === 1) {
+                  setBranchesID(companyBranches[0].id)
+                  console.log("🏢 Auto-selected branch:", companyBranches[0])
+                }
+              }
+            } catch (error) {
+              console.error("Failed to fetch branches:", error)
+            }
           }
         }
       } catch (error) {
@@ -305,7 +325,7 @@ export function RosterManagement() {
   }, [userRole, user])
 
   const isSuperAdmin = userRole === "SUPERADMIN"
-  const isServiceProvider = userRole === "SERVICE_PROVIDER"
+  const isServiceProvider = userRole === "COMPANY_ADMIN"
 
   // ✅ EFFECTIVE SCOPE
   const effectiveServiceProviderID = useMemo(() => {
@@ -556,15 +576,15 @@ export function RosterManagement() {
     loadBranches()
   }, [serviceProviderID, companyID, isSuperAdmin])
 
-  // Load departments when branch changes
+  // Load departments when branch changes (for both SUPERADMIN and COMPANY_ADMIN)
   useEffect(() => {
-    if (isSuperAdmin) {
-      setDepartmentID("")
-      setDesignationID("")
-      setDepList([])
-      setDesList([])
-    }
+    // Reset department and designation when branch changes
+    setDepartmentID("")
+    setDesignationID("")
+    setDepList([])
+    setDesList([])
 
+    // Check if we have required IDs to load departments
     if (isSuperAdmin && (!serviceProviderID || !companyID || !branchesID)) return
     if (isServiceProvider && (!companyID || !branchesID)) return
 
@@ -579,6 +599,7 @@ export function RosterManagement() {
           d.branchesID === effectiveBranchesID
         )
         setDepList(filteredDeps)
+        console.log("📋 Departments loaded:", filteredDeps.length)
       } catch (error) {
         console.error("Failed to load departments:", error)
       }
@@ -928,6 +949,28 @@ export function RosterManagement() {
     setSelectAll(!selectAll)
   }
 
+  // Manual refresh function for branches
+  const refreshBranches = useCallback(async () => {
+    if (!companyID) {
+      toast.error("Please select a company first")
+      return
+    }
+
+    try {
+      const allBranches = await safeFetch<Branch[]>(API.branches)
+      const filtered = allBranches.filter(b => 
+        b.serviceProviderID === effectiveServiceProviderID && 
+        b.companyID === effectiveCompanyID
+      )
+      setBrList(filtered)
+      toast.success(`Loaded ${filtered.length} branches`)
+      console.log("🔄 Branches refreshed:", filtered)
+    } catch (error) {
+      console.error("Failed to refresh branches:", error)
+      toast.error("Failed to refresh branches")
+    }
+  }, [companyID, effectiveServiceProviderID, effectiveCompanyID])
+
   // ==================== RENDER ====================
   if (isLoading.initial) {
     return (
@@ -994,7 +1037,7 @@ export function RosterManagement() {
             <div className="flex items-center gap-2">
               <span className="font-medium">Role:</span>
               <Badge className={`px-3 py-1 ${userRole === "SUPERADMIN" ? "bg-purple-100 text-purple-700 border-purple-300" :
-                userRole === "SERVICE_PROVIDER" ? "bg-blue-100 text-blue-700 border-blue-300" :
+                userRole === "COMPANY_ADMIN" ? "bg-blue-100 text-blue-700 border-blue-300" :
                   "bg-gray-100 text-gray-700 border-gray-300"
                 }`}>
                 {userRole}
@@ -1052,6 +1095,8 @@ export function RosterManagement() {
                   setCompanyID(newCompanyID)
                   // Reset branch when company changes
                   setBranchesID("")
+                  setDepartmentID("")
+                  setDesignationID("")
                 }}
                 disabled={
                   (isSuperAdmin && !serviceProviderID) ||
@@ -1067,14 +1112,27 @@ export function RosterManagement() {
 
             {/* Branch */}
             <div className="space-y-2">
-              <Label className="text-sm font-medium">Branch</Label>
+              <div className="flex items-center justify-between">
+                <Label className="text-sm font-medium">Branch</Label>
+                {companyID && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={refreshBranches}
+                    className="h-6 px-2 text-xs"
+                  >
+                    <RefreshCw className="w-3 h-3 mr-1" />
+                    Refresh
+                  </Button>
+                )}
+              </div>
               <select
                 className="w-full border rounded-lg h-10 px-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50"
                 value={branchesID}
                 onChange={(e) => setBranchesID(e.target.value ? Number(e.target.value) : "")}
                 disabled={
                   (isSuperAdmin && (!serviceProviderID || !companyID)) ||
-                  (isServiceProvider && (!companyID || brList.length === 0))
+                  (isServiceProvider && !companyID)
                 }
               >
                 <option value="">Select Branch</option>
@@ -1082,6 +1140,11 @@ export function RosterManagement() {
                   <option key={b.id} value={b.id}>{b.branchName}</option>
                 ))}
               </select>
+              {isServiceProvider && brList.length === 0 && companyID && (
+                <p className="text-xs text-amber-600 mt-1">
+                  No branches found. Click refresh to load branches.
+                </p>
+              )}
             </div>
 
             {/* Department */}
@@ -1097,7 +1160,8 @@ export function RosterManagement() {
                 }}
                 disabled={
                   (isSuperAdmin && (!serviceProviderID || !companyID || !branchesID)) ||
-                  (isServiceProvider && (!companyID || !branchesID))
+                  (isServiceProvider && (!companyID || !branchesID)) ||
+                  brList.length === 0
                 }
                 required
               >
@@ -1106,6 +1170,11 @@ export function RosterManagement() {
                   <option key={d.id} value={d.id}>{d.departmentName}</option>
                 ))}
               </select>
+              {depList.length === 0 && branchesID && (
+                <p className="text-xs text-gray-500 mt-1">
+                  No departments found for this branch
+                </p>
+              )}
             </div>
 
             {/* Designation */}

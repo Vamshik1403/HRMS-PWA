@@ -8,14 +8,15 @@ const DEBUG = {
   WARN: 1,
   INFO: 2,
   DEBUG: 3
-};
+} as const;
 
-let currentDebugLevel = 3;
+type DebugLevel = typeof DEBUG[keyof typeof DEBUG];
+let currentDebugLevel: DebugLevel = 3;
 
-function log(level, message, data = null) {
+function log(level: DebugLevel, message: string, data: any = null): void {
   if (level <= currentDebugLevel) {
     const timestamp = new Date().toISOString();
-    const levelName = Object.keys(DEBUG).find(key => DEBUG[key] === level);
+    const levelName = Object.keys(DEBUG).find(key => DEBUG[key as keyof typeof DEBUG] === level);
     
     console.log(`[${timestamp}] [${levelName}] ${message}`);
     if (data && level === DEBUG.DEBUG) {
@@ -27,48 +28,84 @@ function log(level, message, data = null) {
 // Database connection
 const pool = new Pool({
   host: process.env.DB_HOST || 'localhost',
-  port: process.env.DB_PORT || 5432,
+  port: parseInt(process.env.DB_PORT || '5432'),
   database: process.env.DB_NAME || 'hrms',
   user: process.env.DB_USER || 'postgres',
   password: process.env.DB_PASSWORD || '',
 });
 
-// ==================== CORRECTED DATE CONVERSION FOR TIMESTAMP ====================
-/**
- * Convert DD/MM/YYYY HH:MM to JavaScript Date object WITHOUT timezone issues
- * Returns a Date object that will be stored correctly in PostgreSQL TIMESTAMP
- */
-function convertToDate(dateString) {
-  if (!dateString) return null;
-
-  const match = dateString.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
-
-  if (!match) {
-    log(DEBUG.WARN, `⚠️ Could not parse date: ${dateString}`);
-    return null;
-  }
-
-  const [, day, month, year, hour, minute, second = '00'] = match;
-
-  // Create as LOCAL date (no timezone conversion)
-  // This stores "10:00" as "10:00" in the database
-  return new Date(
-    Number(year),
-    Number(month) - 1,
-    Number(day),
-    Number(hour),
-    Number(minute),
-    Number(second)
-  );
+interface DeviceInfo {
+  id: number;
+  deviceName: string;
+  deviceType: string;
+  authTypes: string[];
 }
 
-async function processAttendanceLogs() {
+interface EmpInfo {
+  manageEmployeeID: number;
+  username: string;
+  companyName: string;
+  branchName: string;
+  departmentName: string;
+  deviceID: number;
+  deviceSN: string;
+  deviceName: string;
+  deviceType: string;
+}
+
+interface TokenInfo {
+  manageEmployeeID: number;
+  username: string;
+  deviceID: number;
+  deviceSN: string;
+  deviceName: string;
+  deviceType: string;
+}
+
+interface UnmatchedLog {
+  user_id: string;
+  device_sn: string;
+  punch_time: string;
+}
+
+interface ProcessResult {
+  success: boolean;
+  processedCount?: number;
+  matchedCount?: number;
+  unmatchedCount?: number;
+  duration?: string;
+  error?: string;
+}
+
+// ==================== DATE CONVERSION HELPER ====================
+/**
+ * Convert DD/MM/YYYY HH:mm to YYYY-MM-DD HH:mm:ss string format
+ */
+function convertToTimestampString(dateStr: string | null): string | null {
+  if (!dateStr) return null;
+  
+  // Format: "13/4/2026 10:00" or "13/04/2026 10:00"
+  const match = dateStr.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2})$/);
+  if (match) {
+    const [, day, month, year, hour, minute] = match;
+    return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')} ${hour.padStart(2, '0')}:${minute}:00`;
+  }
+  
+  // If already in YYYY-MM-DD format, return as is
+  if (dateStr.match(/^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}/)) {
+    return dateStr;
+  }
+  
+  return dateStr;
+}
+
+async function processAttendanceLogs(): Promise<ProcessResult> {
   const startTime = Date.now();
   
   try {
     log(DEBUG.INFO, "🚀 Starting attendance logs processing...");
     
-    // Step 1: Create process_att_logs table with TIMESTAMP punch_time
+    // Step 1: Create process_att_logs table if not exists with VARCHAR punch_time
     log(DEBUG.DEBUG, "Creating process_att_logs table...");
     
     await pool.query(`
@@ -77,7 +114,7 @@ async function processAttendanceLogs() {
           device_sn VARCHAR(100),
           user_id VARCHAR(50),
           username VARCHAR(255),
-          punch_time TIMESTAMP,
+          punch_time VARCHAR(50),
           company_name VARCHAR(255),
           branch_name VARCHAR(255),
           department_name VARCHAR(255),
@@ -92,18 +129,34 @@ async function processAttendanceLogs() {
       )
     `);
     
-    // Step 2: Add columns if they don't exist
+    // Step 2: Add columns if they don't exist (for existing tables)
     try {
       await pool.query(`ALTER TABLE process_att_logs ADD COLUMN IF NOT EXISTS device_name VARCHAR(100)`);
       await pool.query(`ALTER TABLE process_att_logs ADD COLUMN IF NOT EXISTS device_type VARCHAR(10)`);
       await pool.query(`ALTER TABLE process_att_logs ADD COLUMN IF NOT EXISTS auth_type VARCHAR(20)`);
       await pool.query(`ALTER TABLE process_att_logs ALTER COLUMN status SET DEFAULT '0'`);
+      
+      // Ensure punch_time is VARCHAR (convert if it's TIMESTAMP)
+      await pool.query(`ALTER TABLE process_att_logs ALTER COLUMN punch_time TYPE VARCHAR(50)`);
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      log(DEBUG.DEBUG, "Columns already exist or couldn't be added: " + errorMessage);
+    }
+    
+    // Add auth_type to essl_raw_attlog if not exists
+    try {
       await pool.query(`ALTER TABLE essl_raw_attlog ADD COLUMN IF NOT EXISTS auth_type VARCHAR(20)`);
+    } catch (err) {
+      log(DEBUG.DEBUG, "auth_type column already exists in essl_raw_attlog");
+    }
+    
+    // Add auth_type to canteen tables if not exists
+    try {
       await pool.query(`ALTER TABLE canteen_tr_logs ADD COLUMN IF NOT EXISTS auth_type VARCHAR(20)`);
       await pool.query(`ALTER TABLE canteen_tv_logs ADD COLUMN IF NOT EXISTS auth_type VARCHAR(20)`);
       await pool.query(`ALTER TABLE canteen_tv_not_logs ADD COLUMN IF NOT EXISTS auth_type VARCHAR(20)`);
     } catch (err) {
-      log(DEBUG.DEBUG, "Columns already exist or couldn't be added: " + err.message);
+      log(DEBUG.DEBUG, "Canteen table columns already exist");
     }
     
     // Step 3: Get unprocessed logs from essl_raw_attlog
@@ -126,10 +179,11 @@ async function processAttendanceLogs() {
       return { success: true, processedCount: 0 };
     }
     
-    const uniqueUserIds = [...new Set(unprocessedLogs.map(l => l.user_id))];
+    // Show unique user_ids in logs
+    const uniqueUserIds = [...new Set(unprocessedLogs.map((l: any) => l.user_id))];
     log(DEBUG.INFO, `User IDs in logs: ${uniqueUserIds.join(', ')}`);
     
-    // Step 4: Build device SN → device info map
+    // Step 4: Build device SN → device info map (for all devices)
     log(DEBUG.DEBUG, "Building device SN map...");
 
     const allDevicesResult = await pool.query(`
@@ -138,7 +192,8 @@ async function processAttendanceLogs() {
       WHERE status = 'Active'
     `);
 
-    const deviceSnMap = new Map();
+    // Map: deviceSN → { id, deviceName, deviceType, authTypes }
+    const deviceSnMap = new Map<string, DeviceInfo>();
     for (const row of allDevicesResult.rows) {
       deviceSnMap.set(row.deviceSN, {
         id: row.id,
@@ -148,8 +203,11 @@ async function processAttendanceLogs() {
       });
     }
     log(DEBUG.INFO, `📋 Found ${deviceSnMap.size} active devices`);
+    for (const [sn, info] of deviceSnMap) {
+      log(DEBUG.INFO, `  Device SN: "${sn}" -> ${info.deviceName} (Type: ${info.deviceType})`);
+    }
 
-    // Step 4b: Build EmpDeviceMapping
+    // Step 4b: Build EmpDeviceMapping (for AT devices → process_att_logs)
     log(DEBUG.DEBUG, "Building employee mapping from EmpDeviceMapping...");
     
     const empMappingResult = await pool.query(`
@@ -179,7 +237,8 @@ async function processAttendanceLogs() {
     
     log(DEBUG.INFO, `Found ${empMappingResult.rows.length} device mappings in EmpDeviceMapping`);
 
-    const empMap = new Map();
+    // Map: "deviceSN:deviceEmpCode" → employee info (for AT devices)
+    const empMap = new Map<string, EmpInfo>();
     for (const row of empMappingResult.rows) {
       const key = `${row.deviceSN}:${row.deviceEmpCode}`;
       const username = `${row.employeeFirstName || ''} ${row.employeeLastName || ''}`.trim() || `Employee ${row.deviceEmpCode}`;
@@ -194,9 +253,10 @@ async function processAttendanceLogs() {
         deviceName: row.device_name,
         deviceType: row.device_type || 'AT',
       });
+      log(DEBUG.DEBUG, `EmpMap "${key}" -> "${username}" (Type: ${row.device_type || 'AT'})`);
     }
 
-    // Step 4c: Build TokenDeviceMapping
+    // Step 4c: Build TokenDeviceMapping (for TR/TV devices → canteen tables)
     log(DEBUG.DEBUG, "Building employee mapping from TokenDeviceMapping...");
     
     const tokenMappingResult = await pool.query(`
@@ -217,7 +277,8 @@ async function processAttendanceLogs() {
 
     log(DEBUG.INFO, `Found ${tokenMappingResult.rows.length} device mappings in TokenDeviceMapping`);
 
-    const tokenMap = new Map();
+    // Map: "deviceSN:deviceEmpCode" → employee info (for TR/TV devices)
+    const tokenMap = new Map<string, TokenInfo>();
     for (const row of tokenMappingResult.rows) {
       const key = `${row.deviceSN}:${row.deviceEmpCode}`;
       const username = `${row.employeeFirstName || ''} ${row.employeeLastName || ''}`.trim() || `Employee ${row.deviceEmpCode}`;
@@ -229,17 +290,19 @@ async function processAttendanceLogs() {
         deviceName: row.device_name,
         deviceType: row.device_type,
       });
+      log(DEBUG.DEBUG, `TokenMap "${key}" -> "${username}" (${row.device_type})`);
     }
 
     log(DEBUG.INFO, `📋 EmpMap: ${empMap.size} entries, TokenMap: ${tokenMap.size} entries`);
 
-    // Fetch canteen setup
+    // Fetch current canteen setup for default_token flag
     let defaultTokenEnabled = false;
     try {
       const canteenSetupResult = await pool.query(`SELECT default_token_enabled FROM canteen_setup LIMIT 1`);
       defaultTokenEnabled = canteenSetupResult.rows.length > 0 ? canteenSetupResult.rows[0].default_token_enabled : false;
     } catch (err) {
-      log(DEBUG.WARN, `⚠️ Could not read canteen_setup: ${err.message}. Defaulting to false.`);
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      log(DEBUG.WARN, `⚠️ Could not read canteen_setup: ${errorMessage}. Defaulting to false.`);
     }
     log(DEBUG.INFO, `🍽️ Canteen default_token_enabled: ${defaultTokenEnabled}`);
     
@@ -249,10 +312,9 @@ async function processAttendanceLogs() {
     let canteenTvInserted = 0;
     let attInserted = 0;
     let matchedCount = 0;
-    let unmatchedLogs = [];
-    let skippedDueToDate = 0;
+    const unmatchedLogs: UnmatchedLog[] = [];
 
-    function parseAuthTypeFromRawBody(rawBody) {
+    function parseAuthTypeFromRawBody(rawBody: string | null): string | null {
       if (!rawBody) return null;
       const parts = rawBody.trim().split(/\s+/);
       if (parts.length < 5) return null;
@@ -271,15 +333,6 @@ async function processAttendanceLogs() {
       const user_id = logEntry.user_id;
       const rawDeviceSN = logEntry.device_sn;
 
-      // Convert to Date object (UTC-based to avoid timezone issues)
-      const convertedPunchTime = convertToDate(logEntry.punch_time);
-      if (!convertedPunchTime) {
-        log(DEBUG.WARN, `⚠️ Skipping record with invalid date: ${logEntry.punch_time} (ID: ${logEntry.id}, User: ${user_id})`);
-        await pool.query(`UPDATE essl_raw_attlog SET export = 1 WHERE id = $1`, [logEntry.id]);
-        skippedDueToDate++;
-        continue;
-      }
-
       const deviceInfo = deviceSnMap.get(rawDeviceSN);
       
       if (!deviceInfo) {
@@ -294,8 +347,8 @@ async function processAttendanceLogs() {
 
       const authType = logEntry.auth_type || parseAuthTypeFromRawBody(logEntry.raw_body);
 
-      let attendanceAuth = null;
-      let tokenRegAuth = null;
+      let attendanceAuth: string | null = null;
+      let tokenRegAuth: string | null = null;
       for (const at of deviceAuthTypes) {
         if (at.startsWith('ATT:')) attendanceAuth = at.replace('ATT:', '');
         else if (at.startsWith('TR:')) tokenRegAuth = at.replace('TR:', '');
@@ -303,12 +356,14 @@ async function processAttendanceLogs() {
 
       const useTaggedRouting = deviceType === 'AT+TR' && attendanceAuth && tokenRegAuth && authType;
 
+      const convertedPunchTime = convertToTimestampString(logEntry.punch_time);
+
       if (deviceType === 'TR' || (useTaggedRouting && authType === tokenRegAuth)) {
-        let empInfo = null;
+        let empInfo: EmpInfo | TokenInfo | null = null;
         if (deviceType === 'TR') {
-          empInfo = tokenMap.get(lookupKey);
+          empInfo = tokenMap.get(lookupKey) || null;
         } else {
-          empInfo = empMap.get(lookupKey);
+          empInfo = empMap.get(lookupKey) || null;
         }
 
         if (empInfo) {
@@ -324,10 +379,10 @@ async function processAttendanceLogs() {
           canteenTrInserted++;
           insertedCount++;
           matchedCount++;
-          log(DEBUG.INFO, `🍽️ TR log: user_id "${user_id}" -> "${empInfo.username}"`);
+          log(DEBUG.INFO, `🍽️ TR log: user_id "${user_id}" -> "${empInfo.username}" (Device: ${deviceInfo.deviceName}, AuthType: ${authType})`);
         } else {
           unmatchedLogs.push({ user_id, device_sn: rawDeviceSN, punch_time: logEntry.punch_time });
-          log(DEBUG.WARN, `⚠️ No mapping for user_id: "${user_id}" on TR route`);
+          log(DEBUG.WARN, `⚠️ No mapping for user_id: "${user_id}" on TR/canteen route. Key: "${lookupKey}"`);
         }
 
       } else if (deviceType === 'TV') {
@@ -345,10 +400,10 @@ async function processAttendanceLogs() {
           canteenTvInserted++;
           insertedCount++;
           matchedCount++;
-          log(DEBUG.INFO, `🍽️ TV log: user_id "${user_id}" -> "${tokenInfo.username}"`);
+          log(DEBUG.INFO, `🍽️ TV log: user_id "${user_id}" -> "${tokenInfo.username}" (Device: ${deviceInfo.deviceName})`);
         } else {
           unmatchedLogs.push({ user_id, device_sn: rawDeviceSN, punch_time: logEntry.punch_time });
-          log(DEBUG.WARN, `⚠️ No token mapping for user_id: "${user_id}" on TV device`);
+          log(DEBUG.WARN, `⚠️ No token mapping for user_id: "${user_id}" on TV device: "${rawDeviceSN}". Key: "${lookupKey}"`);
         }
 
       } else {
@@ -370,10 +425,10 @@ async function processAttendanceLogs() {
           attInserted++;
           insertedCount++;
           matchedCount++;
-          log(DEBUG.INFO, `✅ AT log: user_id "${user_id}" -> "${empInfo.username}"`);
+          log(DEBUG.INFO, `✅ AT log: user_id "${user_id}" -> "${empInfo.username}" (Device: ${empInfo.deviceName}, Type: ${empInfo.deviceType}, AuthType: ${authType})`);
         } else {
           unmatchedLogs.push({ user_id, device_sn: rawDeviceSN, punch_time: logEntry.punch_time });
-          log(DEBUG.WARN, `⚠️ No emp mapping for user_id: "${user_id}" on AT device`);
+          log(DEBUG.WARN, `⚠️ No emp mapping for user_id: "${user_id}" on AT device: "${rawDeviceSN}". Key: "${lookupKey}"`);
         }
       }
     }
@@ -382,23 +437,31 @@ async function processAttendanceLogs() {
     log(DEBUG.INFO, `   - process_att_logs: ${attInserted}`);
     log(DEBUG.INFO, `   - canteen_tr_logs: ${canteenTrInserted}`);
     log(DEBUG.INFO, `   - canteen_tv_logs: ${canteenTvInserted}`);
-    if (skippedDueToDate > 0) {
-      log(DEBUG.WARN, `   - Skipped due to invalid date: ${skippedDueToDate}`);
-    }
     
     // Step 6: Update export flag
     if (insertedCount > 0) {
       const processedIds = unprocessedLogs
-        .filter(logEntry => {
-          const convertedDate = convertToDate(logEntry.punch_time);
-          if (!convertedDate) return false;
-          
+        .filter((logEntry: any) => {
           const di = deviceSnMap.get(logEntry.device_sn);
           if (!di) return false;
           const key = `${logEntry.device_sn}:${logEntry.user_id}`;
-          return empMap.has(key) || tokenMap.has(key);
+          const dt = di.deviceType || 'AT';
+          const logAuthType = logEntry.auth_type || parseAuthTypeFromRawBody(logEntry.raw_body);
+          
+          let attAuth: string | null = null;
+          let trAuth: string | null = null;
+          for (const at of (di.authTypes || [])) {
+            if (at.startsWith('ATT:')) attAuth = at.replace('ATT:', '');
+            else if (at.startsWith('TR:')) trAuth = at.replace('TR:', '');
+          }
+          const useTagged = dt === 'AT+TR' && attAuth && trAuth && logAuthType;
+          
+          if (dt === 'TV') return tokenMap.has(key);
+          if (dt === 'TR') return tokenMap.has(key);
+          if (useTagged && logAuthType === trAuth) return empMap.has(key);
+          return empMap.has(key);
         })
-        .map(logEntry => logEntry.id);
+        .map((logEntry: any) => logEntry.id);
       
       if (processedIds.length > 0) {
         await pool.query(`
@@ -417,12 +480,25 @@ async function processAttendanceLogs() {
       total_logs: unprocessedLogs.length,
       matched: matchedCount,
       unmatched: unmatchedLogs.length,
-      skipped_invalid_date: skippedDueToDate,
       inserted: insertedCount
     });
     
     if (unmatchedLogs.length > 0) {
-      log(DEBUG.WARN, `⚠️ Unmatched user_ids: ${[...new Set(unmatchedLogs.map(l => l.user_id))].join(', ')}`);
+      const unmatchedUserIds = [...new Set(unmatchedLogs.map((l: UnmatchedLog) => l.user_id))];
+      log(DEBUG.WARN, `⚠️ Unmatched user_ids: ${unmatchedUserIds.join(', ')}`);
+    }
+    
+    // Step 8: Show last 10 processed records
+    const processedRecords = await pool.query(`
+      SELECT id, user_id, username, device_name, device_type, company_name, branch_name, department_name, punch_time, status
+      FROM process_att_logs 
+      ORDER BY id DESC 
+      LIMIT 10
+    `);
+    
+    if (processedRecords.rows.length > 0) {
+      console.log("\n📋 Last 10 processed records:");
+      console.table(processedRecords.rows);
     }
     
     await pool.end();
@@ -432,28 +508,30 @@ async function processAttendanceLogs() {
       processedCount: insertedCount,
       matchedCount: matchedCount,
       unmatchedCount: unmatchedLogs.length,
-      skippedInvalidDate: skippedDueToDate,
       duration: duration
     };
     
   } catch (error) {
-    log(DEBUG.ERROR, `❌ Error: ${error.message}`);
-    console.error(error.stack);
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    log(DEBUG.ERROR, `❌ Error: ${errorMessage}`);
+    if (error instanceof Error) {
+      console.error(error.stack);
+    }
     await pool.end();
     return {
       success: false,
-      error: error.message
+      error: errorMessage
     };
   }
 }
 
 // Run the script
 processAttendanceLogs()
-  .then(result => {
+  .then((result: ProcessResult) => {
     if (result.success) {
       console.log("\n✅ Script completed successfully!");
       console.log(`📊 Processed: ${result.processedCount} records`);
-      if (result.unmatchedCount > 0) {
+      if (result.unmatchedCount && result.unmatchedCount > 0) {
         console.log(`⚠️ Unmatched: ${result.unmatchedCount} records`);
       }
       console.log(`⏱️ Duration: ${result.duration} seconds`);
@@ -463,7 +541,8 @@ processAttendanceLogs()
       process.exit(1);
     }
   })
-  .catch(error => {
-    console.error("Fatal error:", error);
+  .catch((error: unknown) => {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.error("Fatal error:", errorMessage);
     process.exit(1);
   });

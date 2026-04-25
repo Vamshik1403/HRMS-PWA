@@ -1,7 +1,8 @@
-// src/process-att-logs/dto/create-process_att_log.dto.ts
-import { IsOptional, IsInt, IsString, IsDateString } from 'class-validator';
+import { IsOptional, IsInt, IsString } from 'class-validator';
+import { Type } from 'class-transformer';
 
 export class CreateProcessAttLogDto {
+
   @IsOptional()
   @IsString()
   device_sn?: string;
@@ -15,8 +16,8 @@ export class CreateProcessAttLogDto {
   username?: string;
 
   @IsOptional()
-  @IsDateString()
-  punch_time?: string;
+  @Type(() => Date)
+  punch_time?: Date;
 
   @IsOptional()
   @IsString()

@@ -53,7 +53,7 @@ export class ProcessAttLogsController {
     // Transform the data for frontend use
     const transformedLogs = logs.map(log => ({
       ...log,
-      punch_time: log.punch_time ? log.punch_time.toISOString() : null,
+      punch_time: log.punch_time || null,
     }));
     
     return {
@@ -78,7 +78,7 @@ export class ProcessAttLogsController {
     
     const transformedLogs = logs.map(log => ({
       ...log,
-      punch_time: log.punch_time ? log.punch_time.toISOString() : null,
+      punch_time: log.punch_time || null,
     }));
     
     return {
@@ -103,7 +103,7 @@ export class ProcessAttLogsController {
     
     const transformedLogs = logs.map(log => ({
       ...log,
-      punch_time: log.punch_time ? log.punch_time.toISOString() : null,
+      punch_time: log.punch_time || null,
     }));
     
     return {
@@ -147,7 +147,7 @@ export class ProcessAttLogsController {
     const log = await this.processAttLogsService.findOne(id);
     return {
       ...log,
-      punch_time: log.punch_time ? log.punch_time.toISOString() : null,
+      punch_time: log.punch_time || null,
     };
   }
 

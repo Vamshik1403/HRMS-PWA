@@ -75,7 +75,7 @@ export function PrivilegedLeaveManagement() {
   const [lapseData, setLapseData] = useState({ employeeID: 0, leavePolicyID: 0 })
 
   const user = useCurrentUser()
-  const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN"
+  const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN" || user?.role === "BRANCH_ADMIN"
 
   useEffect(() => {
     if (user) {

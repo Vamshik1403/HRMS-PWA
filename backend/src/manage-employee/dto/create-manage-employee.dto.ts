@@ -63,24 +63,28 @@ export class ExpCreateDto {
 export class EmpDesignationCreateDto {
   @IsOptional() @IsInt() id?: number;
   @IsOptional() @IsInt() designationID?: number;
+  @IsOptional() @IsString() effectFrom?: string;
 }
 
 // ---------- Employee Branch DTO ----------
 export class EmpBranchCreateDto {
   @IsOptional() @IsInt() id?: number;
   @IsOptional() @IsInt() branchesID?: number;
+  @IsOptional() @IsString() effectFrom?: string;
 }
 
 // ---------- Employee Department DTO ----------
 export class EmpDepartmentCreateDto {
   @IsOptional() @IsInt() id?: number;
   @IsOptional() @IsInt() departmentNameID?: number;
+  @IsOptional() @IsString() effectFrom?: string;
 }
 
 // ---------- Employee Employment Type DTO ----------
 export class EmpEmploymentTypeCreateDto {
   @IsOptional() @IsInt() id?: number;
   @IsOptional() @IsString() employmentType?: string;
+  @IsOptional() @IsString() effectFrom?: string;
 }
 
 // ---------- Employee Employment Status DTO ----------
@@ -88,30 +92,35 @@ export class EmpEmploymentStatusCreateDto {
   @IsOptional() @IsInt() id?: number;
   @IsOptional() @IsString() employmentStatus?: string;
   @IsOptional() @IsString() probationPeriod?: string;
+  @IsOptional() @IsString() effectFrom?: string;
 }
 
 // ---------- Employee Work Shift DTO ----------
 export class EmpWorkShiftCreateDto {
   @IsOptional() @IsInt() id?: number;
   @IsOptional() @IsInt() workShiftID?: number;
+  @IsOptional() @IsString() effectFrom?: string;
 }
 
 // ---------- Employee Attendance Policy DTO ----------
 export class EmpAttendancePolicyCreateDto {
   @IsOptional() @IsInt() id?: number;
   @IsOptional() @IsInt() attendancePolicyID?: number;
+  @IsOptional() @IsString() effectFrom?: string;
 }
 
 // ---------- Employee Leave Policy DTO ----------
 export class EmpLeavePolicyCreateDto {
   @IsOptional() @IsInt() id?: number;
   @IsOptional() @IsInt() leavePolicyID?: number;
+  @IsOptional() @IsString() effectFrom?: string;
 }
 
 // ---------- Employee Contractor DTO ----------
 export class EmpContractorCreateDto {
   @IsOptional() @IsInt() id?: number;
   @IsOptional() @IsInt() contractorID?: number;
+  @IsOptional() @IsString() effectFrom?: string;
 }
 
 // ---------- Device Mapping DTO ----------

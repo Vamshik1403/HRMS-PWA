@@ -79,7 +79,7 @@ function useSearchSuggest<T>(
 export function ContractorRatesManagement() {
   const user = useCurrentUser();
   const canManage =
-    user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN";
+    user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN" || user?.role === "BRANCH_ADMIN";
 
   const [contractors, setContractors] = useState<ContractorRead[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
@@ -116,6 +116,7 @@ export function ContractorRatesManagement() {
     departmentName: "",
     designation: "",
     workShiftName: "",
+    rateCardName: "",
     payoutType: "ALL_INCLUSIVE",
     perMinuteRate: "",
     perHourRate: "",
@@ -225,7 +226,16 @@ export function ContractorRatesManagement() {
           /* skip */
         }
       }
-      setAllRateCards(allCards);
+      // 🔒 BRANCH_ADMIN — only show rate cards for their branch
+      const finalCards =
+        user?.role === "BRANCH_ADMIN" && user?.branches?.branchName
+          ? allCards.filter(
+              (c: any) =>
+                !c.branchName ||
+                (c.branchName ?? "").toLowerCase() === user.branches!.branchName.toLowerCase()
+            )
+          : allCards;
+      setAllRateCards(finalCards);
     } catch {
       setAllRateCards([]);
     }
@@ -298,7 +308,12 @@ export function ContractorRatesManagement() {
       setRcDepartments((deptRes || []).filter((d: any) => !cid || Number(d.companyID) === Number(cid)));
       setRcDesignations((desigRes || []).filter((d: any) => !cid || Number(d.companyID) === Number(cid)));
       setRcWorkShifts((wsRes || []).filter((w: any) => !cid || Number(w.companyID) === Number(cid)));
-      setRcBranches((brRes || []).filter((b: any) => !cid || Number(b.companyID) === Number(cid)));
+      const allFilteredBranches = (brRes || []).filter((b: any) => !cid || Number(b.companyID) === Number(cid));
+      setRcBranches(
+        user?.role === "BRANCH_ADMIN" && user?.branchesID
+          ? allFilteredBranches.filter((b: any) => Number(b.id) === Number(user.branchesID))
+          : allFilteredBranches
+      );
     } catch {
       setRcDepartments([]);
       setRcDesignations([]);
@@ -321,6 +336,7 @@ export function ContractorRatesManagement() {
         designation: rateCard.designation || "",
         workShiftName: rateCard.workShiftName || "",
         payoutType: rateCard.payoutType || "ALL_INCLUSIVE",
+        rateCardName: rateCard.rateCardName || "",
         perMinuteRate: rateCard.perMinuteRate?.toString() || "",
         perHourRate: rateCard.perHourRate?.toString() || "",
         perDayRate: rateCard.perDayRate?.toString() || "",
@@ -362,7 +378,12 @@ export function ContractorRatesManagement() {
     deptSuggest.setQuery("");
     desigSuggest.setQuery("");
     shiftSuggest.setQuery("");
-    await loadDropdowns();
+    await loadDropdowns(user?.companyID);
+    // 🔒 BRANCH_ADMIN — pre-fill branch
+    if (user?.role === "BRANCH_ADMIN" && user?.branches?.branchName) {
+      setFormData((prev) => ({ ...prev, branchName: user.branches!.branchName }));
+      branchSuggest.setQuery(user.branches!.branchName);
+    }
     setIsRateCardOpen(true);
   };
 
@@ -381,6 +402,7 @@ export function ContractorRatesManagement() {
             designation: formData.designation || undefined,
             workShiftName: formData.workShiftName || undefined,
             payoutType: formData.payoutType || "ALL_INCLUSIVE",
+            rateCardName: formData.rateCardName || undefined,
             perMinuteRate: formData.perMinuteRate ? parseFloat(formData.perMinuteRate) : 0,
             perHourRate: formData.perHourRate ? parseFloat(formData.perHourRate) : 0,
             perDayRate: formData.perDayRate ? parseFloat(formData.perDayRate) : 0,
@@ -529,6 +551,16 @@ export function ContractorRatesManagement() {
                 Change
               </Button>
             )}
+          </div>
+
+
+          <div className="space-y-1">
+            <Label>Rate Card Name *</Label>
+            <Input
+              value={formData.rateCardName}
+              onChange={(e) => setFormData((prev) => ({ ...prev, rateCardName: e.target.value }))}
+              placeholder="Enter rate card name"
+            />
           </div>
 
           {/* Payout Type */}
@@ -743,6 +775,7 @@ export function ContractorRatesManagement() {
                 <Table className="w-full">
                   <TableHeader>
                     <TableRow>
+                      <TableHead>Rate Card Name</TableHead>
                       <TableHead>Contractor</TableHead>
                       <TableHead>Payout Type</TableHead>
                       <TableHead>Branch</TableHead>
@@ -753,15 +786,14 @@ export function ContractorRatesManagement() {
                       <TableHead>Per Hour (₹)</TableHead>
                       <TableHead>Per Day (₹)</TableHead>
                       <TableHead>Per Month (₹)</TableHead>
-                      <TableHead>OT Multiplier</TableHead>
-                      <TableHead>Commission</TableHead>
+                      <TableHead>OT Rate</TableHead>
                       <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {allRateCards.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={13} className="text-center py-8 text-gray-500">
+                        <TableCell colSpan={12} className="text-center py-8 text-gray-500">
                           <div className="flex flex-col items-center gap-2">
                             <IndianRupee className="w-12 h-12 text-gray-300" />
                             <p>No rate cards found</p>
@@ -786,6 +818,7 @@ export function ContractorRatesManagement() {
                           const fullName = `${displayName}(${displayType})`;
                           return (
                           <TableRow key={`${rc.contractorId}-${index}`}>
+                            <TableCell>{rc.rateCardName || "—"}</TableCell>
                             <TableCell>
                               {fullName}
                             </TableCell>
@@ -828,12 +861,7 @@ export function ContractorRatesManagement() {
                             <TableCell>
                               {rc.payoutType === "COMMISSION_ONLY"
                                 ? "—"
-                                : rc.otRateMultiplier || "—"}
-                            </TableCell>
-                            <TableCell>
-                              {rc.payoutType === "COMMISSION_ONLY"
-                                ? `${rc.commissionValue || 0}${rc.commissionType === "PERCENTAGE" ? "%" : " ₹"}`
-                                : "—"}
+                                : rc.otRateMultiplier ? `${rc.otRateMultiplier}x` : "—"}
                             </TableCell>
                             <TableCell className="text-right">
                               {canManage && (

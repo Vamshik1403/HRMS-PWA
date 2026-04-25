@@ -198,7 +198,7 @@ export function EmployeesPromotionsManagement() {
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const user = useCurrentUser();
-  const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN";
+  const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN" || user?.role === "BRANCH_ADMIN";
   const isEmployee = user?.role === "EMPLOYEE";
 
   const [currentUserMapping, setCurrentUserMapping] = useState<any | null>(null);
@@ -781,6 +781,10 @@ const runFetchBR = (query: string) => {
       // 🔒 BOTH SUPERADMIN & MANAGER:
       // only branches of resolved company
       all = all.filter(b => b.companyID === companyID);
+      // 🔒 BRANCH_ADMIN — restrict to their own branch only
+      if (user?.role === "BRANCH_ADMIN" && user?.branchesID) {
+        all = all.filter(b => Number(b.id) === Number(user.branchesID));
+      }
 
       const ql = query.toLowerCase();
       const filtered = all.filter(b =>

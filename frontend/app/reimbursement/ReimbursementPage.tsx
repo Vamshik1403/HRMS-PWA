@@ -399,7 +399,7 @@ export function ReimbursementManagement() {
 const [empCreds, setEmpCreds] = useState<any>(null);
 
   const user = useCurrentUser()
-const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN"
+const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN" || user?.role === "BRANCH_ADMIN"
 const isEmployee = !canManage
 
   const [formData, setFormData] = useState({
@@ -697,6 +697,7 @@ const fetchBranches = async (q: string) => {
     return data.filter(
       (b) =>
         b.companyID === resolvedCompanyID &&
+        (user?.role !== "BRANCH_ADMIN" || Number(b.id) === Number(user?.branchesID)) &&
         (b.branchName ?? b.name ?? "").toLowerCase().includes(query)
     );
   } catch (error) {
@@ -1002,8 +1003,16 @@ const handleSubmit = async (e: React.FormEvent) => {
 
   }
 
+  // COMPANY_ADMIN / BRANCH_ADMIN
+  if (user?.role === "COMPANY_ADMIN" || user?.role === "BRANCH_ADMIN") {
+    payload.serviceProviderID = formData.serviceProviderID;
+    payload.companyID = formData.companyID;
+    payload.branchesID = formData.branchesID;
+    payload.manageEmployeeID = formData.manageEmployeeID;
+  }
+
   // EMPLOYEE (auto)
-  if (user?.role !== "SUPERADMIN" && user?.role !== "SERVICE_PROVIDER" && empCreds) {
+  if (user?.role === "EMPLOYEE" && empCreds) {
     payload.serviceProviderID = empCreds.serviceProviderID;
     payload.companyID = empCreds.companyID;
     payload.branchesID = empCreds.branchesID;
@@ -1224,8 +1233,20 @@ onClick={async () => {
     }
   }
 
+  // === COMPANY_ADMIN / BRANCH_ADMIN AUTO-FILL ===
+  if (user?.role === "COMPANY_ADMIN" || user?.role === "BRANCH_ADMIN") {
+    const ctx = getSidebarContext();
+    const companyID = ctx?.companyID ?? user?.companyID;
+    setFormData((p) => ({
+      ...p,
+      serviceProviderID: ctx?.serviceProviderID ?? undefined,
+      companyID: companyID ?? undefined,
+      companyName: ctx?.companyName ?? "",
+    }));
+  }
+
   // === EMPLOYEE AUTO-FILL ===
-  if (user?.role !== "SUPERADMIN" && user?.role !== "SERVICE_PROVIDER") {
+  if (user?.role === "EMPLOYEE") {
     const creds = await robustGet<any[]>(
       `${BACKEND_URL}/manage-emp/credentials/all`
     );
@@ -1287,7 +1308,6 @@ onClick={async () => {
               <TableHeader>
                 <TableRow className="bg-[#eef2ff]/50 hover:bg-[#eef2ff]/50">
                   <TableHead className="font-semibold text-gray-900">Employee</TableHead>
-                  <TableHead className="font-semibold text-gray-900">Company</TableHead>
                   <TableHead className="font-semibold text-gray-900">Branch</TableHead>
                   <TableHead className="font-semibold text-gray-900">Date/Period</TableHead>
                   <TableHead className="font-semibold text-gray-900">Amount</TableHead>
@@ -1304,12 +1324,6 @@ onClick={async () => {
                         <div className="flex items-center gap-2">
                           <User className="w-4 h-4 text-gray-400" />
                           {r.employeeName}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          <Building className="w-4 h-4 text-gray-400" />
-                          {r.companyName}
                         </div>
                       </TableCell>
                       <TableCell>
@@ -1546,8 +1560,31 @@ fetchData={(q) => fetchBranches(q)}
   </div>
 )}
 
+{/* COMPANY_ADMIN / BRANCH_ADMIN → only Branch input */}
+{(user?.role === "COMPANY_ADMIN" || user?.role === "BRANCH_ADMIN") && (
+  <div className="grid grid-cols-1 gap-4">
+    <SearchSuggestInput
+      label="Branch"
+      placeholder="Search branch..."
+      value={formData.branchName}
+      onChange={(v) => setFormData((p) => ({ ...p, branchName: v }))}
+      onSelect={(s) =>
+        setFormData((p) => ({
+          ...p,
+          branchesID: s.value,
+          branchName: s.display,
+        }))
+      }
+      fetchData={(q) => fetchBranches(q)}
+      displayField="branchName"
+      valueField="id"
+      required
+    />
+  </div>
+)}
+
 {/* EMPLOYEE → No SP / Company / Branch fields at all */}
-{user?.role !== "SUPERADMIN" && user?.role !== "SERVICE_PROVIDER" && (
+{user?.role === "EMPLOYEE" && (
   <></>
 )}
 

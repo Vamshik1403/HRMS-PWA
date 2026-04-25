@@ -156,25 +156,26 @@ export class ManageEmployeeService {
               .filter((d) => d.designationID != null)
               .map((d) => ({
                 designationID: d.designationID!,
+                effectFrom: d.effectFrom ?? null,
               })),
           },
 
           empBranch: {
             create: empBranches
               .filter((b) => b.branchesID != null)
-              .map((b) => ({ branchesID: b.branchesID! })),
+              .map((b) => ({ branchesID: b.branchesID!, effectFrom: b.effectFrom ?? null })),
           },
 
           empDepartment: {
             create: empDepartments
               .filter((d) => d.departmentNameID != null)
-              .map((d) => ({ departmentNameID: d.departmentNameID! })),
+              .map((d) => ({ departmentNameID: d.departmentNameID!, effectFrom: d.effectFrom ?? null })),
           },
 
           empEmploymentType: {
             create: empEmploymentTypes
               .filter((t) => t.employmentType)
-              .map((t) => ({ employmentType: t.employmentType! })),
+              .map((t) => ({ employmentType: t.employmentType!, effectFrom: t.effectFrom ?? null })),
           },
 
           empEmploymentStatus: {
@@ -183,31 +184,32 @@ export class ManageEmployeeService {
               .map((s) => ({
                 employmentStatus: s.employmentStatus!,
                 probationPeriod: s.probationPeriod ?? null,
+                effectFrom: s.effectFrom ?? null,
               })),
           },
 
           empWorkShift: {
             create: empWorkShifts
               .filter((w) => w.workShiftID != null)
-              .map((w) => ({ workShiftID: w.workShiftID! })),
+              .map((w) => ({ workShiftID: w.workShiftID!, effectFrom: w.effectFrom ?? null })),
           },
 
           empAttendancePolicy: {
             create: empAttendancePolicies
               .filter((a) => a.attendancePolicyID != null)
-              .map((a) => ({ attendancePolicyID: a.attendancePolicyID! })),
+              .map((a) => ({ attendancePolicyID: a.attendancePolicyID!, effectFrom: a.effectFrom ?? null })),
           },
 
           empLeavePolicy: {
             create: empLeavePolicies
               .filter((l) => l.leavePolicyID != null)
-              .map((l) => ({ leavePolicyID: l.leavePolicyID! })),
+              .map((l) => ({ leavePolicyID: l.leavePolicyID!, effectFrom: l.effectFrom ?? null })),
           },
 
           empContractor: {
             create: empContractors
               .filter((c) => c.contractorID != null)
-              .map((c) => ({ contractorID: c.contractorID! })),
+              .map((c) => ({ contractorID: c.contractorID!, effectFrom: c.effectFrom ?? null })),
           },
         } as any,
       });
@@ -599,8 +601,7 @@ async findAll(status?: string) {
     whereCondition.lifecycleStatus = 'EXITED';
   }
 
-  // ALL → no filter
-  // INACTIVE → if needed later
+
 
   return this.prisma.manageEmployee.findMany({
     where: whereCondition,
@@ -1090,6 +1091,7 @@ async findOne(id: number) {
             where: { id: d.id! },
             data: {
               designationID: d.designationID ?? null,
+              effectFrom: d.effectFrom ?? null,
             },
           });
         }
@@ -1100,6 +1102,7 @@ async findOne(id: number) {
               .map((d) => ({
                 manageEmployeeID: id,
                 designationID: d.designationID!,
+                effectFrom: d.effectFrom ?? null,
               })),
           });
         }
@@ -1113,10 +1116,10 @@ async findOne(id: number) {
         const toUpdate = empBranches.filter((b) => !!b.id);
         const toCreate = empBranches.filter((b) => !b.id);
         for (const b of toUpdate) {
-          await tx.empBranch.update({ where: { id: b.id! }, data: { branchesID: b.branchesID! } });
+          await tx.empBranch.update({ where: { id: b.id! }, data: { branchesID: b.branchesID!, effectFrom: b.effectFrom ?? null } });
         }
         if (toCreate.length) {
-          await tx.empBranch.createMany({ data: toCreate.filter((b) => b.branchesID != null).map((b) => ({ manageEmployeeID: id, branchesID: b.branchesID! })) });
+          await tx.empBranch.createMany({ data: toCreate.filter((b) => b.branchesID != null).map((b) => ({ manageEmployeeID: id, branchesID: b.branchesID!, effectFrom: b.effectFrom ?? null })) });
         }
       }
 
@@ -1128,10 +1131,10 @@ async findOne(id: number) {
         const toUpdate = empDepartments.filter((d) => !!d.id);
         const toCreate = empDepartments.filter((d) => !d.id);
         for (const d of toUpdate) {
-          await tx.empDepartment.update({ where: { id: d.id! }, data: { departmentNameID: d.departmentNameID! } });
+          await tx.empDepartment.update({ where: { id: d.id! }, data: { departmentNameID: d.departmentNameID!, effectFrom: d.effectFrom ?? null } });
         }
         if (toCreate.length) {
-          await tx.empDepartment.createMany({ data: toCreate.filter((d) => d.departmentNameID != null).map((d) => ({ manageEmployeeID: id, departmentNameID: d.departmentNameID! })) });
+          await tx.empDepartment.createMany({ data: toCreate.filter((d) => d.departmentNameID != null).map((d) => ({ manageEmployeeID: id, departmentNameID: d.departmentNameID!, effectFrom: d.effectFrom ?? null })) });
         }
       }
 
@@ -1143,10 +1146,10 @@ async findOne(id: number) {
         const toUpdate = empEmploymentTypes.filter((t) => !!t.id);
         const toCreate = empEmploymentTypes.filter((t) => !t.id);
         for (const t of toUpdate) {
-          await tx.empEmploymentType.update({ where: { id: t.id! }, data: { employmentType: t.employmentType! } });
+          await tx.empEmploymentType.update({ where: { id: t.id! }, data: { employmentType: t.employmentType!, effectFrom: t.effectFrom ?? null } });
         }
         if (toCreate.length) {
-          await tx.empEmploymentType.createMany({ data: toCreate.filter((t) => t.employmentType).map((t) => ({ manageEmployeeID: id, employmentType: t.employmentType! })) });
+          await tx.empEmploymentType.createMany({ data: toCreate.filter((t) => t.employmentType).map((t) => ({ manageEmployeeID: id, employmentType: t.employmentType!, effectFrom: t.effectFrom ?? null })) });
         }
       }
 
@@ -1158,10 +1161,10 @@ async findOne(id: number) {
         const toUpdate = empEmploymentStatuses.filter((s) => !!s.id);
         const toCreate = empEmploymentStatuses.filter((s) => !s.id);
         for (const s of toUpdate) {
-          await tx.empEmploymentStatus.update({ where: { id: s.id! }, data: { employmentStatus: s.employmentStatus!, probationPeriod: s.probationPeriod ?? null } });
+          await tx.empEmploymentStatus.update({ where: { id: s.id! }, data: { employmentStatus: s.employmentStatus!, probationPeriod: s.probationPeriod ?? null, effectFrom: s.effectFrom ?? null } });
         }
         if (toCreate.length) {
-          await tx.empEmploymentStatus.createMany({ data: toCreate.filter((s) => s.employmentStatus).map((s) => ({ manageEmployeeID: id, employmentStatus: s.employmentStatus!, probationPeriod: s.probationPeriod ?? null })) });
+          await tx.empEmploymentStatus.createMany({ data: toCreate.filter((s) => s.employmentStatus).map((s) => ({ manageEmployeeID: id, employmentStatus: s.employmentStatus!, probationPeriod: s.probationPeriod ?? null, effectFrom: s.effectFrom ?? null })) });
         }
       }
 
@@ -1173,10 +1176,10 @@ async findOne(id: number) {
         const toUpdate = empWorkShifts.filter((w) => !!w.id);
         const toCreate = empWorkShifts.filter((w) => !w.id);
         for (const w of toUpdate) {
-          await tx.empWorkShift.update({ where: { id: w.id! }, data: { workShiftID: w.workShiftID! } });
+          await tx.empWorkShift.update({ where: { id: w.id! }, data: { workShiftID: w.workShiftID!, effectFrom: w.effectFrom ?? null } });
         }
         if (toCreate.length) {
-          await tx.empWorkShift.createMany({ data: toCreate.filter((w) => w.workShiftID != null).map((w) => ({ manageEmployeeID: id, workShiftID: w.workShiftID! })) });
+          await tx.empWorkShift.createMany({ data: toCreate.filter((w) => w.workShiftID != null).map((w) => ({ manageEmployeeID: id, workShiftID: w.workShiftID!, effectFrom: w.effectFrom ?? null })) });
         }
       }
 
@@ -1188,10 +1191,10 @@ async findOne(id: number) {
         const toUpdate = empAttendancePolicies.filter((a) => !!a.id);
         const toCreate = empAttendancePolicies.filter((a) => !a.id);
         for (const a of toUpdate) {
-          await tx.empAttendancePolicy.update({ where: { id: a.id! }, data: { attendancePolicyID: a.attendancePolicyID! } });
+          await tx.empAttendancePolicy.update({ where: { id: a.id! }, data: { attendancePolicyID: a.attendancePolicyID!, effectFrom: a.effectFrom ?? null } });
         }
         if (toCreate.length) {
-          await tx.empAttendancePolicy.createMany({ data: toCreate.filter((a) => a.attendancePolicyID != null).map((a) => ({ manageEmployeeID: id, attendancePolicyID: a.attendancePolicyID! })) });
+          await tx.empAttendancePolicy.createMany({ data: toCreate.filter((a) => a.attendancePolicyID != null).map((a) => ({ manageEmployeeID: id, attendancePolicyID: a.attendancePolicyID!, effectFrom: a.effectFrom ?? null })) });
         }
       }
 
@@ -1203,10 +1206,10 @@ async findOne(id: number) {
         const toUpdate = empLeavePolicies.filter((l) => !!l.id);
         const toCreate = empLeavePolicies.filter((l) => !l.id);
         for (const l of toUpdate) {
-          await tx.empLeavePolicy.update({ where: { id: l.id! }, data: { leavePolicyID: l.leavePolicyID! } });
+          await tx.empLeavePolicy.update({ where: { id: l.id! }, data: { leavePolicyID: l.leavePolicyID!, effectFrom: l.effectFrom ?? null } });
         }
         if (toCreate.length) {
-          await tx.empLeavePolicy.createMany({ data: toCreate.filter((l) => l.leavePolicyID != null).map((l) => ({ manageEmployeeID: id, leavePolicyID: l.leavePolicyID! })) });
+          await tx.empLeavePolicy.createMany({ data: toCreate.filter((l) => l.leavePolicyID != null).map((l) => ({ manageEmployeeID: id, leavePolicyID: l.leavePolicyID!, effectFrom: l.effectFrom ?? null })) });
         }
       }
 
@@ -1218,10 +1221,10 @@ async findOne(id: number) {
         const toUpdate = empContractors.filter((c) => !!c.id);
         const toCreate = empContractors.filter((c) => !c.id);
         for (const c of toUpdate) {
-          await tx.empContractor.update({ where: { id: c.id! }, data: { contractorID: c.contractorID! } });
+          await tx.empContractor.update({ where: { id: c.id! }, data: { contractorID: c.contractorID!, effectFrom: c.effectFrom ?? null } });
         }
         if (toCreate.length) {
-          await tx.empContractor.createMany({ data: toCreate.filter((c) => c.contractorID != null).map((c) => ({ manageEmployeeID: id, contractorID: c.contractorID! })) });
+          await tx.empContractor.createMany({ data: toCreate.filter((c) => c.contractorID != null).map((c) => ({ manageEmployeeID: id, contractorID: c.contractorID!, effectFrom: c.effectFrom ?? null })) });
         }
       }
 

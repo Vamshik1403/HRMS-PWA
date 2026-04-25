@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { PrismaService } from 'src/prisma/prisma.service';
+import { PrismaService } from '../prisma/prisma.service';
 import { CreateContractorDto } from './dto/create-contractor.dto';
 import { UpdateContractorDto } from './dto/update-contractor.dto';
 
@@ -44,7 +44,7 @@ findAll() {
     });
   }
 
-  saveRateCards(contractorID: number, rateCards: { contractorName?: string; branchName?: string; departmentName?: string; designation?: string; workShiftName?: string; payoutType?: string; perMinuteRate?: number; perHourRate?: number; perDayRate?: number; perMonthRate?: number; dailyRateMinute?: number; dailyRateHour?: number; monthlyRateMinute?: number; monthlyRateHours?: number; otType?: string; otPerMinuteRate?: number; otPerHourRate?: number; otRateMultiplier?: number; commissionType?: string; commissionBasedOn?: string; commissionValue?: number }[]) {
+  saveRateCards(contractorID: number, rateCards: { contractorName?: string; rateCardName?: string; branchName?: string; departmentName?: string; designation?: string; workShiftName?: string; payoutType?: string; perMinuteRate?: number; perHourRate?: number; perDayRate?: number; perMonthRate?: number; dailyRateMinute?: number; dailyRateHour?: number; monthlyRateMinute?: number; monthlyRateHours?: number; otType?: string; otPerMinuteRate?: number; otPerHourRate?: number; otRateMultiplier?: number; commissionType?: string; commissionBasedOn?: string; commissionValue?: number }[]) {
     return this.prisma.$transaction(async (prisma) => {
       await prisma.contractorRateCard.deleteMany({ where: { contractorID } });
       if (rateCards && rateCards.length > 0) {
@@ -56,6 +56,7 @@ findAll() {
             departmentName: rc.departmentName,
             designation: rc.designation,
             workShiftName: rc.workShiftName,
+            rateCardName: rc.rateCardName,
             payoutType: rc.payoutType,
             perMinuteRate: rc.perMinuteRate ?? 0,
             perHourRate: rc.perHourRate ?? 0,

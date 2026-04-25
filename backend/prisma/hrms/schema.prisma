@@ -269,6 +269,7 @@ model ContractorPayout {
 model ContractorRateCard {
   id              Int          @id @default(autoincrement())
   contractorID    Int
+  rateCardName    String?      
   contractorName  String?      @db.VarChar
   branchName      String?      @db.VarChar
   departmentName  String?      @db.VarChar
@@ -869,6 +870,7 @@ model EmpDesignation {
   id               Int             @id @default(autoincrement())
   manageEmployeeID Int?
   designationID    Int?
+  effectFrom       String?         @db.VarChar
   manageEmployee   ManageEmployee? @relation(fields: [manageEmployeeID], references: [id], onDelete: NoAction, onUpdate: NoAction)
   designation      Designations?   @relation("EmpDesignationLink", fields: [designationID], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
@@ -880,6 +882,7 @@ model EmpBranch {
   id               Int            @id @default(autoincrement())
   manageEmployeeID Int
   branchesID       Int
+  effectFrom       String?        @db.VarChar
   manageEmployee   ManageEmployee @relation(fields: [manageEmployeeID], references: [id], onDelete: Cascade)
   branch           Branches       @relation(fields: [branchesID], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
@@ -890,6 +893,7 @@ model EmpDepartment {
   id               Int            @id @default(autoincrement())
   manageEmployeeID Int
   departmentNameID Int
+  effectFrom       String?        @db.VarChar
   manageEmployee   ManageEmployee @relation(fields: [manageEmployeeID], references: [id], onDelete: Cascade)
   department       Departments    @relation("EmpDepartmentLink", fields: [departmentNameID], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
@@ -900,6 +904,7 @@ model EmpEmploymentType {
   id               Int            @id @default(autoincrement())
   manageEmployeeID Int
   employmentType   String         @db.VarChar
+  effectFrom       String?        @db.VarChar
   manageEmployee   ManageEmployee @relation(fields: [manageEmployeeID], references: [id], onDelete: Cascade)
 
   @@index([manageEmployeeID])
@@ -910,6 +915,7 @@ model EmpEmploymentStatus {
   manageEmployeeID Int
   employmentStatus String         @db.VarChar
   probationPeriod  String?        @db.VarChar
+  effectFrom       String?        @db.VarChar
   manageEmployee   ManageEmployee @relation(fields: [manageEmployeeID], references: [id], onDelete: Cascade)
 
   @@index([manageEmployeeID])
@@ -919,6 +925,7 @@ model EmpWorkShift {
   id               Int            @id @default(autoincrement())
   manageEmployeeID Int
   workShiftID      Int
+  effectFrom       String?        @db.VarChar
   manageEmployee   ManageEmployee @relation(fields: [manageEmployeeID], references: [id], onDelete: Cascade)
   workShift        WorkShift      @relation("EmpWorkShiftLink", fields: [workShiftID], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
@@ -929,6 +936,7 @@ model EmpAttendancePolicy {
   id                 Int              @id @default(autoincrement())
   manageEmployeeID   Int
   attendancePolicyID Int
+  effectFrom         String?          @db.VarChar
   manageEmployee     ManageEmployee   @relation(fields: [manageEmployeeID], references: [id], onDelete: Cascade)
   attendancePolicy   AttendancePolicy @relation("EmpAttendancePolicyLink", fields: [attendancePolicyID], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
@@ -939,6 +947,7 @@ model EmpLeavePolicy {
   id               Int            @id @default(autoincrement())
   manageEmployeeID Int
   leavePolicyID    Int
+  effectFrom       String?        @db.VarChar
   manageEmployee   ManageEmployee @relation(fields: [manageEmployeeID], references: [id], onDelete: Cascade)
   leavePolicy      leavePolicy    @relation("EmpLeavePolicyLink", fields: [leavePolicyID], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
@@ -949,6 +958,7 @@ model EmpContractor {
   id               Int            @id @default(autoincrement())
   manageEmployeeID Int
   contractorID     Int
+  effectFrom       String?        @db.VarChar
   manageEmployee   ManageEmployee @relation(fields: [manageEmployeeID], references: [id], onDelete: Cascade)
   contractor       Contractors    @relation("EmpContractorLink", fields: [contractorID], references: [id], onDelete: NoAction, onUpdate: NoAction)
 

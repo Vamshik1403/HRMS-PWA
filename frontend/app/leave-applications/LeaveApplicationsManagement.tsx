@@ -105,7 +105,7 @@ export function LeaveApplicationsManagement() {
   })
 
   const user = useCurrentUser()
-  const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN"
+  const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN" || user?.role === "BRANCH_ADMIN"
   const isNormalUser = user?.role === "EMPLOYEE"
 
   // Revoke Modal State
@@ -210,9 +210,9 @@ export function LeaveApplicationsManagement() {
         }
       } catch { /* no compoff data */ }
 
-      // Maternity / Paternity: static policy-based (commonly 180/15 days)
-      const totalMaternity = 180;
-      const totalPaternity = 15;
+      // Maternity / Paternity: static policy-based (temporary: 5 days each)
+      const totalMaternity = 5;
+      const totalPaternity = 5;
 
       // 2. Fetch all leave applications for this employee
       const leaveRes = await fetch(`${BACKEND_URL}/leave-application`);
@@ -713,7 +713,8 @@ export function LeaveApplicationsManagement() {
         const companyID = formData.companyID ?? ctx?.companyID ?? user?.companyID;
         if (companyID) {
           const filteredByCompany = data.filter(
-            (item: any) => item.companyID === companyID
+            (item: any) => item.companyID === companyID &&
+            (user?.role !== "BRANCH_ADMIN" || Number(item.id) === Number(user?.branchesID))
           )
           return q
             ? filteredByCompany.filter((item: any) =>
@@ -1016,12 +1017,16 @@ export function LeaveApplicationsManagement() {
         }
       }
 
-      // COMPANY_ADMIN / BRANCH_ADMIN → filter by company
+      // COMPANY_ADMIN / BRANCH_ADMIN → filter by company (branch admin also by branch)
       if (user.role === "COMPANY_ADMIN" || user.role === "BRANCH_ADMIN") {
         const ctx = getSidebarContext()
         const companyID = ctx?.companyID ?? user?.companyID
         if (companyID) {
-          setLeaveApplications(splitApplications.filter((a: any) => a.companyID === companyID))
+          if (user.role === "BRANCH_ADMIN" && user?.branchesID) {
+            setLeaveApplications(splitApplications.filter((a: any) => a.companyID === companyID && a.branchesID === user.branchesID))
+          } else {
+            setLeaveApplications(splitApplications.filter((a: any) => a.companyID === companyID))
+          }
         } else {
           setLeaveApplications([])
         }
@@ -1218,13 +1223,13 @@ export function LeaveApplicationsManagement() {
     
     // Auto-populate serviceProviderID and companyID for MANAGER/EMPLOYEE
     const ctx = getSidebarContext();
-    const serviceProviderID = user?.role === "SUPERADMIN" 
+    const serviceProviderID = user?.role === "SUPERADMIN"
       ? (formData.serviceProviderID ?? ctx?.serviceProviderID)
-      : managerData?.serviceProviderID || empCreds?.serviceProviderID;
+      : (formData.serviceProviderID ?? ctx?.serviceProviderID ?? managerData?.serviceProviderID ?? empCreds?.serviceProviderID ?? (user as any)?.serviceProviderID);
 
-    const companyID = user?.role === "SUPERADMIN" 
+    const companyID = user?.role === "SUPERADMIN"
       ? (formData.companyID ?? ctx?.companyID)
-      : managerData?.companyID || empCreds?.companyID;
+      : (formData.companyID ?? ctx?.companyID ?? managerData?.companyID ?? empCreds?.companyID ?? (user as any)?.companyID);
 
     // Ensure we have the required IDs
     if (!companyID || !formData.branchesID || !formData.manageEmployeeID) {
@@ -1467,33 +1472,8 @@ export function LeaveApplicationsManagement() {
                     </div>
                   )}
                   
-                  {/* Leave Type - Only show after employee is selected (for MANAGER/SUPERADMIN) or always for normal users */}
-                  {(isEmployeeSelected || isNormalUser) && (
-                    <div className="space-y-2">
-                      <Label htmlFor="leaveType">Leave Type *</Label>
-                      <select
-                        id="leaveType"
-                        value={formData.leaveType}
-                        onChange={(e) => setFormData(prev => ({ ...prev, leaveType: e.target.value }))}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-sm border-[#d0d0d0] focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-900/15 focus-visible:border-[#b0b0b0]"
-                        required
-                      >
-                        <option value="">Select Leave Type</option>
-                        {availableLeaveTypes.map((type) => (
-                          <option key={type} value={type}>{leaveTypeLabel(type)}</option>
-                        ))}
-                      </select>
-                    </div>
-                  )}
+                  {/* Leave Type - temporarily hidden */}
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label>Calculated Days</Label>
-                      <div className="w-full px-3 py-2 border border-[#d0d0d0] rounded-sm bg-gray-50 text-gray-600">
-                        {calculateDays(formData.fromDate, formData.toDate)} days
-                      </div>
-                    </div>
-                  </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="fromDate">From Date *</Label>
@@ -1516,6 +1496,14 @@ export function LeaveApplicationsManagement() {
                         className="w-full"
                         required
                       />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Calculated Days</Label>
+                      <div className="w-full px-3 py-2 border border-[#d0d0d0] rounded-sm bg-gray-50 text-gray-600">
+                        {calculateDays(formData.fromDate, formData.toDate)} days
+                      </div>
                     </div>
                   </div>
                   <div className="space-y-2">
@@ -1758,7 +1746,6 @@ export function LeaveApplicationsManagement() {
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-[100px]">Employee Name</TableHead>
-                  <TableHead className="w-[70px]">Leave Type</TableHead>
                   <TableHead className="w-[70px]">From Date</TableHead>
                   <TableHead className="w-[70px]">To Date</TableHead>
                   <TableHead className="w-[60px]">No of Days</TableHead>
@@ -1770,7 +1757,7 @@ export function LeaveApplicationsManagement() {
               <TableBody>
                 {filteredApplications.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={8} className="text-center py-8 text-gray-500">
+                    <TableCell colSpan={7} className="text-center py-8 text-gray-500">
                       <div className="flex flex-col items-center gap-2">
                         <Icon icon="mdi:calendar-clock" className="w-12 h-12 text-gray-300" />
                         <p>No leave applications found</p>
@@ -1782,7 +1769,6 @@ export function LeaveApplicationsManagement() {
                   filteredApplications.map((application, index) => (
                     <TableRow key={`${application.id}-${index}`}>
                       <TableCell className="truncate" title={application.employeeName}>{application.employeeName}</TableCell>
-                      <TableCell className="truncate">{application.appliedLeaveType}</TableCell>
                       <TableCell className="truncate">{application.fromDate}</TableCell>
                       <TableCell className="truncate">{application.toDate}</TableCell>
                       <TableCell className="truncate text-center">{calculateDays(application.fromDate, application.toDate)}</TableCell>

@@ -76,7 +76,7 @@ export function SalaryAllowancesManagement() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingAllowance, setEditingAllowance] = useState<SalaryAllowance | null>(null);
   const user = useCurrentUser();
-  const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN";
+  const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN" || user?.role === "BRANCH_ADMIN";
   const isEmployee = user?.role === "EMPLOYEE";
   const [currentUserMapping, setCurrentUserMapping] = useState<any>(null);
 
@@ -186,12 +186,15 @@ const resolvedCompanyID =
         }
       }
 
-      // � COMPANY_ADMIN / BRANCH_ADMIN → filter by company
+      // 🔴 COMPANY_ADMIN / BRANCH_ADMIN → filter by company (+ branch for BRANCH_ADMIN)
       if (user?.role === "COMPANY_ADMIN" || user?.role === "BRANCH_ADMIN") {
         const ctx = getSidebarContext();
         const companyID = ctx?.companyID ?? user?.companyID;
         if (companyID) {
-          setAllowances(all.filter((a: any) => a.companyID === companyID));
+          setAllowances(all.filter((a: any) =>
+            a.companyID === companyID &&
+            (user?.role !== "BRANCH_ADMIN" || !a.branchesID || Number(a.branchesID) === Number(user?.branchesID))
+          ));
         } else {
           setAllowances([]);
         }
@@ -337,6 +340,7 @@ const resolvedCompanyID =
     const filtered = list.filter(
       (b) =>
         b.companyID === resolvedCompanyID &&
+        (user?.role !== "BRANCH_ADMIN" || Number(b.id) === Number(user?.branchesID)) &&
         (b.branchName ?? "").toLowerCase().includes(val.toLowerCase())
     );
 
@@ -853,8 +857,6 @@ const resolvedCompanyID =
             <Table className="w-full">
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-[120px]">Service Provider</TableHead>
-                  <TableHead className="w-[120px]">Company Name</TableHead>
                   <TableHead className="w-[120px]">Branch Name</TableHead>
                   <TableHead className="w-[150px]">Allowance Name</TableHead>
                   <TableHead className="w-[120px]">Allowance Type</TableHead>
@@ -868,7 +870,7 @@ const resolvedCompanyID =
               <TableBody>
                 {filteredAllowances.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={9} className="text-center py-8 text-gray-500">
+                    <TableCell colSpan={7} className="text-center py-8 text-gray-500">
                       <div className="flex flex-col items-center gap-2">
                         <Icon icon="mdi:cash-plus" className="w-12 h-12 text-gray-300" />
                         <p>No salary allowances found</p>
@@ -879,8 +881,6 @@ const resolvedCompanyID =
                 ) : (
                   filteredAllowances.map((allowance) => (
                     <TableRow key={allowance.id}>
-                      <TableCell className="whitespace-nowrap">{allowance.serviceProvider}</TableCell>
-                      <TableCell className="whitespace-nowrap">{allowance.companyName}</TableCell>
                       <TableCell className="whitespace-nowrap">{allowance.branchName}</TableCell>
                       <TableCell className="font-medium whitespace-nowrap">{allowance.allowanceName}</TableCell>
                       <TableCell className="whitespace-nowrap">{allowance.allowanceType}</TableCell>

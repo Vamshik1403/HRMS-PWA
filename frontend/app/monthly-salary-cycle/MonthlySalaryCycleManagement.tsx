@@ -73,7 +73,7 @@ export function MonthlySalaryCycleManagement() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingCycle, setEditingCycle] = useState<MonthlySalaryCycle | null>(null);
   const user = useCurrentUser();
-  const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN";
+  const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN" || user?.role === "BRANCH_ADMIN";
   const isEmployee = user?.role === "EMPLOYEE";
 
   const [currentUserMapping, setCurrentUserMapping] = useState<any>(null);
@@ -309,6 +309,7 @@ const runFetchBR = debounce(async (val: string) => {
     const filtered = list.filter(
       (b) =>
         b.companyID === resolvedCompanyID &&
+        (user?.role !== "BRANCH_ADMIN" || Number(b.id) === Number(user?.branchesID)) &&
         (b.branchName ?? "").toLowerCase().includes(val.toLowerCase())
     );
 
@@ -680,8 +681,6 @@ const runFetchBR = debounce(async (val: string) => {
             <Table className="w-full">
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-[120px]">Service Provider</TableHead>
-                  <TableHead className="w-[120px]">Company Name</TableHead>
                   <TableHead className="w-[120px]">Branch Name</TableHead>
                   <TableHead className="w-[150px]">Cycle Name</TableHead>
                   <TableHead className="w-[120px]">Start Day</TableHead>
@@ -692,7 +691,7 @@ const runFetchBR = debounce(async (val: string) => {
               <TableBody>
                 {filteredCycles.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center py-8 text-gray-500">
+                    <TableCell colSpan={4} className="text-center py-8 text-gray-500">
                       <div className="flex flex-col items-center gap-2">
                         <Icon icon="mdi:cash-multiple" className="w-12 h-12 text-gray-300" />
                         <p>No salary cycles found</p>
@@ -703,8 +702,6 @@ const runFetchBR = debounce(async (val: string) => {
                 ) : (
                   filteredCycles.map((cycle) => (
                     <TableRow key={cycle.id}>
-                      <TableCell className="whitespace-nowrap">{cycle.serviceProvider}</TableCell>
-                      <TableCell className="whitespace-nowrap">{cycle.companyName}</TableCell>
                       <TableCell className="whitespace-nowrap">{cycle.branchName}</TableCell>
                       <TableCell className="font-medium whitespace-nowrap">{cycle.cycleName}</TableCell>
                       <TableCell className="whitespace-nowrap text-center">

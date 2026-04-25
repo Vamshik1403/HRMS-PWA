@@ -126,6 +126,13 @@ export function FieldAttendanceScheduleManagement() {
       if (formData.companyID) {
         filtered = filtered.filter((item: any) => item.companyID === formData.companyID)
       }
+      // 🔒 BRANCH_ADMIN — restrict to their own branch only
+      try {
+        const _u = JSON.parse(localStorage.getItem("user") || "null");
+        if (_u?.role?.toUpperCase() === "BRANCH_ADMIN" && _u?.branchesID) {
+          filtered = filtered.filter((item: any) => Number(item.id) === Number(_u.branchesID));
+        }
+      } catch { /* ignore */ }
       return filtered.filter((item: any) =>
         (item?.branchName || "").toLowerCase().includes(q)
       )
@@ -641,7 +648,6 @@ createdAt: schedule.createdAt
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-[40px]">#</TableHead>
-                  <TableHead className="w-[80px]">Service Provider</TableHead>
                   <TableHead className="w-[70px]">Company Name</TableHead>
                   <TableHead className="w-[70px]">Branch Name</TableHead>
                   <TableHead className="w-[60px]">Employee ID</TableHead>
@@ -658,7 +664,7 @@ createdAt: schedule.createdAt
               <TableBody>
                 {filteredSchedules.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={15} className="text-center py-8 text-gray-500">
+                    <TableCell colSpan={12} className="text-center py-8 text-gray-500">
                       <div className="flex flex-col items-center gap-2">
                         <Icon icon="mdi:map-marker-multiple" className="w-12 h-12 text-gray-300" />
                         <p>No field attendance schedules found</p>
@@ -670,7 +676,6 @@ createdAt: schedule.createdAt
                   filteredSchedules.map((schedule, index) => (
                     <TableRow key={schedule.id}>
                       <TableCell className="font-medium truncate">{index + 1}</TableCell>
-                      <TableCell className="truncate" title={schedule.serviceProvider}>{schedule.serviceProvider}</TableCell>
                       <TableCell className="truncate" title={schedule.companyName}>{schedule.companyName}</TableCell>
                       <TableCell className="truncate" title={schedule.branchName}>{schedule.branchName}</TableCell>
                       <TableCell className="truncate">{schedule.employeeId}</TableCell>

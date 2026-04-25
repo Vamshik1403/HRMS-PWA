@@ -9,6 +9,14 @@ import { QueryProcessAttLogDto } from './dto/query-process_att_log.dto';
 export class ProcessAttLogsService {
   constructor(private prisma: PrismaService) {}
 
+  // Helper method to format date to YYYY-MM-DD
+  private formatDateToString(date: Date): string {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+
   async create(createProcessAttLogDto: CreateProcessAttLogDto) {
     try {
       return await this.prisma.process_att_logs.create({
@@ -16,7 +24,7 @@ export class ProcessAttLogsService {
           device_sn: createProcessAttLogDto.device_sn,
           user_id: createProcessAttLogDto.user_id,
           username: createProcessAttLogDto.username,
-          punch_time: createProcessAttLogDto.punch_time ? new Date(createProcessAttLogDto.punch_time) : null,
+          punch_time: createProcessAttLogDto.punch_time || '',
           company_name: createProcessAttLogDto.company_name,
           branch_name: createProcessAttLogDto.branch_name,
           department_name: createProcessAttLogDto.department_name,
@@ -33,82 +41,78 @@ export class ProcessAttLogsService {
     }
   }
 
-  async findAll(query: QueryProcessAttLogDto = {}) {
-    const {
-      dateFrom,
-      dateTo,
-      deviceId,
-      deviceIds,
-      username,
-      company_name,
-      branch_name,
-      limit: rawLimit = 1000,
-      offset: rawOffset = 0,
-      orderBy = 'desc',
-    } = query;
+async findAll(query: QueryProcessAttLogDto = {}) {
+  const {
+    dateFrom,
+    dateTo,
+    deviceId,
+    deviceIds,
+    username,
+    company_name,
+    branch_name,
+    limit: rawLimit = 1000,
+    offset: rawOffset = 0,
+    orderBy = 'desc',
+  } = query;
 
-    // Ensure limit and offset are numbers (query params arrive as strings)
-    const limit = typeof rawLimit === 'string' ? parseInt(rawLimit, 10) || 1000 : Number(rawLimit) || 1000;
-    const offset = typeof rawOffset === 'string' ? parseInt(rawOffset, 10) || 0 : Number(rawOffset) || 0;
+  const limit = typeof rawLimit === 'string' ? parseInt(rawLimit, 10) || 1000 : Number(rawLimit) || 1000;
+  const offset = typeof rawOffset === 'string' ? parseInt(rawOffset, 10) || 0 : Number(rawOffset) || 0;
 
-    const whereConditions: any = {};
+  const whereConditions: any = {};
 
-    // Date range filter - with null check
-    if (dateFrom && dateTo) {
-      whereConditions.punch_time = {
-        gte: new Date(dateFrom),
-        lte: new Date(`${dateTo} 23:59:59`),
-        not: null, // Exclude null values if needed
-      };
-    } else if (dateFrom) {
-      whereConditions.punch_time = {
-        gte: new Date(dateFrom),
-        not: null,
-      };
-    } else if (dateTo) {
-      whereConditions.punch_time = {
-        lte: new Date(`${dateTo} 23:59:59`),
-        not: null,
-      };
-    }
+  // Fix for string-based date comparison
+  // Fix: Use Date objects for DateTime field
+  if (dateFrom && dateTo) {
+    whereConditions.punch_time = {
+      gte: new Date(`${dateFrom}T00:00:00.000Z`),
+      lte: new Date(`${dateTo}T23:59:59.999Z`),
+    };
+  } else if (dateFrom) {
+    whereConditions.punch_time = {
+      gte: new Date(`${dateFrom}T00:00:00.000Z`),
+    };
+  } else if (dateTo) {
+    whereConditions.punch_time = {
+      lte: new Date(`${dateTo}T23:59:59.999Z`),
+    };
+  }
 
-    // Device filter - single device
-    if (deviceId) {
-      whereConditions.device_id = deviceId;
-    }
+  // Convert device_id to number if it's a string field in your schema
+  if (deviceId) {
+    whereConditions.device_id = String(deviceId); // Convert to string if device_id is string
+  }
 
-    // Device filter - multiple devices
-    if (deviceIds) {
-      const deviceIdArray = deviceIds.split(',').map(id => parseInt(id.trim()));
-      whereConditions.device_id = {
-        in: deviceIdArray,
-      };
-    }
+  if (deviceIds) {
+    const deviceIdArray = deviceIds.split(',').map(id => id.trim()); // Keep as strings
+    whereConditions.device_id = {
+      in: deviceIdArray,
+    };
+  }
 
-    // Username filter
-    if (username) {
-      whereConditions.username = {
-        contains: username,
-        mode: 'insensitive',
-      };
-    }
+  if (username) {
+    whereConditions.username = {
+      contains: username,
+      mode: 'insensitive',
+    };
+  }
 
-    // Company name filter
-    if (company_name) {
-      whereConditions.company_name = {
-        contains: company_name,
-        mode: 'insensitive',
-      };
-    }
+  if (company_name) {
+    whereConditions.company_name = {
+      contains: company_name,
+      mode: 'insensitive',
+    };
+  }
 
-    // Branch name filter
-    if (branch_name) {
-      whereConditions.branch_name = {
-        contains: branch_name,
-        mode: 'insensitive',
-      };
-    }
+  if (branch_name) {
+    whereConditions.branch_name = {
+      contains: branch_name,
+      mode: 'insensitive',
+    };
+  }
 
+  console.log('Where Conditions:', JSON.stringify(whereConditions, null, 2));
+
+  try {
     const [logs, total] = await Promise.all([
       this.prisma.process_att_logs.findMany({
         where: whereConditions,
@@ -130,9 +134,13 @@ export class ProcessAttLogsService {
       offset,
       hasMore: offset + logs.length < total,
     };
+  } catch (error) {
+    console.error('Prisma error:', error);
+    throw error;
   }
+}
 
-  async findOne(id: number) {
+async findOne(id: number) {
     const log = await this.prisma.process_att_logs.findUnique({
       where: { id },
     });
@@ -151,19 +159,16 @@ export class ProcessAttLogsService {
 
     if (dateFrom && dateTo) {
       whereConditions.punch_time = {
-        gte: new Date(dateFrom),
-        lte: new Date(`${dateTo} 23:59:59`),
-        not: null,
+        gte: new Date(`${dateFrom}T00:00:00.000Z`),
+        lte: new Date(`${dateTo}T23:59:59.999Z`),
       };
     } else if (dateFrom) {
       whereConditions.punch_time = {
-        gte: new Date(dateFrom),
-        not: null,
+        gte: new Date(`${dateFrom}T00:00:00.000Z`),
       };
     } else if (dateTo) {
       whereConditions.punch_time = {
-        lte: new Date(`${dateTo} 23:59:59`),
-        not: null,
+        lte: new Date(`${dateTo}T23:59:59.999Z`),
       };
     }
 
@@ -184,19 +189,16 @@ export class ProcessAttLogsService {
 
     if (dateFrom && dateTo) {
       whereConditions.punch_time = {
-        gte: new Date(dateFrom),
-        lte: new Date(`${dateTo} 23:59:59`),
-        not: null,
+        gte: new Date(`${dateFrom}T00:00:00.000Z`),
+        lte: new Date(`${dateTo}T23:59:59.999Z`),
       };
     } else if (dateFrom) {
       whereConditions.punch_time = {
-        gte: new Date(dateFrom),
-        not: null,
+        gte: new Date(`${dateFrom}T00:00:00.000Z`),
       };
     } else if (dateTo) {
       whereConditions.punch_time = {
-        lte: new Date(`${dateTo} 23:59:59`),
-        not: null,
+        lte: new Date(`${dateTo}T23:59:59.999Z`),
       };
     }
 
@@ -216,21 +218,18 @@ export class ProcessAttLogsService {
       },
     };
 
-    if (dateFrom && dateTo) {
+       if (dateFrom && dateTo) {
       whereConditions.punch_time = {
-        gte: new Date(dateFrom),
-        lte: new Date(`${dateTo} 23:59:59`),
-        not: null,
+        gte: new Date(`${dateFrom}T00:00:00.000Z`),
+        lte: new Date(`${dateTo}T23:59:59.999Z`),
       };
     } else if (dateFrom) {
       whereConditions.punch_time = {
-        gte: new Date(dateFrom),
-        not: null,
+        gte: new Date(`${dateFrom}T00:00:00.000Z`),
       };
     } else if (dateTo) {
       whereConditions.punch_time = {
-        lte: new Date(`${dateTo} 23:59:59`),
-        not: null,
+        lte: new Date(`${dateTo}T23:59:59.999Z`),
       };
     }
 
@@ -255,21 +254,18 @@ export class ProcessAttLogsService {
       };
     }
 
-    if (dateFrom && dateTo) {
+      if (dateFrom && dateTo) {
       whereConditions.punch_time = {
-        gte: new Date(dateFrom),
-        lte: new Date(`${dateTo} 23:59:59`),
-        not: null,
+        gte: new Date(`${dateFrom}T00:00:00.000Z`),
+        lte: new Date(`${dateTo}T23:59:59.999Z`),
       };
     } else if (dateFrom) {
       whereConditions.punch_time = {
-        gte: new Date(dateFrom),
-        not: null,
+        gte: new Date(`${dateFrom}T00:00:00.000Z`),
       };
     } else if (dateTo) {
       whereConditions.punch_time = {
-        lte: new Date(`${dateTo} 23:59:59`),
-        not: null,
+        lte: new Date(`${dateTo}T23:59:59.999Z`),
       };
     }
 
@@ -286,15 +282,19 @@ export class ProcessAttLogsService {
       },
     });
 
-    // Group by username and date - with null check for punch_time
+    // Group by username and date
     const summary = new Map();
 
     logs.forEach(log => {
       if (!log.username) return;
-      if (!log.punch_time) return; // Skip null punch_time
+      if (!log.punch_time) return;
       
-      const dateKey = log.punch_time.toISOString().split('T')[0];
-      const key = `${log.username}|${dateKey}`;
+// Since punch_time is a DateTime object, we can use toISOString
+const dateKey = log.punch_time instanceof Date 
+  ? log.punch_time.toISOString().split('T')[0]
+  : new Date(log.punch_time).toISOString().split('T')[0];
+  
+  const key = `${log.username}|${dateKey}`;
       
       if (!summary.has(key)) {
         summary.set(key, {
@@ -318,10 +318,10 @@ export class ProcessAttLogsService {
       date: entry.date,
       punchCount: entry.punches.length,
       firstPunch: entry.punches.length > 0 
-        ? new Date(Math.min(...entry.punches.map(p => new Date(p).getTime())))
+        ? entry.punches.sort()[0]
         : null,
       lastPunch: entry.punches.length > 0
-        ? new Date(Math.max(...entry.punches.map(p => new Date(p).getTime())))
+        ? entry.punches.sort()[entry.punches.length - 1]
         : null,
       devices: Array.from(entry.deviceIds),
       deviceNames: Array.from(entry.deviceNames),
@@ -341,7 +341,7 @@ export class ProcessAttLogsService {
           device_sn: updateProcessAttLogDto.device_sn,
           user_id: updateProcessAttLogDto.user_id,
           username: updateProcessAttLogDto.username,
-          punch_time: updateProcessAttLogDto.punch_time ? new Date(updateProcessAttLogDto.punch_time) : null,
+          punch_time: updateProcessAttLogDto.punch_time || undefined,
           company_name: updateProcessAttLogDto.company_name,
           branch_name: updateProcessAttLogDto.branch_name,
           department_name: updateProcessAttLogDto.department_name,
@@ -390,13 +390,16 @@ export class ProcessAttLogsService {
   }
 
   async getStats() {
+    const now = new Date();
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+    const sevenDaysAgo = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 7, 0, 0, 0, 0);
+
     const [total, todayCount, deviceStats, lastWeek] = await Promise.all([
       this.prisma.process_att_logs.count(),
       this.prisma.process_att_logs.count({
         where: {
           punch_time: {
-            gte: new Date(new Date().setHours(0, 0, 0, 0)),
-            not: null,
+            gte: todayStart,
           },
         },
       }),
@@ -420,8 +423,7 @@ export class ProcessAttLogsService {
       this.prisma.process_att_logs.count({
         where: {
           punch_time: {
-            gte: new Date(new Date().setDate(new Date().getDate() - 7)),
-            not: null,
+            gte: sevenDaysAgo,
           },
         },
       }),

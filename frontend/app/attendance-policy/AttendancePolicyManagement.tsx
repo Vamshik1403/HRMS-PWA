@@ -81,7 +81,7 @@ export function AttendancePolicyManagement() {
     null
   );
   const user = useCurrentUser();
-  const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN";
+  const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN" || user?.role === "BRANCH_ADMIN";
   const isEmployee = user?.role === "EMPLOYEE";
 
   const [currentUserMapping, setCurrentUserMapping] = useState<any>(null);
@@ -137,19 +137,23 @@ export function AttendancePolicyManagement() {
       ? currentUserMapping?.companyID
       : formData.companyID;
 
-  // Load mapping for MANAGER
+  // Load mapping for MANAGER / BRANCH_ADMIN
   useEffect(() => {
-    if (user?.role !== "SERVICE_PROVIDER") return;
+    if (user?.role !== "SERVICE_PROVIDER" && user?.role !== "BRANCH_ADMIN") return;
 
-    (async () => {
-      const res = await fetch(`${BACKEND_URL}/users`);
-      const users = await res.json();
-      const me = users.find((u: any) => u.username === user.username);
-      setCurrentUserMapping(me || null);
-    })();
+    if (user?.role === "SERVICE_PROVIDER") {
+      (async () => {
+        const res = await fetch(`${BACKEND_URL}/users`);
+        const users = await res.json();
+        const me = users.find((u: any) => u.username === user.username);
+        setCurrentUserMapping(me || null);
+      })();
+    } else if (user?.role === "BRANCH_ADMIN") {
+      setCurrentUserMapping(user);
+    }
   }, [user]);
 
-  // Auto-fill SP + Company + Branch for MANAGER
+  // Auto-fill SP + Company + Branch for MANAGER / BRANCH_ADMIN
   useEffect(() => {
     if (user?.role === "SERVICE_PROVIDER" && currentUserMapping) {
       setFormData((p) => ({
@@ -157,6 +161,13 @@ export function AttendancePolicyManagement() {
         serviceProviderID: currentUserMapping.serviceProviderID,
         companyID: currentUserMapping.companyID,
         branchesID: currentUserMapping.branchesID,
+      }));
+    } else if (user?.role === "BRANCH_ADMIN" && currentUserMapping) {
+      setFormData((p) => ({
+        ...p,
+        serviceProviderID: currentUserMapping.serviceProviderID ?? null,
+        companyID: currentUserMapping.companyID ?? null,
+        branchesID: currentUserMapping.branchesID ?? null,
       }));
     }
   }, [user, currentUserMapping]);
@@ -214,6 +225,7 @@ export function AttendancePolicyManagement() {
         ? data.filter(
           (b: any) =>
             b.companyID === resolvedCompanyID &&
+            (user?.role !== "BRANCH_ADMIN" || Number(b.id) === Number(user?.branchesID)) &&
             (b.branchName || "").toLowerCase().includes(q)
         )
         : [];
@@ -708,7 +720,7 @@ export function AttendancePolicyManagement() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2 w-full">
                     <div className="flex items-center gap-1">
-                      <Label htmlFor="checkin_begin_before_min">Check-In Begin Before (Minutes)</Label>
+                      <Label htmlFor="checkin_begin_before_min">Pre Check-In Time(In Minutes)</Label>
                       <span className="relative group">
                         <Info className="w-3.5 h-3.5 text-gray-400 cursor-help flex-shrink-0" />
                         <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-72 p-3 text-xs bg-gray-800 text-white rounded shadow-lg opacity-0 group-hover:opacity-100 transition pointer-events-none z-50 whitespace-pre-line leading-relaxed text-left">
@@ -739,7 +751,7 @@ export function AttendancePolicyManagement() {
 
                   <div className="space-y-2 w-full">
                     <div className="flex items-center gap-1">
-                      <Label htmlFor="checkout_end_after_min">Check-Out End After (Minutes)</Label>
+                      <Label htmlFor="checkout_end_after_min">Post Check-Out Time (In Minutes)</Label>
                       <span className="relative group">
                         <Info className="w-3.5 h-3.5 text-gray-400 cursor-help flex-shrink-0" />
                         <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-72 p-3 text-xs bg-gray-800 text-white rounded shadow-lg opacity-0 group-hover:opacity-100 transition pointer-events-none z-50 whitespace-pre-line leading-relaxed text-left">
@@ -776,7 +788,7 @@ export function AttendancePolicyManagement() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2 w-full">
                     <div className="flex items-center gap-1">
-                      <Label htmlFor="checkin_grace_time_min">Check-In Grace Time (Minutes)</Label>
+                      <Label htmlFor="checkin_grace_time_min">Check-In Grace Time (In Minutes)</Label>
                       <span className="relative group">
                         <Info className="w-3.5 h-3.5 text-gray-400 cursor-help flex-shrink-0" />
                         <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-72 p-3 text-xs bg-gray-800 text-white rounded shadow-lg opacity-0 group-hover:opacity-100 transition pointer-events-none z-50 whitespace-pre-line leading-relaxed text-left">
@@ -808,7 +820,7 @@ export function AttendancePolicyManagement() {
                   <div className="space-y-2 w-full">
                     <div className="flex items-center gap-1">
                       <Label htmlFor="min_work_hours_half_day_min">
-                        Min Work Hours for Half Day (Minutes)
+                        Minimum Work Hours for Half Day (In Minutes)
                       </Label>
                       <span className="relative group">
                         <Info className="w-3.5 h-3.5 text-gray-400 cursor-help flex-shrink-0" />
@@ -840,7 +852,7 @@ export function AttendancePolicyManagement() {
 
                   <div className="space-y-2 w-full">
                     <div className="flex items-center gap-1">
-                      <Label htmlFor="earlyCheckoutBeforeEndMin">Early Checkout Before End (Minutes)</Label>
+                      <Label htmlFor="earlyCheckoutBeforeEndMin">Early Checkout Allow Time (In Minutes)</Label>
                       <span className="relative group">
                         <Info className="w-3.5 h-3.5 text-gray-400 cursor-help flex-shrink-0" />
                         <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-72 p-3 text-xs bg-gray-800 text-white rounded shadow-lg opacity-0 group-hover:opacity-100 transition pointer-events-none z-50 whitespace-pre-line leading-relaxed text-left">
@@ -864,59 +876,6 @@ export function AttendancePolicyManagement() {
                         }}
                         className="w-full"
                         required
-                      />
-                      <span className="text-sm text-gray-500 flex-shrink-0">Min</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Late Check-In Rule */}
-              <div className="space-y-3">
-                <div className="flex items-center gap-1">
-                  <Label className="text-base font-semibold">Late Check-In Rule</Label>
-                  <span className="relative group">
-                    <Info className="w-3.5 h-3.5 text-gray-400 cursor-help flex-shrink-0" />
-                    <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-72 p-3 text-xs bg-gray-800 text-white rounded shadow-lg opacity-0 group-hover:opacity-100 transition pointer-events-none z-50 whitespace-pre-line leading-relaxed text-left">
-                      {`* For Flexible Shift, Not Applicable
-* For Fixed shift, If check-in after this buffer time mark as cumpulsory halfday / Absent as per policy
-* Applicable in Rotating Shift`}
-                    </span>
-                  </span>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
-                  <div className="space-y-1.5">
-                    <Label className="text-xs text-gray-500">Mark as</Label>
-                    <select
-                      value={formData.maxLateCheckinMarkAs}
-                      onChange={(e) =>
-                        setFormData((p) => ({
-                          ...p,
-                          maxLateCheckinMarkAs: e.target.value as "Absent" | "Half Day" | "",
-                        }))
-                      }
-                      className="w-full h-9 px-3 py-2 text-sm border rounded-md border-gray-300 bg-white focus:outline-none focus:ring-2 focus:ring-gray-900/15"
-                    >
-                      <option value="">Select</option>
-                      <option value="Absent">Absent</option>
-                      <option value="Half Day">Half Day</option>
-                    </select>
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label className="text-xs text-gray-500">if Check-In After</Label>
-                    <div className="flex items-center gap-2 w-full">
-                      <Input
-                        type="text"
-                        value={formData.max_late_check_in_time}
-                        onChange={(e) => {
-                          const value = e.target.value.replace(/\D/g, "");
-                          setFormData((p) => ({
-                            ...p,
-                            max_late_check_in_time: parseInt(value) || 0,
-                          }));
-                        }}
-                        className="w-full"
-                        placeholder="0"
                       />
                       <span className="text-sm text-gray-500 flex-shrink-0">Min</span>
                     </div>
@@ -972,6 +931,59 @@ export function AttendancePolicyManagement() {
                   </div>
                   <div className="flex items-end h-9">
                     <span className="text-sm text-gray-500">Late Marks</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Late Check-In Rule */}
+              <div className="space-y-3">
+                <div className="flex items-center gap-1">
+                  <Label className="text-base font-semibold">Late Check-In Rule</Label>
+                  <span className="relative group">
+                    <Info className="w-3.5 h-3.5 text-gray-400 cursor-help flex-shrink-0" />
+                    <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-72 p-3 text-xs bg-gray-800 text-white rounded shadow-lg opacity-0 group-hover:opacity-100 transition pointer-events-none z-50 whitespace-pre-line leading-relaxed text-left">
+                      {`* For Flexible Shift, Not Applicable
+* For Fixed shift, If check-in after this buffer time mark as cumpulsory halfday / Absent as per policy
+* Applicable in Rotating Shift`}
+                    </span>
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-gray-500">Mark as</Label>
+                    <select
+                      value={formData.maxLateCheckinMarkAs}
+                      onChange={(e) =>
+                        setFormData((p) => ({
+                          ...p,
+                          maxLateCheckinMarkAs: e.target.value as "Absent" | "Half Day" | "",
+                        }))
+                      }
+                      className="w-full h-9 px-3 py-2 text-sm border rounded-md border-gray-300 bg-white focus:outline-none focus:ring-2 focus:ring-gray-900/15"
+                    >
+                      <option value="">Select</option>
+                      <option value="Absent">Absent</option>
+                      <option value="Half Day">Half Day</option>
+                    </select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-gray-500">if Max Check-In After Grace Period Time</Label>
+                    <div className="flex items-center gap-2 w-full">
+                      <Input
+                        type="text"
+                        value={formData.max_late_check_in_time}
+                        onChange={(e) => {
+                          const value = e.target.value.replace(/\D/g, "");
+                          setFormData((p) => ({
+                            ...p,
+                            max_late_check_in_time: parseInt(value) || 0,
+                          }));
+                        }}
+                        className="w-full"
+                        placeholder="0"
+                      />
+                      <span className="text-sm text-gray-500 flex-shrink-0">Min</span>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -1034,12 +1046,12 @@ export function AttendancePolicyManagement() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2 w-full">
                     <div className="flex items-center gap-1">
-                      <Label htmlFor="trimPreshiftMin">Trim Preshift Time (Minutes)</Label>
+                      <Label htmlFor="trimPreshiftMin">Trim Preshift Time (In Minutes)</Label>
                       <span className="relative group">
                         <Info className="w-3.5 h-3.5 text-gray-400 cursor-help flex-shrink-0" />
                         <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-72 p-3 text-xs bg-gray-800 text-white rounded shadow-lg opacity-0 group-hover:opacity-100 transition pointer-events-none z-50 whitespace-pre-line leading-relaxed text-left">
-                          {`* For Fixed Shift, Trim Preshifttime as non working hours from total time between Check-in to Checkout
-* For Fixed Shift, Trim Preshifttime as non working hours from total time between Check-in to Checkout
+                          {`* For Fixed Shift, Trim Preshifttime as non working hours from total hours between Check-in to Checkout
+* For Fixed Shift, Trim Preshifttime as non working hours from total working between Check-in to Checkout
 * Applicable in Rotating Shift`}
                         </span>
                       </span>
@@ -1063,7 +1075,7 @@ export function AttendancePolicyManagement() {
                   </div>
                   <div className="space-y-2 w-full">
                     <div className="flex items-center gap-1">
-                      <Label htmlFor="trimPostshiftMin">Trim Postshift Time (Minutes)</Label>
+                      <Label htmlFor="trimPostshiftMin">Trim Postshift Time (In Minutes)</Label>
                       <span className="relative group">
                         <Info className="w-3.5 h-3.5 text-gray-400 cursor-help flex-shrink-0" />
                         <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-72 p-3 text-xs bg-gray-800 text-white rounded shadow-lg opacity-0 group-hover:opacity-100 transition pointer-events-none z-50 whitespace-pre-line leading-relaxed text-left">
@@ -1149,7 +1161,7 @@ export function AttendancePolicyManagement() {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div className="space-y-2 w-full">
                         <div className="flex items-center gap-1">
-                          <Label htmlFor="minOvertimeHrs">Min Overtime Hrs (Minutes)</Label>
+                          <Label htmlFor="minOvertimeHrs">Min Overtime Hrs (In Minutes)</Label>
                           <span className="relative group">
                             <Info className="w-3.5 h-3.5 text-gray-400 cursor-help flex-shrink-0" />
                             <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-72 p-3 text-xs bg-gray-800 text-white rounded shadow-lg opacity-0 group-hover:opacity-100 transition pointer-events-none z-50 whitespace-pre-line leading-relaxed text-left">
@@ -1178,7 +1190,7 @@ export function AttendancePolicyManagement() {
 
                       <div className="space-y-2 w-full">
                         <div className="flex items-center gap-1">
-                          <Label htmlFor="maxOvertimeHrs">Max Overtime Hrs (Minutes)</Label>
+                          <Label htmlFor="maxOvertimeHrs">Max Overtime Hrs (In Minutes)</Label>
                           <span className="relative group">
                             <Info className="w-3.5 h-3.5 text-gray-400 cursor-help flex-shrink-0" />
                             <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-72 p-3 text-xs bg-gray-800 text-white rounded shadow-lg opacity-0 group-hover:opacity-100 transition pointer-events-none z-50 whitespace-pre-line leading-relaxed text-left">
@@ -1258,12 +1270,7 @@ export function AttendancePolicyManagement() {
             <Table className="w-full">
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-[120px]">Service Provider</TableHead>
-                  <TableHead className="w-[120px]">Company Name</TableHead>
-                  <TableHead className="w-[120px]">Branch Name</TableHead>
-                  <TableHead className="w-[150px]">Policy Name</TableHead>
-                  <TableHead className="w-[100px]">Overtime</TableHead>
-                  <TableHead className="w-[100px]">Created</TableHead>
+                  <TableHead className="w-[200px]">Policy Name</TableHead>
                   <TableHead className="w-[80px] text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -1271,7 +1278,7 @@ export function AttendancePolicyManagement() {
                 {filteredPolicies.length === 0 ? (
                   <TableRow>
                     <TableCell
-                      colSpan={7}
+                      colSpan={2}
                       className="text-center py-8 text-gray-500"
                     >
                       <div className="flex flex-col items-center gap-2">
@@ -1289,31 +1296,8 @@ export function AttendancePolicyManagement() {
                 ) : (
                   filteredPolicies.map((policy) => (
                     <TableRow key={policy.id}>
-                      <TableCell className="whitespace-nowrap">
-                        {policy.serviceProvider}
-                      </TableCell>
-                      <TableCell className="whitespace-nowrap">
-                        {policy.companyName}
-                      </TableCell>
-                      <TableCell className="whitespace-nowrap">
-                        {policy.branchName}
-                      </TableCell>
                       <TableCell className="font-medium whitespace-nowrap">
                         {policy.attendancePolicyName}
-                      </TableCell>
-                      <TableCell className="whitespace-nowrap text-center">
-                        {policy.overtimeApplicable ? (
-                          <Badge variant="outline" className="bg-green-50 text-green-700">
-                            Yes
-                          </Badge>
-                        ) : (
-                          <Badge variant="outline" className="bg-gray-50 text-gray-500">
-                            No
-                          </Badge>
-                        )}
-                      </TableCell>
-                      <TableCell className="whitespace-nowrap">
-                        {policy.createdAt}
                       </TableCell>
                       <TableCell className="text-right whitespace-nowrap">
                         <div className="flex items-center justify-end gap-1">

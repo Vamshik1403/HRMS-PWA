@@ -82,8 +82,7 @@ export function WorkShiftsManagement() {
     null
   );
   const user = useCurrentUser();
-  const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN";
-  const isEmployee = user?.role === "EMPLOYEE";
+  const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN" || user?.role === "BRANCH_ADMIN";
   const [currentUserMapping, setCurrentUserMapping] = useState<any>(null);
 
 
@@ -130,17 +129,21 @@ export function WorkShiftsManagement() {
 
   // Load mapping for MANAGER
   useEffect(() => {
-    if (user?.role !== "SERVICE_PROVIDER") return;
+    if (user?.role !== "SERVICE_PROVIDER" && user?.role !== "BRANCH_ADMIN") return;
 
-    (async () => {
-      const res = await fetch("/backend/users");
-      const list = await res.json();
-      const me = list.find((u: any) => u.username === user.username);
-      setCurrentUserMapping(me || null);
-    })();
+    if (user?.role === "SERVICE_PROVIDER") {
+      (async () => {
+        const res = await fetch("/backend/users");
+        const list = await res.json();
+        const me = list.find((u: any) => u.username === user.username);
+        setCurrentUserMapping(me || null);
+      })();
+    } else if (user?.role === "BRANCH_ADMIN") {
+      setCurrentUserMapping(user);
+    }
   }, [user]);
 
-  // Auto-inject mapped IDs for MANAGER
+  // Auto-inject mapped IDs for MANAGER / BRANCH_ADMIN
   useEffect(() => {
     if (user?.role === "SERVICE_PROVIDER" && currentUserMapping) {
       setFormData((p) => ({
@@ -148,6 +151,13 @@ export function WorkShiftsManagement() {
         serviceProviderID: currentUserMapping.serviceProviderID,
         companyID: currentUserMapping.companyID,
         branchesID: currentUserMapping.branchesID,
+      }));
+    } else if (user?.role === "BRANCH_ADMIN" && currentUserMapping) {
+      setFormData((p) => ({
+        ...p,
+        serviceProviderID: currentUserMapping.serviceProviderID ?? null,
+        companyID: currentUserMapping.companyID ?? null,
+        branchesID: currentUserMapping.branchesID ?? null,
       }));
     }
   }, [user, currentUserMapping]);
@@ -216,6 +226,7 @@ export function WorkShiftsManagement() {
         ? data.filter(
           (item: any) =>
             item.companyID === companyID &&
+            (user?.role !== "BRANCH_ADMIN" || Number(item.id) === Number(currentUserMapping?.branchesID ?? user?.branchesID)) &&
             (item.branchName || "").toLowerCase().includes(q)
         )
         : [];
@@ -373,7 +384,9 @@ export function WorkShiftsManagement() {
     if (!start || !end) return 0;
     const [sh, sm] = start.split(":").map(Number);
     const [eh, em] = end.split(":").map(Number);
-    return Math.max(0, (eh * 60 + em) - (sh * 60 + sm));
+    let diff = (eh * 60 + em) - (sh * 60 + sm);
+    if (diff < 0) diff += 24 * 60; // handle cross-midnight (e.g. 23:00 → 00:00)
+    return diff;
   };
 
   const formatHrMin = (totalMin: number): string => {
@@ -883,31 +896,39 @@ export function WorkShiftsManagement() {
                     </tbody>
                     <tfoot>
                       <tr className="bg-gray-100 font-semibold">
-                        <td colSpan={6} className="border border-gray-300 px-2 py-2 text-right text-sm">
-                          Total Weekly Time
+                        <td colSpan={7} className="border border-gray-300 px-2 py-2 text-right text-sm">
+                          Total Working Hours
                         </td>
-                        <td className="border border-gray-300 px-2 py-2 text-center text-sm">
-                          {(() => {
-                            const totalBreakMin = formData.weeklySchedule
-                              .filter((d) => !d.isWeeklyOff)
-                              .reduce((sum, d) => sum + getBreakMin(d.work) + (d.ot.startTime && d.ot.endTime ? getBreakMin(d.ot) : 0), 0);
-                            const h = Math.floor(totalBreakMin / 60);
-                            const m = totalBreakMin % 60;
-                            return `${h}h ${m}m (${totalBreakMin} mins)`;
-                          })()}
-                        </td>
-                        <td className="border border-gray-300 px-2 py-2 text-center text-sm">
+                        <td className="border border-gray-300 px-2 py-2 text-center text-sm font-bold text-green-700">
                           {(() => {
                             const totalWorkMin = formData.weeklySchedule
                               .filter((d) => !d.isWeeklyOff)
-                              .reduce((sum, d) => sum + getWorkMin(d.work) + (d.ot.startTime && d.ot.endTime ? getWorkMin(d.ot) : 0), 0);
-                            const h = Math.floor(totalWorkMin / 60);
-                            const m = totalWorkMin % 60;
-                            return `${h}h ${m}m (${totalWorkMin} mins)`;
+                              .reduce((sum, d) => sum + getWorkMin(d.work), 0);
+                            const hours = Math.floor(totalWorkMin / 60);
+                            const mins = totalWorkMin % 60;
+                            return `${hours}h ${mins}m (${totalWorkMin} mins)`;
                           })()}
                         </td>
                         <td className="border border-gray-300 px-2 py-2 text-center text-xs text-gray-500">
-                          {/* Max 48h */}
+                          {/* Weekly Off indicator */}
+                        </td>
+                      </tr>
+                      <tr className="bg-orange-50 font-semibold">
+                        <td colSpan={7} className="border border-gray-300 px-2 py-2 text-right text-sm text-orange-700">
+                          Total OT Working Hours
+                        </td>
+                        <td className="border border-gray-300 px-2 py-2 text-center text-sm font-bold text-orange-700">
+                          {(() => {
+                            const totalOTMin = formData.weeklySchedule
+                              .filter((d) => !d.isWeeklyOff && d.ot.startTime && d.ot.endTime)
+                              .reduce((sum, d) => sum + getWorkMin(d.ot), 0);
+                            const hours = Math.floor(totalOTMin / 60);
+                            const mins = totalOTMin % 60;
+                            return totalOTMin > 0 ? `${hours}h ${mins}m (${totalOTMin} mins)` : "0h 0m (0 mins)";
+                          })()}
+                        </td>
+                        <td className="border border-gray-300 px-2 py-2 text-center text-xs text-gray-500">
+                          {/* OT indicator */}
                         </td>
                       </tr>
                     </tfoot>
@@ -964,17 +985,9 @@ export function WorkShiftsManagement() {
             <Table className="w-full">
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-[120px]">Service Provider</TableHead>
-                  <TableHead className="w-[120px]">Company Name</TableHead>
-                  <TableHead className="w-[120px]">Branch Name</TableHead>
-                  <TableHead className="w-[150px]">Work Shift Name</TableHead>
-                  <TableHead className="w-[100px]">Type</TableHead>
-                  <TableHead className="w-[200px]">Schedule</TableHead>
-                  <TableHead className="w-[100px]">Break Time</TableHead>
-                  <TableHead className="w-[100px]">
-                    Total Weekly Hours
-                  </TableHead>
-                  <TableHead className="w-[100px]">Created</TableHead>
+                  <TableHead className="w-[200px]">Work Shift Name</TableHead>
+                  <TableHead className="w-[120px]">Shift Type</TableHead>
+                  <TableHead className="w-[150px]">Weekly Off</TableHead>
                   <TableHead className="w-[80px] text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -982,7 +995,7 @@ export function WorkShiftsManagement() {
                 {filteredWorkShifts.length === 0 ? (
                   <TableRow>
                     <TableCell
-                      colSpan={10}
+                      colSpan={4}
                       className="text-center py-8 text-gray-500"
                     >
                       <div className="flex flex-col items-center gap-2">
@@ -1014,48 +1027,25 @@ export function WorkShiftsManagement() {
                       .map((day) => `${day.day}: ${day.work.startTime}-${day.work.endTime}`)
                       .join(", ");
 
-                    const shiftType = [];
-                    if (workShift.isFlexible) shiftType.push("Flexible");
-                    if (workShift.isRotating) shiftType.push("Rotating");
-                    const shiftTypeDisplay = shiftType.length > 0 ? shiftType.join(", ") : "Regular";
+                    let shiftTypeDisplay: string;
+                    if (workShift.isFlexible) {
+                      shiftTypeDisplay = "Flexible";
+                    } else if (workShift.isRotating) {
+                      shiftTypeDisplay = "Fixed Rotating";
+                    } else {
+                      shiftTypeDisplay = "Fixed Non Rotating";
+                    }
 
                     return (
                       <TableRow key={workShift.id}>
-                        <TableCell className="whitespace-nowrap">
-                          {workShift.serviceProvider}
-                        </TableCell>
-                        <TableCell className="whitespace-nowrap">
-                          {workShift.companyName}
-                        </TableCell>
-                        <TableCell className="whitespace-nowrap">
-                          {workShift.branchName}
-                        </TableCell>
                         <TableCell className="font-medium whitespace-nowrap">
                           {workShift.workShiftName}
                         </TableCell>
                         <TableCell className="whitespace-nowrap">
                           <Badge variant="outline">{shiftTypeDisplay}</Badge>
                         </TableCell>
-                        <TableCell className="whitespace-nowrap text-sm">
-                          <div
-                            className="max-w-[180px] truncate"
-                            title={scheduleSummary}
-                          >
-                            {scheduleSummary || "No working days"}
-                          </div>
-                        </TableCell>
-                        <TableCell className="whitespace-nowrap text-center">
-                          <Badge variant="outline">
-                            {workShift.weeklySchedule.filter(d => !d.isWeeklyOff).some(d => calcMinutes(d.work.breakStart, d.work.breakEnd) > 0)
-                              ? workShift.weeklySchedule.filter(d => !d.isWeeklyOff).map(d => `${calcMinutes(d.work.breakStart, d.work.breakEnd)}`).join("/") + "m"
-                              : "—"}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="whitespace-nowrap text-center">
-                          <Badge variant="outline">{formatHrMin(totalWeeklyMin)} ({totalWeeklyMin} mins)</Badge>
-                        </TableCell>
                         <TableCell className="whitespace-nowrap">
-                          {workShift.createdAt}
+                          {workShift.weeklySchedule.filter(d => d.isWeeklyOff).map(d => d.day).join(", ") || "—"}
                         </TableCell>
                         <TableCell className="text-right whitespace-nowrap">
                           <div className="flex items-center justify-end gap-1">

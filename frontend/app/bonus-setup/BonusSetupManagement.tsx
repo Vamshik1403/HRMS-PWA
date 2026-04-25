@@ -74,7 +74,7 @@ export function BonusSetupManagement() {
   const [editingBonus, setEditingBonus] = useState<BonusSetupUI | null>(null);
 
   const user = useCurrentUser();
-  const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN";
+  const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN" || user?.role === "BRANCH_ADMIN";
   const isEmployee = user?.role === "EMPLOYEE";
 
   const [currentUserMapping, setCurrentUserMapping] = useState<any>(null);
@@ -227,12 +227,15 @@ const resolvedCompanyID =
         }
       }
 
-      // COMPANY_ADMIN / BRANCH_ADMIN → filter by company
+      // COMPANY_ADMIN / BRANCH_ADMIN → filter by company (+ branch for BRANCH_ADMIN)
       if (user?.role === "COMPANY_ADMIN" || user?.role === "BRANCH_ADMIN") {
         const ctx = getSidebarContext();
         const companyID = ctx?.companyID ?? user?.companyID;
         if (companyID) {
-          setBonuses(all.filter((b: any) => b.companyID === companyID));
+          setBonuses(all.filter((b: any) =>
+            b.companyID === companyID &&
+            (user?.role !== "BRANCH_ADMIN" || !b.branchesID || Number(b.branchesID) === Number(user?.branchesID))
+          ));
         } else {
           setBonuses([]);
         }
@@ -372,6 +375,7 @@ const runFetchBR = debounce(async (val: string) => {
     const filtered = list.filter(
       (b) =>
         b.companyID === resolvedCompanyID &&
+        (user?.role !== "BRANCH_ADMIN" || Number(b.id) === Number(user?.branchesID)) &&
         (b.branchName ?? "").toLowerCase().includes(val.toLowerCase())
     );
 
@@ -849,8 +853,6 @@ const runFetchBR = debounce(async (val: string) => {
             <Table className="w-full">
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-[120px]">Service Provider</TableHead>
-                  <TableHead className="w-[120px]">Company Name</TableHead>
                   <TableHead className="w-[120px]">Branch Name</TableHead>
                   <TableHead className="w-[150px]">Bonus Name</TableHead>
                   <TableHead className="w-[200px]">Description</TableHead>
@@ -863,7 +865,7 @@ const runFetchBR = debounce(async (val: string) => {
               <TableBody>
                 {filteredBonuses.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={9} className="text-center py-8 text-gray-500">
+                    <TableCell colSpan={7} className="text-center py-8 text-gray-500">
                       <div className="flex flex-col items-center gap-2">
                         <Icon icon="mdi:trophy" className="w-12 h-12 text-gray-300" />
                         <p>No bonus setups found</p>
@@ -874,8 +876,6 @@ const runFetchBR = debounce(async (val: string) => {
                 ) : (
                   filteredBonuses.map((b) => (
                     <TableRow key={b.id}>
-                      <TableCell className="whitespace-nowrap">{b.serviceProvider}</TableCell>
-                      <TableCell className="whitespace-nowrap">{b.companyName}</TableCell>
                       <TableCell className="whitespace-nowrap">{b.branchName}</TableCell>
                       <TableCell className="font-medium whitespace-nowrap">{b.bonusName}</TableCell>
                       <TableCell className="whitespace-nowrap max-w-[200px] truncate" title={b.description}>

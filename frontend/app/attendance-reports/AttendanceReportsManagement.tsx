@@ -1,44 +1,34 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef, useMemo, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
-import { Search, Download, FileText } from "lucide-react";
+import { Search, Download, FileText, ChevronDown, X } from "lucide-react";
 import { useCurrentUser } from "../hooks/useCurrentUser";
-import { getSidebarContext } from "../utils/sidebarContext";
 import * as XLSX from "xlsx";
 
-// Interfaces remain the same as your existing code...
-interface AttendanceLog {
+// ==================== INTERFACES ====================
+
+interface ProcessAttLog {
   id: number;
-  device_sn?: string;
-  user_id?: string;
+  device_sn: string;
+  user_id: string;
   username: string;
   punch_time: string;
-  company_name?: string;
-  branch_name?: string;
-  department_name?: string;
-  device_emp_code?: string;
-  manage_employee_id?: number;
+  company_name: string;
+  branch_name: string;
+  department_name: string;
+  device_emp_code: string;
+  manage_employee_id: number;
   device_id: number;
-  raw_body?: string;
-  processed_at?: string;
-  status?: string;
-  device_name?: string;
-}
-
-interface Device {
-  id: number;
-  deviceName: string;
-  deviceType: string;
-  companyID: number;
-  branchesID: number;
+  raw_body: string;
+  processed_at: string;
   status: string;
-  deviceMake?: string;
-  deviceModel?: string;
-  deviceSN?: string;
+  device_name: string;
+  device_type: string;
+  auth_type: string | null;
 }
 
 interface Employee {
@@ -49,7 +39,9 @@ interface Employee {
   companyID: number;
   branchesID: number;
   departmentNameID?: number | null;
+  designationID?: number | null;
   username?: string;
+  workShiftID?: number;
 }
 
 interface Company {
@@ -74,14 +66,14 @@ interface Designation {
   id: number;
   companyID: number;
   branchesID: number;
-  departmentID?: number;
   designation: string;
+  departmentID: number;
 }
 
 interface PublicHoliday {
+  id: number;
   companyID: number;
   branchesID: number;
-  financialYear: string;
   startDate: string;
   endDate: string;
 }
@@ -90,9 +82,12 @@ interface WorkShiftDay {
   id: number;
   workShiftID: number;
   weekDay: string;
+  shiftType: string;
   weeklyOff: boolean;
   startTime: string;
   endTime: string;
+  breakStart: string | null;
+  breakEnd: string | null;
   totalMinutes: number;
 }
 
@@ -101,30 +96,94 @@ interface WorkShift {
   serviceProviderID: number;
   companyID: number;
   branchesID: number;
+  workShiftName: string;
+  isActive: string;
+  isFlexible: boolean;
+  isRotating: boolean;
+  breakTimeMin: number;
   workShiftDay: WorkShiftDay[];
 }
 
 interface AttendanceRegularize {
+  id: number;
   companyID: number;
   branchesID: number;
   manageEmployeeID: number;
   attendanceDate: string;
-  day: string;
   status: string;
-  requestedStatus?: string;
-}
-
-interface LeaveDayStatus {
-  date: string;
-  status: string;
+  requestedStatus: string;
 }
 
 interface LeaveApplication {
+  id: number;
   companyID: number;
   branchesID: number;
   manageEmployeeID: number;
+  appliedLeaveType: string;
+  fromDate: string;
+  toDate: string;
   status: string;
-  dayStatuses: LeaveDayStatus[];
+}
+
+interface RosterEmployee {
+  id: number;
+  rosterID: number;
+  employeeID: number;
+  days: RosterDay[];
+}
+
+interface RosterDay {
+  id: number;
+  rosterEmployeeID: number;
+  workDate: string;
+  workShiftID: number | null;
+  dayType: string;
+  leaveType: string | null;
+  isLocked: boolean;
+  workShift: WorkShift | null;
+}
+
+interface AttendancePolicy {
+  id: number;
+  serviceProviderID: number;
+  companyID: number;
+  branchesID: number;
+  attendancePolicyName: string;
+  workingHoursType: string;
+  checkin_begin_before_min: number;
+  checkout_end_after_min: number;
+  checkin_grace_time_min: number;
+  earlyCheckoutBeforeEndMin: number;
+  min_work_hours_half_day_min: number;
+  max_late_check_in_time: number;
+  markAs: string;
+  lateMarkCount: string;
+  lateMarkMarkAs: string;
+  lateMarkMarkCount: string;
+  maxLateCheckinMarkAs: string;
+  allow_self_mark_attendance: boolean;
+  allow_manager_update_ot: boolean;
+  max_ot_hours_per_day_min: number;
+  checkoutGracePeriodForOvertimeTrimming: number;
+  breakTimeForOT: number;
+  otMealApply: boolean;
+  maxOvertimeHrs: number;
+  minOvertimeHrs: number;
+  countWorkhoursInMinutes: boolean;
+  overtimeApplicable: boolean;
+  overtimeTrimmingApply: boolean;
+  minsForOTMealToken: number;
+  minsForBreakTimeForMeal: number;
+  leaveAroundHolidayCounted: boolean;
+  trimPreshiftMin: number;
+  trimPostshiftMin: number;
+}
+
+interface EmpWorkShift {
+  id: number;
+  manageEmployeeID: number;
+  workShiftID: number;
+  workShift: WorkShift;
 }
 
 interface ReportData {
@@ -135,10 +194,7 @@ interface ReportData {
   departmentName: string;
 }
 
-interface InOutData {
-  inTime: string;
-  outTime: string;
-}
+// ==================== CONSTANTS ====================
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "/backend";
 
@@ -150,19 +206,456 @@ const getTodayStr = () => {
   return `${yyyy}-${mm}-${dd}`;
 };
 
+const getFirstDayOfMonth = () => {
+  const d = new Date();
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  return `${yyyy}-${mm}-01`;
+};
+
 const LEFT_WIDTHS = {
-  sno: 60,
-  company: 220,
-  branch: 160,
-  dept: 130,
-  emp: 200
+  sno: 50,
+  company: 140,
+  branch: 130,
+  dept: 120,
+  emp: 160
 };
 
 const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
+// Global cache for status calculations
+const globalStatusCache = new Map<string, any>();
+
+// ==================== HELPER FUNCTIONS ====================
+
+const parsePunchTime = (punchTime: string): { dateKey: string; timeStr: string } | null => {
+  if (!punchTime) return null;
+  
+  if (punchTime.includes("T")) {
+    const datePart = punchTime.split("T")[0];
+    const timePart = punchTime.split("T")[1].split(".")[0];
+    return { dateKey: datePart, timeStr: timePart };
+  }
+  
+  const match = punchTime.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2})$/);
+  
+  if (match) {
+    const [, day, month, year, hour, minute] = match;
+    const dateKey = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    const timeStr = `${String(hour).padStart(2, '0')}:${minute}:00`;
+    return { dateKey, timeStr };
+  }
+  
+  return null;
+};
+
+const timeToMinutes = (timeStr: string): number => {
+  if (!timeStr) return 0;
+  const cleanTime = timeStr.includes(':') ? timeStr : timeStr + ':00';
+  const parts = cleanTime.split(':');
+  const hours = parseInt(parts[0]) || 0;
+  const minutes = parseInt(parts[1]) || 0;
+  const seconds = parseInt(parts[2]) || 0;
+  return hours * 60 + minutes + seconds / 60;
+};
+
+// ==================== MULTI SELECT COMPONENT ====================
+
+const MultiSelect = ({ options, selectedValues, onChange, placeholder, disabled = false }: { 
+  options: { value: string; label: string }[], 
+  selectedValues: string[], 
+  onChange: (values: string[]) => void, 
+  placeholder: string,
+  disabled?: boolean
+}) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+  
+  const filteredOptions = options.filter(opt => 
+    opt.label.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+  
+  const toggleOption = (value: string) => {
+    if (selectedValues.includes(value)) {
+      onChange(selectedValues.filter(v => v !== value));
+    } else {
+      onChange([...selectedValues, value]);
+    }
+  };
+  
+  const selectAll = () => {
+    const allValues = filteredOptions.map(opt => opt.value);
+    onChange([...new Set([...selectedValues, ...allValues])]);
+  };
+  
+  const clearAll = () => {
+    onChange([]);
+  };
+  
+  const getSelectedLabels = () => {
+    if (selectedValues.length === 0) return placeholder;
+    if (selectedValues.length === 1) {
+      const opt = options.find(o => o.value === selectedValues[0]);
+      return opt?.label || placeholder;
+    }
+    return `${selectedValues.length} selected`;
+  };
+  
+  return (
+    <div className="relative" ref={dropdownRef}>
+      <div 
+        className={`w-full px-3 py-2 border rounded-md bg-white ${disabled ? 'bg-gray-100 cursor-not-allowed' : 'cursor-pointer'} flex items-center justify-between`}
+        onClick={() => !disabled && setIsOpen(!isOpen)}
+      >
+        <span className="text-sm truncate">{getSelectedLabels()}</span>
+        <ChevronDown className="w-4 h-4 text-gray-400" />
+      </div>
+      
+      {isOpen && !disabled && (
+        <div className="absolute z-50 w-full mt-1 bg-white border rounded-md shadow-lg max-h-80 overflow-hidden">
+          <div className="p-2 border-b">
+            <Input
+              type="text"
+              placeholder="Search..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="text-sm"
+              onClick={(e) => e.stopPropagation()}
+            />
+          </div>
+          <div className="flex gap-2 p-2 border-b">
+            <Button type="button" variant="outline" size="sm" onClick={selectAll}>Select All</Button>
+            <Button type="button" variant="outline" size="sm" onClick={clearAll}>Clear</Button>
+          </div>
+          <div className="max-h-48 overflow-auto">
+            {filteredOptions.length === 0 ? (
+              <div className="px-3 py-2 text-sm text-gray-500">No options available</div>
+            ) : (
+              filteredOptions.map(opt => (
+                <label key={opt.value} className="flex items-center px-3 py-2 hover:bg-gray-50 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={selectedValues.includes(opt.value)}
+                    onChange={() => toggleOption(opt.value)}
+                    className="mr-2"
+                  />
+                  <span className="text-sm">{opt.label}</span>
+                </label>
+              ))
+            )}
+          </div>
+          <div className="p-2 border-t">
+            <Button type="button" size="sm" className="w-full" onClick={() => setIsOpen(false)}>Done</Button>
+          </div>
+        </div>
+      )}
+      
+      {selectedValues.length > 0 && (
+        <div className="flex flex-wrap gap-1 mt-2">
+          {selectedValues.slice(0, 2).map(v => {
+            const opt = options.find(o => o.value === v);
+            return opt ? (
+              <span key={v} className="inline-flex items-center gap-1 px-2 py-0.5 bg-blue-100 text-blue-800 text-xs rounded-full">
+                {opt.label.length > 20 ? opt.label.substring(0, 20) + '...' : opt.label}
+                <X className="w-3 h-3 cursor-pointer hover:text-blue-600" onClick={() => toggleOption(v)} />
+              </span>
+            ) : null;
+          })}
+          {selectedValues.length > 2 && (
+            <span className="px-2 py-0.5 bg-gray-100 text-gray-600 text-xs rounded-full">
+              +{selectedValues.length - 2} more
+            </span>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ==================== DATE CELL COMPONENT ====================
+
+// ==================== DATE CELL COMPONENT (UPDATED) ====================
+
+const DateCell = ({ punches, date, employeeID, formData, reportData, selectedCompanyID, selectedBranchID, getComprehensiveStatus }: any) => {
+  const cacheKey = `${date}-${employeeID}-${punches.length}`;
+  const [status, setStatus] = useState<any>(null);
+
+  useEffect(() => {
+    const fetchStatus = async () => {
+      if (globalStatusCache.has(cacheKey)) {
+        setStatus(globalStatusCache.get(cacheKey));
+      } else {
+        const statusesMap = new Map<string, string>();
+        const result = await getComprehensiveStatus(date, employeeID, punches, selectedCompanyID, selectedBranchID, statusesMap);
+        globalStatusCache.set(cacheKey, result);
+        setStatus(result);
+      }
+    };
+    fetchStatus();
+  }, [cacheKey, date, employeeID, punches.length, selectedCompanyID, selectedBranchID]);
+
+  if (!status) {
+    return <td className="px-2 py-1 border-b min-w-[80px] text-center align-top"><div className="text-[10px] text-gray-400">...</div></td>;
+  }
+
+  // ALL PUNCHES LOGS
+  if (formData.reportType === "All Punches Logs") {
+    return (
+      <td className="px-2 py-1 border-b min-w-[100px] text-center align-top">
+        {punches.length > 0 ? (
+          <div className="flex flex-wrap justify-center gap-1">
+            {punches.map((time: string, idx: number) => (
+              <span key={idx} className="inline-block px-2 py-0.5 bg-gray-800 text-white text-[9px] font-medium rounded-full">
+                {time}
+              </span>
+            ))}
+          </div>
+        ) : (
+          <div className="text-[10px] text-gray-400"></div>
+        )}
+      </td>
+    );
+  }
+
+  // FILO PUNCHES LOGS
+  if (formData.reportType === "FILO Punches Logs") {
+    if (punches.length === 0) {
+      return <td className="px-2 py-1 border-b min-w-[100px] text-center align-top"><div className="text-[10px] text-gray-400"></div></td>;
+    }
+    const firstPunch = punches[0];
+    const lastPunch = punches.length >= 2 ? punches[punches.length - 1] : null;
+    return (
+      <td className="px-2 py-1 border-b min-w-[100px] text-center align-top">
+        <div className="flex flex-col gap-1">
+          <span className="inline-block px-2 py-0.5 bg-green-600 text-white text-[9px] font-medium rounded-full">{firstPunch}</span>
+          {lastPunch && <span className="inline-block px-2 py-0.5 bg-red-600 text-white text-[9px] font-medium rounded-full">{lastPunch}</span>}
+        </div>
+      </td>
+    );
+  }
+
+  // ATTENDANCE MARKING LOGS
+  if (formData.reportType === "Attendance Marking Logs") {
+    let statusClass = "";
+    if (status.type === "WEEK_OFF") statusClass = "bg-orange-100 text-orange-800";
+    else if (status.type === "HOLIDAY") statusClass = "bg-purple-100 text-purple-800";
+    else if (status.type === "LEAVE") statusClass = "bg-pink-100 text-pink-800";
+    else if (status.type === "REGULARIZATION") statusClass = "bg-teal-100 text-teal-800";
+    else if (status.type === "SANDWICH") statusClass = "bg-amber-100 text-amber-800";
+    else if (status.type === "ABSENT") statusClass = "bg-red-100 text-red-800";
+    else if (status.type === "PRESENT") statusClass = "bg-green-100 text-green-800";
+    else if (status.type === "HALF_DAY") statusClass = "bg-yellow-100 text-yellow-800";
+    else if (status.type === "LATE_MARK") statusClass = "bg-blue-100 text-blue-800";
+    else if (status.type === "LATE_MARK_LIMIT") statusClass = "bg-red-200 text-red-900";
+    else if (status.type === "OT") statusClass = "bg-indigo-100 text-indigo-800";
+    else if (status.type === "SINGLE_PUNCH") statusClass = "bg-gray-100 text-gray-800";
+    else statusClass = "bg-gray-100 text-gray-800";
+
+    // Special status with punches - show status + working hours
+    if (status.hasPunches && punches.length > 0 && 
+        (status.type === "WEEK_OFF" || status.type === "HOLIDAY" || status.type === "LEAVE" || status.type === "REGULARIZATION")) {
+      const workedMinutes = status.workedMinutes || 0;
+      const hours = Math.floor(workedMinutes / 60);
+      const mins = workedMinutes % 60;
+      return (
+        <td className="px-2 py-1 border-b min-w-[100px] text-center align-top">
+          <div className={`text-[9px] font-bold py-1 px-2 rounded mb-1 ${statusClass}`}>{status.label}</div>
+          <div className="inline-block px-2 py-0.5 bg-blue-100 text-blue-800 text-[9px] font-medium rounded-full">{hours}h {mins}m</div>
+        </td>
+      );
+    }
+    
+    // OT - show P badge + OT time
+    if (status.type === "OT" && status.workedMinutes && status.totalShiftMinutes && status.otMinutes) {
+      const normalHours = Math.floor(status.totalShiftMinutes / 60);
+      const normalMins = status.totalShiftMinutes % 60;
+      const otHours = Math.floor(status.otMinutes / 60);
+      const otMins = status.otMinutes % 60;
+      return (
+        <td className="px-2 py-1 border-b min-w-[100px] text-center align-top">
+          <div className="inline-block px-2 py-0.5 bg-green-100 text-green-800 text-[9px] font-medium rounded-full mb-1">P</div>
+          <div className="inline-block px-2 py-0.5 bg-indigo-100 text-indigo-800 text-[9px] font-medium rounded-full">{normalHours}h{normalMins}m + {otHours}h{otMins}m OT</div>
+        </td>
+      );
+    }
+    
+    // Present - show P badge + working hours
+    if (status.type === "PRESENT" && status.workedMinutes) {
+      const hours = Math.floor(status.workedMinutes / 60);
+      const mins = status.workedMinutes % 60;
+      return (
+        <td className="px-2 py-1 border-b min-w-[80px] text-center align-top">
+          <div className="inline-block px-2 py-0.5 bg-green-100 text-green-800 text-[9px] font-medium rounded-full mb-1">P</div>
+          <div className="inline-block px-2 py-0.5 bg-blue-100 text-blue-800 text-[9px] font-medium rounded-full">{hours}h {mins}m</div>
+        </td>
+      );
+    }
+
+    // Half Day - show HD badge + working hours
+    if (status.type === "HALF_DAY" && status.workedMinutes) {
+      const hours = Math.floor(status.workedMinutes / 60);
+      const mins = status.workedMinutes % 60;
+      return (
+        <td className="px-2 py-1 border-b min-w-[80px] text-center align-top">
+          <div className="inline-block px-2 py-0.5 bg-yellow-100 text-yellow-800 text-[9px] font-medium rounded-full mb-1">HD</div>
+          <div className="inline-block px-2 py-0.5 bg-blue-100 text-blue-800 text-[9px] font-medium rounded-full">{hours}h {mins}m</div>
+        </td>
+      );
+    }
+    
+    return (
+      <td className="px-2 py-1 border-b min-w-[80px] text-center align-top">
+        <div className={`text-[10px] font-bold py-1 px-2 rounded ${statusClass}`}>{status.label}</div>
+      </td>
+    );
+  }
+
+  // ==================== ATTENDANCE SUMMARY LOGS (ENHANCED FOR PAYROLL) ====================
+  if (formData.reportType === "Attendance Summary Logs") {
+    
+    // Helper function to format time with leading zeros
+    const formatPunchTime = (timeStr: string) => {
+      if (!timeStr) return "";
+      const parts = timeStr.split(':');
+      return `${parts[0].padStart(2, '0')}:${parts[1].padStart(2, '0')}`;
+    };
+    
+    // Get first and last punch
+    const firstPunch = punches.length > 0 ? formatPunchTime(punches[0]) : "";
+    const lastPunch = punches.length >= 2 ? formatPunchTime(punches[punches.length - 1]) : "";
+    
+    // Calculate worked hours (in minutes)
+    const workedMinutes = status.workedMinutes || 0;
+    const workedHours = Math.floor(workedMinutes / 60);
+    const workedMins = workedMinutes % 60;
+    
+    // Calculate OT hours (in minutes)
+    const otMinutes = status.otMinutes || 0;
+    const otHours = Math.floor(otMinutes / 60);
+    const otMins = otMinutes % 60;
+    
+    // Determine status badge
+    let statusBadge = "";
+    let badgeClass = "";
+    
+    if (status.type === "ABSENT") {
+      statusBadge = "A";
+      badgeClass = "bg-red-100 text-red-800";
+    } else if (status.type === "WEEK_OFF") {
+      statusBadge = status.label === "WO-P" ? "WO-P" : "WO";
+      badgeClass = "bg-orange-100 text-orange-800";
+    } else if (status.type === "HOLIDAY") {
+      statusBadge = status.label === "PH-P" ? "PH-P" : "PH";
+      badgeClass = "bg-purple-100 text-purple-800";
+    } else if (status.type === "LEAVE") {
+      statusBadge = status.label === "Leave-P" ? "L-P" : "L";
+      badgeClass = "bg-pink-100 text-pink-800";
+    } else if (status.type === "HALF_DAY") {
+      statusBadge = "HD";
+      badgeClass = "bg-yellow-100 text-yellow-800";
+    } else if (status.type === "REGULARIZATION") {
+      statusBadge = "AR";
+      badgeClass = "bg-teal-100 text-teal-800";
+    } else if (status.type === "SANDWICH") {
+      statusBadge = "SW";
+      badgeClass = "bg-amber-100 text-amber-800";
+    } else if (status.type === "SINGLE_PUNCH") {
+      statusBadge = "SP";
+      badgeClass = "bg-gray-100 text-gray-800";
+    } else {
+      statusBadge = "P";
+      badgeClass = "bg-green-100 text-green-800";
+    }
+    
+    return (
+      <td className="px-2 py-1 border-b min-w-[140px] text-center align-top bg-white">
+        <div className="flex flex-col gap-0.5">
+          
+          {/* Row 1: Status Badge */}
+          <div className="flex items-center justify-center">
+            <span className={`inline-block px-2 py-0.5 ${badgeClass} text-[9px] font-bold rounded-full`}>
+              {statusBadge}
+            </span>
+            <span className="text-[8px] text-gray-400 ml-1">Marking</span>
+          </div>
+          
+          {/* Row 2: FILO Punches (First In - Last Out) */}
+          {punches.length > 0 && (
+            <div className="flex items-center justify-center gap-1">
+              <span className="text-[9px] font-mono bg-gray-100 px-1.5 py-0.5 rounded text-gray-700">
+                {firstPunch || "--:--"}
+              </span>
+              <span className="text-[8px] text-gray-400">-</span>
+              <span className="text-[9px] font-mono bg-gray-100 px-1.5 py-0.5 rounded text-gray-700">
+                {lastPunch || "--:--"}
+              </span>
+            </div>
+          )}
+          
+          {/* Row 3: Working Hours (in minutes) */}
+          {status.type !== "ABSENT" && status.type !== "WEEK_OFF" && status.type !== "HOLIDAY" && 
+           status.type !== "LEAVE" && !(status.type === "WEEK_OFF" && !status.hasPunches) && 
+           !(status.type === "HOLIDAY" && !status.hasPunches) && workedMinutes > 0 && (
+            <div className="flex items-center justify-center">
+              <span className="text-[9px] font-semibold text-blue-700">
+                {workedHours}h {workedMins}m
+              </span>
+              <span className="text-[7px] text-gray-400 ml-1">Work</span>
+            </div>
+          )}
+          
+          {/* Row 4: OT Hours (in minutes) - Only show if OT exists */}
+          {otMinutes > 0 && (
+            <div className="flex items-center justify-center">
+              <span className="text-[9px] font-semibold text-indigo-700">
+                {otHours}h {otMins}m
+              </span>
+              <span className="text-[7px] text-gray-400 ml-1">OT</span>
+            </div>
+          )}
+          
+          {/* Row 5: Total Payable Hours (Work + OT) - For payroll quick reference */}
+          {workedMinutes > 0 && status.type !== "WEEK_OFF" && status.type !== "HOLIDAY" && status.type !== "LEAVE" && (
+            <div className="flex items-center justify-center border-t border-gray-200 pt-0.5 mt-0.5">
+              <span className="text-[8px] font-bold text-gray-600">
+                Total: {Math.floor((workedMinutes + otMinutes) / 60)}h {(workedMinutes + otMinutes) % 60}m
+              </span>
+            </div>
+          )}
+          
+          {/* Show label for non-working days without punches */}
+          {punches.length === 0 && (
+            <div className="text-[9px] text-gray-500 font-medium">
+              {status.type === "WEEK_OFF" ? "Weekly Off" : 
+               status.type === "HOLIDAY" ? "Holiday" : 
+               status.type === "LEAVE" ? status.label : 
+               status.type === "ABSENT" ? "Absent" : ""}
+            </div>
+          )}
+          
+        </div>
+      </td>
+    );
+  }
+
+  return <td className="px-2 py-1 border-b min-w-[100px] text-center align-top"><div className="text-[10px] text-gray-400"></div></td>;
+};
+
+// ==================== MAIN COMPONENT ====================
+
 export function AttendanceReportsManagement() {
   const user = useCurrentUser();
-
   const [searchTerm, setSearchTerm] = useState("");
   const [reportData, setReportData] = useState<ReportData[]>([]);
   const [loading, setLoading] = useState(false);
@@ -171,14 +664,17 @@ export function AttendanceReportsManagement() {
   const [branches, setBranches] = useState<Branch[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
   const [allBranches, setAllBranches] = useState<Branch[]>([]);
-  const [allDepartments, setAllDepartments] = useState<Department[]>([]);
+  const [designations, setDesignations] = useState<Designation[]>([]);
+  const [allEmployees, setAllEmployees] = useState<Employee[]>([]);
+  
   const [publicHolidays, setPublicHolidays] = useState<PublicHoliday[]>([]);
   const [workShifts, setWorkShifts] = useState<WorkShift[]>([]);
   const [attendanceRegularizations, setAttendanceRegularizations] = useState<AttendanceRegularize[]>([]);
   const [leaveApplications, setLeaveApplications] = useState<LeaveApplication[]>([]);
-  const [devices, setDevices] = useState<Device[]>([]);
-  const [allDesignations, setAllDesignations] = useState<Designation[]>([]);
-  const [designations, setDesignations] = useState<Designation[]>([]);
+  const [rosters, setRosters] = useState<RosterEmployee[]>([]);
+  const [attendancePolicy, setAttendancePolicy] = useState<AttendancePolicy | null>(null);
+  const [empWorkShifts, setEmpWorkShifts] = useState<EmpWorkShift[]>([]);
+  const [sandwichOverrides, setSandwichOverrides] = useState<Map<number, Set<string>>>(new Map());
 
   const [managerData, setManagerData] = useState<any>(null);
   const [empCreds, setEmpCreds] = useState<any>(null);
@@ -186,432 +682,56 @@ export function AttendanceReportsManagement() {
   const [formData, setFormData] = useState({
     companyID: null as number | null,
     branchName: "",
-    department: "",
     reportType: "All Punches Logs",
-    designation: "",
-    dateFrom: "",
+    dateFrom: getFirstDayOfMonth(),
     dateTo: getTodayStr()
   });
+  
+  const [selectedDepartments, setSelectedDepartments] = useState<string[]>([]);
+  const [selectedDesignations, setSelectedDesignations] = useState<string[]>([]);
+  const [selectedEmployees, setSelectedEmployees] = useState<string[]>([]);
 
-  const [visibleColumns, setVisibleColumns] = useState<Record<string, boolean>>({ sno: true, company: true, branch: true, dept: true, emp: true });
-  const [columnPickerOpen, setColumnPickerOpen] = useState(false);
-  const toggleColumn = (key: string) => setVisibleColumns(prev => ({ ...prev, [key]: !prev[key] }));
+  const lateMarkTracker = useRef(new Map<string, number>());
+  const noCheckoutTracker = useRef(new Map<string, number>());
 
-  const getStickyLeft = (key: string) => {
-    const order = ["sno", "company", "branch", "dept", "emp"];
-    let left = 0;
-    for (const k of order) {
-      if (k === key) return left;
-      if (visibleColumns[k]) left += LEFT_WIDTHS[k as keyof typeof LEFT_WIDTHS];
-    }
-    return left;
-  };
-
-  // ------- HELPERS -------
-  // (Keep all your existing helper functions: parseInputDate, parseTimestamp, formatTime, 
-  // buildDateRangeColumns, formatHeaderDate, getInOutTimes, getSpecialStatus, getAttendanceStatus,
-  // downloadExcel, getFullStatusLabel, getExcelStatusStyle)
-
-  const parseInputDate = (value: string) => {
-    if (!value) return new Date(NaN);
-    if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return new Date(value);
-    const parts = value.split("/");
-    if (parts.length === 3) {
-      const [mm, dd, yyyy] = parts;
-      return new Date(`${yyyy}-${mm}-${dd}`);
-    }
-    return new Date(value);
-  };
-
-  const parseTimestamp = (ts: string) => {
-    return new Date(ts.replace(" ", "T"));
-  };
-
-  const formatTime = (ts: string) => {
-    const d = parseTimestamp(ts);
-    return d.toLocaleTimeString("en-US", {
-      hour12: false,
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit"
-    });
-  };
-
-  const buildDateRangeColumns = (): string[] => {
-    if (!formData.dateFrom || !formData.dateTo) return [];
-    const start = parseInputDate(formData.dateFrom);
-    const end = parseInputDate(formData.dateTo);
-    if (isNaN(start.getTime()) || isNaN(end.getTime())) return [];
-
-    start.setHours(0, 0, 0, 0);
-    end.setHours(0, 0, 0, 0);
-
-    const dates: string[] = [];
-    const cur = new Date(start);
-
-    while (cur <= end) {
-      const yyyy = cur.getFullYear();
-      const mm = String(cur.getMonth() + 1).padStart(2, "0");
-      const dd = String(cur.getDate()).padStart(2, "0");
-      dates.push(`${yyyy}-${mm}-${dd}`);
-      cur.setDate(cur.getDate() + 1);
-    }
-
-    return dates;
-  };
-
-  const formatHeaderDate = (iso: string) => {
-    const d = new Date(iso);
-    const dayName = d.toLocaleDateString("en-US", { weekday: "short" }).toUpperCase();
-    const dateStr = d
-      .toLocaleDateString("en-GB", {
-        day: "2-digit",
-        month: "short",
-        year: "numeric"
-      })
-      .toUpperCase();
-    return { dayName, dateStr };
-  };
-
-  const getInOutTimes = (punches: string[]): InOutData => {
-    if (punches.length === 0) return { inTime: "-", outTime: "-" };
-    if (punches.length === 1) return { inTime: punches[0], outTime: "-" };
+  // ==================== LOAD BRANCH DATA ON SELECTION ====================
+  
+ useEffect(() => {
+  const loadBranchData = async () => {
+    if (!formData.branchName || !formData.companyID) return;
     
-    const sortedPunches = [...punches].sort((a, b) => {
-      const timeA = new Date(`1970-01-01T${a}`).getTime();
-      const timeB = new Date(`1970-01-01T${b}`).getTime();
-      return timeA - timeB;
-    });
-    
-    return {
-      inTime: sortedPunches[0],
-      outTime: sortedPunches[sortedPunches.length - 1]
-    };
+    const branch = branches.find(b => b.branchName === formData.branchName);
+    if (!branch) return;
+
+    try {
+      const deptsRes = await fetch(`${BACKEND_URL}/departments`);
+      const deptsData = await deptsRes.json();
+      const branchDepts = deptsData.filter((d: Department) => 
+        d.branchesID === branch.id && d.companyID === formData.companyID
+      );
+      setDepartments(branchDepts);
+
+      const desigsRes = await fetch(`${BACKEND_URL}/designations`);
+      const desigsData = await desigsRes.json();
+      const branchDesigs = desigsData.filter((d: Designation) => 
+        d.branchesID === branch.id && d.companyID === formData.companyID
+      );
+      setDesignations(branchDesigs);
+
+      const empsRes = await fetch(`${BACKEND_URL}/manage-emp`);
+      const empsData = await empsRes.json();
+      const branchEmps = empsData.filter((e: Employee) => 
+        e.branchesID === branch.id && e.companyID === formData.companyID
+      );
+      setAllEmployees(branchEmps);
+
+    } catch (error) {}
   };
 
-  const getSpecialStatus = (date: string, selectedCompanyID: number, selectedBranchID: number, employeeID: number): { type: string; label: string } | null => {
-    const isPublicHoliday = publicHolidays.some(holiday => {
-      if (holiday.companyID !== selectedCompanyID || holiday.branchesID !== selectedBranchID) return false;
-      
-      const holidayStart = new Date(holiday.startDate);
-      const holidayEnd = new Date(holiday.endDate);
-      const currentDate = new Date(date);
-      
-      holidayStart.setHours(0, 0, 0, 0);
-      holidayEnd.setHours(23, 59, 59, 999);
-      currentDate.setHours(0, 0, 0, 0);
-      
-      return currentDate >= holidayStart && currentDate <= holidayEnd;
-    });
+  loadBranchData();
+}, [formData.branchName, formData.companyID, branches]);
 
-    if (isPublicHoliday) {
-      return { type: "PH", label: "PH" };
-    }
-
-    const dayOfWeek = WEEKDAYS[new Date(date).getDay()];
-    const isWeeklyOff = workShifts.some(shift => {
-      if (shift.companyID !== selectedCompanyID || shift.branchesID !== selectedBranchID) return false;
-      
-      const workShiftDay = shift.workShiftDay.find(day => day.weekDay === dayOfWeek);
-      return workShiftDay?.weeklyOff === true;
-    });
-
-    if (isWeeklyOff) {
-      return { type: "WO", label: "WO" };
-    }
-
-    const leaveStatus = leaveApplications.find(leave => {
-      if (leave.companyID !== selectedCompanyID || leave.branchesID !== selectedBranchID || leave.manageEmployeeID !== employeeID) 
-        return false;
-      
-      if (leave.status !== "Approved") return false;
-      
-      const dayStatus = leave.dayStatuses.find(day => day.date === date);
-      return dayStatus !== undefined;
-    });
-
-    if (leaveStatus) {
-      const dayStatus = leaveStatus.dayStatuses.find(day => day.date === date);
-      if (dayStatus) {
-        return { type: "LEAVE", label: dayStatus.status };
-      }
-    }
-
-    const regularization = attendanceRegularizations.find(reg => {
-      if (reg.companyID !== selectedCompanyID || reg.branchesID !== selectedBranchID || reg.manageEmployeeID !== employeeID) 
-        return false;
-      
-      if (reg.status !== "Approved") return false;
-      
-      const regDate = new Date(reg.attendanceDate);
-      const currentDate = new Date(date);
-      
-      regDate.setHours(0, 0, 0, 0);
-      currentDate.setHours(0, 0, 0, 0);
-      
-      return regDate.getTime() === currentDate.getTime();
-    });
-
-    if (regularization) {
-      const requestedStatus = regularization.requestedStatus || regularization.day || "";
-      const statusMap: { [key: string]: string } = {
-        'PRESENT': 'Present',
-        'SL': 'Sick Leave',
-        'CL': 'Casual Leave',
-        'PL': 'Privilege Leave',
-        'LOP': 'Loss of Pay',
-        'WEEKOFF': 'Week Off',
-      };
-      const statusLabel = statusMap[requestedStatus] || requestedStatus.charAt(0).toUpperCase() + requestedStatus.slice(1);
-      return { type: "AR", label: `${statusLabel} (Regularized)` };
-    }
-
-    return null;
-  };
-
-  const getAttendanceStatus = (punches: string[], date: string, selectedCompanyID: number, selectedBranchID: number, employeeID: number): string => {
-    const specialStatus = getSpecialStatus(date, selectedCompanyID, selectedBranchID, employeeID);
-    
-    if (specialStatus) {
-      return specialStatus.label;
-    }
-
-    if (punches.length === 0) return "A";
-    if (punches.length === 1) return punches[0];
-    return "P";
-  };
-
-  const downloadExcel = () => {
-    if (reportData.length === 0) {
-      alert("No data to download");
-      return;
-    }
-
-    const dateColumns = buildDateRangeColumns();
-    const selectedCompanyID = formData.companyID;
-    const selectedBranch = branches.find(b => b.branchName === formData.branchName);
-    const selectedBranchID = selectedBranch?.id || 0;
-    
-    const excelData: any[] = [];
-    
-    const headerRow: any = {
-      "S.NO": "S.NO",
-      "Employee ID": "Employee ID", 
-      "Employee Name": "Employee Name",
-      "Company": "Company",
-      "Branch": "Branch",
-      "Department": "Department"
-    };
-
-    dateColumns.forEach(date => {
-      const { dayName, dateStr } = formatHeaderDate(date);
-      headerRow[dateStr] = `${dateStr}\n${dayName}`;
-    });
-
-    excelData.push(headerRow);
-
-    filteredReportData.forEach((row, index) => {
-      const dataRow: any = {
-        "S.NO": index + 1,
-        "Employee ID": row.employee.employeeID,
-        "Employee Name": `${row.employee.employeeFirstName} ${row.employee.employeeLastName}`,
-        "Company": row.companyName,
-        "Branch": row.branchName,
-        "Department": row.departmentName || "N/A"
-      };
-
-      dateColumns.forEach(date => {
-        const { dateStr } = formatHeaderDate(date);
-        const punches = row.punches[date] || [];
-        const specialStatus = getSpecialStatus(date, selectedCompanyID!, selectedBranchID, row.employee.id);
-        
-        if (formData.reportType === "FILO Punches Logs") {
-          const { inTime, outTime } = getInOutTimes(punches);
-          
-          if (specialStatus) {
-            const fullStatus = getFullStatusLabel(specialStatus.label);
-            dataRow[dateStr] = fullStatus;
-          } else if (punches.length === 0) {
-            dataRow[dateStr] = "Absent";
-          } else {
-            dataRow[dateStr] = `IN: ${inTime}\nOUT: ${outTime}`;
-          }
-        } else if (formData.reportType === "Attendance Marking Logs") {
-          const status = getAttendanceStatus(punches, date, selectedCompanyID!, selectedBranchID, row.employee.id);
-          const fullStatus = getFullStatusLabel(status);
-          dataRow[dateStr] = fullStatus;
-        } else {
-          if (specialStatus) {
-            const fullStatus = getFullStatusLabel(specialStatus.label);
-            dataRow[dateStr] = fullStatus;
-          } else if (punches.length === 0) {
-            dataRow[dateStr] = "Absent";
-          } else if (punches.length === 1) {
-            dataRow[dateStr] = punches[0];
-          } else {
-            dataRow[dateStr] = "Present";
-          }
-        }
-      });
-
-      excelData.push(dataRow);
-    });
-
-    const ws = XLSX.utils.json_to_sheet(excelData, { skipHeader: true });
-    const range = XLSX.utils.decode_range(ws['!ref'] || 'A1');
-    
-    for (let R = range.s.r; R <= range.e.r; R++) {
-      for (let C = range.s.c; C <= range.e.c; C++) {
-        const cell_address = {c: C, r: R};
-        const cell_ref = XLSX.utils.encode_cell(cell_address);
-        
-        if (!ws[cell_ref]) continue;
-        
-        ws[cell_ref].s = {
-          font: { name: "Arial", sz: 9 },
-          alignment: { 
-            horizontal: "center", 
-            vertical: "center", 
-            wrapText: true 
-          },
-          border: {
-            top: { style: "thin", color: { rgb: "000000" } },
-            left: { style: "thin", color: { rgb: "000000" } },
-            bottom: { style: "thin", color: { rgb: "000000" } },
-            right: { style: "thin", color: { rgb: "000000" } }
-          }
-        };
-        
-        if (R === 0) {
-          ws[cell_ref].s.fill = { fgColor: { rgb: "366092" } };
-          ws[cell_ref].s.font = { 
-            name: "Arial", 
-            sz: 10, 
-            bold: true, 
-            color: { rgb: "FFFFFF" } 
-          };
-        } else {
-          const cellValue = ws[cell_ref].v;
-          if (typeof cellValue === 'string' && C >= 6) {
-            const statusStyle = getExcelStatusStyle(cellValue);
-            if (statusStyle) {
-              ws[cell_ref].s.fill = { fgColor: { rgb: statusStyle.bgColor } };
-              ws[cell_ref].s.font = { 
-                name: "Arial", 
-                sz: 9, 
-                bold: statusStyle.bold, 
-                color: { rgb: statusStyle.textColor } 
-              };
-            }
-          }
-          
-          if (typeof cellValue === 'string' && cellValue.toLowerCase() === 'absent') {
-            ws[cell_ref].s.fill = { fgColor: { rgb: "FF0000" } };
-            ws[cell_ref].s.font = { 
-              name: "Arial", 
-              sz: 9, 
-              bold: true, 
-              color: { rgb: "FFFFFF" } 
-            };
-          }
-          
-          if (typeof cellValue === 'string' && cellValue.toLowerCase() === 'present') {
-            ws[cell_ref].s.fill = { fgColor: { rgb: "00B050" } };
-            ws[cell_ref].s.font = { 
-              name: "Arial", 
-              sz: 9, 
-              bold: true, 
-              color: { rgb: "FFFFFF" } 
-            };
-          }
-          
-          if (typeof cellValue === 'string' && /^\d{1,2}:\d{2}:\d{2}$/.test(cellValue)) {
-            ws[cell_ref].s.fill = { fgColor: { rgb: "FFFF00" } };
-            ws[cell_ref].s.font = { 
-              name: "Arial", 
-              sz: 9, 
-              bold: true, 
-              color: { rgb: "000000" } 
-            };
-          }
-        }
-      }
-    }
-    
-    const colWidths = [
-      { wch: 6 }, { wch: 12 }, { wch: 18 }, { wch: 30 }, { wch: 12 }, { wch: 12 },
-    ];
-    
-    dateColumns.forEach(() => {
-      colWidths.push({ wch: 15 });
-    });
-    
-    ws['!cols'] = colWidths;
-    ws['!freeze'] = { x: 6, y: 1 };
-    
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Attendance Report");
-    const filename = `${formData.reportType.replace(/\s+/g, '_')}_${formData.dateFrom}_to_${formData.dateTo}.xlsx`;
-    XLSX.writeFile(wb, filename);
-  };
-
-  const getFullStatusLabel = (status: string): string => {
-    const statusMap: { [key: string]: string } = {
-      'P': 'Present',
-      'A': 'Absent',
-      'PH': 'Public Holiday',
-      'WO': 'Weekly Off',
-      'AR': 'Attendance Regularized',
-      'Casual': 'Casual Leave',
-      'Sick': 'Sick Leave',
-      'Earned': 'Earned Leave',
-      'Maternity': 'Maternity Leave',
-      'Paternity': 'Paternity Leave',
-      'Halfday': 'Half Day',
-      'Fullday': 'Full Day',
-      'Single Punch': 'Single Punch'
-    };
-
-    if (status.startsWith('AR (')) {
-      const arType = status.replace('AR (', '').replace(')', '');
-      const fullArType = getFullStatusLabel(arType);
-      return `Attendance Regularized (${fullArType})`;
-    }
-
-    return statusMap[status] || status;
-  };
-
-  const getExcelStatusStyle = (status: string): { bgColor: string; textColor: string; bold: boolean } | null => {
-    const statusLower = status.toLowerCase();
-    
-    if (statusLower.includes('public holiday') || statusLower.includes('ph')) {
-      return { bgColor: "FF99FF", textColor: "000000", bold: true };
-    }
-    else if (statusLower.includes('weekly off') || statusLower.includes('wo')) {
-      return { bgColor: "FF9900", textColor: "000000", bold: true };
-    }
-    else if (statusLower.includes('attendance regularized') || statusLower.includes('ar')) {
-      return { bgColor: "00FFFF", textColor: "000000", bold: true };
-    }
-    else if (statusLower.includes('leave') || 
-             statusLower.includes('casual') || 
-             statusLower.includes('sick') || 
-             statusLower.includes('earned') ||
-             statusLower.includes('maternity') ||
-             statusLower.includes('paternity')) {
-      return { bgColor: "FF66CC", textColor: "000000", bold: true };
-    }
-    else if (statusLower.includes('half day') || statusLower.includes('halfday')) {
-      return { bgColor: "FFFFCC", textColor: "000000", bold: true };
-    }
-    else if (statusLower.includes('full day') || statusLower.includes('fullday')) {
-      return { bgColor: "CCFFCC", textColor: "000000", bold: true };
-    }
-
-    return null;
-  };
-
-  // ------- LOAD MASTER DATA -------
+  // ==================== LOAD MASTER DATA ====================
 
   useEffect(() => {
     const loadCompanies = async () => {
@@ -624,7 +744,7 @@ export function AttendanceReportsManagement() {
 
   useEffect(() => {
     const loadAllBranches = async () => {
-      const res = await fetch(`${BACKEND_URL}/branches`, { cache: "no-store" });
+      const res = await fetch(`${BACKEND_URL}/branches`);
       const data = await res.json();
       setAllBranches(data);
     };
@@ -632,84 +752,10 @@ export function AttendanceReportsManagement() {
   }, []);
 
   useEffect(() => {
-    const loadAllDepartments = async () => {
-      const res = await fetch(`${BACKEND_URL}/departments`, { cache: "no-store" });
-      const data = await res.json();
-      setAllDepartments(data);
-    };
-    loadAllDepartments();
-  }, []);
-
-  useEffect(() => {
-    const loadAllDesignations = async () => {
-      try {
-        const res = await fetch(`${BACKEND_URL}/designations`, { cache: "no-store" });
-        const data = await res.json();
-        setAllDesignations(Array.isArray(data) ? data : []);
-      } catch (error) {
-        console.error("Error loading designations:", error);
-      }
-    };
-    loadAllDesignations();
-  }, []);
-
-  useEffect(() => {
-    const loadDevices = async () => {
-      try {
-        const res = await fetch(`${BACKEND_URL}/devices`, { cache: "no-store" });
-        const data = await res.json();
-        setDevices(data);
-      } catch (error) {
-        console.error("Error loading devices:", error);
-      }
-    };
-    loadDevices();
-  }, []);
-
-  // ------- LOAD HOLIDAYS, WORK SHIFTS, REGULARIZATIONS AND LEAVES -------
-
-  const loadHolidaysShiftsRegularizationsAndLeaves = async (selectedCompanyID: number, selectedBranchID: number) => {
-    try {
-      const holidaysRes = await fetch(`${BACKEND_URL}/public-holiday`);
-      const holidaysData = await holidaysRes.json();
-      const filteredHolidays = holidaysData.filter((holiday: PublicHoliday) => 
-        holiday.companyID === selectedCompanyID && holiday.branchesID === selectedBranchID
-      );
-      setPublicHolidays(filteredHolidays);
-
-      const shiftsRes = await fetch(`${BACKEND_URL}/work-shift`);
-      const shiftsData = await shiftsRes.json();
-      const filteredShifts = shiftsData.filter((shift: WorkShift) => 
-        shift.companyID === selectedCompanyID && shift.branchesID === selectedBranchID
-      );
-      setWorkShifts(filteredShifts);
-
-      const regularizationsRes = await fetch(`${BACKEND_URL}/emp-attendance-regularise`);
-      const regularizationsData = await regularizationsRes.json();
-      const filteredRegularizations = regularizationsData.filter((reg: AttendanceRegularize) => 
-        reg.companyID === selectedCompanyID && reg.branchesID === selectedBranchID && reg.status === "Approved"
-      );
-      setAttendanceRegularizations(filteredRegularizations);
-
-      const leavesRes = await fetch(`${BACKEND_URL}/leave-application`);
-      const leavesData = await leavesRes.json();
-      const filteredLeaves = leavesData.filter((leave: LeaveApplication) => 
-        leave.companyID === selectedCompanyID && leave.branchesID === selectedBranchID && leave.status === "Approved"
-      );
-      setLeaveApplications(filteredLeaves);
-    } catch (error) {
-      console.error("Error loading holidays, shifts, regularizations and leaves:", error);
-    }
-  };
-
-  // ------- LOAD ROLE DATA -------
-
-  useEffect(() => {
     if (!user) return;
-
     const loadUserData = async () => {
       try {
-        if (user.role === "SERVICE_PROVIDER") {
+        if (user.role === "SERVICE_PROVIDER" || user.role === "COMPANY_ADMIN" || user.role === "BRANCH_ADMIN") {
           const usersRes = await fetch(`${BACKEND_URL}/users`);
           const users = await usersRes.json();
           const me = users.find((u: any) => u.username === user.username);
@@ -720,27 +766,25 @@ export function AttendanceReportsManagement() {
           const me = creds.find((u: any) => u.username === user.username);
           setEmpCreds(me || null);
         }
-      } catch (err) {
-        console.error("Error loading user role data:", err);
-      }
+      } catch (err) {}
     };
-
     loadUserData();
   }, [user]);
 
-  // ------- BRANCH & DEPARTMENT LISTS -------
+  // ==================== BRANCH FILTERING ====================
 
   useEffect(() => {
     if (!user) return;
 
     let data = [...allBranches];
 
-    if (user.role === "SERVICE_PROVIDER") {
-      const ctx = getSidebarContext();
-      if (ctx?.companyID) {
-        data = data.filter(b => b.companyID === ctx.companyID);
-      } else if (managerData?.serviceProviderID) {
-        data = data.filter((b: any) => b.serviceProviderID === managerData.serviceProviderID);
+    if (user.role === "SERVICE_PROVIDER" && managerData) {
+      if (managerData.companyID) data = data.filter(b => b.companyID === managerData.companyID);
+    } else if (user.role === "COMPANY_ADMIN" && managerData) {
+      if (managerData.companyID) data = data.filter(b => b.companyID === managerData.companyID);
+    } else if (user.role === "BRANCH_ADMIN" && managerData) {
+      if (managerData.companyID && managerData.branchesID) {
+        data = data.filter(b => b.companyID === managerData.companyID && b.id === managerData.branchesID);
       }
     } else if (user.role === "EMPLOYEE" && empCreds) {
       data = data.filter(b => b.companyID === empCreds.companyID);
@@ -752,50 +796,485 @@ export function AttendanceReportsManagement() {
 
     if (user.role !== "SUPERADMIN" && data.length > 0) {
       const b = data[0];
-      setFormData(prev => ({
-        ...prev,
-        companyID: b.companyID,
-        branchName: b.branchName
-      }));
-      loadDepartmentsForBranch(b.id, b.companyID);
+      setFormData(prev => ({ ...prev, companyID: b.companyID, branchName: b.branchName }));
     }
   }, [user, managerData, empCreds, formData.companyID, allBranches]);
 
-  const loadDepartmentsForBranch = (branchId: number, companyID?: number) => {
-    let data = allDepartments.filter(d => d.branchesID === branchId);
+const handleBranchChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+  const branchName = e.target.value;
+  setFormData(prev => ({ ...prev, branchName }));
+  setSelectedDepartments([]);
+  setSelectedDesignations([]);
+  setSelectedEmployees([]);
+};
 
-    if (user?.role === "SUPERADMIN" && (companyID || formData.companyID)) {
-      const cid = companyID ?? formData.companyID!;
-      data = data.filter(d => d.companyID === cid);
+  // ==================== FILTERED OPTIONS ====================
+
+const filteredDesignations = designations.filter((d: Designation) => 
+  selectedDepartments.length === 0 || selectedDepartments.includes(d.departmentID.toString())
+);
+
+const filteredEmployees = allEmployees.filter((e: Employee) => {
+  if (selectedDesignations.length > 0) {
+    if (!e.designationID || !selectedDesignations.includes(e.designationID.toString())) {
+      return false;
     }
+  }
+  if (selectedDepartments.length > 0) {
+    if (!e.departmentNameID || !selectedDepartments.includes(e.departmentNameID.toString())) {
+      return false;
+    }
+  }
+  return true;
+});
 
-    setDepartments(data);
+const departmentOptions = departments.map((d: Department) => ({ 
+  value: d.id.toString(), 
+  label: d.departmentName 
+}));
+const designationOptions = filteredDesignations.map((d: Designation) => ({ 
+  value: d.id.toString(), 
+  label: d.designation 
+}));
 
-    // Also filter designations for this branch
-    const cid = companyID ?? formData.companyID;
-    let desigData = allDesignations.filter(d => d.branchesID === branchId);
-    if (cid) desigData = desigData.filter(d => d.companyID === cid);
-    setDesignations(desigData);
+const employeeOptions = filteredEmployees.map((e: Employee) => ({ 
+  value: e.id.toString(), 
+  label: `${e.employeeFirstName} ${e.employeeLastName} (${e.employeeID})` 
+}));
 
-    setFormData(prev => ({
-      ...prev,
-      department: data.length ? data[0].departmentName : "",
-      designation: "",
-    }));
+  // ==================== CALCULATION FUNCTIONS ====================
+
+  const calculateWorkedMinutes = (
+    punches: string[], 
+    shiftStart: string, 
+    shiftEnd: string, 
+    workBreak: { breakStart: string; breakEnd: string },
+    policy: AttendancePolicy | null, 
+    isFlexible: boolean
+  ): number => {
+    if (punches.length < 2) return 0;
+    
+    const firstPunch = punches[0];
+    const lastPunch = punches[punches.length - 1];
+    
+    let startTime = timeToMinutes(firstPunch);
+    let endTime = timeToMinutes(lastPunch);
+    
+    if (!isFlexible && policy) {
+      const shiftStartMin = timeToMinutes(shiftStart);
+      const shiftEndMin = timeToMinutes(shiftEnd);
+      
+      // Cap early check-in
+      if (startTime < shiftStartMin - (policy.checkin_begin_before_min || 0)) {
+        startTime = shiftStartMin;
+      }
+      
+      // Cap late check-out if OT not applicable
+      if (!policy.overtimeApplicable) {
+        const maxEndTime = shiftEndMin + (policy.checkout_end_after_min || 0);
+        if (endTime > maxEndTime) {
+          endTime = shiftEndMin;
+        }
+      }
+    }
+    
+    let workedMinutes = endTime - startTime;
+    if (workedMinutes < 0) workedMinutes += 24 * 60;
+    
+    const breakStartMin = timeToMinutes(workBreak.breakStart);
+    const breakEndMin = timeToMinutes(workBreak.breakEnd);
+    
+    if (breakStartMin > 0 && breakEndMin > 0) {
+      const breakDuration = breakEndMin - breakStartMin;
+      if (startTime <= breakStartMin && endTime >= breakEndMin) {
+        workedMinutes -= breakDuration;
+      }
+    }
+    
+    if (!isFlexible && policy) {
+      workedMinutes -= (policy.trimPreshiftMin || 0);
+      workedMinutes -= (policy.trimPostshiftMin || 0);
+    }
+    
+    return Math.max(0, workedMinutes);
   };
 
-  const handleBranchChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const branchName = e.target.value;
-    const branch = branches.find(b => b.branchName === branchName);
-    setFormData(prev => ({ ...prev, branchName, department: "" }));
-    if (branch) {
-      loadDepartmentsForBranch(branch.id, branch.companyID);
-    } else {
-      setDepartments([]);
+  const calculateOTMinutes = (
+    punches: string[], 
+    shiftEndTime: string, 
+    otConfig: { startTime: string; endTime: string; breakStart: string; breakEnd: string },
+    policy: AttendancePolicy
+  ): number => {
+    if (punches.length < 2) return 0;
+    if (!policy.overtimeApplicable) return 0;
+    if (!otConfig.startTime || !otConfig.endTime) return 0;
+    
+    const lastPunch = punches[punches.length - 1];
+    const lastPunchMin = timeToMinutes(lastPunch);
+    const shiftEndMin = timeToMinutes(shiftEndTime);
+    
+    const checkoutBuffer = policy.checkout_end_after_min || 0;
+    if (lastPunchMin <= shiftEndMin + checkoutBuffer) return 0;
+    
+    let otStartMin = Math.max(shiftEndMin, timeToMinutes(otConfig.startTime));
+    let otEndMin = Math.min(lastPunchMin, timeToMinutes(otConfig.endTime));
+    let totalOTMinutes = otEndMin - otStartMin;
+    
+    // Deduct OT break time
+    if (policy.breakTimeForOT > 0) {
+      totalOTMinutes -= policy.breakTimeForOT;
     }
+    
+    // Apply OT meal break deduction
+    if (policy.otMealApply && policy.minsForBreakTimeForMeal > 0) {
+      totalOTMinutes -= policy.minsForBreakTimeForMeal;
+    }
+    
+    // Apply overtime trimming
+    if (policy.overtimeTrimmingApply && policy.checkoutGracePeriodForOvertimeTrimming > 0) {
+      totalOTMinutes = Math.max(0, totalOTMinutes - policy.checkoutGracePeriodForOvertimeTrimming);
+    }
+    
+    // Apply min/max OT limits
+    if (totalOTMinutes < (policy.minOvertimeHrs || 0)) return 0;
+    if (policy.maxOvertimeHrs > 0 && totalOTMinutes > policy.maxOvertimeHrs) {
+      totalOTMinutes = policy.maxOvertimeHrs;
+    }
+    
+    return Math.max(0, totalOTMinutes);
   };
 
-  // ------- GENERATE REPORT -------
+  // ==================== SANDWICH RULE DETECTION ====================
+
+  const detectSandwichDates = (
+    row: ReportData,
+    dates: string[],
+    localShifts: EmpWorkShift[],
+    localLeaves: LeaveApplication[],
+    localHolidays: PublicHoliday[],
+    localRosters: RosterEmployee[]
+  ): Set<string> => {
+    const result = new Set<string>();
+
+    const isWODay = (date: string): boolean => {
+      const empShift = localShifts.find(ws => ws.manageEmployeeID === row.employee.id);
+      const workShift = empShift?.workShift;
+      if (!workShift?.workShiftDay?.length) return false;
+      if (workShift.isRotating) {
+        const roster = localRosters.find(r => r.employeeID === row.employee.id);
+        const rosterDay = roster?.days?.find((d: RosterDay) => new Date(d.workDate).toISOString().split('T')[0] === date);
+        return rosterDay?.dayType === "WEEKLY_OFF";
+      }
+      const dayOfWeek = WEEKDAYS[new Date(date).getDay()];
+      const shiftDay = workShift.workShiftDay.find((d: WorkShiftDay) => d.weekDay === dayOfWeek && d.shiftType === "WORK");
+      return shiftDay?.weeklyOff === true;
+    };
+
+    const isPHDay = (date: string): boolean => {
+      return localHolidays.some((h: PublicHoliday) => {
+        const start = new Date(h.startDate).toISOString().split('T')[0];
+        const end = new Date(h.endDate).toISOString().split('T')[0];
+        return date >= start && date <= end;
+      });
+    };
+
+    const isSandwichTrigger = (date: string): boolean => {
+      if (isWODay(date) || isPHDay(date)) return false;
+      const punches = row.punches[date] || [];
+      const hasLeave = localLeaves.some((l: LeaveApplication) =>
+        l.manageEmployeeID === row.employee.id &&
+        date >= new Date(l.fromDate).toISOString().split('T')[0] &&
+        date <= new Date(l.toDate).toISOString().split('T')[0]
+      );
+      return punches.length === 0 || hasLeave;
+    };
+
+    let i = 0;
+    while (i < dates.length) {
+      const date = dates[i];
+      if (isWODay(date)) {
+        const woStart = i;
+        while (i < dates.length && isWODay(dates[i])) i++;
+        const woEnd = i - 1;
+
+        if (woStart > 0 && woEnd + 1 < dates.length) {
+          const dayBefore = dates[woStart - 1];
+          const dayAfter = dates[woEnd + 1];
+          if (isSandwichTrigger(dayBefore) && isSandwichTrigger(dayAfter)) {
+            result.add(dayBefore);
+            for (let j = woStart; j <= woEnd; j++) result.add(dates[j]);
+            result.add(dayAfter);
+          }
+        }
+      } else {
+        i++;
+      }
+    }
+    return result;
+  };
+
+  const applySandwichRule = (
+    date: string, 
+    employeeID: number, 
+    statuses: Map<string, string>
+  ): string | null => {
+    if (!attendancePolicy?.leaveAroundHolidayCounted) return null;
+    
+    const currentDate = new Date(date);
+    const prevDate = new Date(currentDate); prevDate.setDate(prevDate.getDate() - 1);
+    const nextDate = new Date(currentDate); nextDate.setDate(nextDate.getDate() + 1);
+    
+    const prevDateStr = prevDate.toISOString().split('T')[0];
+    const nextDateStr = nextDate.toISOString().split('T')[0];
+    
+    const prevStatus = statuses.get(prevDateStr) || "";
+    const nextStatus = statuses.get(nextDateStr) || "";
+    
+    const isLeaveOrAbsent = (s: string) => 
+      s.includes("Leave") || s.includes("SL") || s.includes("CL") || 
+      s.includes("PL") || s.includes("LOP") || s === "Absent" || s === "A";
+    
+    if (isLeaveOrAbsent(prevStatus) && isLeaveOrAbsent(nextStatus)) {
+      return "CL (Sandwich)";
+    }
+    return null;
+  };
+
+  // ==================== COMPREHENSIVE STATUS CALCULATION ====================
+  
+  const getComprehensiveStatus = async (
+    date: string, 
+    employeeID: number, 
+    punches: string[], 
+    selectedCompanyID: number, 
+    selectedBranchID: number,
+    statusesMap: Map<string, string>
+  ): Promise<{ type: string; label: string; hasPunches: boolean; workedMinutes?: number; otMinutes?: number; totalShiftMinutes?: number }> => {
+    
+    const hasPunches = punches.length > 0;
+    
+    if (!reportData || reportData.length === 0) {
+      if (!hasPunches) return { type: "ABSENT", label: "Absent", hasPunches: false };
+      if (punches.length === 1) return { type: "SINGLE_PUNCH", label: "Half Day", hasPunches: true };
+      return { type: "PRESENT", label: "P", hasPunches: true };
+    }
+    
+    const employee = reportData.find(r => r.employee.id === employeeID)?.employee;
+    if (!employee) return { type: "ABSENT", label: "Absent", hasPunches: false };
+
+    // PRIORITY 1: Approved Regularization
+    const regularization = attendanceRegularizations.find(reg => 
+      reg.manageEmployeeID === employeeID &&
+      reg.status === "Approved" &&
+      new Date(reg.attendanceDate).toISOString().split('T')[0] === date
+    );
+    if (regularization) {
+      return { type: "REGULARIZATION", label: regularization.requestedStatus, hasPunches };
+    }
+
+    // PRIORITY 1.5: Sandwich Rule Override
+    if (sandwichOverrides.get(employeeID)?.has(date)) {
+      return { type: "SANDWICH", label: "SW", hasPunches };
+    }
+
+    // Get work shift
+    const empShift = empWorkShifts.find(ws => ws.manageEmployeeID === employeeID);
+    let workShift: WorkShift | undefined = empShift?.workShift;
+    
+    if (workShift && (!workShift.workShiftDay || workShift.workShiftDay.length === 0)) {
+      try {
+        const res = await fetch(`${BACKEND_URL}/work-shift/${workShift.id}`);
+        if (res.ok) workShift = await res.json();
+      } catch (err) {}
+    }
+    
+    const isRotating = workShift?.isRotating || false;
+    const isFlexible = workShift?.isFlexible || false;
+    const dayOfWeek = WEEKDAYS[new Date(date).getDay()];
+    const shiftDay = workShift?.workShiftDay?.find(d => d.weekDay === dayOfWeek && d.shiftType === "WORK");
+    const otDay = workShift?.workShiftDay?.find(d => d.weekDay === dayOfWeek && d.shiftType === "OT");
+    const defaultWorkedMinutes = shiftDay?.totalMinutes || 480;
+
+    // Week off check
+    const isWeekOff = (): boolean => {
+      if (!workShift) return false;
+      if (isRotating) {
+        const roster = rosters.find(r => r.employeeID === employeeID);
+        const rosterDay = roster?.days?.find(d => new Date(d.workDate).toISOString().split('T')[0] === date);
+        return rosterDay?.dayType === "WEEKLY_OFF";
+      }
+      return shiftDay?.weeklyOff || false;
+    };
+
+    // Public holiday check
+    const isPublicHolidayDay = (): boolean => {
+      return publicHolidays.some(holiday => {
+        if (holiday.companyID !== selectedCompanyID || holiday.branchesID !== selectedBranchID) return false;
+        const holidayStart = new Date(holiday.startDate).toISOString().split('T')[0];
+        const holidayEnd = new Date(holiday.endDate).toISOString().split('T')[0];
+        return date >= holidayStart && date <= holidayEnd;
+      });
+    };
+
+    // Leave check
+    const isLeaveDay = (): LeaveApplication | undefined => {
+      return leaveApplications.find(leave => 
+        leave.manageEmployeeID === employeeID &&
+        leave.status === "Approved" &&
+        date >= new Date(leave.fromDate).toISOString().split('T')[0] &&
+        date <= new Date(leave.toDate).toISOString().split('T')[0]
+      );
+    };
+
+    // PRIORITY 2: Week Off
+    if (isWeekOff()) {
+      let workedMinutes = 0;
+      if (hasPunches && shiftDay) {
+        workedMinutes = calculateWorkedMinutes(punches, shiftDay.startTime, shiftDay.endTime, 
+          { breakStart: shiftDay.breakStart || "", breakEnd: shiftDay.breakEnd || "" }, attendancePolicy, isFlexible);
+      }
+      return { type: "WEEK_OFF", label: hasPunches ? "WO-P" : "WO", hasPunches, workedMinutes: workedMinutes || defaultWorkedMinutes };
+    }
+
+    // PRIORITY 3: Public Holiday
+    if (isPublicHolidayDay()) {
+      let workedMinutes = 0;
+      if (hasPunches && shiftDay) {
+        workedMinutes = calculateWorkedMinutes(punches, shiftDay.startTime, shiftDay.endTime, 
+          { breakStart: shiftDay.breakStart || "", breakEnd: shiftDay.breakEnd || "" }, attendancePolicy, isFlexible);
+      }
+      return { type: "HOLIDAY", label: hasPunches ? "PH-P" : "PH", hasPunches, workedMinutes: workedMinutes || defaultWorkedMinutes };
+    }
+
+    // PRIORITY 4: Approved Leave
+    const leave = isLeaveDay();
+    if (leave) {
+      let workedMinutes = 0;
+      if (hasPunches && shiftDay) {
+        workedMinutes = calculateWorkedMinutes(punches, shiftDay.startTime, shiftDay.endTime, 
+          { breakStart: shiftDay.breakStart || "", breakEnd: shiftDay.breakEnd || "" }, attendancePolicy, isFlexible);
+      }
+      return { type: "LEAVE", label: hasPunches ? "Leave-P" : leave.appliedLeaveType, hasPunches, workedMinutes: workedMinutes || defaultWorkedMinutes };
+    }
+
+    // Check Sandwich Rule
+    const currentStatus = statusesMap.get(date) || "";
+    if (currentStatus === "WO" || currentStatus === "PH") {
+      const sandwichResult = applySandwichRule(date, employeeID, statusesMap);
+      if (sandwichResult) return { type: "SANDWICH", label: sandwichResult, hasPunches };
+    }
+
+    // PRIORITY 5: Calculate based on punches
+    if (!hasPunches) return { type: "ABSENT", label: "Absent", hasPunches: false };
+    
+    let policy = attendancePolicy;
+    if (!policy) {
+      try {
+        const res = await fetch(`${BACKEND_URL}/attendance-policy?companyID=${selectedCompanyID}&branchesID=${selectedBranchID}`);
+        if (res.ok) {
+          const policies = await res.json();
+          policy = policies.find((p: AttendancePolicy) => p.companyID === selectedCompanyID && p.branchesID === selectedBranchID) || null;
+        }
+      } catch (err) {}
+    }
+
+    // Handle single punch
+    if (punches.length === 1) {
+      if (policy?.markAs) {
+        return { type: "SINGLE_PUNCH", label: policy.markAs, hasPunches: true };
+      }
+      return { type: "SINGLE_PUNCH", label: "Half Day", hasPunches: true };
+    }
+
+    if (shiftDay && policy) {
+      const firstPunch = timeToMinutes(punches[0]);
+      const lastPunch = timeToMinutes(punches[punches.length - 1]);
+      const shiftStartMin = timeToMinutes(shiftDay.startTime);
+      const shiftEndMin = timeToMinutes(shiftDay.endTime);
+      
+      // Check max late check-in first
+      const maxLateWindow = policy.max_late_check_in_time || 0;
+      if (!isFlexible && firstPunch > shiftStartMin + maxLateWindow) {
+        const markAs = policy.maxLateCheckinMarkAs || "Absent";
+        return { 
+          type: markAs === "Absent" ? "ABSENT" : "HALF_DAY", 
+          label: markAs, 
+          hasPunches: true 
+        };
+      }
+      
+      // Check early checkout
+      const earlyCheckoutWindow = policy.earlyCheckoutBeforeEndMin || 0;
+      if (!isFlexible && lastPunch < shiftEndMin - earlyCheckoutWindow) {
+        const monthKey = `${employeeID}-${date.substring(0, 7)}`;
+        const currentTracker = noCheckoutTracker.current;
+        const newCount = (currentTracker.get(monthKey) || 0) + 1;
+        currentTracker.set(monthKey, newCount);
+        
+        const maxEarlyCount = parseInt(policy.lateMarkCount || "3");
+        if (newCount === maxEarlyCount) {
+          const markAs = policy.markAs || "Half Day";
+          return { type: markAs === "Absent" ? "ABSENT" : "HALF_DAY", label: markAs, hasPunches: true };
+        }
+      }
+      
+      const workedMinutes = calculateWorkedMinutes(punches, shiftDay.startTime, shiftDay.endTime, 
+        { breakStart: shiftDay.breakStart || "", breakEnd: shiftDay.breakEnd || "" }, policy, isFlexible);
+      
+      const totalShiftMinutes = shiftDay.totalMinutes;
+      const halfDayMin = policy.min_work_hours_half_day_min || 0;
+      const graceTime = policy.checkin_grace_time_min || 0;
+      
+      // Late mark tracking
+      const isLate = !isFlexible && 
+                     firstPunch > shiftStartMin + graceTime && 
+                     firstPunch <= shiftStartMin + maxLateWindow;
+      
+      if (isLate) {
+        const monthKey = `${employeeID}-${date.substring(0, 7)}`;
+        const currentTracker = lateMarkTracker.current;
+        const newCount = (currentTracker.get(monthKey) || 0) + 1;
+        currentTracker.set(monthKey, newCount);
+        
+        const maxLateCount = parseInt(policy.lateMarkMarkCount || policy.lateMarkCount || "3");
+        
+        if (newCount === maxLateCount) {
+          const markAs = policy.lateMarkMarkAs || policy.markAs || "Half Day";
+          return { 
+            type: markAs === "Absent" ? "ABSENT" : "HALF_DAY", 
+            label: markAs, 
+            hasPunches: true, 
+            workedMinutes 
+          };
+        }
+      }
+      
+      // Calculate OT
+      let otMinutes = 0;
+      if (otDay && policy.overtimeApplicable) {
+        otMinutes = calculateOTMinutes(punches, shiftDay.endTime, {
+          startTime: otDay.startTime, endTime: otDay.endTime,
+          breakStart: otDay.breakStart || "", breakEnd: otDay.breakEnd || ""
+        }, policy);
+      }
+      
+      if (workedMinutes < halfDayMin) {
+        return { type: "ABSENT", label: "Absent", hasPunches: true, workedMinutes };
+      } else if (workedMinutes < totalShiftMinutes) {
+        return { type: "HALF_DAY", label: "Half Day", hasPunches: true, workedMinutes };
+      } else if (otMinutes > 0) {
+        return { type: "OT", label: "OT", hasPunches: true, workedMinutes, otMinutes, totalShiftMinutes };
+      } else if (isLate) {
+        return { type: "LATE_MARK", label: "Late Mark", hasPunches: true, workedMinutes };
+      } else {
+        return { type: "PRESENT", label: "P", hasPunches: true, workedMinutes };
+      }
+    }
+
+    return { type: "PRESENT", label: "P", hasPunches: true };
+  };
+
+  // ==================== OPTIMIZED GENERATE REPORT ====================
 
   const generateReport = async () => {
     if (!formData.dateFrom || !formData.dateTo) {
@@ -804,25 +1283,22 @@ export function AttendanceReportsManagement() {
     }
 
     setLoading(true);
+    lateMarkTracker.current.clear();
+    noCheckoutTracker.current.clear();
+    globalStatusCache.clear();
 
     try {
-      // Resolve selected company + branch
-      let selectedCompanyID: number | null = null;
-      let selectedBranchID: number | null = null;
+      let selectedCompanyID: number | null = formData.companyID;
+      let selectedBranchID: number | null = branches.find(b => b.branchName === formData.branchName)?.id || null;
 
-      if (user?.role === "SUPERADMIN") {
-        selectedCompanyID = formData.companyID;
-        const branch = allBranches.find(b => b.branchName === formData.branchName);
-        selectedBranchID = branch?.id ?? null;
-      } else if (user?.role === "SERVICE_PROVIDER") {
-        const ctx = getSidebarContext();
-        selectedCompanyID = ctx?.companyID || managerData?.companyID;
-        selectedBranchID = managerData?.branchesID;
-        if (!selectedCompanyID && managerData?.serviceProviderID) {
-          const branch = allBranches.find(b => b.branchName === formData.branchName);
-          selectedCompanyID = branch?.companyID ?? null;
-          selectedBranchID = branch?.id ?? null;
-        }
+      if (user?.role === "COMPANY_ADMIN" && managerData?.companyID) {
+        selectedCompanyID = managerData.companyID;
+      } else if (user?.role === "BRANCH_ADMIN" && managerData) {
+        selectedCompanyID = managerData.companyID;
+        selectedBranchID = managerData.branchesID;
+      } else if (user?.role === "SERVICE_PROVIDER" && managerData) {
+        selectedCompanyID = managerData.companyID;
+        selectedBranchID = managerData.branchesID;
       } else if (user?.role === "EMPLOYEE" && empCreds) {
         selectedCompanyID = empCreds.companyID;
         selectedBranchID = empCreds.branchesID;
@@ -835,131 +1311,137 @@ export function AttendanceReportsManagement() {
         return;
       }
 
-      // Load holidays, shifts, etc.
-      await loadHolidaysShiftsRegularizationsAndLeaves(selectedCompanyID, selectedBranchID);
+      // Load all master data in parallel
+      const [holidaysRes, shiftsRes, regRes, leavesRes, rostersRes, policyRes, empShiftRes] = await Promise.all([
+        fetch(`${BACKEND_URL}/public-holiday`),
+        fetch(`${BACKEND_URL}/work-shift`),
+        fetch(`${BACKEND_URL}/emp-attendance-regularise`),
+        fetch(`${BACKEND_URL}/leave-application`),
+        fetch(`${BACKEND_URL}/rosters`),
+        fetch(`${BACKEND_URL}/attendance-policy`),
+        fetch(`${BACKEND_URL}/manage-emp`),
+      ]);
 
-      // Get AT device IDs from devices API
-      const devicesResponse = await fetch(`${BACKEND_URL}/devices`, { cache: "no-store" });
-      const devicesData = await devicesResponse.json();
-      
-      const atDeviceIds = devicesData
-        .filter((device: any) => device.deviceType === 'AT')
-        .map((device: any) => device.id);
-      
-      console.log("AT Device IDs:", atDeviceIds);
+      const holidaysData = await holidaysRes.json();
+      const shiftsData = await shiftsRes.json();
+      const regData = await regRes.json();
+      const leavesData = await leavesRes.json();
+      const rostersData = await rostersRes.json();
+      const policyData = await policyRes.json();
+      const empData = await empShiftRes.json();
 
-      if (atDeviceIds.length === 0) {
-        console.log("No AT devices found");
-        setReportData([]);
-        setLoading(false);
-        return;
-      }
+      setPublicHolidays(holidaysData.filter((h: PublicHoliday) => h.companyID === selectedCompanyID && h.branchesID === selectedBranchID));
+      setWorkShifts(shiftsData.filter((s: WorkShift) => s.companyID === selectedCompanyID && s.branchesID === selectedBranchID));
+      setAttendanceRegularizations(regData.filter((r: AttendanceRegularize) => r.companyID === selectedCompanyID && r.branchesID === selectedBranchID && r.status === "Approved"));
+      setLeaveApplications(leavesData.filter((l: LeaveApplication) => l.companyID === selectedCompanyID && l.branchesID === selectedBranchID && l.status === "Approved"));
+      setRosters(rostersData);
+      setAttendancePolicy(policyData.find((p: AttendancePolicy) => p.companyID === selectedCompanyID && p.branchesID === selectedBranchID) || null);
 
-      // Fetch logs from NestJS backend API - using the by-devices endpoint
-      const params = new URLSearchParams();
-      params.append('dateFrom', formData.dateFrom);
-      params.append('dateTo', formData.dateTo);
-      params.append('deviceIds', atDeviceIds.join(','));
+      const shifts: EmpWorkShift[] = [];
+      empData.forEach((emp: any) => {
+        if (emp.empWorkShift && Array.isArray(emp.empWorkShift)) {
+          emp.empWorkShift.forEach((ws: any) => shifts.push(ws));
+        }
+      });
+      setEmpWorkShifts(shifts);
       
-      const logsResponse = await fetch(`${BACKEND_URL}/process-att-logs/by-devices?${params.toString()}`);
+      const fromDate = new Date(formData.dateFrom);
+      const toDate = new Date(formData.dateTo);
+      fromDate.setHours(0, 0, 0, 0);
+      toDate.setHours(23, 59, 59, 999);
+      
+      const queryParams = new URLSearchParams({
+        dateFrom: formData.dateFrom,
+        dateTo: formData.dateTo,
+        limit: '10000'
+      });
+      
+      const logsResponse = await fetch(`${BACKEND_URL}/process-att-logs?${queryParams}`);
       
       if (!logsResponse.ok) {
-        throw new Error(`Failed to fetch logs: ${logsResponse.status}`);
+        throw new Error('Failed to fetch logs');
       }
       
       const result = await logsResponse.json();
-      // Handle the response format from your NestJS API
-      const logsData = result.data || result;
+      const allLogs = result.data || result;
       
-      console.log("Total logs fetched:", logsData.length);
-      console.log("Sample log:", logsData[0]);
-
-      // Fetch employees
-      const employeesResponse = await fetch(`${BACKEND_URL}/manage-emp`, { cache: "no-store" });
-      const employees = await employeesResponse.json();
-
-      // Fetch companies, branches, departments
-      const companiesData = await fetch(`${BACKEND_URL}/company`, { cache: "no-store" }).then(r => r.json());
-      const branchesData = await fetch(`${BACKEND_URL}/branches`, { cache: "no-store" }).then(r => r.json());
-      const departmentsData = await fetch(`${BACKEND_URL}/departments`, { cache: "no-store" }).then(r => r.json());
-
-      // Filter employees by company and branch
-      let filteredEmployees = employees.filter(
-        (e: any) => e.companyID === selectedCompanyID && e.branchesID === selectedBranchID
-      );
-
-      // Filter by department if selected
-      if (formData.department) {
-        const dept = departmentsData.find(
-          (d: any) => d.departmentName === formData.department &&
-               d.companyID === selectedCompanyID &&
-               d.branchesID === selectedBranchID
-        );
-        if (dept) {
-          filteredEmployees = filteredEmployees.filter(
-            (e: any) => e.departmentNameID === dept.id
-          );
-        }
-      }
-
-      // Filter by designation if selected
-      if (formData.designation) {
-        filteredEmployees = filteredEmployees.filter(
-          (e: any) => e.designationID === Number(formData.designation)
-        );
-      }
-
-      // Group logs by employee (match by username)
-      const logsByEmployee = new Map<number, any[]>();
-      
-      logsData.forEach((log: any) => {
-        // Try to find employee by username
-        const employee = filteredEmployees.find((e: any) => {
-          const empFullName = `${e.employeeFirstName} ${e.employeeLastName}`.toLowerCase();
-          const logUsername = log.username?.toLowerCase() || '';
-          return e.username?.toLowerCase() === logUsername || 
-                 empFullName === logUsername;
-        });
-        
-        if (employee && log.punch_time) {
-          if (!logsByEmployee.has(employee.id)) {
-            logsByEmployee.set(employee.id, []);
-          }
-          logsByEmployee.get(employee.id)!.push(log);
-        } else if (!employee) {
-          console.log("No employee match for username:", log.username);
-        }
+      const logsData = allLogs.filter((log: ProcessAttLog) => {
+        const parsed = parsePunchTime(log.punch_time);
+        if (!parsed) return false;
+        const logDate = new Date(parsed.dateKey);
+        return logDate >= fromDate && logDate <= toDate;
       });
 
-      // Build report data for all employees
-      const rows = filteredEmployees.map((emp: any) => {
-        const empLogs = logsByEmployee.get(emp.id) || [];
+      // Build employee list from log manage_employee_id values to handle company/branch name mismatches
+      const logEmployeeIdSet = new Set(
+        logsData
+          .filter((log: ProcessAttLog) => log.manage_employee_id != null)
+          .map((log: ProcessAttLog) => Number(log.manage_employee_id))
+      );
+
+      // Use Number() coercion to handle string vs number type mismatches from API responses
+      const byCompanyBranch = empData.filter((e: Employee) =>
+        Number(e.companyID) === Number(selectedCompanyID) && Number(e.branchesID) === Number(selectedBranchID)
+      );
+      const byCompanyBranchIds = new Set(byCompanyBranch.map((e: Employee) => Number(e.id)));
+
+      // Also include employees that appear in the returned logs (covers name-mismatch scenarios)
+      const empFromLogs = empData.filter((e: Employee) =>
+        logEmployeeIdSet.has(Number(e.id)) && !byCompanyBranchIds.has(Number(e.id))
+      );
+
+      const filteredEmpData: Employee[] = [...byCompanyBranch, ...empFromLogs];
+      setAllEmployees(filteredEmpData);
+
+      const companiesData = await fetch(`${BACKEND_URL}/company`).then(r => r.json());
+      const branchesData = await fetch(`${BACKEND_URL}/branches`).then(r => r.json());
+      const departmentsData = await fetch(`${BACKEND_URL}/departments`).then(r => r.json());
+
+      let finalFilteredEmployees = [...filteredEmpData];
+
+      if (selectedDepartments.length > 0) {
+        finalFilteredEmployees = finalFilteredEmployees.filter(e => e.departmentNameID && selectedDepartments.includes(e.departmentNameID.toString()));
+      }
+      if (selectedDesignations.length > 0) {
+        finalFilteredEmployees = finalFilteredEmployees.filter(e => e.designationID && selectedDesignations.includes(e.designationID.toString()));
+      }
+      if (selectedEmployees.length > 0) {
+        finalFilteredEmployees = finalFilteredEmployees.filter(e => selectedEmployees.includes(e.id.toString()));
+      }
+
+      // Process logs in chunks for better performance
+      const logsByEmployee = new Map<number, ProcessAttLog[]>();
+      const chunkSize = 500;
+      for (let i = 0; i < logsData.length; i += chunkSize) {
+        const chunk = logsData.slice(i, i + chunkSize);
+        chunk.forEach((log: ProcessAttLog) => {
+          const employeeId = Number(log.manage_employee_id);
+          if (employeeId && finalFilteredEmployees.some(e => Number(e.id) === employeeId)) {
+            if (!logsByEmployee.has(employeeId)) logsByEmployee.set(employeeId, []);
+            logsByEmployee.get(employeeId)!.push(log);
+          }
+        });
+        // Allow UI to breathe
+        await new Promise(resolve => setTimeout(resolve, 0));
+      }
+
+      const rows = finalFilteredEmployees.map((emp: Employee) => {
+        const empLogs = logsByEmployee.get(Number(emp.id)) || [];
         const punchesByDate: { [date: string]: string[] } = {};
 
-        empLogs.forEach((log: any) => {
-          if (log.punch_time) {
-            // Handle different date formats
-            let dateKey;
-            if (typeof log.punch_time === 'string') {
-              if (log.punch_time.includes('T')) {
-                dateKey = log.punch_time.split('T')[0];
-              } else {
-                dateKey = log.punch_time.split(' ')[0];
-              }
-            } else if (log.punch_time instanceof Date) {
-              dateKey = log.punch_time.toISOString().split('T')[0];
-            } else {
-              dateKey = new Date(log.punch_time).toISOString().split('T')[0];
-            }
-            
-            if (!punchesByDate[dateKey]) punchesByDate[dateKey] = [];
-            punchesByDate[dateKey].push(formatTime(log.punch_time));
+        empLogs.forEach((log: ProcessAttLog) => {
+          const parsed = parsePunchTime(log.punch_time);
+          if (parsed) {
+            if (!punchesByDate[parsed.dateKey]) punchesByDate[parsed.dateKey] = [];
+            punchesByDate[parsed.dateKey].push(parsed.timeStr);
           }
         });
 
-        const company = companiesData.find((c: any) => c.id === emp.companyID);
-        const branch = branchesData.find((b: any) => b.id === emp.branchesID);
-        const dept = departmentsData.find((d: any) => d.id === emp.departmentNameID);
+        Object.keys(punchesByDate).forEach(date => punchesByDate[date].sort());
+
+        const company = companiesData.find((c: Company) => Number(c.id) === Number(emp.companyID));
+        const branch = branchesData.find((b: Branch) => Number(b.id) === Number(emp.branchesID));
+        const dept = departmentsData.find((d: Department) => Number(d.id) === Number(emp.departmentNameID));
 
         return {
           employee: emp,
@@ -970,556 +1452,387 @@ export function AttendanceReportsManagement() {
         };
       });
 
-      console.log("Final report data rows:", rows.length);
       setReportData(rows);
+
+      // Compute sandwich overrides for UI display
+      const dateColumnsFull = buildDateRangeColumns();
+      const filteredHols = holidaysData.filter((h: any) => h.companyID === selectedCompanyID && h.branchesID === selectedBranchID);
+      const filteredLvs = leavesData.filter((l: any) => l.companyID === selectedCompanyID && l.branchesID === selectedBranchID && l.status === "Approved");
+      const newSandwichOverrides = new Map<number, Set<string>>();
+      for (const row of rows) {
+        const swDates = detectSandwichDates(row, dateColumnsFull, shifts, filteredLvs, filteredHols, rostersData);
+        if (swDates.size > 0) newSandwichOverrides.set(Number(row.employee.id), swDates);
+      }
+      setSandwichOverrides(newSandwichOverrides);
     } catch (err) {
       console.error("Error generating report:", err);
-      alert("Error generating report. Check console for details.");
+      alert("Error generating report.");
       setReportData([]);
     } finally {
       setLoading(false);
     }
   };
 
-  const resetForm = () => {
-    setFormData(prev => ({
-      ...prev,
-      dateFrom: "",
-      dateTo: getTodayStr(),
-      department: "",
-      designation: "",
-      branchName: "",
-      companyID: user?.role === "SUPERADMIN" ? null : prev.companyID
-    }));
-    setReportData([]);
-    setSearchTerm("");
+  // ==================== DOWNLOAD EXCEL ====================
+
+  const downloadExcel = async () => {
+    if (reportData.length === 0) {
+      alert("No data to download");
+      return;
+    }
+
+    const dateColumns = buildDateRangeColumns();
+    
+    let selectedCompanyID = formData.companyID;
+    if (user?.role === "COMPANY_ADMIN" && managerData?.companyID) selectedCompanyID = managerData.companyID;
+    else if (user?.role === "BRANCH_ADMIN" && managerData?.companyID) selectedCompanyID = managerData.companyID;
+    else if (user?.role === "SERVICE_PROVIDER" && managerData?.companyID) selectedCompanyID = managerData.companyID;
+    
+    const selectedBranch = branches.find(b => b.branchName === formData.branchName);
+    const selectedBranchID = selectedBranch?.id || 0;
+    
+    const excelData: any[] = [];
+    const statusesMap = new Map<string, string>();
+    
+    const headerRow: any = {
+      "S.NO": "S.NO", "Employee ID": "Employee ID", "Employee Name": "Employee Name",
+      "Company": "Company", "Branch": "Branch", "Department": "Department"
+    };
+    dateColumns.forEach(date => {
+      const { dayName, dateStr } = formatHeaderDate(date);
+      headerRow[date] = `${dateStr}\n${dayName}`;
+    });
+    excelData.push(headerRow);
+
+    for (let index = 0; index < filteredReportData.length; index++) {
+      const row = filteredReportData[index];
+      const dataRow: any = {
+        "S.NO": index + 1,
+        "Employee ID": row.employee.employeeID,
+        "Employee Name": `${row.employee.employeeFirstName} ${row.employee.employeeLastName}`,
+        "Company": row.companyName, "Branch": row.branchName, "Department": row.departmentName || "N/A"
+      };
+
+      for (const date of dateColumns) {
+        const punches = row.punches[date] || [];
+        const status = await getComprehensiveStatus(date, row.employee.id, punches, selectedCompanyID!, selectedBranchID, statusesMap);
+        statusesMap.set(date, status.label);
+        
+        if (formData.reportType === "FILO Punches Logs") {
+          dataRow[date] = punches.length === 0 ? "" : punches.length === 1 ? punches[0] : `${punches[0]}\n${punches[punches.length - 1]}`;
+        } else if (formData.reportType === "Attendance Marking Logs") {
+          let displayLabel = status.label;
+          if (status.type === "OT" && status.workedMinutes && status.totalShiftMinutes && status.otMinutes) {
+            const nh = Math.floor(status.totalShiftMinutes / 60), nm = status.totalShiftMinutes % 60;
+            const oh = Math.floor(status.otMinutes / 60), om = status.otMinutes % 60;
+            displayLabel = `P (${nh}h${nm}m + ${oh}h${om}m OT)`;
+          } else if (status.type === "PRESENT" && status.workedMinutes) {
+            const h = Math.floor(status.workedMinutes / 60), m = status.workedMinutes % 60;
+            displayLabel = `P (${h}h${m}m)`;
+          } else if (status.type === "HALF_DAY" && status.workedMinutes) {
+            const h = Math.floor(status.workedMinutes / 60), m = status.workedMinutes % 60;
+            displayLabel = `HD (${h}h${m}m)`;
+          } else if ((status.type === "WEEK_OFF" || status.type === "HOLIDAY" || status.type === "LEAVE") && status.workedMinutes) {
+            const h = Math.floor(status.workedMinutes / 60), m = status.workedMinutes % 60;
+            displayLabel = `${status.label}\n${h}h${m}m`;
+          }
+          dataRow[date] = displayLabel;
+        } else if (formData.reportType === "Attendance Summary Logs") {
+          let displayLabel = status.label;
+          if (status.type === "WEEK_OFF") {
+            displayLabel = status.label === "WO-P" ? "Weekly Off (Present)" : "Weekly Off";
+            if (status.workedMinutes) { const h = Math.floor(status.workedMinutes / 60), m = status.workedMinutes % 60; displayLabel += `\n${h}h${m}m`; }
+          } else if (status.type === "HOLIDAY") {
+            displayLabel = status.label === "PH-P" ? "Public Holiday (Present)" : "Public Holiday";
+            if (status.workedMinutes) { const h = Math.floor(status.workedMinutes / 60), m = status.workedMinutes % 60; displayLabel += `\n${h}h${m}m`; }
+          } else if (status.type === "LEAVE") {
+            displayLabel = status.label === "Leave-P" ? "Leave (Present)" : status.label;
+            if (status.workedMinutes) { const h = Math.floor(status.workedMinutes / 60), m = status.workedMinutes % 60; displayLabel += `\n${h}h${m}m`; }
+          } else if (status.type === "ABSENT") {
+            displayLabel = "Absent";
+          } else if (status.type === "PRESENT" && status.workedMinutes) {
+            displayLabel = `Present (${Math.floor(status.workedMinutes / 60)}h${status.workedMinutes % 60}m)`;
+          } else if (status.type === "HALF_DAY" && status.workedMinutes) {
+            displayLabel = `Half Day (${Math.floor(status.workedMinutes / 60)}h${status.workedMinutes % 60}m)`;
+          } else if (status.type === "OT" && status.workedMinutes && status.totalShiftMinutes && status.otMinutes) {
+            const nh = Math.floor(status.totalShiftMinutes / 60), nm = status.totalShiftMinutes % 60;
+            const oh = Math.floor(status.otMinutes / 60), om = status.otMinutes % 60;
+            displayLabel = `Present (${nh}h${nm}m + ${oh}h${om}m OT)`;
+          }
+          dataRow[date] = displayLabel;
+        } else {
+          dataRow[date] = punches.length > 0 ? punches.join("\n") : "";
+        }
+      }
+      excelData.push(dataRow);
+    }
+
+    const ws = XLSX.utils.json_to_sheet(excelData, { skipHeader: true });
+    const range = XLSX.utils.decode_range(ws['!ref'] || 'A1');
+    
+    for (let R = range.s.r; R <= range.e.r; R++) {
+      for (let C = range.s.c; C <= range.e.c; C++) {
+        const cellRef = XLSX.utils.encode_cell({ c: C, r: R });
+        if (!ws[cellRef]) continue;
+        ws[cellRef].s = {
+          font: { name: "Arial", sz: 9 },
+          alignment: { horizontal: "center", vertical: "center", wrapText: true },
+          border: { top: { style: "thin", color: { rgb: "CCCCCC" } }, left: { style: "thin", color: { rgb: "CCCCCC" } }, bottom: { style: "thin", color: { rgb: "CCCCCC" } }, right: { style: "thin", color: { rgb: "CCCCCC" } } }
+        };
+        if (R === 0) {
+          ws[cellRef].s.fill = { fgColor: { rgb: "1F2937" } };
+          ws[cellRef].s.font = { name: "Arial", sz: 10, bold: true, color: { rgb: "FFFFFF" } };
+        } else {
+          if (R % 2 === 1) ws[cellRef].s.fill = { fgColor: { rgb: "F9FAFB" } };
+          if (C >= 6) {
+            const cv = ws[cellRef].v?.toString() || "";
+            if (cv.includes("Absent") || cv === "A") { ws[cellRef].s.fill = { fgColor: { rgb: "FEE2E2" } }; ws[cellRef].s.font = { name: "Arial", sz: 9, bold: true, color: { rgb: "991B1B" } }; }
+            else if (cv.includes("Present") || cv.includes("P (")) { ws[cellRef].s.fill = { fgColor: { rgb: "DCFCE7" } }; ws[cellRef].s.font = { name: "Arial", sz: 9, bold: true, color: { rgb: "166534" } }; }
+            else if (cv.includes("Half Day") || cv.includes("HD")) { ws[cellRef].s.fill = { fgColor: { rgb: "FEF9C3" } }; ws[cellRef].s.font = { name: "Arial", sz: 9, bold: true, color: { rgb: "854D0E" } }; }
+            else if (cv.includes("Late Mark")) { ws[cellRef].s.fill = { fgColor: { rgb: "DBEAFE" } }; ws[cellRef].s.font = { name: "Arial", sz: 9, bold: true, color: { rgb: "1E40AF" } }; }
+            else if (cv.includes("OT") || cv.includes("+")) { ws[cellRef].s.fill = { fgColor: { rgb: "E0E7FF" } }; ws[cellRef].s.font = { name: "Arial", sz: 9, bold: true, color: { rgb: "3730A3" } }; }
+            else if (cv.includes("PH") || cv.includes("Public Holiday")) { ws[cellRef].s.fill = { fgColor: { rgb: "F3E8FF" } }; ws[cellRef].s.font = { name: "Arial", sz: 9, bold: true, color: { rgb: "6B21A8" } }; }
+            else if (cv.includes("WO") || cv.includes("Weekly Off")) { ws[cellRef].s.fill = { fgColor: { rgb: "FFEDD5" } }; ws[cellRef].s.font = { name: "Arial", sz: 9, bold: true, color: { rgb: "9A3412" } }; }
+            else if (cv.includes("Leave")) { ws[cellRef].s.fill = { fgColor: { rgb: "FCE7F3" } }; ws[cellRef].s.font = { name: "Arial", sz: 9, bold: true, color: { rgb: "9D174D" } }; }
+            else if (cv.includes("Regularized")) { ws[cellRef].s.fill = { fgColor: { rgb: "CCFBF1" } }; ws[cellRef].s.font = { name: "Arial", sz: 9, bold: true, color: { rgb: "115E59" } }; }
+          }
+        }
+      }
+    }
+    
+    const colWidths = [{ wch: 6 }, { wch: 14 }, { wch: 20 }, { wch: 22 }, { wch: 16 }, { wch: 18 }];
+    dateColumns.forEach(() => colWidths.push({ wch: 18 }));
+    ws['!cols'] = colWidths;
+    ws['!freeze'] = { x: 6, y: 1 };
+    
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Attendance Report");
+    XLSX.writeFile(wb, `${formData.reportType.replace(/\s+/g, '_')}_${formData.dateFrom}_to_${formData.dateTo}.xlsx`);
   };
 
-  // ------- UI HELPERS -------
+  // ==================== RENDER HELPERS ====================
+
+  const parseInputDate = (value: string) => {
+    if (!value) return new Date(NaN);
+    if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return new Date(value);
+    return new Date(value);
+  };
+
+  const buildDateRangeColumns = (): string[] => {
+    if (!formData.dateFrom || !formData.dateTo) return [];
+    const start = parseInputDate(formData.dateFrom);
+    const end = parseInputDate(formData.dateTo);
+    if (isNaN(start.getTime()) || isNaN(end.getTime())) return [];
+    start.setHours(0, 0, 0, 0); end.setHours(0, 0, 0, 0);
+    const dates: string[] = [];
+    const cur = new Date(start);
+    while (cur <= end) {
+      dates.push(`${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, "0")}-${String(cur.getDate()).padStart(2, "0")}`);
+      cur.setDate(cur.getDate() + 1);
+    }
+    return dates;
+  };
+
+  const formatHeaderDate = (iso: string) => {
+    const d = new Date(iso);
+    return { dayName: d.toLocaleDateString("en-US", { weekday: "short" }).toUpperCase(), dateStr: d.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }).toUpperCase() };
+  };
 
   const dateColumns = buildDateRangeColumns();
 
-  const filteredReportData = reportData.filter(row => {
-    const fullName = `${row.employee.employeeFirstName} ${row.employee.employeeLastName}`.toLowerCase();
+  const filteredReportData = useMemo(() => {
+    return reportData.filter(row => {
+      const fullName = `${row.employee.employeeFirstName} ${row.employee.employeeLastName}`.toLowerCase();
+      return fullName.includes(searchTerm.toLowerCase()) || row.employee.employeeID.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        row.companyName.toLowerCase().includes(searchTerm.toLowerCase()) || row.branchName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        row.departmentName.toLowerCase().includes(searchTerm.toLowerCase());
+    });
+  }, [reportData, searchTerm]);
+
+  const renderDateCell = useCallback((punches: string[], date: string, employeeID: number) => {
+    let selectedCompanyID = formData.companyID;
+    if (user?.role === "COMPANY_ADMIN" && managerData?.companyID) selectedCompanyID = managerData.companyID;
+    else if (user?.role === "BRANCH_ADMIN" && managerData?.companyID) selectedCompanyID = managerData.companyID;
+    else if (user?.role === "SERVICE_PROVIDER" && managerData?.companyID) selectedCompanyID = managerData.companyID;
+    const selectedBranch = branches.find(b => b.branchName === formData.branchName);
+    return <DateCell punches={punches} date={date} employeeID={employeeID} formData={formData} reportData={reportData} selectedCompanyID={selectedCompanyID} selectedBranchID={selectedBranch?.id || 0} getComprehensiveStatus={getComprehensiveStatus} />;
+  }, [formData, user, managerData, branches, reportData]);
+
+  const renderDateHeaders = () => dateColumns.map(date => {
+    const { dayName, dateStr } = formatHeaderDate(date);
     return (
-      fullName.includes(searchTerm.toLowerCase()) ||
-      row.employee.employeeID.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      row.companyName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      row.branchName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      row.departmentName.toLowerCase().includes(searchTerm.toLowerCase())
+      <th key={date} className="px-2 py-1 text-center min-w-[90px] border-l border-gray-500 text-[11px] bg-gray-900">
+        <div className="font-semibold">{dateStr}</div>
+        <div className="text-[10px] opacity-80 mt-1">{dayName}</div>
+      </th>
     );
   });
 
-  // ------- RENDER DATE CELLS -------
-  // (Keep all your existing renderDateCell and renderDateHeaders functions)
-
-  const renderDateCell = (punches: string[], date: string, employeeID: number) => {
-    const selectedCompanyID = formData.companyID;
-    const selectedBranch = branches.find(b => b.branchName === formData.branchName);
-    const selectedBranchID = selectedBranch?.id || 0;
-
-    const specialStatus = getSpecialStatus(date, selectedCompanyID!, selectedBranchID, employeeID);
-
-    const renderSpecialStatusBadge = () => {
-      if (!specialStatus) return null;
-
-      let statusClass = "";
-      
-      if (specialStatus.type === "PH") {
-        statusClass = "bg-purple-100 text-purple-800 border border-purple-300";
-      } else if (specialStatus.type === "WO") {
-        statusClass = "bg-orange-100 text-orange-800 border border-orange-300";
-      } else if (specialStatus.type === "AR") {
-        statusClass = "bg-teal-100 text-teal-800 border border-teal-300";
-      } else if (specialStatus.type === "LEAVE") {
-        statusClass = "bg-pink-100 text-pink-800 border border-pink-300";
-      }
-  
-      return (
-        <div className={`text-[9px] font-bold py-1 px-2 rounded mb-1 ${statusClass}`}>
-          {specialStatus.label}
-        </div>
-      );
-    };
-  
-    if (formData.reportType === "FILO Punches Logs") {
-      const { inTime, outTime } = getInOutTimes(punches);
-      return (
-        <td className="px-2 py-1 border-b min-w-[140px] text-center align-top">
-          {renderSpecialStatusBadge()}
-          {punches.length > 0 ? (
-            <div className="flex flex-col gap-1 text-[10px]">
-              <div className="flex justify-between items-center">
-                <span className="font-semibold">IN:</span>
-                <span className={`px-2 py-1 rounded ${inTime === "-" ? "bg-gray-200 text-gray-500" : "bg-green-100 text-green-800"}`}>
-                  {inTime}
-                </span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="font-semibold">OUT:</span>
-                <span className={`px-2 py-1 rounded ${outTime === "-" ? "bg-gray-200 text-gray-500" : "bg-red-100 text-red-800"}`}>
-                  {outTime}
-                </span>
-              </div>
-            </div>
-          ) : specialStatus ? (
-            <div className="text-[10px] text-gray-500 italic">No punches</div>
-          ) : (
-            <div className="text-[10px] text-gray-400 italic">No logs</div>
-          )}
-        </td>
-      );
-    } else if (formData.reportType === "Attendance Marking Logs") {
-      const status = getAttendanceStatus(punches, date, selectedCompanyID!, selectedBranchID, employeeID);
-      
-      let statusClass = "";
-      let statusText = status;
-      
-      if (status === "PH") {
-        statusClass = "bg-purple-100 text-purple-800";
-      } else if (status === "WO") {
-        statusClass = "bg-orange-100 text-orange-800";
-      } else if (status.startsWith("AR")) {
-        statusClass = "bg-teal-100 text-teal-800";
-      } else if (status === "A") {
-        statusClass = "bg-red-100 text-red-800";
-      } else if (status === "P") {
-        statusClass = "bg-green-100 text-green-800";
-      } else if (status === "Casual" || status === "Sick" || status === "Earned" || status === "Maternity" || status === "Paternity") {
-        statusClass = "bg-pink-100 text-pink-800";
-      } else {
-        statusClass = "bg-blue-100 text-blue-800";
-      }
-
-      return (
-        <td className="px-2 py-1 border-b min-w-[80px] text-center align-top">
-          <div className={`text-[10px] font-bold py-1 px-2 rounded ${statusClass}`}>
-            {status}
-          </div>
-        </td>
-      );
-    } else {
-      return (
-        <td className="px-2 py-1 border-b min-w-[120px] text-center align-top">
-          {renderSpecialStatusBadge()}
-          {punches.length > 0 ? (
-            <div className="flex flex-col items-center gap-1">
-              {punches.map((time, idx) => (
-                <span
-                  key={idx}
-                  className="inline-block px-2 py-1 bg-gray-900 text-white text-[10px] font-semibold rounded-full"
-                >
-                  {time}
-                </span>
-              ))}
-            </div>
-          ) : specialStatus ? (
-            <div className="text-[10px] text-gray-500 italic">No punches</div>
-          ) : (
-            <div className="text-[10px] text-gray-400 italic">No logs</div>
-          )}
-        </td>
-      );
-    }
+  const resetForm = () => {
+    setFormData(prev => ({ ...prev, dateFrom: getFirstDayOfMonth(), dateTo: getTodayStr(), branchName: "", companyID: user?.role === "SUPERADMIN" ? null : prev.companyID }));
+    setReportData([]); setSearchTerm(""); setSelectedDepartments([]); setSelectedDesignations([]); setSelectedEmployees([]);
+    globalStatusCache.clear();
   };
 
-  const renderDateHeaders = () => {
-    if (formData.reportType === "FILO Punches Logs") {
-      return dateColumns.map(date => {
-        const { dayName, dateStr } = formatHeaderDate(date);
-        return (
-          <th
-            key={date}
-            className="px-2 py-1 text-center min-w-[140px] border-l border-blue-500 text-[11px]"
-            colSpan={1}
-          >
-            <div className="font-semibold">{dateStr}</div>
-            <div className="text-[10px] opacity-80 mt-1">{dayName}</div>
-          </th>
-        );
-      });
-    } else {
-      return dateColumns.map(date => {
-        const { dayName, dateStr } = formatHeaderDate(date);
-        return (
-          <th
-            key={date}
-            className="px-2 py-1 text-center min-w-[120px] border-l border-blue-500 text-[11px]"
-          >
-            <div className="font-semibold">{dateStr}</div>
-            <div className="text-[10px] opacity-80 mt-1">{dayName}</div>
-          </th>
-        );
-      });
-    }
-  };
+  const showLegend = formData.reportType === "Attendance Marking Logs" || formData.reportType === "Attendance Summary Logs";
 
-  // ------- RENDER -------
-  // Keep your existing return statement with all the JSX
+  // ==================== RENDER ====================
 
   return (
     <div className="space-y-6 w-full max-w-7xl mx-auto px-4">
-      <div className="flex items-center justify-between w-full">
-        <div className="min-w-0 flex-1">
-          <p className="text-gray-600 mt-1 text-sm">
-            Generate and view attendance logs by company, branch, department and date range.
-          </p>
-        </div>
-      </div>
+      <div className="flex items-center justify-between w-full"><div className="min-w-0 flex-1"><p className="text-gray-600 mt-1 text-sm">Generate and view attendance logs by company, branch, department and date range.</p></div></div>
 
       <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            Attendance Filters
-          </CardTitle>
-        </CardHeader>
+        <CardHeader><CardTitle className="flex items-center gap-2">Attendance Filters</CardTitle></CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
             {user?.role === "SUPERADMIN" && (
               <div className="space-y-2">
                 <Label>Company</Label>
-                <select
-                  className="w-full px-3 py-2 border rounded-md bg-white"
-                  value={formData.companyID ?? ""}
-                  onChange={e =>
-                    setFormData(prev => ({
-                      ...prev,
-                      companyID: e.target.value ? Number(e.target.value) : null,
-                      branchName: "",
-                      department: ""
-                    }))
-                  }
-                >
+                <select className="w-full px-3 py-2 border rounded-md bg-white" value={formData.companyID ?? ""} onChange={e => setFormData(prev => ({ ...prev, companyID: e.target.value ? Number(e.target.value) : null, branchName: "" }))}>
                   <option value="">Select company</option>
-                  {companies.map(c => (
-                    <option key={c.id} value={c.id}>
-                      {c.companyName}
-                    </option>
-                  ))}
+                  {companies.map(c => <option key={c.id} value={c.id}>{c.companyName}</option>)}
                 </select>
               </div>
             )}
-
             <div className="space-y-2">
               <Label>Branch</Label>
-              <select
-                className="w-full px-3 py-2 border rounded-md bg-white"
-                value={formData.branchName}
-                onChange={handleBranchChange}
-              >
+              <select className="w-full px-3 py-2 border rounded-md bg-white" value={formData.branchName} onChange={handleBranchChange}>
                 <option value="">Select branch</option>
-                {branches.map(b => (
-                  <option key={b.id} value={b.branchName}>
-                    {b.branchName}
-                  </option>
-                ))}
+                {branches.map(b => <option key={b.id} value={b.branchName}>{b.branchName}</option>)}
               </select>
             </div>
-
-            <div className="space-y-2">
-              <Label>Department</Label>
-              <select
-                className="w-full px-3 py-2 border rounded-md bg-white"
-                value={formData.department}
-                onChange={e =>
-                  setFormData(prev => ({ ...prev, department: e.target.value }))
-                }
-              >
-                <option value="">All departments</option>
-                {departments.map(d => (
-                  <option key={d.id} value={d.departmentName}>
-                    {d.departmentName}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="space-y-2">
-              <Label>Designation</Label>
-              <select
-                className="w-full px-3 py-2 border rounded-md bg-white"
-                value={formData.designation}
-                onChange={e =>
-                  setFormData(prev => ({ ...prev, designation: e.target.value }))
-                }
-              >
-                <option value="">All designations</option>
-                {designations.map(d => (
-                  <option key={d.id} value={String(d.id)}>
-                    {d.designation}
-                  </option>
-                ))}
-              </select>
-            </div>
+            <div className="space-y-2"><Label>Departments</Label><MultiSelect options={departmentOptions} selectedValues={selectedDepartments} onChange={setSelectedDepartments} placeholder="All departments" /></div>
+            <div className="space-y-2"><Label>Designations</Label><MultiSelect options={designationOptions} selectedValues={selectedDesignations} onChange={setSelectedDesignations} placeholder="All designations" /></div>
           </div>
-
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+            <div className="space-y-2"><Label>Employees</Label><MultiSelect options={employeeOptions} selectedValues={selectedEmployees} onChange={setSelectedEmployees} placeholder="All employees" /></div>
+          </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
             <div className="space-y-2">
               <Label>Report Type</Label>
-              <select
-                className="w-full px-3 py-2 border rounded-md bg-white"
-                value={formData.reportType}
-                onChange={e =>
-                  setFormData(prev => ({ ...prev, reportType: e.target.value }))
-                }
-              >
-                <option value="All Punches Logs">All Punches Logs</option>
-                <option value="FILO Punches Logs">FILO Punches Logs</option>
-                <option value="Attendance Marking Logs">Attendance Marking Logs</option>
-                <option value="Attendance Summary Logs">Attendance Summary Logs</option>
+              <select className="w-full px-3 py-2 border rounded-md bg-white" value={formData.reportType} onChange={e => setFormData(prev => ({ ...prev, reportType: e.target.value }))}>
+                <option value="All Punches Logs">All Punches Logs</option><option value="FILO Punches Logs">FILO Punches Logs</option>
+                <option value="Attendance Marking Logs">Attendance Marking Logs</option><option value="Attendance Summary Logs">Attendance Summary Logs</option>
               </select>
             </div>
           </div>
-
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
-            <div className="space-y-2">
-              <Label>Date From</Label>
-              <Input
-                type="date"
-                value={formData.dateFrom}
-                onChange={e =>
-                  setFormData(prev => ({ ...prev, dateFrom: e.target.value }))
-                }
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label>Date To</Label>
-              <Input
-                type="date"
-                value={formData.dateTo}
-                onChange={e =>
-                  setFormData(prev => ({ ...prev, dateTo: e.target.value }))
-                }
-              />
-            </div>
-
+            <div className="space-y-2"><Label>Date From</Label><Input type="date" value={formData.dateFrom} onChange={e => setFormData(prev => ({ ...prev, dateFrom: e.target.value }))} /></div>
+            <div className="space-y-2"><Label>Date To</Label><Input type="date" value={formData.dateTo} onChange={e => setFormData(prev => ({ ...prev, dateTo: e.target.value }))} /></div>
             <div className="col-span-2 flex items-end gap-3">
-              <Button
-                className=""
-                onClick={generateReport}
-                disabled={loading}
-              >
-                {loading ? "Generating..." : "Generate Report"}
-              </Button>
-              <Button variant="outline" onClick={resetForm}>
-                Reset
-              </Button>
+              <Button onClick={generateReport} disabled={loading}>{loading ? "Generating..." : "Generate Report"}</Button>
+              <Button variant="outline" onClick={resetForm}>Reset</Button>
+              <Button variant="outline" onClick={downloadExcel} disabled={reportData.length === 0}><Download className="w-4 h-4 mr-2" />Excel</Button>
             </div>
           </div>
-
-          <div className="mt-4 p-3 bg-gray-50 rounded-md">
-            <p className="text-xs font-semibold mb-2">Legend:</p>
-            <div className="flex flex-wrap gap-3 text-[10px]">
-              <div className="flex items-center gap-1">
-                <div className="w-3 h-3 bg-green-100 border border-green-300 rounded"></div>
-                <span>P = Present (2+ punches)</span>
+          {showLegend && (
+            <div className="mt-4 p-3 bg-gray-50 rounded-md">
+              <p className="text-xs font-semibold mb-2">Legend:</p>
+              <div className="flex flex-wrap gap-3 text-[10px]">
+                <div className="flex items-center gap-1"><div className="w-3 h-3 bg-green-100 rounded"></div><span>P = Present</span></div>
+                <div className="flex items-center gap-1"><div className="w-3 h-3 bg-yellow-100 rounded"></div><span>HD = Half Day</span></div>
+                <div className="flex items-center gap-1"><div className="w-3 h-3 bg-blue-100 rounded"></div><span>LM = Late Mark</span></div>
+                <div className="flex items-center gap-1"><div className="w-3 h-3 bg-indigo-100 rounded"></div><span>OT = Overtime</span></div>
+                <div className="flex items-center gap-1"><div className="w-3 h-3 bg-red-100 rounded"></div><span>A = Absent</span></div>
+                <div className="flex items-center gap-1"><div className="w-3 h-3 bg-purple-100 rounded"></div><span>PH = Public Holiday</span></div>
+                <div className="flex items-center gap-1"><div className="w-3 h-3 bg-orange-100 rounded"></div><span>WO = Weekly Off</span></div>
+                <div className="flex items-center gap-1"><div className="w-3 h-3 bg-teal-100 rounded"></div><span>AR = Regularized</span></div>
+                <div className="flex items-center gap-1"><div className="w-3 h-3 bg-pink-100 rounded"></div><span>Leave</span></div>
               </div>
-              <div className="flex items-center gap-1">
-                <div className="w-3 h-3 bg-blue-100 border border-blue-300 rounded"></div>
-                <span>Time = Single punch</span>
-              </div>
-              <div className="flex items-center gap-1">
-                <div className="w-3 h-3 bg-red-100 border border-red-300 rounded"></div>
-                <span>A = Absent</span>
-              </div>
-              <div className="flex items-center gap-1">
-                <div className="w-3 h-3 bg-purple-100 border border-purple-300 rounded"></div>
-                <span>PH = Public Holiday</span>
-              </div>
-              <div className="flex items-center gap-1">
-                <div className="w-3 h-3 bg-orange-100 border border-orange-300 rounded"></div>
-                <span>WO = Weekly Off</span>
-              </div>
-              <div className="flex items-center gap-1">
-                <div className="w-3 h-3 bg-teal-100 border border-teal-300 rounded"></div>
-                <span>AR = Attendance Regularized</span>
-              </div>
-              <div className="flex items-center gap-1">
-                <div className="w-3 h-3 bg-pink-100 border border-pink-300 rounded"></div>
-                <span>Leave Types (Casual, Sick, etc.)</span>
-              </div>
+              <p className="text-[10px] text-gray-500 mt-2">Note: WO-P / PH-P / Leave-P means employee punched on Week Off/Holiday/Leave</p>
             </div>
-          </div>
-
-          <p className="text-xs text-gray-500 mt-2">
-            Logs are filtered by company, branch, department (if selected) and date
-            range. Only logs from AT devices are included.
-          </p>
+          )}
+          <p className="text-xs text-gray-500 mt-2">Logs are filtered by company, branch, department (if selected) and date range. Only logs from AT devices are included.</p>
         </CardContent>
       </Card>
 
-      {reportData.length === 0 && !loading && (
-        <Card>
-          <CardContent className="py-6 text-center text-sm text-gray-500">
-            No logs found for selected filters and date range.
-          </CardContent>
-        </Card>
-      )}
+      {reportData.length === 0 && !loading && <Card><CardContent className="py-6 text-center text-sm text-gray-500">No logs found. Click Generate Report to load data.</CardContent></Card>}
 
       {reportData.length > 0 && (
         <Card className="mt-4">
           <CardHeader>
             <div className="flex items-center justify-between">
-              <CardTitle className="flex items-center gap-2 text-lg font-semibold">
-                <FileText className="w-5 h-5" />
-                {formData.reportType} – {filteredReportData.length} users
-              </CardTitle>
-              <div className="flex items-center gap-3">
-                <div className="relative w-64">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
-                  <Input
-                    placeholder="Search employee, company, branch..."
-                    value={searchTerm}
-                    onChange={e => setSearchTerm(e.target.value)}
-                    className="pl-10"
-                  />
-                </div>
-                <Button
-                  variant="outline"
-                  onClick={downloadExcel}
-                  className="flex items-center gap-2"
-                >
-                  <Download className="w-4 h-4" />
-                  Download Excel
-                </Button>
-                <div className="relative">
-                  <Button variant="outline" onClick={() => setColumnPickerOpen(v => !v)} className="flex items-center gap-2">
-                    <FileText className="w-4 h-4" /> Columns
-                  </Button>
-                  {columnPickerOpen && (
-                    <div className="absolute right-0 top-full mt-1 z-50 bg-white border border-gray-200 rounded-lg shadow-lg p-3 min-w-[200px] max-h-[300px] overflow-y-auto">
-                      {[
-                        { key: "sno", label: "S.NO" }, { key: "company", label: "Company" },
-                        { key: "branch", label: "Branch" }, { key: "dept", label: "Dept" },
-                        { key: "emp", label: "Employee" },
-                      ].map(col => (
-                        <label key={col.key} className="flex items-center gap-2 py-1 cursor-pointer text-sm">
-                          <input type="checkbox" checked={visibleColumns[col.key] !== false} onChange={() => toggleColumn(col.key)} className="w-3.5 h-3.5 rounded" />
-                          {col.label}
-                        </label>
-                      ))}
-                    </div>
-                  )}
-                </div>
+              <CardTitle className="flex items-center gap-2 text-lg font-semibold"><FileText className="w-5 h-5" />{formData.reportType} – {filteredReportData.length} users</CardTitle>
+              <div className="relative w-64">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+                <Input placeholder="Search..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="pl-10" />
               </div>
             </div>
           </CardHeader>
-
           <CardContent className="p-0">
             <div className="overflow-x-auto w-full border-t border-gray-200">
               <table className="min-w-full border-collapse text-xs">
-                <thead className="bg-gray-900 text-white">
+                <thead className="bg-gray-900 text-white sticky top-0 z-20">
                   <tr>
-                    {visibleColumns.sno && <th
-                      className="sticky z-30 bg-gray-900 px-3 py-2 text-center"
-                      style={{ left: getStickyLeft("sno"), width: LEFT_WIDTHS.sno, minWidth: LEFT_WIDTHS.sno }}
+                    <th 
+                      className="sticky left-0 z-30 bg-gray-900 px-2 py-2 text-center border-r border-gray-700" 
+                      style={{ left: 0, width: LEFT_WIDTHS.sno, minWidth: LEFT_WIDTHS.sno }}
                     >
                       S.NO
-                    </th>}
-                    {visibleColumns.company && <th
-                      className="sticky z-30 bg-gray-900 px-3 py-2 text-left"
-                      style={{
-                        left: getStickyLeft("company"),
-                        width: LEFT_WIDTHS.company,
-                        minWidth: LEFT_WIDTHS.company
-                      }}
+                    </th>
+                    <th 
+                      className="sticky z-30 bg-gray-900 px-2 py-2 text-left border-r border-gray-700" 
+                      style={{ left: LEFT_WIDTHS.sno, width: LEFT_WIDTHS.company, minWidth: LEFT_WIDTHS.company }}
                     >
                       COMPANY
-                    </th>}
-                    {visibleColumns.branch && <th
-                      className="sticky z-30 bg-gray-900 px-3 py-2 text-left"
-                      style={{
-                        left: getStickyLeft("branch"),
-                        width: LEFT_WIDTHS.branch,
-                        minWidth: LEFT_WIDTHS.branch
-                      }}
+                    </th>
+                    <th 
+                      className="sticky z-30 bg-gray-900 px-2 py-2 text-left border-r border-gray-700" 
+                      style={{ left: LEFT_WIDTHS.sno + LEFT_WIDTHS.company, width: LEFT_WIDTHS.branch, minWidth: LEFT_WIDTHS.branch }}
                     >
                       BRANCH
-                    </th>}
-                    {visibleColumns.dept && <th
-                      className="sticky z-30 bg-gray-900 px-3 py-2 text-left"
-                      style={{
-                        left: getStickyLeft("dept"),
-                        width: LEFT_WIDTHS.dept,
-                        minWidth: LEFT_WIDTHS.dept
-                      }}
+                    </th>
+                    <th 
+                      className="sticky z-30 bg-gray-900 px-2 py-2 text-left border-r border-gray-700" 
+                      style={{ left: LEFT_WIDTHS.sno + LEFT_WIDTHS.company + LEFT_WIDTHS.branch, width: LEFT_WIDTHS.dept, minWidth: LEFT_WIDTHS.dept }}
                     >
                       DEPT
-                    </th>}
-                    {visibleColumns.emp && <th
-                      className="sticky z-30 bg-gray-900 px-3 py-2 text-left"
-                      style={{
-                        left: getStickyLeft("emp"),
-                        width: LEFT_WIDTHS.emp,
-                        minWidth: LEFT_WIDTHS.emp
-                      }}
+                    </th>
+                    <th 
+                      className="sticky z-30 bg-gray-900 px-2 py-2 text-left border-r border-gray-700" 
+                      style={{ left: LEFT_WIDTHS.sno + LEFT_WIDTHS.company + LEFT_WIDTHS.branch + LEFT_WIDTHS.dept, width: LEFT_WIDTHS.emp, minWidth: LEFT_WIDTHS.emp }}
                     >
                       EMPLOYEE
-                    </th>}
+                    </th>
                     {renderDateHeaders()}
                   </tr>
                 </thead>
-
                 <tbody>
                   {filteredReportData.map((row, index) => (
                     <tr key={row.employee.id} className="odd:bg-gray-50">
-                      {visibleColumns.sno && <td
-                        className="sticky bg-white px-3 py-2 border-b border-r text-center text-[11px] z-20"
-                        style={{ left: getStickyLeft("sno"), width: LEFT_WIDTHS.sno, minWidth: LEFT_WIDTHS.sno }}
+                      <td 
+                        className="sticky left-0 bg-white px-2 py-2 border-b border-r text-center text-[11px] z-10" 
+                        style={{ left: 0, width: LEFT_WIDTHS.sno, minWidth: LEFT_WIDTHS.sno }}
                       >
                         {index + 1}
-                      </td>}
-                      {visibleColumns.company && <td
-                        className="sticky bg-white px-3 py-2 border-b border-r text-[11px] z-20 align-top"
-                        style={{
-                          left: getStickyLeft("company"),
-                          width: LEFT_WIDTHS.company,
-                          minWidth: LEFT_WIDTHS.company
-                        }}
+                      </td>
+                      <td 
+                        className="sticky bg-white px-2 py-2 border-b border-r text-[11px] z-10 align-top" 
+                        style={{ left: LEFT_WIDTHS.sno, width: LEFT_WIDTHS.company, minWidth: LEFT_WIDTHS.company }}
                       >
-                        {row.companyName}
-                      </td>}
-                      {visibleColumns.branch && <td
-                        className="sticky bg-white px-3 py-2 border-b border-r text-[11px] z-20 align-top"
-                        style={{
-                          left: getStickyLeft("branch"),
-                          width: LEFT_WIDTHS.branch,
-                          minWidth: LEFT_WIDTHS.branch
-                        }}
+                        <div className="truncate">{row.companyName}</div>
+                      </td>
+                      <td 
+                        className="sticky bg-white px-2 py-2 border-b border-r text-[11px] z-10 align-top" 
+                        style={{ left: LEFT_WIDTHS.sno + LEFT_WIDTHS.company, width: LEFT_WIDTHS.branch, minWidth: LEFT_WIDTHS.branch }}
                       >
-                        {row.branchName}
-                      </td>}
-                      {visibleColumns.dept && <td
-                        className="sticky bg-white px-3 py-2 border-b border-r text-[11px] z-20 align-top"
-                        style={{
-                          left: getStickyLeft("dept"),
-                          width: LEFT_WIDTHS.dept,
-                          minWidth: LEFT_WIDTHS.dept
-                        }}
+                        <div className="truncate">{row.branchName}</div>
+                      </td>
+                      <td 
+                        className="sticky bg-white px-2 py-2 border-b border-r text-[11px] z-10 align-top" 
+                        style={{ left: LEFT_WIDTHS.sno + LEFT_WIDTHS.company + LEFT_WIDTHS.branch, width: LEFT_WIDTHS.dept, minWidth: LEFT_WIDTHS.dept }}
                       >
-                        {row.departmentName || "N/A"}
-                      </td>}
-                      {visibleColumns.emp && <td
-                        className="sticky bg-white px-3 py-2 border-b border-r text-[11px] z-20 align-top"
-                        style={{
-                          left: getStickyLeft("emp"),
-                          width: LEFT_WIDTHS.emp,
-                          minWidth: LEFT_WIDTHS.emp
-                        }}
+                        <div className="truncate">{row.departmentName || "N/A"}</div>
+                      </td>
+                      <td 
+                        className="sticky bg-white px-2 py-2 border-b border-r text-[11px] z-10 align-top" 
+                        style={{ left: LEFT_WIDTHS.sno + LEFT_WIDTHS.company + LEFT_WIDTHS.branch + LEFT_WIDTHS.dept, width: LEFT_WIDTHS.emp, minWidth: LEFT_WIDTHS.emp }}
                       >
-                        <div>
-                          {row.employee.employeeFirstName} {row.employee.employeeLastName}
-                        </div>
-                        <div className="text-[10px] text-gray-500">
-                          ({row.employee.employeeID})
-                        </div>
-                      </td>}
-
-                      {dateColumns.map(date => {
-                        const punches = row.punches[date] || [];
-                        return renderDateCell(punches, date, row.employee.id);
-                      })}
+                        <div className="truncate">{row.employee.employeeFirstName} {row.employee.employeeLastName}</div>
+                        <div className="text-[10px] text-gray-500 truncate">({row.employee.employeeID})</div>
+                      </td>
+                      {dateColumns.map(date => renderDateCell(row.punches[date] || [], date, row.employee.id))}
                     </tr>
                   ))}
                 </tbody>

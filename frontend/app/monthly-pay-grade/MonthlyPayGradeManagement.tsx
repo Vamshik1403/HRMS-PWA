@@ -138,7 +138,7 @@ export function MonthlyPayGradeManagement() {
   const [editingPayGrade, setEditingPayGrade] = useState<MonthlyPayGradeUI | null>(null);
 
   const user = useCurrentUser();
-  const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN";
+  const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN" || user?.role === "BRANCH_ADMIN";
   const isEmployee = user?.role === "EMPLOYEE";
 
   const [currentUserMapping, setCurrentUserMapping] = useState<any>(null);
@@ -609,6 +609,7 @@ miniOTTime: x.miniOTTime ?? 0,
     const filtered = list.filter(
       (b) =>
         b.companyID === resolvedCompanyID &&
+        (user?.role !== "BRANCH_ADMIN" || Number(b.id) === Number(user?.branchesID)) &&
         (b.branchName ?? "").toLowerCase().includes(val.toLowerCase())
     );
 
@@ -1391,8 +1392,6 @@ miniOTTime: x.miniOTTime ?? 0,
             <Table className="w-full">
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-[120px]">Service Provider</TableHead>
-                  <TableHead className="w-[120px]">Company Name</TableHead>
                   <TableHead className="w-[120px]">Branch Name</TableHead>
                   <TableHead className="w-[150px]">Pay Grade Name</TableHead>
                   <TableHead className="w-[100px]">Gross</TableHead>
@@ -1406,7 +1405,7 @@ miniOTTime: x.miniOTTime ?? 0,
               <TableBody>
                 {filteredPayGrades.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={11} className="text-center py-8 text-gray-500">
+                    <TableCell colSpan={8} className="text-center py-8 text-gray-500">
                       <div className="flex flex-col items-center gap-2">
                         <Icon icon="mdi:cash-multiple" className="w-12 h-12 text-gray-300" />
                         <p>No paygrade setups found</p>
@@ -1417,8 +1416,6 @@ miniOTTime: x.miniOTTime ?? 0,
                 ) : (
                   filteredPayGrades.map((pg) => (
                     <TableRow key={pg.id}>
-                      <TableCell className="whitespace-nowrap">{pg.serviceProvider}</TableCell>
-                      <TableCell className="whitespace-nowrap">{pg.companyName}</TableCell>
                       <TableCell className="whitespace-nowrap">{pg.branchName}</TableCell>
                       <TableCell className="font-medium whitespace-nowrap">{pg.monthlyPayGradeName}</TableCell>
                       <TableCell className="whitespace-nowrap text-center">₹{pg.grossSalary}</TableCell>

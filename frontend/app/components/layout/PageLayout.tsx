@@ -35,6 +35,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../ui/dialog";
 import { Button } from "../ui/button";
 import { Label } from "../ui/label";
 import { toast } from "sonner";
+import { Eye, EyeOff } from "lucide-react";
 
 interface PageLayoutProps {
   children: React.ReactNode;
@@ -109,6 +110,8 @@ export function PageLayout({ children }: PageLayoutProps) {
   })
   const [profileSaving, setProfileSaving] = useState(false)
   const [profileLoading, setProfileLoading] = useState(false)
+  const [showNewPassword, setShowNewPassword] = useState(false)
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
 
   const handleProfileOpen = async () => {
     setProfileForm({
@@ -289,9 +292,14 @@ export function PageLayout({ children }: PageLayoutProps) {
           if (PAYROLL_POLICY_PATHS.includes(pathname)) newOpen[`c${comp.id}_payrollPolicy`] = true
           if (LEAVE_PATHS.includes(pathname)) newOpen[`c${comp.id}_leave`] = true
           if (ATTENDANCE_PATHS.includes(pathname)) newOpen[`c${comp.id}_attendance`] = true
+          if (LEAVE_MANAGEMENT_PATHS.includes(pathname)) newOpen[`c${comp.id}_leaveManagement`] = true
           if (REPORTS_PATHS.includes(pathname)) newOpen[`c${comp.id}_reports`] = true
           if (pathname.startsWith("/canteen")) newOpen[`c${comp.id}_canteen`] = true
           if (SETTINGS_PATHS.includes(pathname)) newOpen[`c${comp.id}_settings`] = true
+          // For branch admin, also expand the branch level
+          if (isBranchAdmin && currentUser?.branchesID) {
+            newOpen[`branch_${currentUser.branchesID}`] = true
+          }
         }
       }
     }
@@ -299,7 +307,12 @@ export function PageLayout({ children }: PageLayoutProps) {
     if (pathname === '/dashboard' && displaySPs.length > 0) {
       newOpen[`sp_${displaySPs[0].id}`] = true
       const firstComps = companiesBySP[displaySPs[0].id] || []
-      if (firstComps.length > 0) newOpen[`company_${firstComps[0].id}`] = true
+      if (firstComps.length > 0) {
+        newOpen[`company_${firstComps[0].id}`] = true
+        if (isBranchAdmin && currentUser?.branchesID) {
+          newOpen[`branch_${currentUser.branchesID}`] = true
+        }
+      }
     }
     setOpenSections(newOpen)
   }, [pathname, displaySPs, companiesBySP, sidebarCtx])
@@ -362,7 +375,7 @@ export function PageLayout({ children }: PageLayoutProps) {
             </CollapsibleTrigger>
             <CollapsibleContent>
               <SidebarMenuSub className="ml-5 mt-1 space-y-0.5 border-l border-[#f0f0f0] pl-3">
-                {(isSuperAdmin || isServiceProvider || isCompanyAdmin) && (
+                {(isSuperAdmin || isServiceProvider || isCompanyAdmin || isBranchAdmin) && (
                   <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/company" className={cn(sbSubRow, isActiveLink('/company', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Company Profile</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
                 )}
                 <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/branches" className={cn(sbSubRow, isActiveLink('/branches', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Branches</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
@@ -411,7 +424,7 @@ export function PageLayout({ children }: PageLayoutProps) {
                 <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/designations" className={cn(sbSubRow, isActiveLink('/designations', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Designations</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
                 <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/manage-employees" className={cn(sbSubRow, isActiveLink('/manage-employees', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Manage Employees</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
                 <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/employees-promotions" className={cn(sbSubRow, isActiveLink('/employees-promotions', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium" style={{ display: "block" }}>Promotions & Transfers</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
-                <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/employee-memo" className={cn(sbSubRow, isActiveLink('/employee-memo', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Warning & Notices</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
+                {/* Warning & Notices - temporarily hidden */}
                 <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/termination" className={cn(sbSubRow, isActiveLink('/termination', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Off Boarding</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
               </SidebarMenuSub>
             </CollapsibleContent>
@@ -440,7 +453,7 @@ export function PageLayout({ children }: PageLayoutProps) {
         )}
 
         {/* Leave Policy */}
-        {(isSuperAdmin || isServiceProvider || isCompanyAdmin || isRegularUser) && (
+        {(isSuperAdmin || isServiceProvider || isCompanyAdmin || isBranchAdmin || isRegularUser) && (
           <Collapsible open={openSections[k('leave')]} onOpenChange={o => toggleSection(k('leave'), o)}>
             <CollapsibleTrigger asChild>
               <SidebarMenuButton size="lg" className={cn(sbMenuBtnReset, sbRow, "mx-0 justify-between", leaveSectionActive ? sbActive : cn(sbIdle, openSections[k('leave')] && "font-semibold text-[#4f46e5]"))}>
@@ -490,7 +503,7 @@ export function PageLayout({ children }: PageLayoutProps) {
         )}
 
         {/* Payroll Management */}
-        {(isSuperAdmin || isServiceProvider || isCompanyAdmin || isRegularUser) && (
+        {(isSuperAdmin || isServiceProvider || isCompanyAdmin || isBranchAdmin || isRegularUser) && (
           <Collapsible open={openSections[k('salary')]} onOpenChange={o => toggleSection(k('salary'), o)}>
             <CollapsibleTrigger asChild>
               <SidebarMenuButton size="lg" className={cn(sbMenuBtnReset, sbRow, "mx-0 justify-between", salarySectionActive ? sbActive : cn(sbIdle, openSections[k('salary')] && "font-semibold text-[#4f46e5]"))}>
@@ -516,7 +529,7 @@ export function PageLayout({ children }: PageLayoutProps) {
         )}
 
         {/* Attendance Management */}
-        {(isSuperAdmin || isServiceProvider || isCompanyAdmin || isRegularUser) && (
+        {(isSuperAdmin || isServiceProvider || isCompanyAdmin || isBranchAdmin || isRegularUser) && (
           <Collapsible open={openSections[k('attendance')]} onOpenChange={o => toggleSection(k('attendance'), o)}>
             <CollapsibleTrigger asChild>
               <SidebarMenuButton size="lg" className={cn(sbMenuBtnReset, sbRow, "mx-0 justify-between", attendanceSectionActive ? sbActive : cn(sbIdle, openSections[k('attendance')] && "font-semibold text-[#4f46e5]"))}>
@@ -540,7 +553,7 @@ export function PageLayout({ children }: PageLayoutProps) {
         )}
 
         {/* Leave Management */}
-        {(isSuperAdmin || isServiceProvider || isCompanyAdmin || isRegularUser) && (
+        {(isSuperAdmin || isServiceProvider || isCompanyAdmin || isBranchAdmin || isRegularUser) && (
           <Collapsible open={openSections[k('leaveManagement')]} onOpenChange={o => toggleSection(k('leaveManagement'), o)}>
             <CollapsibleTrigger asChild>
               <SidebarMenuButton size="lg" className={cn(sbMenuBtnReset, sbRow, "mx-0 justify-between", leaveManagementSectionActive ? sbActive : cn(sbIdle, openSections[k('leaveManagement')] && "font-semibold text-[#4f46e5]"))}>
@@ -702,7 +715,26 @@ export function PageLayout({ children }: PageLayoutProps) {
                               </SidebarMenuButton>
                             </CollapsibleTrigger>
                             <CollapsibleContent>
-                              {renderCompanySections(company.id, sp.id, sp.companyName, company.companyName || "")}
+                              {isBranchAdmin && currentUser?.branches?.branchName ? (
+                                <div className="ml-3 border-l border-[#f0f0f0] pl-1">
+                                  <Collapsible open={openSections[`branch_${currentUser.branchesID}`]} onOpenChange={o => toggleSection(`branch_${currentUser.branchesID}`, o)}>
+                                    <CollapsibleTrigger asChild>
+                                      <SidebarMenuButton size="lg" className={cn(sbMenuBtnReset, sbRow, "mx-0 justify-between", cn(sbIdle, openSections[`branch_${currentUser.branchesID}`] && "font-semibold text-[#4f46e5]"))}>
+                                        <span className="flex items-center gap-3 min-w-0">
+                                          <Icon icon="mdi:source-branch" className={cn("w-5 h-5 shrink-0", openSections[`branch_${currentUser.branchesID}`] ? "text-[#4f46e5]" : "text-gray-400")} />
+                                          <span className="truncate font-semibold text-sm">{currentUser.branches.branchName}</span>
+                                        </span>
+                                        <Icon icon="mdi:chevron-down" className={cn("w-4 h-4 shrink-0 text-gray-500 transition-transform duration-300", openSections[`branch_${currentUser.branchesID}`] && "rotate-180")} />
+                                      </SidebarMenuButton>
+                                    </CollapsibleTrigger>
+                                    <CollapsibleContent>
+                                      {renderCompanySections(company.id, sp.id, sp.companyName, company.companyName || "")}
+                                    </CollapsibleContent>
+                                  </Collapsible>
+                                </div>
+                              ) : (
+                                renderCompanySections(company.id, sp.id, sp.companyName, company.companyName || "")
+                              )}
                             </CollapsibleContent>
                           </Collapsible>
                         ))}
@@ -925,21 +957,43 @@ export function PageLayout({ children }: PageLayoutProps) {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>New Password (leave blank to keep current)</Label>
-                  <Input
-                    type="password"
-                    value={profileForm.password}
-                    onChange={(e) => setProfileForm(p => ({ ...p, password: e.target.value }))}
-                    placeholder="Enter new password"
-                  />
+                  <div className="relative">
+                    <Input
+                      type={showNewPassword ? "text" : "password"}
+                      value={profileForm.password}
+                      onChange={(e) => setProfileForm(p => ({ ...p, password: e.target.value }))}
+                      placeholder="Enter new password"
+                      className="pr-10"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowNewPassword(v => !v)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                      tabIndex={-1}
+                    >
+                      {showNewPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
                 </div>
                 <div className="space-y-2">
                   <Label>Confirm Password</Label>
-                  <Input
-                    type="password"
-                    value={profileForm.confirmPassword}
-                    onChange={(e) => setProfileForm(p => ({ ...p, confirmPassword: e.target.value }))}
-                    placeholder="Confirm new password"
-                  />
+                  <div className="relative">
+                    <Input
+                      type={showConfirmPassword ? "text" : "password"}
+                      value={profileForm.confirmPassword}
+                      onChange={(e) => setProfileForm(p => ({ ...p, confirmPassword: e.target.value }))}
+                      placeholder="Confirm new password"
+                      className="pr-10"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowConfirmPassword(v => !v)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                      tabIndex={-1}
+                    >
+                      {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>

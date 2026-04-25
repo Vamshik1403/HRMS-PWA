@@ -125,7 +125,7 @@ export function ContractorManagement() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const user = useCurrentUser();
-  const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN";
+  const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN" || user?.role === "BRANCH_ADMIN";
   const isEmployee = user?.role === "EMPLOYEE";
   // Add this with your other state declarations
   const [currentUserMapping, setCurrentUserMapping] = useState<any>(null);
@@ -1062,8 +1062,6 @@ export function ContractorManagement() {
                 <TableRow>
                   <TableHead>Contractor</TableHead>
                   <TableHead>Type</TableHead>
-                  <TableHead>Service Provider</TableHead>
-                  <TableHead>Company</TableHead>
                   <TableHead>Email</TableHead>
                   <TableHead>Contact</TableHead>
                   <TableHead>GST</TableHead>
@@ -1073,7 +1071,7 @@ export function ContractorManagement() {
               <TableBody>
                 {filtered.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={8} className="text-center py-8 text-gray-500">
+                    <TableCell colSpan={6} className="text-center py-8 text-gray-500">
                       <div className="flex flex-col items-center gap-2">
                         <Icon icon="mdi:account-search" className="w-12 h-12 text-gray-300" />
                         <p>No contractors found</p>
@@ -1092,8 +1090,6 @@ export function ContractorManagement() {
                         })}
                         {!(r.contractorType) && "—"}
                       </TableCell>
-                      <TableCell className="whitespace-nowrap">{spName(r)}</TableCell>
-                      <TableCell className="whitespace-nowrap">{coName(r)}</TableCell>
                       <TableCell className="whitespace-nowrap">{r.emailAdd || "—"}</TableCell>
                       <TableCell className="whitespace-nowrap">{r.contactNo || "—"}</TableCell>
                       <TableCell className="whitespace-nowrap">{r.gstNo || "—"}</TableCell>

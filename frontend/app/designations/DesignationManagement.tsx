@@ -115,7 +115,7 @@ export function DesignationManagement() {
 
   const user = useCurrentUser();
   useEffect(() => {
-    if (!user || user.role !== "SERVICE_PROVIDER") return;
+    if (!user || (user.role !== "SERVICE_PROVIDER" && user.role !== "COMPANY_ADMIN")) return;
 
     const loadMapping = async () => {
       try {
@@ -133,7 +133,7 @@ export function DesignationManagement() {
     loadMapping();
   }, [user]);
 
-  const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN";
+  const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN" || user?.role === "BRANCH_ADMIN";
   const isEmployee = user?.role === "EMPLOYEE";
 
   // UI
@@ -382,18 +382,35 @@ export function DesignationManagement() {
   const resetForm = () => {
     const ctx = getSidebarContext();
     skipCascadeRef.current = true;
+
+    let serviceProviderID: ID | null = ctx?.serviceProviderID ?? null;
+    let companyID: ID | null = ctx?.companyID ?? null;
+    let branchesID: ID | null = null;
+    let spAutocomplete = ctx?.serviceProviderName ?? "";
+    let coAutocomplete = ctx?.companyName ?? "";
+    let brAutocomplete = "";
+
+    if (user?.role === "BRANCH_ADMIN" && currentUserMapping) {
+      serviceProviderID = currentUserMapping.serviceProviderID ?? null;
+      companyID = currentUserMapping.companyID ?? null;
+      branchesID = currentUserMapping.branchesID ?? null;
+      spAutocomplete = currentUserMapping.serviceProvider?.companyName ?? "";
+      coAutocomplete = currentUserMapping.company?.companyName ?? "";
+      brAutocomplete = currentUserMapping.branches?.branchName ?? "";
+    }
+
     setFormData({
-      serviceProviderID: ctx?.serviceProviderID ?? null,
-      companyID: ctx?.companyID ?? null,
-      branchesID: null,
+      serviceProviderID,
+      companyID,
+      branchesID,
       departmentID: null,
       designation: "",
       otApplicable: "",
       noticePeriodDaysForResignation: "",
       noticePeriodDaysForTermination: "",
-      spAutocomplete: ctx?.serviceProviderName ?? "",
-      coAutocomplete: ctx?.companyName ?? "",
-      brAutocomplete: "",
+      spAutocomplete,
+      coAutocomplete,
+      brAutocomplete,
       deptAutocomplete: "",
     });
     setEditing(null);
@@ -600,6 +617,7 @@ export function DesignationManagement() {
       const filtered = allBranches.filter(branch => 
         branch.serviceProviderID === formData.serviceProviderID &&
         branch.companyID === formData.companyID &&
+        (user?.role !== "BRANCH_ADMIN" || Number(branch.id) === Number(user?.branchesID)) &&
         branch.branchName.toLowerCase().includes(query.toLowerCase())
       );
       
@@ -1056,8 +1074,6 @@ export function DesignationManagement() {
                     <TableHeader>
                       <TableRow>
                         <TableHead>Designation</TableHead>
-                        <TableHead>Service Provider</TableHead>
-                        <TableHead>Company</TableHead>
                         <TableHead>Branch</TableHead>
                         <TableHead>Department</TableHead>
                         
@@ -1067,7 +1083,7 @@ export function DesignationManagement() {
                     <TableBody>
                       {filtered.length === 0 ? (
                         <TableRow>
-                          <TableCell colSpan={12} className="text-center py-8 text-gray-500">
+                          <TableCell colSpan={4} className="text-center py-8 text-gray-500">
                             <div className="flex flex-col items-center gap-2">
                               <Icon icon="mdi:account-search" className="w-12 h-12 text-gray-300" />
                               <p>No designations found</p>
@@ -1079,8 +1095,6 @@ export function DesignationManagement() {
                         filtered.map((r) => (
                           <TableRow key={r.id}>
                             <TableCell className="whitespace-nowrap">{r.designation || "—"}</TableCell>
-                            <TableCell className="whitespace-nowrap">{spName(r)}</TableCell>
-                            <TableCell className="whitespace-nowrap">{coName(r)}</TableCell>
                             <TableCell className="whitespace-nowrap">{brName(r)}</TableCell>
                             <TableCell className="whitespace-nowrap">{deptName(r)}</TableCell>
                             <TableCell className="text-right whitespace-nowrap">

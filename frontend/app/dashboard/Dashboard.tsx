@@ -191,6 +191,15 @@ export default function DashboardPage() {
           (d) =>
             d.companyID === user!.companyID && d.branchesID === user!.branchesID
         );
+      } else if (user!.role === "BRANCH_ADMIN") {
+        scopedEmployees = allEmployees.filter(
+          (e) =>
+            e.companyID === user!.companyID && e.branchesID === user!.branchesID
+        );
+        scopedDepartments = allDepartments.filter(
+          (d) =>
+            d.companyID === user!.companyID && d.branchesID === user!.branchesID
+        );
       }
 
       setEmployees(scopedEmployees);

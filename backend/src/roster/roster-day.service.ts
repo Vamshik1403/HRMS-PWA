@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import { PrismaService } from 'src/prisma/prisma.service';
+import { PrismaService } from '../prisma/prisma.service';
 import { UpsertRosterDayDto } from './dto/upsert-roster-day.dto';
 import { BulkUpsertRosterDaysDto } from './dto/bulk-upsert-roster-days.dto';
 import { RosterDayType } from './enums/roster.enums';

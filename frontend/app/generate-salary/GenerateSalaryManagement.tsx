@@ -1451,7 +1451,7 @@ export function GenerateSalaryManagement() {
 
   const user = useCurrentUser()
   const [items, setItems] = useState<GenerateSalaryRow[]>([])
-  const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN"
+  const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN" || user?.role === "BRANCH_ADMIN"
 
   const [spList, setSpList] = useState<SP[]>([]);
   const [coList, setCoList] = useState<CO[]>([]);
@@ -1961,6 +1961,21 @@ export function GenerateSalaryManagement() {
         data = data.filter(b => b.companyID === managerScope.companyID);
       }
 
+      // For COMPANY_ADMIN / BRANCH_ADMIN, show branches from their company only
+      if (user?.role === "COMPANY_ADMIN" || user?.role === "BRANCH_ADMIN") {
+        const companyID = formData.companyID ?? user?.companyID;
+        if (companyID) {
+          data = data.filter(b => b.companyID === companyID);
+        } else {
+          setBrList([]);
+          return;
+        }
+        // 🔒 BRANCH_ADMIN — restrict to their own branch only
+        if (user?.role === "BRANCH_ADMIN" && user?.branchesID) {
+          data = data.filter(b => Number(b.id) === Number(user.branchesID));
+        }
+      }
+
       const low = q.toLowerCase();
       const filtered = data.filter(b =>
         (b.branchName ?? "").toLowerCase().includes(low)
@@ -1995,6 +2010,14 @@ export function GenerateSalaryManagement() {
       if (formData.branchesID && managerScope?.companyID) {
         shouldFetch = true;
         companyId = managerScope.companyID;
+        branchId = formData.branchesID;
+      }
+    } else if (user?.role === "COMPANY_ADMIN" || user?.role === "BRANCH_ADMIN") {
+      // COMPANY_ADMIN / BRANCH_ADMIN: use their company + selected branch
+      const resolvedCompanyID = formData.companyID ?? user?.companyID ?? null;
+      if (resolvedCompanyID && formData.branchesID) {
+        shouldFetch = true;
+        companyId = resolvedCompanyID;
         branchId = formData.branchesID;
       }
     }
@@ -2894,8 +2917,6 @@ export function GenerateSalaryManagement() {
               <Table className="w-full">
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="w-[160px]">Service Provider</TableHead>
-                    <TableHead className="w-[160px]">Company</TableHead>
                     <TableHead className="w-[160px]">Branch</TableHead>
                     <TableHead className="w-[180px]">Employee</TableHead>
                     <TableHead className="w-[160px]">Month Period</TableHead>
@@ -2906,7 +2927,7 @@ export function GenerateSalaryManagement() {
                 <TableBody>
                   {filtered.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={9} className="text-center py-8 text-gray-500">
+                      <TableCell colSpan={5} className="text-center py-8 text-gray-500">
                         <div className="flex flex-col items-center gap-2">
                           <Icon icon="mdi:cash-check" className="w-12 h-12 text-gray-300" />
                           <p>No records found</p>
@@ -2917,8 +2938,6 @@ export function GenerateSalaryManagement() {
                   ) : (
                     filtered.map((row) => (
                       <TableRow key={row.id}>
-                        <TableCell className="whitespace-nowrap">{row.serviceProvider?.companyName ?? "-"}</TableCell>
-                        <TableCell className="whitespace-nowrap">{row.company?.companyName ?? "-"}</TableCell>
                         <TableCell className="whitespace-nowrap">{row.branches?.branchName ?? "-"}</TableCell>
                         <TableCell className="whitespace-nowrap">
                           {row.manageEmployee ? `${empName(row.manageEmployee)} (${row.manageEmployee.employeeID ?? ""})` : "-"}

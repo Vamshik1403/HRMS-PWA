@@ -338,7 +338,6 @@ export function SystemUsersManagement() {
                   <TableRow>
                     <TableHead>Username</TableHead>
                     <TableHead>Role</TableHead>
-                    <TableHead>Service Provider</TableHead>
                     <TableHead>Company</TableHead>
                     <TableHead>Branch</TableHead>
                     <TableHead>Status</TableHead>
@@ -347,15 +346,14 @@ export function SystemUsersManagement() {
                 </TableHeader>
                 <TableBody>
                   {loading ? (
-                    <TableRow><TableCell colSpan={7} className="text-center py-8 text-gray-400">Loading…</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={6} className="text-center py-8 text-gray-400">Loading…</TableCell></TableRow>
                   ) : filteredRows.length === 0 ? (
-                    <TableRow><TableCell colSpan={7} className="text-center py-8 text-gray-400">No users found</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={6} className="text-center py-8 text-gray-400">No users found</TableCell></TableRow>
                   ) : (
                     filteredRows.map((r) => (
                       <TableRow key={r.id}>
                         <TableCell className="font-medium">{r.username}</TableCell>
                         <TableCell><Badge variant="secondary">{ROLE_DISPLAY[r.role] || r.role}</Badge></TableCell>
-                        <TableCell>{r.serviceProvider?.companyName ?? "—"}</TableCell>
                         <TableCell>{r.company?.companyName ?? "—"}</TableCell>
                         <TableCell>{r.branches?.branchName ?? "—"}</TableCell>
                         <TableCell>

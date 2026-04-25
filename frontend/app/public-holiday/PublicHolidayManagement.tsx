@@ -100,7 +100,7 @@ export function PublicHolidayManagement() {
   const [holidayOptions, setHolidayOptions] = useState<any[]>([])
   const [financialYearOptions, setFinancialYearOptions] = useState<string[]>([])
   const user = useCurrentUser()
-  const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN"
+  const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN" || user?.role === "BRANCH_ADMIN"
 
   const [managerData, setManagerData] = useState<any>(null);
   const [empCreds, setEmpCreds] = useState<any>(null);
@@ -242,7 +242,8 @@ export function PublicHolidayManagement() {
         companyIdToUse = empCreds?.companyID;
       } else {
         // COMPANY_ADMIN / BRANCH_ADMIN
-        companyIdToUse = formData.companyID;
+        const ctx = getSidebarContext();
+        companyIdToUse = formData.companyID ?? ctx?.companyID ?? user?.companyID;
       }
 
       if (!companyIdToUse) return [];
@@ -254,17 +255,22 @@ export function PublicHolidayManagement() {
       const filteredByCompany = allBranches.filter((b: any) => 
         b.companyID === companyIdToUse
       );
+      // 🔒 BRANCH_ADMIN — restrict to their own branch only
+      const branchScope =
+        user?.role === "BRANCH_ADMIN" && user?.branchesID
+          ? filteredByCompany.filter((b: any) => Number(b.id) === Number(user.branchesID))
+          : filteredByCompany;
 
       // Apply search filter if query provided
       if (q) {
-        return filteredByCompany.filter((b: any) =>
+        return branchScope.filter((b: any) =>
           (b.branchName || "")
             .toLowerCase()
             .includes(q.toLowerCase())
         );
       }
 
-      return filteredByCompany;
+      return branchScope;
     } catch (error) {
       console.error("Error fetching branches:", error);
       return [];
@@ -362,12 +368,16 @@ export function PublicHolidayManagement() {
         return
       }
 
-      // COMPANY_ADMIN / BRANCH_ADMIN → filter by company
+      // COMPANY_ADMIN / BRANCH_ADMIN → filter by company (branch admin also by branch)
       {
         const ctx = getSidebarContext();
         const companyID = ctx?.companyID ?? user?.companyID;
         if (companyID) {
-          setPublicHolidays(mapped.filter((h: any) => h.companyID === companyID));
+          if (user?.role === "BRANCH_ADMIN" && user?.branchesID) {
+            setPublicHolidays(mapped.filter((h: any) => h.companyID === companyID && h.branchesID === user.branchesID));
+          } else {
+            setPublicHolidays(mapped.filter((h: any) => h.companyID === companyID));
+          }
           return;
         }
       }
@@ -488,6 +498,11 @@ export function PublicHolidayManagement() {
       serviceProviderID = managerData?.serviceProviderID;
       companyID = managerData?.companyID;
       branchesID = formData.branchesID;
+    } else if (user?.role === "COMPANY_ADMIN" || user?.role === "BRANCH_ADMIN") {
+      const ctx = getSidebarContext();
+      serviceProviderID = ctx?.serviceProviderID ?? formData.serviceProviderID;
+      companyID = formData.companyID ?? ctx?.companyID ?? user?.companyID;
+      branchesID = formData.branchesID;
     } else if (user?.role === "EMPLOYEE") {
       serviceProviderID = empCreds?.serviceProviderID;
       companyID = empCreds?.companyID;
@@ -562,6 +577,17 @@ export function PublicHolidayManagement() {
         serviceProvider: managerData.serviceProviderName || "",
         companyName: managerData.companyName || "",
       });
+    } else if (user?.role === "BRANCH_ADMIN") {
+      const ctx = getSidebarContext();
+      setFormData({
+        ...baseForm,
+        serviceProviderID: user?.serviceProviderID ?? ctx?.serviceProviderID ?? undefined,
+        companyID: user?.companyID ?? ctx?.companyID ?? undefined,
+        branchesID: user?.branchesID ?? undefined,
+        serviceProvider: (user as any)?.serviceProvider?.companyName ?? ctx?.serviceProviderName ?? "",
+        companyName: (user as any)?.company?.companyName ?? ctx?.companyName ?? "",
+        branchName: (user as any)?.branches?.branchName ?? "",
+      });
     } else if (user?.role === "EMPLOYEE" && empCreds) {
       setFormData({
         ...baseForm,
@@ -577,7 +603,7 @@ export function PublicHolidayManagement() {
       setFormData({
         ...baseForm,
         serviceProviderID: ctx?.serviceProviderID ?? undefined,
-        companyID: ctx?.companyID ?? undefined,
+        companyID: ctx?.companyID ?? user?.companyID ?? undefined,
         serviceProvider: ctx?.serviceProviderName ?? "",
         companyName: ctx?.companyName ?? "",
       });
@@ -673,8 +699,8 @@ export function PublicHolidayManagement() {
 
                  
 
-                  {/* Branch - For SUPERADMIN and MANAGER */}
-                  {(user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER") && (
+                  {/* Branch - For SUPERADMIN, MANAGER, and COMPANY_ADMIN */}
+                  {(user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN") && (
                     <div className={`${user?.role === "SUPERADMIN" ? "col-span-1" : "col-span-3"}`}>
                       <SearchSuggestInput 
                         label="Branch Name" 
@@ -823,7 +849,6 @@ export function PublicHolidayManagement() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Company</TableHead>
                   <TableHead>Branch</TableHead>
                   <TableHead>Holiday</TableHead>
                   <TableHead>Year</TableHead>
@@ -846,7 +871,6 @@ export function PublicHolidayManagement() {
                 ) : filtered.length > 0 ? (
                   filtered.map(h => (
                     <TableRow key={h.id}>
-                      <TableCell className="font-medium">{h.companyName || "N/A"}</TableCell>
                       <TableCell>{h.branchName || "N/A"}</TableCell>
                       <TableCell>{h.holidayName}</TableCell>
                       <TableCell>{h.financialYear}</TableCell>

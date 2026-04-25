@@ -216,7 +216,10 @@ export function AttendanceRegularisationManagement() {
         const ctx = getSidebarContext();
         const companyID = formData.companyID ?? ctx?.companyID ?? user?.companyID;
         if (companyID) {
-          const filteredByCompany = data.filter((item: any) => item.companyID === companyID)
+          const filteredByCompany = data.filter(
+            (item: any) => item.companyID === companyID &&
+            (user?.role !== "BRANCH_ADMIN" || Number(item.id) === Number(user?.branchesID))
+          )
           return q ? filteredByCompany.filter((item: any) => (item?.branchName || "").toLowerCase().includes(q)) : filteredByCompany
         }
       }
@@ -450,41 +453,200 @@ export function AttendanceRegularisationManagement() {
     }
     setIsFetchingStatus(true)
     try {
-      const res = await fetch(
-        `${BACKEND_URL}/emp-attendance-regularise/fetch-status?employeeId=${formData.manageEmployeeID}&date=${formData.attendanceDate}`,
-        { cache: "no-store" }
+      const employeeId = formData.manageEmployeeID
+      const date = formData.attendanceDate // "YYYY-MM-DD"
+      const ctx = getSidebarContext()
+      const resolvedCompanyID = formData.companyID ?? managerData?.companyID ?? empCreds?.companyID ?? ctx?.companyID ?? user?.companyID
+      const resolvedBranchID = formData.branchesID ?? managerData?.branchesID ?? empCreds?.branchesID ?? user?.branchesID
+
+      // ── Helpers ──────────────────────────────────────────────────────
+      const timeToMin = (t: string): number => {
+        if (!t) return 0
+        const p = t.split(":")
+        return (parseInt(p[0]) || 0) * 60 + (parseInt(p[1]) || 0) + (parseInt(p[2]) || 0) / 60
+      }
+
+      const parsePunchTime = (pt: string): string | null => {
+        if (!pt) return null
+        if (pt.includes("T")) return pt.split("T")[1].split(".")[0]
+        const m = pt.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2})$/)
+        if (m) return `${String(m[4]).padStart(2, "0")}:${m[5]}:00`
+        return null
+      }
+
+      const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
+      const dayOfWeek = WEEKDAYS[new Date(date).getDay()]
+
+      // ── Fetch all data in parallel ────────────────────────────────────
+      const [logsRes, empRes, policyRes, holidayRes, leaveRes, regRes, rosterRes] = await Promise.all([
+        fetch(`${BACKEND_URL}/process-att-logs?dateFrom=${date}&dateTo=${date}&limit=1000`, { cache: "no-store" }),
+        fetch(`${BACKEND_URL}/manage-emp/${employeeId}`, { cache: "no-store" }),
+        fetch(`${BACKEND_URL}/attendance-policy`, { cache: "no-store" }),
+        fetch(`${BACKEND_URL}/public-holiday`, { cache: "no-store" }),
+        fetch(`${BACKEND_URL}/leave-application`, { cache: "no-store" }),
+        fetch(`${BACKEND_URL}/emp-attendance-regularise`, { cache: "no-store" }),
+        fetch(`${BACKEND_URL}/rosters`, { cache: "no-store" }),
+      ])
+
+      const logsRaw = await logsRes.json()
+      const allLogs: any[] = Array.isArray(logsRaw) ? logsRaw : (logsRaw?.data ?? [])
+      const empLogs = allLogs.filter((l: any) => Number(l.manage_employee_id) === Number(employeeId))
+      const punches: string[] = empLogs.map((l: any) => parsePunchTime(l.punch_time)).filter(Boolean).sort() as string[]
+
+      const empData: any = empRes.ok ? await empRes.json() : null
+      const allPolicies: any[] = policyRes.ok ? await policyRes.json() : []
+      const allHolidays: any[] = holidayRes.ok ? await holidayRes.json() : []
+      const allLeaves: any[] = leaveRes.ok ? await leaveRes.json() : []
+      const allRegs: any[] = regRes.ok ? await regRes.json() : []
+      const allRosters: any[] = rosterRes.ok ? await rosterRes.json() : []
+
+      const policy = Array.isArray(allPolicies)
+        ? (allPolicies.find((p: any) => Number(p.companyID) === Number(resolvedCompanyID) && Number(p.branchesID) === Number(resolvedBranchID)) ?? null)
+        : null
+
+      // ── Resolve work shift (fetch with workShiftDay) ─────────────────
+      let workShift: any = null
+      const empShiftEntry = empData?.empWorkShift?.[0]
+      const workShiftID = empShiftEntry?.workShiftID ?? empData?.workShiftID
+      if (workShiftID) {
+        const wsRes = await fetch(`${BACKEND_URL}/work-shift/${workShiftID}`, { cache: "no-store" })
+        if (wsRes.ok) workShift = await wsRes.json()
+      }
+
+      const isFlexible: boolean = workShift?.isFlexible || false
+      const isRotating: boolean = workShift?.isRotating || false
+      const shiftDay: any = workShift?.workShiftDay?.find((d: any) => d.weekDay === dayOfWeek && d.shiftType === "WORK") ?? null
+
+      // ── Check existing approved regularization ───────────────────────
+      const existingReg = allRegs.find((r: any) =>
+        Number(r.manageEmployeeID) === Number(employeeId) &&
+        r.status === "Approved" &&
+        new Date(r.attendanceDate).toISOString().split("T")[0] === date
       )
-      if (!res.ok) throw new Error("Failed to fetch attendance status")
-      const data = await res.json()
-
-      const dayOfWeek = new Date(formData.attendanceDate).toLocaleDateString("en-US", { weekday: "long" })
-
-      let checkInTime = ""
-      let checkOutTime = ""
-      if (data.checkInTime) {
-        checkInTime = new Date(data.checkInTime).toTimeString().split(" ")[0]
-      }
-      if (data.checkOutTime) {
-        checkOutTime = new Date(data.checkOutTime).toTimeString().split(" ")[0]
-      }
-
-      const statusLabel = data.isRegularized
-        ? `${data.actualStatus} (Regularized)`
-        : data.actualStatus
-
-      setFormData((prev) => ({
-        ...prev,
-        actualStatus: statusLabel,
-        checkInTime,
-        checkOutTime,
-        day: dayOfWeek,
-      }))
-
-      if (data.isRegularized) {
+      if (existingReg) {
+        const checkIn = existingReg.checkInTime ? new Date(existingReg.checkInTime).toTimeString().split(" ")[0] : ""
+        const checkOut = existingReg.checkOutTime ? new Date(existingReg.checkOutTime).toTimeString().split(" ")[0] : ""
+        setFormData(prev => ({
+          ...prev,
+          actualStatus: `${existingReg.requestedStatus || existingReg.actualStatus} (Regularized)`,
+          checkInTime: checkIn,
+          checkOutTime: checkOut,
+          day: dayOfWeek,
+        }))
         toast.info("This date has already been regularized")
-      } else {
-        toast.success(`Status fetched: ${data.actualStatus} (${data.punchCount} punches)`)
+        return
       }
+
+      const checkIn = punches.length > 0 ? punches[0] : ""
+      const checkOut = punches.length >= 2 ? punches[punches.length - 1] : ""
+
+      const applyStatus = (status: string) => {
+        setFormData(prev => ({ ...prev, actualStatus: status, checkInTime: checkIn, checkOutTime: checkOut, day: dayOfWeek }))
+        toast.success(`Status: ${status}`)
+      }
+
+      // ── Week-off helper ───────────────────────────────────────────────
+      const isWeekOff = (): boolean => {
+        if (!workShift) return false
+        if (isRotating) {
+          const roster = allRosters.find((r: any) => Number(r.employeeID) === Number(employeeId))
+          const rDay = roster?.days?.find((d: any) => new Date(d.workDate).toISOString().split("T")[0] === date)
+          return rDay?.dayType === "WEEKLY_OFF"
+        }
+        return shiftDay?.weeklyOff || false
+      }
+
+      // ── Public-holiday helper ─────────────────────────────────────────
+      const isPublicHoliday = (): boolean =>
+        allHolidays.some((h: any) => {
+          if (Number(h.companyID) !== Number(resolvedCompanyID) || Number(h.branchesID) !== Number(resolvedBranchID)) return false
+          const hs = new Date(h.startDate).toISOString().split("T")[0]
+          const he = new Date(h.endDate).toISOString().split("T")[0]
+          return date >= hs && date <= he
+        })
+
+      // ── Approved-leave helper ─────────────────────────────────────────
+      const approvedLeave = (): any =>
+        allLeaves.find((l: any) =>
+          Number(l.manageEmployeeID) === Number(employeeId) &&
+          l.status === "Approved" &&
+          date >= new Date(l.fromDate).toISOString().split("T")[0] &&
+          date <= new Date(l.toDate).toISOString().split("T")[0]
+        )
+
+      // ── calculateWorkedMinutes – exact mirror of attendance reports ───
+      const calculateWorkedMinutes = (p: string[]): number => {
+        if (p.length < 2) return 0
+        let st = timeToMin(p[0])
+        let et = timeToMin(p[p.length - 1])
+        if (!isFlexible && policy && shiftDay) {
+          const ss = timeToMin(shiftDay.startTime)
+          const se = timeToMin(shiftDay.endTime)
+          if (st < ss - (policy.checkin_begin_before_min || 0)) st = ss
+          if (!policy.overtimeApplicable) {
+            const maxEnd = se + (policy.checkout_end_after_min || 0)
+            if (et > maxEnd) et = se
+          }
+        }
+        let worked = et - st
+        if (worked < 0) worked += 24 * 60
+        if (shiftDay?.breakStart && shiftDay?.breakEnd) {
+          const bs = timeToMin(shiftDay.breakStart)
+          const be = timeToMin(shiftDay.breakEnd)
+          if (bs > 0 && be > 0 && st <= bs && et >= be) worked -= (be - bs)
+        }
+        if (!isFlexible && policy) {
+          worked -= (policy.trimPreshiftMin || 0)
+          worked -= (policy.trimPostshiftMin || 0)
+        }
+        return Math.max(0, worked)
+      }
+
+      // ── 0 punches ────────────────────────────────────────────────────
+      if (punches.length === 0) {
+        if (isWeekOff()) return applyStatus("WEEK_OFF")
+        if (isPublicHoliday()) return applyStatus("PUBLIC_HOLIDAY")
+        const leave = approvedLeave()
+        if (leave) return applyStatus(leave.appliedLeaveType)
+        return applyStatus("ABSENT")
+      }
+
+      // ── 1+ punch: check special days first ───────────────────────────
+      if (isWeekOff()) return applyStatus("WEEK_OFF")
+      if (isPublicHoliday()) return applyStatus("PUBLIC_HOLIDAY")
+      const leave = approvedLeave()
+      if (leave) return applyStatus(leave.appliedLeaveType)
+
+      // ── 1 punch: single-punch policy ─────────────────────────────────
+      if (punches.length === 1) {
+        return applyStatus(policy?.markAs === "Absent" ? "ABSENT" : "HALFDAY")
+      }
+
+      // ── 2+ punches: full policy calculation ──────────────────────────
+      if (shiftDay && policy) {
+        const firstMin = timeToMin(punches[0])
+        const shiftStartMin = timeToMin(shiftDay.startTime)
+        const maxLateWindow = policy.max_late_check_in_time || 0
+
+        if (!isFlexible && firstMin > shiftStartMin + maxLateWindow) {
+          const markAs = policy.maxLateCheckinMarkAs || "Absent"
+          return applyStatus(markAs === "Absent" ? "ABSENT" : "HALFDAY")
+        }
+
+        const workedMinutes = calculateWorkedMinutes(punches)
+        const totalShiftMinutes = shiftDay.totalMinutes || 480
+        const halfDayMin = policy.min_work_hours_half_day_min || 0
+        const graceTime = policy.checkin_grace_time_min || 0
+        const isLate = !isFlexible && firstMin > shiftStartMin + graceTime && firstMin <= shiftStartMin + maxLateWindow
+
+        if (workedMinutes < halfDayMin) return applyStatus("ABSENT")
+        if (workedMinutes < totalShiftMinutes) return applyStatus("HALFDAY")
+        if (isLate) return applyStatus("LATE_MARK")
+        return applyStatus("FULLDAY")
+      }
+
+      // ── Fallback: no shift/policy data ───────────────────────────────
+      return applyStatus(punches.length >= 2 ? "FULLDAY" : "HALFDAY")
     } catch (error) {
       console.error("Error fetching attendance status:", error)
       toast.error("Failed to fetch attendance status")
@@ -499,11 +661,11 @@ export function AttendanceRegularisationManagement() {
     // Auto-populate serviceProviderID and companyID for MANAGER/EMPLOYEE
     const serviceProviderID = user?.role === "SUPERADMIN" 
       ? formData.serviceProviderID 
-      : managerData?.serviceProviderID || empCreds?.serviceProviderID;
+      : managerData?.serviceProviderID || empCreds?.serviceProviderID || formData.serviceProviderID || user?.serviceProviderID;
 
     const companyID = user?.role === "SUPERADMIN" 
       ? formData.companyID 
-      : managerData?.companyID || empCreds?.companyID;
+      : managerData?.companyID || empCreds?.companyID || formData.companyID || user?.companyID;
 
     // Ensure we have the required IDs
     if (!companyID || !formData.branchesID || !formData.manageEmployeeID) {
@@ -994,8 +1156,6 @@ export function AttendanceRegularisationManagement() {
             <Table className="w-full">
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-[90px]">Service Provider</TableHead>
-                  <TableHead className="w-[80px]">Company Name</TableHead>
                   <TableHead className="w-[80px]">Branch Name</TableHead>
                   <TableHead className="w-[70px]">Employee ID</TableHead>
                   <TableHead className="w-[100px]">Employee Name</TableHead>
@@ -1011,7 +1171,7 @@ export function AttendanceRegularisationManagement() {
               <TableBody>
                 {filteredRegularisations.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={12} className="text-center py-8 text-gray-500">
+                    <TableCell colSpan={10} className="text-center py-8 text-gray-500">
                       <div className="flex flex-col items-center gap-2">
                         <Icon icon="mdi:clock-edit" className="w-12 h-12 text-gray-300" />
                         <p>No attendance regularisations found</p>
@@ -1022,8 +1182,6 @@ export function AttendanceRegularisationManagement() {
                 ) : (
                   filteredRegularisations.map((regularisation, index) => (
                     <TableRow key={regularisation.id}>
-                      <TableCell className="truncate" title={regularisation.serviceProvider}>{regularisation.serviceProvider}</TableCell>
-                      <TableCell className="truncate" title={regularisation.companyName}>{regularisation.companyName}</TableCell>
                       <TableCell className="truncate" title={regularisation.branchName}>{regularisation.branchName}</TableCell>
                       <TableCell className="truncate">{regularisation.employeeId}</TableCell>
                       <TableCell className="truncate" title={regularisation.employeeName}>{regularisation.employeeName}</TableCell>

@@ -1194,19 +1194,18 @@ export function BranchManagement() {
                 <Table className="w-full">
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Branch</TableHead>
-                      <TableHead>Country</TableHead>
+                      <TableHead>Branch Name</TableHead>
+                      <TableHead>City</TableHead>
+                      <TableHead>Pin</TableHead>
                       <TableHead>State</TableHead>
-                      <TableHead>Email</TableHead>
-                      <TableHead>Contact</TableHead>
-                      <TableHead>GST</TableHead>
+                      <TableHead>Country</TableHead>
                       <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {filteredBranches.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={7} className="text-center py-8 text-gray-500">
+                        <TableCell colSpan={6} className="text-center py-8 text-gray-500">
                           <div className="flex flex-col items-center gap-2">
                             <Icon icon="mdi:account-search" className="w-12 h-12 text-gray-300" />
                             <p>No branches found</p>
@@ -1218,11 +1217,10 @@ export function BranchManagement() {
                       filteredBranches.map((b) => (
                         <TableRow key={b.id}>
                           <TableCell>{b.branchName || "—"}</TableCell>
-                          <TableCell>{b.country || "—"}</TableCell>
+                          <TableCell>{b.city || "—"}</TableCell>
+                          <TableCell>{b.pincode || "—"}</TableCell>
                           <TableCell>{b.state || "—"}</TableCell>
-                          <TableCell>{b.emailAdd || "—"}</TableCell>
-                          <TableCell>{b.contactNo || "—"}</TableCell>
-                          <TableCell>{b.gstNo || "—"}</TableCell>
+                          <TableCell>{b.country || "—"}</TableCell>
                           <TableCell className="text-right">
                             <div className="flex items-center justify-end gap-1">
                               {/* ✏️ Only SUPERADMIN and MANAGER can edit */}

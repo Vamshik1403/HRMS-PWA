@@ -79,7 +79,7 @@ export function DepartmentManagement() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const user = useCurrentUser();
-  const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN";
+  const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN" || user?.role === "BRANCH_ADMIN";
   const isEmployee = user?.role === "EMPLOYEE";
   const [currentUserMapping, setCurrentUserMapping] = useState<any>(null);
 
@@ -291,11 +291,14 @@ export function DepartmentManagement() {
 
         // 🟡 Filter by companyID
         let filtered = all || [];
-        if (user?.role === "SERVICE_PROVIDER" && currentUserMapping?.companyID) {
+        if ((user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN") && currentUserMapping?.companyID) {
           filtered = filtered.filter(
             (b: any) => b.companyID === currentUserMapping.companyID
-          );
-        } else if (formData.companyID) {
+          );        } else if (user?.role === "BRANCH_ADMIN") {
+          const companyID = currentUserMapping?.companyID ?? user?.companyID;
+          if (companyID) filtered = filtered.filter((b: any) => b.companyID === companyID);
+          const branchesID = currentUserMapping?.branchesID ?? user?.branchesID;
+          if (branchesID) filtered = filtered.filter((b: any) => Number(b.id) === Number(branchesID));        } else if (formData.companyID) {
           filtered = filtered.filter(
             (b: any) => b.companyID === formData.companyID
           );
@@ -359,6 +362,18 @@ export function DepartmentManagement() {
       baseFormData.companyID = currentUserMapping.companyID;
       baseFormData.spAutocomplete = currentUserMapping.serviceProvider?.companyName || "";
       baseFormData.coAutocomplete = currentUserMapping.company?.companyName || "";
+    } else if (user?.role === "COMPANY_ADMIN" && currentUserMapping) {
+      baseFormData.serviceProviderID = currentUserMapping.serviceProviderID;
+      baseFormData.companyID = currentUserMapping.companyID;
+      baseFormData.spAutocomplete = currentUserMapping.serviceProvider?.companyName || "";
+      baseFormData.coAutocomplete = currentUserMapping.company?.companyName || "";
+    } else if (user?.role === "BRANCH_ADMIN" && currentUserMapping) {
+      baseFormData.serviceProviderID = currentUserMapping.serviceProviderID;
+      baseFormData.companyID = currentUserMapping.companyID;
+      baseFormData.branchesID = currentUserMapping.branchesID;
+      baseFormData.spAutocomplete = currentUserMapping.serviceProvider?.companyName || "";
+      baseFormData.coAutocomplete = currentUserMapping.company?.companyName || "";
+      baseFormData.brAutocomplete = currentUserMapping.branches?.branchName || "";
     } else if (user?.role === "SUPERADMIN") {
       const ctx = getSidebarContext();
       if (ctx) {
@@ -456,7 +471,7 @@ export function DepartmentManagement() {
     let finalServiceProviderID = formData.serviceProviderID;
     let finalCompanyID = formData.companyID;
 
-    if (user?.role === "SERVICE_PROVIDER" && currentUserMapping) {
+    if ((user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN") && currentUserMapping) {
       finalServiceProviderID = currentUserMapping.serviceProviderID;
       finalCompanyID = currentUserMapping.companyID;
     }
@@ -796,8 +811,6 @@ export function DepartmentManagement() {
                   <TableHeader>
                     <TableRow>
                       <TableHead>Department</TableHead>
-                      <TableHead>Service Provider</TableHead>
-                      <TableHead>Company</TableHead>
                       <TableHead>Branch</TableHead>
                       <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
@@ -805,7 +818,7 @@ export function DepartmentManagement() {
                   <TableBody>
                     {filtered.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={5} className="text-center py-8 text-gray-500">
+                        <TableCell colSpan={3} className="text-center py-8 text-gray-500">
                           <div className="flex flex-col items-center gap-2">
                             <Icon icon="mdi:account-search" className="w-12 h-12 text-gray-300" />
                             <p>No departments found</p>
@@ -817,8 +830,6 @@ export function DepartmentManagement() {
                       filtered.map((r) => (
                         <TableRow key={r.id}>
                           <TableCell className="whitespace-nowrap">{r.departmentName || "—"}</TableCell>
-                          <TableCell className="whitespace-nowrap">{spName(r)}</TableCell>
-                          <TableCell className="whitespace-nowrap">{coName(r)}</TableCell>
                           <TableCell className="whitespace-nowrap">{brName(r)}</TableCell>
                           <TableCell className="text-right whitespace-nowrap">
                             <div className="flex items-center justify-end gap-1">

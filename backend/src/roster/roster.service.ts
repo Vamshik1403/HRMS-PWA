@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { PrismaService } from 'src/prisma/prisma.service';
+import { PrismaService } from '../prisma/prisma.service';
 import { CreateRosterDto } from './dto/create-roster.dto';
 import { UpdateRosterDto } from './dto/update-roster.dto';
 
@@ -37,6 +37,7 @@ export class RosterService {
     return this.prisma.roster.findMany({
       orderBy: { id: 'desc' },
       include: {
+        employees: { include: { manageEmployee: true, days: { include: { workShift: true } } } },
         company: true,
         branches: true,
         departments: true,

@@ -4,8 +4,9 @@ export class CreateContractorDto {
   @IsOptional() @IsInt() serviceProviderID?: number;
   @IsOptional() @IsInt() companyID?: number;
   @IsOptional() @IsString() contractorType?: string;
-  @IsOptional() @IsString() contractorName?: string;
-  @IsOptional() @IsString() address?: string;
+  @IsOptional() @IsString() contractorName?: string; 
+   @IsOptional() @IsString() address?: string;
+    @IsOptional() @IsString() rateCardName?: string;
   @IsOptional() @IsString() country?: string;
   @IsOptional() @IsString() state?: string;
   @IsOptional() @IsString() timeZone?: string;
