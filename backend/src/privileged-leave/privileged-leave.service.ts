@@ -198,4 +198,188 @@ export class PrivilegedLeaveService {
       orderBy: { lapseDate: 'desc' },
     });
   }
+
+  // === ATTENDANCE-BASED PL CALCULATION ===
+  async getAttendanceCount(employeeID: number, fromDate?: string, toDate?: string) {
+    const dateFilter: any = {};
+    if (fromDate) dateFilter.gte = new Date(fromDate);
+    if (toDate) {
+      const to = new Date(toDate);
+      to.setHours(23, 59, 59, 999);
+      dateFilter.lte = to;
+    }
+
+    const punches = await this.prisma.process_att_logs.findMany({
+      where: {
+        manage_employee_id: employeeID,
+        ...(Object.keys(dateFilter).length > 0 ? { punch_time: dateFilter } : {}),
+      },
+      select: { punch_time: true },
+    });
+
+    const dateSet = new Set<string>();
+    for (const p of punches) {
+      if (p.punch_time) {
+        dateSet.add(p.punch_time.toISOString().split('T')[0]);
+      }
+    }
+    return {
+      employeeID,
+      totalPunches: punches.length,
+      distinctDays: dateSet.size,
+      dates: [...dateSet].sort(),
+    };
+  }
+
+  async calculateAndCreditFromAttendance(
+    employeeID: number,
+    leavePolicyID: number,
+    fromDate?: string,
+    toDate?: string,
+    dryRun = false,
+  ) {
+    const policy = await this.prisma.leavePolicy.findUnique({
+      where: { id: leavePolicyID },
+    });
+    if (!policy || !policy.isPrivilegedLeaveApplicable) {
+      throw new NotFoundException('Leave policy not found or PL not applicable');
+    }
+
+    const ratio = policy.privilegedLeaveRatio || '20:1';
+    const [workDays, plDays] = ratio.split(':').map(Number);
+    if (!workDays || !plDays) {
+      throw new NotFoundException('Invalid PL ratio configured in policy');
+    }
+
+    const dateFilter: any = {};
+    if (fromDate) dateFilter.gte = new Date(fromDate);
+    if (toDate) {
+      const to = new Date(toDate);
+      to.setHours(23, 59, 59, 999);
+      dateFilter.lte = to;
+    }
+
+    // 1. Count distinct punch days from process_att_logs
+    const punches = await this.prisma.process_att_logs.findMany({
+      where: {
+        manage_employee_id: employeeID,
+        ...(Object.keys(dateFilter).length > 0 ? { punch_time: dateFilter } : {}),
+      },
+      select: { punch_time: true },
+    });
+
+    const workingDates = new Set<string>();
+    for (const p of punches) {
+      if (p.punch_time) {
+        workingDates.add(p.punch_time.toISOString().split('T')[0]);
+      }
+    }
+
+    // 2. If weekOffConsideredInPL, also count EmployeeWeeklyOff dates
+    if (policy.weekOffConsideredInPL) {
+      const weeklyOffs = await this.prisma.employeeWeeklyOff.findMany({
+        where: {
+          employeeID,
+          ...(Object.keys(dateFilter).length > 0 ? { date: dateFilter } : {}),
+        },
+      });
+      for (const wo of weeklyOffs) {
+        workingDates.add(wo.date.toISOString().split('T')[0]);
+      }
+    }
+
+    // 3. If paidLeaveConsideredInPL, also count approved paid leave days
+    if (policy.paidLeaveConsideredInPL) {
+      const paidLeaves = await this.prisma.leaveApplication.findMany({
+        where: {
+          manageEmployeeID: employeeID,
+          status: 'Approved',
+          appliedLeaveType: { in: ['Sick', 'Casual', 'Earn', 'PL'] },
+          ...(fromDate || toDate ? {
+            fromDate: {
+              ...(fromDate ? { gte: new Date(fromDate) } : {}),
+              ...(toDate ? { lte: new Date(toDate) } : {}),
+            },
+          } : {}),
+        },
+        select: { fromDate: true, toDate: true },
+      });
+      for (const lv of paidLeaves) {
+        if (lv.fromDate && lv.toDate) {
+          const start = new Date(lv.fromDate);
+          const end = new Date(lv.toDate);
+          for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+            workingDates.add(d.toISOString().split('T')[0]);
+          }
+        }
+      }
+    }
+
+    const totalWorkingDays = workingDates.size;
+    const plEarned = Math.floor(totalWorkingDays / workDays) * plDays;
+
+    // 4. Get already credited PL from auto-credit entries
+    const existingAuto = await this.prisma.privilegedLeaveLedger.aggregate({
+      where: {
+        employeeID,
+        leavePolicyID,
+        description: { contains: 'Auto credit from attendance' },
+      },
+      _sum: { creditedLeaves: true },
+    });
+    const alreadyCredited = existingAuto._sum.creditedLeaves ?? 0;
+    const toCredit = plEarned - alreadyCredited;
+
+    if (dryRun) {
+      return {
+        message: toCredit > 0
+          ? `${toCredit} PL ready to credit (${totalWorkingDays} working days, ratio ${workDays}:${plDays})`
+          : `No new PL to credit (${totalWorkingDays} working days, ${plEarned} earned, ${alreadyCredited} already credited)`,
+        totalWorkingDays,
+        plEarned,
+        alreadyCredited,
+        toCredit,
+        ratio: `${workDays}:${plDays}`,
+        weekOffConsidered: policy.weekOffConsideredInPL ?? false,
+        holidayConsidered: policy.holidayConsideredInPL ?? false,
+        paidLeaveConsidered: policy.paidLeaveConsideredInPL ?? false,
+      };
+    }
+
+    if (toCredit <= 0) {
+      return {
+        message: `No new PL to credit. Employee has ${totalWorkingDays} working days, earned ${plEarned} PL, already credited ${alreadyCredited}.`,
+        totalWorkingDays,
+        plEarned,
+        alreadyCredited,
+        newlyCredited: 0,
+      };
+    }
+
+    // 5. Credit the difference
+    const entry = await this.prisma.privilegedLeaveLedger.create({
+      data: {
+        serviceProviderID: policy.serviceProviderID,
+        companyID: policy.companyID,
+        branchesID: policy.branchesID,
+        employeeID,
+        leavePolicyID,
+        creditedLeaves: toCredit,
+        usedLeaves: 0,
+        balanceLeaves: toCredit,
+        creditDate: new Date(),
+        description: `Auto credit from attendance: ${totalWorkingDays} working days, ${plEarned} PL earned, ${alreadyCredited} previously credited`,
+      },
+      include: { manageEmployee: true, leavePolicy: true },
+    });
+
+    return {
+      message: `Credited ${toCredit} PL for employee #${employeeID} (${totalWorkingDays} working days)`,
+      totalWorkingDays,
+      plEarned,
+      alreadyCredited,
+      newlyCredited: toCredit,
+      entry,
+    };
+  }
 }

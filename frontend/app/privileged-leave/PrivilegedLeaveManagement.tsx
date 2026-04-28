@@ -74,6 +74,12 @@ export function PrivilegedLeaveManagement() {
   const [creditData, setCreditData] = useState({ employeeID: 0, leavePolicyID: 0 })
   const [lapseData, setLapseData] = useState({ employeeID: 0, leavePolicyID: 0 })
 
+  // Calculate from Attendance dialog
+  const [isCalcDialogOpen, setIsCalcDialogOpen] = useState(false)
+  const [calcData, setCalcData] = useState({ employeeID: 0, leavePolicyID: 0, fromDate: "", toDate: "" })
+  const [calcPreview, setCalcPreview] = useState<any>(null)
+  const [calcLoading, setCalcLoading] = useState(false)
+
   const user = useCurrentUser()
   const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN" || user?.role === "BRANCH_ADMIN"
 
@@ -133,11 +139,13 @@ export function PrivilegedLeaveManagement() {
     }
   }
 
-  const filteredLedger = ledgerEntries.filter((entry) => {
-    const empName = `${entry.manageEmployee?.employeeFirstName || ""} ${entry.manageEmployee?.employeeLastName || ""}`.toLowerCase()
-    const q = searchTerm.toLowerCase()
-    return empName.includes(q)
-  })
+  // Only filter when a search term is entered – no results shown by default
+  const filteredLedger = searchTerm.trim()
+    ? ledgerEntries.filter((entry) => {
+        const empName = `${entry.manageEmployee?.employeeFirstName || ""} ${entry.manageEmployee?.employeeLastName || ""}`.toLowerCase()
+        return empName.includes(searchTerm.toLowerCase())
+      })
+    : []
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -169,6 +177,57 @@ export function PrivilegedLeaveManagement() {
     } catch (err) {
       console.error("Error saving PL entry:", err)
       toast.error("Failed to save. Please try again.");
+    }
+  }
+
+  const handlePreviewCalc = async () => {
+    if (!calcData.employeeID || !calcData.leavePolicyID) {
+      toast.error("Please select an employee and leave policy first.")
+      return
+    }
+    setCalcLoading(true)
+    setCalcPreview(null)
+    try {
+      const res = await fetch(`${BACKEND_URL}/privileged-leave/calculate-from-attendance`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...calcData, dryRun: true }),
+      })
+      const data = await res.json()
+      setCalcPreview(data)
+    } catch (err) {
+      toast.error("Failed to preview PL calculation.")
+    } finally {
+      setCalcLoading(false)
+    }
+  }
+
+  const handleCalculateAndCredit = async () => {
+    if (!calcData.employeeID || !calcData.leavePolicyID) {
+      toast.error("Please select an employee and leave policy first.")
+      return
+    }
+    setCalcLoading(true)
+    try {
+      const res = await fetch(`${BACKEND_URL}/privileged-leave/calculate-from-attendance`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...calcData, dryRun: false }),
+      })
+      const data = await res.json()
+      if (res.ok) {
+        toast.success(data.message || "PL calculated and credited successfully")
+        await loadLedger()
+        setIsCalcDialogOpen(false)
+        setCalcData({ employeeID: 0, leavePolicyID: 0, fromDate: "", toDate: "" })
+        setCalcPreview(null)
+      } else {
+        toast.error(data.message || "Failed to credit PL")
+      }
+    } catch (err) {
+      toast.error("Failed to credit PL.")
+    } finally {
+      setCalcLoading(false)
     }
   }
 
@@ -346,9 +405,106 @@ export function PrivilegedLeaveManagement() {
         <div className="min-w-0 flex-1">
           <p className="text-gray-600 mt-1 text-sm">Track PL credits, balances, and lapse history</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
+          {canManage && (
+            <Button
+              size="sm"
+              onClick={() => { setIsCalcDialogOpen(true); setCalcPreview(null) }}
+              className="bg-indigo-600 hover:bg-indigo-700 gap-1.5"
+            >
+              <Icon icon="mdi:calculator" className="w-4 h-4" />
+              Calculate from Attendance
+            </Button>
+          )}
           {canManage && (
             <>
+              {/* Calculate from Attendance Dialog */}
+              <FormDrawer open={isCalcDialogOpen} onOpenChange={(o) => { setIsCalcDialogOpen(o); if (!o) { setCalcPreview(null); setCalcData({ employeeID: 0, leavePolicyID: 0, fromDate: "", toDate: "" }) } }} title="Calculate PL from Attendance" description="Count actual attendance days and auto-credit Privileged Leave based on the policy ratio">
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label>Employee</Label>
+                    <select
+                      className="w-full border rounded-md px-3 py-2 text-sm"
+                      value={calcData.employeeID}
+                      onChange={(e) => { setCalcData((p) => ({ ...p, employeeID: Number(e.target.value) })); setCalcPreview(null) }}
+                    >
+                      <option value={0}>Select Employee</option>
+                      {employees.map((emp) => (
+                        <option key={emp.id} value={emp.id}>
+                          {getEmployeeName(emp)} ({emp.employeeID || emp.id})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Leave Policy (PL Enabled)</Label>
+                    <select
+                      className="w-full border rounded-md px-3 py-2 text-sm"
+                      value={calcData.leavePolicyID}
+                      onChange={(e) => { setCalcData((p) => ({ ...p, leavePolicyID: Number(e.target.value) })); setCalcPreview(null) }}
+                    >
+                      <option value={0}>Select Policy</option>
+                      {policies.map((pol) => (
+                        <option key={pol.id} value={pol.id}>
+                          {pol.leavePolicyName} (Ratio: {pol.privilegedLeaveRatio || "20:1"})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-2">
+                      <Label>From Date (optional)</Label>
+                      <Input type="date" value={calcData.fromDate} onChange={(e) => { setCalcData((p) => ({ ...p, fromDate: e.target.value })); setCalcPreview(null) }} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>To Date (optional)</Label>
+                      <Input type="date" value={calcData.toDate} onChange={(e) => { setCalcData((p) => ({ ...p, toDate: e.target.value })); setCalcPreview(null) }} />
+                    </div>
+                  </div>
+                  <Button type="button" variant="outline" onClick={handlePreviewCalc} disabled={calcLoading} className="w-full">
+                    {calcLoading ? "Calculating..." : "Preview Calculation"}
+                  </Button>
+                  {calcPreview && (
+                    <div className="rounded-xl bg-gray-50 border border-gray-200 p-4 space-y-3">
+                      <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Calculation Preview</p>
+                      <div className="grid grid-cols-2 gap-2 text-sm">
+                        <div className="bg-white rounded-lg border p-3 text-center">
+                          <p className="text-2xl font-bold text-blue-600">{calcPreview.totalWorkingDays}</p>
+                          <p className="text-xs text-gray-500 mt-0.5">Working Days</p>
+                        </div>
+                        <div className="bg-white rounded-lg border p-3 text-center">
+                          <p className="text-2xl font-bold text-green-600">{calcPreview.plEarned}</p>
+                          <p className="text-xs text-gray-500 mt-0.5">PL Earned</p>
+                        </div>
+                        <div className="bg-white rounded-lg border p-3 text-center">
+                          <p className="text-2xl font-bold text-gray-500">{calcPreview.alreadyCredited}</p>
+                          <p className="text-xs text-gray-500 mt-0.5">Already Credited</p>
+                        </div>
+                        <div className="bg-white rounded-lg border p-3 text-center">
+                          <p className={`text-2xl font-bold ${(calcPreview.toCredit || 0) > 0 ? "text-indigo-600" : "text-gray-400"}`}>{calcPreview.toCredit || 0}</p>
+                          <p className="text-xs text-gray-500 mt-0.5">New PL to Credit</p>
+                        </div>
+                      </div>
+                      <p className="text-xs text-gray-500">
+                        Ratio: {calcPreview.ratio} &nbsp;·&nbsp; Week Off: {calcPreview.weekOffConsidered ? "counted" : "not counted"} &nbsp;·&nbsp; Holiday: {calcPreview.holidayConsidered ? "counted" : "not counted"}
+                      </p>
+                      <p className="text-xs font-medium text-gray-700">{calcPreview.message}</p>
+                    </div>
+                  )}
+                  <div className="flex justify-end gap-3 pt-2">
+                    <Button type="button" variant="outline" onClick={() => setIsCalcDialogOpen(false)}>Cancel</Button>
+                    <Button
+                      type="button"
+                      disabled={calcLoading || !calcPreview || (calcPreview.toCredit || 0) === 0}
+                      onClick={handleCalculateAndCredit}
+                      className="bg-indigo-600 hover:bg-indigo-700"
+                    >
+                      {calcLoading ? "Crediting..." : `Credit ${calcPreview?.toCredit || 0} PL`}
+                    </Button>
+                  </div>
+                </div>
+              </FormDrawer>
+
               <FormDrawer open={isCreditDialogOpen} onOpenChange={setIsCreditDialogOpen} title={"Credit Privileged Leave"} description={"Auto-credit PL based on policy ratio"}>
                   <form onSubmit={handleCreditPL} className="space-y-4">
                     <div className="space-y-2">
@@ -582,10 +738,17 @@ export function PrivilegedLeaveManagement() {
                 <TableBody>
                   {aggregatedData.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={12} className="text-center py-8 text-gray-500">
+                      <TableCell colSpan={12} className="text-center py-10 text-gray-500">
                         <div className="flex flex-col items-center gap-2">
-                          <Icon icon="mdi:book-open-page-variant" className="w-12 h-12 text-gray-300" />
-                          <p>No PL records found</p>
+                          <Icon icon="mdi:magnify" className="w-12 h-12 text-gray-300" />
+                          {!searchTerm.trim() ? (
+                            <>
+                              <p className="font-medium text-gray-600">Search to view PL records</p>
+                              <p className="text-xs text-gray-400">Type an employee name above to see their Privileged Leave summary</p>
+                            </>
+                          ) : (
+                            <p>No PL records found for &ldquo;{searchTerm}&rdquo;</p>
+                          )}
                         </div>
                       </TableCell>
                     </TableRow>

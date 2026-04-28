@@ -7,6 +7,7 @@ import {
   Param,
   Delete,
   ParseIntPipe,
+  Query,
 } from '@nestjs/common';
 import { PrivilegedLeaveService } from './privileged-leave.service';
 import { CreatePrivilegedLeaveDto } from './dto/create-privileged-leave.dto';
@@ -26,11 +27,6 @@ export class PrivilegedLeaveController {
     return this.service.findAll();
   }
 
-  @Get(':id')
-  findOne(@Param('id', ParseIntPipe) id: number) {
-    return this.service.findOne(id);
-  }
-
   @Get('employee/:employeeId')
   findByEmployee(@Param('employeeId', ParseIntPipe) employeeId: number) {
     return this.service.findByEmployee(employeeId);
@@ -39,6 +35,25 @@ export class PrivilegedLeaveController {
   @Get('balance/:employeeId')
   getBalance(@Param('employeeId', ParseIntPipe) employeeId: number) {
     return this.service.getBalance(employeeId);
+  }
+
+  @Get('lapse-history/:employeeId')
+  getLapseHistory(@Param('employeeId', ParseIntPipe) employeeId: number) {
+    return this.service.getLapseHistory(employeeId);
+  }
+
+  @Get('attendance-count/:employeeId')
+  getAttendanceCount(
+    @Param('employeeId', ParseIntPipe) employeeId: number,
+    @Query('fromDate') fromDate?: string,
+    @Query('toDate') toDate?: string,
+  ) {
+    return this.service.getAttendanceCount(employeeId, fromDate, toDate);
+  }
+
+  @Get(':id')
+  findOne(@Param('id', ParseIntPipe) id: number) {
+    return this.service.findOne(id);
   }
 
   @Post('credit')
@@ -51,9 +66,24 @@ export class PrivilegedLeaveController {
     return this.service.processLapse(body.employeeID, body.leavePolicyID);
   }
 
-  @Get('lapse-history/:employeeId')
-  getLapseHistory(@Param('employeeId', ParseIntPipe) employeeId: number) {
-    return this.service.getLapseHistory(employeeId);
+  @Post('calculate-from-attendance')
+  calculateFromAttendance(
+    @Body()
+    body: {
+      employeeID: number;
+      leavePolicyID: number;
+      fromDate?: string;
+      toDate?: string;
+      dryRun?: boolean;
+    },
+  ) {
+    return this.service.calculateAndCreditFromAttendance(
+      body.employeeID,
+      body.leavePolicyID,
+      body.fromDate,
+      body.toDate,
+      body.dryRun ?? false,
+    );
   }
 
   @Patch(':id')
