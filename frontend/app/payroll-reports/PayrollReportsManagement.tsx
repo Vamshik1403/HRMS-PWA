@@ -123,13 +123,11 @@ export function PayrollReportsManagement() {
     if (!user) return;
     let cid = formData.companyID;
     if (user.role !== "SUPERADMIN" && user.companyID) cid = user.companyID;
+    // For SUPERADMIN: show no branches until a company is selected
+    if (user.role === "SUPERADMIN" && !cid) { setBranches([]); return; }
     let filtered = [...allBranches];
     if (cid) filtered = filtered.filter((b) => b.companyID === cid);
     setBranches(filtered);
-    // Auto-select if only one branch
-    if (user.role !== "SUPERADMIN" && filtered.length === 1) {
-      setFormData((prev) => ({ ...prev, branchID: filtered[0].id }));
-    }
   }, [user, allBranches, formData.companyID]);
 
   // ── Filter departments ──
@@ -137,14 +135,12 @@ export function PayrollReportsManagement() {
   useEffect(() => {
     if (!user) return;
     const cid = user.role !== "SUPERADMIN" && user.companyID ? user.companyID : formData.companyID;
+    // For SUPERADMIN: show no departments until a company is selected
+    if (user.role === "SUPERADMIN" && !cid) { setDepartments([]); return; }
     let filtered = [...allDepartments];
     if (cid) filtered = filtered.filter((d) => d.companyID === cid);
     if (formData.branchID) filtered = filtered.filter((d) => d.branchesID === formData.branchID);
     setDepartments(filtered);
-    // Auto-select if only one department
-    if (user.role !== "SUPERADMIN" && filtered.length === 1) {
-      setFormData((prev) => ({ ...prev, departmentID: filtered[0].id }));
-    }
   }, [user, allDepartments, formData.companyID, formData.branchID]);
 
   // ── Generate Report ──
@@ -332,6 +328,8 @@ export function PayrollReportsManagement() {
     if (!user) return;
     const cid = user.role !== "SUPERADMIN" && user.companyID ? user.companyID : formData.companyID;
     let filtered = [...allDesignations];
+    // For SUPERADMIN: show no designations until a company is selected
+    if (user.role === "SUPERADMIN" && !cid) { setDesignations([]); return; }
     if (cid) filtered = filtered.filter((d) => d.companyID === cid);
     if (formData.branchID) filtered = filtered.filter((d) => d.branchesID === formData.branchID);
     setDesignations(filtered);
@@ -375,6 +373,7 @@ export function PayrollReportsManagement() {
                       companyID: val,
                       branchID: null,
                       departmentID: null,
+                      designationID: null,
                     }));
                   }}
                 >

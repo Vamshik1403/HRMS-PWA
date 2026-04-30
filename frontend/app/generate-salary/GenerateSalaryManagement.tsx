@@ -390,7 +390,11 @@ async function getCompanyAndBranch(companyId: number, branchId: number) {
 
 async function getShiftDays(emp: any) {
   const workShifts: any[] = await robustGet(API.workShift);
-  const empShift = workShifts.find(ws => ws.id === emp.workShiftID);
+  const effectiveWSID = emp.workShiftID ??
+    ([...(emp.empWorkShift ?? [])].sort((a: any, b: any) =>
+      new Date(b.effectFrom || 0).getTime() - new Date(a.effectFrom || 0).getTime()
+    )[0]?.workShiftID ?? null);
+  const empShift = workShifts.find(ws => ws.id === effectiveWSID);
   return empShift?.workShiftDay || [];
 }
 
@@ -568,13 +572,30 @@ async function getReimbursementAmount(employeeId: number, selectedMonthLabel: st
 
 async function fetchAllLogs(): Promise<any[]> {
   const all: any[] = [];
+
+  // Fetch from emp-attendance-logs (legacy table)
   try {
     const res: any[] = await robustGet(API.empAttendanceLogs);
     all.push(...res);
   } catch (err) {
     console.error("Failed to fetch /emp-attendance-logs", err);
-    toast.error("Failed to load data.");
   }
+
+  // Also fetch from process_att_logs (device punch data) and normalize to same shape
+  try {
+    const raw: any = await robustGet("/backend/process-att-logs");
+    const items: any[] = Array.isArray(raw) ? raw : (raw?.data ?? []);
+    // Normalize fields so calculateSalaryCounts can filter/use them identically
+    const normalized = items.map((r: any) => ({
+      ...r,
+      employeeID: r.manage_employee_id ?? r.employeeID,
+      punchTimeStamp: r.punch_time ?? r.punchTimeStamp,
+    }));
+    all.push(...normalized);
+  } catch (err) {
+    console.error("Failed to fetch /process-att-logs", err);
+  }
+
   return all;
 }
 
@@ -611,12 +632,28 @@ async function calculateSalaryCounts(
 
     const ymd = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
     const dayName = (d: Date) => d.toLocaleString("en-US", { weekday: "long" });
-    const parseCDataTs = (s: string) => (!s ? new Date() : new Date(s.replace(" ", "T")));
+    // Strip timezone designator so punch times are treated as LOCAL wall-clock time.
+    // process_att_logs stores local times with Z notation (not true UTC conversion).
+    const parseCDataTs = (s: string) => {
+      if (!s) return new Date();
+      const local = s.replace(" ", "T").replace(/([+-]\d{2}:\d{2}|Z)$/i, "");
+      return new Date(local);
+    };
 
     const empList: any[] = await robustGet(API.emp);
     let emp = empList.find((e) => e.id === employeeId) ??
       empList.find((e) => [e.employeeID, e.empId, e.employeeId].includes(employeeId as any));
     if (!emp) throw new Error("Employee not found: " + employeeId);
+
+    // Fallback: if scalar IDs are null, derive from history child records (most recent effectFrom)
+    const effectiveWorkShiftID = emp.workShiftID ??
+      ([...(emp.empWorkShift ?? [])].sort((a: any, b: any) =>
+        new Date(b.effectFrom || 0).getTime() - new Date(a.effectFrom || 0).getTime()
+      )[0]?.workShiftID ?? null);
+    const effectiveAttPolicyID = emp.attendancePolicyID ??
+      ([...(emp.empAttendancePolicy ?? [])].sort((a: any, b: any) =>
+        new Date(b.effectFrom || 0).getTime() - new Date(a.effectFrom || 0).getTime()
+      )[0]?.attendancePolicyID ?? null);
 
     let startDate: Date, endDate: Date;
 
@@ -660,7 +697,7 @@ async function calculateSalaryCounts(
     const DEBUG_LOP = false; // set to false in production
 
     const policies: any[] = await robustGet(API.attendancePolicy);
-    const policy = policies.find((p: any) => p.id === emp.attendancePolicyID) ?? {};
+    const policy = policies.find((p: any) => p.id === effectiveAttPolicyID) ?? {};
     const workingType = (policy?.workingHoursType ?? "").toLowerCase();
     const isFlexible = workingType.includes("flex");
     const checkinBeginBeforeMin = readNum(policy, "checkin_begin_before_min", "checkinBeginBeforeMin") ?? 0;
@@ -669,22 +706,37 @@ async function calculateSalaryCounts(
     const earlyCheckoutBeforeEndMin = readNum(policy, "early_checkout_before_end_min", "earlyCheckoutBeforeEndMin") ?? 0;
     const maxLateCheckInMin = readNum(policy, "max_late_check_in_time", "maxLateCheckInTime") ?? 0;
     const halfDayMin = toMinutesMaybeHours(readNum(policy, "min_work_hours_half_day_min", "minWorkHoursHalfDayMin") ?? 0);
-    const lateMarkCount = Number(policy?.lateMarkCount ?? 0);
-    const markAsAction = (policy?.markAs ?? "Half Day").toString().toLowerCase();
+    const lateMarkCount = Number(policy?.lateMarkMarkCount ?? policy?.lateMarkCount ?? 0);
+    const lateMarkMarkAsAction = (policy?.lateMarkMarkAs ?? policy?.markAs ?? "Half Day").toString().toLowerCase();
 
     const workShifts: any[] = await robustGet(API.workShift);
-    const empShift = workShifts.find((ws: any) => ws.id === emp.workShiftID);
+    const empShift = workShifts.find((ws: any) => ws.id === effectiveWorkShiftID);
     if (!empShift) return null;
     const shiftDays: any[] = empShift.workShiftDay ?? [];
     const weeklyOffDays = new Set(shiftDays.filter((d: any) => d.weeklyOff).map((d: any) => d.weekDay));
 
+    // Parse "HH:MM" or full ISO datetime strings into { h, m }
+    const parseHHMM = (s: string) => {
+      if (!s) return { h: 0, m: 0 };
+      // Plain "HH:MM" format (most common from API)
+      if (/^\d{1,2}:\d{2}$/.test(s.trim())) {
+        const [h, m] = s.trim().split(":").map(Number);
+        return { h: isNaN(h) ? 0 : h, m: isNaN(m) ? 0 : m };
+      }
+      // Fallback: full ISO datetime — strip Z and parse local
+      const dt = new Date(s.replace(/([+-]\d{2}:\d{2}|Z)$/i, ""));
+      return { h: dt.getHours(), m: dt.getMinutes() };
+    };
+
     const getShiftFrame = (d: Date) => {
       const dayOfWeek = dayName(d);
-      const sd = shiftDays.find((x: any) => x.weekDay === dayOfWeek);
+      // Prefer WORK type; fall back to first matching day entry
+      const sd = shiftDays.find((x: any) => x.weekDay === dayOfWeek && (x.shiftType === "WORK" || !x.shiftType))
+        ?? shiftDays.find((x: any) => x.weekDay === dayOfWeek);
       if (!sd) return null;
-      const st = new Date(sd.startTime), et = new Date(sd.endTime);
-      const shiftStart = new Date(d.getFullYear(), d.getMonth(), d.getDate(), st.getUTCHours(), st.getUTCMinutes());
-      let shiftEnd = new Date(d.getFullYear(), d.getMonth(), d.getDate(), et.getUTCHours(), et.getUTCMinutes());
+      const st = parseHHMM(sd.startTime), et = parseHHMM(sd.endTime);
+      const shiftStart = new Date(d.getFullYear(), d.getMonth(), d.getDate(), st.h, st.m);
+      let shiftEnd = new Date(d.getFullYear(), d.getMonth(), d.getDate(), et.h, et.m);
       if (shiftEnd <= shiftStart) shiftEnd.setDate(shiftEnd.getDate() + 1);
       const earliestIn = new Date(shiftStart.getTime() - checkinBeginBeforeMin * 60000);
       const latestOut = new Date(shiftEnd.getTime() + checkoutEndAfterMin * 60000);
@@ -869,7 +921,7 @@ async function calculateSalaryCounts(
             if (isEarlyCheckout) todayViolations++;
             if (todayViolations > 0 && lateMarkCount > 0) {
               if (lateMarksUsed + todayViolations >= lateMarkCount) {
-                dayStatus = markAsAction.includes("absent") ? "absent" : "half";
+                dayStatus = lateMarkMarkAsAction.includes("absent") ? "absent" : "half";
                 lateMarksUsed = 0;
               } else {
                 lateMarksUsed += todayViolations;
@@ -1004,7 +1056,7 @@ function downloadSalarySlipPDF(payload: {
     const gray: [number, number, number] = [100, 60, 150];
     let y = 15;
 
-    const companyName = payload.companyName || payload.employee?.company?.companyName;
+    const companyName = payload.companyName || payload.employee?.company?.companyName || "Company";
     const companyAddress = payload.employee?.company?.address || "Head Office";
 
     doc.setFont("helvetica", "bold");
@@ -1154,7 +1206,7 @@ function downloadSalarySlipPDF(payload: {
     doc.setFont("helvetica", "italic");
     doc.setFontSize(9);
     doc.text(
-      `Net Payable (in words): ${numberToWords(payload.netPay)}`,
+      `Net Payable (in words): ${numberToWords(Math.max(0, Math.round(payload.netPay || 0)))}`,
       15,
       y
     );
@@ -1262,11 +1314,10 @@ async function computeSalarySlipForRow(
     branchId,
     effectiveStart,
   )
-  if (!counts) throw new Error("Could not compute attendance counts")
-
-  const fullDays = Number(counts.flex_fullDayPresent || 0)
-  const halfDays = Number(counts.flex_halfDayPresent || 0)
-  const absentDays = Number(counts.flex_absent || 0)
+  // If counts is null (e.g. employee has no work shift assigned), default to 0 absent days → no LOP
+  const fullDays = Number(counts?.flex_fullDayPresent || 0)
+  const halfDays = Number(counts?.flex_halfDayPresent || 0)
+  const absentDays = Number(counts?.flex_absent || 0)
 
   /* ===============================
      ✅ PAID DAYS (CALENDAR BASED)
@@ -1283,7 +1334,7 @@ async function computeSalarySlipForRow(
   const { companyName, branchName } =
     await getCompanyAndBranch(companyId, branchId)
 
-  const monthlyGross = getGrossFromEmp(emp)
+  const monthlyGross = getGrossFromEmp(emp, grade)
 
   /* ===============================
      ✅ PER DAY & RATIO (CALENDAR)

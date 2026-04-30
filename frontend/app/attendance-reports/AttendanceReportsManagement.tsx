@@ -462,9 +462,9 @@ const DateCell = ({ punches, date, employeeID, formData, reportData, selectedCom
     else if (status.type === "SINGLE_PUNCH") statusClass = "bg-gray-100 text-gray-800";
     else statusClass = "bg-gray-100 text-gray-800";
 
-    // Special status with punches - show status + working hours
+    // Special status with punches - show status + working hours (WO-P, PH-P, Leave-P)
     if (status.hasPunches && punches.length > 0 && 
-        (status.type === "WEEK_OFF" || status.type === "HOLIDAY" || status.type === "LEAVE" || status.type === "REGULARIZATION")) {
+        (status.type === "WEEK_OFF" || status.type === "HOLIDAY" || status.type === "LEAVE")) {
       const workedMinutes = status.workedMinutes || 0;
       const hours = Math.floor(workedMinutes / 60);
       const mins = workedMinutes % 60;
@@ -475,17 +475,37 @@ const DateCell = ({ punches, date, employeeID, formData, reportData, selectedCom
         </td>
       );
     }
-    
-    // OT - show P badge + OT time
-    if (status.type === "OT" && status.workedMinutes && status.totalShiftMinutes && status.otMinutes) {
-      const normalHours = Math.floor(status.totalShiftMinutes / 60);
-      const normalMins = status.totalShiftMinutes % 60;
-      const otHours = Math.floor(status.otMinutes / 60);
-      const otMins = status.otMinutes % 60;
+
+    // Regularization - always show AR badge + status label + hours
+    if (status.type === "REGULARIZATION") {
+      const workedMinutes = status.workedMinutes || 0;
+      const hours = Math.floor(workedMinutes / 60);
+      const mins = workedMinutes % 60;
+      const regLabel = status.label || "P";
+      const regStatusClass = regLabel === "P" ? "bg-green-100 text-green-800"
+        : regLabel === "HD" ? "bg-yellow-100 text-yellow-800"
+        : regLabel === "A" ? "bg-red-100 text-red-800"
+        : "bg-teal-100 text-teal-800";
       return (
         <td className="px-2 py-1 border-b min-w-[100px] text-center align-top">
-          <div className="inline-block px-2 py-0.5 bg-green-100 text-green-800 text-[9px] font-medium rounded-full mb-1">P</div>
-          <div className="inline-block px-2 py-0.5 bg-indigo-100 text-indigo-800 text-[9px] font-medium rounded-full">{normalHours}h{normalMins}m + {otHours}h{otMins}m OT</div>
+          <div className="inline-block px-2 py-0.5 bg-teal-100 text-teal-800 text-[9px] font-bold rounded-full mb-1">AR</div>
+          <div className={`inline-block px-2 py-0.5 text-[9px] font-medium rounded-full mb-1 ${regStatusClass}`}>{regLabel}</div>
+          {workedMinutes > 0 && <div className="inline-block px-2 py-0.5 bg-blue-100 text-blue-800 text-[9px] font-medium rounded-full">{hours}h {mins}m</div>}
+        </td>
+      );
+    }
+    
+    // OT - show total worked hours → OT badge → OT hours
+    if (status.type === "OT") {
+      const totalHours = Math.floor((status.workedMinutes || 0) / 60);
+      const totalMins = (status.workedMinutes || 0) % 60;
+      const otHours = Math.floor((status.otMinutes || 0) / 60);
+      const otMins = (status.otMinutes || 0) % 60;
+      return (
+        <td className="px-2 py-1 border-b min-w-[100px] text-center align-top">
+          <div className="inline-block px-2 py-0.5 bg-blue-100 text-blue-800 text-[9px] font-medium rounded-full mb-1">{totalHours}h {totalMins}m</div>
+          <div className="inline-block px-2 py-0.5 bg-indigo-100 text-indigo-800 text-[9px] font-medium rounded-full mb-1">OT</div>
+          <div className="inline-block px-2 py-0.5 bg-indigo-50 text-indigo-700 text-[9px] font-medium rounded-full">+{otHours}h {otMins}m</div>
         </td>
       );
     }
@@ -509,6 +529,18 @@ const DateCell = ({ punches, date, employeeID, formData, reportData, selectedCom
       return (
         <td className="px-2 py-1 border-b min-w-[80px] text-center align-top">
           <div className="inline-block px-2 py-0.5 bg-yellow-100 text-yellow-800 text-[9px] font-medium rounded-full mb-1">HD</div>
+          <div className="inline-block px-2 py-0.5 bg-blue-100 text-blue-800 text-[9px] font-medium rounded-full">{hours}h {mins}m</div>
+        </td>
+      );
+    }
+    
+    // Late Mark - show L badge + working hours
+    if (status.type === "LATE_MARK") {
+      const hours = Math.floor((status.workedMinutes || 0) / 60);
+      const mins = (status.workedMinutes || 0) % 60;
+      return (
+        <td className="px-2 py-1 border-b min-w-[80px] text-center align-top">
+          <div className="inline-block px-2 py-0.5 bg-blue-100 text-blue-800 text-[9px] font-medium rounded-full mb-1">L</div>
           <div className="inline-block px-2 py-0.5 bg-blue-100 text-blue-800 text-[9px] font-medium rounded-full">{hours}h {mins}m</div>
         </td>
       );
@@ -798,8 +830,9 @@ export function AttendanceReportsManagement() {
       }
     } else if (user.role === "EMPLOYEE" && empCreds) {
       data = data.filter(b => b.companyID === empCreds.companyID);
-    } else if (user.role === "SUPERADMIN" && formData.companyID) {
-      data = data.filter(b => b.companyID === formData.companyID);
+    } else if (user.role === "SUPERADMIN") {
+      // Only show branches for the selected company; show nothing until a company is chosen
+      data = formData.companyID ? data.filter(b => b.companyID === formData.companyID) : [];
     }
 
     setBranches(data);
@@ -813,6 +846,10 @@ export function AttendanceReportsManagement() {
 const handleBranchChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
   const branchName = e.target.value;
   setFormData(prev => ({ ...prev, branchName }));
+  // Clear filters and data — loadBranchData will repopulate for the new branch
+  setDepartments([]);
+  setDesignations([]);
+  setAllEmployees([]);
   setSelectedDepartments([]);
   setSelectedDesignations([]);
   setSelectedEmployees([]);
@@ -1072,16 +1109,6 @@ const employeeOptions = filteredEmployees.map((e: Employee) => ({
     const employee = reportData.find(r => r.employee.id === employeeID)?.employee;
     if (!employee) return { type: "ABSENT", label: "Absent", hasPunches: false };
 
-    // PRIORITY 1: Approved Regularization
-    const regularization = attendanceRegularizations.find(reg => 
-      reg.manageEmployeeID === employeeID &&
-      reg.status === "Approved" &&
-      new Date(reg.attendanceDate).toISOString().split('T')[0] === date
-    );
-    if (regularization) {
-      return { type: "REGULARIZATION", label: regularization.requestedStatus, hasPunches };
-    }
-
     // PRIORITY 1.5: Sandwich Rule Override
     if (sandwichOverrides.get(employeeID)?.has(date)) {
       return { type: "SANDWICH", label: "SW", hasPunches };
@@ -1104,6 +1131,29 @@ const employeeOptions = filteredEmployees.map((e: Employee) => ({
     const shiftDay = workShift?.workShiftDay?.find(d => d.weekDay === dayOfWeek && d.shiftType === "WORK");
     const otDay = workShift?.workShiftDay?.find(d => d.weekDay === dayOfWeek && d.shiftType === "OT");
     const defaultWorkedMinutes = shiftDay?.totalMinutes || 480;
+
+    // PRIORITY 1: Approved Regularization — placed here so we have shiftDay to compute actual hours
+    const regularization = attendanceRegularizations.find(reg => 
+      reg.manageEmployeeID === employeeID &&
+      reg.status === "Approved" &&
+      new Date(reg.attendanceDate).toISOString().split('T')[0] === date
+    );
+    if (regularization) {
+      let regWorkedMinutes: number | undefined;
+      if (hasPunches && shiftDay && punches.length >= 2) {
+        const sortedP = [...punches].sort();
+        regWorkedMinutes = calculateWorkedMinutes(
+          sortedP, shiftDay.startTime, shiftDay.endTime,
+          { breakStart: shiftDay.breakStart || "", breakEnd: shiftDay.breakEnd || "" },
+          null, isFlexible
+        );
+      } else {
+        regWorkedMinutes = hasPunches ? undefined : defaultWorkedMinutes;
+      }
+      const reqStatus = regularization.requestedStatus;
+      const regLabel = reqStatus === "PRESENT" ? "P" : reqStatus === "Half Day" ? "HD" : reqStatus === "Absent" ? "A" : reqStatus;
+      return { type: "REGULARIZATION", label: regLabel, hasPunches, workedMinutes: regWorkedMinutes };
+    }
 
     // Week off check
     const isWeekOff = (): boolean => {
@@ -1197,10 +1247,29 @@ const employeeOptions = filteredEmployees.map((e: Employee) => ({
     }
 
     if (shiftDay && policy) {
-      const firstPunch = timeToMinutes(punches[0]);
-      const lastPunch = timeToMinutes(punches[punches.length - 1]);
-      const shiftStartMin = timeToMinutes(shiftDay.startTime);
-      const shiftEndMin = timeToMinutes(shiftDay.endTime);
+      // Filter punches to the valid attendance window [earliestIn, latestOut]
+      // When OT is applicable and an OT shift exists, extend the window to the OT shift end
+      const checkinBeginBefore = policy.checkin_begin_before_min || 0;
+      const checkoutEndAfter = policy.checkout_end_after_min || 0;
+      const shiftStartMinRaw = timeToMinutes(shiftDay.startTime);
+      const shiftEndMinRaw = timeToMinutes(shiftDay.endTime);
+      const earliestInMin = shiftStartMinRaw - checkinBeginBefore;
+      // If OT applicable and an OT shift exists for this day, allow punches up to OT end
+      const otEndMin = (policy.overtimeApplicable && otDay)
+        ? timeToMinutes(otDay.endTime)
+        : 0;
+      const latestOutMin = Math.max(shiftEndMinRaw + checkoutEndAfter, otEndMin);
+      const filteredPunches = punches.filter(p => {
+        const t = timeToMinutes(p);
+        return t >= earliestInMin && t <= latestOutMin;
+      });
+      // If filtering removes all punches, fall through as absent
+      const effectivePunches = filteredPunches.length >= 2 ? filteredPunches : (filteredPunches.length === 1 ? filteredPunches : punches.length > 0 ? [punches[0]] : []);
+
+      const firstPunch = timeToMinutes(effectivePunches[0] ?? punches[0]);
+      const lastPunch = timeToMinutes(effectivePunches[effectivePunches.length - 1] ?? punches[punches.length - 1]);
+      const shiftStartMin = shiftStartMinRaw;
+      const shiftEndMin = shiftEndMinRaw;
       
       // Check max late check-in first
       const maxLateWindow = policy.max_late_check_in_time || 0;
@@ -1213,9 +1282,9 @@ const employeeOptions = filteredEmployees.map((e: Employee) => ({
         };
       }
       
-      // Check early checkout
+      // Check early checkout — use filtered last punch
       const earlyCheckoutWindow = policy.earlyCheckoutBeforeEndMin || 0;
-      if (!isFlexible && lastPunch < shiftEndMin - earlyCheckoutWindow) {
+      if (!isFlexible && effectivePunches.length >= 2 && lastPunch < shiftEndMin - earlyCheckoutWindow) {
         const monthKey = `${employeeID}-${date.substring(0, 7)}`;
         const currentTracker = noCheckoutTracker.current;
         const newCount = (currentTracker.get(monthKey) || 0) + 1;
@@ -1228,7 +1297,7 @@ const employeeOptions = filteredEmployees.map((e: Employee) => ({
         }
       }
       
-      const workedMinutes = calculateWorkedMinutes(punches, shiftDay.startTime, shiftDay.endTime, 
+      const workedMinutes = calculateWorkedMinutes(effectivePunches, shiftDay.startTime, shiftDay.endTime, 
         { breakStart: shiftDay.breakStart || "", breakEnd: shiftDay.breakEnd || "" }, policy, isFlexible);
       
       const totalShiftMinutes = shiftDay.totalMinutes;
@@ -1259,10 +1328,10 @@ const employeeOptions = filteredEmployees.map((e: Employee) => ({
         }
       }
       
-      // Calculate OT
+      // Calculate OT — only using filtered punches within the valid attendance window
       let otMinutes = 0;
       if (otDay && policy.overtimeApplicable) {
-        otMinutes = calculateOTMinutes(punches, shiftDay.endTime, {
+        otMinutes = calculateOTMinutes(effectivePunches, shiftDay.endTime, {
           startTime: otDay.startTime, endTime: otDay.endTime,
           breakStart: otDay.breakStart || "", breakEnd: otDay.breakEnd || ""
         }, policy);
@@ -1270,7 +1339,9 @@ const employeeOptions = filteredEmployees.map((e: Employee) => ({
       
       if (workedMinutes < halfDayMin) {
         return { type: "ABSENT", label: "Absent", hasPunches: true, workedMinutes };
-      } else if (workedMinutes < totalShiftMinutes) {
+      } else if (workedMinutes < totalShiftMinutes && !isLate) {
+        // Only mark as Half Day due to hours if it's NOT a late arrival.
+        // Late arrivals use the late-mark rule — they accumulate to the threshold.
         return { type: "HALF_DAY", label: "Half Day", hasPunches: true, workedMinutes };
       } else if (otMinutes > 0) {
         return { type: "OT", label: "OT", hasPunches: true, workedMinutes, otMinutes, totalShiftMinutes };
@@ -1710,7 +1781,7 @@ const employeeOptions = filteredEmployees.map((e: Employee) => ({
             {user?.role === "SUPERADMIN" && (
               <div className="space-y-2">
                 <Label>Company</Label>
-                <select className="w-full px-3 py-2 border rounded-md bg-white" value={formData.companyID ?? ""} onChange={e => setFormData(prev => ({ ...prev, companyID: e.target.value ? Number(e.target.value) : null, branchName: "" }))}>
+                <select className="w-full px-3 py-2 border rounded-md bg-white" value={formData.companyID ?? ""} onChange={e => { setFormData(prev => ({ ...prev, companyID: e.target.value ? Number(e.target.value) : null, branchName: "" })); setDepartments([]); setDesignations([]); setAllEmployees([]); setSelectedDepartments([]); setSelectedDesignations([]); setSelectedEmployees([]); }}>
                   <option value="">Select company</option>
                   {companies.map(c => <option key={c.id} value={c.id}>{c.companyName}</option>)}
                 </select>
@@ -1753,7 +1824,7 @@ const employeeOptions = filteredEmployees.map((e: Employee) => ({
               <div className="flex flex-wrap gap-3 text-[10px]">
                 <div className="flex items-center gap-1"><div className="w-3 h-3 bg-green-100 rounded"></div><span>P = Present</span></div>
                 <div className="flex items-center gap-1"><div className="w-3 h-3 bg-yellow-100 rounded"></div><span>HD = Half Day</span></div>
-                <div className="flex items-center gap-1"><div className="w-3 h-3 bg-blue-100 rounded"></div><span>LM = Late Mark</span></div>
+                <div className="flex items-center gap-1"><div className="w-3 h-3 bg-blue-100 rounded"></div><span>L = Late Mark</span></div>
                 <div className="flex items-center gap-1"><div className="w-3 h-3 bg-indigo-100 rounded"></div><span>OT = Overtime</span></div>
                 <div className="flex items-center gap-1"><div className="w-3 h-3 bg-red-100 rounded"></div><span>A = Absent</span></div>
                 <div className="flex items-center gap-1"><div className="w-3 h-3 bg-purple-100 rounded"></div><span>PH = Public Holiday</span></div>

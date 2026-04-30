@@ -76,7 +76,7 @@ export function PrivilegedLeaveManagement() {
 
   // Calculate from Attendance dialog
   const [isCalcDialogOpen, setIsCalcDialogOpen] = useState(false)
-  const [calcData, setCalcData] = useState({ employeeID: 0, leavePolicyID: 0, fromDate: "", toDate: "" })
+  const [calcData, setCalcData] = useState({ employeeID: 0, leavePolicyID: 0 })
   const [calcPreview, setCalcPreview] = useState<any>(null)
   const [calcLoading, setCalcLoading] = useState(false)
 
@@ -219,7 +219,7 @@ export function PrivilegedLeaveManagement() {
         toast.success(data.message || "PL calculated and credited successfully")
         await loadLedger()
         setIsCalcDialogOpen(false)
-        setCalcData({ employeeID: 0, leavePolicyID: 0, fromDate: "", toDate: "" })
+        setCalcData({ employeeID: 0, leavePolicyID: 0 })
         setCalcPreview(null)
       } else {
         toast.error(data.message || "Failed to credit PL")
@@ -419,7 +419,7 @@ export function PrivilegedLeaveManagement() {
           {canManage && (
             <>
               {/* Calculate from Attendance Dialog */}
-              <FormDrawer open={isCalcDialogOpen} onOpenChange={(o) => { setIsCalcDialogOpen(o); if (!o) { setCalcPreview(null); setCalcData({ employeeID: 0, leavePolicyID: 0, fromDate: "", toDate: "" }) } }} title="Calculate PL from Attendance" description="Count actual attendance days and auto-credit Privileged Leave based on the policy ratio">
+              <FormDrawer open={isCalcDialogOpen} onOpenChange={(o) => { setIsCalcDialogOpen(o); if (!o) { setCalcPreview(null); setCalcData({ employeeID: 0, leavePolicyID: 0 }) } }} title="Calculate PL from Attendance" description="Count actual attendance days and auto-credit Privileged Leave based on the policy ratio">
                 <div className="space-y-4">
                   <div className="space-y-2">
                     <Label>Employee</Label>
@@ -451,16 +451,7 @@ export function PrivilegedLeaveManagement() {
                       ))}
                     </select>
                   </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-2">
-                      <Label>From Date (optional)</Label>
-                      <Input type="date" value={calcData.fromDate} onChange={(e) => { setCalcData((p) => ({ ...p, fromDate: e.target.value })); setCalcPreview(null) }} />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>To Date (optional)</Label>
-                      <Input type="date" value={calcData.toDate} onChange={(e) => { setCalcData((p) => ({ ...p, toDate: e.target.value })); setCalcPreview(null) }} />
-                    </div>
-                  </div>
+
                   <Button type="button" variant="outline" onClick={handlePreviewCalc} disabled={calcLoading} className="w-full">
                     {calcLoading ? "Calculating..." : "Preview Calculation"}
                   </Button>

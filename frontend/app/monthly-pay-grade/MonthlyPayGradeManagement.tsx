@@ -766,8 +766,14 @@ miniOTTime: x.miniOTTime ?? 0,
     );
   }, [payGrades, searchTerm]);
 
-  // Combine regular allowances and bonuses for display
-  const allAllowances = [...allowanceList, ...bonusList];
+  // Combine regular allowances and bonuses for display, HRA always first
+  const allAllowances = [...allowanceList, ...bonusList].sort((a, b) => {
+    const aIsHRA = a.name.toUpperCase().includes("HRA");
+    const bIsHRA = b.name.toUpperCase().includes("HRA");
+    if (aIsHRA && !bIsHRA) return -1;
+    if (!aIsHRA && bIsHRA) return 1;
+    return 0;
+  });
 
   /* ---------- UI ---------- */
   return (

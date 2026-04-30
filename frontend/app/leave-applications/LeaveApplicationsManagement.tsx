@@ -180,7 +180,12 @@ export function LeaveApplicationsManagement() {
       });
       const employee = await empRes.json();
       
-      const policy = employee.leavePolicy || {};
+      // Use direct leavePolicy relation; fall back to most recent empLeavePolicy history entry
+      const policy = employee.leavePolicy ||
+        ([...(employee.empLeavePolicy ?? [])].sort((a: any, b: any) =>
+          new Date(b.effectFrom || 0).getTime() - new Date(a.effectFrom || 0).getTime()
+        )[0]?.leavePolicy) ||
+        {};
       
       // Get policy limits
       const totalSick = Number(policy.sickLeaveCount) || 0;

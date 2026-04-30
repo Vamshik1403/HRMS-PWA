@@ -125,7 +125,7 @@ useEffect(() => {
     deductionTypeField: "",
     basedOn: "Gross" as "Gross" | "Basic" | "N/A",
     deductionType: "Fixed" as "Fixed" | "Percentage",
-    value: 0,
+    value: "",
     perMonthLimit: 0,
   });
 
@@ -430,7 +430,7 @@ const loadDeductions = async () => {
       displayName: deduction.displayName || "",
       deductionTypeField: deduction.deductionTypeField || "",
       deductionType: deduction.deductionType,
-      value: deduction.value,
+      value: String(deduction.value),
       perMonthLimit: deduction.perMonthLimit,
     }));
     setEditingDeduction(deduction);
@@ -462,7 +462,7 @@ const loadDeductions = async () => {
       deductionTypeField: "",
       basedOn: "Gross",
       deductionType: "Fixed",
-      value: 0,
+      value: "",
       perMonthLimit: 0,
     });
     setEditingDeduction(null);
@@ -805,7 +805,7 @@ const loadDeductions = async () => {
                         type="text"
                         value={formData.value}
                         onChange={(e) =>
-                          setFormData((prev) => ({ ...prev, value: parseFloat(e.target.value) || 0 }))
+                          setFormData((prev) => ({ ...prev, value: e.target.value }))
                         }
                         placeholder="0"
                         required

@@ -2523,9 +2523,18 @@ const addCombinedDevMap = () => {
 
     const effectiveDeptID = freshData.departmentNameID ?? null;
     const effectiveDesgID = freshData.designationID ?? null;
-    const effectiveWorkShiftID = freshData.workShiftID ?? null;
-    const effectiveAttendancePolicyID = freshData.attendancePolicyID ?? null;
-    const effectiveLeavePolicyID = freshData.leavePolicyID ?? null;
+    const effectiveWorkShiftID = freshData.workShiftID ??
+      ([...(freshData.empWorkShift ?? [])].sort((a: any, b: any) =>
+        new Date(b.effectFrom || 0).getTime() - new Date(a.effectFrom || 0).getTime()
+      )[0]?.workShiftID ?? null);
+    const effectiveAttendancePolicyID = freshData.attendancePolicyID ??
+      ([...(freshData.empAttendancePolicy ?? [])].sort((a: any, b: any) =>
+        new Date(b.effectFrom || 0).getTime() - new Date(a.effectFrom || 0).getTime()
+      )[0]?.attendancePolicyID ?? null);
+    const effectiveLeavePolicyID = freshData.leavePolicyID ??
+      ([...(freshData.empLeavePolicy ?? [])].sort((a: any, b: any) =>
+        new Date(b.effectFrom || 0).getTime() - new Date(a.effectFrom || 0).getTime()
+      )[0]?.leavePolicyID ?? null);
 
     // Set main form data
     setFormData({
@@ -3546,10 +3555,11 @@ const addCombinedDevMap = () => {
                   <Button type="button" size="sm" disabled={!stagingAP.attendancePolicyID} onClick={() => {
                     if (!stagingAP.attendancePolicyID) return;
                     const newEntry: EmpAttendancePolicyForm = { _localId: uid(), attendancePolicyID: stagingAP.attendancePolicyID, _apAutocomplete: stagingAP.label, effectFrom: stagingAP.effectFrom };
-                    setFormData(p => ({
-                      ...p,
-                      empAttendancePolicyForm: upsertHistoryEntry(p.empAttendancePolicyForm, newEntry, (item) => item.attendancePolicyID === newEntry.attendancePolicyID),
-                    }));
+                    setFormData(p => {
+                      const newList = upsertHistoryEntry(p.empAttendancePolicyForm, newEntry, (item) => item.attendancePolicyID === newEntry.attendancePolicyID);
+                      const last = newList[newList.length - 1];
+                      return { ...p, empAttendancePolicyForm: newList, attendancePolicyID: last?.attendancePolicyID ?? null };
+                    });
                     setStagingAP({ attendancePolicyID: null, label: "", effectFrom: today });
                   }}>Add</Button>
                 </div>
@@ -3613,10 +3623,11 @@ const addCombinedDevMap = () => {
                   <Button type="button" size="sm" disabled={!stagingLP.leavePolicyID} onClick={() => {
                     if (!stagingLP.leavePolicyID) return;
                     const newEntry: EmpLeavePolicyForm = { _localId: uid(), leavePolicyID: stagingLP.leavePolicyID, _lpAutocomplete: stagingLP.label, effectFrom: stagingLP.effectFrom };
-                    setFormData(p => ({
-                      ...p,
-                      empLeavePolicyForm: upsertHistoryEntry(p.empLeavePolicyForm, newEntry, (item) => item.leavePolicyID === newEntry.leavePolicyID),
-                    }));
+                    setFormData(p => {
+                      const newList = upsertHistoryEntry(p.empLeavePolicyForm, newEntry, (item) => item.leavePolicyID === newEntry.leavePolicyID);
+                      const last = newList[newList.length - 1];
+                      return { ...p, empLeavePolicyForm: newList, leavePolicyID: last?.leavePolicyID ?? null };
+                    });
                     setStagingLP({ leavePolicyID: null, label: "", effectFrom: today });
                   }}>Add</Button>
                 </div>
@@ -3680,10 +3691,11 @@ const addCombinedDevMap = () => {
                   <Button type="button" size="sm" disabled={!stagingWS.workShiftID} onClick={() => {
                     if (!stagingWS.workShiftID) return;
                     const newEntry: EmpWorkShiftForm = { _localId: uid(), workShiftID: stagingWS.workShiftID, _wsAutocomplete: stagingWS.label, effectFrom: stagingWS.effectFrom };
-                    setFormData(p => ({
-                      ...p,
-                      empWorkShiftForm: upsertHistoryEntry(p.empWorkShiftForm, newEntry, (item) => item.workShiftID === newEntry.workShiftID),
-                    }));
+                    setFormData(p => {
+                      const newList = upsertHistoryEntry(p.empWorkShiftForm, newEntry, (item) => item.workShiftID === newEntry.workShiftID);
+                      const last = newList[newList.length - 1];
+                      return { ...p, empWorkShiftForm: newList, workShiftID: last?.workShiftID ?? null };
+                    });
                     setStagingWS({ workShiftID: null, label: "", effectFrom: today });
                   }}>Add</Button>
                 </div>

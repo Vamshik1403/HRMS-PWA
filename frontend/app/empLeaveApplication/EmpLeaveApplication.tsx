@@ -107,7 +107,11 @@ export function EmpLeaveApplication() {
   const loadLeaveBalance = async (employeeId: number) => {
     try {
       const empRes = await robustGet<any>(`${BACKEND_URL}/manage-emp/${employeeId}`);
-      const policy = empRes.leavePolicy || {};
+      const policy = empRes.leavePolicy ||
+        ([...(empRes.empLeavePolicy ?? [])].sort((a: any, b: any) =>
+          new Date(b.effectFrom || 0).getTime() - new Date(a.effectFrom || 0).getTime()
+        )[0]?.leavePolicy) ||
+        {};
       const totalSick = Number(policy.sickLeaveCount) || 0;
       const totalCasual = Number(policy.casualLeaveCount) || 0;
 

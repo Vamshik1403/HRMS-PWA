@@ -95,7 +95,7 @@ export default function Page() {
     } finally {
       setLoading(false);
     }
-  };
+};
 
   const getAttendance = (empId: number) => {
     const logs = attendanceLogs

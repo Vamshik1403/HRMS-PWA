@@ -111,7 +111,7 @@ useEffect(() => {
     allowanceType: "",
     basedOn: "N/A" as "Gross" | "Basic" | "N/A",
     salaryAllowanceType: "Fixed" as "Fixed" | "Percentage",
-    value: 0,
+    value: "",
     perMonthLimit: 0,
   });
 
@@ -429,7 +429,7 @@ const resolvedCompanyID =
       allowanceType: allowance.allowanceType,
       basedOn: allowance.basedOn || "N/A",
       salaryAllowanceType: allowance.salaryAllowanceType,
-      value: allowance.value,
+      value: String(allowance.value),
       perMonthLimit: allowance.perMonthLimit,
     }));
     setEditingAllowance(allowance);
@@ -461,7 +461,7 @@ const resolvedCompanyID =
       allowanceType: "",
       basedOn: "Gross",
       salaryAllowanceType: "Fixed",
-      value: 0,
+      value: "",
       perMonthLimit: 0,
     });
     setEditingAllowance(null);
@@ -794,7 +794,7 @@ const resolvedCompanyID =
        
           value={formData.value}
           onChange={(e) =>
-            setFormData((prev) => ({ ...prev, value: parseFloat(e.target.value) || 0 }))
+            setFormData((prev) => ({ ...prev, value: e.target.value }))
           }
           placeholder="0"
           required
