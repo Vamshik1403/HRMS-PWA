@@ -34,6 +34,14 @@ export class CreateLeaveApplicationDto {
   appliedLeaveType?: string;
 
   @IsOptional()
+  @IsString()
+  childNumber?: string;
+
+  @IsOptional()
+  @IsString()
+  birthEventDate?: string;
+
+  @IsOptional()
   @IsDateString()
   fromDate?: Date;
 

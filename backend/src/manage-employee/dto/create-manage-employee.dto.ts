@@ -227,6 +227,7 @@ export class CreateManageEmployeeDto {
 
   @IsOptional() @IsString() employeePhotoUrl?: string;
   @IsOptional() @IsString() gender?: string;
+  @IsOptional() @IsInt() numberOfChildren?: number;
   @IsOptional() @IsString() dateOfBirth?: string;
   @IsOptional() @IsString() bloodGroup?: string;
   @IsOptional() @IsString() maritalStatus?: string;

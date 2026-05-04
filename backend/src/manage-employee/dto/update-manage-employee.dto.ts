@@ -95,6 +95,7 @@ export class UpdateManageEmployeeDto {
 
   @IsOptional() @IsString() employeePhotoUrl?: string | null;
   @IsOptional() @IsString() gender?: string | null;
+  @IsOptional() @IsInt() numberOfChildren?: number | null;
   @IsOptional() @IsString() dateOfBirth?: string | null; // fixed typo
   @IsOptional() @IsString() bloodGroup?: string | null;
   @IsOptional() @IsString() maritalStatus?: string | null;

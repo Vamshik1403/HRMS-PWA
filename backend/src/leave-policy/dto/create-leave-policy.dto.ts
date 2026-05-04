@@ -27,6 +27,14 @@ export class CreateLeavePolicyDto {
 
   @IsOptional()
   @IsString()
+  maternityLeaveCount?: string;
+
+  @IsOptional()
+  @IsString()
+  paternityLeaveCount?: string;
+
+  @IsOptional()
+  @IsString()
   earnLeaveWorkingMonths?: string;
 
   @IsOptional()

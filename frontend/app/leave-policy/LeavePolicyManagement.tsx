@@ -46,6 +46,8 @@ interface LeavePolicy {
   leavePolicyName?: string
   sickLeaveCount?: string
   casualLeaveCount?: string
+  maternityLeaveCount?: string
+  paternityLeaveCount?: string
   earnLeaveWorkingMonths?: string
   earnLeaveCount?: number
   isPrivilegedLeaveApplicable?: boolean
@@ -77,6 +79,8 @@ export function LeavePolicyManagement() {
     leavePolicyName: "",
     sickLeaveCount: 0,
     casualLeaveCount: 0,
+    maternityLeaveCount: 182,
+    paternityLeaveCount: 15,
     earnLeaveWorkingMonths: 0,
     earnLeaveCount: 0,
     isPrivilegedLeaveApplicable: false,
@@ -427,6 +431,8 @@ const fetchBranches = async (query: string) => {
   leavePolicyName: formData.leavePolicyName,
   sickLeaveCount: String(formData.sickLeaveCount),
   casualLeaveCount: String(formData.casualLeaveCount),
+  maternityLeaveCount: String(formData.maternityLeaveCount),
+  paternityLeaveCount: String(formData.paternityLeaveCount),
   earnLeaveWorkingMonths: String(formData.earnLeaveWorkingMonths),
   earnLeaveCount: Number(formData.earnLeaveCount),
   isPrivilegedLeaveApplicable: formData.isPrivilegedLeaveApplicable,
@@ -486,6 +492,8 @@ const fetchBranches = async (query: string) => {
       leavePolicyName: "",
       sickLeaveCount: 0,
       casualLeaveCount: 0,
+      maternityLeaveCount: 182,
+      paternityLeaveCount: 15,
       earnLeaveWorkingMonths: 0,
       earnLeaveCount: 0,
       isPrivilegedLeaveApplicable: false,
@@ -511,6 +519,8 @@ const fetchBranches = async (query: string) => {
       leavePolicyName: policy.leavePolicyName || "",
       sickLeaveCount: parseInt(policy.sickLeaveCount || "0") || 0,
       casualLeaveCount: parseInt(policy.casualLeaveCount || "0") || 0,
+      maternityLeaveCount: parseInt(policy.maternityLeaveCount || "182") || 182,
+      paternityLeaveCount: parseInt(policy.paternityLeaveCount || "15") || 15,
       earnLeaveWorkingMonths: parseInt(policy.earnLeaveWorkingMonths || "0") || 0,
       earnLeaveCount: policy.earnLeaveCount || 0,
       isPrivilegedLeaveApplicable: policy.isPrivilegedLeaveApplicable || false,
@@ -745,6 +755,38 @@ const handleCompanySelect = (selected: SelectedItem) => {
                         required
                       />
                       <span className="text-sm text-gray-500">Nos</span>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="maternityLeaveCount">Maternity Leave (MtL) / Per Event</Label>
+                    <div className="flex items-center gap-2">
+                      <Input
+                        id="maternityLeaveCount"
+                        type="text"
+                        value={formData.maternityLeaveCount}
+                        onChange={(e) => {
+                          const value = e.target.value.replace(/\D/g, '');
+                          setFormData(prev => ({ ...prev, maternityLeaveCount: parseInt(value) || 0 }));
+                        }}
+                        placeholder="182"
+                      />
+                      <span className="text-sm text-gray-500">Days</span>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="paternityLeaveCount">Paternity Leave (PtL) / Per Event</Label>
+                    <div className="flex items-center gap-2">
+                      <Input
+                        id="paternityLeaveCount"
+                        type="text"
+                        value={formData.paternityLeaveCount}
+                        onChange={(e) => {
+                          const value = e.target.value.replace(/\D/g, '');
+                          setFormData(prev => ({ ...prev, paternityLeaveCount: parseInt(value) || 0 }));
+                        }}
+                        placeholder="15"
+                      />
+                      <span className="text-sm text-gray-500">Days</span>
                     </div>
                   </div>
                 </div>

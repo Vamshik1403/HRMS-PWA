@@ -80,6 +80,8 @@ export function LeaveApplicationsManagement() {
     branchName: "",
     employeeName: "",
     leaveType: "",
+    childNumber: "",
+    birthEventDate: "",
     fromDate: "",
     toDate: "",
     purpose: "",
@@ -90,6 +92,10 @@ export function LeaveApplicationsManagement() {
   })
 
   const [selectedEmployee, setSelectedEmployee] = useState<any | null>(null)
+  const [selectedEmployeeGender, setSelectedEmployeeGender] = useState<string | null>(null)
+  const [selectedEmployeeData, setSelectedEmployeeData] = useState<any | null>(null)
+  const [tenureWarning, setTenureWarning] = useState<string | null>(null)
+  const [childrenCountWarning, setChildrenCountWarning] = useState<string | null>(null)
   const [managerData, setManagerData] = useState<any>(null)
   const [empCreds, setEmpCreds] = useState<any>(null)
   // Dynamic Leave Types
@@ -215,9 +221,13 @@ export function LeaveApplicationsManagement() {
         }
       } catch { /* no compoff data */ }
 
-      // Maternity / Paternity: static policy-based (temporary: 5 days each)
-      const totalMaternity = 5;
-      const totalPaternity = 5;
+      // Maternity and Paternity: days from policy (company-configurable), fallback to statutory defaults
+      const numChildren = employee.numberOfChildren ?? null;
+      const totalMaternity = Number(policy.maternityLeaveCount) || 182;
+      const totalPaternity = Number(policy.paternityLeaveCount) || 15;
+
+      // Tenure: days since joining
+      const joiningDate = employee.joiningDate ?? null;
 
       // 2. Fetch all leave applications for this employee
       const leaveRes = await fetch(`${BACKEND_URL}/leave-application`);
@@ -282,7 +292,7 @@ export function LeaveApplicationsManagement() {
       };
 
       setLeaveBalance(balance);
-      return balance;
+      return { ...balance, gender: (employee.gender ?? null) as string | null, numberOfChildren: numChildren, joiningDate };
 
     } catch (error) {
       console.error("Error calculating leave balance:", error);
@@ -291,6 +301,9 @@ export function LeaveApplicationsManagement() {
       return {
         sick: zero, casual: zero, privileged: zero,
         compOff: zero, maternity: zero, paternity: zero,
+        gender: null as string | null,
+        numberOfChildren: null as number | null,
+        joiningDate: null as string | null,
       };
     }
   };
@@ -298,9 +311,32 @@ export function LeaveApplicationsManagement() {
   // Function to load leave types for a specific employee
   const loadEmployeeLeaveTypes = async (employeeId: number) => {
     try {
-      const balance = await calculateLeaveBalance(employeeId);
-      
-      // Build available Leave Types based on remaining leaves
+      const result = await calculateLeaveBalance(employeeId);
+      const { gender, numberOfChildren, joiningDate, ...balance } = result as any;
+      setSelectedEmployeeGender(gender ?? null);
+
+      // Tenure warning (80 working days rule)
+      if (joiningDate) {
+        const joining = new Date(joiningDate);
+        const today = new Date();
+        const daysSinceJoining = Math.floor((today.getTime() - joining.getTime()) / (1000 * 60 * 60 * 24));
+        if (daysSinceJoining < 80) {
+          setTenureWarning(`Employee has only ${daysSinceJoining} days of service. Minimum 80 days required — leave subject to approval.`);
+        } else {
+          setTenureWarning(null);
+        }
+      } else {
+        setTenureWarning(null);
+      }
+
+      // numberOfChildren null warning for parental leaves
+      if (numberOfChildren === null && (gender === "Female" || gender === "Male" || gender === "Others")) {
+        setChildrenCountWarning("Number of children not set in employee profile. Maternity entitlement defaults to 182 days. Please update the employee profile for accurate entitlement.");
+      } else {
+        setChildrenCountWarning(null);
+      }
+
+      // Build available Leave Types based on remaining leaves and gender eligibility
       const types: string[] = [];
 
       if (balance.sick.remaining > 0) types.push("Sick");
@@ -309,8 +345,9 @@ export function LeaveApplicationsManagement() {
       types.push("ShortLeave"); // Always available - marks as Present/LateMark/Halfday/Absent
       if (balance.compOff.remaining > 0) types.push("CompOff");
       types.push("LoP"); // Always available - unpaid absent
-      if (balance.maternity.remaining > 0) types.push("MtL");
-      if (balance.paternity.remaining > 0) types.push("PtL");
+      // Gender-based: Maternity only for Female/Transgender, Paternity only for Male/Transgender
+      if (balance.maternity.remaining > 0 && (gender === "Female" || gender === "Others")) types.push("MtL");
+      if (balance.paternity.remaining > 0 && (gender === "Male" || gender === "Others")) types.push("PtL");
 
       console.log("Final Available Leave Types:", types);
       setAvailableLeaveTypes(types);
@@ -377,8 +414,9 @@ export function LeaveApplicationsManagement() {
     types.push("ShortLeave");
     if (remainingCompOff > 0) types.push("CompOff");
     types.push("LoP");
-    if (remainingMaternity > 0) types.push("MtL");
-    if (remainingPaternity > 0) types.push("PtL");
+    // Gender-based: Maternity only for Female/Transgender, Paternity only for Male/Transgender
+    if (remainingMaternity > 0 && (selectedEmployeeGender === "Female" || selectedEmployeeGender === "Others")) types.push("MtL");
+    if (remainingPaternity > 0 && (selectedEmployeeGender === "Male" || selectedEmployeeGender === "Others")) types.push("PtL");
 
     setCurrentAvailableTypes(types);
     
@@ -423,9 +461,32 @@ export function LeaveApplicationsManagement() {
     
     // Calculate leave balance for this employee
     if (application.manageEmployeeID) {
-      const balance = await calculateLeaveBalance(application.manageEmployeeID);
+      const result = await calculateLeaveBalance(application.manageEmployeeID);
+      const { gender, numberOfChildren, joiningDate, ...balance } = result as any;
       setManagerLeaveBalance(balance);
-      
+      setSelectedEmployeeGender(gender ?? null);
+
+      // Tenure warning
+      if (joiningDate) {
+        const joining = new Date(joiningDate);
+        const today = new Date();
+        const daysSinceJoining = Math.floor((today.getTime() - joining.getTime()) / (1000 * 60 * 60 * 24));
+        if (daysSinceJoining < 80) {
+          setTenureWarning(`Employee has only ${daysSinceJoining} days of service. Minimum 80 days required — leave subject to approval.`);
+        } else {
+          setTenureWarning(null);
+        }
+      } else {
+        setTenureWarning(null);
+      }
+
+      // numberOfChildren null warning
+      if (numberOfChildren === null && (gender === "Female" || gender === "Male" || gender === "Others")) {
+        setChildrenCountWarning("Number of children not set in employee profile. Maternity entitlement defaults to 182 days. Please update the employee profile for accurate entitlement.");
+      } else {
+        setChildrenCountWarning(null);
+      }
+
       const types: string[] = [];
       if (balance.sick.remaining > 0) types.push("Sick");
       if (balance.casual.remaining > 0) types.push("Casual");
@@ -433,9 +494,10 @@ export function LeaveApplicationsManagement() {
       types.push("ShortLeave");
       if (balance.compOff.remaining > 0) types.push("CompOff");
       types.push("LoP");
-      if (balance.maternity.remaining > 0) types.push("MtL");
-      if (balance.paternity.remaining > 0) types.push("PtL");
-      
+      // Gender-based: Maternity only for Female/Transgender, Paternity only for Male/Transgender
+      if (balance.maternity.remaining > 0 && (gender === "Female" || gender === "Others")) types.push("MtL");
+      if (balance.paternity.remaining > 0 && (gender === "Male" || gender === "Others")) types.push("PtL");
+
       setAvailableLeaveTypesForManager(types);
       setCurrentAvailableTypes(types);
     }
@@ -1128,6 +1190,10 @@ export function LeaveApplicationsManagement() {
 
   const resetEmployeeState = () => {
     setSelectedEmployee(null)
+    setSelectedEmployeeGender(null)
+    setSelectedEmployeeData(null)
+    setTenureWarning(null)
+    setChildrenCountWarning(null)
     setAvailableLeaveTypes(["ShortLeave", "LoP"])
     setIsEmployeeSelected(false)
   }
@@ -1254,6 +1320,8 @@ export function LeaveApplicationsManagement() {
         fromDate: formData.fromDate ? new Date(formData.fromDate) : null,
         toDate: formData.toDate ? new Date(formData.toDate) : null,
         purpose: formData.purpose,
+        childNumber: formData.childNumber || undefined,
+        birthEventDate: formData.birthEventDate || undefined,
       }
 
       const url = editingApplication
@@ -1288,6 +1356,8 @@ export function LeaveApplicationsManagement() {
       branchName: "",
       employeeName: isNormalUser ? `${empCreds?.employeeFirstName || ""} ${empCreds?.employeeLastName || ""}`.trim() : "",
       leaveType: "",
+      childNumber: "",
+      birthEventDate: "",
       fromDate: "",
       toDate: "",
       purpose: "",
@@ -1297,6 +1367,10 @@ export function LeaveApplicationsManagement() {
       manageEmployeeID: isNormalUser ? empCreds?.manageEmployeeID : undefined,
     })
     setSelectedEmployee(null)
+    setSelectedEmployeeGender(null)
+    setSelectedEmployeeData(null)
+    setTenureWarning(null)
+    setChildrenCountWarning(null)
     setEditingApplication(null)
     setAvailableLeaveTypes(["ShortLeave", "LoP"])
     setLeaveBalance({
@@ -1317,6 +1391,8 @@ export function LeaveApplicationsManagement() {
       branchName: application.branchName || "",
       employeeName: application.employeeName || "",
       leaveType: application.appliedLeaveType || "",
+      childNumber: (application as any).childNumber || "",
+      birthEventDate: (application as any).birthEventDate || "",
       fromDate: application.fromDate,
       toDate: application.toDate,
       purpose: application.purpose || "",
@@ -1456,28 +1532,92 @@ export function LeaveApplicationsManagement() {
                   {/* Leave Balance Display */}
                   {(isEmployeeSelected || isNormalUser) && (
                     <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 p-4 bg-gray-50 rounded-lg">
-                      {([
-                        { key: "sick" as const, label: "Sick Leave", color: "text-blue-600" },
-                        { key: "casual" as const, label: "Casual Leave", color: "text-green-600" },
-                        { key: "privileged" as const, label: "Privileged Leave", color: "text-purple-600" },
-                        { key: "compOff" as const, label: "Comp Off", color: "text-orange-600" },
-                        { key: "maternity" as const, label: "Maternity (MtL)", color: "text-pink-600" },
-                        { key: "paternity" as const, label: "Paternity (PtL)", color: "text-teal-600" },
-                      ] as const).map(({ key, label, color }) => (
-                        <div key={key} className="text-center">
-                          <div className="text-xs font-medium text-gray-600">{label}</div>
-                          <div className={`text-base font-bold ${color}`}>
-                            {leaveBalance[key].used}/{leaveBalance[key].total}
+                    {([
+                        { key: "sick" as const, label: "Sick Leave", color: "text-blue-600", genderRequired: null as string | null },
+                        { key: "casual" as const, label: "Casual Leave", color: "text-green-600", genderRequired: null as string | null },
+                        { key: "privileged" as const, label: "Privileged Leave", color: "text-purple-600", genderRequired: null as string | null },
+                        { key: "compOff" as const, label: "Comp Off", color: "text-orange-600", genderRequired: null as string | null },
+                        { key: "maternity" as const, label: "Maternity (MtL)", color: "text-pink-600", genderRequired: "Female" as string | null },
+                        { key: "paternity" as const, label: "Paternity (PtL)", color: "text-teal-600", genderRequired: "Male" as string | null },
+                      ] as const).map(({ key, label, color, genderRequired }) => {
+                        const isEligible = !genderRequired || selectedEmployeeGender === genderRequired || selectedEmployeeGender === "Others";
+                        const ineligibleReason = !isEligible
+                          ? (key === "maternity" ? "Not eligible (Male)" : "Not eligible (Female)")
+                          : null;
+                        return (
+                          <div key={key} className={`text-center ${!isEligible ? "opacity-40" : ""}`}>
+                            <div className="text-xs font-medium text-gray-600">{label}</div>
+                            {isEligible ? (
+                              <>
+                                <div className={`text-base font-bold ${color}`}>
+                                  {leaveBalance[key].used}/{leaveBalance[key].total}
+                                </div>
+                                <div className="text-xs text-gray-500">
+                                  {leaveBalance[key].remaining} remaining
+                                </div>
+                              </>
+                            ) : (
+                              <div className="text-xs text-gray-400 mt-1">{ineligibleReason}</div>
+                            )}
                           </div>
-                          <div className="text-xs text-gray-500">
-                            {leaveBalance[key].remaining} remaining
-                          </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
                   
                   {/* Leave Type - temporarily hidden */}
+
+                  {/* Tenure Warning */}
+                  {tenureWarning && (
+                    <div className="p-3 bg-orange-50 rounded-md border border-orange-200">
+                      <p className="text-sm text-orange-700">⚠️ {tenureWarning}</p>
+                    </div>
+                  )}
+
+                  {/* Children Count Warning */}
+                  {childrenCountWarning && (
+                    <div className="p-3 bg-yellow-50 rounded-md border border-yellow-200">
+                      <p className="text-sm text-yellow-700">⚠️ {childrenCountWarning}</p>
+                    </div>
+                  )}
+
+                  {/* Child Event - shown for MtL/PtL */}
+                  {(formData.leaveType === "MtL" || formData.leaveType === "PtL") && (
+                    <div className="space-y-2">
+                      <Label>Which child is this for? *</Label>
+                      <select
+                        value={formData.childNumber}
+                        onChange={(e) => setFormData(prev => ({ ...prev, childNumber: e.target.value }))}
+                        className="w-full px-3 py-2 border border-[#d0d0d0] rounded-sm bg-white text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                        required
+                      >
+                        <option value="">Select child event</option>
+                        <option value="1st">1st Child</option>
+                        <option value="2nd">2nd Child</option>
+                        <option value="3rd+">3rd+ Child</option>
+                        <option value="Adoption">Adoption</option>
+                      </select>
+                    </div>
+                  )}
+
+                  {/* Birth / Expected Delivery Date - shown for MtL/PtL */}
+                  {(formData.leaveType === "MtL" || formData.leaveType === "PtL") && (
+                    <div className="space-y-2">
+                      <Label>{formData.leaveType === "MtL" ? "Expected Delivery Date" : "Birth / Expected Birth Date"}</Label>
+                      <Input
+                        type="date"
+                        value={formData.birthEventDate}
+                        onChange={(e) => setFormData(prev => ({ ...prev, birthEventDate: e.target.value }))}
+                        className="w-full"
+                      />
+                      {formData.leaveType === "PtL" && formData.birthEventDate && formData.fromDate && (() => {
+                        const diff = Math.abs(new Date(formData.fromDate).getTime() - new Date(formData.birthEventDate).getTime()) / (1000 * 60 * 60 * 24);
+                        return diff > 90 ? (
+                          <p className="text-xs text-red-500 mt-1">⚠️ Leave start is more than 90 days from birth date. Paternity leave may not be eligible.</p>
+                        ) : null;
+                      })()}
+                    </div>
+                  )}
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="space-y-2">
@@ -1608,23 +1748,35 @@ export function LeaveApplicationsManagement() {
                 {/* Leave Balance Display for Manager */}
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 p-4 bg-blue-50 rounded-lg">
                   {([
-                    { key: "sick" as const, label: "Sick Leave", color: "text-blue-600", statusKey: "Sick" },
-                    { key: "casual" as const, label: "Casual Leave", color: "text-green-600", statusKey: "Casual" },
-                    { key: "privileged" as const, label: "Privileged Leave", color: "text-purple-600", statusKey: "Privileged" },
-                    { key: "compOff" as const, label: "Comp Off", color: "text-orange-600", statusKey: "CompOff" },
-                    { key: "maternity" as const, label: "Maternity (MtL)", color: "text-pink-600", statusKey: "MtL" },
-                    { key: "paternity" as const, label: "Paternity (PtL)", color: "text-teal-600", statusKey: "PtL" },
-                  ] as const).map(({ key, label, color, statusKey }) => (
-                    <div key={key} className="text-center">
-                      <div className="text-xs font-medium text-gray-600">{label}</div>
-                      <div className={`text-base font-bold ${color}`}>
-                        {managerLeaveBalance[key].used + dayStatuses.filter(day => day.status === statusKey).length}/{managerLeaveBalance[key].total}
+                    { key: "sick" as const, label: "Sick Leave", color: "text-blue-600", statusKey: "Sick", genderRequired: null as string | null },
+                    { key: "casual" as const, label: "Casual Leave", color: "text-green-600", statusKey: "Casual", genderRequired: null as string | null },
+                    { key: "privileged" as const, label: "Privileged Leave", color: "text-purple-600", statusKey: "Privileged", genderRequired: null as string | null },
+                    { key: "compOff" as const, label: "Comp Off", color: "text-orange-600", statusKey: "CompOff", genderRequired: null as string | null },
+                    { key: "maternity" as const, label: "Maternity (MtL)", color: "text-pink-600", statusKey: "MtL", genderRequired: "Female" as string | null },
+                    { key: "paternity" as const, label: "Paternity (PtL)", color: "text-teal-600", statusKey: "PtL", genderRequired: "Male" as string | null },
+                  ] as const).map(({ key, label, color, statusKey, genderRequired }) => {
+                    const isEligible = !genderRequired || selectedEmployeeGender === genderRequired || selectedEmployeeGender === "Others";
+                    const ineligibleReason = !isEligible
+                      ? (key === "maternity" ? "Not eligible (Male)" : "Not eligible (Female)")
+                      : null;
+                    return (
+                      <div key={key} className={`text-center ${!isEligible ? "opacity-40" : ""}`}>
+                        <div className="text-xs font-medium text-gray-600">{label}</div>
+                        {isEligible ? (
+                          <>
+                            <div className={`text-base font-bold ${color}`}>
+                              {managerLeaveBalance[key].used + dayStatuses.filter(day => day.status === statusKey).length}/{managerLeaveBalance[key].total}
+                            </div>
+                            <div className="text-xs text-gray-500">
+                              {managerLeaveBalance[key].remaining} remaining
+                            </div>
+                          </>
+                        ) : (
+                          <div className="text-xs text-gray-400 mt-1">{ineligibleReason}</div>
+                        )}
                       </div>
-                      <div className="text-xs text-gray-500">
-                        {managerLeaveBalance[key].remaining} remaining
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
 
                 {/* Available Leave Types Info */}
@@ -1633,6 +1785,20 @@ export function LeaveApplicationsManagement() {
                     <strong>Available Leave Types:</strong> {currentAvailableTypes.map(t => leaveTypeLabel(t)).join(", ")}
                   </p>
                 </div>
+
+                {/* Tenure Warning */}
+                {tenureWarning && (
+                  <div className="p-3 bg-orange-50 rounded-md border border-orange-200">
+                    <p className="text-sm text-orange-700">⚠️ {tenureWarning}</p>
+                  </div>
+                )}
+
+                {/* Children Count Warning */}
+                {childrenCountWarning && (
+                  <div className="p-3 bg-yellow-50 rounded-md border border-yellow-200">
+                    <p className="text-sm text-yellow-700">⚠️ {childrenCountWarning}</p>
+                  </div>
+                )}
               </>
             )}
 
@@ -1649,13 +1815,15 @@ export function LeaveApplicationsManagement() {
                   types.push("ShortLeave");
                   if (managerLeaveBalance.compOff.remaining > 0 || day.status === "CompOff") types.push("CompOff");
                   types.push("LoP");
-                  if (managerLeaveBalance.maternity.remaining > 0 || day.status === "MtL") types.push("MtL");
-                  if (managerLeaveBalance.paternity.remaining > 0 || day.status === "PtL") types.push("PtL");
+                  if ((managerLeaveBalance.maternity.remaining > 0 || day.status === "MtL") && (selectedEmployeeGender === "Female" || selectedEmployeeGender === "Others")) types.push("MtL");
+                  if ((managerLeaveBalance.paternity.remaining > 0 || day.status === "PtL") && (selectedEmployeeGender === "Male" || selectedEmployeeGender === "Others")) types.push("PtL");
                   
                   return types;
                 };
 
                 const availableTypesForThisDay = getAvailableTypesForDay();
+                const showMtLDisabled = !availableTypesForThisDay.includes("MtL") && selectedEmployeeGender !== null && selectedEmployeeGender !== "Female" && selectedEmployeeGender !== "Others";
+                const showPtLDisabled = !availableTypesForThisDay.includes("PtL") && selectedEmployeeGender !== null && selectedEmployeeGender !== "Male" && selectedEmployeeGender !== "Others";
                                           
                 return (
                   <div key={index} className="flex items-center gap-4 p-3 border rounded-md">
@@ -1676,6 +1844,8 @@ export function LeaveApplicationsManagement() {
                         {availableTypesForThisDay.map((type) => (
                           <option key={type} value={type}>{leaveTypeLabel(type)}</option>
                         ))}
+                        {showMtLDisabled && <option value="" disabled>Maternity (MtL) — Not eligible (Male)</option>}
+                        {showPtLDisabled && <option value="" disabled>Paternity (PtL) — Not eligible (Female)</option>}
                       </select>
                       {day.status === "ShortLeave" && (
                         <select

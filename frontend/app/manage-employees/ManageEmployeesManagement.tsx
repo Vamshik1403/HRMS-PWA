@@ -187,6 +187,7 @@ interface ManageEmpRead {
   employeePhotoUrl?: string | null;
 
   gender?: string | null;
+  numberOfChildren?: number | null;
   dateOfBirth?: string | null;
   bloodGroup?: string | null;
   maritalStatus?: string | null;
@@ -764,6 +765,7 @@ export function ManageEmployeesManagement() {
     employeeFatherName: "",
     employeeMotherName: "",
     employeeSpouseName: "",
+    numberOfChildren: "",
 
     deptAutocomplete: "",
     desgAutocomplete: "",
@@ -1793,6 +1795,7 @@ const addCombinedDevMap = () => {
       employeeFatherName: "",
       employeeMotherName: "",
       employeeSpouseName: "",
+      numberOfChildren: "",
 
       deptAutocomplete: "",
       desgAutocomplete: "",
@@ -2335,6 +2338,7 @@ const addCombinedDevMap = () => {
         employeePhotoUrl: uploadedPhotoUrl ?? (formData.employeePhotoUrl || undefined),
 
         gender: formData.gender || undefined,
+        numberOfChildren: formData.numberOfChildren !== "" ? Number(formData.numberOfChildren) : undefined,
         dateOfBirth: formData.dateOfBirth || undefined,
         bloodGroup: formData.bloodGroup || undefined,
         maritalStatus: formData.maritalStatus || undefined,
@@ -2582,6 +2586,7 @@ const addCombinedDevMap = () => {
       employeeFatherName: freshData.employeeFatherName ?? "",
       employeeMotherName: freshData.employeeMotherName ?? "",
       employeeSpouseName: freshData.employeeSpouseName ?? "",
+      numberOfChildren: freshData.numberOfChildren != null ? String(freshData.numberOfChildren) : "",
       contrAutocomplete: "",
       wsAutocomplete: "",
       apAutocomplete: "",
@@ -3808,7 +3813,7 @@ const addCombinedDevMap = () => {
                     <SelectContent>
                       <SelectItem value="Male">Male</SelectItem>
                       <SelectItem value="Female">Female</SelectItem>
-                      <SelectItem value="Transgender">Transgender</SelectItem>
+                      <SelectItem value="Others">Others</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -3876,7 +3881,16 @@ const addCombinedDevMap = () => {
                 />
               </div>
 
-              {/* Photo upload */}
+              <div className="space-y-2">
+                <Label>Number of Children</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  value={formData.numberOfChildren}
+                  onChange={(e) => setFormData((p) => ({ ...p, numberOfChildren: e.target.value }))}
+                  placeholder="0"
+                />
+              </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Photo</Label>

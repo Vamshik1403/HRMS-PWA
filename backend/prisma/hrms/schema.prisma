@@ -550,6 +550,8 @@ model leaveApplication {
   revokedAt               DateTime?
   revokedReason           String?
   appliedLeaveType        String?                   @db.VarChar
+  childNumber             String?                   @db.VarChar
+  birthEventDate          String?                   @db.VarChar
   fromDate                DateTime?                 @db.Date
   toDate                  DateTime?                 @db.Date
   purpose                 String?                   @db.VarChar
@@ -583,6 +585,8 @@ model leavePolicy {
   leavePolicyName             String?                  @db.VarChar
   sickLeaveCount              String?                  @db.VarChar
   casualLeaveCount            String?                  @db.VarChar
+  maternityLeaveCount         String?                  @db.VarChar
+  paternityLeaveCount         String?                  @db.VarChar
   earnLeaveWorkingMonths      String?                  @db.VarChar
   earnLeaveCount              Int?
   isPrivilegedLeaveApplicable Boolean?                 @default(false)
@@ -636,6 +640,7 @@ model ManageEmployee {
   permenantAddress               String?                   @db.VarChar
   employeePhotoUrl               String?                   @db.VarChar
   gender                         String?                   @db.VarChar
+  numberOfChildren               Int?
   dateOfBirth                    String?                   @db.VarChar
   bloodGroup                     String?                   @db.VarChar
   maritalStatus                  String?                   @db.VarChar
