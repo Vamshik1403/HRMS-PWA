@@ -39,6 +39,8 @@ interface WorkShift {
   shiftName?: string
   shiftCode?: string
   isActive?: string
+  isRotating?: boolean
+  isFlexible?: boolean
 }
 
 interface RosterDay {
@@ -70,6 +72,9 @@ interface ManageEmployee {
   serviceProviderID?: ID | null
   companyID?: ID | null
   branchesID?: ID | null
+  allowRotatingShift?: boolean | null
+  workShiftID?: ID | null
+  workShift?: WorkShift | null
 }
 
 interface LeaveApplication {
@@ -227,7 +232,7 @@ export function RosterManagement() {
 
   // Get user from localStorage
   const [user, setUser] = useState<any>(null)
-  const [userRole, setUserRole] = useState<"SUPERADMIN" | "COMPANY_ADMIN" | "EMPLOYEE" | null>(null)
+  const [userRole, setUserRole] = useState<"SUPERADMIN" | "SERVICE_PROVIDER" | "COMPANY_ADMIN" | "EMPLOYEE" | null>(null)
 
   // ==================== USER AUTHENTICATION ====================
   useEffect(() => {
@@ -248,7 +253,7 @@ export function RosterManagement() {
   }, [])
 
   useEffect(() => {
-    if (userRole !== "COMPANY_ADMIN" || !user) return
+    if ((userRole !== "COMPANY_ADMIN" && userRole !== "SERVICE_PROVIDER") || !user) return
 
     const loadUserMapping = async () => {
       try {
@@ -260,7 +265,7 @@ export function RosterManagement() {
           setCurrentUserMapping(me)
           console.log("👨‍💼 Manager mapping loaded:", me)
 
-          // Set service provider for manager
+          // Set service provider for both COMPANY_ADMIN and SERVICE_PROVIDER
           if (me.serviceProvider) {
             const sp: ServiceProvider = {
               id: me.serviceProviderID,
@@ -270,51 +275,56 @@ export function RosterManagement() {
             setServiceProviderID(me.serviceProviderID)
           }
 
-          // Set only the mapped company
-          if (me.company) {
-            const company: Company = {
-              id: me.companyID,
-              serviceProviderID: me.serviceProviderID,
-              companyName: me.company.companyName
-            }
-            setManagerCompanies([company]) // Only one company
-            setCoList([company])
-            setCompanyID(me.companyID) // Auto-select mapped company
-            console.log("🏢 Company set:", company)
-          }
-
-          // Set only the mapped branch
-          if (me.branches) {
-            const branch: Branch = {
-              id: me.branchesID,
-              serviceProviderID: me.serviceProviderID,
-              companyID: me.companyID,
-              branchName: me.branches.branchName
-            }
-            setManagerBranches([branch]) // Only one branch
-            setBrList([branch])
-            setBranchesID(me.branchesID) // Auto-select mapped branch
-            console.log("🏢 Branch set:", branch)
-          } else {
-            console.warn("⚠️ No branch found in user mapping")
-            // Try to fetch branches for the company
-            try {
-              const allBranches = await safeFetch<Branch[]>(API.branches)
-              const companyBranches = allBranches.filter(b => 
-                b.serviceProviderID === me.serviceProviderID && 
-                b.companyID === me.companyID
-              )
-              if (companyBranches.length > 0) {
-                setBrList(companyBranches)
-                if (companyBranches.length === 1) {
-                  setBranchesID(companyBranches[0].id)
-                  console.log("🏢 Auto-selected branch:", companyBranches[0])
-                }
+          // For COMPANY_ADMIN only: auto-set the single mapped company and branch
+          if (userRole === "COMPANY_ADMIN") {
+            // Set only the mapped company
+            if (me.company) {
+              const company: Company = {
+                id: me.companyID,
+                serviceProviderID: me.serviceProviderID,
+                companyName: me.company.companyName
               }
-            } catch (error) {
-              console.error("Failed to fetch branches:", error)
+              setManagerCompanies([company]) // Only one company
+              setCoList([company])
+              setCompanyID(me.companyID) // Auto-select mapped company
+              console.log("🏢 Company set:", company)
+            }
+
+            // Set only the mapped branch
+            if (me.branches) {
+              const branch: Branch = {
+                id: me.branchesID,
+                serviceProviderID: me.serviceProviderID,
+                companyID: me.companyID,
+                branchName: me.branches.branchName
+              }
+              setManagerBranches([branch]) // Only one branch
+              setBrList([branch])
+              setBranchesID(me.branchesID) // Auto-select mapped branch
+              console.log("🏢 Branch set:", branch)
+            } else {
+              console.warn("⚠️ No branch found in user mapping")
+              // Try to fetch branches for the company
+              try {
+                const allBranches = await safeFetch<Branch[]>(API.branches)
+                const companyBranches = allBranches.filter(b =>
+                  b.serviceProviderID === me.serviceProviderID &&
+                  b.companyID === me.companyID
+                )
+                if (companyBranches.length > 0) {
+                  setBrList(companyBranches)
+                  if (companyBranches.length === 1) {
+                    setBranchesID(companyBranches[0].id)
+                    console.log("🏢 Auto-selected branch:", companyBranches[0])
+                  }
+                }
+              } catch (error) {
+                console.error("Failed to fetch branches:", error)
+              }
             }
           }
+          // SERVICE_PROVIDER: serviceProviderID is set above; companies will be loaded
+          // by the company loading effect when serviceProviderID changes
         }
       } catch (error) {
         console.error("Error loading user mapping:", error)
@@ -325,6 +335,7 @@ export function RosterManagement() {
   }, [userRole, user])
 
   const isSuperAdmin = userRole === "SUPERADMIN"
+  const isServiceProviderRole = userRole === "SERVICE_PROVIDER"
   const isServiceProvider = userRole === "COMPANY_ADMIN"
 
   // ✅ EFFECTIVE SCOPE
@@ -392,10 +403,12 @@ export function RosterManagement() {
   )
 
   const shiftOptions = useMemo(() =>
-    shiftList.map((s) => ({
-      id: s.id,
-      name: s.shiftName ?? s.workShiftName ?? s.shiftCode ?? `Shift-${s.id}`,
-    })),
+    shiftList
+      .filter(s => s.isRotating === true)
+      .map((s) => ({
+        id: s.id,
+        name: s.shiftName ?? s.workShiftName ?? s.shiftCode ?? `Shift-${s.id}`,
+      })),
     [shiftList]
   )
 
@@ -518,9 +531,9 @@ export function RosterManagement() {
     fetchInitialData()
   }, [fetchInitialData])
 
-  // SUPERADMIN: Load companies when service provider changes
+  // SUPERADMIN / SERVICE_PROVIDER: Load companies when service provider changes
   useEffect(() => {
-    if (!isSuperAdmin) return
+    if (!isSuperAdmin && !isServiceProviderRole) return
 
     setCompanyID("")
     setBranchesID("")
@@ -545,11 +558,11 @@ export function RosterManagement() {
     }
 
     loadCompanies()
-  }, [serviceProviderID, isSuperAdmin])
+  }, [serviceProviderID, isSuperAdmin, isServiceProviderRole])
 
-  // SUPERADMIN: Load branches when company changes
+  // SUPERADMIN / SERVICE_PROVIDER: Load branches when company changes
   useEffect(() => {
-    if (!isSuperAdmin) return
+    if (!isSuperAdmin && !isServiceProviderRole) return
 
     setBranchesID("")
     setDepartmentID("")
@@ -574,9 +587,9 @@ export function RosterManagement() {
     }
 
     loadBranches()
-  }, [serviceProviderID, companyID, isSuperAdmin])
+  }, [serviceProviderID, companyID, isSuperAdmin, isServiceProviderRole])
 
-  // Load departments when branch changes (for both SUPERADMIN and COMPANY_ADMIN)
+  // Load departments when branch changes (for SUPERADMIN, SERVICE_PROVIDER, and COMPANY_ADMIN)
   useEffect(() => {
     // Reset department and designation when branch changes
     setDepartmentID("")
@@ -586,6 +599,7 @@ export function RosterManagement() {
 
     // Check if we have required IDs to load departments
     if (isSuperAdmin && (!serviceProviderID || !companyID || !branchesID)) return
+    if (isServiceProviderRole && (!serviceProviderID || !companyID || !branchesID)) return
     if (isServiceProvider && (!companyID || !branchesID)) return
 
     const loadDepartments = async () => {
@@ -606,11 +620,12 @@ export function RosterManagement() {
     }
 
     loadDepartments()
-  }, [effectiveServiceProviderID, effectiveCompanyID, effectiveBranchesID, isSuperAdmin, isServiceProvider])
+  }, [effectiveServiceProviderID, effectiveCompanyID, effectiveBranchesID, isSuperAdmin, isServiceProviderRole, isServiceProvider])
 
   // Load designations when department changes
   useEffect(() => {
     if (isSuperAdmin && (!serviceProviderID || !companyID || !branchesID)) return
+    if (isServiceProviderRole && (!serviceProviderID || !companyID || !branchesID)) return
     if (isServiceProvider && (!companyID || !branchesID)) return
 
     const loadDesignations = async () => {
@@ -635,7 +650,7 @@ export function RosterManagement() {
     }
 
     loadDesignations()
-  }, [effectiveServiceProviderID, effectiveCompanyID, effectiveBranchesID, departmentID, isSuperAdmin, isServiceProvider])
+  }, [effectiveServiceProviderID, effectiveCompanyID, effectiveBranchesID, departmentID, isSuperAdmin, isServiceProviderRole, isServiceProvider])
 
   // Auto-refresh roster data
   useEffect(() => {
@@ -700,6 +715,28 @@ export function RosterManagement() {
 
     const day = getDayForDate(empId, dateStr)
 
+    // For fixed (non-rotating) employees, show their assigned shift in all cells
+    // even if there is no roster day entry for that date
+    const emp = employees.find(e => e.id === empId)
+    if (!emp?.allowRotatingShift && !day) {
+      const shiftName = emp?.workShift?.workShiftName ?? emp?.workShift?.shiftName ?? null
+      if (shiftName) {
+        return {
+          text: shiftName,
+          color: "bg-blue-50 border-blue-200 text-blue-700",
+          icon: "📌",
+          hasApprovedLeave: false,
+          isFixedShift: true,  // mark so we can hide delete button
+        }
+      }
+      return {
+        text: "-",
+        color: "bg-gray-50 border-gray-200",
+        icon: null,
+        hasApprovedLeave: false
+      }
+    }
+
     if (!day) {
       return {
         text: "-",
@@ -747,7 +784,7 @@ export function RosterManagement() {
           hasApprovedLeave: false
         }
     }
-  }, [getDayForDate, hasApprovedLeave, getLeaveTypeForDate])
+  }, [getDayForDate, hasApprovedLeave, getLeaveTypeForDate, employees])
 
   // ==================== EVENT HANDLERS ====================
   const handleDeleteAssignment = async (rosterDayId: ID, employeeId: ID) => {
@@ -1099,7 +1136,7 @@ export function RosterManagement() {
                   setDesignationID("")
                 }}
                 disabled={
-                  (isSuperAdmin && !serviceProviderID) ||
+                  ((isSuperAdmin || isServiceProviderRole) && !serviceProviderID) ||
                   (isServiceProvider && coList.length === 0)
                 }
               >
@@ -1131,7 +1168,7 @@ export function RosterManagement() {
                 value={branchesID}
                 onChange={(e) => setBranchesID(e.target.value ? Number(e.target.value) : "")}
                 disabled={
-                  (isSuperAdmin && (!serviceProviderID || !companyID)) ||
+                  ((isSuperAdmin || isServiceProviderRole) && (!serviceProviderID || !companyID)) ||
                   (isServiceProvider && !companyID)
                 }
               >
@@ -1159,7 +1196,7 @@ export function RosterManagement() {
                   setDesignationID("") // Reset designation when department changes
                 }}
                 disabled={
-                  (isSuperAdmin && (!serviceProviderID || !companyID || !branchesID)) ||
+                  ((isSuperAdmin || isServiceProviderRole) && (!serviceProviderID || !companyID || !branchesID)) ||
                   (isServiceProvider && (!companyID || !branchesID)) ||
                   brList.length === 0
                 }
@@ -1185,7 +1222,7 @@ export function RosterManagement() {
                 value={designationID}
                 onChange={(e) => setDesignationID(e.target.value ? Number(e.target.value) : "")}
                 disabled={
-                  (isSuperAdmin && (!serviceProviderID || !companyID || !branchesID)) ||
+                  ((isSuperAdmin || isServiceProviderRole) && (!serviceProviderID || !companyID || !branchesID)) ||
                   (isServiceProvider && (!companyID || !branchesID)) ||
                   !departmentID // Disable if no department selected
                 }
@@ -1362,6 +1399,8 @@ export function RosterManagement() {
                             const cellData = getCellDisplay(emp.id, d)
                             const day = getDayForDate(emp.id, d)
                             const isDeleting = deletingDays.has(day?.id || 0)
+                            // Fixed (non-rotating) employees cannot have their shift deleted from roster
+                            const isFixedShiftEmp = emp.allowRotatingShift === false || emp.allowRotatingShift == null
 
                             return (
                               <TableCell key={`${emp.id}-${d}`} className="text-center p-1">
@@ -1391,7 +1430,8 @@ export function RosterManagement() {
                                           {day.workShift.shiftCode}
                                         </span>
                                       )}
-                                      {cellData.rosterDayId && (
+                                      {/* Only show delete button for rotating employees with an actual roster day */}
+                                      {cellData.rosterDayId && !isFixedShiftEmp && (
                                         <button
                                           onClick={(e) => {
                                             e.stopPropagation()

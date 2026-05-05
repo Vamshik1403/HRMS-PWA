@@ -141,7 +141,9 @@ export class UpdateManageEmployeeDto {
   @IsOptional()
   @IsString()
   noticePeriodDaysForTermination?: string;
-  
+
+  @IsOptional()
+  allowRotatingShift?: boolean;
 
   // Nested arrays (upsert)
   @IsOptional() @IsArray()

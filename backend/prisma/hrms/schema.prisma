@@ -671,6 +671,7 @@ model ManageEmployee {
   shiftEligibility               String?                   @db.VarChar
   typeOfEmployee                 String?                   @db.VarChar
   weeklyOffPattern               String?                   @db.VarChar
+  allowRotatingShift             Boolean                   @default(false)
   bonusAllocation                BonusAllocation[]
   empAttendanceRegularise        EmpAttendanceRegularise[]
   empCurrentPosition             EmpCurrentPosition[]

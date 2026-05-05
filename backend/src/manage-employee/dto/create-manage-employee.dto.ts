@@ -273,6 +273,8 @@ export class CreateManageEmployeeDto {
   @IsString()
   noticePeriodDaysForTermination?: string;
 
+  @IsOptional() @IsBoolean()
+  allowRotatingShift?: boolean;
 
   // Nested arrays
   @IsOptional() @IsArray()

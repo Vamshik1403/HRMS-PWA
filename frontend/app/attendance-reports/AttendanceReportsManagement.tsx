@@ -388,7 +388,8 @@ const MultiSelect = ({ options, selectedValues, onChange, placeholder, disabled 
 // ==================== DATE CELL COMPONENT (UPDATED) ====================
 
 const DateCell = ({ punches, date, employeeID, formData, reportData, selectedCompanyID, selectedBranchID, getComprehensiveStatus }: any) => {
-  const cacheKey = `${date}-${employeeID}-${punches.length}`;
+  const punchesKey = punches.join(',');
+  const cacheKey = `${date}-${employeeID}-${punchesKey}`;
   const [status, setStatus] = useState<any>(null);
 
   useEffect(() => {
@@ -403,7 +404,7 @@ const DateCell = ({ punches, date, employeeID, formData, reportData, selectedCom
       }
     };
     fetchStatus();
-  }, [cacheKey, date, employeeID, punches.length, selectedCompanyID, selectedBranchID]);
+  }, [cacheKey, date, employeeID, punchesKey, selectedCompanyID, selectedBranchID]);
 
   if (!status) {
     return <td className="px-2 py-1 border-b min-w-[80px] text-center align-top"><div className="text-[10px] text-gray-400">...</div></td>;
@@ -506,6 +507,7 @@ const DateCell = ({ punches, date, employeeID, formData, reportData, selectedCom
           <div className="inline-block px-2 py-0.5 bg-blue-100 text-blue-800 text-[9px] font-medium rounded-full mb-1">{totalHours}h {totalMins}m</div>
           <div className="inline-block px-2 py-0.5 bg-indigo-100 text-indigo-800 text-[9px] font-medium rounded-full mb-1">OT</div>
           <div className="inline-block px-2 py-0.5 bg-indigo-50 text-indigo-700 text-[9px] font-medium rounded-full">+{otHours}h {otMins}m</div>
+          {status.rosterShiftName && <div className="block mt-0.5 text-[8px] font-medium text-gray-500">{status.rosterShiftName}</div>}
         </td>
       );
     }
@@ -518,6 +520,7 @@ const DateCell = ({ punches, date, employeeID, formData, reportData, selectedCom
         <td className="px-2 py-1 border-b min-w-[80px] text-center align-top">
           <div className="inline-block px-2 py-0.5 bg-green-100 text-green-800 text-[9px] font-medium rounded-full mb-1">P</div>
           <div className="inline-block px-2 py-0.5 bg-blue-100 text-blue-800 text-[9px] font-medium rounded-full">{hours}h {mins}m</div>
+          {status.rosterShiftName && <div className="block mt-0.5 text-[8px] font-medium text-gray-500">{status.rosterShiftName}</div>}
         </td>
       );
     }
@@ -530,6 +533,7 @@ const DateCell = ({ punches, date, employeeID, formData, reportData, selectedCom
         <td className="px-2 py-1 border-b min-w-[80px] text-center align-top">
           <div className="inline-block px-2 py-0.5 bg-yellow-100 text-yellow-800 text-[9px] font-medium rounded-full mb-1">HD</div>
           <div className="inline-block px-2 py-0.5 bg-blue-100 text-blue-800 text-[9px] font-medium rounded-full">{hours}h {mins}m</div>
+          {status.rosterShiftName && <div className="block mt-0.5 text-[8px] font-medium text-gray-500">{status.rosterShiftName}</div>}
         </td>
       );
     }
@@ -542,6 +546,7 @@ const DateCell = ({ punches, date, employeeID, formData, reportData, selectedCom
         <td className="px-2 py-1 border-b min-w-[80px] text-center align-top">
           <div className="inline-block px-2 py-0.5 bg-blue-100 text-blue-800 text-[9px] font-medium rounded-full mb-1">L</div>
           <div className="inline-block px-2 py-0.5 bg-blue-100 text-blue-800 text-[9px] font-medium rounded-full">{hours}h {mins}m</div>
+          {status.rosterShiftName && <div className="block mt-0.5 text-[8px] font-medium text-gray-500">{status.rosterShiftName}</div>}
         </td>
       );
     }
@@ -1096,7 +1101,7 @@ const employeeOptions = filteredEmployees.map((e: Employee) => ({
     selectedCompanyID: number, 
     selectedBranchID: number,
     statusesMap: Map<string, string>
-  ): Promise<{ type: string; label: string; hasPunches: boolean; workedMinutes?: number; otMinutes?: number; totalShiftMinutes?: number }> => {
+  ): Promise<{ type: string; label: string; hasPunches: boolean; workedMinutes?: number; otMinutes?: number; totalShiftMinutes?: number; rosterShiftName?: string }> => {
     
     const hasPunches = punches.length > 0;
     
@@ -1124,13 +1129,47 @@ const employeeOptions = filteredEmployees.map((e: Employee) => ({
         if (res.ok) workShift = await res.json();
       } catch (err) {}
     }
-    
+
+    // Check roster for a date-specific work shift override.
+    // rosters state is already flattened to RosterEmployee[] in generateReport.
+    const rosterEmp = rosters.find(r => r.employeeID === employeeID);
+    const rosterDayEntry = rosterEmp?.days?.find((d: RosterDay) => new Date(d.workDate).toISOString().split('T')[0] === date);
+    let rosterShiftName: string | undefined;
+    if (rosterDayEntry?.dayType === "WORK" && rosterDayEntry?.workShiftID != null) {
+      // Prefer the fully-enriched shift from workShifts state (has workShiftDay loaded).
+      // workShifts state is populated from /work-shift in generateReport.
+      const overrideShift = workShifts.find(ws => ws.id === rosterDayEntry.workShiftID);
+      if (overrideShift) {
+        workShift = overrideShift;
+        rosterShiftName = overrideShift.workShiftName;
+      } else if (rosterDayEntry.workShift) {
+        workShift = rosterDayEntry.workShift;
+        rosterShiftName = rosterDayEntry.workShift.workShiftName;
+      }
+    }
+
     const isRotating = workShift?.isRotating || false;
     const isFlexible = workShift?.isFlexible || false;
     const dayOfWeek = WEEKDAYS[new Date(date).getDay()];
     const shiftDay = workShift?.workShiftDay?.find(d => d.weekDay === dayOfWeek && d.shiftType === "WORK");
     const otDay = workShift?.workShiftDay?.find(d => d.weekDay === dayOfWeek && d.shiftType === "OT");
     const defaultWorkedMinutes = shiftDay?.totalMinutes || 480;
+
+    // For night shifts that span midnight, include next-day punches (checkout is on next calendar date).
+    const shiftSpansMidnight = shiftDay
+      ? timeToMinutes(shiftDay.endTime) < timeToMinutes(shiftDay.startTime)
+      : false;
+    let nextDayShiftPunches: string[] = [];
+    let effectivePunchesForDate = [...punches];
+    if (shiftSpansMidnight) {
+      const nextDateObj = new Date(date);
+      nextDateObj.setDate(nextDateObj.getDate() + 1);
+      const nextDateKey = nextDateObj.toISOString().split('T')[0];
+      const empRow = reportData.find((r: ReportData) => r.employee.id === employeeID);
+      nextDayShiftPunches = empRow?.punches[nextDateKey] || [];
+      effectivePunchesForDate = [...punches, ...nextDayShiftPunches];
+    }
+    const hasPunchesEffective = effectivePunchesForDate.length > 0;
 
     // PRIORITY 1: Approved Regularization — placed here so we have shiftDay to compute actual hours
     const regularization = attendanceRegularizations.find(reg => 
@@ -1225,7 +1264,8 @@ const employeeOptions = filteredEmployees.map((e: Employee) => ({
     }
 
     // PRIORITY 5: Calculate based on punches
-    if (!hasPunches) return { type: "ABSENT", label: "Absent", hasPunches: false };
+    // Use effectivePunchesForDate (includes next-day punches for night shifts) for presence check.
+    if (!hasPunchesEffective) return { type: "ABSENT", label: "Absent", hasPunches: false };
     
     let policy = attendancePolicy;
     if (!policy) {
@@ -1239,7 +1279,8 @@ const employeeOptions = filteredEmployees.map((e: Employee) => ({
     }
 
     // Handle single punch
-    if (punches.length === 1) {
+    if (!hasPunchesEffective) return { type: "ABSENT", label: "Absent", hasPunches: false };
+    if (effectivePunchesForDate.length === 1) {
       if (policy?.markAs) {
         return { type: "SINGLE_PUNCH", label: policy.markAs, hasPunches: true };
       }
@@ -1248,7 +1289,7 @@ const employeeOptions = filteredEmployees.map((e: Employee) => ({
 
     if (shiftDay && policy) {
       // Filter punches to the valid attendance window [earliestIn, latestOut]
-      // When OT is applicable and an OT shift exists, extend the window to the OT shift end
+      // For night shifts spanning midnight, use OR logic (t >= earliestIn OR t <= latestOut)
       const checkinBeginBefore = policy.checkin_begin_before_min || 0;
       const checkoutEndAfter = policy.checkout_end_after_min || 0;
       const shiftStartMinRaw = timeToMinutes(shiftDay.startTime);
@@ -1258,18 +1299,48 @@ const employeeOptions = filteredEmployees.map((e: Employee) => ({
       const otEndMin = (policy.overtimeApplicable && otDay)
         ? timeToMinutes(otDay.endTime)
         : 0;
-      const latestOutMin = Math.max(shiftEndMinRaw + checkoutEndAfter, otEndMin);
-      const filteredPunches = punches.filter(p => {
-        const t = timeToMinutes(p);
-        return t >= earliestInMin && t <= latestOutMin;
-      });
+      const latestOutMin = shiftSpansMidnight
+        ? shiftEndMinRaw + checkoutEndAfter       // e.g. 05:00 + 120min = 07:00 (420)
+        : Math.max(shiftEndMinRaw + checkoutEndAfter, otEndMin);
+      // For night shifts, filter each part separately to avoid the previous night's checkout
+      // (stored under the current calendar date key) from polluting this shift's window.
+      // Current-day punches = check-in portion only (must be >= earliestIn, i.e. before midnight).
+      // Next-day punches = check-out portion only (must be <= latestOut, i.e. after midnight).
+      // Only pull next-day checkout when the employee hasn't fully checked out on the current night:
+      //   - odd current-day punch count → last punch is a check-in without a matching check-out
+      //   - zero current-day punches → need next-day data
+      // Even current-day count means the punches are already paired (check-in + check-out on same night),
+      // so the next-day punch would be from a different shift and must NOT be included.
+      const currentDayFiltered = punches.filter((p: string) => timeToMinutes(p) >= earliestInMin);
+      const nextDayFiltered = nextDayShiftPunches.filter((p: string) => timeToMinutes(p) <= latestOutMin);
+      const needsNextDayCheckout = currentDayFiltered.length === 0 || currentDayFiltered.length % 2 !== 0;
+      const filteredPunches: string[] = shiftSpansMidnight
+        ? [...currentDayFiltered, ...(needsNextDayCheckout ? nextDayFiltered : [])]
+        : effectivePunchesForDate.filter(p => {
+            const t = timeToMinutes(p);
+            return t >= earliestInMin && t <= latestOutMin;
+          });
+      // Sort: for night shifts, times after midnight (0-latestOut) are logically AFTER times before midnight
+      const sortedFiltered = shiftSpansMidnight
+        ? [...filteredPunches].sort((a, b) => {
+            const ta = timeToMinutes(a), tb = timeToMinutes(b);
+            // Times < earliestInMin are post-midnight (next day), treat as +1440
+            const wa = ta < earliestInMin ? ta + 1440 : ta;
+            const wb = tb < earliestInMin ? tb + 1440 : tb;
+            return wa - wb;
+          })
+        : [...filteredPunches].sort((a, b) => timeToMinutes(a) - timeToMinutes(b));
       // If filtering removes all punches, fall through as absent
-      const effectivePunches = filteredPunches.length >= 2 ? filteredPunches : (filteredPunches.length === 1 ? filteredPunches : punches.length > 0 ? [punches[0]] : []);
+      const effectivePunches = sortedFiltered.length >= 2 ? sortedFiltered : (sortedFiltered.length === 1 ? sortedFiltered : effectivePunchesForDate.length > 0 ? [effectivePunchesForDate[0]] : []);
 
-      const firstPunch = timeToMinutes(effectivePunches[0] ?? punches[0]);
-      const lastPunch = timeToMinutes(effectivePunches[effectivePunches.length - 1] ?? punches[punches.length - 1]);
+      // For night shifts, compute firstPunch/lastPunch in a way that spans midnight correctly.
+      // Times in [0..latestOut] are post-midnight → add 1440 for comparison purposes.
+      const toNightAwareMinutes = (t: number) => shiftSpansMidnight && t < earliestInMin ? t + 1440 : t;
+      const firstPunch = toNightAwareMinutes(timeToMinutes(effectivePunches[0] ?? effectivePunchesForDate[0]));
+      const lastPunch = toNightAwareMinutes(timeToMinutes(effectivePunches[effectivePunches.length - 1] ?? effectivePunchesForDate[effectivePunchesForDate.length - 1]));
+      // For night shift, shiftEnd in night-aware minutes is e.g. 05:00 → 300 + 1440 = 1740
       const shiftStartMin = shiftStartMinRaw;
-      const shiftEndMin = shiftEndMinRaw;
+      const shiftEndMin = shiftSpansMidnight ? shiftEndMinRaw + 1440 : shiftEndMinRaw;
       
       // Check max late check-in first
       const maxLateWindow = policy.max_late_check_in_time || 0;
@@ -1342,13 +1413,13 @@ const employeeOptions = filteredEmployees.map((e: Employee) => ({
       } else if (workedMinutes < totalShiftMinutes && !isLate) {
         // Only mark as Half Day due to hours if it's NOT a late arrival.
         // Late arrivals use the late-mark rule — they accumulate to the threshold.
-        return { type: "HALF_DAY", label: "Half Day", hasPunches: true, workedMinutes };
+        return { type: "HALF_DAY", label: "Half Day", hasPunches: true, workedMinutes, rosterShiftName };
       } else if (otMinutes > 0) {
-        return { type: "OT", label: "OT", hasPunches: true, workedMinutes, otMinutes, totalShiftMinutes };
+        return { type: "OT", label: "OT", hasPunches: true, workedMinutes, otMinutes, totalShiftMinutes, rosterShiftName };
       } else if (isLate) {
-        return { type: "LATE_MARK", label: "Late Mark", hasPunches: true, workedMinutes };
+        return { type: "LATE_MARK", label: "Late Mark", hasPunches: true, workedMinutes, rosterShiftName };
       } else {
-        return { type: "PRESENT", label: "P", hasPunches: true, workedMinutes };
+        return { type: "PRESENT", label: "P", hasPunches: true, workedMinutes, rosterShiftName };
       }
     }
 
@@ -1415,7 +1486,10 @@ const employeeOptions = filteredEmployees.map((e: Employee) => ({
       setWorkShifts(shiftsData.filter((s: WorkShift) => s.companyID === selectedCompanyID && s.branchesID === selectedBranchID));
       setAttendanceRegularizations(regData.filter((r: AttendanceRegularize) => r.companyID === selectedCompanyID && r.branchesID === selectedBranchID && r.status === "Approved"));
       setLeaveApplications(leavesData.filter((l: LeaveApplication) => l.companyID === selectedCompanyID && l.branchesID === selectedBranchID && l.status === "Approved"));
-      setRosters(rostersData);
+      // Flatten: /rosters returns Roster[] each with employees: RosterEmployee[]
+      // We need a flat RosterEmployee[] so lookups by employeeID work correctly.
+      const flatRosterEmployees = (rostersData as any[]).flatMap((r: any) => r.employees ?? []);
+      setRosters(flatRosterEmployees);
       setAttendancePolicy(policyData.find((p: AttendancePolicy) => p.companyID === selectedCompanyID && p.branchesID === selectedBranchID) || null);
 
       const shifts: EmpWorkShift[] = [];
@@ -1552,7 +1626,7 @@ const employeeOptions = filteredEmployees.map((e: Employee) => ({
 
       const newSandwichOverrides = new Map<number, Set<string>>();
       for (const row of rows) {
-        const swDates = detectSandwichDates(row, dateColumnsFull, enrichedShifts, filteredLvs, filteredHols, rostersData);
+        const swDates = detectSandwichDates(row, dateColumnsFull, enrichedShifts, filteredLvs, filteredHols, flatRosterEmployees);
         if (swDates.size > 0) newSandwichOverrides.set(Number(row.employee.id), swDates);
       }
       setSandwichOverrides(newSandwichOverrides);

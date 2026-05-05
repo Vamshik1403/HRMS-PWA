@@ -99,7 +99,7 @@ export default function Page() {
 
   const getAttendance = (empId: number) => {
     const logs = attendanceLogs
-      .filter((l) => l.employeeID === empId)
+      .filter((l) => l.employeeID === empId) 
       .sort((a, b) => new Date(a.punchTimeStamp).getTime() - new Date(b.punchTimeStamp).getTime());
     if (logs.length === 0) return { inTime: "N/A", outTime: "N/A" };
     return {

@@ -59,6 +59,9 @@ export class RosterEmployeeService {
         departmentNameID: filters.departmentID,
         ...(filters.designationID ? { designationID: filters.designationID } : {}),
       },
+      include: {
+        workShift: { select: { id: true, workShiftName: true, isRotating: true, isFlexible: true } },
+      },
       orderBy: { id: 'asc' },
     });
   }

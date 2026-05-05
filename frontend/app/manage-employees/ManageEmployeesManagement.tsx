@@ -740,6 +740,7 @@ export function ManageEmployeesManagement() {
     weeklyOffPattern: "",
     noticePeriodDaysForResignation: "",
     noticePeriodDaysForTermination: "",
+    allowRotatingShift: false,
 
     typeOfEmployee: "employee",
 
@@ -1280,7 +1281,13 @@ const runFetchCombinedDev = (q: string) => {
         } else if (formData.companyID) {
           all = all.filter(x => x.companyID === formData.companyID);
         }
-        const filtered = (all || []).filter(w => (w.workShiftName ?? "").toLowerCase().includes(q.toLowerCase()));
+        // Only show fixed (non-rotating) shifts when allowRotatingShift is false
+        const allowRotating = (formData as any).allowRotatingShift;
+        const shiftFiltered = (all || []).filter(w => {
+          if (!allowRotating) return w.isRotating === false || w.isRotating == null ? true : false;
+          return true;
+        });
+        const filtered = shiftFiltered.filter(w => (w.workShiftName ?? "").toLowerCase().includes(q.toLowerCase()));
         setWsList(filtered.slice(0, 20));
       } finally { setWsLoading(false); }
     }, DEBOUNCE_MS);
@@ -1411,7 +1418,7 @@ const runFetchCombinedDev = (q: string) => {
   interface Desg { id: ID; designation?: string | null; companyID?: ID | null; branchesID?: ID | null; }
   interface Contr { id: ID; contractorName?: string | null; companyID?: ID | null; branchesID?: ID | null; }
   interface Mgr { id: ID; employeeFirstName?: string | null; employeeLastName?: string | null; companyID?: ID | null; branchesID?: ID | null; }
-  interface WS { id: ID; workShiftName?: string | null; companyID?: ID | null; branchesID?: ID | null; }
+  interface WS { id: ID; workShiftName?: string | null; companyID?: ID | null; branchesID?: ID | null; isRotating?: boolean | null; isFlexible?: boolean | null; }
   interface AP { id: ID; attendancePolicyName?: string | null; companyID?: ID | null; branchesID?: ID | null; }
   interface LP { id: ID; leavePolicyName?: string | null; companyID?: ID | null; branchesID?: ID | null; }
 
@@ -1772,6 +1779,7 @@ const addCombinedDevMap = () => {
       weeklyOffPattern: "",
       noticePeriodDaysForResignation: "",
       noticePeriodDaysForTermination: "",
+      allowRotatingShift: false,
 
       typeOfEmployee: "employee",
 
@@ -2324,6 +2332,7 @@ const addCombinedDevMap = () => {
         weeklyOffPattern: formData.weeklyOffPattern || undefined,
         noticePeriodDaysForResignation: formData.noticePeriodDaysForResignation || undefined,
         noticePeriodDaysForTermination: formData.noticePeriodDaysForTermination || undefined,
+        allowRotatingShift: formData.allowRotatingShift,
 
         typeOfEmployee: formData.typeOfEmployee || undefined,
 
@@ -2567,6 +2576,7 @@ const addCombinedDevMap = () => {
       weeklyOffPattern: freshData.weeklyOffPattern ?? "",
       noticePeriodDaysForResignation: freshData.noticePeriodDaysForResignation ?? "",
       noticePeriodDaysForTermination: freshData.noticePeriodDaysForTermination ?? "",
+      allowRotatingShift: freshData.allowRotatingShift ?? false,
       typeOfEmployee: freshData.typeOfEmployee ?? "",
       workShiftID: effectiveWorkShiftID,
       attendancePolicyID: effectiveAttendancePolicyID,
@@ -3661,11 +3671,43 @@ const addCombinedDevMap = () => {
                   <h3 className="text-lg font-semibold">Work Shift</h3>
                   {canManage && <Button type="button" variant="outline" size="sm" onClick={() => window.open('/work-shifts', '_blank')}><Plus className="w-4 h-4 mr-1" /> Manage Shifts</Button>}
                 </div>
-                <div className="flex items-end gap-2">
+
+                {/* Allow Rotating Shift checkbox */}
+                <div className="flex items-center gap-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                  <input
+                    type="checkbox"
+                    id="allowRotatingShift"
+                    checked={formData.allowRotatingShift}
+                    onChange={(e) => {
+                      const checked = e.target.checked;
+                      setFormData(p => ({
+                        ...p,
+                        allowRotatingShift: checked,
+                        // Clear work shift when switching to rotating (managed in roster)
+                        ...(checked ? { workShiftID: null, empWorkShiftForm: [] } : {}),
+                      }));
+                      setStagingWS({ workShiftID: null, label: "", effectFrom: today });
+                      setWsList([]);
+                    }}
+                    className="w-4 h-4 accent-blue-600"
+                  />
+                  <label htmlFor="allowRotatingShift" className="text-sm font-medium text-blue-800 cursor-pointer select-none">
+                    Allow Rotating Shift
+                    <span className="ml-2 text-xs font-normal text-blue-600">
+                      {formData.allowRotatingShift
+                        ? "(Rotating — shift assigned per day in Roster)"
+                        : "(Fixed — select a non-rotating shift below)"}
+                    </span>
+                  </label>
+                </div>
+
+                {/* Work shift field — disabled for rotating employees */}
+                <div className={`flex items-end gap-2 ${formData.allowRotatingShift ? "opacity-50 pointer-events-none" : ""}`}>
                   <div ref={wsRef} className="flex-1 space-y-2 relative">
-                    <Label>Work Shift</Label>
+                    <Label>Work Shift {formData.allowRotatingShift && <span className="text-xs text-gray-400">(disabled — managed in Roster)</span>}</Label>
                     <Input
                       value={stagingWS.label}
+                      disabled={formData.allowRotatingShift}
                       onChange={(e) => {
                         const val = e.target.value;
                         setStagingWS(p => ({ ...p, label: val, workShiftID: null }));
@@ -3674,10 +3716,10 @@ const addCombinedDevMap = () => {
                       onFocus={(e) => {
                         if (e.target.value.length >= MIN_CHARS) runFetchWS(e.target.value);
                       }}
-                      placeholder="Search work shift…"
+                      placeholder={formData.allowRotatingShift ? "Disabled for rotating employees" : "Search fixed work shift…"}
                       autoComplete="off"
                     />
-                    {wsList.length > 0 && (
+                    {wsList.length > 0 && !formData.allowRotatingShift && (
                       <div className="absolute z-10 bg-white border rounded w-full shadow max-h-48 overflow-y-auto">
                         {wsLoading && <div className="px-3 py-2 text-sm text-gray-500">Loading…</div>}
                         {wsList.map((w) => (
@@ -3691,9 +3733,9 @@ const addCombinedDevMap = () => {
                   </div>
                   <div className="space-y-2">
                     <Label>WEF</Label>
-                    <Input type="date" value={stagingWS.effectFrom} onChange={(e) => setStagingWS(p => ({ ...p, effectFrom: e.target.value }))} />
+                    <Input type="date" disabled={formData.allowRotatingShift} value={stagingWS.effectFrom} onChange={(e) => setStagingWS(p => ({ ...p, effectFrom: e.target.value }))} />
                   </div>
-                  <Button type="button" size="sm" disabled={!stagingWS.workShiftID} onClick={() => {
+                  <Button type="button" size="sm" disabled={!stagingWS.workShiftID || formData.allowRotatingShift} onClick={() => {
                     if (!stagingWS.workShiftID) return;
                     const newEntry: EmpWorkShiftForm = { _localId: uid(), workShiftID: stagingWS.workShiftID, _wsAutocomplete: stagingWS.label, effectFrom: stagingWS.effectFrom };
                     setFormData(p => {
@@ -3705,6 +3747,7 @@ const addCombinedDevMap = () => {
                   }}>Add</Button>
                 </div>
                 {/* History Box */}
+                {!formData.allowRotatingShift && (
                 <div className="border border-gray-200 rounded-lg overflow-hidden">
                   <div className="bg-gray-50 px-3 py-2 text-xs font-semibold text-gray-600 uppercase tracking-wide flex">
                     <span className="flex-1">Work Shift</span><span className="w-32 text-center">WEF</span><span className="w-10"></span>
@@ -3721,6 +3764,12 @@ const addCombinedDevMap = () => {
                     ))
                   )}
                 </div>
+                )}
+                {formData.allowRotatingShift && (
+                  <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-800">
+                    Rotating employee — shifts will be assigned day-by-day in the <strong>Workshift Roster</strong>.
+                  </div>
+                )}
               </div>
 
 

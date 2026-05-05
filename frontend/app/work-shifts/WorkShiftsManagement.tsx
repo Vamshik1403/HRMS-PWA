@@ -824,7 +824,7 @@ export function WorkShiftsManagement() {
                     <tbody>
                       {formData.weeklySchedule.map((daySchedule, index) => {
                         const isOff = daySchedule.isWeeklyOff;
-                        const disabled = formData.isRotating;
+                        const disabled = false;
                         return (
                           <>
                             {/* WORK row */}

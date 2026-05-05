@@ -144,6 +144,7 @@ const API = {
   leaveApplication: "/backend/leave-application",
   empAttendanceRegularise: "/backend/emp-attendance-regularise",
   empAttendanceLogs: "/backend/emp-attendance-logs",
+  rosters: "/backend/rosters",
 };
 
 const MIN_CHARS = 0;
@@ -715,6 +716,11 @@ async function calculateSalaryCounts(
     const shiftDays: any[] = empShift.workShiftDay ?? [];
     const weeklyOffDays = new Set(shiftDays.filter((d: any) => d.weeklyOff).map((d: any) => d.weekDay));
 
+    // Fetch roster data so we can respect temporary work shift overrides per date.
+    const rostersRaw: any[] = await robustGet(API.rosters);
+    const rosterEmployees = rostersRaw.flatMap((r: any) => r.employees ?? []);
+    const empRosterEntry = rosterEmployees.find((re: any) => re.employeeID === employeeId) ?? null;
+
     // Parse "HH:MM" or full ISO datetime strings into { h, m }
     const parseHHMM = (s: string) => {
       if (!s) return { h: 0, m: 0 };
@@ -730,9 +736,21 @@ async function calculateSalaryCounts(
 
     const getShiftFrame = (d: Date) => {
       const dayOfWeek = dayName(d);
+      const key = ymd(d);
+      // Check roster for a date-specific work shift override
+      let activeShiftDays = shiftDays;
+      if (empRosterEntry) {
+        const rd = empRosterEntry.days?.find(
+          (x: any) => new Date(x.workDate).toISOString().split('T')[0] === key
+        );
+        if (rd?.dayType === "WORK" && rd?.workShiftID != null) {
+          const rosterShift = workShifts.find((ws: any) => ws.id === rd.workShiftID);
+          if (rosterShift?.workShiftDay?.length) activeShiftDays = rosterShift.workShiftDay;
+        }
+      }
       // Prefer WORK type; fall back to first matching day entry
-      const sd = shiftDays.find((x: any) => x.weekDay === dayOfWeek && (x.shiftType === "WORK" || !x.shiftType))
-        ?? shiftDays.find((x: any) => x.weekDay === dayOfWeek);
+      const sd = activeShiftDays.find((x: any) => x.weekDay === dayOfWeek && (x.shiftType === "WORK" || !x.shiftType))
+        ?? activeShiftDays.find((x: any) => x.weekDay === dayOfWeek);
       if (!sd) return null;
       const st = parseHHMM(sd.startTime), et = parseHHMM(sd.endTime);
       const shiftStart = new Date(d.getFullYear(), d.getMonth(), d.getDate(), st.h, st.m);
@@ -805,9 +823,16 @@ async function calculateSalaryCounts(
       };
 
       const todayWeekDay = dayName(d);
-      
-      // Check if it's a weekly off day
-      if (weeklyOffDays.has(todayWeekDay)) {
+
+      // Check roster for any explicit override on this specific date
+      const rosterDayEntry = empRosterEntry?.days?.find(
+        (rd: any) => new Date(rd.workDate).toISOString().split('T')[0] === key
+      );
+      const hasRosterWorkOverride = rosterDayEntry?.dayType === "WORK" && rosterDayEntry?.workShiftID != null;
+
+      // Check if it's a weekly off day.
+      // Roster WEEKLY_OFF overrides default; roster WORK override skips the default weekly-off check.
+      if (rosterDayEntry?.dayType === "WEEKLY_OFF" || (!hasRosterWorkOverride && weeklyOffDays.has(todayWeekDay))) {
         // ✅ Weekly off days are ALWAYS PAID (regardless of joining date)
         // The startDate is already adjusted to joining date, so any weekly off
         // within the loop range is after/before joining date
@@ -830,27 +855,16 @@ async function calculateSalaryCounts(
         continue;
       }
 
-      // Check for regularised days
+      // Check for regularised days — any approved regularization = full paid day (no LOP)
       if (regulariseMap.has(key)) {
         const r = regulariseMap.get(key);
         debug.regularise = {
           status: r.status,
-          day: r.day,
+          requestedStatus: r.requestedStatus,
           source: "emp-attendance-regularise",
         };
-
-        const dayType = String(r.day ?? "").toLowerCase();
-        if (dayType === "fullday" || dayType === "full day") {
-          flex_fullDayPresent++;
-          debug.final = "REGULARISE → FULL PAID";
-        } else if (dayType === "halfday" || dayType === "half day") {
-          flex_halfDayPresent++;
-          debug.final = "REGULARISE → HALF PAID";
-        } else {
-          flex_absent++;
-          debug.final = "REGULARISE → ABSENT";
-        }
-
+        flex_fullDayPresent++;
+        debug.final = "REGULARISE → FULL PAID (no LOP)";
         if (DEBUG_LOP) console.table([debug]);
         continue;
       }
@@ -882,8 +896,17 @@ async function calculateSalaryCounts(
         // ⛔ Pending / Rejected leave → IGNORE, attendance will decide
       }
 
-      // Check attendance logs for the day
-      const dayLogs = (logsByDate.get(key) || []).filter(t => t >= frame.earliestIn && t <= frame.latestOut);
+      // Check attendance logs for the day.
+      // For night shifts that cross midnight, the check-out punch lands on the NEXT calendar date,
+      // so merge next-day's punches into the filter for this shift window.
+      const nextDayD = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1);
+      const nextDayKey = ymd(nextDayD);
+      const currentDayPunches = logsByDate.get(key) || [];
+      const nextDayPunches = logsByDate.get(nextDayKey) || [];
+      const allPotentialPunches = [...currentDayPunches, ...nextDayPunches];
+      const dayLogs = allPotentialPunches
+        .filter(t => t >= frame.earliestIn && t <= frame.latestOut)
+        .sort((a, b) => a.getTime() - b.getTime());
       let dayStatus: "full" | "half" | "absent" = "absent";
 
       if (isFlexible) {
