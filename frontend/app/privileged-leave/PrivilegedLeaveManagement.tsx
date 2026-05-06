@@ -416,8 +416,10 @@ export function PrivilegedLeaveManagement() {
               Calculate from Attendance
             </Button>
           )}
-          {canManage && (
-            <>
+        </div>
+      </div>
+      {canManage && (
+        <>
               {/* Calculate from Attendance Dialog */}
               <FormDrawer open={isCalcDialogOpen} onOpenChange={(o) => { setIsCalcDialogOpen(o); if (!o) { setCalcPreview(null); setCalcData({ employeeID: 0, leavePolicyID: 0 }) } }} title="Calculate PL from Attendance" description="Count actual attendance days and auto-credit Privileged Leave based on the policy ratio">
                 <div className="space-y-4">
@@ -673,10 +675,8 @@ export function PrivilegedLeaveManagement() {
                   </form>
                 
               </FormDrawer>
-            </>
-          )}
-        </div>
-      </div>
+        </>
+      )}
 
       {!isDialogOpen && !isCreditDialogOpen && !isLapseDialogOpen && !isHistoryOpen && (<>
       {/* Search */}

@@ -66,11 +66,11 @@ const sbSubIdle =
 const SETUP_PATHS = ["/company", "/branches", "/devices"];
 const CONTRACTOR_MANAGEMENT_PATHS = ["/contractors", "/contractor-rates"];
 const EMPLOYEE_PATHS = ["/departments", "/designations", "/manage-employees", "/employees-promotions", "/employee-memo", "/termination"];
-const PAYROLL_PATHS = ["/work-shifts", "/attendance-policy"];
+const PAYROLL_PATHS = ["/work-shifts", "/attendance-policy", "/factual-work-shifts", "/factual-attendance-policy"];
 const SALARY_PATHS = ["/salary-advance", "/reimbursement", "/bonus-allocations", "/generate-salary", "/contractor-payout"];
 const PAYROLL_POLICY_PATHS = ["/monthly-salary-cycle", "/salary-allowances", "/salary-deductions", "/monthly-pay-grade", "/bonus-setup"];
 const LEAVE_PATHS = ["/manage-holidays", "/public-holiday", "/leave-policy"];
-const ATTENDANCE_PATHS = ["/field-attendance-schedule", "/attendance-regularisation", "/roster"];
+const ATTENDANCE_PATHS = ["/field-attendance-schedule", "/attendance-regularisation", "/roster", "/factual-roster"];
 const LEAVE_MANAGEMENT_PATHS = ["/leave-applications", "/privileged-leave"];
 const REPORTS_PATHS = ["/attendance-reports", "/payroll-reports"];
 const CANTEEN_PATHS = ["/canteen", "/canteen/setup", "/canteen/reports"];
@@ -446,7 +446,9 @@ export function PageLayout({ children }: PageLayoutProps) {
             <CollapsibleContent>
               <SidebarMenuSub className="ml-5 mt-1 space-y-0.5 border-l border-[#f0f0f0] pl-3">
                 <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/work-shifts" className={cn(sbSubRow, isActiveLink('/work-shifts', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Work Shifts</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
+                <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/factual-work-shifts" className={cn(sbSubRow, isActiveLink('/factual-work-shifts', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>FCT-Work Shifts</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
                 <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/attendance-policy" className={cn(sbSubRow, isActiveLink('/attendance-policy', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Attendance Policy</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
+                <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/factual-attendance-policy" className={cn(sbSubRow, isActiveLink('/factual-attendance-policy', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>FCT-Attendance Policy</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
               </SidebarMenuSub>
             </CollapsibleContent>
           </Collapsible>
@@ -546,6 +548,9 @@ export function PageLayout({ children }: PageLayoutProps) {
                 {/* Field Attendance Schedule - temporarily hidden */}
                 {(isSuperAdmin || isServiceProvider || isCompanyAdmin || isBranchAdmin) && (
                   <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/roster" className={cn(sbSubRow, isActiveLink('/roster', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Workshift Roster</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
+                )}
+                {(isSuperAdmin || isServiceProvider || isCompanyAdmin || isBranchAdmin) && (
+                  <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/factual-roster" className={cn(sbSubRow, isActiveLink('/factual-roster', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>FCT-Workshift Roster</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
                 )}
               </SidebarMenuSub>
             </CollapsibleContent>
@@ -954,7 +959,7 @@ export function PageLayout({ children }: PageLayoutProps) {
             </div>
             <div className="border-t border-gray-200 pt-4 space-y-4">
               <p className="text-sm text-gray-500 font-medium">Change Password</p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-end">
                 <div className="space-y-2">
                   <Label>New Password (leave blank to keep current)</Label>
                   <div className="relative">

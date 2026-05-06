@@ -4,7 +4,7 @@ import { RosterManagement } from "./RosterPage";
 export default function RosterPage() {  
   return (
     <PageLayout>
-        <RosterManagement/>
+      <RosterManagement/>
     </PageLayout>
   )
 }

@@ -1766,3 +1766,113 @@ model EmployeeMemo {
 
   @@index([employeeID])
 }
+
+// ==================== FACTUAL TABLES ====================
+
+model FactualWorkShift {
+  id                  Int                   @id @default(autoincrement())
+  serviceProviderID   Int?
+  companyID           Int?
+  branchesID          Int?
+  workShiftName       String?               @db.VarChar
+  isActive            String?               @db.VarChar
+  workShiftType       String?               @db.VarChar
+  isFlexible          Boolean?              @default(false)
+  isRotating          Boolean?              @default(false)
+  breakTimeMin        Int?                  @default(0)
+  createdAt           DateTime              @default(now())
+  factualWorkShiftDay FactualWorkShiftDay[]
+  factualRosterDay    FactualRosterDay[]
+}
+
+model FactualWorkShiftDay {
+  id                 Int               @id @default(autoincrement())
+  factualWorkShiftID Int?
+  weekDay            String?           @db.VarChar
+  shiftType          String?           @db.VarChar
+  weeklyOff          Boolean?
+  startTime          String?
+  endTime            String?
+  breakStart         String?
+  breakEnd           String?
+  totalMinutes       Int?
+  factualWorkShift   FactualWorkShift?  @relation(fields: [factualWorkShiftID], references: [id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+model FactualAttendancePolicy {
+  id                                     Int      @id @default(autoincrement())
+  serviceProviderID                      Int?
+  companyID                              Int?
+  branchesID                             Int?
+  attendancePolicyName                   String?  @db.VarChar
+  workingHoursType                       String?  @db.VarChar
+  checkin_begin_before_min               Int?
+  checkout_end_after_min                 Int?
+  checkin_grace_time_min                 Int?
+  earlyCheckoutBeforeEndMin              Int?
+  min_work_hours_half_day_min            Int?
+  max_late_check_in_time                 Int?
+  markAs                                 String?
+  lateMarkCount                          String?
+  allow_self_mark_attendance             Boolean? @default(false)
+  allow_manager_update_ot                Boolean? @default(false)
+  max_ot_hours_per_day_min               Int?
+  checkoutGracePeriodForOvertimeTrimming Int?     @default(0)
+  breakTimeForOT                         Int?     @default(0)
+  otMealApply                            Boolean? @default(false)
+  maxOvertimeHrs                         Int?     @default(0)
+  minOvertimeHrs                         Int?     @default(0)
+  countWorkhoursInMinutes                Boolean? @default(false)
+  overtimeApplicable                     Boolean? @default(false)
+  overtimeTrimmingApply                  Boolean? @default(false)
+  minsForOTMealToken                     Int?     @default(0)
+  minsForBreakTimeForMeal                Int?     @default(0)
+  leaveAroundHolidayCounted              Boolean? @default(false)
+  lateMarkMarkAs                         String?
+  lateMarkMarkCount                      String?
+  maxLateCheckinMarkAs                   String?
+  trimPreshiftMin                        Int?     @default(0)
+  trimPostshiftMin                       Int?     @default(0)
+  createdAt                              DateTime @default(now())
+}
+
+model FactualRoster {
+  id                Int                     @id @default(autoincrement())
+  serviceProviderID Int
+  companyID         Int
+  branchesID        Int
+  departmentID      Int
+  designationID     Int?
+  fromDate          DateTime
+  toDate            DateTime
+  rosterPeriod      String
+  status            String                  @default("DRAFT")
+  createdBy         Int
+  createdAt         DateTime                @default(now())
+  updatedAt         DateTime                @updatedAt
+  employees         FactualRosterEmployee[]
+}
+
+model FactualRosterEmployee {
+  id              Int                @id @default(autoincrement())
+  factualRosterID Int
+  employeeID      Int
+  days            FactualRosterDay[]
+  factualRoster   FactualRoster      @relation(fields: [factualRosterID], references: [id], onDelete: Cascade)
+
+  @@unique([factualRosterID, employeeID])
+}
+
+model FactualRosterDay {
+  id                      Int                   @id @default(autoincrement())
+  factualRosterEmployeeID Int
+  workDate                DateTime
+  factualWorkShiftID      Int?
+  dayType                 String
+  leaveType               String?
+  isLocked                Boolean               @default(false)
+  factualRosterEmployee   FactualRosterEmployee @relation(fields: [factualRosterEmployeeID], references: [id], onDelete: Cascade)
+  factualWorkShift        FactualWorkShift?     @relation(fields: [factualWorkShiftID], references: [id])
+
+  @@unique([factualRosterEmployeeID, workDate])
+}
