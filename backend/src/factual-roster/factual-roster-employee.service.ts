@@ -30,10 +30,10 @@ export class FactualRosterEmployeeService {
     serviceProviderID: number;
     companyID: number;
     branchesID: number;
-    departmentID: number;
+    departmentID?: number;
     designationID?: number;
   }) {
-    if (!filters.serviceProviderID || !filters.companyID || !filters.branchesID || !filters.departmentID) {
+    if (!filters.serviceProviderID || !filters.companyID || !filters.branchesID) {
       throw new BadRequestException('Missing required filter parameters');
     }
     return this.prisma.manageEmployee.findMany({
@@ -41,8 +41,11 @@ export class FactualRosterEmployeeService {
         serviceProviderID: filters.serviceProviderID,
         companyID: filters.companyID,
         branchesID: filters.branchesID,
-        departmentNameID: filters.departmentID,
+        ...(filters.departmentID ? { departmentNameID: filters.departmentID } : {}),
         ...(filters.designationID ? { designationID: filters.designationID } : {}),
+      },
+      include: {
+        workShift: { select: { id: true, workShiftName: true, isRotating: true, isFlexible: true } },
       },
       orderBy: { id: 'asc' },
     });

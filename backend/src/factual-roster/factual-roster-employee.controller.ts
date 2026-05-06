@@ -25,14 +25,14 @@ export class FactualRosterEmployeeController {
     @Query('serviceProviderID') serviceProviderID: string,
     @Query('companyID') companyID: string,
     @Query('branchesID') branchesID: string,
-    @Query('departmentID') departmentID: string,
+    @Query('departmentID') departmentID?: string,
     @Query('designationID') designationID?: string,
   ) {
     return this.service.listEmployeesForSelection({
       serviceProviderID: +serviceProviderID,
       companyID: +companyID,
       branchesID: +branchesID,
-      departmentID: +departmentID,
+      departmentID: departmentID ? +departmentID : undefined,
       designationID: designationID ? +designationID : undefined,
     });
   }
