@@ -97,7 +97,7 @@ export default function DashboardPage() {
   const [currentUserMapping, setCurrentUserMapping] = useState<any>(null);
 
   useEffect(() => {
-    if (user?.role !== "SERVICE_PROVIDER" && user?.role !== "COMPANY_ADMIN") return;
+    if (user?.role !== "SERVICE_PROVIDER" && user?.role !== "COMPANY_ADMIN" && user?.role !== "ADMIN") return;
 
     (async () => {
       const res = await fetch(`${BACKEND_URL}/users`, { cache: "no-store" });
@@ -109,7 +109,7 @@ export default function DashboardPage() {
 
   useEffect(() => {
     if (!user) return;
-    if ((user.role === "SERVICE_PROVIDER" || user.role === "COMPANY_ADMIN") && !currentUserMapping) return;
+    if ((user.role === "SERVICE_PROVIDER" || user.role === "COMPANY_ADMIN" || user.role === "ADMIN") && !currentUserMapping) return;
 
     loadDashboard();
   }, [user, currentUserMapping]);
@@ -175,7 +175,7 @@ export default function DashboardPage() {
             (d) => d.serviceProviderID === currentUserMapping.serviceProviderID
           );
         }
-      } else if (user!.role === "COMPANY_ADMIN" && currentUserMapping) {
+      } else if ((user!.role === "COMPANY_ADMIN" || user!.role === "ADMIN") && currentUserMapping) {
         scopedEmployees = allEmployees.filter(
           (e) => e.companyID === currentUserMapping.companyID
         );

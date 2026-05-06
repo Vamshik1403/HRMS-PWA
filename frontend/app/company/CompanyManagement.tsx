@@ -75,8 +75,8 @@ export function CompanyManagement() {
   const [isAddingNew, setIsAddingNew] = useState(false)
   const [isViewing, setIsViewing] = useState(false)
   const user = useCurrentUser()
-  const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN"
-  const isNonSuperAdmin = user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN" || user?.role === "BRANCH_ADMIN"
+  const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN" || user?.role === "ADMIN"
+  const isNonSuperAdmin = user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN" || user?.role === "ADMIN" || user?.role === "BRANCH_ADMIN"
 
   interface CompanyFormData extends Partial<Company> {
     autocompleteName?: string
@@ -196,6 +196,16 @@ export function CompanyManagement() {
         } else if (user.serviceProviderID) {
           const filtered = all.filter(
             (c: any) => c.serviceProviderID === user.serviceProviderID
+          )
+          setCompanies(filtered)
+          return
+        }
+      }
+
+      if (user?.role === "ADMIN") {
+        if (user.companyID) {
+          const filtered = all.filter(
+            (c: any) => c.id === user.companyID
           )
           setCompanies(filtered)
           return
@@ -473,7 +483,7 @@ export function CompanyManagement() {
         <div>
             <form onSubmit={handleSubmit} className="space-y-4">
               {/* Company Name with Service Provider Autocomplete - auto-filled from sidebar */}
-              {user?.role !== "COMPANY_ADMIN" && (
+              {user?.role !== "COMPANY_ADMIN" && user?.role !== "ADMIN" && (
               <div ref={wrapperRef} className="space-y-2 relative">
                 <Label>Service Provider *</Label>
                 <Input

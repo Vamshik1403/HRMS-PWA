@@ -105,7 +105,7 @@ export function DeviceManagement() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const user = useCurrentUser();
-  const canManage = user?.role === "SUPERADMIN" || user?.role === "COMPANY_ADMIN" || user?.role === "SERVICE_PROVIDER";
+  const canManage = user?.role === "SUPERADMIN" || user?.role === "COMPANY_ADMIN" || user?.role === "ADMIN" || user?.role === "SERVICE_PROVIDER";
   const canAdd = user?.role === "SUPERADMIN";
   const canDelete = user?.role === "SUPERADMIN";
   
@@ -175,8 +175,8 @@ export function DeviceManagement() {
         return;
       }
 
-      // � COMPANY_ADMIN → filter by companyID from sidebar context / user object
-      if (user?.role === "COMPANY_ADMIN") {
+      // 🟡 COMPANY_ADMIN / ADMIN → filter by companyID from sidebar context / user object
+      if (user?.role === "COMPANY_ADMIN" || user?.role === "ADMIN") {
         const ctx = getSidebarContext();
         const companyID = ctx?.companyID ?? user?.companyID;
         if (companyID) {
@@ -403,7 +403,7 @@ export function DeviceManagement() {
       baseFormData.serviceProviderID = currentUserMapping.serviceProviderID;
       baseFormData.companyID = currentUserMapping.companyID;
       baseFormData.branchesID = currentUserMapping.branchesID;
-    } else if (user?.role === "COMPANY_ADMIN" || user?.role === "BRANCH_ADMIN") {
+    } else if (user?.role === "COMPANY_ADMIN" || user?.role === "ADMIN" || user?.role === "BRANCH_ADMIN") {
       const ctx = getSidebarContext();
       baseFormData.serviceProviderID = ctx?.serviceProviderID ?? null;
       baseFormData.companyID = ctx?.companyID ?? user?.companyID ?? null;

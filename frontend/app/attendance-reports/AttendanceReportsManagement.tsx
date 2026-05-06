@@ -802,7 +802,7 @@ export function AttendanceReportsManagement() {
     if (!user) return;
     const loadUserData = async () => {
       try {
-        if (user.role === "SERVICE_PROVIDER" || user.role === "COMPANY_ADMIN" || user.role === "BRANCH_ADMIN") {
+        if (user.role === "SERVICE_PROVIDER" || user.role === "COMPANY_ADMIN" || user.role === "ADMIN" || user.role === "BRANCH_ADMIN") {
           const usersRes = await fetch(`${BACKEND_URL}/users`);
           const users = await usersRes.json();
           const me = users.find((u: any) => u.username === user.username);
@@ -827,7 +827,7 @@ export function AttendanceReportsManagement() {
 
     if (user.role === "SERVICE_PROVIDER" && managerData) {
       if (managerData.companyID) data = data.filter(b => b.companyID === managerData.companyID);
-    } else if (user.role === "COMPANY_ADMIN" && managerData) {
+    } else if ((user.role === "COMPANY_ADMIN" || user.role === "ADMIN") && managerData) {
       if (managerData.companyID) data = data.filter(b => b.companyID === managerData.companyID);
     } else if (user.role === "BRANCH_ADMIN" && managerData) {
       if (managerData.companyID && managerData.branchesID) {

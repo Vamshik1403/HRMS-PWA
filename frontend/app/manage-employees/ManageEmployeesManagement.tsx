@@ -656,7 +656,7 @@ export function ManageEmployeesManagement() {
   const [currentUserMapping, setCurrentUserMapping] = useState<any>(null);
 
   useEffect(() => {
-    if (user?.role !== "SERVICE_PROVIDER" && user?.role !== "BRANCH_ADMIN") return;
+    if (user?.role !== "SERVICE_PROVIDER" && user?.role !== "BRANCH_ADMIN" && user?.role !== "ADMIN") return;
 
     if (user?.role === "SERVICE_PROVIDER") {
       (async () => {
@@ -665,8 +665,8 @@ export function ManageEmployeesManagement() {
         const me = list.find((u: any) => u.username === user.username);
         setCurrentUserMapping(me || null);
       })();
-    } else if (user?.role === "BRANCH_ADMIN") {
-      // BRANCH_ADMIN: user object from localStorage already has full details
+    } else if (user?.role === "BRANCH_ADMIN" || user?.role === "ADMIN") {
+      // BRANCH_ADMIN / ADMIN: user object from localStorage already has full details
       setCurrentUserMapping(user);
     }
   }, [user]);
@@ -689,6 +689,15 @@ export function ManageEmployeesManagement() {
         branchesID: currentUserMapping.branchesID ?? null,
         coAutocomplete: currentUserMapping.company?.companyName ?? currentUserMapping.companyName ?? "",
         brAutocomplete: currentUserMapping.branches?.branchName ?? currentUserMapping.branchName ?? "",
+      }));
+    } else if (user?.role === "ADMIN" && currentUserMapping) {
+      setFormData(p => ({
+        ...p,
+        serviceProviderID: currentUserMapping.serviceProviderID ?? null,
+        companyID: currentUserMapping.companyID ?? null,
+        branchesID: null,
+        coAutocomplete: currentUserMapping.company?.companyName ?? currentUserMapping.companyName ?? "",
+        brAutocomplete: "",
       }));
     }
   }, [user, currentUserMapping]);
@@ -894,8 +903,8 @@ tokenDeviceMapping: tokenDevices,
         }
       }
     }
-    // COMPANY_ADMIN → filter by companyID
-    else if (user?.role === "COMPANY_ADMIN") {
+    // COMPANY_ADMIN / ADMIN → filter by companyID
+    else if (user?.role === "COMPANY_ADMIN" || user?.role === "ADMIN") {
       const usersRes = await fetch("/backend/users");
       const users = await usersRes.json();
       const currentUser = users.find((u: any) => u.username === user.username);

@@ -376,7 +376,7 @@ export function PageLayout({ children }: PageLayoutProps) {
             </CollapsibleTrigger>
             <CollapsibleContent>
               <SidebarMenuSub className="ml-5 mt-1 space-y-0.5 border-l border-[#f0f0f0] pl-3">
-                {(isSuperAdmin || isServiceProvider || isCompanyAdmin || isBranchAdmin) && (
+                {(isSuperAdmin || isServiceProvider || isCompanyAdmin || isAdmin || isBranchAdmin) && (
                   <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/company" className={cn(sbSubRow, isActiveLink('/company', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Company Profile</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
                 )}
                 <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/branches" className={cn(sbSubRow, isActiveLink('/branches', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Branches</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>

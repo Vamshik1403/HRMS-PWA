@@ -139,7 +139,7 @@ export function BranchManagement() {
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [signatureFile, setSignatureFile] = useState<File | null>(null);
   const user = useCurrentUser();
-  const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN";
+  const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN" || user?.role === "ADMIN";
   const canCreate = user?.role === "SUPERADMIN";
   const isEmployee = user?.role === "EMPLOYEE";
 
@@ -222,8 +222,8 @@ export function BranchManagement() {
           } else {
             setBranches(all.filter((b: any) => b.serviceProviderID === currentUser.serviceProviderID));
           }
-        } else if (user?.role === "COMPANY_ADMIN") {
-          // Company admin sees all branches in their company
+        } else if (user?.role === "COMPANY_ADMIN" || user?.role === "ADMIN") {
+          // Company admin / Admin sees all branches in their company
           let filtered: any[];
           if (currentUser.companyID) {
             filtered = all.filter(
@@ -391,8 +391,8 @@ export function BranchManagement() {
       bankDetailsForm: [],
     };
 
-    // Auto-set Service Provider and Company for MANAGER/COMPANY_ADMIN (no UI display)
-    if ((user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN") && currentUserMapping) {
+    // Auto-set Service Provider and Company for MANAGER/COMPANY_ADMIN/ADMIN (no UI display)
+    if ((user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN" || user?.role === "ADMIN") && currentUserMapping) {
       baseFormData.serviceProviderID = currentUserMapping.serviceProviderID;
       baseFormData.companyID = currentUserMapping.companyID;
     } else if (user?.role === "SUPERADMIN") {
@@ -466,7 +466,7 @@ export function BranchManagement() {
     let finalServiceProviderID = formData.serviceProviderID;
     let finalCompanyID = formData.companyID;
 
-    if ((user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN") && currentUserMapping) {
+    if ((user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN" || user?.role === "ADMIN") && currentUserMapping) {
       finalServiceProviderID = currentUserMapping.serviceProviderID;
       finalCompanyID = currentUserMapping.companyID;
     }
@@ -563,8 +563,8 @@ export function BranchManagement() {
     let spName = "";
     let coName = "";
 
-    if ((user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN") && currentUserMapping) {
-      // Use MANAGER's mapped IDs
+    if ((user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN" || user?.role === "ADMIN") && currentUserMapping) {
+      // Use user's mapped IDs
       finalServiceProviderID = currentUserMapping.serviceProviderID;
       finalCompanyID = currentUserMapping.companyID;
       spName = currentUserMapping.serviceProvider?.companyName ?? "";

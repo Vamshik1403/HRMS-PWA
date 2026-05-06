@@ -115,7 +115,7 @@ export function DesignationManagement() {
 
   const user = useCurrentUser();
   useEffect(() => {
-    if (!user || (user.role !== "SERVICE_PROVIDER" && user.role !== "COMPANY_ADMIN")) return;
+    if (!user || (user.role !== "SERVICE_PROVIDER" && user.role !== "COMPANY_ADMIN" && user.role !== "ADMIN")) return;
 
     const loadMapping = async () => {
       try {
@@ -133,7 +133,7 @@ export function DesignationManagement() {
     loadMapping();
   }, [user]);
 
-  const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN" || user?.role === "BRANCH_ADMIN";
+  const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN" || user?.role === "ADMIN" || user?.role === "BRANCH_ADMIN";
   const isEmployee = user?.role === "EMPLOYEE";
 
   // UI
@@ -310,7 +310,7 @@ export function DesignationManagement() {
           } else {
             filtered = all.filter((r: any) => r.serviceProviderID === currentUser.serviceProviderID);
           }
-        } else if (user?.role === "COMPANY_ADMIN") {
+        } else if (user?.role === "COMPANY_ADMIN" || user?.role === "ADMIN") {
           filtered = all.filter((r: any) => r.companyID === currentUser.companyID);
         } else if (user?.role === "BRANCH_ADMIN") {
           filtered = all.filter((r: any) => r.companyID === currentUser.companyID && r.branchesID === currentUser.branchesID);
@@ -390,7 +390,14 @@ export function DesignationManagement() {
     let coAutocomplete = ctx?.companyName ?? "";
     let brAutocomplete = "";
 
-    if (user?.role === "BRANCH_ADMIN" && currentUserMapping) {
+    if ((user?.role === "COMPANY_ADMIN" || user?.role === "ADMIN") && currentUserMapping) {
+      serviceProviderID = currentUserMapping.serviceProviderID ?? null;
+      companyID = currentUserMapping.companyID ?? null;
+      branchesID = null;
+      spAutocomplete = currentUserMapping.serviceProvider?.companyName ?? "";
+      coAutocomplete = currentUserMapping.company?.companyName ?? "";
+      brAutocomplete = "";
+    } else if (user?.role === "BRANCH_ADMIN" && currentUserMapping) {
       serviceProviderID = currentUserMapping.serviceProviderID ?? null;
       companyID = currentUserMapping.companyID ?? null;
       branchesID = currentUserMapping.branchesID ?? null;
