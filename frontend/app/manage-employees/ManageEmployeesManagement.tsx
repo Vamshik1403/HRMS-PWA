@@ -368,7 +368,8 @@ export function ManageEmployeesManagement() {
   const [error, setError] = useState<string | null>(null);
   const [terminationMap, setTerminationMap] = useState<Record<number, { daysLeft: number; lastWorkingDay: string }>>({});
   const user = useCurrentUser();
-  const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN" || user?.role === "BRANCH_ADMIN";
+  const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN" || user?.role === "ADMIN" || user?.role === "BRANCH_ADMIN";
+  const isAdmin = user?.role === "ADMIN";
   const isEmployee = user?.role === "EMPLOYEE";
 
   // UI
@@ -3028,18 +3029,18 @@ const addCombinedDevMap = () => {
                     required
                   />
                 </div>
-                <div className="space-y-2">
+                {!isAdmin && (<div className="space-y-2">
                   <Label>Mobile Number <span className="text-red-500">*</span></Label>
                   <Input
                     value={formData.personalPhoneNo}
                     onChange={(e) => setFormData((p) => ({ ...p, personalPhoneNo: e.target.value }))}
                     required
                   />
-                </div>
+                </div>)}
               </div>
 
               {/* Codes / Date */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              {!isAdmin && (<><div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div className="space-y-2">
                   <Label>Joining Date <span className="text-red-500">*</span></Label>
                   <Input
@@ -4162,6 +4163,7 @@ const addCombinedDevMap = () => {
                   ))
                 )}
               </div>
+              </>)}
 
           {/* ==========================
     ATTENDANCE DEVICE MAPPING 
@@ -4280,7 +4282,7 @@ const addCombinedDevMap = () => {
 {/* ==========================
     TOKEN REGISTER DEVICE MAPPING 
     ========================== */}
-<div className="space-y-3 mt-6">
+{!isAdmin && (<><div className="space-y-3 mt-6">
   <div className="flex items-center justify-between">
     <h3 className="text-lg font-semibold">Token Register Device Mapping</h3>
     <Button variant="outline" size="sm" type="button" onClick={addTokenDevMap}>
@@ -4496,6 +4498,7 @@ const addCombinedDevMap = () => {
     ))
   )}
 </div>
+</>)}
 
               <div className="flex justify-end gap-2 pt-4 border-t border-gray-200">
                 <Button type="button" variant="outline" onClick={handleCancel}>

@@ -35,13 +35,15 @@ interface UserRow {
 }
 
 // Roles available based on the current user's role
-const SUPERADMIN_ROLES = ["SUPERADMIN", "SERVICE_PROVIDER", "COMPANY_ADMIN", "BRANCH_ADMIN"];
-const SERVICE_PROVIDER_ROLES = ["SERVICE_PROVIDER", "COMPANY_ADMIN", "BRANCH_ADMIN"];
+const SUPERADMIN_ROLES = ["SUPERADMIN", "SERVICE_PROVIDER", "COMPANY_ADMIN", "ADMIN", "BRANCH_ADMIN"];
+const SERVICE_PROVIDER_ROLES = ["SERVICE_PROVIDER", "COMPANY_ADMIN", "ADMIN", "BRANCH_ADMIN"];
+const ADMIN_ROLES = ["BRANCH_ADMIN"];
 
 const ROLE_DISPLAY: Record<string, string> = {
   SUPERADMIN: "SUPERADMIN",
   SERVICE_PROVIDER: "SERVICE PROVIDER",
   COMPANY_ADMIN: "COMPANY ADMIN",
+  ADMIN: "ADMIN",
   BRANCH_ADMIN: "BRANCH ADMIN",
   EMPLOYEE: "EMPLOYEE",
 };
@@ -51,7 +53,8 @@ export function SystemUsersManagement() {
   const isSuperAdmin = user?.role === "SUPERADMIN";
   const isServiceProvider = user?.role === "SERVICE_PROVIDER";
   const isCompanyAdmin = user?.role === "COMPANY_ADMIN";
-  const canAccess = isSuperAdmin;
+  const isAdmin = user?.role === "ADMIN";
+  const canAccess = isSuperAdmin || isAdmin;
 
   const [rows, setRows] = useState<UserRow[]>([]);
   const [loading, setLoading] = useState(false);
@@ -187,9 +190,14 @@ export function SystemUsersManagement() {
   };
 
   const filteredRows = useMemo(() => {
+    let data = rows;
+    // ADMIN can only see users in their own company
+    if (isAdmin && user?.companyID) {
+      data = data.filter((r) => r.companyID === user.companyID);
+    }
     const t = searchTerm.trim().toLowerCase();
-    if (!t) return rows;
-    return rows.filter((r) => {
+    if (!t) return data;
+    return data.filter((r) => {
       return [
         r.username,
         r.role,
@@ -198,7 +206,7 @@ export function SystemUsersManagement() {
         r.branches?.branchName ?? "",
       ].some((x) => x.toLowerCase().includes(t));
     });
-  }, [rows, searchTerm]);
+  }, [rows, searchTerm, isAdmin, user?.companyID]);
 
   if (!canAccess) {
     return <div className="p-8 text-center text-gray-500">Access restricted.</div>;
@@ -209,7 +217,7 @@ export function SystemUsersManagement() {
       <div className="flex items-center justify-between w-full">
         <p className="text-gray-600 text-sm">Manage system users and access</p>
         {!isAddingNew && !isViewing && (
-          <Button onClick={() => { resetForm(); setIsAddingNew(true); }} className="text-sm px-3 py-2">
+          <Button onClick={() => { resetForm(); if (isAdmin && user?.companyID) { setForm(p => ({ ...p, companyID: user.companyID as number })); } setIsAddingNew(true); }} className="text-sm px-3 py-2">
             <Plus className="w-4 h-4 mr-1" /> Add User
           </Button>
         )}
@@ -244,13 +252,13 @@ export function SystemUsersManagement() {
             <Select value={form.role} onValueChange={(v) => setForm((p) => ({ ...p, role: v, companyID: "", branchesID: "" }))}>
               <SelectTrigger><SelectValue placeholder="Select role…" /></SelectTrigger>
               <SelectContent>
-                {(isSuperAdmin ? SUPERADMIN_ROLES : SERVICE_PROVIDER_ROLES).map((r) => <SelectItem key={r} value={r}>{r === "SERVICE_PROVIDER" ? "SERVICE PROVIDER" : r === "BRANCH_ADMIN" ? "BRANCH ADMIN" : r === "COMPANY_ADMIN" ? "COMPANY ADMIN" : r}</SelectItem>)}
+                {(isSuperAdmin ? SUPERADMIN_ROLES : isAdmin ? ADMIN_ROLES : SERVICE_PROVIDER_ROLES).map((r) => <SelectItem key={r} value={r}>{r === "SERVICE_PROVIDER" ? "SERVICE PROVIDER" : r === "BRANCH_ADMIN" ? "BRANCH ADMIN" : r === "COMPANY_ADMIN" ? "COMPANY ADMIN" : r}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
 
-          {/* SP field: shown for MANAGER, COMPANY_ADMIN, BRANCH_ADMIN */}
-          {isSuperAdmin && (form.role === "SERVICE_PROVIDER" || form.role === "COMPANY_ADMIN" || form.role === "BRANCH_ADMIN") && (
+          {/* SP field: shown for SERVICE_PROVIDER, COMPANY_ADMIN, ADMIN, BRANCH_ADMIN */}
+          {isSuperAdmin && (form.role === "SERVICE_PROVIDER" || form.role === "COMPANY_ADMIN" || form.role === "ADMIN" || form.role === "BRANCH_ADMIN") && (
             <div className="space-y-2">
               <Label>Service Provider</Label>
               <Select value={String(form.serviceProviderID)} onValueChange={(v) => setForm((p) => ({ ...p, serviceProviderID: v, companyID: "", branchesID: "" }))}>
@@ -262,8 +270,8 @@ export function SystemUsersManagement() {
             </div>
           )}
 
-          {/* Company field: shown for COMPANY_ADMIN, BRANCH_ADMIN */}
-          {(form.role === "COMPANY_ADMIN" || form.role === "BRANCH_ADMIN") && (
+          {/* Company field: shown for COMPANY_ADMIN, ADMIN, BRANCH_ADMIN */}
+          {(form.role === "COMPANY_ADMIN" || form.role === "ADMIN" || form.role === "BRANCH_ADMIN") && (
             <div className="space-y-2">
               <Label>Company</Label>
               <Select value={String(form.companyID)} onValueChange={(v) => setForm((p) => ({ ...p, companyID: v, branchesID: "" }))}>
