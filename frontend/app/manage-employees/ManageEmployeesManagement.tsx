@@ -2680,12 +2680,12 @@ const addCombinedDevMap = () => {
       empEmploymentStatusForm: (freshData.empEmploymentStatus ?? []).map((d: any) => ({ id: d.id, _localId: uid(), employmentStatus: d.employmentStatus ?? "", probationPeriod: d.probationPeriod ?? "", effectFrom: d.effectFrom ?? "" })),
       empWorkShiftForm: [
         ...(freshData.empWorkShift ?? []).map((d: any) => ({ id: d.id, _localId: uid(), workShiftID: d.workShiftID ?? null, _wsAutocomplete: d.workShift?.workShiftName ?? "", effectFrom: d.effectFrom ?? "", _isFactual: false })),
-        ...(freshData.empFactualWorkShift ?? []).map((d: any) => ({ id: d.id, _localId: uid(), workShiftID: d.factualWorkShiftID ?? null, _wsAutocomplete: '[FCT] ' + (d.factualWorkShift?.workShiftName ?? ''), effectFrom: d.effectFrom ?? "", _isFactual: true })),
+        ...(freshData.empFactualWorkShift ?? []).map((d: any) => ({ id: d.id, _localId: uid(), workShiftID: d.factualWorkShiftID ?? null, _wsAutocomplete: d.factualWorkShift?.workShiftName ?? '', effectFrom: d.effectFrom ?? "", _isFactual: true })),
       ],
       empLeavePolicyForm: (freshData.empLeavePolicy ?? []).map((d: any) => ({ id: d.id, _localId: uid(), leavePolicyID: d.leavePolicyID ?? null, _lpAutocomplete: d.leavePolicy?.leavePolicyName ?? "", effectFrom: d.effectFrom ?? "" })),
       empAttendancePolicyForm: [
         ...(freshData.empAttendancePolicy ?? []).map((d: any) => ({ id: d.id, _localId: uid(), attendancePolicyID: d.attendancePolicyID ?? null, _apAutocomplete: d.attendancePolicy?.attendancePolicyName ?? "", effectFrom: d.effectFrom ?? "", _isFactual: false })),
-        ...(freshData.empFactualAttendancePolicy ?? []).map((d: any) => ({ id: d.id, _localId: uid(), attendancePolicyID: d.factualAttendancePolicyID ?? null, _apAutocomplete: '[FCT] ' + (d.factualAttendancePolicy?.attendancePolicyName ?? ''), effectFrom: d.effectFrom ?? "", _isFactual: true })),
+        ...(freshData.empFactualAttendancePolicy ?? []).map((d: any) => ({ id: d.id, _localId: uid(), attendancePolicyID: d.factualAttendancePolicyID ?? null, _apAutocomplete: d.factualAttendancePolicy?.attendancePolicyName ?? '', effectFrom: d.effectFrom ?? "", _isFactual: true })),
       ],
       empContractorForm: (freshData.empContractor ?? []).map((d: any) => ({ id: d.id, _localId: uid(), contractorID: d.contractorID ?? null, _contrAutocomplete: d.contractor?.contractorName ?? "", effectFrom: d.effectFrom ?? "" })),
     });
@@ -4088,7 +4088,7 @@ const addCombinedDevMap = () => {
                           <div key={a.id} className="px-3 py-2 hover:bg-gray-100 cursor-pointer" onMouseDown={(e) => e.preventDefault()} onClick={() => {
                             setStagingAP(p => ({ ...p, attendancePolicyID: a.id, label: a.attendancePolicyName ?? "", _isFactual: a._isFactual ?? false }));
                             setApList([]);
-                          }}>{a._isFactual ? <span>[FCT] {a.attendancePolicyName}</span> : a.attendancePolicyName}</div>
+                          }}>{a.attendancePolicyName}</div>
                         ))}
                       </div>
                     )}
@@ -4099,7 +4099,7 @@ const addCombinedDevMap = () => {
                   </div>
                   <Button type="button" size="sm" disabled={!stagingAP.attendancePolicyID} onClick={() => {
                     if (!stagingAP.attendancePolicyID) return;
-                    const newEntry: EmpAttendancePolicyForm = { _localId: uid(), attendancePolicyID: stagingAP.attendancePolicyID, _apAutocomplete: (stagingAP._isFactual ? '[FCT] ' : '') + stagingAP.label, effectFrom: stagingAP.effectFrom, _isFactual: stagingAP._isFactual ?? false };
+                    const newEntry: EmpAttendancePolicyForm = { _localId: uid(), attendancePolicyID: stagingAP.attendancePolicyID, _apAutocomplete: stagingAP.label, effectFrom: stagingAP.effectFrom, _isFactual: stagingAP._isFactual ?? false };
                     setFormData(p => {
                       const newList = upsertHistoryEntry(p.empAttendancePolicyForm, newEntry, (item) => item.attendancePolicyID === newEntry.attendancePolicyID);
                       const last = newList[newList.length - 1];
@@ -4118,7 +4118,7 @@ const addCombinedDevMap = () => {
                   ) : (
                     formData.empAttendancePolicyForm.map((ea, i) => (
                       <div key={ea._localId} className={`flex items-center px-3 py-2 text-sm ${i === formData.empAttendancePolicyForm.length - 1 ? 'bg-blue-50 font-medium' : 'bg-white'} ${i > 0 ? 'border-t border-gray-100' : ''}`}>
-                        <span className="flex-1 flex items-center gap-1">{ea._isFactual && <span className="text-[10px] font-bold text-purple-600 bg-purple-50 border border-purple-200 rounded px-1">FCT</span>}{ea._apAutocomplete || '—'}</span>
+                        <span className="flex-1 flex items-center gap-1">{ea._apAutocomplete || '—'}</span>
                         <span className="w-32 text-center text-gray-500">{ea.effectFrom || '—'}</span>
                         {!editingRow && <Button type="button" variant="ghost" size="sm" onClick={() => removeEmpAttendancePolicy(ea._localId)} className="h-6 w-6 p-0 text-red-500 hover:text-red-700 hover:bg-red-50"><X className="w-3 h-3" /></Button>}
                       </div>
@@ -4158,7 +4158,7 @@ const addCombinedDevMap = () => {
                           <div key={w.id} className="px-3 py-2 hover:bg-gray-100 cursor-pointer" onMouseDown={(e) => e.preventDefault()} onClick={() => {
                             setStagingWS(p => ({ ...p, workShiftID: w.id, label: w.workShiftName ?? "", _isFactual: w._isFactual ?? false }));
                             setWsList([]);
-                          }}>{w._isFactual ? <span>[FCT] {w.workShiftName}</span> : w.workShiftName}</div>
+                          }}>{w.workShiftName}</div>
                         ))}
                       </div>
                     )}
@@ -4169,7 +4169,7 @@ const addCombinedDevMap = () => {
                   </div>
                   <Button type="button" size="sm" disabled={!stagingWS.workShiftID || formData.allowRotatingShift} onClick={() => {
                     if (!stagingWS.workShiftID) return;
-                    const newEntry: EmpWorkShiftForm = { _localId: uid(), workShiftID: stagingWS.workShiftID, _wsAutocomplete: (stagingWS._isFactual ? '[FCT] ' : '') + stagingWS.label, effectFrom: stagingWS.effectFrom, _isFactual: stagingWS._isFactual ?? false };
+                    const newEntry: EmpWorkShiftForm = { _localId: uid(), workShiftID: stagingWS.workShiftID, _wsAutocomplete: stagingWS.label, effectFrom: stagingWS.effectFrom, _isFactual: stagingWS._isFactual ?? false };
                     setFormData(p => {
                       const newList = upsertHistoryEntry(p.empWorkShiftForm, newEntry, (item) => item.workShiftID === newEntry.workShiftID);
                       const last = newList[newList.length - 1];
@@ -4189,7 +4189,7 @@ const addCombinedDevMap = () => {
                   ) : (
                     formData.empWorkShiftForm.map((ew, i) => (
                       <div key={ew._localId} className={`flex items-center px-3 py-2 text-sm ${i === formData.empWorkShiftForm.length - 1 ? 'bg-blue-50 font-medium' : 'bg-white'} ${i > 0 ? 'border-t border-gray-100' : ''}`}>
-                        <span className="flex-1 flex items-center gap-1">{ew._isFactual && <span className="text-[10px] font-bold text-purple-600 bg-purple-50 border border-purple-200 rounded px-1">FCT</span>}{ew._wsAutocomplete || '—'}</span>
+                        <span className="flex-1 flex items-center gap-1">{ew._wsAutocomplete || '—'}</span>
                         <span className="w-32 text-center text-gray-500">{ew.effectFrom || '—'}</span>
                         {!editingRow && <Button type="button" variant="ghost" size="sm" onClick={() => removeEmpWorkShift(ew._localId)} className="h-6 w-6 p-0 text-red-500 hover:text-red-700 hover:bg-red-50"><X className="w-3 h-3" /></Button>}
                       </div>
