@@ -7,7 +7,7 @@ import {
   ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
-import { BankDetailsCreateDto, EmpDesignationCreateDto, TokenDeviceMapCreateDto, EmpBranchCreateDto, EmpDepartmentCreateDto, EmpEmploymentTypeCreateDto, EmpEmploymentStatusCreateDto, EmpWorkShiftCreateDto, EmpAttendancePolicyCreateDto, EmpLeavePolicyCreateDto, EmpContractorCreateDto } from './create-manage-employee.dto';
+import { BankDetailsCreateDto, EmpDesignationCreateDto, TokenDeviceMapCreateDto, EmpBranchCreateDto, EmpDepartmentCreateDto, EmpEmploymentTypeCreateDto, EmpEmploymentStatusCreateDto, EmpWorkShiftCreateDto, EmpAttendancePolicyCreateDto, EmpFactualWorkShiftCreateDto, EmpFactualAttendancePolicyCreateDto, EmpLeavePolicyCreateDto, EmpContractorCreateDto } from './create-manage-employee.dto';
 import e from 'express';
 
 export class EduUpdateDto {
@@ -223,6 +223,16 @@ empDesignationIdsToDelete?: number[];
 
   @IsOptional() @IsArray()
   @ValidateNested({ each: true })
+  @Type(() => EmpFactualWorkShiftCreateDto)
+  empFactualWorkShifts?: EmpFactualWorkShiftCreateDto[];
+
+  @IsOptional() @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => EmpFactualAttendancePolicyCreateDto)
+  empFactualAttendancePolicies?: EmpFactualAttendancePolicyCreateDto[];
+
+  @IsOptional() @IsArray()
+  @ValidateNested({ each: true })
   @Type(() => EmpLeavePolicyCreateDto)
   empLeavePolicies?: EmpLeavePolicyCreateDto[];
 
@@ -242,6 +252,8 @@ empDesignationIdsToDelete?: number[];
   @IsOptional() @IsArray() empEmploymentStatusIdsToDelete?: number[];
   @IsOptional() @IsArray() empWorkShiftIdsToDelete?: number[];
   @IsOptional() @IsArray() empAttendancePolicyIdsToDelete?: number[];
+  @IsOptional() @IsArray() empFactualWorkShiftIdsToDelete?: number[];
+  @IsOptional() @IsArray() empFactualAttendancePolicyIdsToDelete?: number[];
   @IsOptional() @IsArray() empLeavePolicyIdsToDelete?: number[];
   @IsOptional() @IsArray() empContractorIdsToDelete?: number[];
 }

@@ -106,7 +106,7 @@ export function DeviceManagement() {
   const [error, setError] = useState<string | null>(null);
   const user = useCurrentUser();
   const canManage = user?.role === "SUPERADMIN" || user?.role === "COMPANY_ADMIN" || user?.role === "ADMIN" || user?.role === "SERVICE_PROVIDER";
-  const canAdd = user?.role === "SUPERADMIN";
+  const canAdd = user?.role === "SUPERADMIN" || user?.role === "COMPANY_ADMIN" || user?.role === "ADMIN";
   const canDelete = user?.role === "SUPERADMIN";
   
   // UI
@@ -873,9 +873,13 @@ export function DeviceManagement() {
                 >
                   <option value="">Select device type</option>
                   <option value="AT">Attendance</option>
-                  <option value="TR">Token Registration</option>
-                  <option value="TV">Token Verifier</option>
-                  <option value="AT+TR">Attendance + Token Register</option>
+                  {!(user?.role === "ADMIN" || user?.role === "COMPANY_ADMIN") && (
+                    <>
+                      <option value="TR">Token Registration</option>
+                      <option value="TV">Token Verifier</option>
+                      <option value="AT+TR">Attendance + Token Register</option>
+                    </>
+                  )}
                 </select>
               </div>
 

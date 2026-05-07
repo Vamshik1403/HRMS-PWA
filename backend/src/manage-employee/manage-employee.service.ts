@@ -51,6 +51,8 @@ export class ManageEmployeeService {
       empEmploymentStatuses = [],
       empWorkShifts = [],
       empAttendancePolicies = [],
+      empFactualWorkShifts = [],
+      empFactualAttendancePolicies = [],
       empLeavePolicies = [],
       empContractors = [],
       promotion,
@@ -200,6 +202,18 @@ export class ManageEmployeeService {
               .map((a) => ({ attendancePolicyID: a.attendancePolicyID!, effectFrom: a.effectFrom ?? null })),
           },
 
+          empFactualWorkShift: {
+            create: empFactualWorkShifts
+              .filter((w) => w.factualWorkShiftID != null)
+              .map((w) => ({ factualWorkShiftID: w.factualWorkShiftID!, effectFrom: w.effectFrom ?? null })),
+          },
+
+          empFactualAttendancePolicy: {
+            create: empFactualAttendancePolicies
+              .filter((a) => a.factualAttendancePolicyID != null)
+              .map((a) => ({ factualAttendancePolicyID: a.factualAttendancePolicyID!, effectFrom: a.effectFrom ?? null })),
+          },
+
           empLeavePolicy: {
             create: empLeavePolicies
               .filter((l) => l.leavePolicyID != null)
@@ -266,6 +280,8 @@ export class ManageEmployeeService {
           empEmploymentStatus: true,
           empWorkShift: { include: { workShift: true } },
           empAttendancePolicy: { include: { attendancePolicy: true } },
+          empFactualWorkShift: { include: { factualWorkShift: true } },
+          empFactualAttendancePolicy: { include: { factualAttendancePolicy: true } },
           empLeavePolicy: { include: { leavePolicy: true } },
           empContractor: { include: { contractor: true } },
           empPromotion: {
@@ -638,6 +654,8 @@ async findAll(status?: string) {
       empEmploymentStatus: true,
       empWorkShift: { include: { workShift: true } },
       empAttendancePolicy: { include: { attendancePolicy: true } },
+      empFactualWorkShift: { include: { factualWorkShift: true } },
+      empFactualAttendancePolicy: { include: { factualAttendancePolicy: true } },
       empLeavePolicy: { include: { leavePolicy: true } },
       empContractor: { include: { contractor: true } },
       empPromotion: {
@@ -697,6 +715,8 @@ async findOne(id: number) {
       empEmploymentStatus: true,
       empWorkShift: { include: { workShift: true } },
       empAttendancePolicy: { include: { attendancePolicy: true } },
+      empFactualWorkShift: { include: { factualWorkShift: true } },
+      empFactualAttendancePolicy: { include: { factualAttendancePolicy: true } },
       empLeavePolicy: { include: { leavePolicy: true } },
       empContractor: { include: { contractor: true } },
       empPromotion: {
@@ -746,6 +766,8 @@ async findOne(id: number) {
       empEmploymentStatuses,
       empWorkShifts,
       empAttendancePolicies,
+      empFactualWorkShifts,
+      empFactualAttendancePolicies,
       empLeavePolicies,
       empContractors,
       promotion,
@@ -761,6 +783,8 @@ async findOne(id: number) {
       empEmploymentStatusIdsToDelete = [],
       empWorkShiftIdsToDelete = [],
       empAttendancePolicyIdsToDelete = [],
+      empFactualWorkShiftIdsToDelete = [],
+      empFactualAttendancePolicyIdsToDelete = [],
       empLeavePolicyIdsToDelete = [],
       empContractorIdsToDelete = [],
       ...scalars
@@ -777,6 +801,8 @@ async findOne(id: number) {
       delete (scalars as any).empEmploymentStatusIdsToDelete;
       delete (scalars as any).empWorkShiftIdsToDelete;
       delete (scalars as any).empAttendancePolicyIdsToDelete;
+      delete (scalars as any).empFactualWorkShiftIdsToDelete;
+      delete (scalars as any).empFactualAttendancePolicyIdsToDelete;
       delete (scalars as any).empLeavePolicyIdsToDelete;
       delete (scalars as any).empContractorIdsToDelete;
 
@@ -1198,6 +1224,36 @@ async findOne(id: number) {
         }
       }
 
+      // Delete and upsert empFactualWorkShift
+      if (empFactualWorkShiftIdsToDelete.length) {
+        await (tx as any).empFactualWorkShift.deleteMany({ where: { id: { in: empFactualWorkShiftIdsToDelete }, manageEmployeeID: id } });
+      }
+      if (empFactualWorkShifts?.length) {
+        const toUpdate = empFactualWorkShifts.filter((w) => !!w.id);
+        const toCreate = empFactualWorkShifts.filter((w) => !w.id);
+        for (const w of toUpdate) {
+          await (tx as any).empFactualWorkShift.update({ where: { id: w.id! }, data: { factualWorkShiftID: w.factualWorkShiftID!, effectFrom: w.effectFrom ?? null } });
+        }
+        if (toCreate.length) {
+          await (tx as any).empFactualWorkShift.createMany({ data: toCreate.filter((w) => w.factualWorkShiftID != null).map((w) => ({ manageEmployeeID: id, factualWorkShiftID: w.factualWorkShiftID!, effectFrom: w.effectFrom ?? null })) });
+        }
+      }
+
+      // Delete and upsert empFactualAttendancePolicy
+      if (empFactualAttendancePolicyIdsToDelete.length) {
+        await (tx as any).empFactualAttendancePolicy.deleteMany({ where: { id: { in: empFactualAttendancePolicyIdsToDelete }, manageEmployeeID: id } });
+      }
+      if (empFactualAttendancePolicies?.length) {
+        const toUpdate = empFactualAttendancePolicies.filter((a) => !!a.id);
+        const toCreate = empFactualAttendancePolicies.filter((a) => !a.id);
+        for (const a of toUpdate) {
+          await (tx as any).empFactualAttendancePolicy.update({ where: { id: a.id! }, data: { factualAttendancePolicyID: a.factualAttendancePolicyID!, effectFrom: a.effectFrom ?? null } });
+        }
+        if (toCreate.length) {
+          await (tx as any).empFactualAttendancePolicy.createMany({ data: toCreate.filter((a) => a.factualAttendancePolicyID != null).map((a) => ({ manageEmployeeID: id, factualAttendancePolicyID: a.factualAttendancePolicyID!, effectFrom: a.effectFrom ?? null })) });
+        }
+      }
+
       // Delete and upsert empLeavePolicy
       if (empLeavePolicyIdsToDelete.length) {
         await tx.empLeavePolicy.deleteMany({ where: { id: { in: empLeavePolicyIdsToDelete }, manageEmployeeID: id } });
@@ -1305,6 +1361,8 @@ async findOne(id: number) {
           empEmploymentStatus: true,
           empWorkShift: { include: { workShift: true } },
           empAttendancePolicy: { include: { attendancePolicy: true } },
+          empFactualWorkShift: { include: { factualWorkShift: true } },
+          empFactualAttendancePolicy: { include: { factualAttendancePolicy: true } },
           empLeavePolicy: { include: { leavePolicy: true } },
           empContractor: { include: { contractor: true } },
           empPromotion: {
@@ -1370,6 +1428,12 @@ async remove(id: number) {
         where: { manageEmployeeID: id },
       }),
       this.prisma.empAttendancePolicy.deleteMany({
+        where: { manageEmployeeID: id },
+      }),
+      (this.prisma as any).empFactualWorkShift.deleteMany({
+        where: { manageEmployeeID: id },
+      }),
+      (this.prisma as any).empFactualAttendancePolicy.deleteMany({
         where: { manageEmployeeID: id },
       }),
       this.prisma.empLeavePolicy.deleteMany({

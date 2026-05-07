@@ -298,10 +298,22 @@ export function CompanyManagement() {
 
       const { autocompleteName, id, ...formDataWithoutAutocomplete } = formData;
       const { serviceProvider, ...cleanFormData } = formDataWithoutAutocomplete as any;
+
+      // Validate serviceProviderID exists in DB before submitting to avoid FK constraint errors
+      let resolvedServiceProviderID: number | undefined = formData.serviceProviderID || undefined;
+      if (resolvedServiceProviderID) {
+        try {
+          const spCheck = await fetch(`/backend/service-provider/${resolvedServiceProviderID}`);
+          if (!spCheck.ok) resolvedServiceProviderID = undefined;
+        } catch {
+          resolvedServiceProviderID = undefined;
+        }
+      }
+
       const finalData = {
         ...cleanFormData,
         companyName: formData.companyName || formData.autocompleteName || "",
-        serviceProviderID: formData.serviceProviderID || undefined,
+        serviceProviderID: resolvedServiceProviderID,
         companyLogoUrl: companyLogoUrl || undefined,
         SignatureUrl: SignatureUrl || undefined,
       };

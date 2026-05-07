@@ -140,7 +140,7 @@ export function BranchManagement() {
   const [signatureFile, setSignatureFile] = useState<File | null>(null);
   const user = useCurrentUser();
   const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN" || user?.role === "ADMIN";
-  const canCreate = user?.role === "SUPERADMIN";
+  const canCreate = user?.role === "SUPERADMIN" || user?.role === "COMPANY_ADMIN" || user?.role === "ADMIN";
   const isEmployee = user?.role === "EMPLOYEE";
 
   // Add this with your other state declarations
@@ -1020,8 +1020,8 @@ export function BranchManagement() {
                 <Input type="date" value={formData.financialYearStart} onChange={(e) => setFormData((p) => ({ ...p, financialYearStart: e.target.value }))} />
               </div>
 
-              {/* Bank Details repeater */}
-              <div className="space-y-4">
+              {/* Bank Details repeater - hidden for ADMIN and COMPANY_ADMIN */}
+              {!(user?.role === "ADMIN" || user?.role === "COMPANY_ADMIN") && <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <h3 className="text-lg font-semibold">Bank Details</h3>
                   <Button variant="outline" size="sm" type="button" onClick={addBankDetail}>
@@ -1089,7 +1089,7 @@ export function BranchManagement() {
                     </div>
                   ))
                 )}
-              </div>
+              </div>}
 
               <div className="flex justify-end gap-2 pt-4 border-t border-gray-200">
                 <Button type="button" variant="outline" onClick={handleCancel}>

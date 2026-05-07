@@ -1879,7 +1879,9 @@ const employeeOptions = filteredEmployees.map((e: Employee) => ({
               <Label>Report Type</Label>
               <select className="w-full px-3 py-2 border rounded-md bg-white" value={formData.reportType} onChange={e => setFormData(prev => ({ ...prev, reportType: e.target.value }))}>
                 <option value="All Punches Logs">All Punches Logs</option><option value="FILO Punches Logs">FILO Punches Logs</option>
-                <option value="Attendance Marking Logs">Attendance Marking Logs</option><option value="Attendance Summary Logs">Attendance Summary Logs</option>
+                {/* Attendance Marking Logs and Summary Logs - hidden for ADMIN role temporarily */}
+                {user?.role !== "ADMIN" && <option value="Attendance Marking Logs">Attendance Marking Logs</option>}
+                {user?.role !== "ADMIN" && <option value="Attendance Summary Logs">Attendance Summary Logs</option>}
               </select>
             </div>
           </div>

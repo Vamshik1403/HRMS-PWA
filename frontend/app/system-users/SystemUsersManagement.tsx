@@ -191,9 +191,9 @@ export function SystemUsersManagement() {
 
   const filteredRows = useMemo(() => {
     let data = rows;
-    // ADMIN can only see users in their own company
+    // ADMIN can only see users in their own company, and cannot see COMPANY_ADMIN accounts
     if (isAdmin && user?.companyID) {
-      data = data.filter((r) => r.companyID === user.companyID);
+      data = data.filter((r) => r.companyID === user.companyID && r.role !== "COMPANY_ADMIN");
     }
     const t = searchTerm.trim().toLowerCase();
     if (!t) return data;

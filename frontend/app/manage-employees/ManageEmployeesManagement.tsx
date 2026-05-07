@@ -244,7 +244,9 @@ const API = {
   employees: "/backend/manage-emp",
   contractors: "/backend/contractors",
   workShifts: "/backend/work-shift",
+  factualWorkShifts: "/backend/factual-work-shift",
   attendancePolicies: "/backend/attendance-policy",
+  factualAttendancePolicies: "/backend/factual-attendance-policy",
   leavePolicies: "/backend/leave-policy",
   devices: "/backend/devices",
   monthlyGrades: "/backend/monthly-pay-grade",
@@ -324,14 +326,7 @@ async function resolveLabelsForEdit(
       // Sync multi-entry form autocompletes
       empDepartmentForm: (prev.empDepartmentForm || []).map((entry: any, i: number, arr: any[]) =>
         i === arr.length - 1 ? { ...entry, _deptAutocomplete: dept?.departmentName ?? entry._deptAutocomplete } : entry),
-      empWorkShiftForm: (prev.empWorkShiftForm || []).map((entry: any, i: number, arr: any[]) =>
-        i === arr.length - 1 ? { ...entry, _wsAutocomplete: ws?.workShiftName ?? entry._wsAutocomplete } : entry),
-      empAttendancePolicyForm: (prev.empAttendancePolicyForm || []).map((entry: any, i: number, arr: any[]) =>
-        i === arr.length - 1 ? { ...entry, _apAutocomplete: ap?.attendancePolicyName ?? entry._apAutocomplete } : entry),
-      empLeavePolicyForm: (prev.empLeavePolicyForm || []).map((entry: any, i: number, arr: any[]) =>
-        i === arr.length - 1 ? { ...entry, _lpAutocomplete: lp?.leavePolicyName ?? entry._lpAutocomplete } : entry),
-      empContractorForm: (prev.empContractorForm || []).map((entry: any, i: number, arr: any[]) =>
-        i === arr.length - 1 ? { ...entry, _contrAutocomplete: contractor?.contractorName ?? entry._contrAutocomplete } : entry),
+      // empWorkShiftForm and empAttendancePolicyForm already have correct names from backend JOIN (including factual)
     };
   });
 }
@@ -370,6 +365,7 @@ export function ManageEmployeesManagement() {
   const user = useCurrentUser();
   const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN" || user?.role === "ADMIN" || user?.role === "BRANCH_ADMIN";
   const isAdmin = user?.role === "ADMIN";
+  const isCompanyAdmin = user?.role === "COMPANY_ADMIN";
   const isEmployee = user?.role === "EMPLOYEE";
 
   // UI
@@ -528,6 +524,7 @@ export function ManageEmployeesManagement() {
     workShiftID: ID | null;
     _wsAutocomplete: string;
     effectFrom?: string;
+    _isFactual?: boolean;
   };
   type EmpLeavePolicyForm = {
     id?: ID;
@@ -542,6 +539,7 @@ export function ManageEmployeesManagement() {
     attendancePolicyID: ID | null;
     _apAutocomplete: string;
     effectFrom?: string;
+    _isFactual?: boolean;
   };
   type EmpContractorForm = {
     id?: ID;
@@ -560,8 +558,8 @@ export function ManageEmployeesManagement() {
   const [stagingDept, setStagingDept] = useState<{ departmentNameID: ID | null; label: string; effectFrom: string }>({ departmentNameID: null, label: "", effectFrom: today });
   const [stagingDesg, setStagingDesg] = useState<{ designationID: ID | null; label: string; effectFrom: string }>({ designationID: null, label: "", effectFrom: today });
   const [stagingContr, setStagingContr] = useState<{ contractorID: ID | null; label: string; effectFrom: string }>({ contractorID: null, label: "", effectFrom: today });
-  const [stagingWS, setStagingWS] = useState<{ workShiftID: ID | null; label: string; effectFrom: string }>({ workShiftID: null, label: "", effectFrom: today });
-  const [stagingAP, setStagingAP] = useState<{ attendancePolicyID: ID | null; label: string; effectFrom: string }>({ attendancePolicyID: null, label: "", effectFrom: today });
+  const [stagingWS, setStagingWS] = useState<{ workShiftID: ID | null; label: string; effectFrom: string; _isFactual?: boolean }>({ workShiftID: null, label: "", effectFrom: today });
+  const [stagingAP, setStagingAP] = useState<{ attendancePolicyID: ID | null; label: string; effectFrom: string; _isFactual?: boolean }>({ attendancePolicyID: null, label: "", effectFrom: today });
   const [stagingLP, setStagingLP] = useState<{ leavePolicyID: ID | null; label: string; effectFrom: string }>({ leavePolicyID: null, label: "", effectFrom: today });
   const [stagingET, setStagingET] = useState<{ employmentType: string; effectFrom: string }>({ employmentType: "", effectFrom: today });
   const [stagingES, setStagingES] = useState<{ employmentStatus: string; probationPeriod: string; effectFrom: string }>({ employmentStatus: "", probationPeriod: "", effectFrom: today });
@@ -576,6 +574,8 @@ export function ManageEmployeesManagement() {
   const [originalEmpEmploymentStatusIds, setOriginalEmpEmploymentStatusIds] = useState<ID[]>([]);
   const [originalEmpWorkShiftIds, setOriginalEmpWorkShiftIds] = useState<ID[]>([]);
   const [originalEmpAttendancePolicyIds, setOriginalEmpAttendancePolicyIds] = useState<ID[]>([]);
+  const [originalEmpFactualWorkShiftIds, setOriginalEmpFactualWorkShiftIds] = useState<ID[]>([]);
+  const [originalEmpFactualAttendancePolicyIds, setOriginalEmpFactualAttendancePolicyIds] = useState<ID[]>([]);
   const [originalEmpLeavePolicyIds, setOriginalEmpLeavePolicyIds] = useState<ID[]>([]);
   const [originalEmpContractorIds, setOriginalEmpContractorIds] = useState<ID[]>([]);
   // For Token Device Mapping
@@ -1285,7 +1285,12 @@ const runFetchCombinedDev = (q: string) => {
       const ctrl = new AbortController(); wsAbortRef.current = ctrl;
       setWsLoading(true);
       try {
-        let all = await fetchJSONSafe<WS[]>(API.workShifts, ctrl.signal);
+        const [regular, factual] = await Promise.all([
+          fetchJSONSafe<WS[]>(API.workShifts, ctrl.signal),
+          fetchJSONSafe<WS[]>(API.factualWorkShifts, ctrl.signal),
+        ]);
+        const factualTagged = (factual || []).map(w => ({ ...w, _isFactual: true as const }));
+        let all = [...(regular || []), ...factualTagged];
         if (user?.role === "SERVICE_PROVIDER" && currentUserMapping) {
           all = filterForManager(all);
         } else if (formData.companyID) {
@@ -1311,7 +1316,12 @@ const runFetchCombinedDev = (q: string) => {
       const ctrl = new AbortController(); apAbortRef.current = ctrl;
       setApLoading(true);
       try {
-        let all = await fetchJSONSafe<AP[]>(API.attendancePolicies, ctrl.signal);
+        const [regular, factual] = await Promise.all([
+          fetchJSONSafe<AP[]>(API.attendancePolicies, ctrl.signal),
+          fetchJSONSafe<AP[]>(API.factualAttendancePolicies, ctrl.signal),
+        ]);
+        const factualTagged = (factual || []).map(a => ({ ...a, _isFactual: true as const }));
+        let all = [...(regular || []), ...factualTagged];
         if (user?.role === "SERVICE_PROVIDER" && currentUserMapping) {
           all = filterForManager(all);
         } else if (formData.companyID) {
@@ -1428,8 +1438,8 @@ const runFetchCombinedDev = (q: string) => {
   interface Desg { id: ID; designation?: string | null; companyID?: ID | null; branchesID?: ID | null; }
   interface Contr { id: ID; contractorName?: string | null; companyID?: ID | null; branchesID?: ID | null; }
   interface Mgr { id: ID; employeeFirstName?: string | null; employeeLastName?: string | null; companyID?: ID | null; branchesID?: ID | null; }
-  interface WS { id: ID; workShiftName?: string | null; companyID?: ID | null; branchesID?: ID | null; isRotating?: boolean | null; isFlexible?: boolean | null; }
-  interface AP { id: ID; attendancePolicyName?: string | null; companyID?: ID | null; branchesID?: ID | null; }
+  interface WS { id: ID; workShiftName?: string | null; companyID?: ID | null; branchesID?: ID | null; isRotating?: boolean | null; isFlexible?: boolean | null; _isFactual?: boolean; }
+  interface AP { id: ID; attendancePolicyName?: string | null; companyID?: ID | null; branchesID?: ID | null; _isFactual?: boolean; }
   interface LP { id: ID; leavePolicyName?: string | null; companyID?: ID | null; branchesID?: ID | null; }
 
   // refs for outside-click close
@@ -1874,6 +1884,8 @@ const addCombinedDevMap = () => {
     setOriginalEmpEmploymentStatusIds([]);
     setOriginalEmpWorkShiftIds([]);
     setOriginalEmpAttendancePolicyIds([]);
+    setOriginalEmpFactualWorkShiftIds([]);
+    setOriginalEmpFactualAttendancePolicyIds([]);
     setOriginalEmpLeavePolicyIds([]);
     setOriginalEmpContractorIds([]);
     setActiveDesgLocalId(null);
@@ -2143,8 +2155,8 @@ const addCombinedDevMap = () => {
     if (!formData.employeeFirstName?.trim()) validationErrors.push("Employee First Name is mandatory");
     if (!formData.employeeLastName?.trim()) validationErrors.push("Employee Last Name is mandatory");
     if (!formData.employeeID?.trim()) validationErrors.push("Employee ID is mandatory");
-    if (!formData.personalPhoneNo?.trim()) validationErrors.push("Mobile Number is mandatory");
-    if (!formData.joiningDate?.trim()) validationErrors.push("Joining Date is mandatory");
+    if (!isAdmin && !isCompanyAdmin && !formData.personalPhoneNo?.trim()) validationErrors.push("Mobile Number is mandatory");
+    if (!isAdmin && !isCompanyAdmin && !formData.joiningDate?.trim()) validationErrors.push("Joining Date is mandatory");
 
     // Duplicate Employee ID check (within the same company)
     if (formData.employeeID?.trim()) {
@@ -2273,12 +2285,20 @@ const addCombinedDevMap = () => {
         .map(s => ({ id: s.id, employmentStatus: s.employmentStatus, probationPeriod: s.probationPeriod || undefined, effectFrom: s.effectFrom || undefined }));
 
       const empWorkShifts = formData.empWorkShiftForm
-        .filter(w => w.workShiftID != null)
+        .filter(w => w.workShiftID != null && !w._isFactual)
         .map(w => ({ id: w.id, workShiftID: w.workShiftID!, effectFrom: w.effectFrom || undefined }));
 
+      const empFactualWorkShifts = formData.empWorkShiftForm
+        .filter(w => w.workShiftID != null && w._isFactual)
+        .map(w => ({ id: w.id, factualWorkShiftID: w.workShiftID!, effectFrom: w.effectFrom || undefined }));
+
       const empAttendancePolicies = formData.empAttendancePolicyForm
-        .filter(a => a.attendancePolicyID != null)
+        .filter(a => a.attendancePolicyID != null && !a._isFactual)
         .map(a => ({ id: a.id, attendancePolicyID: a.attendancePolicyID!, effectFrom: a.effectFrom || undefined }));
+
+      const empFactualAttendancePolicies = formData.empAttendancePolicyForm
+        .filter(a => a.attendancePolicyID != null && a._isFactual)
+        .map(a => ({ id: a.id, factualAttendancePolicyID: a.attendancePolicyID!, effectFrom: a.effectFrom || undefined }));
 
       const empLeavePolicies = formData.empLeavePolicyForm
         .filter(l => l.leavePolicyID != null)
@@ -2300,6 +2320,8 @@ const addCombinedDevMap = () => {
       const empEmpStatusRemaining = new Set(empEmploymentStatuses.filter(s => s.id != null).map(s => s.id as number));
       const empWSRemaining = new Set(empWorkShifts.filter(w => w.id != null).map(w => w.id as number));
       const empAPRemaining = new Set(empAttendancePolicies.filter(a => a.id != null).map(a => a.id as number));
+      const empFWSRemaining = new Set(empFactualWorkShifts.filter(w => w.id != null).map(w => w.id as number));
+      const empFAPRemaining = new Set(empFactualAttendancePolicies.filter(a => a.id != null).map(a => a.id as number));
       const empLPRemaining = new Set(empLeavePolicies.filter(l => l.id != null).map(l => l.id as number));
       const empCtrRemaining = new Set(empContractors.filter(c => c.id != null).map(c => c.id as number));
       const type = formData.promotion?.salaryPayGradeType;
@@ -2376,7 +2398,9 @@ const addCombinedDevMap = () => {
         empEmploymentTypes,
         empEmploymentStatuses,
         empWorkShifts,
+        empFactualWorkShifts,
         empAttendancePolicies,
+        empFactualAttendancePolicies,
         empLeavePolicies,
         empContractors,
 
@@ -2393,6 +2417,8 @@ const addCombinedDevMap = () => {
           empEmploymentStatusIdsToDelete: originalEmpEmploymentStatusIds.filter(id => !empEmpStatusRemaining.has(id)),
           empWorkShiftIdsToDelete: originalEmpWorkShiftIds.filter(id => !empWSRemaining.has(id)),
           empAttendancePolicyIdsToDelete: originalEmpAttendancePolicyIds.filter(id => !empAPRemaining.has(id)),
+          empFactualWorkShiftIdsToDelete: originalEmpFactualWorkShiftIds.filter(id => !empFWSRemaining.has(id)),
+          empFactualAttendancePolicyIdsToDelete: originalEmpFactualAttendancePolicyIds.filter(id => !empFAPRemaining.has(id)),
           empLeavePolicyIdsToDelete: originalEmpLeavePolicyIds.filter(id => !empLPRemaining.has(id)),
           empContractorIdsToDelete: originalEmpContractorIds.filter(id => !empCtrRemaining.has(id)),
         } : {}),
@@ -2652,9 +2678,15 @@ const addCombinedDevMap = () => {
       empBranchForm: (freshData.empBranch ?? []).map((d: any) => ({ id: d.id, _localId: uid(), branchesID: d.branchesID ?? null, _brAutocomplete: d.branch?.branchName ?? "", effectFrom: d.effectFrom ?? "" })),
       empEmploymentTypeForm: (freshData.empEmploymentType ?? []).map((d: any) => ({ id: d.id, _localId: uid(), employmentType: d.employmentType ?? "", effectFrom: d.effectFrom ?? "" })),
       empEmploymentStatusForm: (freshData.empEmploymentStatus ?? []).map((d: any) => ({ id: d.id, _localId: uid(), employmentStatus: d.employmentStatus ?? "", probationPeriod: d.probationPeriod ?? "", effectFrom: d.effectFrom ?? "" })),
-      empWorkShiftForm: (freshData.empWorkShift ?? []).map((d: any) => ({ id: d.id, _localId: uid(), workShiftID: d.workShiftID ?? null, _wsAutocomplete: d.workShift?.workShiftName ?? "", effectFrom: d.effectFrom ?? "" })),
+      empWorkShiftForm: [
+        ...(freshData.empWorkShift ?? []).map((d: any) => ({ id: d.id, _localId: uid(), workShiftID: d.workShiftID ?? null, _wsAutocomplete: d.workShift?.workShiftName ?? "", effectFrom: d.effectFrom ?? "", _isFactual: false })),
+        ...(freshData.empFactualWorkShift ?? []).map((d: any) => ({ id: d.id, _localId: uid(), workShiftID: d.factualWorkShiftID ?? null, _wsAutocomplete: '[FCT] ' + (d.factualWorkShift?.workShiftName ?? ''), effectFrom: d.effectFrom ?? "", _isFactual: true })),
+      ],
       empLeavePolicyForm: (freshData.empLeavePolicy ?? []).map((d: any) => ({ id: d.id, _localId: uid(), leavePolicyID: d.leavePolicyID ?? null, _lpAutocomplete: d.leavePolicy?.leavePolicyName ?? "", effectFrom: d.effectFrom ?? "" })),
-      empAttendancePolicyForm: (freshData.empAttendancePolicy ?? []).map((d: any) => ({ id: d.id, _localId: uid(), attendancePolicyID: d.attendancePolicyID ?? null, _apAutocomplete: d.attendancePolicy?.attendancePolicyName ?? "", effectFrom: d.effectFrom ?? "" })),
+      empAttendancePolicyForm: [
+        ...(freshData.empAttendancePolicy ?? []).map((d: any) => ({ id: d.id, _localId: uid(), attendancePolicyID: d.attendancePolicyID ?? null, _apAutocomplete: d.attendancePolicy?.attendancePolicyName ?? "", effectFrom: d.effectFrom ?? "", _isFactual: false })),
+        ...(freshData.empFactualAttendancePolicy ?? []).map((d: any) => ({ id: d.id, _localId: uid(), attendancePolicyID: d.factualAttendancePolicyID ?? null, _apAutocomplete: '[FCT] ' + (d.factualAttendancePolicy?.attendancePolicyName ?? ''), effectFrom: d.effectFrom ?? "", _isFactual: true })),
+      ],
       empContractorForm: (freshData.empContractor ?? []).map((d: any) => ({ id: d.id, _localId: uid(), contractorID: d.contractorID ?? null, _contrAutocomplete: d.contractor?.contractorName ?? "", effectFrom: d.effectFrom ?? "" })),
     });
 
@@ -2710,8 +2742,10 @@ const addCombinedDevMap = () => {
     setOriginalEmpDepartmentIds(empDepartmentForm2.filter((x: any) => x.id != null).map((x: any) => x.id));
     setOriginalEmpEmploymentTypeIds(empEmploymentTypeForm.filter((x: any) => x.id != null).map((x: any) => x.id));
     setOriginalEmpEmploymentStatusIds(empEmploymentStatusForm.filter((x: any) => x.id != null).map((x: any) => x.id));
-    setOriginalEmpWorkShiftIds(empWorkShiftForm.filter((x: any) => x.id != null).map((x: any) => x.id));
-    setOriginalEmpAttendancePolicyIds(empAttendancePolicyForm.filter((x: any) => x.id != null).map((x: any) => x.id));
+    setOriginalEmpWorkShiftIds(empWorkShiftForm.filter((x: any) => x.id != null && !x._isFactual).map((x: any) => x.id));
+    setOriginalEmpAttendancePolicyIds(empAttendancePolicyForm.filter((x: any) => x.id != null && !x._isFactual).map((x: any) => x.id));
+    setOriginalEmpFactualWorkShiftIds((freshData.empFactualWorkShift ?? []).filter((x: any) => x.id != null).map((x: any) => x.id));
+    setOriginalEmpFactualAttendancePolicyIds((freshData.empFactualAttendancePolicy ?? []).filter((x: any) => x.id != null).map((x: any) => x.id));
     setOriginalEmpLeavePolicyIds(empLeavePolicyForm.filter((x: any) => x.id != null).map((x: any) => x.id));
     setOriginalEmpContractorIds(empContractorForm.filter((x: any) => x.id != null).map((x: any) => x.id));
 
@@ -2996,11 +3030,7 @@ const addCombinedDevMap = () => {
                   <Label>Employee Type</Label>
                   <select className="w-full rounded-md border px-3 py-2" value={formData.typeOfEmployee || "employee"} onChange={(e) => setFormData((p) => ({ ...p, typeOfEmployee: e.target.value }))}>
                     <option value="employee">Employee</option>
-                    <option value="trustee">Trustee</option>
-                    <option value="owner">Owner</option>
-                    <option value="proprietor">Proprietor</option>
-                    <option value="manager">Director</option>
-                    <option value="freelancer">Freelancer</option>
+                    {/* Trustee, Owner, Proprietor, Director, Freelancer - temporarily hidden */}
                   </select>
                 </div>
               </div>
@@ -3038,7 +3068,7 @@ const addCombinedDevMap = () => {
                     required
                   />
                 </div>
-                {!isAdmin && (<div className="space-y-2">
+                {!isAdmin && !isCompanyAdmin && (<div className="space-y-2">
                   <Label>Mobile Number <span className="text-red-500">*</span></Label>
                   <Input
                     value={formData.personalPhoneNo}
@@ -3048,57 +3078,31 @@ const addCombinedDevMap = () => {
                 </div>)}
               </div>
 
-              {/* Codes / Date */}
-              {!isAdmin && (<><div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              {/* Gender field for ADMIN and COMPANY_ADMIN */}
+              {(isAdmin || isCompanyAdmin) && (
                 <div className="space-y-2">
-                  <Label>Joining Date <span className="text-red-500">*</span></Label>
-                  <Input
-                    type="date"
-                    value={formData.joiningDate}
-                    onChange={(e) => setFormData((p) => ({ ...p, joiningDate: e.target.value }))}
-                    required
-                  />
+                  <Label>Gender</Label>
+                  <Select
+                    value={formData.gender || ""}
+                    onValueChange={(val) => setFormData((p) => ({ ...p, gender: val }))}
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Select gender…" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Male">Male</SelectItem>
+                      <SelectItem value="Female">Female</SelectItem>
+                      <SelectItem value="Transgender">Transgender</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
-
-                <div className="space-y-2 mt-3">
-                  <label>PF Member</label>
-                  <div className="flex items-center space-x-4">
-                    <label className="flex items-center space-x-2">
-                      <input
-                        type="checkbox"
-                        checked={formData.pfMemberStatus === "Yes"}
-                        onChange={(e) => setFormData((p) => ({ ...p, pfMemberStatus: e.target.checked ? "Yes" : "No" }))}
-                      />
-                      <span>Yes</span>
-                    </label>
-                    <label className="flex items-center space-x-2">
-                      <input
-                        type="checkbox"
-                        checked={formData.pfMemberStatus === "No"}
-                        onChange={(e) => setFormData((p) => ({ ...p, pfMemberStatus: e.target.checked ? "No" : "Yes" }))}
-                      />
-                      <span>No</span>
-                    </label>
-                  </div>
-                </div>
-              </div>
-
-              {formData.pfMemberStatus === "Yes" && (
-              <div className="space-y-2">
-                <label>PF Number</label>
-                <Input
-                  value={formData.pfNumber}
-                  onChange={(e) => setFormData((p) => ({ ...p, pfNumber: e.target.value }))}
-                />
-              </div>
               )}
 
+              {/* Department - Search & Add with History (visible for all roles including COMPANY_ADMIN) */}
               <div className="relative my-6">
                 <div className="absolute inset-0 flex items-center"><div className="w-full border-t-2 border-blue-200"></div></div>
-                <div className="relative flex justify-start"><span className="bg-white pr-3 text-sm font-semibold text-blue-700 uppercase tracking-wide">Department / Designation / Manager</span></div>
+                <div className="relative flex justify-start"><span className="bg-white pr-3 text-sm font-semibold text-blue-700 uppercase tracking-wide">Department</span></div>
               </div>
-
-              {/* Department - Search & Add with History */}
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <h3 className="text-lg font-semibold">Department</h3>
@@ -3163,8 +3167,13 @@ const addCombinedDevMap = () => {
                 </div>
               </div>
 
-              {/* Designation - Search & Add with History */}
+              {/* Designation - for COMPANY_ADMIN and above (not ADMIN) */}
+              {!isAdmin && (
               <div className="space-y-3">
+              <div className="relative my-6">
+                <div className="absolute inset-0 flex items-center"><div className="w-full border-t-2 border-blue-200"></div></div>
+                <div className="relative flex justify-start"><span className="bg-white pr-3 text-sm font-semibold text-blue-700 uppercase tracking-wide">Designation</span></div>
+              </div>
                 <div className="flex items-center justify-between">
                   <h3 className="text-lg font-semibold">Designation</h3>
                   {canManage && <Button type="button" variant="outline" size="sm" onClick={() => { setQuickAddOpen('designation'); setQuickAddValue(''); setQuickAddSuggestions([]); }}><Plus className="w-4 h-4 mr-1" /> Quick Add</Button>}
@@ -3225,6 +3234,57 @@ const addCombinedDevMap = () => {
                     ))
                   )}
                 </div>
+              </div>
+              )}
+
+              {/* Codes / Date */}
+              {!isAdmin && !isCompanyAdmin && (<><div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <Label>Joining Date <span className="text-red-500">*</span></Label>
+                  <Input
+                    type="date"
+                    value={formData.joiningDate}
+                    onChange={(e) => setFormData((p) => ({ ...p, joiningDate: e.target.value }))}
+                    required
+                  />
+                </div>
+
+                <div className="space-y-2 mt-3">
+                  <label>PF Member</label>
+                  <div className="flex items-center space-x-4">
+                    <label className="flex items-center space-x-2">
+                      <input
+                        type="checkbox"
+                        checked={formData.pfMemberStatus === "Yes"}
+                        onChange={(e) => setFormData((p) => ({ ...p, pfMemberStatus: e.target.checked ? "Yes" : "No" }))}
+                      />
+                      <span>Yes</span>
+                    </label>
+                    <label className="flex items-center space-x-2">
+                      <input
+                        type="checkbox"
+                        checked={formData.pfMemberStatus === "No"}
+                        onChange={(e) => setFormData((p) => ({ ...p, pfMemberStatus: e.target.checked ? "No" : "Yes" }))}
+                      />
+                      <span>No</span>
+                    </label>
+                  </div>
+                </div>
+              </div>
+
+              {formData.pfMemberStatus === "Yes" && (
+              <div className="space-y-2">
+                <label>PF Number</label>
+                <Input
+                  value={formData.pfNumber}
+                  onChange={(e) => setFormData((p) => ({ ...p, pfNumber: e.target.value }))}
+                />
+              </div>
+              )}
+
+              <div className="relative my-6">
+                <div className="absolute inset-0 flex items-center"><div className="w-full border-t-2 border-blue-200"></div></div>
+                <div className="relative flex justify-start"><span className="bg-white pr-3 text-sm font-semibold text-blue-700 uppercase tracking-wide">Manager</span></div>
               </div>
 
               {/* Manager - Multi-entry repeater */}
@@ -3539,74 +3599,6 @@ const addCombinedDevMap = () => {
                 </div>
               </div>
 
-              {/* Attendance Policy - Search & Add with History */}
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-lg font-semibold">Attendance Policy</h3>
-                  {canManage && <Button type="button" variant="outline" size="sm" onClick={() => window.open('/attendance-policy', '_blank')}><Plus className="w-4 h-4 mr-1" /> Manage Policies</Button>}
-                </div>
-                <div className="flex items-end gap-2">
-                  <div ref={apRef} className="flex-1 space-y-2 relative">
-                    <Label>Attendance Policy</Label>
-                    <Input
-                      value={stagingAP.label}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        setStagingAP(p => ({ ...p, label: val, attendancePolicyID: null }));
-                        runFetchAP(val);
-                      }}
-                      onFocus={(e) => {
-                        if (e.target.value.length >= MIN_CHARS) runFetchAP(e.target.value);
-                      }}
-                      placeholder="Search attendance policy…"
-                      autoComplete="off"
-                    />
-                    {apList.length > 0 && (
-                      <div className="absolute z-10 bg-white border rounded w-full shadow max-h-48 overflow-y-auto">
-                        {apLoading && <div className="px-3 py-2 text-sm text-gray-500">Loading…</div>}
-                        {apList.map((a) => (
-                          <div key={a.id} className="px-3 py-2 hover:bg-gray-100 cursor-pointer" onMouseDown={(e) => e.preventDefault()} onClick={() => {
-                            setStagingAP(p => ({ ...p, attendancePolicyID: a.id, label: a.attendancePolicyName ?? "" }));
-                            setApList([]);
-                          }}>{a.attendancePolicyName}</div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                  <div className="space-y-2">
-                    <Label>WEF</Label>
-                    <Input type="date" value={stagingAP.effectFrom} onChange={(e) => setStagingAP(p => ({ ...p, effectFrom: e.target.value }))} />
-                  </div>
-                  <Button type="button" size="sm" disabled={!stagingAP.attendancePolicyID} onClick={() => {
-                    if (!stagingAP.attendancePolicyID) return;
-                    const newEntry: EmpAttendancePolicyForm = { _localId: uid(), attendancePolicyID: stagingAP.attendancePolicyID, _apAutocomplete: stagingAP.label, effectFrom: stagingAP.effectFrom };
-                    setFormData(p => {
-                      const newList = upsertHistoryEntry(p.empAttendancePolicyForm, newEntry, (item) => item.attendancePolicyID === newEntry.attendancePolicyID);
-                      const last = newList[newList.length - 1];
-                      return { ...p, empAttendancePolicyForm: newList, attendancePolicyID: last?.attendancePolicyID ?? null };
-                    });
-                    setStagingAP({ attendancePolicyID: null, label: "", effectFrom: today });
-                  }}>Add</Button>
-                </div>
-                {/* History Box */}
-                <div className="border border-gray-200 rounded-lg overflow-hidden">
-                  <div className="bg-gray-50 px-3 py-2 text-xs font-semibold text-gray-600 uppercase tracking-wide flex">
-                    <span className="flex-1">Attendance Policy</span><span className="w-32 text-center">WEF</span><span className="w-10"></span>
-                  </div>
-                  {formData.empAttendancePolicyForm.length === 0 ? (
-                    <div className="text-center py-4 text-gray-400 text-sm">No attendance policies added</div>
-                  ) : (
-                    formData.empAttendancePolicyForm.map((ea, i) => (
-                      <div key={ea._localId} className={`flex items-center px-3 py-2 text-sm ${i === formData.empAttendancePolicyForm.length - 1 ? 'bg-blue-50 font-medium' : 'bg-white'} ${i > 0 ? 'border-t border-gray-100' : ''}`}>
-                        <span className="flex-1">{ea._apAutocomplete || '—'}</span>
-                        <span className="w-32 text-center text-gray-500">{ea.effectFrom || '—'}</span>
-                        {!editingRow && <Button type="button" variant="ghost" size="sm" onClick={() => removeEmpAttendancePolicy(ea._localId)} className="h-6 w-6 p-0 text-red-500 hover:text-red-700 hover:bg-red-50"><X className="w-3 h-3" /></Button>}
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
-
               {/* Leave Policy - Search & Add with History */}
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
@@ -3676,113 +3668,6 @@ const addCombinedDevMap = () => {
               </div>
 
               {/* Work Shift - Search & Add with History */}
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-lg font-semibold">Work Shift</h3>
-                  {canManage && <Button type="button" variant="outline" size="sm" onClick={() => window.open('/work-shifts', '_blank')}><Plus className="w-4 h-4 mr-1" /> Manage Shifts</Button>}
-                </div>
-
-                {/* Allow Rotating Shift checkbox */}
-                <div className="flex items-center gap-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                  <input
-                    type="checkbox"
-                    id="allowRotatingShift"
-                    checked={formData.allowRotatingShift}
-                    onChange={(e) => {
-                      const checked = e.target.checked;
-                      setFormData(p => ({
-                        ...p,
-                        allowRotatingShift: checked,
-                        // Clear work shift when switching to rotating (managed in roster)
-                        ...(checked ? { workShiftID: null, empWorkShiftForm: [] } : {}),
-                      }));
-                      setStagingWS({ workShiftID: null, label: "", effectFrom: today });
-                      setWsList([]);
-                    }}
-                    className="w-4 h-4 accent-blue-600"
-                  />
-                  <label htmlFor="allowRotatingShift" className="text-sm font-medium text-blue-800 cursor-pointer select-none">
-                    Allow Rotating Shift
-                    <span className="ml-2 text-xs font-normal text-blue-600">
-                      {formData.allowRotatingShift
-                        ? "(Rotating — shift assigned per day in Roster)"
-                        : "(Fixed — select a non-rotating shift below)"}
-                    </span>
-                  </label>
-                </div>
-
-                {/* Work shift field — disabled for rotating employees */}
-                <div className={`flex items-end gap-2 ${formData.allowRotatingShift ? "opacity-50 pointer-events-none" : ""}`}>
-                  <div ref={wsRef} className="flex-1 space-y-2 relative">
-                    <Label>Work Shift {formData.allowRotatingShift && <span className="text-xs text-gray-400">(disabled — managed in Roster)</span>}</Label>
-                    <Input
-                      value={stagingWS.label}
-                      disabled={formData.allowRotatingShift}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        setStagingWS(p => ({ ...p, label: val, workShiftID: null }));
-                        runFetchWS(val);
-                      }}
-                      onFocus={(e) => {
-                        if (e.target.value.length >= MIN_CHARS) runFetchWS(e.target.value);
-                      }}
-                      placeholder={formData.allowRotatingShift ? "Disabled for rotating employees" : "Search fixed work shift…"}
-                      autoComplete="off"
-                    />
-                    {wsList.length > 0 && !formData.allowRotatingShift && (
-                      <div className="absolute z-10 bg-white border rounded w-full shadow max-h-48 overflow-y-auto">
-                        {wsLoading && <div className="px-3 py-2 text-sm text-gray-500">Loading…</div>}
-                        {wsList.map((w) => (
-                          <div key={w.id} className="px-3 py-2 hover:bg-gray-100 cursor-pointer" onMouseDown={(e) => e.preventDefault()} onClick={() => {
-                            setStagingWS(p => ({ ...p, workShiftID: w.id, label: w.workShiftName ?? "" }));
-                            setWsList([]);
-                          }}>{w.workShiftName}</div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                  <div className="space-y-2">
-                    <Label>WEF</Label>
-                    <Input type="date" disabled={formData.allowRotatingShift} value={stagingWS.effectFrom} onChange={(e) => setStagingWS(p => ({ ...p, effectFrom: e.target.value }))} />
-                  </div>
-                  <Button type="button" size="sm" disabled={!stagingWS.workShiftID || formData.allowRotatingShift} onClick={() => {
-                    if (!stagingWS.workShiftID) return;
-                    const newEntry: EmpWorkShiftForm = { _localId: uid(), workShiftID: stagingWS.workShiftID, _wsAutocomplete: stagingWS.label, effectFrom: stagingWS.effectFrom };
-                    setFormData(p => {
-                      const newList = upsertHistoryEntry(p.empWorkShiftForm, newEntry, (item) => item.workShiftID === newEntry.workShiftID);
-                      const last = newList[newList.length - 1];
-                      return { ...p, empWorkShiftForm: newList, workShiftID: last?.workShiftID ?? null };
-                    });
-                    setStagingWS({ workShiftID: null, label: "", effectFrom: today });
-                  }}>Add</Button>
-                </div>
-                {/* History Box */}
-                {!formData.allowRotatingShift && (
-                <div className="border border-gray-200 rounded-lg overflow-hidden">
-                  <div className="bg-gray-50 px-3 py-2 text-xs font-semibold text-gray-600 uppercase tracking-wide flex">
-                    <span className="flex-1">Work Shift</span><span className="w-32 text-center">WEF</span><span className="w-10"></span>
-                  </div>
-                  {formData.empWorkShiftForm.length === 0 ? (
-                    <div className="text-center py-4 text-gray-400 text-sm">No work shifts added</div>
-                  ) : (
-                    formData.empWorkShiftForm.map((ew, i) => (
-                      <div key={ew._localId} className={`flex items-center px-3 py-2 text-sm ${i === formData.empWorkShiftForm.length - 1 ? 'bg-blue-50 font-medium' : 'bg-white'} ${i > 0 ? 'border-t border-gray-100' : ''}`}>
-                        <span className="flex-1">{ew._wsAutocomplete || '—'}</span>
-                        <span className="w-32 text-center text-gray-500">{ew.effectFrom || '—'}</span>
-                        {!editingRow && <Button type="button" variant="ghost" size="sm" onClick={() => removeEmpWorkShift(ew._localId)} className="h-6 w-6 p-0 text-red-500 hover:text-red-700 hover:bg-red-50"><X className="w-3 h-3" /></Button>}
-                      </div>
-                    ))
-                  )}
-                </div>
-                )}
-                {formData.allowRotatingShift && (
-                  <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-800">
-                    Rotating employee — shifts will be assigned day-by-day in the <strong>Workshift Roster</strong>.
-                  </div>
-                )}
-              </div>
-
-
               <div className="relative my-6">
                 <div className="absolute inset-0 flex items-center"><div className="w-full border-t-2 border-blue-200"></div></div>
                 <div className="relative flex justify-start"><span className="bg-white pr-3 text-sm font-semibold text-blue-700 uppercase tracking-wide">Contact & Address</span></div>
@@ -3872,7 +3757,7 @@ const addCombinedDevMap = () => {
                     <SelectContent>
                       <SelectItem value="Male">Male</SelectItem>
                       <SelectItem value="Female">Female</SelectItem>
-                      <SelectItem value="Others">Others</SelectItem>
+                      <SelectItem value="Transgender">Transgender</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -4174,6 +4059,151 @@ const addCombinedDevMap = () => {
               </div>
               </>)}
 
+              {/* Attendance Policy - Search & Add with History (visible for COMPANY_ADMIN and above, hidden for ADMIN) */}
+              {!isAdmin && <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-semibold">Attendance Policy</h3>
+                  {canManage && <Button type="button" variant="outline" size="sm" onClick={() => window.open('/attendance-policy', '_blank')}><Plus className="w-4 h-4 mr-1" /> Manage Policies</Button>}
+                </div>
+                <div className="flex items-end gap-2">
+                  <div ref={apRef} className="flex-1 space-y-2 relative">
+                    <Label>Attendance Policy</Label>
+                    <Input
+                      value={stagingAP.label}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setStagingAP(p => ({ ...p, label: val, attendancePolicyID: null }));
+                        runFetchAP(val);
+                      }}
+                      onFocus={(e) => {
+                        if (e.target.value.length >= MIN_CHARS) runFetchAP(e.target.value);
+                      }}
+                      placeholder="Search attendance policy…"
+                      autoComplete="off"
+                    />
+                    {apList.length > 0 && (
+                      <div className="absolute z-10 bg-white border rounded w-full shadow max-h-48 overflow-y-auto">
+                        {apLoading && <div className="px-3 py-2 text-sm text-gray-500">Loading…</div>}
+                        {apList.map((a) => (
+                          <div key={a.id} className="px-3 py-2 hover:bg-gray-100 cursor-pointer" onMouseDown={(e) => e.preventDefault()} onClick={() => {
+                            setStagingAP(p => ({ ...p, attendancePolicyID: a.id, label: a.attendancePolicyName ?? "", _isFactual: a._isFactual ?? false }));
+                            setApList([]);
+                          }}>{a._isFactual ? <span>[FCT] {a.attendancePolicyName}</span> : a.attendancePolicyName}</div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <div className="space-y-2">
+                    <Label>WEF</Label>
+                    <Input type="date" value={stagingAP.effectFrom} onChange={(e) => setStagingAP(p => ({ ...p, effectFrom: e.target.value }))} />
+                  </div>
+                  <Button type="button" size="sm" disabled={!stagingAP.attendancePolicyID} onClick={() => {
+                    if (!stagingAP.attendancePolicyID) return;
+                    const newEntry: EmpAttendancePolicyForm = { _localId: uid(), attendancePolicyID: stagingAP.attendancePolicyID, _apAutocomplete: (stagingAP._isFactual ? '[FCT] ' : '') + stagingAP.label, effectFrom: stagingAP.effectFrom, _isFactual: stagingAP._isFactual ?? false };
+                    setFormData(p => {
+                      const newList = upsertHistoryEntry(p.empAttendancePolicyForm, newEntry, (item) => item.attendancePolicyID === newEntry.attendancePolicyID);
+                      const last = newList[newList.length - 1];
+                      return { ...p, empAttendancePolicyForm: newList, attendancePolicyID: last?.attendancePolicyID ?? null };
+                    });
+                    setStagingAP({ attendancePolicyID: null, label: "", effectFrom: today });
+                  }}>Add</Button>
+                </div>
+                {/* History Box */}
+                <div className="border border-gray-200 rounded-lg overflow-hidden">
+                  <div className="bg-gray-50 px-3 py-2 text-xs font-semibold text-gray-600 uppercase tracking-wide flex">
+                    <span className="flex-1">Attendance Policy</span><span className="w-32 text-center">WEF</span><span className="w-10"></span>
+                  </div>
+                  {formData.empAttendancePolicyForm.length === 0 ? (
+                    <div className="text-center py-4 text-gray-400 text-sm">No attendance policies added</div>
+                  ) : (
+                    formData.empAttendancePolicyForm.map((ea, i) => (
+                      <div key={ea._localId} className={`flex items-center px-3 py-2 text-sm ${i === formData.empAttendancePolicyForm.length - 1 ? 'bg-blue-50 font-medium' : 'bg-white'} ${i > 0 ? 'border-t border-gray-100' : ''}`}>
+                        <span className="flex-1 flex items-center gap-1">{ea._isFactual && <span className="text-[10px] font-bold text-purple-600 bg-purple-50 border border-purple-200 rounded px-1">FCT</span>}{ea._apAutocomplete || '—'}</span>
+                        <span className="w-32 text-center text-gray-500">{ea.effectFrom || '—'}</span>
+                        {!editingRow && <Button type="button" variant="ghost" size="sm" onClick={() => removeEmpAttendancePolicy(ea._localId)} className="h-6 w-6 p-0 text-red-500 hover:text-red-700 hover:bg-red-50"><X className="w-3 h-3" /></Button>}
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>}
+
+              {/* Work Shift - Search & Add with History (visible for COMPANY_ADMIN and above, hidden for ADMIN) */}
+              {!isAdmin && <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-semibold">Work Shift</h3>
+                  {canManage && <Button type="button" variant="outline" size="sm" onClick={() => window.open('/work-shifts', '_blank')}><Plus className="w-4 h-4 mr-1" /> Manage Shifts</Button>}
+                </div>
+
+                {/* Work shift field */}
+                <div className="flex items-end gap-2">
+                  <div ref={wsRef} className="flex-1 space-y-2 relative">
+                    <Label>Work Shift</Label>
+                    <Input
+                      value={stagingWS.label}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setStagingWS(p => ({ ...p, label: val, workShiftID: null }));
+                        runFetchWS(val);
+                      }}
+                      onFocus={(e) => {
+                        if (e.target.value.length >= MIN_CHARS) runFetchWS(e.target.value);
+                      }}
+                      placeholder="Search work shift…"
+                      autoComplete="off"
+                    />
+                    {wsList.length > 0 && !formData.allowRotatingShift && (
+                      <div className="absolute z-10 bg-white border rounded w-full shadow max-h-48 overflow-y-auto">
+                        {wsLoading && <div className="px-3 py-2 text-sm text-gray-500">Loading…</div>}
+                        {wsList.map((w) => (
+                          <div key={w.id} className="px-3 py-2 hover:bg-gray-100 cursor-pointer" onMouseDown={(e) => e.preventDefault()} onClick={() => {
+                            setStagingWS(p => ({ ...p, workShiftID: w.id, label: w.workShiftName ?? "", _isFactual: w._isFactual ?? false }));
+                            setWsList([]);
+                          }}>{w._isFactual ? <span>[FCT] {w.workShiftName}</span> : w.workShiftName}</div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <div className="space-y-2">
+                    <Label>WEF</Label>
+                    <Input type="date" disabled={formData.allowRotatingShift} value={stagingWS.effectFrom} onChange={(e) => setStagingWS(p => ({ ...p, effectFrom: e.target.value }))} />
+                  </div>
+                  <Button type="button" size="sm" disabled={!stagingWS.workShiftID || formData.allowRotatingShift} onClick={() => {
+                    if (!stagingWS.workShiftID) return;
+                    const newEntry: EmpWorkShiftForm = { _localId: uid(), workShiftID: stagingWS.workShiftID, _wsAutocomplete: (stagingWS._isFactual ? '[FCT] ' : '') + stagingWS.label, effectFrom: stagingWS.effectFrom, _isFactual: stagingWS._isFactual ?? false };
+                    setFormData(p => {
+                      const newList = upsertHistoryEntry(p.empWorkShiftForm, newEntry, (item) => item.workShiftID === newEntry.workShiftID);
+                      const last = newList[newList.length - 1];
+                      return { ...p, empWorkShiftForm: newList, workShiftID: last?.workShiftID ?? null };
+                    });
+                    setStagingWS({ workShiftID: null, label: "", effectFrom: today });
+                  }}>Add</Button>
+                </div>
+                {/* History Box */}
+                {!formData.allowRotatingShift && (
+                <div className="border border-gray-200 rounded-lg overflow-hidden">
+                  <div className="bg-gray-50 px-3 py-2 text-xs font-semibold text-gray-600 uppercase tracking-wide flex">
+                    <span className="flex-1">Work Shift</span><span className="w-32 text-center">WEF</span><span className="w-10"></span>
+                  </div>
+                  {formData.empWorkShiftForm.length === 0 ? (
+                    <div className="text-center py-4 text-gray-400 text-sm">No work shifts added</div>
+                  ) : (
+                    formData.empWorkShiftForm.map((ew, i) => (
+                      <div key={ew._localId} className={`flex items-center px-3 py-2 text-sm ${i === formData.empWorkShiftForm.length - 1 ? 'bg-blue-50 font-medium' : 'bg-white'} ${i > 0 ? 'border-t border-gray-100' : ''}`}>
+                        <span className="flex-1 flex items-center gap-1">{ew._isFactual && <span className="text-[10px] font-bold text-purple-600 bg-purple-50 border border-purple-200 rounded px-1">FCT</span>}{ew._wsAutocomplete || '—'}</span>
+                        <span className="w-32 text-center text-gray-500">{ew.effectFrom || '—'}</span>
+                        {!editingRow && <Button type="button" variant="ghost" size="sm" onClick={() => removeEmpWorkShift(ew._localId)} className="h-6 w-6 p-0 text-red-500 hover:text-red-700 hover:bg-red-50"><X className="w-3 h-3" /></Button>}
+                      </div>
+                    ))
+                  )}
+                </div>
+                )}
+                {formData.allowRotatingShift && (
+                  <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-800">
+                    Rotating employee — shifts will be assigned day-by-day in the <strong>Workshift Roster</strong>.
+                  </div>
+                )}
+              </div>}
+
           {/* ==========================
     ATTENDANCE DEVICE MAPPING 
     ========================== */}
@@ -4291,7 +4321,7 @@ const addCombinedDevMap = () => {
 {/* ==========================
     TOKEN REGISTER DEVICE MAPPING 
     ========================== */}
-{!isAdmin && (<><div className="space-y-3 mt-6">
+{!isAdmin && !isCompanyAdmin && (<><div className="space-y-3 mt-6">
   <div className="flex items-center justify-between">
     <h3 className="text-lg font-semibold">Token Register Device Mapping</h3>
     <Button variant="outline" size="sm" type="button" onClick={addTokenDevMap}>
@@ -4714,7 +4744,7 @@ const addCombinedDevMap = () => {
                           </TableCell>
                           <TableCell className="whitespace-nowrap">{r.departments?.departmentName ?? "—"}</TableCell>
                           <TableCell className="whitespace-nowrap">{brName(r)}</TableCell>
-                          <TableCell className="whitespace-nowrap">{r.employmentType ?? "—"}</TableCell>
+                          <TableCell className="whitespace-nowrap">{r.employmentType ?? (r.typeOfEmployee ? r.typeOfEmployee.charAt(0).toUpperCase() + r.typeOfEmployee.slice(1) : "—")}</TableCell>
                           <TableCell className="whitespace-nowrap">{r.employmentStatus ?? "—"}</TableCell>
                           <TableCell className="text-right whitespace-nowrap">
                             <div className="flex items-center justify-end gap-1">

@@ -109,6 +109,20 @@ export class EmpAttendancePolicyCreateDto {
   @IsOptional() @IsString() effectFrom?: string;
 }
 
+// ---------- Employee Factual Work Shift DTO ----------
+export class EmpFactualWorkShiftCreateDto {
+  @IsOptional() @IsInt() id?: number;
+  @IsOptional() @IsInt() factualWorkShiftID?: number;
+  @IsOptional() @IsString() effectFrom?: string;
+}
+
+// ---------- Employee Factual Attendance Policy DTO ----------
+export class EmpFactualAttendancePolicyCreateDto {
+  @IsOptional() @IsInt() id?: number;
+  @IsOptional() @IsInt() factualAttendancePolicyID?: number;
+  @IsOptional() @IsString() effectFrom?: string;
+}
+
 // ---------- Employee Leave Policy DTO ----------
 export class EmpLeavePolicyCreateDto {
   @IsOptional() @IsInt() id?: number;
@@ -345,6 +359,16 @@ export class CreateManageEmployeeDto {
 
   @IsOptional() @IsArray()
   @ValidateNested({ each: true })
+  @Type(() => EmpFactualWorkShiftCreateDto)
+  empFactualWorkShifts?: EmpFactualWorkShiftCreateDto[];
+
+  @IsOptional() @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => EmpFactualAttendancePolicyCreateDto)
+  empFactualAttendancePolicies?: EmpFactualAttendancePolicyCreateDto[];
+
+  @IsOptional() @IsArray()
+  @ValidateNested({ each: true })
   @Type(() => EmpLeavePolicyCreateDto)
   empLeavePolicies?: EmpLeavePolicyCreateDto[];
 
@@ -480,6 +504,16 @@ export class UpdateManageEmployeeDto {
 
   @IsOptional() @IsArray()
   @ValidateNested({ each: true })
+  @Type(() => EmpFactualWorkShiftCreateDto)
+  empFactualWorkShifts?: EmpFactualWorkShiftCreateDto[];
+
+  @IsOptional() @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => EmpFactualAttendancePolicyCreateDto)
+  empFactualAttendancePolicies?: EmpFactualAttendancePolicyCreateDto[];
+
+  @IsOptional() @IsArray()
+  @ValidateNested({ each: true })
   @Type(() => EmpLeavePolicyCreateDto)
   empLeavePolicies?: EmpLeavePolicyCreateDto[];
 
@@ -501,6 +535,8 @@ export class UpdateManageEmployeeDto {
   @IsOptional() @IsArray() @IsInt({ each: true }) empEmploymentStatusIdsToDelete?: number[];
   @IsOptional() @IsArray() @IsInt({ each: true }) empWorkShiftIdsToDelete?: number[];
   @IsOptional() @IsArray() @IsInt({ each: true }) empAttendancePolicyIdsToDelete?: number[];
+  @IsOptional() @IsArray() @IsInt({ each: true }) empFactualWorkShiftIdsToDelete?: number[];
+  @IsOptional() @IsArray() @IsInt({ each: true }) empFactualAttendancePolicyIdsToDelete?: number[];
   @IsOptional() @IsArray() @IsInt({ each: true }) empLeavePolicyIdsToDelete?: number[];
   @IsOptional() @IsArray() @IsInt({ each: true }) empContractorIdsToDelete?: number[];
 }

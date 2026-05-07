@@ -718,6 +718,8 @@ model ManageEmployee {
   empAttendancePolicy            EmpAttendancePolicy[]
   empLeavePolicy                 EmpLeavePolicy[]
   empContractor                  EmpContractor[]
+  empFactualWorkShift            EmpFactualWorkShift[]
+  empFactualAttendancePolicy     EmpFactualAttendancePolicy[]
   employeeMemo                   EmployeeMemo[]
 
   @@unique([employeeID, companyID], name: "unique_employee_id_per_company")
@@ -1784,6 +1786,7 @@ model FactualWorkShift {
   createdAt           DateTime              @default(now())
   factualWorkShiftDay FactualWorkShiftDay[]
   factualRosterDay    FactualRosterDay[]
+  empFactualWorkShift EmpFactualWorkShift[] @relation("EmpFactualWorkShiftLink")
 }
 
 model FactualWorkShiftDay {
@@ -1835,6 +1838,29 @@ model FactualAttendancePolicy {
   trimPreshiftMin                        Int?     @default(0)
   trimPostshiftMin                       Int?     @default(0)
   createdAt                              DateTime @default(now())
+  empFactualAttendancePolicy             EmpFactualAttendancePolicy[] @relation("EmpFactualAttendancePolicyLink")
+}
+
+model EmpFactualWorkShift {
+  id                    Int              @id @default(autoincrement())
+  manageEmployeeID      Int
+  factualWorkShiftID    Int
+  effectFrom            String?          @db.VarChar
+  manageEmployee        ManageEmployee   @relation(fields: [manageEmployeeID], references: [id], onDelete: Cascade)
+  factualWorkShift      FactualWorkShift @relation("EmpFactualWorkShiftLink", fields: [factualWorkShiftID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([manageEmployeeID])
+}
+
+model EmpFactualAttendancePolicy {
+  id                        Int                     @id @default(autoincrement())
+  manageEmployeeID          Int
+  factualAttendancePolicyID Int
+  effectFrom                String?                 @db.VarChar
+  manageEmployee            ManageEmployee          @relation(fields: [manageEmployeeID], references: [id], onDelete: Cascade)
+  factualAttendancePolicy   FactualAttendancePolicy @relation("EmpFactualAttendancePolicyLink", fields: [factualAttendancePolicyID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([manageEmployeeID])
 }
 
 model FactualRoster {
