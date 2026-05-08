@@ -23,6 +23,7 @@ export class CreateFactualAttendancePolicyDto {
   @IsOptional() @IsInt() maxOvertimeHrs?: number;
   @IsOptional() @IsInt() minOvertimeHrs?: number;
   @IsOptional() @IsBoolean() countWorkhoursInMinutes?: boolean;
+  @IsOptional() @IsBoolean() weekoffCompulsory?: boolean;
   @IsOptional() @IsBoolean() overtimeApplicable?: boolean;
   @IsOptional() @IsBoolean() overtimeTrimmingApply?: boolean;
   @IsOptional() @IsInt() minsForOTMealToken?: number;

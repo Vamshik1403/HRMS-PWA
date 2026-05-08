@@ -4,7 +4,7 @@ import { PageLayout } from "../components/layout/PageLayout";
 export default function AttendanceReportsPage() {
   return (
     <PageLayout>
-      <AttendanceReportsManagement />
+      <AttendanceReportsManagement mode="actual" />
     </PageLayout>
   )
 }

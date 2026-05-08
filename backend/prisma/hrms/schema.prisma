@@ -1831,6 +1831,7 @@ model FactualAttendancePolicy {
   overtimeTrimmingApply                  Boolean? @default(false)
   minsForOTMealToken                     Int?     @default(0)
   minsForBreakTimeForMeal                Int?     @default(0)
+  weekoffCompulsory                      Boolean? @default(false)
   leaveAroundHolidayCounted              Boolean? @default(false)
   lateMarkMarkAs                         String?
   lateMarkMarkCount                      String?

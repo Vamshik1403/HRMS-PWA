@@ -9,6 +9,8 @@ import { Search, Download, FileText, ChevronDown, X } from "lucide-react";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import * as XLSX from "xlsx";
 
+type ReportMode = "actual" | "factual";
+
 // ==================== INTERFACES ====================
 
 interface ProcessAttLog {
@@ -170,6 +172,7 @@ interface AttendancePolicy {
   maxOvertimeHrs: number;
   minOvertimeHrs: number;
   countWorkhoursInMinutes: boolean;
+  weekoffCompulsory?: boolean;
   overtimeApplicable: boolean;
   overtimeTrimmingApply: boolean;
   minsForOTMealToken: number;
@@ -257,6 +260,69 @@ const timeToMinutes = (timeStr: string): number => {
   const minutes = parseInt(parts[1]) || 0;
   const seconds = parseInt(parts[2]) || 0;
   return hours * 60 + minutes + seconds / 60;
+};
+
+const toIsoDate = (value: string | Date): string => {
+  const date = typeof value === "string" ? new Date(value) : value;
+  return date.toISOString().split("T")[0];
+};
+
+const addDaysToIso = (date: string, days: number): string => {
+  const next = new Date(date);
+  next.setDate(next.getDate() + days);
+  return toIsoDate(next);
+};
+
+const normalizeWorkShift = (shift: any): WorkShift => ({
+  ...shift,
+  workShiftName: shift?.workShiftName || shift?.shiftName || "",
+  workShiftDay: (shift?.workShiftDay || shift?.factualWorkShiftDay || []).map((day: any) => ({
+    ...day,
+    workShiftID: day?.workShiftID ?? day?.factualWorkShiftID ?? shift?.id ?? 0,
+  })),
+});
+
+const normalizeRosterEmployee = (rosterEmployee: any, shiftById: Map<number, WorkShift>): RosterEmployee => ({
+  ...rosterEmployee,
+  days: (rosterEmployee?.days || []).map((day: any) => {
+    const workShiftID = day?.workShiftID ?? day?.factualWorkShiftID ?? null;
+    const relatedShift = workShiftID != null
+      ? shiftById.get(workShiftID) || normalizeWorkShift(day?.workShift || day?.factualWorkShift)
+      : null;
+
+    return {
+      ...day,
+      rosterEmployeeID: day?.rosterEmployeeID ?? day?.factualRosterEmployeeID ?? rosterEmployee?.id,
+      workShiftID,
+      workShift: relatedShift,
+    };
+  }),
+});
+
+const extractEmpWorkShiftMappings = (
+  employees: any[],
+  isFactualMode: boolean,
+  shiftById: Map<number, WorkShift>
+): EmpWorkShift[] => {
+  const mappingKey = isFactualMode ? "empFactualWorkShift" : "empWorkShift";
+  const shiftKey = isFactualMode ? "factualWorkShift" : "workShift";
+
+  return employees.flatMap((employee: any) => {
+    const mappings = Array.isArray(employee?.[mappingKey]) ? employee[mappingKey] : [];
+    return mappings
+      .map((mapping: any) => {
+        const workShiftID = mapping?.workShiftID ?? mapping?.factualWorkShiftID ?? mapping?.[shiftKey]?.id;
+        if (!workShiftID) return null;
+
+        return {
+          id: mapping.id,
+          manageEmployeeID: mapping.manageEmployeeID ?? employee.id,
+          workShiftID,
+          workShift: shiftById.get(workShiftID) || normalizeWorkShift(mapping?.[shiftKey]),
+        };
+      })
+      .filter(Boolean) as EmpWorkShift[];
+  });
 };
 
 // ==================== MULTI SELECT COMPONENT ====================
@@ -701,8 +767,9 @@ const DateCell = ({ punches, date, employeeID, formData, reportData, selectedCom
 
 // ==================== MAIN COMPONENT ====================
 
-export function AttendanceReportsManagement() {
+export function AttendanceReportsManagement({ mode = "actual" }: { mode?: ReportMode }) {
   const user = useCurrentUser();
+  const isFactualMode = mode === "factual";
   const [searchTerm, setSearchTerm] = useState("");
   const [reportData, setReportData] = useState<ReportData[]>([]);
   const [loading, setLoading] = useState(false);
@@ -722,6 +789,7 @@ export function AttendanceReportsManagement() {
   const [attendancePolicy, setAttendancePolicy] = useState<AttendancePolicy | null>(null);
   const [empWorkShifts, setEmpWorkShifts] = useState<EmpWorkShift[]>([]);
   const [sandwichOverrides, setSandwichOverrides] = useState<Map<number, Set<string>>>(new Map());
+  const [factualWeekoffOverrides, setFactualWeekoffOverrides] = useState<Map<number, Set<string>>>(new Map());
 
   const [managerData, setManagerData] = useState<any>(null);
   const [empCreds, setEmpCreds] = useState<any>(null);
@@ -740,6 +808,11 @@ export function AttendanceReportsManagement() {
 
   const lateMarkTracker = useRef(new Map<string, number>());
   const noCheckoutTracker = useRef(new Map<string, number>());
+  const canGenerateReports = !user
+    ? true
+    : isFactualMode
+      ? ["SUPERADMIN", "COMPANY_ADMIN", "BRANCH_ADMIN", "ADMIN"].includes(user.role)
+      : ["SUPERADMIN", "COMPANY_ADMIN", "BRANCH_ADMIN"].includes(user.role);
 
   // ==================== LOAD BRANCH DATA ON SELECTION ====================
   
@@ -1065,6 +1138,56 @@ const employeeOptions = filteredEmployees.map((e: Employee) => ({
     return result;
   };
 
+  const detectFactualWeekoffDates = (
+    row: ReportData,
+    dates: string[],
+    localShifts: EmpWorkShift[],
+    localRosters: RosterEmployee[],
+    policy: AttendancePolicy | null
+  ): Set<string> => {
+    const result = new Set<string>();
+    if (!isFactualMode || !policy?.weekoffCompulsory) return result;
+
+    for (const date of dates) {
+      const punches = row.punches[date] || [];
+      if (punches.length === 0) continue;
+
+      const empShift = localShifts.find(ws => ws.manageEmployeeID === row.employee.id);
+      const workShift = empShift?.workShift;
+      if (!workShift?.workShiftDay?.length) continue;
+
+      if (workShift.isRotating) {
+        const roster = localRosters.find(r => r.employeeID === row.employee.id);
+        const rosterDay = roster?.days?.find((day: RosterDay) => toIsoDate(day.workDate) === date);
+        if (rosterDay?.dayType === "WEEKLY_OFF") {
+          result.add(date);
+        }
+        continue;
+      }
+
+      const dayOfWeek = WEEKDAYS[new Date(date).getDay()];
+      const shiftDay = workShift.workShiftDay.find(
+        (day: WorkShiftDay) => day.weekDay === dayOfWeek && day.shiftType === "WORK"
+      );
+      if (!shiftDay?.weeklyOff) continue;
+
+      let hasPreviousSixPunchedDays = true;
+      for (let offset = 1; offset <= 6; offset++) {
+        const previousDate = addDaysToIso(date, -offset);
+        if ((row.punches[previousDate] || []).length === 0) {
+          hasPreviousSixPunchedDays = false;
+          break;
+        }
+      }
+
+      if (hasPreviousSixPunchedDays) {
+        result.add(date);
+      }
+    }
+
+    return result;
+  };
+
   const applySandwichRule = (
     date: string, 
     employeeID: number, 
@@ -1125,8 +1248,9 @@ const employeeOptions = filteredEmployees.map((e: Employee) => ({
     
     if (workShift && (!workShift.workShiftDay || workShift.workShiftDay.length === 0)) {
       try {
-        const res = await fetch(`${BACKEND_URL}/work-shift/${workShift.id}`);
-        if (res.ok) workShift = await res.json();
+        const shiftEndpoint = isFactualMode ? "factual-work-shift" : "work-shift";
+        const res = await fetch(`${BACKEND_URL}/${shiftEndpoint}/${workShift.id}`);
+        if (res.ok) workShift = normalizeWorkShift(await res.json());
       } catch (err) {}
     }
 
@@ -1154,6 +1278,10 @@ const employeeOptions = filteredEmployees.map((e: Employee) => ({
     const shiftDay = workShift?.workShiftDay?.find(d => d.weekDay === dayOfWeek && d.shiftType === "WORK");
     const otDay = workShift?.workShiftDay?.find(d => d.weekDay === dayOfWeek && d.shiftType === "OT");
     const defaultWorkedMinutes = shiftDay?.totalMinutes || 480;
+
+    if (isFactualMode && factualWeekoffOverrides.get(employeeID)?.has(date)) {
+      return { type: "WEEK_OFF", label: "WO", hasPunches: false, workedMinutes: defaultWorkedMinutes };
+    }
 
     // For night shifts that span midnight, include next-day punches (checkout is on next calendar date).
     const shiftSpansMidnight = shiftDay
@@ -1270,7 +1398,8 @@ const employeeOptions = filteredEmployees.map((e: Employee) => ({
     let policy = attendancePolicy;
     if (!policy) {
       try {
-        const res = await fetch(`${BACKEND_URL}/attendance-policy?companyID=${selectedCompanyID}&branchesID=${selectedBranchID}`);
+        const policyEndpoint = isFactualMode ? "factual-attendance-policy" : "attendance-policy";
+        const res = await fetch(`${BACKEND_URL}/${policyEndpoint}?companyID=${selectedCompanyID}&branchesID=${selectedBranchID}`);
         if (res.ok) {
           const policies = await res.json();
           policy = policies.find((p: AttendancePolicy) => p.companyID === selectedCompanyID && p.branchesID === selectedBranchID) || null;
@@ -1434,10 +1563,17 @@ const employeeOptions = filteredEmployees.map((e: Employee) => ({
       return;
     }
 
+    if (user && !canGenerateReports) {
+      alert("You do not have access to this report.");
+      return;
+    }
+
     setLoading(true);
     lateMarkTracker.current.clear();
     noCheckoutTracker.current.clear();
     globalStatusCache.clear();
+    setFactualWeekoffOverrides(new Map());
+    setSandwichOverrides(new Map());
 
     try {
       let selectedCompanyID: number | null = formData.companyID;
@@ -1464,13 +1600,17 @@ const employeeOptions = filteredEmployees.map((e: Employee) => ({
       }
 
       // Load all master data in parallel
+      const shiftEndpoint = isFactualMode ? "factual-work-shift" : "work-shift";
+      const rosterEndpoint = isFactualMode ? "factual-rosters" : "rosters";
+      const policyEndpoint = isFactualMode ? "factual-attendance-policy" : "attendance-policy";
+
       const [holidaysRes, shiftsRes, regRes, leavesRes, rostersRes, policyRes, empShiftRes] = await Promise.all([
         fetch(`${BACKEND_URL}/public-holiday`),
-        fetch(`${BACKEND_URL}/work-shift`),
+        fetch(`${BACKEND_URL}/${shiftEndpoint}`),
         fetch(`${BACKEND_URL}/emp-attendance-regularise`),
         fetch(`${BACKEND_URL}/leave-application`),
-        fetch(`${BACKEND_URL}/rosters`),
-        fetch(`${BACKEND_URL}/attendance-policy`),
+        fetch(`${BACKEND_URL}/${rosterEndpoint}`),
+        fetch(`${BACKEND_URL}/${policyEndpoint}`),
         fetch(`${BACKEND_URL}/manage-emp`),
       ]);
 
@@ -1482,22 +1622,43 @@ const employeeOptions = filteredEmployees.map((e: Employee) => ({
       const policyData = await policyRes.json();
       const empData = await empShiftRes.json();
 
-      setPublicHolidays(holidaysData.filter((h: PublicHoliday) => h.companyID === selectedCompanyID && h.branchesID === selectedBranchID));
-      setWorkShifts(shiftsData.filter((s: WorkShift) => s.companyID === selectedCompanyID && s.branchesID === selectedBranchID));
-      setAttendanceRegularizations(regData.filter((r: AttendanceRegularize) => r.companyID === selectedCompanyID && r.branchesID === selectedBranchID && r.status === "Approved"));
-      setLeaveApplications(leavesData.filter((l: LeaveApplication) => l.companyID === selectedCompanyID && l.branchesID === selectedBranchID && l.status === "Approved"));
-      // Flatten: /rosters returns Roster[] each with employees: RosterEmployee[]
-      // We need a flat RosterEmployee[] so lookups by employeeID work correctly.
-      const flatRosterEmployees = (rostersData as any[]).flatMap((r: any) => r.employees ?? []);
-      setRosters(flatRosterEmployees);
-      setAttendancePolicy(policyData.find((p: AttendancePolicy) => p.companyID === selectedCompanyID && p.branchesID === selectedBranchID) || null);
+      const safeHolidays = Array.isArray(holidaysData) ? holidaysData : [];
+      const safeShiftsData = Array.isArray(shiftsData) ? shiftsData : [];
+      const safeRegData = Array.isArray(regData) ? regData : [];
+      const safeLeavesData = Array.isArray(leavesData) ? leavesData : [];
+      const safeRostersData = Array.isArray(rostersData) ? rostersData : [];
+      const safePolicyData = Array.isArray(policyData) ? policyData : [];
+      const safeEmpData = Array.isArray(empData) ? empData : [];
 
-      const shifts: EmpWorkShift[] = [];
-      empData.forEach((emp: any) => {
-        if (emp.empWorkShift && Array.isArray(emp.empWorkShift)) {
-          emp.empWorkShift.forEach((ws: any) => shifts.push(ws));
-        }
-      });
+      const matchesCompanyBranch = (companyID?: number | null, branchesID?: number | null) => {
+        if (Number(companyID) !== Number(selectedCompanyID)) return false;
+        return Number(branchesID) === Number(selectedBranchID) || branchesID == null;
+      };
+
+      const normalizedShifts = (safeShiftsData as any[])
+        .map(normalizeWorkShift)
+        .filter((shift: WorkShift) => matchesCompanyBranch(shift.companyID, shift.branchesID));
+      const shiftById = new Map<number, WorkShift>(normalizedShifts.map((shift: WorkShift) => [shift.id, shift]));
+
+      const relevantRosters = (safeRostersData as any[]).filter((roster: any) =>
+        Number(roster.companyID) === Number(selectedCompanyID) && Number(roster.branchesID) === Number(selectedBranchID)
+      );
+      const flatRosterEmployees = relevantRosters
+        .flatMap((roster: any) => roster.employees ?? [])
+        .map((employee: any) => normalizeRosterEmployee(employee, shiftById));
+
+      const selectedPolicy = (safePolicyData as AttendancePolicy[]).find(
+        (policy: AttendancePolicy) => matchesCompanyBranch(policy.companyID, policy.branchesID)
+      ) || null;
+
+      const shifts = extractEmpWorkShiftMappings(safeEmpData, isFactualMode, shiftById);
+
+      setPublicHolidays(safeHolidays.filter((h: PublicHoliday) => Number(h.companyID) === Number(selectedCompanyID) && Number(h.branchesID) === Number(selectedBranchID)));
+      setWorkShifts(normalizedShifts);
+      setAttendanceRegularizations(safeRegData.filter((r: AttendanceRegularize) => Number(r.companyID) === Number(selectedCompanyID) && Number(r.branchesID) === Number(selectedBranchID) && r.status === "Approved"));
+      setLeaveApplications(safeLeavesData.filter((l: LeaveApplication) => Number(l.companyID) === Number(selectedCompanyID) && Number(l.branchesID) === Number(selectedBranchID) && l.status === "Approved"));
+      setRosters(flatRosterEmployees);
+      setAttendancePolicy(selectedPolicy);
       setEmpWorkShifts(shifts);
       
       const fromDate = new Date(formData.dateFrom);
@@ -1535,13 +1696,13 @@ const employeeOptions = filteredEmployees.map((e: Employee) => ({
       );
 
       // Use Number() coercion to handle string vs number type mismatches from API responses
-      const byCompanyBranch = empData.filter((e: Employee) =>
+      const byCompanyBranch = safeEmpData.filter((e: Employee) =>
         Number(e.companyID) === Number(selectedCompanyID) && Number(e.branchesID) === Number(selectedBranchID)
       );
       const byCompanyBranchIds = new Set(byCompanyBranch.map((e: Employee) => Number(e.id)));
 
       // Also include employees that appear in the returned logs (covers name-mismatch scenarios)
-      const empFromLogs = empData.filter((e: Employee) =>
+      const empFromLogs = safeEmpData.filter((e: Employee) =>
         logEmployeeIdSet.has(Number(e.id)) && !byCompanyBranchIds.has(Number(e.id))
       );
 
@@ -1611,18 +1772,27 @@ const employeeOptions = filteredEmployees.map((e: Employee) => ({
 
       // Compute sandwich overrides for UI display
       const dateColumnsFull = buildDateRangeColumns();
-      const filteredHols = holidaysData.filter((h: any) => h.companyID === selectedCompanyID && h.branchesID === selectedBranchID);
-      const filteredLvs = leavesData.filter((l: any) => l.companyID === selectedCompanyID && l.branchesID === selectedBranchID && l.status === "Approved");
+      const filteredHols = safeHolidays.filter((h: any) => Number(h.companyID) === Number(selectedCompanyID) && Number(h.branchesID) === Number(selectedBranchID));
+      const filteredLvs = safeLeavesData.filter((l: any) => Number(l.companyID) === Number(selectedCompanyID) && Number(l.branchesID) === Number(selectedBranchID) && l.status === "Approved");
 
       // Enrich emp-to-workshift mappings with full workShiftDay data from the already-fetched shiftsData,
       // because the /manage-emp endpoint includes workShift but NOT workShiftDay.
       const enrichedShifts = shifts.map(s => {
         if (!s.workShift?.workShiftDay?.length) {
-          const fullShift = shiftsData.find((ws: WorkShift) => ws.id === s.workShiftID);
+          const fullShift = normalizedShifts.find((ws: WorkShift) => ws.id === s.workShiftID);
           if (fullShift) return { ...s, workShift: fullShift };
         }
         return s;
       });
+
+      const newFactualWeekoffOverrides = new Map<number, Set<string>>();
+      if (isFactualMode && selectedPolicy?.weekoffCompulsory) {
+        for (const row of rows) {
+          const weekoffDates = detectFactualWeekoffDates(row, dateColumnsFull, enrichedShifts, flatRosterEmployees, selectedPolicy);
+          if (weekoffDates.size > 0) newFactualWeekoffOverrides.set(Number(row.employee.id), weekoffDates);
+        }
+      }
+      setFactualWeekoffOverrides(newFactualWeekoffOverrides);
 
       const newSandwichOverrides = new Map<number, Set<string>>();
       for (const row of rows) {
@@ -1634,6 +1804,8 @@ const employeeOptions = filteredEmployees.map((e: Employee) => ({
       console.error("Error generating report:", err);
       alert("Error generating report.");
       setReportData([]);
+      setFactualWeekoffOverrides(new Map());
+      setSandwichOverrides(new Map());
     } finally {
       setLoading(false);
     }
@@ -1656,6 +1828,8 @@ const employeeOptions = filteredEmployees.map((e: Employee) => ({
     
     const selectedBranch = branches.find(b => b.branchName === formData.branchName);
     const selectedBranchID = selectedBranch?.id || 0;
+    const getDisplayPunches = (employeeID: number, date: string, punches: string[]) =>
+      isFactualMode && factualWeekoffOverrides.get(employeeID)?.has(date) ? [] : punches;
     
     const excelData: any[] = [];
     const statusesMap = new Map<string, string>();
@@ -1680,7 +1854,7 @@ const employeeOptions = filteredEmployees.map((e: Employee) => ({
       };
 
       for (const date of dateColumns) {
-        const punches = row.punches[date] || [];
+        const punches = getDisplayPunches(row.employee.id, date, row.punches[date] || []);
         const status = await getComprehensiveStatus(date, row.employee.id, punches, selectedCompanyID!, selectedBranchID, statusesMap);
         statusesMap.set(date, status.label);
         
@@ -1821,8 +1995,9 @@ const employeeOptions = filteredEmployees.map((e: Employee) => ({
     else if (user?.role === "BRANCH_ADMIN" && managerData?.companyID) selectedCompanyID = managerData.companyID;
     else if (user?.role === "SERVICE_PROVIDER" && managerData?.companyID) selectedCompanyID = managerData.companyID;
     const selectedBranch = branches.find(b => b.branchName === formData.branchName);
-    return <DateCell punches={punches} date={date} employeeID={employeeID} formData={formData} reportData={reportData} selectedCompanyID={selectedCompanyID} selectedBranchID={selectedBranch?.id || 0} getComprehensiveStatus={getComprehensiveStatus} />;
-  }, [formData, user, managerData, branches, reportData]);
+    const displayPunches = isFactualMode && factualWeekoffOverrides.get(employeeID)?.has(date) ? [] : punches;
+    return <DateCell punches={displayPunches} date={date} employeeID={employeeID} formData={formData} reportData={reportData} selectedCompanyID={selectedCompanyID} selectedBranchID={selectedBranch?.id || 0} getComprehensiveStatus={getComprehensiveStatus} />;
+  }, [formData, user, managerData, branches, reportData, isFactualMode, factualWeekoffOverrides]);
 
   const renderDateHeaders = () => dateColumns.map(date => {
     const { dayName, dateStr } = formatHeaderDate(date);
@@ -1837,12 +2012,26 @@ const employeeOptions = filteredEmployees.map((e: Employee) => ({
   const resetForm = () => {
     setFormData(prev => ({ ...prev, dateFrom: getFirstDayOfMonth(), dateTo: getTodayStr(), branchName: "", companyID: user?.role === "SUPERADMIN" ? null : prev.companyID }));
     setReportData([]); setSearchTerm(""); setSelectedDepartments([]); setSelectedDesignations([]); setSelectedEmployees([]);
+    setSandwichOverrides(new Map());
+    setFactualWeekoffOverrides(new Map());
     globalStatusCache.clear();
   };
 
   const showLegend = formData.reportType === "Attendance Marking Logs" || formData.reportType === "Attendance Summary Logs";
 
   // ==================== RENDER ====================
+
+  if (user && !canGenerateReports) {
+    return (
+      <div className="p-6">
+        <Card>
+          <CardContent className="py-6 text-center text-sm text-gray-500">
+            You do not have access to this report.
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 w-full max-w-7xl mx-auto px-4">
@@ -1879,9 +2068,8 @@ const employeeOptions = filteredEmployees.map((e: Employee) => ({
               <Label>Report Type</Label>
               <select className="w-full px-3 py-2 border rounded-md bg-white" value={formData.reportType} onChange={e => setFormData(prev => ({ ...prev, reportType: e.target.value }))}>
                 <option value="All Punches Logs">All Punches Logs</option><option value="FILO Punches Logs">FILO Punches Logs</option>
-                {/* Attendance Marking Logs and Summary Logs - hidden for ADMIN role temporarily */}
-                {user?.role !== "ADMIN" && <option value="Attendance Marking Logs">Attendance Marking Logs</option>}
-                {user?.role !== "ADMIN" && <option value="Attendance Summary Logs">Attendance Summary Logs</option>}
+                <option value="Attendance Marking Logs">Attendance Marking Logs</option>
+                <option value="Attendance Summary Logs">Attendance Summary Logs</option>
               </select>
             </div>
           </div>

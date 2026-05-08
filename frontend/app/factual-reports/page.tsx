@@ -4,7 +4,7 @@ import { PageLayout } from "../components/layout/PageLayout";
 export default function FactualReportsPage() {
   return (
     <PageLayout>
-      <AttendanceReportsManagement />
+      <AttendanceReportsManagement mode="factual" />
     </PageLayout>
   );
 }

@@ -55,6 +55,7 @@ interface AttendancePolicy {
   allow_manager_update_ot: boolean;
   max_ot_hours_per_day_min: number;
   countWorkhoursInMinutes?: boolean;
+  weekoffCompulsory?: boolean;
   overtimeApplicable: boolean;
   minOvertimeHrs: number;
   maxOvertimeHrs: number;
@@ -113,6 +114,7 @@ export function FactualAttendancePolicyManagement() {
     allow_manager_update_ot: false,
     max_ot_hours_per_day_min: 0,
     countWorkhoursInMinutes: false,
+    weekoffCompulsory: false,
     overtimeApplicable: false,
     minOvertimeHrs: 0,
     maxOvertimeHrs: 0,
@@ -291,6 +293,7 @@ export function FactualAttendancePolicyManagement() {
         otMealApply: p.otMealApply ?? false,
         minsForOTMealToken: p.minsForOTMealToken ?? 0,
         minsForBreakTimeForMeal: p.minsForBreakTimeForMeal ?? 0,
+        weekoffCompulsory: p.weekoffCompulsory ?? false,
         leaveAroundHolidayCounted: p.leaveAroundHolidayCounted ?? false,
       }));
 
@@ -429,6 +432,8 @@ export function FactualAttendancePolicyManagement() {
         minsForOTMealToken: formData.minsForOTMealToken,
         minsForBreakTimeForMeal: formData.minsForBreakTimeForMeal,
         breakTimeForOT: formData.breakTimeForOT,
+        countWorkhoursInMinutes: formData.countWorkhoursInMinutes,
+        weekoffCompulsory: formData.weekoffCompulsory,
         leaveAroundHolidayCounted: formData.leaveAroundHolidayCounted,
       };
 
@@ -484,6 +489,7 @@ export function FactualAttendancePolicyManagement() {
       allow_manager_update_ot: false,
       max_ot_hours_per_day_min: 0,
       countWorkhoursInMinutes: false,
+      weekoffCompulsory: false,
       overtimeApplicable: false,
       minOvertimeHrs: 0,
       maxOvertimeHrs: 0,
@@ -555,6 +561,7 @@ export function FactualAttendancePolicyManagement() {
       allow_manager_update_ot: policy.allow_manager_update_ot,
       max_ot_hours_per_day_min: policy.max_ot_hours_per_day_min,
       countWorkhoursInMinutes: policy.countWorkhoursInMinutes || false,
+      weekoffCompulsory: (policy as any).weekoffCompulsory || false,
       overtimeApplicable: policy.overtimeApplicable || false,
       minOvertimeHrs: policy.minOvertimeHrs || 0,
       maxOvertimeHrs: policy.maxOvertimeHrs || 0,
@@ -1108,6 +1115,33 @@ export function FactualAttendancePolicyManagement() {
 
               {/* Additional Settings */}
               <div className="border-t border-gray-200 pt-4 space-y-4">
+                <div className="flex items-center space-x-3">
+                  <input
+                    type="checkbox"
+                    id="weekoffCompulsory"
+                    checked={formData.weekoffCompulsory || false}
+                    onChange={(e) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        weekoffCompulsory: e.target.checked,
+                      }))
+                    }
+                    className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
+                  />
+                  <div className="flex items-center gap-1">
+                    <Label htmlFor="weekoffCompulsory" className="text-sm font-medium">
+                      Weekoff compulsory in factual reports
+                    </Label>
+                    <span className="relative group">
+                      <Info className="w-3.5 h-3.5 text-gray-400 cursor-help flex-shrink-0" />
+                      <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-72 p-3 text-xs bg-gray-800 text-white rounded shadow-lg opacity-0 group-hover:opacity-100 transition pointer-events-none z-50 whitespace-pre-line leading-relaxed text-left">
+                        {`* Fixed/Flexible shift: if an employee punches on the configured weekly off after six continuous punched days, factual reports show WO.
+* Rotating shift: if roster marks the date as weekly off, factual reports show WO even when punches exist.
+* Actual reports remain unchanged.`}
+                      </span>
+                    </span>
+                  </div>
+                </div>
                 <div className="flex items-center space-x-3">
                   <input
                     type="checkbox"
