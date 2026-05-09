@@ -1,18 +1,31 @@
 "use client"
 
+import { useEffect } from "react"
+import { useRouter } from "next/navigation"
 import { PageLayout } from "../components/layout/PageLayout"
+import { useCurrentUser } from "../hooks/useCurrentUser"
 
 export default function SystemSettingsPage() {
+  const user = useCurrentUser()
+  const router = useRouter()
+
+  useEffect(() => {
+    if (user && (user.role === "SUPERADMIN" || user.role === "COMPANY_ADMIN")) {
+      router.replace("/system-settings/compliance")
+    }
+  }, [router, user])
+
+  if (user && user.role !== "SUPERADMIN" && user.role !== "COMPANY_ADMIN") {
+    return (
+      <PageLayout>
+        <div className="p-8 text-center text-gray-500">Access restricted.</div>
+      </PageLayout>
+    )
+  }
+
   return (
     <PageLayout>
-      <div className="space-y-6 w-full max-w-7xl mx-auto px-4">
-        <p className="text-gray-600 text-sm">Manage main server settings</p>
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-12 text-center">
-          <div className="text-gray-400 text-5xl mb-4">⚙️</div>
-          <h2 className="text-xl font-semibold text-gray-700 mb-2">System Settings</h2>
-          <p className="text-gray-500 text-sm">Main server settings configuration will be available here.</p>
-        </div>
-      </div>
+      <div className="p-8 text-center text-gray-500">Redirecting...</div>
     </PageLayout>
   )
 }

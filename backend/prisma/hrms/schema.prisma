@@ -185,6 +185,7 @@ model Company {
   attendancePolicy               AttendancePolicy[]
   bankDetails                    BankDetails[]
   bonusSetup                     BonusSetup[]
+  complianceRule                 ComplianceRule[]
   branches                       Branches[]
   serviceProvider                ServiceProvider?          @relation(fields: [serviceProviderID], references: [id], onDelete: NoAction, onUpdate: NoAction)
   contractors                    Contractors[]
@@ -248,6 +249,21 @@ model Contractors {
   empContractor      EmpContractor[]     @relation("EmpContractorLink")
   contractorRateCards ContractorRateCard[]
   contractorPayouts  ContractorPayout[]
+}
+
+model ComplianceRule {
+  id                Int              @id @default(autoincrement())
+  serviceProviderID Int?
+  companyID         Int?
+  ruleText          String           @db.Text
+  isActive          Boolean          @default(false)
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  company           Company?         @relation(fields: [companyID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  serviceProvider   ServiceProvider? @relation(fields: [serviceProviderID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([serviceProviderID])
+  @@index([companyID])
 }
 
 model ContractorPayout {
@@ -1157,6 +1173,7 @@ model ServiceProvider {
   attendancePolicy        AttendancePolicy[]
   bankDetails             BankDetails[]
   bonusSetup              BonusSetup[]
+  complianceRule          ComplianceRule[]
   branches                Branches[]
   company                 Company[]
   contractors             Contractors[]

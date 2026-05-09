@@ -723,28 +723,6 @@ export function FactualRosterManagement() {
 
     const day = getDayForDate(empId, dateStr)
 
-    // For fixed (non-rotating) employees, show their assigned shift in all cells
-    // even if there is no roster day entry for that date
-    const emp = employees.find(e => e.id === empId)
-    if (!emp?.allowRotatingShift && !day) {
-      const shiftName = emp?.workShift?.workShiftName ?? emp?.workShift?.shiftName ?? null
-      if (shiftName) {
-        return {
-          text: shiftName,
-          color: "bg-blue-50 border-blue-200 text-blue-700",
-          icon: "📌",
-          hasApprovedLeave: false,
-          isFixedShift: true,  // mark so we can hide delete button
-        }
-      }
-      return {
-        text: "-",
-        color: "bg-gray-50 border-gray-200",
-        icon: null,
-        hasApprovedLeave: false
-      }
-    }
-
     if (!day) {
       return {
         text: "-",

@@ -309,6 +309,18 @@ const extractEmpWorkShiftMappings = (
 
   return employees.flatMap((employee: any) => {
     const mappings = Array.isArray(employee?.[mappingKey]) ? employee[mappingKey] : [];
+    if (isFactualMode && mappings.length === 0 && employee?.workShiftID) {
+      const fallbackShift = shiftById.get(employee.workShiftID) || normalizeWorkShift(employee?.workShift);
+      if (fallbackShift?.id) {
+        return [{
+          id: Number(employee.id),
+          manageEmployeeID: employee.id,
+          workShiftID: employee.workShiftID,
+          workShift: fallbackShift,
+        }];
+      }
+    }
+
     return mappings
       .map((mapping: any) => {
         const workShiftID = mapping?.workShiftID ?? mapping?.factualWorkShiftID ?? mapping?.[shiftKey]?.id;
@@ -323,6 +335,31 @@ const extractEmpWorkShiftMappings = (
       })
       .filter(Boolean) as EmpWorkShift[];
   });
+};
+
+const parseRuleCount = (value: string | number | undefined, fallback: number): number => {
+  const parsed = Number.parseInt(String(value ?? ""), 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+};
+
+const incrementTrackerAndShouldApply = (
+  tracker: Map<string, number>,
+  key: string,
+  allowedCount: number,
+): boolean => {
+  if (allowedCount <= 0) return false;
+
+  const nextCount = (tracker.get(key) || 0) + 1;
+
+  // Apply rule only on the violation AFTER the configured count.
+  // Example: count=3 => apply on 4th, then start a fresh cycle.
+  if (nextCount > allowedCount) {
+    tracker.set(key, 0);
+    return true;
+  }
+
+  tracker.set(key, nextCount);
+  return false;
 };
 
 // ==================== MULTI SELECT COMPONENT ====================
@@ -478,6 +515,13 @@ const DateCell = ({ punches, date, employeeID, formData, reportData, selectedCom
 
   // ALL PUNCHES LOGS
   if (formData.reportType === "All Punches Logs") {
+    if (status.type === "WEEK_OFF") {
+      return (
+        <td className="px-2 py-1 border-b min-w-[100px] text-center align-top">
+          <span className="inline-block px-2 py-0.5 bg-orange-100 text-orange-800 text-[9px] font-medium rounded-full">WO</span>
+        </td>
+      );
+    }
     return (
       <td className="px-2 py-1 border-b min-w-[100px] text-center align-top">
         {punches.length > 0 ? (
@@ -489,7 +533,7 @@ const DateCell = ({ punches, date, employeeID, formData, reportData, selectedCom
             ))}
           </div>
         ) : (
-          <div className="text-[10px] text-gray-400"></div>
+          <div className="text-[10px] font-medium text-red-600">Absent</div>
         )}
       </td>
     );
@@ -497,8 +541,15 @@ const DateCell = ({ punches, date, employeeID, formData, reportData, selectedCom
 
   // FILO PUNCHES LOGS
   if (formData.reportType === "FILO Punches Logs") {
+    if (status.type === "WEEK_OFF") {
+      return (
+        <td className="px-2 py-1 border-b min-w-[100px] text-center align-top">
+          <span className="inline-block px-2 py-0.5 bg-orange-100 text-orange-800 text-[9px] font-medium rounded-full">WO</span>
+        </td>
+      );
+    }
     if (punches.length === 0) {
-      return <td className="px-2 py-1 border-b min-w-[100px] text-center align-top"><div className="text-[10px] text-gray-400"></div></td>;
+      return <td className="px-2 py-1 border-b min-w-[100px] text-center align-top"><div className="text-[10px] font-medium text-red-600">Absent</div></td>;
     }
     const firstPunch = punches[0];
     const lastPunch = punches.length >= 2 ? punches[punches.length - 1] : null;
@@ -616,6 +667,15 @@ const DateCell = ({ punches, date, employeeID, formData, reportData, selectedCom
         </td>
       );
     }
+
+    // Single punch: show only punch-in time in Attendance Marking Logs.
+    if (status.type === "SINGLE_PUNCH" && punches.length > 0) {
+      return (
+        <td className="px-2 py-1 border-b min-w-[80px] text-center align-top">
+          <div className="inline-block px-2 py-0.5 bg-gray-100 text-gray-800 text-[9px] font-medium rounded-full">{punches[0]}</div>
+        </td>
+      );
+    }
     
     // Sandwich - show Absent + SW badge
     if (status.type === "SANDWICH") {
@@ -684,7 +744,7 @@ const DateCell = ({ punches, date, employeeID, formData, reportData, selectedCom
       statusBadge = "SW";
       badgeClass = "bg-amber-100 text-amber-800";
     } else if (status.type === "SINGLE_PUNCH") {
-      statusBadge = "SP";
+      statusBadge = "no checkout";
       badgeClass = "bg-gray-100 text-gray-800";
     } else {
       statusBadge = "P";
@@ -1142,19 +1202,15 @@ const employeeOptions = filteredEmployees.map((e: Employee) => ({
     row: ReportData,
     dates: string[],
     localShifts: EmpWorkShift[],
-    localRosters: RosterEmployee[],
-    policy: AttendancePolicy | null
+    localRosters: RosterEmployee[]
   ): Set<string> => {
     const result = new Set<string>();
-    if (!isFactualMode || !policy?.weekoffCompulsory) return result;
+    if (!isFactualMode) return result;
 
     for (const date of dates) {
-      const punches = row.punches[date] || [];
-      if (punches.length === 0) continue;
-
       const empShift = localShifts.find(ws => ws.manageEmployeeID === row.employee.id);
       const workShift = empShift?.workShift;
-      if (!workShift?.workShiftDay?.length) continue;
+      if (!workShift) continue;
 
       if (workShift.isRotating) {
         const roster = localRosters.find(r => r.employeeID === row.employee.id);
@@ -1165,22 +1221,13 @@ const employeeOptions = filteredEmployees.map((e: Employee) => ({
         continue;
       }
 
+      if (!workShift.workShiftDay?.length) continue;
+
       const dayOfWeek = WEEKDAYS[new Date(date).getDay()];
       const shiftDay = workShift.workShiftDay.find(
         (day: WorkShiftDay) => day.weekDay === dayOfWeek && day.shiftType === "WORK"
       );
-      if (!shiftDay?.weeklyOff) continue;
-
-      let hasPreviousSixPunchedDays = true;
-      for (let offset = 1; offset <= 6; offset++) {
-        const previousDate = addDaysToIso(date, -offset);
-        if ((row.punches[previousDate] || []).length === 0) {
-          hasPreviousSixPunchedDays = false;
-          break;
-        }
-      }
-
-      if (hasPreviousSixPunchedDays) {
+      if (shiftDay?.weeklyOff) {
         result.add(date);
       }
     }
@@ -1230,17 +1277,12 @@ const employeeOptions = filteredEmployees.map((e: Employee) => ({
     
     if (!reportData || reportData.length === 0) {
       if (!hasPunches) return { type: "ABSENT", label: "Absent", hasPunches: false };
-      if (punches.length === 1) return { type: "SINGLE_PUNCH", label: "Half Day", hasPunches: true };
+      if (punches.length === 1) return { type: "SINGLE_PUNCH", label: "no checkout", hasPunches: true };
       return { type: "PRESENT", label: "P", hasPunches: true };
     }
     
     const employee = reportData.find(r => r.employee.id === employeeID)?.employee;
     if (!employee) return { type: "ABSENT", label: "Absent", hasPunches: false };
-
-    // PRIORITY 1.5: Sandwich Rule Override
-    if (sandwichOverrides.get(employeeID)?.has(date)) {
-      return { type: "SANDWICH", label: "SW", hasPunches };
-    }
 
     // Get work shift
     const empShift = empWorkShifts.find(ws => ws.manageEmployeeID === employeeID);
@@ -1355,16 +1397,14 @@ const employeeOptions = filteredEmployees.map((e: Employee) => ({
 
     // PRIORITY 2: Week Off
     if (isWeekOff()) {
-      let workedMinutes = 0;
-      if (hasPunches && shiftDay) {
-        workedMinutes = calculateWorkedMinutes(punches, shiftDay.startTime, shiftDay.endTime, 
-          { breakStart: shiftDay.breakStart || "", breakEnd: shiftDay.breakEnd || "" }, attendancePolicy, isFlexible);
+      if (isFactualMode) {
+        return { type: "WEEK_OFF", label: "WO", hasPunches: false, workedMinutes: defaultWorkedMinutes };
       }
-      return { type: "WEEK_OFF", label: hasPunches ? "WO-P" : "WO", hasPunches, workedMinutes: workedMinutes || defaultWorkedMinutes };
+      // Actual reports should not apply week-off logic.
     }
 
-    // PRIORITY 3: Public Holiday
-    if (isPublicHolidayDay()) {
+    // PRIORITY 3: Public Holiday (factual mode only)
+    if (isFactualMode && isPublicHolidayDay()) {
       let workedMinutes = 0;
       if (hasPunches && shiftDay) {
         workedMinutes = calculateWorkedMinutes(punches, shiftDay.startTime, shiftDay.endTime, 
@@ -1373,25 +1413,7 @@ const employeeOptions = filteredEmployees.map((e: Employee) => ({
       return { type: "HOLIDAY", label: hasPunches ? "PH-P" : "PH", hasPunches, workedMinutes: workedMinutes || defaultWorkedMinutes };
     }
 
-    // PRIORITY 4: Approved Leave
-    const leave = isLeaveDay();
-    if (leave) {
-      let workedMinutes = 0;
-      if (hasPunches && shiftDay) {
-        workedMinutes = calculateWorkedMinutes(punches, shiftDay.startTime, shiftDay.endTime, 
-          { breakStart: shiftDay.breakStart || "", breakEnd: shiftDay.breakEnd || "" }, attendancePolicy, isFlexible);
-      }
-      return { type: "LEAVE", label: hasPunches ? "Leave-P" : leave.appliedLeaveType, hasPunches, workedMinutes: workedMinutes || defaultWorkedMinutes };
-    }
-
-    // Check Sandwich Rule
-    const currentStatus = statusesMap.get(date) || "";
-    if (currentStatus === "WO" || currentStatus === "PH") {
-      const sandwichResult = applySandwichRule(date, employeeID, statusesMap);
-      if (sandwichResult) return { type: "SANDWICH", label: sandwichResult, hasPunches };
-    }
-
-    // PRIORITY 5: Calculate based on punches
+    // PRIORITY 4: Calculate based on punches
     // Use effectivePunchesForDate (includes next-day punches for night shifts) for presence check.
     if (!hasPunchesEffective) return { type: "ABSENT", label: "Absent", hasPunches: false };
     
@@ -1407,13 +1429,22 @@ const employeeOptions = filteredEmployees.map((e: Employee) => ({
       } catch (err) {}
     }
 
-    // Handle single punch
+    // Handle single punch (No Check-out Punch Rule with count conditioning)
     if (!hasPunchesEffective) return { type: "ABSENT", label: "Absent", hasPunches: false };
     if (effectivePunchesForDate.length === 1) {
-      if (policy?.markAs) {
-        return { type: "SINGLE_PUNCH", label: policy.markAs, hasPunches: true };
+      if (policy) {
+        const monthKey = `${employeeID}-${date.substring(0, 7)}`;
+        const currentTracker = noCheckoutTracker.current;
+        const maxNoCheckoutCount = parseRuleCount(policy.lateMarkCount, 3);
+        const shouldApplyNoCheckoutRule = incrementTrackerAndShouldApply(currentTracker, monthKey, maxNoCheckoutCount);
+
+        if (shouldApplyNoCheckoutRule) {
+          const markAs = policy.markAs || "Half Day";
+          return { type: markAs === "Absent" ? "ABSENT" : "HALF_DAY", label: markAs, hasPunches: true };
+        }
       }
-      return { type: "SINGLE_PUNCH", label: "Half Day", hasPunches: true };
+
+      return { type: "SINGLE_PUNCH", label: "no checkout", hasPunches: true };
     }
 
     if (shiftDay && policy) {
@@ -1471,9 +1502,13 @@ const employeeOptions = filteredEmployees.map((e: Employee) => ({
       const shiftStartMin = shiftStartMinRaw;
       const shiftEndMin = shiftSpansMidnight ? shiftEndMinRaw + 1440 : shiftEndMinRaw;
       
-      // Check max late check-in first
-      const maxLateWindow = policy.max_late_check_in_time || 0;
-      if (!isFlexible && firstPunch > shiftStartMin + maxLateWindow) {
+      const graceTime = policy.checkin_grace_time_min || 0;
+      const maxLateWindowAfterGrace = policy.max_late_check_in_time || 0;
+      const graceEnd = shiftStartMin + graceTime;
+      const maxLateCutoffInclusive = graceEnd + maxLateWindowAfterGrace;
+
+      // Late check-in rule starts strictly after the max late cutoff.
+      if (!isFlexible && firstPunch > maxLateCutoffInclusive) {
         const markAs = policy.maxLateCheckinMarkAs || "Absent";
         return { 
           type: markAs === "Absent" ? "ABSENT" : "HALF_DAY", 
@@ -1482,42 +1517,27 @@ const employeeOptions = filteredEmployees.map((e: Employee) => ({
         };
       }
       
-      // Check early checkout — use filtered last punch
-      const earlyCheckoutWindow = policy.earlyCheckoutBeforeEndMin || 0;
-      if (!isFlexible && effectivePunches.length >= 2 && lastPunch < shiftEndMin - earlyCheckoutWindow) {
-        const monthKey = `${employeeID}-${date.substring(0, 7)}`;
-        const currentTracker = noCheckoutTracker.current;
-        const newCount = (currentTracker.get(monthKey) || 0) + 1;
-        currentTracker.set(monthKey, newCount);
-        
-        const maxEarlyCount = parseInt(policy.lateMarkCount || "3");
-        if (newCount === maxEarlyCount) {
-          const markAs = policy.markAs || "Half Day";
-          return { type: markAs === "Absent" ? "ABSENT" : "HALF_DAY", label: markAs, hasPunches: true };
-        }
-      }
-      
       const workedMinutes = calculateWorkedMinutes(effectivePunches, shiftDay.startTime, shiftDay.endTime, 
         { breakStart: shiftDay.breakStart || "", breakEnd: shiftDay.breakEnd || "" }, policy, isFlexible);
       
       const totalShiftMinutes = shiftDay.totalMinutes;
       const halfDayMin = policy.min_work_hours_half_day_min || 0;
-      const graceTime = policy.checkin_grace_time_min || 0;
+      const requiredFullDayMinutes = isFlexible
+        ? totalShiftMinutes
+        : Math.max(totalShiftMinutes - graceTime, halfDayMin);
       
       // Late mark tracking
       const isLate = !isFlexible && 
-                     firstPunch > shiftStartMin + graceTime && 
-                     firstPunch <= shiftStartMin + maxLateWindow;
+                     firstPunch > graceEnd && 
+                     firstPunch <= maxLateCutoffInclusive;
       
       if (isLate) {
         const monthKey = `${employeeID}-${date.substring(0, 7)}`;
         const currentTracker = lateMarkTracker.current;
-        const newCount = (currentTracker.get(monthKey) || 0) + 1;
-        currentTracker.set(monthKey, newCount);
-        
-        const maxLateCount = parseInt(policy.lateMarkMarkCount || policy.lateMarkCount || "3");
-        
-        if (newCount === maxLateCount) {
+        const maxLateCount = parseRuleCount(policy.lateMarkMarkCount || policy.lateMarkCount, 3);
+        const shouldApplyLateMarkRule = incrementTrackerAndShouldApply(currentTracker, monthKey, maxLateCount);
+
+        if (shouldApplyLateMarkRule) {
           const markAs = policy.lateMarkMarkAs || policy.markAs || "Half Day";
           return { 
             type: markAs === "Absent" ? "ABSENT" : "HALF_DAY", 
@@ -1539,8 +1559,14 @@ const employeeOptions = filteredEmployees.map((e: Employee) => ({
       
       if (workedMinutes < halfDayMin) {
         return { type: "ABSENT", label: "Absent", hasPunches: true, workedMinutes };
-      } else if (workedMinutes < totalShiftMinutes && !isLate) {
-        // Only mark as Half Day due to hours if it's NOT a late arrival.
+      }
+
+      // Early checkout allow time: checkout before cutoff is Half Day.
+      const earlyCheckoutWindow = policy.earlyCheckoutBeforeEndMin || 0;
+      if (effectivePunches.length >= 2 && lastPunch < shiftEndMin - earlyCheckoutWindow) {
+        return { type: "HALF_DAY", label: "Half Day", hasPunches: true, workedMinutes, rosterShiftName };
+      } else if (workedMinutes < requiredFullDayMinutes && !isLate) {
+        // Allow grace-time minutes as still full-day, and keep late arrivals under late-mark flow.
         // Late arrivals use the late-mark rule — they accumulate to the threshold.
         return { type: "HALF_DAY", label: "Half Day", hasPunches: true, workedMinutes, rosterShiftName };
       } else if (otMinutes > 0) {
@@ -1635,9 +1661,27 @@ const employeeOptions = filteredEmployees.map((e: Employee) => ({
         return Number(branchesID) === Number(selectedBranchID) || branchesID == null;
       };
 
-      const normalizedShifts = (safeShiftsData as any[])
+      let normalizedShifts = (safeShiftsData as any[])
         .map(normalizeWorkShift)
         .filter((shift: WorkShift) => matchesCompanyBranch(shift.companyID, shift.branchesID));
+
+      if (isFactualMode) {
+        try {
+          const actualShiftsRes = await fetch(`${BACKEND_URL}/work-shift`);
+          if (actualShiftsRes.ok) {
+            const actualShiftsData = await actualShiftsRes.json();
+            const actualShifts = (Array.isArray(actualShiftsData) ? actualShiftsData : [])
+              .map(normalizeWorkShift)
+              .filter((shift: WorkShift) => matchesCompanyBranch(shift.companyID, shift.branchesID));
+            const actualById = new Map<number, WorkShift>(actualShifts.map((shift: WorkShift) => [shift.id, shift]));
+            normalizedShifts = normalizedShifts.map((shift: WorkShift) => {
+              if ((shift.workShiftDay?.length || 0) > 0) return shift;
+              return actualById.get(shift.id) || shift;
+            });
+          }
+        } catch (err) {}
+      }
+
       const shiftById = new Map<number, WorkShift>(normalizedShifts.map((shift: WorkShift) => [shift.id, shift]));
 
       const relevantRosters = (safeRostersData as any[]).filter((roster: any) =>
@@ -1772,8 +1816,6 @@ const employeeOptions = filteredEmployees.map((e: Employee) => ({
 
       // Compute sandwich overrides for UI display
       const dateColumnsFull = buildDateRangeColumns();
-      const filteredHols = safeHolidays.filter((h: any) => Number(h.companyID) === Number(selectedCompanyID) && Number(h.branchesID) === Number(selectedBranchID));
-      const filteredLvs = safeLeavesData.filter((l: any) => Number(l.companyID) === Number(selectedCompanyID) && Number(l.branchesID) === Number(selectedBranchID) && l.status === "Approved");
 
       // Enrich emp-to-workshift mappings with full workShiftDay data from the already-fetched shiftsData,
       // because the /manage-emp endpoint includes workShift but NOT workShiftDay.
@@ -1786,20 +1828,15 @@ const employeeOptions = filteredEmployees.map((e: Employee) => ({
       });
 
       const newFactualWeekoffOverrides = new Map<number, Set<string>>();
-      if (isFactualMode && selectedPolicy?.weekoffCompulsory) {
+      if (isFactualMode) {
         for (const row of rows) {
-          const weekoffDates = detectFactualWeekoffDates(row, dateColumnsFull, enrichedShifts, flatRosterEmployees, selectedPolicy);
+          const weekoffDates = detectFactualWeekoffDates(row, dateColumnsFull, enrichedShifts, flatRosterEmployees);
           if (weekoffDates.size > 0) newFactualWeekoffOverrides.set(Number(row.employee.id), weekoffDates);
         }
       }
       setFactualWeekoffOverrides(newFactualWeekoffOverrides);
 
-      const newSandwichOverrides = new Map<number, Set<string>>();
-      for (const row of rows) {
-        const swDates = detectSandwichDates(row, dateColumnsFull, enrichedShifts, filteredLvs, filteredHols, flatRosterEmployees);
-        if (swDates.size > 0) newSandwichOverrides.set(Number(row.employee.id), swDates);
-      }
-      setSandwichOverrides(newSandwichOverrides);
+      setSandwichOverrides(new Map());
     } catch (err) {
       console.error("Error generating report:", err);
       alert("Error generating report.");

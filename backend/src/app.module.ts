@@ -61,6 +61,7 @@ import { ContractorPayoutModule } from './contractor-payout/contractor-payout.mo
 import { FactualWorkShiftModule } from './factual-work-shift/factual-work-shift.module';
 import { FactualAttendancePolicyModule } from './factual-attendance-policy/factual-attendance-policy.module';
 import { FactualRosterModule } from './factual-roster/factual-roster.module';
+import { ComplianceRulesModule } from './compliance-rules/compliance-rules.module';
 
 
 @Module({
@@ -127,6 +128,7 @@ import { FactualRosterModule } from './factual-roster/factual-roster.module';
     FactualWorkShiftModule,
     FactualAttendancePolicyModule,
     FactualRosterModule,
+    ComplianceRulesModule,
   ],
   providers: [AuthService],
   controllers: [AuthController],

@@ -1296,13 +1296,7 @@ const runFetchCombinedDev = (q: string) => {
         } else if (formData.companyID) {
           all = all.filter(x => x.companyID === formData.companyID);
         }
-        // Only show fixed (non-rotating) shifts when allowRotatingShift is false
-        const allowRotating = (formData as any).allowRotatingShift;
-        const shiftFiltered = (all || []).filter(w => {
-          if (!allowRotating) return w.isRotating === false || w.isRotating == null ? true : false;
-          return true;
-        });
-        const filtered = shiftFiltered.filter(w => (w.workShiftName ?? "").toLowerCase().includes(q.toLowerCase()));
+        const filtered = (all || []).filter(w => (w.workShiftName ?? "").toLowerCase().includes(q.toLowerCase()));
         setWsList(filtered.slice(0, 20));
       } finally { setWsLoading(false); }
     }, DEBOUNCE_MS);

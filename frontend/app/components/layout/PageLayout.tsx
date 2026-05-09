@@ -74,8 +74,8 @@ const ATTENDANCE_PATHS = ["/field-attendance-schedule", "/attendance-regularisat
 const LEAVE_MANAGEMENT_PATHS = ["/leave-applications", "/privileged-leave"];
 const REPORTS_PATHS = ["/attendance-reports", "/payroll-reports", "/factual-reports"];
 const CANTEEN_PATHS = ["/canteen", "/canteen/setup", "/canteen/reports"];
-const SETTINGS_PATHS = ["/import-attendance", "/hrms-integrations"];
-const ADMIN_PATHS = ["/system-users", "/backup-restore", "/system-settings"];
+const SETTINGS_PATHS = ["/import-attendance", "/hrms-integrations", "/system-settings", "/system-settings/compliance"];
+const ADMIN_PATHS = ["/system-users", "/backup-restore"];
 const ALL_SECTION_PATHS = [...SETUP_PATHS, ...CONTRACTOR_MANAGEMENT_PATHS, ...EMPLOYEE_PATHS, ...PAYROLL_PATHS, ...SALARY_PATHS, ...PAYROLL_POLICY_PATHS, ...LEAVE_PATHS, ...LEAVE_MANAGEMENT_PATHS, ...ATTENDANCE_PATHS, ...REPORTS_PATHS, ...CANTEEN_PATHS, ...SETTINGS_PATHS];
 
 export function PageLayout({ children }: PageLayoutProps) {
@@ -595,8 +595,8 @@ export function PageLayout({ children }: PageLayoutProps) {
             </CollapsibleTrigger>
             <CollapsibleContent>
               <SidebarMenuSub className="ml-5 mt-1 space-y-0.5 border-l border-[#f0f0f0] pl-3">
-                <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/attendance-reports" className={cn(sbSubRow, isActiveLink('/attendance-reports', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Attendance Reports</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
-                <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/factual-reports" className={cn(sbSubRow, isActiveLink('/factual-reports', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>FCT Reports</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
+                <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href={isAdmin ? "/factual-reports" : "/attendance-reports"} className={cn(sbSubRow, (isActiveLink('/attendance-reports', companyId) || (isAdmin && isActiveLink('/factual-reports', companyId))) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Attendance Reports</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
+                {!isAdmin && (<SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/factual-reports" className={cn(sbSubRow, isActiveLink('/factual-reports', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>FCT Reports</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>)}
                 {/* Payroll Reports - temporarily hidden */}
                 {/* Leave Reports - temporarily hidden */}
                 {/* Canteen Reports - moved to Canteen Management */}
@@ -622,6 +622,7 @@ export function PageLayout({ children }: PageLayoutProps) {
               <SidebarMenuSub className="ml-5 mt-1 space-y-0.5 border-l border-[#f0f0f0] pl-3">
                 {!isAdmin && (<SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/import-attendance" className={cn(sbSubRow, isActiveLink('/import-attendance', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Import Attendance</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>)}
                 {isAdmin && (<SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/hrms-integrations" className={cn(sbSubRow, isActiveLink('/hrms-integrations', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>HRMS Integrations</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>)}
+                {(isSuperAdmin || isCompanyAdmin) && (<SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/system-settings/compliance" className={cn(sbSubRow, isActiveLink('/system-settings', companyId) || isActiveLink('/system-settings/compliance', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Compliance</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>)}
               </SidebarMenuSub>
             </CollapsibleContent>
           </Collapsible>
@@ -795,7 +796,6 @@ export function PageLayout({ children }: PageLayoutProps) {
                       <SidebarMenuSub className="ml-5 mt-1 space-y-0.5 border-l border-[#f0f0f0] pl-3">
                         <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link href="/system-users" className={cn(sbSubRow, isActiveLink('/system-users') ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>System Users</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
                         <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link href="/backup-restore" className={cn(sbSubRow, isActiveLink('/backup-restore') ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Backup & Restore</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
-                        <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link href="/system-settings" className={cn(sbSubRow, isActiveLink('/system-settings') ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>System Settings</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
                       </SidebarMenuSub>
                     </CollapsibleContent>
                   </Collapsible>

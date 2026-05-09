@@ -1111,33 +1111,6 @@ export function AttendancePolicyManagement() {
                 <div className="flex items-center space-x-3">
                   <input
                     type="checkbox"
-                    id="countWorkhoursInMinutes"
-                    checked={formData.countWorkhoursInMinutes || false}
-                    onChange={(e) =>
-                      setFormData((prev) => ({
-                        ...prev,
-                        countWorkhoursInMinutes: e.target.checked,
-                      }))
-                    }
-                    className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
-                  />
-                  <div className="flex items-center gap-1">
-                    <Label htmlFor="countWorkhoursInMinutes" className="text-sm font-medium">
-                      Weekoff compulsory in factual reports
-                    </Label>
-                    <span className="relative group">
-                      <Info className="w-3.5 h-3.5 text-gray-400 cursor-help flex-shrink-0" />
-                      <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-72 p-3 text-xs bg-gray-800 text-white rounded shadow-lg opacity-0 group-hover:opacity-100 transition pointer-events-none z-50 whitespace-pre-line leading-relaxed text-left">
-                        {`* Fixed/Flexible shift: if an employee punches on the configured weekly off after six continuous punched days, factual reports show WO.
-* Rotating shift: if roster marks the date as weekly off, factual reports show WO even when punches exist.
-* Actual reports remain unchanged.`}
-                      </span>
-                    </span>
-                  </div>
-                </div>
-                <div className="flex items-center space-x-3">
-                  <input
-                    type="checkbox"
                     id="leaveAroundHolidayCounted"
                     checked={formData.leaveAroundHolidayCounted || false}
                     onChange={(e) =>
