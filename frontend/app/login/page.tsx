@@ -118,6 +118,35 @@ export default function LoginPage() {
   const [termsAccepted, setTermsAccepted] = useState(false)
   const [showTermsModal, setShowTermsModal] = useState(false)
 
+  const setAccessTokenCookie = (token: string) => {
+    const secure = window.location.protocol === 'https:' ? '; secure' : ''
+    document.cookie = `accessToken=${token}; path=/; max-age=${60 * 60 * 24 * 30}; samesite=lax${secure}`
+  }
+
+  useEffect(() => {
+    const token = localStorage.getItem('accessToken')
+    if (!token) return
+
+    // Ensure middleware can see auth after app relaunch in PWA/browser.
+    setAccessTokenCookie(token)
+
+    const userRaw = localStorage.getItem('user')
+    if (!userRaw) return
+
+    try {
+      const user = JSON.parse(userRaw)
+      const role = String(user?.role || '').toUpperCase()
+
+      if (role === 'EMPLOYEE' || user?.type === 'employee') {
+        router.replace('/empdashboard')
+      } else if (role) {
+        router.replace('/dashboard')
+      }
+    } catch {
+      // Keep user on login if stored user object is invalid.
+    }
+  }, [router])
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!termsAccepted) {
@@ -137,7 +166,7 @@ export default function LoginPage() {
 
       // Save token in localStorage and cookie (middleware reads the cookie)
       localStorage.setItem('accessToken', accessToken)
-      document.cookie = `accessToken=${accessToken}; path=/; max-age=${60 * 60 * 24};`
+      setAccessTokenCookie(accessToken)
 
       // Step 2: For employees, use login response directly (no /users/:id lookup)
       // Employee IDs can collide with user IDs in the Users table, so skip the fetch.

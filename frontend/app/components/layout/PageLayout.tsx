@@ -855,7 +855,7 @@ export function PageLayout({ children }: PageLayoutProps) {
                       <DropdownMenuItem className="cursor-pointer text-red-600 focus:text-red-600 rounded-xl m-1" onClick={() => {
                         localStorage.removeItem("accessToken");
                         localStorage.removeItem("user");
-                        document.cookie = "accessToken=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+                        document.cookie = "accessToken=; path=/; max-age=0; expires=Thu, 01 Jan 1970 00:00:00 UTC; samesite=lax";
                         router.push("/login");
                       }}>
                         <Icon icon="mdi:logout" className="w-4 h-4 mr-2" />
