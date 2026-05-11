@@ -813,18 +813,18 @@ export function PageLayout({ children }: PageLayoutProps) {
         <SidebarInset>
           <div className="min-h-screen bg-[#f8fafc] overflow-x-hidden">
             <header className="sticky top-0 z-30 bg-[#f8fafc]/95 backdrop-blur-sm px-4 sm:px-8 pt-5 pb-4">
-              <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                <div className="flex items-center gap-3 min-w-0">
+              <div className="flex flex-wrap items-center gap-4 lg:flex-nowrap lg:justify-between">
+                <div className="order-1 flex flex-1 items-center gap-3 min-w-0">
                   <SidebarTrigger className="text-gray-500 hover:text-[#4f46e5] hover:bg-[#eef2ff] rounded-full h-10 w-10 shrink-0 border border-[#d1d5db] shadow-sm" />
                   <h1 className="text-2xl sm:text-[1.65rem] font-bold text-gray-900 tracking-tight truncate">{pageTitle}</h1>
                 </div>
-                <div className="flex flex-1 flex-col sm:flex-row items-stretch sm:items-center gap-3 lg:max-w-2xl lg:mx-6">
+                <div className="order-3 basis-full lg:order-2 lg:basis-auto flex flex-1 flex-col sm:flex-row items-stretch sm:items-center gap-3 lg:max-w-2xl lg:mx-6">
                   <div className="flex flex-1 items-center gap-2.5 bg-white rounded-full border border-[#e8e8e8] shadow-[0_2px_12px_rgba(0,0,0,0.04)] px-4 py-2.5 min-w-0">
                     <Icon icon="mdi:magnify" className="w-5 h-5 text-gray-400 shrink-0" />
                     <Input type="search" placeholder="Search anything..." className="border-0 bg-transparent shadow-none focus-visible:ring-0 h-8 px-0 text-sm placeholder:text-gray-400" />
                   </div>
                 </div>
-                <div className="flex items-center justify-end gap-2 sm:gap-2 shrink-0">
+                <div className="order-2 lg:order-3 flex items-center justify-end gap-2 sm:gap-2 shrink-0">
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <button type="button" className="flex items-center gap-2 cursor-pointer focus:outline-none rounded-full pl-1 pr-1 py-1 hover:bg-white/80 transition-colors">
