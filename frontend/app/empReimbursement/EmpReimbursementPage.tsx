@@ -14,6 +14,7 @@ import {
 } from "../components/ui/table"
 import { Badge } from "../components/ui/badge"
 import { Search, Edit, Trash2, Plus, Download, User, Building, MapPin, Calendar } from "lucide-react"
+import { Icon } from "@iconify/react"
 import jsPDF from "jspdf"
 import html2canvas from "html2canvas"
 import { useCurrentUser } from "../hooks/useCurrentUser"
@@ -701,10 +702,9 @@ if (employee) await loadReimbursements(employee.employeeID)
     setFormData(prev => ({
       ...prev,
       date: r.date || new Date().toISOString().split('T')[0],
-      status: "Pending", // Reset to Pending when editing
+      status: "Pending",
     }))
     setItems(r.items || [{ reimbursementType: "", amount: "", description: "" }])
-    setIsDialogOpen(true)
   }
 
   const filteredReimbursements = reimbursements.filter((r) =>
@@ -720,314 +720,202 @@ if (employee) await loadReimbursements(employee.employeeID)
 
   
   return (
-    <div className="space-y-6 p-6 bg-gray-50 min-h-screen">
+    <div className="px-4 pt-5 pb-4 space-y-4">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+      <h1 className="text-[22px] font-bold text-gray-900">Reimbursement</h1>
+
+      {/* Inline Form */}
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 space-y-4">
+        <p className="text-[13px] font-bold text-gray-700">{editing ? "Edit Request" : "New Request"}</p>
+
+        {/* Date */}
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-gray-900">Reimbursement Management</h1>
-          <p className="text-gray-600 mt-2">Manage your reimbursement requests</p>
+          <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">Date</p>
+          <input
+            type="date"
+            value={formData.date}
+            onChange={(e) => setFormData(p => ({ ...p, date: e.target.value }))}
+            className="w-full px-3 py-2.5 text-[13px] rounded-xl border border-gray-100 bg-gray-50 focus:outline-none"
+          />
         </div>
-        <Button 
-          onClick={() => { resetForm(); setIsDialogOpen(true); }} 
-          className="px-6 py-2 rounded-lg shadow-sm"
+
+        {/* Items */}
+        <div>
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Items</p>
+            <button
+              onClick={addItemRow}
+              className="flex items-center gap-1 text-[11px] font-bold text-blue-600 border border-blue-100 bg-blue-50 rounded-lg px-2.5 py-1.5 active:scale-[0.97]"
+            >
+              <Plus className="w-3 h-3" /> Add Row
+            </button>
+          </div>
+          <div className="space-y-3">
+            {items.map((item, idx) => (
+              <div key={idx} className="bg-gray-50 rounded-xl p-3 space-y-2">
+                <div className="flex gap-2">
+                  <input
+                    value={item.reimbursementType}
+                    onChange={(e) => updateItemRow(idx, "reimbursementType", e.target.value)}
+                    placeholder="Category (Travel, Food…)"
+                    className="flex-1 px-3 py-2 text-[13px] rounded-xl border border-gray-100 bg-white focus:outline-none"
+                  />
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={item.amount}
+                    onChange={(e) => updateItemRow(idx, "amount", e.target.value)}
+                    placeholder="₹ Amount"
+                    className="w-28 px-3 py-2 text-[13px] rounded-xl border border-gray-100 bg-white focus:outline-none"
+                  />
+                  {items.length > 1 && (
+                    <button
+                      onClick={() => removeItemRow(idx)}
+                      className="w-8 h-9 flex items-center justify-center text-red-400 border border-red-100 bg-red-50 rounded-xl active:scale-[0.95]"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+                <input
+                  value={item.description}
+                  onChange={(e) => updateItemRow(idx, "description", e.target.value)}
+                  placeholder="Description of expense"
+                  className="w-full px-3 py-2 text-[13px] rounded-xl border border-gray-100 bg-white focus:outline-none"
+                />
+              </div>
+            ))}
+          </div>
+          {items.length > 0 && (
+            <p className="text-[12px] text-right font-bold text-emerald-700 mt-2">
+              Total: ₹{items.reduce((s, i) => s + parseFloat(i.amount || "0"), 0).toFixed(2)}
+            </p>
+          )}
+        </div>
+
+        {/* Submit */}
+        <button
+          onClick={async () => {
+            if (!items.some(i => i.reimbursementType && i.amount)) {
+              alert("Please fill in at least one item with category and amount.");
+              return;
+            }
+            const payload = {
+              serviceProviderID: employee?.serviceProviderID,
+              companyID: employee?.companyID,
+              branchesID: employee?.branchesID,
+              manageEmployeeID: employee?.id,
+              date: formData.date,
+              status: "Pending",
+              items: items.map(i => ({
+                reimbursementType: i.reimbursementType,
+                amount: i.amount,
+                description: i.description,
+              })),
+            };
+            try {
+              if (editing) {
+                await robustFetch(`${BACKEND_URL}/reimbursement/${editing.id}`, {
+                  method: "PATCH",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify(payload),
+                });
+              } else {
+                await robustFetch(`${BACKEND_URL}/reimbursement`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify(payload),
+                });
+              }
+              if (employee) await loadReimbursements(employee.id);
+              resetForm();
+              toast.success(editing ? "Reimbursement updated!" : "Reimbursement submitted!");
+            } catch (e: any) {
+              toast.error("Error: " + (e.message || "Failed to submit"));
+            }
+          }}
+          className="w-full py-3.5 bg-[#2563eb] text-white font-bold text-[15px] rounded-2xl shadow-md shadow-blue-200 active:scale-[0.98] transition-transform"
         >
-          <Plus className="w-4 h-4 mr-2" />
-          Create Reimbursement
-        </Button>
+          {editing ? "Update Request" : "Submit Request"}
+        </button>
+        {editing && (
+          <button onClick={resetForm} className="w-full py-2.5 text-[13px] font-semibold text-gray-500 rounded-xl bg-gray-50 border border-gray-100 active:scale-[0.98]">
+            Cancel Edit
+          </button>
+        )}
       </div>
 
-      {/* Search and Stats */}
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-        <Card className="lg:col-span-3">
-          <CardContent className="pt-6">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-              <Input
-                placeholder="Search your reimbursements..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10 py-2 rounded-lg border-gray-300 focus:border-blue-500"
-              />
-            </div>
-          </CardContent>
-        </Card>
-        
-        {/* Stats Card */}
-        <Card className="bg-blue-50 border-blue-200">
-          <CardContent className="pt-6">
-            <div className="text-center">
-              <div className="text-2xl font-bold text-blue-800">{filteredReimbursements.length}</div>
-              <div className="text-sm text-blue-600 mt-1">Your Reimbursements</div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Table */}
-      <Card className="shadow-sm border-gray-200">
-        <CardContent className="pt-6">
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow className="bg-gray-50 hover:bg-gray-50">
-                  <TableHead className="font-semibold text-gray-900">Employee</TableHead>
-                  <TableHead className="font-semibold text-gray-900">Company</TableHead>
-                  <TableHead className="font-semibold text-gray-900">Branch</TableHead>
-                  <TableHead className="font-semibold text-gray-900">Date/Period</TableHead>
-                  <TableHead className="font-semibold text-gray-900">Amount</TableHead>
-                  <TableHead className="font-semibold text-gray-900">Status</TableHead>
-                  <TableHead className="font-semibold text-gray-900 text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredReimbursements.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={7} className="text-center py-8 text-gray-500">
-                      No reimbursements found. Create your first reimbursement request.
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  filteredReimbursements.map((r) => {
-                    const totalAmount = getTotalAmount(r)
-                    return (
-                      <TableRow key={r.id} className="hover:bg-gray-50 border-b border-gray-100">
-                        <TableCell className="font-medium">
-                          <div className="flex items-center gap-2">
-                            <User className="w-4 h-4 text-gray-400" />
-                            {r.employeeName}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            <Building className="w-4 h-4 text-gray-400" />
-                            {r.companyName}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            <MapPin className="w-4 h-4 text-gray-400" />
-                            {r.branchName}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            <Calendar className="w-4 h-4 text-gray-400" />
-                            {r.date}
-                          </div>
-                        </TableCell>
-                        <TableCell className="font-semibold text-green-700">
-                          ₹{totalAmount.toFixed(2)}
-                        </TableCell>
-                        <TableCell>
-                          <Badge
-                            variant="secondary"
-                            className={
-                              r.status === "Paid"
-                                ? "bg-green-100 text-green-800 border-green-200"
-                                : r.status === "Approved"
-                                ? "bg-blue-100 text-blue-800 border-blue-200"
-                                : r.status === "Rejected"
-                                ? "bg-red-100 text-red-800 border-red-200"
-                                : "bg-yellow-100 text-yellow-800 border-yellow-200"
-                            }
-                          >
-                            {r.status}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex justify-end gap-1">
-                            {/* Download PDF - Available for all statuses */}
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => generatePDF(r)}
-                              className="h-8 w-8 text-gray-600 hover:text-gray-800 hover:bg-gray-50 rounded-lg"
-                              title="Download PDF"
-                            >
-                              <Download className="h-4 w-4" />
-                            </Button>
-
-                            {/* Edit/Delete - Only for non-approved reimbursements */}
-                            {r.status !== "Approved" && r.status !== "Paid" && (
-                              <>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={() => handleEdit(r)}
-                                  className="h-8 w-8 text-gray-600 hover:text-gray-800 hover:bg-gray-50 rounded-lg"
-                                  title="Edit"
-                                >
-                                  <Edit className="h-4 w-4" />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={() => handleDelete(r.id)}
-                                  className="h-8 w-8 text-red-600 hover:text-red-800 hover:bg-red-50 rounded-lg"
-                                  title="Delete"
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
-                              </>
-                            )}
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    )
-                  })
-                )}
-              </TableBody>
-            </Table>
+      {/* Recent Reimbursements */}
+      <div>
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-[16px] font-bold text-gray-900">Recent Requests</h2>
+          <div className="relative">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
+            <input
+              placeholder="Search…"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-7 pr-3 py-1.5 text-[12px] rounded-xl border border-gray-100 bg-white shadow-sm focus:outline-none w-28"
+            />
           </div>
-        </CardContent>
-      </Card>
+        </div>
 
-      {/* Create/Edit Dialog */}
-      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent>
-          <DialogHeader className="px-6 py-4 border-b bg-white sticky top-0 z-10">
-            <DialogTitle className="text-xl font-semibold">
-              {editing ? "Edit Reimbursement" : "Create New Reimbursement"}
-            </DialogTitle>
-          </DialogHeader>
-          <div className="flex-1 overflow-y-auto px-6 py-4">
-            <form onSubmit={handleSubmit} className="space-y-6">
-              {/* Auto-populated Organization Info (Read-only) */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                
-                <div className="space-y-3">
-                  <Label className="text-sm font-medium text-gray-700">Company</Label>
-                  <Input 
-                    type="text" 
-                    value={formData.companyName || ""} 
-                    readOnly 
-                    className="bg-gray-100 border-gray-300"
-                  />
-                </div>
-
-                <div className="space-y-3">
-                  <Label className="text-sm font-medium text-gray-700">Branch</Label>
-                  <Input 
-                    type="text" 
-                    value={formData.branchName || ""} 
-                    readOnly 
-                    className="bg-gray-100 border-gray-300"
-                  />
-                </div>
-
-                <div className="space-y-3">
-                  <Label className="text-sm font-medium text-gray-700">Employee</Label>
-                  <Input 
-                    type="text" 
-                    value={formData.employeeName || ""} 
-                    readOnly 
-                    className="bg-gray-100 border-gray-300"
-                  />
-                </div>
-
-                {/* Date */}
-                <div className="space-y-3">
-                  <Label htmlFor="date" className="text-sm font-medium text-gray-700">
-                    Date *
-                  </Label>
-                  <Input
-                    id="date"
-                    type="date"
-                    value={formData.date}
-                    onChange={(e) => setFormData(p => ({ ...p, date: e.target.value }))}
-                    className="w-full p-2 border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                    required
-                  />
-                </div>
-              </div>
-
-              {/* Items Section */}
-              <div className="space-y-4 border-t pt-6">
-                <div className="flex items-center justify-between">
-                  <Label className="text-lg font-semibold text-gray-900">Reimbursement Items</Label>
-                  <Button type="button" onClick={addItemRow} variant="outline" size="sm" className="rounded-lg">
-                    <Plus className="w-4 h-4 mr-2" />
-                    Add Item
-                  </Button>
-                </div>
-
-                <div className="space-y-3 max-h-60 overflow-y-auto pr-2">
-                  {items.map((item, idx) => (
-                    <div key={idx} className="grid grid-cols-1 md:grid-cols-12 gap-3 items-start border border-gray-200 p-4 rounded-lg bg-white shadow-sm">
-                      <div className="md:col-span-4 space-y-2">
-                        <Label htmlFor={`type-${idx}`} className="text-sm font-medium text-gray-700">Type *</Label>
-                        <Input
-                          id={`type-${idx}`}
-                          value={item.reimbursementType}
-                          onChange={(e) => updateItemRow(idx, "reimbursementType", e.target.value)}
-                          placeholder="e.g., Travel, Food, etc."
-                          className="border-gray-300 focus:border-blue-500"
-                          required
-                        />
-                      </div>
-                      <div className="md:col-span-3 space-y-2">
-                        <Label htmlFor={`amount-${idx}`} className="text-sm font-medium text-gray-700">Amount (₹) *</Label>
-                        <Input
-                          id={`amount-${idx}`}
-                          type="number"
-                          step="0.01"
-                          value={item.amount}
-                          onChange={(e) => updateItemRow(idx, "amount", e.target.value)}
-                          placeholder="0.00"
-                          className="border-gray-300 focus:border-blue-500"
-                          required
-                        />
-                      </div>
-                      <div className="md:col-span-4 space-y-2">
-                        <Label htmlFor={`description-${idx}`} className="text-sm font-medium text-gray-700">Description *</Label>
-                        <Input
-                          id={`description-${idx}`}
-                          value={item.description}
-                          onChange={(e) => updateItemRow(idx, "description", e.target.value)}
-                          placeholder="Description of expense"
-                          className="border-gray-300 focus:border-blue-500"
-                          required
-                        />
-                      </div>
-                      <div className="md:col-span-1 space-y-2 flex justify-center pt-6">
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => removeItemRow(idx)}
-                          disabled={items.length === 1}
-                          className="h-8 w-8 text-red-600 hover:text-red-800 hover:bg-red-50 rounded-lg"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
+        <div className="space-y-3">
+          {filteredReimbursements.length === 0 ? (
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-8 flex flex-col items-center gap-3">
+              <Icon icon="solar:wallet-bold-duotone" className="w-12 h-12 text-gray-200" />
+              <p className="text-[14px] font-semibold text-gray-400">No reimbursements yet</p>
+            </div>
+          ) : (
+            filteredReimbursements.map((r) => {
+              const totalAmount = getTotalAmount(r);
+              return (
+                <div key={r.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+                  <div className="flex items-start justify-between gap-2 mb-1.5">
+                    <div className="min-w-0">
+                      <p className="text-[14px] font-bold text-gray-900 truncate">
+                        {r.items?.[0]?.reimbursementType || "Reimbursement"}
+                        {(r.items?.length || 0) > 1 && <span className="ml-1 text-[11px] text-gray-400">+{(r.items?.length || 1) - 1} more</span>}
+                      </p>
+                      {r.companyName && <p className="text-[12px] text-gray-400 mt-0.5 truncate">{r.companyName}{r.branchName ? ` · ${r.branchName}` : ""}</p>}
                     </div>
-                  ))}
+                    <span className={`shrink-0 text-[11px] font-bold px-2.5 py-1 rounded-full ${
+                      r.status === "Paid" ? "bg-green-100 text-green-700"
+                      : r.status === "Approved" ? "bg-blue-100 text-blue-700"
+                      : r.status === "Rejected" ? "bg-red-100 text-red-600"
+                      : "bg-gray-100 text-gray-600"
+                    }`}>
+                      {r.status}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-1.5 text-[12px] text-gray-500">
+                      <Calendar className="w-3.5 h-3.5 shrink-0" />
+                      <span>{r.date}</span>
+                    </div>
+                    <span className="text-[15px] font-bold text-emerald-700">₹{totalAmount.toFixed(2)}</span>
+                  </div>
+                  <div className="flex items-center justify-end gap-1 pt-2 border-t border-gray-50">
+                    <button onClick={() => generatePDF(r)} className="flex items-center gap-1 text-[11px] font-bold text-gray-600 border border-gray-100 bg-gray-50 rounded-lg px-2.5 py-1.5 active:scale-[0.97]">
+                      <Download className="w-3 h-3" /> PDF
+                    </button>
+                    {r.status !== "Approved" && r.status !== "Paid" && (
+                      <>
+                        <button onClick={() => handleEdit(r)} className="flex items-center gap-1 text-[11px] font-bold text-gray-600 border border-gray-100 bg-gray-50 rounded-lg px-2.5 py-1.5 active:scale-[0.97]">
+                          <Edit className="w-3 h-3" /> Edit
+                        </button>
+                        <button onClick={() => handleDelete(r.id)} className="flex items-center gap-1 text-[11px] font-bold text-red-500 border border-red-100 bg-red-50 rounded-lg px-2.5 py-1.5 active:scale-[0.97]">
+                          <Trash2 className="w-3 h-3" /> Delete
+                        </button>
+                      </>
+                    )}
+                  </div>
                 </div>
-              </div>
-            </form>
-          </div>
-          <DialogFooter className="px-6 py-4 border-t bg-gray-50 sticky bottom-0">
-            <div className="flex gap-3 w-full">
-              <Button 
-                type="button" 
-                variant="outline" 
-                onClick={() => setIsDialogOpen(false)}
-                className="flex-1 border-gray-300 hover:bg-gray-50 rounded-lg"
-              >
-                Cancel
-              </Button>
-              <Button 
-                type="submit" 
-                onClick={handleSubmit}
-                className="flex-1 rounded-lg"
-              >
-                {editing ? "Update Reimbursement" : "Create Reimbursement"}
-              </Button>
-            </div>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+              );
+            })
+          )}
+        </div>
+      </div>
 
       {/* Hidden PDF Template */}
       <div style={{ position: 'absolute', left: '-9999px', top: 0 }}>

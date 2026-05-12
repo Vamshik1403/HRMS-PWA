@@ -1937,22 +1937,20 @@ useEffect(() => {
 
 
 
-      <div className="space-y-6 w-full max-w-7xl mx-auto px-4">
+      <div className="px-4 pt-5 pb-4 space-y-4">
         {/* Header */}
-        <div className="flex items-center justify-between w-full">
-          <div className="min-w-0 flex-1">
-            <p className="text-gray-600 mt-1 text-sm">Generate and manage employee salary payments</p>
-          </div>
+        <div className="flex items-center justify-between mb-1">
+          <h1 className="text-[22px] font-bold text-gray-900">Pay Slips</h1>
 
           <Dialog open={isDialogOpen} onOpenChange={(o) => { setIsDialogOpen(o); if (!o) resetForm(); }}>
             {canManage && (
-  <DialogTrigger asChild>
-    <Button onClick={resetForm} className="flex-shrink-0 text-sm px-3 py-2">
-      <Plus className="w-4 h-4 mr-1" />
-      Add Salary Generation
-    </Button>
-  </DialogTrigger>
-)}
+              <DialogTrigger asChild>
+                <button onClick={resetForm} className="flex items-center gap-1.5 bg-[#2563eb] text-white font-bold text-[13px] rounded-xl px-3 py-2.5 shadow-md shadow-blue-200 active:scale-[0.97] transition-transform">
+                  <Plus className="w-4 h-4" />
+                  Add
+                </button>
+              </DialogTrigger>
+            )}
 
 
             <DialogContent>
@@ -2178,127 +2176,71 @@ useEffect(() => {
         </div>
 
         {/* Search */}
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center space-x-4 w-full">
-              <div className="relative flex-1 min-w-0">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
-                <Input
-                  placeholder="Search generated salaries…"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10 w-full"
-                />
-              </div>
-              <Badge variant="secondary" className="px-3 py-1 flex-shrink-0">
-                {filtered.length} records
-              </Badge>
+        <div className="flex items-center gap-2">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+            <Input
+              placeholder="Search generated salaries…"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-9 bg-white rounded-xl border border-gray-100 shadow-sm text-[13px]"
+            />
+          </div>
+          <span className="text-[12px] font-semibold text-gray-500 bg-white border border-gray-100 rounded-xl px-3 py-2.5 shadow-sm whitespace-nowrap">
+            {filtered.length} records
+          </span>
+        </div>
+
+        {/* Pay Slips — mobile cards */}
+        <div className="space-y-3">
+          {filtered.length === 0 ? (
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-8 flex flex-col items-center gap-3">
+              <Icon icon="solar:bill-bold-duotone" className="w-12 h-12 text-gray-200" />
+              <p className="text-[14px] font-semibold text-gray-400">No records found</p>
+              <p className="text-[12px] text-gray-400 text-center">Try adjusting your search criteria</p>
             </div>
-          </CardContent>
-        </Card>
-
-        {/* Table */}
-        <Card className="w-full">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Icon icon="mdi:cash-check" className="w-5 h-5" />
-              Salary Generation List
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-0 w-full">
-            <div className="overflow-x-auto w-full">
-              <Table className="w-full">
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-[160px]">Service Provider</TableHead>
-                    <TableHead className="w-[160px]">Company</TableHead>
-                    <TableHead className="w-[160px]">Branch</TableHead>
-                    <TableHead className="w-[180px]">Employee</TableHead>
-                    <TableHead className="w-[160px]">Month Period</TableHead>
-                    <TableHead className="w-[100px] text-center">Status</TableHead>
-                    <TableHead className="w-[140px] text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filtered.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={9} className="text-center py-8 text-gray-500">
-                        <div className="flex flex-col items-center gap-2">
-                          <Icon icon="mdi:cash-check" className="w-12 h-12 text-gray-300" />
-                          <p>No records found</p>
-                          <p className="text-sm">Try adjusting your search criteria</p>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    filtered.map((row) => (
-                      <TableRow key={row.id}>
-                        <TableCell className="whitespace-nowrap">{row.serviceProvider?.companyName ?? "-"}</TableCell>
-                        <TableCell className="whitespace-nowrap">{row.company?.companyName ?? "-"}</TableCell>
-                        <TableCell className="whitespace-nowrap">{row.branches?.branchName ?? "-"}</TableCell>
-                        <TableCell className="whitespace-nowrap">
-                          {row.manageEmployee ? `${empName(row.manageEmployee)} (${row.manageEmployee.employeeID ?? ""})` : "-"}
-                        </TableCell>
-                        <TableCell className="whitespace-nowrap">{row.monthPeriod}</TableCell>
-<TableCell className="text-center">
-  <Badge variant={row.status === "Paid" ? "default" : "secondary"}>
-    {row.status || "Pending"}
-  </Badge>
-</TableCell>
-
-                        <TableCell className="text-right whitespace-nowrap">
-                          <div className="flex items-center justify-end gap-1">
-  {canManage && (
-    <>
-      <Button
-        variant="ghost"
-        size="sm"
-        onClick={() => openPaymentDialog(row)}
-        className="h-7 w-7 p-0 text-green-600 hover:text-green-700 hover:bg-green-50"
-      >
-        <Icon icon="mdi:credit-card-outline" className="w-4 h-4" />
-      </Button>
-
-      <Button
-        variant="ghost"
-        size="sm"
-        onClick={() => beginEdit(row)}
-        className="h-7 w-7 p-0"
-      >
-        <Edit className="w-3 h-3" />
-      </Button>
-
-      <Button
-        variant="ghost"
-        size="sm"
-        onClick={() => handleDelete(row.id)}
-        className="h-7 w-7 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
-      >
-        <Trash2 className="w-3 h-3" />
-      </Button>
-    </>
-  )}
-
-  {/* Always visible download button */}
-  <Button
-    onClick={() => handleDownloadSalarySlipForRow(row)}
-    variant="ghost"
-    size="sm"
-    className="h-7 w-7 p-0"
-  >
-    <Download className="w-3 h-3" />
-  </Button>
-</div>
-
-                        </TableCell>
-                      </TableRow>
-                    ))
+          ) : (
+            filtered.map((row) => (
+              <div key={row.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+                <div className="flex items-start justify-between gap-2 mb-1.5">
+                  <div className="min-w-0">
+                    <p className="text-[15px] font-bold text-gray-900 truncate">
+                      {row.manageEmployee ? `${empName(row.manageEmployee)} (${row.manageEmployee.employeeID ?? ""})` : "—"}
+                    </p>
+                    <p className="text-[12px] text-gray-400 mt-0.5 truncate">
+                      {row.company?.companyName ?? ""}{row.branches?.branchName ? ` · ${row.branches.branchName}` : ""}
+                    </p>
+                  </div>
+                  <Badge variant={row.status === "Paid" ? "default" : "secondary"} className="shrink-0 text-[10px]">
+                    {row.status || "Pending"}
+                  </Badge>
+                </div>
+                <div className="flex items-center gap-1.5 text-[12px] text-gray-500 mb-2">
+                  <Icon icon="solar:calendar-linear" className="w-3.5 h-3.5 shrink-0" />
+                  <span>{row.monthPeriod}</span>
+                </div>
+                <div className="flex items-center justify-end gap-1 pt-2 border-t border-gray-50">
+                  {canManage && (
+                    <>
+                      <button onClick={() => openPaymentDialog(row)} className="flex items-center gap-1 text-[11px] font-bold text-emerald-600 border border-emerald-100 bg-emerald-50 rounded-lg px-2.5 py-1.5 active:scale-[0.97]">
+                        <Icon icon="mdi:credit-card-outline" className="w-3 h-3" /> Pay
+                      </button>
+                      <button onClick={() => beginEdit(row)} className="flex items-center gap-1 text-[11px] font-bold text-gray-600 border border-gray-100 bg-gray-50 rounded-lg px-2.5 py-1.5 active:scale-[0.97]">
+                        <Edit className="w-3 h-3" /> Edit
+                      </button>
+                      <button onClick={() => handleDelete(row.id)} className="flex items-center gap-1 text-[11px] font-bold text-red-500 border border-red-100 bg-red-50 rounded-lg px-2.5 py-1.5 active:scale-[0.97]">
+                        <Trash2 className="w-3 h-3" /> Delete
+                      </button>
+                    </>
                   )}
-                </TableBody>
-              </Table>
-            </div>
-          </CardContent>
-        </Card>
+                  <button onClick={() => handleDownloadSalarySlipForRow(row)} className="flex items-center gap-1 text-[11px] font-bold text-gray-600 border border-gray-100 bg-gray-50 rounded-lg px-2.5 py-1.5 active:scale-[0.97]">
+                    <Download className="w-3 h-3" /> Slip
+                  </button>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
       </div>
     </>
   );

@@ -1,10 +1,10 @@
-import EmpLayout from "../components/layout/EmpLayout";
+import EmpMobileLayout from "../components/layout/EmpMobileLayout";
 import { EmpPublicHoliday } from "./EmpPublicHoliday";
 
 export default function EmpPublicHolidayPage() {
   return (
-    <EmpLayout>
+    <EmpMobileLayout>
       <EmpPublicHoliday />
-    </EmpLayout>
+    </EmpMobileLayout>
   );
 }

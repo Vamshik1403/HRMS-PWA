@@ -46,6 +46,7 @@ export default function EmpLayout({ children }: EmpLayoutProps) {
   const [showOldPwd, setShowOldPwd] = useState(false);
   const [showNewPwd, setShowNewPwd] = useState(false);
   const [showConfirmPwd, setShowConfirmPwd] = useState(false);
+  const [showProfile, setShowProfile] = useState(false);
 
   const handleChangePassword = async () => {
     if (!pwdForm.oldPassword || !pwdForm.newPassword) { toast.error("All fields are required"); return; }
@@ -75,20 +76,34 @@ export default function EmpLayout({ children }: EmpLayoutProps) {
     }
   };
 
+  const [empUser, setEmpUser] = useState<any>(null);
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem("user");
+      if (stored) setEmpUser(JSON.parse(stored));
+    } catch {}
+  }, []);
+
+  const empDisplayName = empUser?.employee
+    ? `${empUser.employee.firstName || ""} ${empUser.employee.lastName || ""}`.trim() || empUser.username || "Employee"
+    : empUser?.username || "Employee";
+  const empInitials = empDisplayName
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w: string) => w[0].toUpperCase())
+    .join("") || "E";
+
   const [openSections, setOpenSections] = useState({
-    salary: false,
     leave: false,
   });
 
   useEffect(() => {
-    const newOpen = { salary: false, leave: false };
-
-    if (["/empSalaryAdvance", "/empReimbursement", "/empGenerateSalary"].includes(pathname)) {
-      newOpen.salary = true;
-    } else if (["/manage-holidays", "/empPublicHoliday", "/empLeaveApplication"].includes(pathname)) {
+    const newOpen = { leave: false };
+    if (["/empLeaveApplication"].includes(pathname)) {
       newOpen.leave = true;
     }
-
     setOpenSections(newOpen);
   }, [pathname]);
 
@@ -100,14 +115,10 @@ export default function EmpLayout({ children }: EmpLayoutProps) {
         {/* Sidebar */}
         <Sidebar collapsible="icon" className="border-r border-[#d1d5db] bg-sidebar text-sidebar-foreground">
           <SidebarHeader className="px-4 py-6 border-0">
-            <Link href="/empdashboard" className="flex items-center gap-3">
-              <div className="w-11 h-11 rounded-full bg-[#4f46e5] flex items-center justify-center text-white text-sm font-bold shadow-[0_6px_16px_rgba(79,70,229,0.35)] shrink-0">
-                HR
-              </div>
+            <Link href="/empAttendance" className="flex items-center gap-3">
+              <img src="/img/OpenHRM_Logo.png" alt="OpenHRM" className="w-11 h-11 rounded-full object-cover shrink-0 shadow-[0_6px_16px_rgba(79,70,229,0.35)]" />
               <div className="min-w-0">
-                <span className="text-gray-900 font-bold text-sm tracking-tight block truncate">
-                  OpenHRM
-                </span>
+                <span className="text-[#111827] font-bold text-sm tracking-tight block truncate">OpenHRM</span>
                 <p className="text-[11px] text-gray-400">Employee Portal</p>
               </div>
             </Link>
@@ -116,74 +127,22 @@ export default function EmpLayout({ children }: EmpLayoutProps) {
           <SidebarContent className="px-2.5 py-2 flex-1 overflow-y-auto">
             <SidebarGroup>
               <SidebarMenu className="gap-1.5 flex flex-col">
-                {/* Dashboard */}
+                {/* Attendance */}
                 <SidebarMenuItem className="mx-0">
                   <SidebarMenuButton asChild>
                     <Link
-                      href="/empdashboard"
+                      href="/empAttendance"
                       className={`flex w-full items-center gap-3 rounded-md px-3 h-11 min-h-[44px] max-h-11 shrink-0 transition-colors duration-150 ${
-                        isActive("/empdashboard")
+                        isActive("/empAttendance")
                           ? "!bg-[#eef2ff] text-[#4f46e5] font-medium relative overflow-visible before:absolute before:-left-3 before:top-[20%] before:h-[60%] before:w-[3px] before:rounded-r-sm before:bg-[#4f46e5]"
                           : "text-[#6b7280] hover:bg-[#f3f4f6] hover:text-[#1a1a2e]"
                       }`}
                     >
-                      <Icon icon="mdi:view-dashboard-outline" className={`w-5 h-5 shrink-0 ${isActive("/empdashboard") ? "text-[#4f46e5]" : "text-gray-400"}`} />
-                      <span className="text-[13px]">Dashboard</span>
+                      <Icon icon="mdi:map-marker-check-outline" className={`w-5 h-5 shrink-0 ${isActive("/empAttendance") ? "text-[#4f46e5]" : "text-gray-400"}`} />
+                      <span className="text-[13px]">Attendance</span>
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
-
-                {/* Salary Management */}
-                <Collapsible
-                  open={openSections.salary}
-                  onOpenChange={(open) =>
-                    setOpenSections((prev) => ({ ...prev, salary: open }))
-                  }
-                >
-                  <SidebarMenuItem className="mx-0">
-                    <CollapsibleTrigger asChild>
-                      <SidebarMenuButton className={`flex w-full items-center gap-3 rounded-md px-3 h-11 min-h-[44px] max-h-11 shrink-0 transition-colors duration-150 ${
-                        ["/empSalaryAdvance", "/empReimbursement", "/empGenerateSalary"].includes(pathname)
-                          ? "!bg-[#eef2ff] text-[#4f46e5] font-medium"
-                          : "text-[#6b7280] hover:bg-[#f3f4f6] hover:text-[#1a1a2e]"
-                      }`}>
-                        <Icon icon="mdi:currency-usd" className={`w-5 h-5 shrink-0 ${["/empSalaryAdvance", "/empReimbursement", "/empGenerateSalary"].includes(pathname) ? "text-[#4f46e5]" : "text-gray-400"}`} />
-                        <span className="text-[13px]">Payroll Management</span>
-                        <Icon
-                          icon="mdi:chevron-right"
-                          className={`w-4 h-4 ml-auto transition-transform duration-200 text-gray-400 ${
-                            openSections.salary ? "rotate-90" : ""
-                          }`}
-                        />
-                      </SidebarMenuButton>
-                    </CollapsibleTrigger>
-                  </SidebarMenuItem>
-
-                  <CollapsibleContent>
-                    <SidebarMenuSub className="ml-4 mt-1 space-y-0.5">
-                      {[
-                        { href: "/empSalaryAdvance", label: "Salary Advance" },
-                        { href: "/empReimbursement", label: "Reimbursement" },
-                        { href: "/empGenerateSalary", label: "Generate Salary" },
-                      ].map((item) => (
-                        <SidebarMenuSubItem key={item.href}>
-                          <SidebarMenuSubButton asChild>
-                            <Link
-                              href={item.href}
-                              className={`flex w-full items-center rounded-md !px-3 min-h-9 h-9 max-h-9 text-[12px] font-normal transition-colors duration-150 ${
-                                isActive(item.href)
-                                  ? "!bg-[#eef2ff] text-[#4f46e5] font-medium relative !pl-6 before:absolute before:left-0 before:top-[30%] before:h-[40%] before:w-[2px] before:rounded-full before:bg-[#4f46e5]"
-                                  : "text-[#6b7280] hover:bg-[#f3f4f6] hover:text-[#1a1a2e]"
-                              }`}
-                            >
-                              <span>{item.label}</span>
-                            </Link>
-                          </SidebarMenuSubButton>
-                        </SidebarMenuSubItem>
-                      ))}
-                    </SidebarMenuSub>
-                  </CollapsibleContent>
-                </Collapsible>
 
                 {/* Leave Management */}
                 <Collapsible
@@ -195,11 +154,11 @@ export default function EmpLayout({ children }: EmpLayoutProps) {
                   <SidebarMenuItem className="mx-0">
                     <CollapsibleTrigger asChild>
                       <SidebarMenuButton className={`flex w-full items-center gap-3 rounded-md px-3 h-11 min-h-[44px] max-h-11 shrink-0 transition-colors duration-150 ${
-                        ["/empPublicHoliday", "/empLeaveApplication"].includes(pathname)
+                        ["/empLeaveApplication"].includes(pathname)
                           ? "!bg-[#eef2ff] text-[#4f46e5] font-medium"
                           : "text-[#6b7280] hover:bg-[#f3f4f6] hover:text-[#1a1a2e]"
                       }`}>
-                        <Icon icon="mdi:calendar-clock-outline" className={`w-5 h-5 shrink-0 ${["/empPublicHoliday", "/empLeaveApplication"].includes(pathname) ? "text-[#4f46e5]" : "text-gray-400"}`} />
+                        <Icon icon="mdi:calendar-clock-outline" className={`w-5 h-5 shrink-0 ${["/empLeaveApplication"].includes(pathname) ? "text-[#4f46e5]" : "text-gray-400"}`} />
                         <span className="text-[13px]">Leave Policy</span>
                         <Icon
                           icon="mdi:chevron-right"
@@ -214,7 +173,6 @@ export default function EmpLayout({ children }: EmpLayoutProps) {
                   <CollapsibleContent>
                     <SidebarMenuSub className="ml-4 mt-1 space-y-0.5">
                       {[
-                        { href: "/empPublicHoliday", label: "Public Holiday" },
                         { href: "/empLeaveApplication", label: "Leave Applications" },
                       ].map((item) => (
                         <SidebarMenuSubItem key={item.href}>
@@ -248,18 +206,26 @@ export default function EmpLayout({ children }: EmpLayoutProps) {
               <div className="flex items-center gap-4">
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <button className="flex items-center gap-3 cursor-pointer focus:outline-none">
-                      <Avatar className="w-8 h-8 ring-2 ring-gray-200">
-                        <AvatarImage src="https://wqnmyfkavrotpmupbtou.supabase.co/storage/v1/object/public/reweb/blocks/placeholder.png" />
-                        <AvatarFallback className="bg-gray-900 text-white">U</AvatarFallback>
+                    <button type="button" className="flex items-center gap-2 cursor-pointer focus:outline-none rounded-full pl-1 pr-1 py-1 hover:bg-white/80 transition-colors">
+                      <Avatar className="w-10 h-10 ring-[3px] ring-white shadow-md">
+                        <AvatarFallback className="bg-gray-900 text-white text-sm font-bold">{empInitials}</AvatarFallback>
                       </Avatar>
-                      <span className="text-gray-900 font-medium text-sm">User</span>
-                      <Icon icon="mdi:chevron-down" className="w-4 h-4 text-gray-500" />
                     </button>
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-48">
+                  <DropdownMenuContent align="end" className="w-52 rounded-2xl">
+                    <div className="px-3 py-2 border-b border-gray-100">
+                      <p className="text-sm font-semibold text-gray-900 truncate">{empDisplayName}</p>
+                      <p className="text-[11px] text-gray-400 font-medium mt-0.5">Employee</p>
+                    </div>
                     <DropdownMenuItem
-                      className="cursor-pointer"
+                      className="cursor-pointer rounded-xl m-1"
+                      onClick={() => setShowProfile(true)}
+                    >
+                      <Icon icon="mdi:account-circle-outline" className="w-4 h-4 mr-2" />
+                      User Profile
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      className="cursor-pointer rounded-xl m-1"
                       onClick={() => setShowChangePassword(true)}
                     >
                       <Icon icon="mdi:lock-outline" className="w-4 h-4 mr-2" />
@@ -323,6 +289,72 @@ export default function EmpLayout({ children }: EmpLayoutProps) {
             <Button onClick={handleChangePassword} disabled={pwdLoading} className="w-full">
               {pwdLoading ? "Changing..." : "Change Password"}
             </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* User Profile Modal */}
+      <Dialog open={showProfile} onOpenChange={setShowProfile}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>User Profile</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="flex items-center gap-4 pb-4 border-b border-gray-100">
+              <div className="w-14 h-14 rounded-full bg-gray-900 flex items-center justify-center text-white text-xl font-bold shrink-0">
+                {empInitials}
+              </div>
+              <div>
+                <p className="text-base font-semibold text-gray-900">{empDisplayName}</p>
+                <p className="text-sm text-gray-500">Employee</p>
+              </div>
+            </div>
+            {empUser?.employee?.employeeID && (
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-500 font-medium">Employee ID</span>
+                <span className="font-semibold text-gray-900">{empUser.employee.employeeID}</span>
+              </div>
+            )}
+            {empUser?.employee?.email && (
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-500 font-medium">Email</span>
+                <span className="font-semibold text-gray-900">{empUser.employee.email}</span>
+              </div>
+            )}
+            {empUser?.employee?.department && (
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-500 font-medium">Department</span>
+                <span className="font-semibold text-gray-900">{empUser.employee.department}</span>
+              </div>
+            )}
+            {empUser?.employee?.designation && (
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-500 font-medium">Designation</span>
+                <span className="font-semibold text-gray-900">{empUser.employee.designation}</span>
+              </div>
+            )}
+            {empUser?.employee?.company && (
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-500 font-medium">Company</span>
+                <span className="font-semibold text-gray-900">{empUser.employee.company}</span>
+              </div>
+            )}
+            {empUser?.employee?.branch && (
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-500 font-medium">Branch</span>
+                <span className="font-semibold text-gray-900">{empUser.employee.branch}</span>
+              </div>
+            )}
+            <div className="flex justify-between text-sm">
+              <span className="text-gray-500 font-medium">Username</span>
+              <span className="font-semibold text-gray-900">{empUser?.username || "—"}</span>
+            </div>
+            <div className="pt-2">
+              <Button variant="outline" className="w-full" onClick={() => { setShowProfile(false); setShowChangePassword(true); }}>
+                <Icon icon="mdi:lock-outline" className="w-4 h-4 mr-2" />
+                Change Password
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>

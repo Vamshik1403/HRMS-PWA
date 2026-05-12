@@ -737,6 +737,7 @@ model ManageEmployee {
   empFactualWorkShift            EmpFactualWorkShift[]
   empFactualAttendancePolicy     EmpFactualAttendancePolicy[]
   employeeMemo                   EmployeeMemo[]
+  attendanceLocations            AttendanceLocation[]
 
   @@unique([employeeID, companyID], name: "unique_employee_id_per_company")
 }
@@ -1920,4 +1921,30 @@ model FactualRosterDay {
   factualWorkShift        FactualWorkShift?     @relation(fields: [factualWorkShiftID], references: [id])
 
   @@unique([factualRosterEmployeeID, workDate])
+}
+
+model AttendanceLocation {
+  id                Int             @id @default(autoincrement())
+  employeeId        Int
+  checkType         String          @db.VarChar(20)
+  latitude          Float
+  longitude         Float
+  accuracy          Float?
+  ipAddress         String?         @db.VarChar(64)
+  deviceType        String?         @db.VarChar(64)
+  browser           String?         @db.VarChar(128)
+  operatingSystem   String?         @db.VarChar(128)
+  userAgent         String?         @db.Text
+  companyID         Int?
+  branchesID        Int?
+  serviceProviderID Int?
+  checkinTime       DateTime        @default(now())
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  employee          ManageEmployee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@index([employeeId])
+  @@index([checkinTime])
+  @@index([checkType])
+  @@map("attendance_locations")
 }

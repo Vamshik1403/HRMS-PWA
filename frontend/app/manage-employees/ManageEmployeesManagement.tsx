@@ -366,6 +366,8 @@ export function ManageEmployeesManagement() {
   const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN" || user?.role === "ADMIN" || user?.role === "BRANCH_ADMIN";
   const isAdmin = user?.role === "ADMIN";
   const isCompanyAdmin = user?.role === "COMPANY_ADMIN";
+  const isBranchAdmin = user?.role === "BRANCH_ADMIN";
+  const isSuperAdmin = user?.role === "SUPERADMIN";
   const isEmployee = user?.role === "EMPLOYEE";
 
   // UI
@@ -2149,8 +2151,8 @@ const addCombinedDevMap = () => {
     if (!formData.employeeFirstName?.trim()) validationErrors.push("Employee First Name is mandatory");
     if (!formData.employeeLastName?.trim()) validationErrors.push("Employee Last Name is mandatory");
     if (!formData.employeeID?.trim()) validationErrors.push("Employee ID is mandatory");
-    if (!isAdmin && !isCompanyAdmin && !formData.personalPhoneNo?.trim()) validationErrors.push("Mobile Number is mandatory");
-    if (!isAdmin && !isCompanyAdmin && !formData.joiningDate?.trim()) validationErrors.push("Joining Date is mandatory");
+    if (!isAdmin && !formData.personalPhoneNo?.trim()) validationErrors.push("Mobile Number is mandatory");
+    if (!isAdmin && !formData.joiningDate?.trim()) validationErrors.push("Joining Date is mandatory");
 
     // Duplicate Employee ID check (within the same company)
     if (formData.employeeID?.trim()) {
@@ -3062,33 +3064,62 @@ const addCombinedDevMap = () => {
                     required
                   />
                 </div>
-                {!isAdmin && !isCompanyAdmin && (<div className="space-y-2">
+                {!isAdmin && (<div className="space-y-2">
                   <Label>Mobile Number <span className="text-red-500">*</span></Label>
                   <Input
                     value={formData.personalPhoneNo}
                     onChange={(e) => setFormData((p) => ({ ...p, personalPhoneNo: e.target.value }))}
+                    placeholder="Used as employee login password"
                     required
                   />
                 </div>)}
               </div>
 
-              {/* Gender field for ADMIN and COMPANY_ADMIN */}
-              {(isAdmin || isCompanyAdmin) && (
-                <div className="space-y-2">
-                  <Label>Gender</Label>
-                  <Select
-                    value={formData.gender || ""}
-                    onValueChange={(val) => setFormData((p) => ({ ...p, gender: val }))}
-                  >
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Select gender…" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Male">Male</SelectItem>
-                      <SelectItem value="Female">Female</SelectItem>
-                      <SelectItem value="Transgender">Transgender</SelectItem>
-                    </SelectContent>
-                  </Select>
+              {/* Gender / Joining Date / Photo at top — shown for all roles except pure ADMIN */}
+              {(isAdmin || isCompanyAdmin || isBranchAdmin || isSuperAdmin) && (
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div className="space-y-2">
+                    <Label>Gender</Label>
+                    <Select
+                      value={formData.gender || ""}
+                      onValueChange={(val) => setFormData((p) => ({ ...p, gender: val }))}
+                    >
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Select gender…" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Male">Male</SelectItem>
+                        <SelectItem value="Female">Female</SelectItem>
+                        <SelectItem value="Transgender">Transgender</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {(isCompanyAdmin || isBranchAdmin || isSuperAdmin) && (
+                    <>
+                      <div className="space-y-2">
+                        <Label>Joining Date <span className="text-red-500">*</span></Label>
+                        <Input
+                          type="date"
+                          value={formData.joiningDate}
+                          onChange={(e) => setFormData((p) => ({ ...p, joiningDate: e.target.value }))}
+                          required
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Photo</Label>
+                        <Input
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) => onPickPhoto(e.target.files?.[0] ?? null)}
+                        />
+                        {photoPreview ? (
+                          <img src={photoPreview} className="h-20 w-20 rounded object-cover mt-2" alt="preview" />
+                        ) : formData.employeePhotoUrl ? (
+                          <img src={formData.employeePhotoUrl} className="h-20 w-20 rounded object-cover mt-2" alt="photo" />
+                        ) : null}
+                      </div>
+                    </>
+                  )}
                 </div>
               )}
 
@@ -3231,17 +3262,19 @@ const addCombinedDevMap = () => {
               </div>
               )}
 
-              {/* Codes / Date */}
-              {!isAdmin && !isCompanyAdmin && (<><div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div className="space-y-2">
-                  <Label>Joining Date <span className="text-red-500">*</span></Label>
-                  <Input
-                    type="date"
-                    value={formData.joiningDate}
-                    onChange={(e) => setFormData((p) => ({ ...p, joiningDate: e.target.value }))}
-                    required
-                  />
-                </div>
+              {/* Codes / Date — hidden for COMPANY_ADMIN and BRANCH_ADMIN (they see joining date/photo at top) */}
+              {!isAdmin && !isCompanyAdmin && !isBranchAdmin && (<><div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                {!isSuperAdmin && (
+                  <div className="space-y-2">
+                    <Label>Joining Date <span className="text-red-500">*</span></Label>
+                    <Input
+                      type="date"
+                      value={formData.joiningDate}
+                      onChange={(e) => setFormData((p) => ({ ...p, joiningDate: e.target.value }))}
+                      required
+                    />
+                  </div>
+                )}
 
                 <div className="space-y-2 mt-3">
                   <label>PF Member</label>
@@ -3688,17 +3721,6 @@ const addCombinedDevMap = () => {
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label>Personal Email</Label>
-                  <Input
-                    type="email"
-                    value={formData.personalEmail}
-                    onChange={(e) => setFormData((p) => ({ ...p, personalEmail: e.target.value }))}
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-2">
                   <Label>Emergency Contact</Label>
                   <Input
                     value={formData.emergancyContact}
@@ -3734,27 +3756,29 @@ const addCombinedDevMap = () => {
 
               {/* Personal */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div className="space-y-2">
-                  <Label>Gender</Label>
-                  <Select
-                    value={formData.gender || ""}
-                    onValueChange={(val) =>
-                      setFormData((p) => ({
-                        ...p,
-                        gender: val,
-                      }))
-                    }
-                  >
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Select gender…" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Male">Male</SelectItem>
-                      <SelectItem value="Female">Female</SelectItem>
-                      <SelectItem value="Transgender">Transgender</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+                {!isSuperAdmin && (
+                  <div className="space-y-2">
+                    <Label>Gender</Label>
+                    <Select
+                      value={formData.gender || ""}
+                      onValueChange={(val) =>
+                        setFormData((p) => ({
+                          ...p,
+                          gender: val,
+                        }))
+                      }
+                    >
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Select gender…" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Male">Male</SelectItem>
+                        <SelectItem value="Female">Female</SelectItem>
+                        <SelectItem value="Transgender">Transgender</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
 
                 <div className="space-y-2">
                   <Label>Date of Birth</Label>
@@ -3829,21 +3853,23 @@ const addCombinedDevMap = () => {
                   placeholder="0"
                 />
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Photo</Label>
-                  <Input
-                    type="file"
-                    accept="image/*"
-                    onChange={(e) => onPickPhoto(e.target.files?.[0] ?? null)}
-                  />
-                  {photoPreview ? (
-                    <img src={photoPreview} className="h-20 w-20 rounded object-cover mt-2" alt="preview" />
-                  ) : formData.employeePhotoUrl ? (
-                    <img src={formData.employeePhotoUrl} className="h-20 w-20 rounded object-cover mt-2" alt="photo" />
-                  ) : null}
+              {!isSuperAdmin && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Photo</Label>
+                    <Input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => onPickPhoto(e.target.files?.[0] ?? null)}
+                    />
+                    {photoPreview ? (
+                      <img src={photoPreview} className="h-20 w-20 rounded object-cover mt-2" alt="preview" />
+                    ) : formData.employeePhotoUrl ? (
+                      <img src={formData.employeePhotoUrl} className="h-20 w-20 rounded object-cover mt-2" alt="photo" />
+                    ) : null}
+                  </div>
                 </div>
-              </div>
+              )}
 
               {/* ==========================
                   EDUCATION (repeater)

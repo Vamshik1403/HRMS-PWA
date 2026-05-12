@@ -526,464 +526,370 @@ export function EmpLeaveApplication() {
     }
   }
 
+  // --- helpers for the date picker display ---
+  const formatDateParts = (dateStr: string) => {
+    if (!dateStr) return { top: "", bottom: "" };
+    const d = new Date(dateStr + "T00:00:00");
+    const day = d.getDate();
+    const month = d.toLocaleString("en-US", { month: "short" });
+    const year = d.getFullYear();
+    return { top: `${day} ${month}`, bottom: `${year}` };
+  };
+
+  const leaveTypeIcon = (type: string) => {
+    const icons: Record<string, string> = {
+      Sick:       "solar:heart-pulse-linear",
+      Casual:     "solar:calendar-linear",
+      Privileged: "solar:star-shine-linear",
+      ShortLeave: "solar:clock-circle-linear",
+      CompOff:    "solar:transfer-horizontal-linear",
+      LoP:        "solar:document-remove-linear",
+      MtL:        "mdi:baby-face-outline",
+      PtL:        "mdi:human-male",
+    };
+    return icons[type] || "solar:calendar-linear";
+  };
+
   return (
-    <div className="space-y-6 w-full max-w-full mx-auto px-4 overflow-hidden">
+    <div className="px-4 pt-5 pb-4 space-y-5">
       {/* Header */}
-      <div className="flex items-center justify-between w-full">
-        <div className="min-w-0 flex-1">
-          <p className="text-gray-600 mt-1 text-sm">Manage employee leave applications and approvals</p>
-        </div>
-        <div className="flex items-center gap-3">
-          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-            <DialogTrigger asChild>
-              <Button onClick={resetForm} className="flex-shrink-0 text-sm px-3 py-2">
-                <Plus className="w-4 h-4 mr-1" />
-                Submit Application
-              </Button>
-            </DialogTrigger>
-                      <DialogContent    onOpenAutoFocus={(e) => e.preventDefault()}
->
-              <DialogHeader>
-                <DialogTitle>
-                  {editingApplication ? "Edit Leave Application" : "Submit Leave Application"}
-                </DialogTitle>
-                <DialogDescription>
-                  {editingApplication 
-                    ? "Update the leave application information below." 
-                    : "Fill in the details to submit a new leave application."
-                  }
-                </DialogDescription>
-              </DialogHeader>
-              <form onSubmit={handleSubmit} className="space-y-6">
-                {/* Auto-populated Organization Info (Read-only) */}
-                <div className="space-y-4">
-                  <h3 className="text-lg font-semibold">Organization Information</h3>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  
-                    <div className="space-y-2">
-                      <Label className="text-sm font-medium text-gray-700">Company</Label>
-                      <Input 
-                        type="text" 
-                        value={formData.companyName} 
-                        readOnly 
-                        className="bg-gray-100 border-gray-300"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label className="text-sm font-medium text-gray-700">Branch</Label>
-                      <Input 
-                        type="text" 
-                        value={formData.branchName} 
-                        readOnly 
-                        className="bg-gray-100 border-gray-300"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label className="text-sm font-medium text-gray-700">Employee</Label>
-                      <Input 
-                        type="text" 
-                        value={formData.employeeName} 
-                        readOnly 
-                        className="bg-gray-100 border-gray-300"
-                      />
-                    </div>
-                  </div>
-                </div>
+      <h1 className="text-[22px] font-bold text-gray-900">Request Leave</h1>
 
-                {/* Leave Application Details */}
-                <div className="space-y-4">
-                  <h3 className="text-lg font-semibold">Leave Application Details</h3>
-                  
-                  {/* Leave Balance Display */}
-                  {Object.keys(leaveBalance).length > 0 && (
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 p-4 bg-gray-50 rounded-lg">
-                      {([
-                        { key: "sick", label: "Sick Leave", color: "text-blue-600", genderRequired: null as string | null },
-                        { key: "casual", label: "Casual Leave", color: "text-green-600", genderRequired: null as string | null },
-                        { key: "privileged", label: "Privileged Leave", color: "text-purple-600", genderRequired: null as string | null },
-                        { key: "compOff", label: "Comp Off", color: "text-orange-600", genderRequired: null as string | null },
-                        { key: "maternity", label: "MtL", color: "text-pink-600", genderRequired: "Female" as string | null },
-                        { key: "paternity", label: "PtL", color: "text-teal-600", genderRequired: "Male" as string | null },
-                      ]).map(({ key, label, color, genderRequired }) => {
-                        const isEligible = !genderRequired || employeeGender === genderRequired || employeeGender === "Others";
-                        const ineligibleReason = !isEligible
-                          ? (key === "maternity" ? "Not eligible (Male)" : "Not eligible (Female)")
-                          : null;
-                        return leaveBalance[key] ? (
-                          <div key={key} className={`text-center ${!isEligible ? "opacity-40" : ""}`}>
-                            <div className="text-xs font-medium text-gray-600">{label}</div>
-                            {isEligible ? (
-                              <>
-                                <div className={`text-base font-bold ${color}`}>
-                                  {leaveBalance[key].used}/{leaveBalance[key].total}
-                                </div>
-                                <div className="text-xs text-gray-500">{leaveBalance[key].remaining} remaining</div>
-                              </>
-                            ) : (
-                              <div className="text-xs text-gray-400 mt-1">{ineligibleReason}</div>
-                            )}
-                          </div>
-                        ) : null;
-                      })}
-                    </div>
-                  )}
-
-                  {/* Leave Type */}
-                  <div className="space-y-2">
-                    <Label htmlFor="leaveType">Leave Type *</Label>
-                    <select
-                      id="leaveType"
-                      value={formData.leaveType}
-                      onChange={(e) => setFormData(prev => ({ ...prev, leaveType: e.target.value }))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-sm border-[#d0d0d0] focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-900/15 focus-visible:border-[#b0b0b0]"
-                      required
-                    >
-                      <option value="">Select Leave Type</option>
-                      {availableLeaveTypes.map((type) => (
-                        <option key={type} value={type}>{leaveTypeLabel(type)}</option>
-                      ))}
-                      {employeeGender !== null && employeeGender !== "Female" && employeeGender !== "Others" && (
-                        <option value="" disabled>Maternity (MtL) — Not eligible (Male)</option>
-                      )}
-                      {employeeGender !== null && employeeGender !== "Male" && employeeGender !== "Others" && (
-                        <option value="" disabled>Paternity (PtL) — Not eligible (Female)</option>
-                      )}
-                    </select>
-                  </div>
-
-                  {/* Tenure Warning */}
-                  {tenureWarning && (
-                    <div className="p-3 bg-orange-50 rounded-md border border-orange-200">
-                      <p className="text-sm text-orange-700">⚠️ {tenureWarning}</p>
-                    </div>
-                  )}
-
-                  {/* Children Count Warning */}
-                  {childrenCountWarning && (
-                    <div className="p-3 bg-yellow-50 rounded-md border border-yellow-200">
-                      <p className="text-sm text-yellow-700">⚠️ {childrenCountWarning}</p>
-                    </div>
-                  )}
-
-                  {/* Child Event - shown for MtL/PtL */}
-                  {(formData.leaveType === "MtL" || formData.leaveType === "PtL") && (
-                    <div className="space-y-2">
-                      <Label>Which child is this for? *</Label>
-                      <select
-                        value={formData.childNumber}
-                        onChange={(e) => setFormData(prev => ({ ...prev, childNumber: e.target.value }))}
-                        className="w-full px-3 py-2 border border-[#d0d0d0] rounded-sm bg-white text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-900/15"
-                        required
-                      >
-                        <option value="">Select child event</option>
-                        <option value="1st">1st Child</option>
-                        <option value="2nd">2nd Child</option>
-                        <option value="3rd+">3rd+ Child</option>
-                        <option value="Adoption">Adoption</option>
-                      </select>
-                    </div>
-                  )}
-
-                  {/* Birth / Expected Delivery Date - shown for MtL/PtL */}
-                  {(formData.leaveType === "MtL" || formData.leaveType === "PtL") && (
-                    <div className="space-y-2">
-                      <Label>{formData.leaveType === "MtL" ? "Expected Delivery Date" : "Birth / Expected Birth Date"}</Label>
-                      <Input
-                        type="date"
-                        value={formData.birthEventDate}
-                        onChange={(e) => setFormData(prev => ({ ...prev, birthEventDate: e.target.value }))}
-                        className="w-full"
-                      />
-                      {formData.leaveType === "PtL" && formData.birthEventDate && formData.fromDate && (() => {
-                        const diff = Math.abs(new Date(formData.fromDate).getTime() - new Date(formData.birthEventDate).getTime()) / (1000 * 60 * 60 * 24);
-                        return diff > 90 ? (
-                          <p className="text-xs text-red-500 mt-1">⚠️ Leave start is more than 90 days from birth date. Paternity leave may not be eligible.</p>
-                        ) : null;
-                      })()}
-                    </div>
-                  )}
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                   
-                    <div className="space-y-2">
-                      <Label>Calculated Days</Label>
-                      <div className="w-full px-3 py-2 border border-[#d0d0d0] rounded-sm bg-gray-50 text-gray-600">
-                        {calculateDays(formData.fromDate, formData.toDate)} days
-                      </div>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="fromDate">From Date *</Label>
-                      <Input
-                        id="fromDate"
-                        type="date"
-                        value={formData.fromDate}
-                        onChange={(e) => setFormData(prev => ({ ...prev, fromDate: e.target.value }))}
-                        className="w-full"
-                        required
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="toDate">To Date *</Label>
-                      <Input
-                        id="toDate"
-                        type="date"
-                        value={formData.toDate}
-                        onChange={(e) => setFormData(prev => ({ ...prev, toDate: e.target.value }))}
-                        className="w-full"
-                        required
-                      />
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="purpose">Purpose *</Label>
-                    <Input
-                      id="purpose"
-                      type="text"
-                      value={formData.purpose}
-                      onChange={(e) => setFormData(prev => ({ ...prev, purpose: e.target.value }))}
-                      placeholder="Enter purpose for leave"
-                      className="w-full"
-                      required
-                    />
-                  </div>
-                </div>
-
-                <DialogFooter>
-                  <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
-                    Cancel
-                  </Button>
-                  <Button type="submit" className="">
-                    {editingApplication ? "Update Application" : "Submit Application"}
-                  </Button>
-                </DialogFooter>
-              </form>
-            </DialogContent>
-          </Dialog>
-        </div>
-        
-        {/* === Revoke Leave Modal === */}
-        <Dialog open={isRevokeDialogOpen} onOpenChange={setIsRevokeDialogOpen}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Revoke Leave Application</DialogTitle>
-              <DialogDescription>
-                Please provide a reason for revoking this leave. It will go for manager approval.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4 mt-4">
-              <div>
-                <Label htmlFor="revokedReason">Revoked Reason</Label>
-                <Input
-                  id="revokedReason"
-                  type="text"
-                  placeholder="Enter reason for revoking leave"
-                  value={revokeReason}
-                  onChange={(e) => setRevokeReason(e.target.value)}
-                  required
-                />
+      {/* Leave Balance Cards — monochrome bordered */}
+      {Object.keys(leaveBalance).length > 0 && (
+        <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1" style={{ scrollbarWidth: 'none' }}>
+          {([
+            { key: "sick",       label: "SICK"      },
+            { key: "casual",     label: "CASUAL"    },
+            { key: "privileged", label: "PRIVILEGED"},
+            { key: "compOff",    label: "COMP OFF"  },
+            { key: "maternity",  label: "MATERNITY", genderReq: "Female" },
+            { key: "paternity",  label: "PATERNITY", genderReq: "Male"   },
+          ] as { key: string; label: string; genderReq?: string }[])
+            .filter(({ key, genderReq }) => {
+              if (!leaveBalance[key]) return false;
+              if (genderReq === "Female" && employeeGender !== "Female" && employeeGender !== "Others") return false;
+              if (genderReq === "Male"   && employeeGender !== "Male"   && employeeGender !== "Others") return false;
+              return true;
+            })
+            .map(({ key, label }) => (
+              <div key={key} className="shrink-0 bg-white border border-gray-200 rounded-xl px-3.5 py-2.5 flex flex-col items-center min-w-[68px]">
+                <span className="text-[22px] font-bold text-gray-900 leading-none">{leaveBalance[key].remaining}</span>
+                <span className="text-[9px] font-semibold text-gray-400 mt-1.5 uppercase tracking-widest whitespace-nowrap">{label}</span>
               </div>
-              <div>
-                <Label>Request Date</Label>
-                <div className="border rounded-md px-3 py-2 bg-gray-50 text-gray-700">
-                  {new Date().toLocaleString()}
-                </div>
-              </div>
+            ))}
+        </div>
+      )}
+
+      {/* Form Container */}
+      <div className="bg-white rounded-2xl border border-gray-200 p-4 space-y-5">
+        {tenureWarning && (
+          <div className="p-3 bg-amber-50 rounded-xl border border-amber-100">
+            <p className="text-[12px] text-amber-700">⚠️ {tenureWarning}</p>
+          </div>
+        )}
+
+        {/* Leave Type */}
+        <div>
+          <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest mb-2.5">Leave Type</p>
+          <div className="flex flex-wrap gap-2">
+            {availableLeaveTypes.map((type) => (
+              <button
+                key={type}
+                onClick={() => setFormData(p => ({ ...p, leaveType: type }))}
+                className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-[12px] font-semibold border transition-all active:scale-[0.97] ${
+                  formData.leaveType === type
+                    ? "bg-[#2563eb] text-white border-[#2563eb]"
+                    : "bg-white text-gray-700 border-gray-200"
+                }`}
+              >
+                <Icon icon={leaveTypeIcon(type)} className="w-[15px] h-[15px] shrink-0" />
+                {leaveTypeLabel(type)}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* MtL/PtL extra fields */}
+        {(formData.leaveType === "MtL" || formData.leaveType === "PtL") && (
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest mb-1.5">Child Event</p>
+              <select
+                value={formData.childNumber}
+                onChange={(e) => setFormData(p => ({ ...p, childNumber: e.target.value }))}
+                className="w-full px-3 py-2.5 text-[13px] rounded-xl border border-gray-200 bg-white focus:outline-none"
+              >
+                <option value="">Select…</option>
+                <option value="1st">1st Child</option>
+                <option value="2nd">2nd Child</option>
+                <option value="3rd+">3rd+ Child</option>
+                <option value="Adoption">Adoption</option>
+              </select>
             </div>
-            <DialogFooter className="mt-4">
-              <Button variant="outline" onClick={() => setIsRevokeDialogOpen(false)}>
-                Cancel
-              </Button>
-              <Button onClick={handleRevokeSubmit} className="bg-yellow-600 hover:bg-yellow-700 text-white">
-                Submit Revoke Request
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      </div>
-
-      {/* Search and Filters */}
-      <Card>
-        <CardContent className="p-6">
-          <div className="flex items-center space-x-4 w-full">
-            <div className="relative flex-1 min-w-0">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-              <Input
-                placeholder="Search leave applications..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10 w-full"
+            <div>
+              <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest mb-1.5">
+                {formData.leaveType === "MtL" ? "Expected Delivery" : "Birth Date"}
+              </p>
+              <input
+                type="date"
+                value={formData.birthEventDate}
+                onChange={(e) => setFormData(p => ({ ...p, birthEventDate: e.target.value }))}
+                className="w-full px-3 py-2.5 text-[13px] rounded-xl border border-gray-200 bg-white focus:outline-none"
               />
             </div>
-            <Badge variant="secondary" className="px-3 py-1 flex-shrink-0">
-              {filteredApplications.length} applications
-            </Badge>
           </div>
-        </CardContent>
-      </Card>
+        )}
 
-      {/* Leave Applications Table */}
-      <Card className="w-full">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Icon icon="mdi:calendar-clock" className="w-5 h-5" />
-            Leave Application Request
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="p-0">
-          <div className="overflow-x-auto max-w-full">
-            <Table className="w-full table-fixed">
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-[100px]">Employee Name</TableHead>
-                  <TableHead className="w-[70px]">Leave Type</TableHead>
-                  <TableHead className="w-[70px]">From Date</TableHead>
-                  <TableHead className="w-[70px]">To Date</TableHead>
-                  <TableHead className="w-[60px]">No of Days</TableHead>
-                  <TableHead className="w-[80px]">Purpose</TableHead>
-                  <TableHead className="w-[70px]">Status</TableHead>
-                  <TableHead className="w-[80px] text-right">Action</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredApplications.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={8} className="text-center py-8 text-gray-500">
-                      <div className="flex flex-col items-center gap-2">
-                        <Icon icon="mdi:calendar-clock" className="w-12 h-12 text-gray-300" />
-                        <p>No leave applications found</p>
-                        <p className="text-sm">Try adjusting your search criteria</p>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  filteredApplications.map((application) => (
-                    <TableRow key={application.id}>
-                      <TableCell className="truncate" title={application.employeeName}>{application.employeeName}</TableCell>
-                      <TableCell className="truncate">{application.appliedLeaveType}</TableCell>
-                      <TableCell className="truncate">{application.fromDate}</TableCell>
-                      <TableCell className="truncate">{application.toDate}</TableCell>
-                      <TableCell className="truncate text-center">{calculateDays(application.fromDate, application.toDate)}</TableCell>
-                      <TableCell className="truncate" title={application.purpose}>{application.purpose}</TableCell>
-                      <TableCell className="whitespace-nowrap">
-                        <Badge
-                          variant={
-                            application.status === "Approved"
-                              ? "default"
-                              : application.status === "Rejected"
-                              ? "destructive"
-                              : application.status === "RevokePending"
-                              ? "outline"
-                              : application.status === "Revoked"
-                              ? "secondary"
-                              : "secondary"
-                          }
-                        >
-                          {application.status === "RevokePending" ? "Revoke Pending" : application.status}
-                        </Badge>
-                      </TableCell>
+        {/* Start / End Date — image-2 style: bordered box with arrows + stacked date inside */}
+        <div className="grid grid-cols-2 gap-3">
+          {(["fromDate", "toDate"] as const).map((key) => {
+            const label = key === "fromDate" ? "START" : "END";
+            const parts = formatDateParts(formData[key]);
+            return (
+              <div key={key}>
+                <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest mb-1.5">{label}</p>
+                <div className="relative flex items-center justify-between border border-gray-200 rounded-xl bg-white px-2 py-3">
+                  {/* Transparent native date input — covers entire box for tap-to-pick */}
+                  <input
+                    type="date"
+                    value={formData[key]}
+                    onChange={(e) => setFormData(p => ({ ...p, [key]: e.target.value }))}
+                    className="absolute inset-0 opacity-0 w-full h-full cursor-pointer z-0"
+                  />
+                  {/* Left arrow — above the transparent input */}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      const d = formData[key] ? new Date(formData[key] + "T00:00:00") : new Date();
+                      d.setDate(d.getDate() - 1);
+                      setFormData(p => ({ ...p, [key]: d.toISOString().split("T")[0] }));
+                    }}
+                    className="relative z-10 w-7 h-7 flex items-center justify-center text-gray-400 text-[18px] font-light shrink-0 active:scale-[0.85]"
+                  >‹</button>
+                  {/* Stacked date display */}
+                  <div className="relative z-10 flex flex-col items-center flex-1 pointer-events-none select-none">
+                    {formData[key] ? (
+                      <>
+                        <span className="text-[14px] font-bold text-gray-900 leading-tight">{parts.top}</span>
+                        <span className="text-[12px] font-medium text-gray-500 leading-tight">{parts.bottom}</span>
+                      </>
+                    ) : (
+                      <span className="text-[12px] text-gray-400">Select</span>
+                    )}
+                  </div>
+                  {/* Right arrow */}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      const d = formData[key] ? new Date(formData[key] + "T00:00:00") : new Date();
+                      d.setDate(d.getDate() + 1);
+                      setFormData(p => ({ ...p, [key]: d.toISOString().split("T")[0] }));
+                    }}
+                    className="relative z-10 w-7 h-7 flex items-center justify-center text-gray-400 text-[18px] font-light shrink-0 active:scale-[0.85]"
+                  >›</button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        {formData.fromDate && formData.toDate && (
+          <p className="text-[12px] text-center text-[#2563eb] font-semibold -mt-3">
+            {calculateDays(formData.fromDate, formData.toDate)} day{calculateDays(formData.fromDate, formData.toDate) !== 1 ? "s" : ""}
+          </p>
+        )}
 
-                      {/* === Action Buttons Section === */}
-                      <TableCell className="text-right whitespace-nowrap">
-                        <div className="flex items-center justify-end gap-1">
-                          {/* --- For SUPERADMIN and MANAGER --- */}
-                          {canManage ? (
-                            <>
-                              {/* Pending or RevokePending approval flow */}
-                              {(application.status === "Pending" || application.status === "RevokePending") && (
-                                <>
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => handleApprove(application.id)}
-                                    className="h-7 w-7 p-0 text-green-600 hover:text-green-700 hover:bg-green-50"
-                                    title="Approve"
-                                  >
-                                    <Check className="w-3 h-3" />
-                                  </Button>
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => handleReject(application.id)}
-                                    className="h-7 w-7 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
-                                    title="Reject"
-                                  >
-                                    <X className="w-3 h-3" />
-                                  </Button>
-                                </>
-                              )}
+        {/* Reason */}
+        <div>
+          <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest mb-1.5">Reason</p>
+          <textarea
+            value={formData.purpose}
+            onChange={(e) => setFormData(p => ({ ...p, purpose: e.target.value }))}
+            placeholder="Describe your reason…"
+            rows={3}
+            className="w-full px-3 py-2.5 text-[13px] rounded-xl border border-gray-200 bg-gray-50 focus:outline-none resize-none"
+          />
+        </div>
 
-                              {/* Edit/Delete always available for managers */}
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleEdit(application)}
-                                className="h-7 w-7 p-0"
-                                title="Edit"
-                              >
-                                <Edit className="w-3 h-3" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleDelete(application.id)}
-                                className="h-7 w-7 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
-                                title="Delete"
-                              >
-                                <Trash2 className="w-3 h-3" />
-                              </Button>
-                            </>
-                          ) : (
-                            <>
-                              {/* Normal Employee actions */}
-                              {application.status === "Pending" && (
-                                <>
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => handleEdit(application)}
-                                    className="h-7 w-7 p-0"
-                                    title="Edit"
-                                  >
-                                    <Edit className="w-3 h-3" />
-                                  </Button>
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => handleDelete(application.id)}
-                                    className="h-7 w-7 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
-                                    title="Delete"
-                                  >
-                                    <Trash2 className="w-3 h-3" />
-                                  </Button>
-                                </>
-                              )}
+        {/* Submit */}
+        <button
+          onClick={async () => {
+            if (!formData.leaveType || !formData.fromDate || !formData.toDate) {
+              alert("Please select leave type and dates.");
+              return;
+            }
+            try {
+              const payload = {
+                serviceProviderID: formData.serviceProviderID,
+                companyID: formData.companyID,
+                branchesID: formData.branchesID,
+                manageEmployeeID: formData.manageEmployeeID,
+                remainingSickLeave: 0,
+                remainingCasualLeave: 0,
+                remainingEarnedLeave: 0,
+                appliedLeaveType: formData.leaveType,
+                fromDate: new Date(formData.fromDate),
+                toDate: new Date(formData.toDate),
+                purpose: formData.purpose,
+                childNumber: formData.childNumber || undefined,
+                birthEventDate: formData.birthEventDate || undefined,
+                status: "Pending",
+              };
+              const url = editingApplication
+                ? `${BACKEND_URL}/leave-application/${editingApplication.id}`
+                : `${BACKEND_URL}/leave-application`;
+              const method = editingApplication ? "PATCH" : "POST";
+              const res = await fetch(url, {
+                method,
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload),
+              });
+              if (!res.ok) throw new Error(await res.text());
+              await loadLeaveApplications();
+              resetForm();
+              alert(editingApplication ? "Leave updated!" : "Leave request submitted!");
+            } catch (e: any) {
+              alert("Error: " + (e.message || "Failed to submit"));
+            }
+          }}
+          className="w-full py-3.5 bg-[#2563eb] text-white font-bold text-[15px] rounded-2xl active:scale-[0.98] transition-transform"
+        >
+          {editingApplication ? "Update Request" : "Submit Request"}
+        </button>
+        {editingApplication && (
+          <button onClick={resetForm} className="w-full py-2.5 text-[13px] font-semibold text-gray-500 rounded-xl bg-white border border-gray-200 active:scale-[0.98]">
+            Cancel Edit
+          </button>
+        )}
+      </div>
 
-                              {/* Revoke option for approved leaves */}
-                              {application.status === "Approved" && (
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => openRevokeModal(application)}
-                                  className="h-7 w-7 p-0 text-yellow-600 hover:text-yellow-700 hover:bg-yellow-50"
-                                  title="Request Revoke"
-                                >
-                                  <Icon icon="mdi:rotate-left" className="w-3 h-3" />
-                                </Button>
-                              )}
-                            </>
-                          )}
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))
+      {/* Recent Requests */}
+      <div>
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-[16px] font-bold text-gray-900">Recent Requests</h2>
+          <div className="relative">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
+            <input
+              placeholder="Search…"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-7 pr-3 py-1.5 text-[12px] rounded-xl border border-gray-100 bg-white shadow-sm focus:outline-none w-28"
+            />
+          </div>
+        </div>
+
+        {/* Manager actions */}
+        {canManage && (
+          <div className="mb-3 p-3 bg-blue-50 rounded-xl border border-blue-100">
+            <p className="text-[12px] font-semibold text-blue-700">Manager View — swipe cards to approve / reject</p>
+          </div>
+        )}
+
+        <div className="space-y-3">
+          {filteredApplications.length === 0 ? (
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-8 flex flex-col items-center gap-3">
+              <Icon icon="solar:calendar-bold-duotone" className="w-12 h-12 text-gray-200" />
+              <p className="text-[14px] font-semibold text-gray-400">No leave requests yet</p>
+            </div>
+          ) : (
+            filteredApplications.map((application) => (
+              <div key={application.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+                <div className="flex items-start justify-between gap-2 mb-1.5">
+                  <div>
+                    <p className="text-[14px] font-bold text-gray-900">{leaveTypeLabel(application.appliedLeaveType || "")}</p>
+                    {application.employeeName && (
+                      <p className="text-[12px] text-gray-400">{application.employeeName}</p>
+                    )}
+                  </div>
+                  <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full ${
+                    application.status === "Approved" ? "bg-green-100 text-green-700"
+                    : application.status === "Rejected" ? "bg-red-100 text-red-600"
+                    : application.status === "RevokePending" ? "bg-amber-100 text-amber-700"
+                    : "bg-gray-100 text-gray-600"
+                  }`}>
+                    {application.status === "RevokePending" ? "Revoke Pending" : application.status}
+                  </span>
+                </div>
+                <div className="flex items-center gap-1.5 text-[12px] text-gray-500 mb-1.5">
+                  <Icon icon="solar:calendar-linear" className="w-3.5 h-3.5 shrink-0" />
+                  <span>{application.fromDate}</span>
+                  <span className="text-gray-300">→</span>
+                  <span>{application.toDate}</span>
+                  <span className="ml-1 font-bold text-gray-700">{calculateDays(application.fromDate, application.toDate)}d</span>
+                </div>
+                {application.purpose && (
+                  <p className="text-[12px] text-gray-500 line-clamp-2 mb-2">{application.purpose}</p>
                 )}
-              </TableBody>
-            </Table>
+                <div className="flex items-center justify-end gap-1 pt-2 border-t border-gray-50">
+                  {canManage ? (
+                    <>
+                      {(application.status === "Pending" || application.status === "RevokePending") && (
+                        <>
+                          <button onClick={() => handleApprove(application.id)} className="flex items-center gap-1 text-[11px] font-bold text-emerald-600 border border-emerald-100 bg-emerald-50 rounded-lg px-2.5 py-1.5 active:scale-[0.97]">
+                            <Check className="w-3 h-3" /> Approve
+                          </button>
+                          <button onClick={() => handleReject(application.id)} className="flex items-center gap-1 text-[11px] font-bold text-red-500 border border-red-100 bg-red-50 rounded-lg px-2.5 py-1.5 active:scale-[0.97]">
+                            <X className="w-3 h-3" /> Reject
+                          </button>
+                        </>
+                      )}
+                      <button onClick={() => handleEdit(application)} className="flex items-center gap-1 text-[11px] font-bold text-gray-600 border border-gray-100 bg-gray-50 rounded-lg px-2.5 py-1.5 active:scale-[0.97]">
+                        <Edit className="w-3 h-3" /> Edit
+                      </button>
+                      <button onClick={() => handleDelete(application.id)} className="flex items-center gap-1 text-[11px] font-bold text-red-500 border border-red-100 bg-red-50 rounded-lg px-2.5 py-1.5 active:scale-[0.97]">
+                        <Trash2 className="w-3 h-3" /> Delete
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      {application.status === "Pending" && (
+                        <>
+                          <button onClick={() => handleEdit(application)} className="flex items-center gap-1 text-[11px] font-bold text-gray-600 border border-gray-100 bg-gray-50 rounded-lg px-2.5 py-1.5 active:scale-[0.97]">
+                            <Edit className="w-3 h-3" /> Edit
+                          </button>
+                          <button onClick={() => handleDelete(application.id)} className="flex items-center gap-1 text-[11px] font-bold text-red-500 border border-red-100 bg-red-50 rounded-lg px-2.5 py-1.5 active:scale-[0.97]">
+                            <Trash2 className="w-3 h-3" /> Delete
+                          </button>
+                        </>
+                      )}
+                      {application.status === "Approved" && (
+                        <button onClick={() => openRevokeModal(application)} className="flex items-center gap-1 text-[11px] font-bold text-amber-600 border border-amber-100 bg-amber-50 rounded-lg px-2.5 py-1.5 active:scale-[0.97]">
+                          <Icon icon="mdi:rotate-left" className="w-3 h-3" /> Revoke
+                        </button>
+                      )}
+                    </>
+                  )}
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+
+      {/* Revoke Dialog */}
+      <Dialog open={isRevokeDialogOpen} onOpenChange={setIsRevokeDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Revoke Leave Application</DialogTitle>
+            <DialogDescription>Please provide a reason for revoking this leave.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 mt-4">
+            <div>
+              <Label htmlFor="revokedReason">Revoked Reason</Label>
+              <Input id="revokedReason" type="text" placeholder="Enter reason" value={revokeReason} onChange={(e) => setRevokeReason(e.target.value)} />
+            </div>
+            <div>
+              <Label>Request Date</Label>
+              <div className="border rounded-md px-3 py-2 bg-gray-50 text-gray-700">{new Date().toLocaleString()}</div>
+            </div>
           </div>
-        </CardContent>
-      </Card>
+          <DialogFooter className="mt-4">
+            <Button variant="outline" onClick={() => setIsRevokeDialogOpen(false)}>Cancel</Button>
+            <Button onClick={handleRevokeSubmit} className="bg-yellow-600 hover:bg-yellow-700 text-white">Submit Revoke Request</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
+

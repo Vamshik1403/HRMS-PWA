@@ -224,6 +224,15 @@ const LEFT_WIDTHS = {
   emp: 160
 };
 
+// Mobile responsive widths - much narrower for better horizontal scrolling
+const LEFT_WIDTHS_MOBILE = {
+  sno: 30,
+  company: 0, // Hide on mobile
+  branch: 0, // Hide on mobile
+  dept: 0, // Hide on mobile
+  emp: 110
+};
+
 const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
 // Global cache for status calculations
@@ -865,6 +874,21 @@ export function AttendanceReportsManagement({ mode = "actual" }: { mode?: Report
   const [selectedDepartments, setSelectedDepartments] = useState<string[]>([]);
   const [selectedDesignations, setSelectedDesignations] = useState<string[]>([]);
   const [selectedEmployees, setSelectedEmployees] = useState<string[]>([]);
+  const [isMobile, setIsMobile] = useState(false);
+
+  // Detect mobile viewport and update state
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768); // md breakpoint
+    };
+    
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+
+  // Get responsive widths based on viewport
+  const responsiveLeftWidths = isMobile ? LEFT_WIDTHS_MOBILE : LEFT_WIDTHS;
 
   const lateMarkTracker = useRef(new Map<string, number>());
   const noCheckoutTracker = useRef(new Map<string, number>());
@@ -2160,31 +2184,31 @@ const employeeOptions = filteredEmployees.map((e: Employee) => ({
                   <tr>
                     <th 
                       className="sticky left-0 z-30 bg-gray-900 px-2 py-2 text-center border-r border-gray-700" 
-                      style={{ left: 0, width: LEFT_WIDTHS.sno, minWidth: LEFT_WIDTHS.sno }}
+                      style={{ left: 0, width: responsiveLeftWidths.sno, minWidth: responsiveLeftWidths.sno }}
                     >
                       S.NO
                     </th>
-                    <th 
+                    {!isMobile && <th 
                       className="sticky z-30 bg-gray-900 px-2 py-2 text-left border-r border-gray-700" 
-                      style={{ left: LEFT_WIDTHS.sno, width: LEFT_WIDTHS.company, minWidth: LEFT_WIDTHS.company }}
+                      style={{ left: responsiveLeftWidths.sno, width: responsiveLeftWidths.company, minWidth: responsiveLeftWidths.company }}
                     >
                       COMPANY
-                    </th>
-                    <th 
+                    </th>}
+                    {!isMobile && <th 
                       className="sticky z-30 bg-gray-900 px-2 py-2 text-left border-r border-gray-700" 
-                      style={{ left: LEFT_WIDTHS.sno + LEFT_WIDTHS.company, width: LEFT_WIDTHS.branch, minWidth: LEFT_WIDTHS.branch }}
+                      style={{ left: responsiveLeftWidths.sno + responsiveLeftWidths.company, width: responsiveLeftWidths.branch, minWidth: responsiveLeftWidths.branch }}
                     >
                       BRANCH
-                    </th>
-                    <th 
+                    </th>}
+                    {!isMobile && <th 
                       className="sticky z-30 bg-gray-900 px-2 py-2 text-left border-r border-gray-700" 
-                      style={{ left: LEFT_WIDTHS.sno + LEFT_WIDTHS.company + LEFT_WIDTHS.branch, width: LEFT_WIDTHS.dept, minWidth: LEFT_WIDTHS.dept }}
+                      style={{ left: responsiveLeftWidths.sno + responsiveLeftWidths.company + responsiveLeftWidths.branch, width: responsiveLeftWidths.dept, minWidth: responsiveLeftWidths.dept }}
                     >
                       DEPT
-                    </th>
+                    </th>}
                     <th 
                       className="sticky z-30 bg-gray-900 px-2 py-2 text-left border-r border-gray-700" 
-                      style={{ left: LEFT_WIDTHS.sno + LEFT_WIDTHS.company + LEFT_WIDTHS.branch + LEFT_WIDTHS.dept, width: LEFT_WIDTHS.emp, minWidth: LEFT_WIDTHS.emp }}
+                      style={{ left: responsiveLeftWidths.sno + (isMobile ? 0 : responsiveLeftWidths.company + responsiveLeftWidths.branch + responsiveLeftWidths.dept), width: responsiveLeftWidths.emp, minWidth: responsiveLeftWidths.emp }}
                     >
                       EMPLOYEE
                     </th>
@@ -2196,31 +2220,31 @@ const employeeOptions = filteredEmployees.map((e: Employee) => ({
                     <tr key={row.employee.id} className="odd:bg-gray-50">
                       <td 
                         className="sticky left-0 bg-white px-2 py-2 border-b border-r text-center text-[11px] z-10" 
-                        style={{ left: 0, width: LEFT_WIDTHS.sno, minWidth: LEFT_WIDTHS.sno }}
+                        style={{ left: 0, width: responsiveLeftWidths.sno, minWidth: responsiveLeftWidths.sno }}
                       >
                         {index + 1}
                       </td>
-                      <td 
+                      {!isMobile && <td 
                         className="sticky bg-white px-2 py-2 border-b border-r text-[11px] z-10 align-top" 
-                        style={{ left: LEFT_WIDTHS.sno, width: LEFT_WIDTHS.company, minWidth: LEFT_WIDTHS.company }}
+                        style={{ left: responsiveLeftWidths.sno, width: responsiveLeftWidths.company, minWidth: responsiveLeftWidths.company }}
                       >
                         <div className="truncate">{row.companyName}</div>
-                      </td>
-                      <td 
+                      </td>}
+                      {!isMobile && <td 
                         className="sticky bg-white px-2 py-2 border-b border-r text-[11px] z-10 align-top" 
-                        style={{ left: LEFT_WIDTHS.sno + LEFT_WIDTHS.company, width: LEFT_WIDTHS.branch, minWidth: LEFT_WIDTHS.branch }}
+                        style={{ left: responsiveLeftWidths.sno + responsiveLeftWidths.company, width: responsiveLeftWidths.branch, minWidth: responsiveLeftWidths.branch }}
                       >
                         <div className="truncate">{row.branchName}</div>
-                      </td>
-                      <td 
+                      </td>}
+                      {!isMobile && <td 
                         className="sticky bg-white px-2 py-2 border-b border-r text-[11px] z-10 align-top" 
-                        style={{ left: LEFT_WIDTHS.sno + LEFT_WIDTHS.company + LEFT_WIDTHS.branch, width: LEFT_WIDTHS.dept, minWidth: LEFT_WIDTHS.dept }}
+                        style={{ left: responsiveLeftWidths.sno + responsiveLeftWidths.company + responsiveLeftWidths.branch, width: responsiveLeftWidths.dept, minWidth: responsiveLeftWidths.dept }}
                       >
                         <div className="truncate">{row.departmentName || "N/A"}</div>
-                      </td>
+                      </td>}
                       <td 
                         className="sticky bg-white px-2 py-2 border-b border-r text-[11px] z-10 align-top" 
-                        style={{ left: LEFT_WIDTHS.sno + LEFT_WIDTHS.company + LEFT_WIDTHS.branch + LEFT_WIDTHS.dept, width: LEFT_WIDTHS.emp, minWidth: LEFT_WIDTHS.emp }}
+                        style={{ left: responsiveLeftWidths.sno + (isMobile ? 0 : responsiveLeftWidths.company + responsiveLeftWidths.branch + responsiveLeftWidths.dept), width: responsiveLeftWidths.emp, minWidth: responsiveLeftWidths.emp }}
                       >
                         <div className="truncate">{row.employee.employeeFirstName} {row.employee.employeeLastName}</div>
                         <div className="text-[10px] text-gray-500 truncate">({row.employee.employeeID})</div>

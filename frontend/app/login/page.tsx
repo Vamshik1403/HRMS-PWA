@@ -166,6 +166,7 @@ export default function LoginPage() {
 
       // Save token in localStorage and cookie (middleware reads the cookie)
       localStorage.setItem('accessToken', accessToken)
+      localStorage.setItem('token', accessToken)
       setAccessTokenCookie(accessToken)
 
       // Step 2: For employees, use login response directly (no /users/:id lookup)
@@ -224,9 +225,9 @@ export default function LoginPage() {
       {showTermsModal && (
         <TermsModal onClose={() => { setShowTermsModal(false); setTermsAccepted(true) }} />
       )}
-    <div className="min-h-screen flex items-center justify-center bg-[#f4f4f4] relative overflow-hidden">
+    <div style={{ position: 'fixed', inset: 0, overflowY: 'auto', overscrollBehavior: 'none' }} className="flex items-center justify-center bg-[#f4f4f4] relative">
       {/* Subtle background pattern */}
-      <div className="absolute inset-0 opacity-[0.03]" style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, #000 1px, transparent 0)', backgroundSize: '32px 32px' }} />
+      <div className="absolute inset-0 opacity-[0.03] pointer-events-none" style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, #000 1px, transparent 0)', backgroundSize: '32px 32px' }} />
 
       <div className="relative w-full max-w-[420px] mx-4">
         {/* Brand header */}

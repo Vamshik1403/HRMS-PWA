@@ -62,6 +62,7 @@ import { FactualWorkShiftModule } from './factual-work-shift/factual-work-shift.
 import { FactualAttendancePolicyModule } from './factual-attendance-policy/factual-attendance-policy.module';
 import { FactualRosterModule } from './factual-roster/factual-roster.module';
 import { ComplianceRulesModule } from './compliance-rules/compliance-rules.module';
+import { EmpLocationAttendanceModule } from './emp-location-attendance/emp-location-attendance.module';
 
 
 @Module({
@@ -69,7 +70,7 @@ import { ComplianceRulesModule } from './compliance-rules/compliance-rules.modul
     ConfigModule.forRoot({ isGlobal: true }),
     PrismaModule,
     ServeStaticModule.forRoot({
-      rootPath: join(__dirname, '..', 'uploads'),
+      rootPath: join(__dirname, '..', '..', 'uploads'),
       serveRoot: '/uploads', // files accessible via /uploads/*
     }),
     ServiceProviderModule,
@@ -129,6 +130,7 @@ import { ComplianceRulesModule } from './compliance-rules/compliance-rules.modul
     FactualAttendancePolicyModule,
     FactualRosterModule,
     ComplianceRulesModule,
+    EmpLocationAttendanceModule,
   ],
   providers: [AuthService],
   controllers: [AuthController],

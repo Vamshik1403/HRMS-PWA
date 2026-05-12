@@ -1,10 +1,10 @@
-import EmpLayout from '../components/layout/EmpLayout'
+import EmpMobileLayout from '../components/layout/EmpMobileLayout'
 import { EmpLeaveApplication } from './EmpLeaveApplication'
 
 export default function EmpLeaveApplicationPage() {
   return (
-    <EmpLayout>
+    <EmpMobileLayout>
       <EmpLeaveApplication />
-    </EmpLayout>
+    </EmpMobileLayout>
   )
 }

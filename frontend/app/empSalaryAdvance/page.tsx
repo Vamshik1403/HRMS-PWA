@@ -1,10 +1,10 @@
-import EmpLayout from "../components/layout/EmpLayout";
+import EmpMobileLayout from "../components/layout/EmpMobileLayout";
 import { EmpSalaryAdvancePage } from "./EmpSalaryAdvance";
 
 export default function EmpSalaryAdvancePageWrapper() {
   return (
-    <EmpLayout>
+    <EmpMobileLayout>
       <EmpSalaryAdvancePage />
-    </EmpLayout>
+    </EmpMobileLayout>
   );
 }
