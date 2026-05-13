@@ -1793,7 +1793,8 @@ model EmployeeMemo {
   serviceProviderID Int?
   companyID         Int?
   branchesID        Int?
-  employeeID        Int
+  employeeID        Int?
+  employeeIDs       Int[]
   memoType          String?          @db.VarChar  // Warning, Memo, Notice
   subject           String?          @db.VarChar
   description       String?
@@ -1801,7 +1802,7 @@ model EmployeeMemo {
   issuedBy          String?          @db.VarChar
   createdAt         DateTime         @default(now())
   updatedAt         DateTime         @updatedAt
-  manageEmployee    ManageEmployee   @relation(fields: [employeeID], references: [id], onDelete: Cascade)
+  manageEmployee    ManageEmployee?  @relation(fields: [employeeID], references: [id], onDelete: SetNull)
 
   @@index([employeeID])
 }

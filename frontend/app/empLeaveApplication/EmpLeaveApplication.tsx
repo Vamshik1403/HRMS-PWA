@@ -113,7 +113,14 @@ export function EmpLeaveApplication() {
 
   const loadLeaveBalance = async (employeeId: number) => {
     try {
-      const empRes = await robustGet<any>(`${BACKEND_URL}/manage-emp/${employeeId}`);
+      // Run all 4 independent calls in parallel — cuts load time from ~4s to ~1s
+      const [empRes, plDataRaw, woDataRaw, balanceRecordRaw] = await Promise.all([
+        robustGet<any>(`${BACKEND_URL}/manage-emp/${employeeId}`),
+        robustGet<any[]>(`${BACKEND_URL}/privileged-leave/employee/${employeeId}`).catch(() => []),
+        robustGet<any[]>(`${BACKEND_URL}/employee-weekly-off?employeeID=${employeeId}`).catch(() => []),
+        robustGet<any>(`${BACKEND_URL}/emp-leave-balance/employee/${employeeId}`).catch(() => ({})),
+      ]);
+
       const employeeGenderVal = empRes.gender ?? null;
       setEmployeeGender(employeeGenderVal);
       const policy = empRes.leavePolicy ||
@@ -124,23 +131,15 @@ export function EmpLeaveApplication() {
       const totalSick = Number(policy.sickLeaveCount) || 0;
       const totalCasual = Number(policy.casualLeaveCount) || 0;
 
-      let totalPrivileged = 0;
-      try {
-        const plData = await robustGet<any[]>(`${BACKEND_URL}/privileged-leave/employee/${employeeId}`);
-        if (Array.isArray(plData)) totalPrivileged = plData.reduce((s: number, e: any) => s + (Number(e.balanceLeaves) || 0), 0);
-      } catch {}
+      const totalPrivileged = Array.isArray(plDataRaw)
+        ? plDataRaw.reduce((s: number, e: any) => s + (Number(e.balanceLeaves) || 0), 0)
+        : 0;
 
-      let totalCompOff = 0;
-      try {
-        const woData = await robustGet<any[]>(`${BACKEND_URL}/employee-weekly-off?employeeID=${employeeId}`);
-        if (Array.isArray(woData)) totalCompOff = woData.filter((w: any) => w.status === "Present").length;
-      } catch {}
+      const totalCompOff = Array.isArray(woDataRaw)
+        ? woDataRaw.filter((w: any) => w.status === "Present").length
+        : 0;
 
-      // Fetch per-employee stored balance from DB (seeded from historical approved leaves on first call)
-      let balanceRecord: any = {};
-      try {
-        balanceRecord = await robustGet<any>(`${BACKEND_URL}/emp-leave-balance/employee/${employeeId}`);
-      } catch {}
+      const balanceRecord: any = balanceRecordRaw ?? {};
       const used: Record<string, number> = {
         Sick:       Number(balanceRecord.sickUsed)       || 0,
         Casual:     Number(balanceRecord.casualUsed)     || 0,

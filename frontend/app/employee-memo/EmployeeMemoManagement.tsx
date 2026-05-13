@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
+import { Card, CardContent } from "../components/ui/card";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
@@ -41,9 +41,15 @@ interface MemoRow {
   };
 }
 
+interface SelectedEmp { id: number; label: string; }
+
 export function EmployeeMemoManagement() {
   const user = useCurrentUser();
-  const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN" || user?.role === "BRANCH_ADMIN";
+  const canManage =
+    user?.role === "SUPERADMIN" ||
+    user?.role === "SERVICE_PROVIDER" ||
+    user?.role === "COMPANY_ADMIN" ||
+    user?.role === "BRANCH_ADMIN";
 
   const [rows, setRows] = useState<MemoRow[]>([]);
   const [loading, setLoading] = useState(false);
@@ -54,12 +60,15 @@ export function EmployeeMemoManagement() {
   const [viewRow, setViewRow] = useState<MemoRow | null>(null);
   const [isViewing, setIsViewing] = useState(false);
 
-  // Employee autocomplete
+  // Employee autocomplete shared state
   const [empSearch, setEmpSearch] = useState("");
   const [empList, setEmpList] = useState<any[]>([]);
   const [empLoading, setEmpLoading] = useState(false);
   const empRef = useRef<HTMLDivElement>(null);
   const empTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Multi-select (add mode only)
+  const [selectedEmployees, setSelectedEmployees] = useState<SelectedEmp[]>([]);
 
   const [form, setForm] = useState({
     employeeID: null as number | null,
@@ -71,13 +80,13 @@ export function EmployeeMemoManagement() {
     issuedBy: "",
   });
 
+  // ── Data fetching ──────────────────────────────────────────────────────────
   const fetchRows = async () => {
     setLoading(true);
     try {
       const res = await fetch(API);
       const data = await res.json();
       let result = Array.isArray(data) ? data : data?.data ?? [];
-      // Helper: get companyID from memo itself or from the linked employee
       const getCompanyID = (r: any) => r.companyID ?? r.manageEmployee?.companyID;
       if (user?.role === "SUPERADMIN") {
         const ctx = getSidebarContext();
@@ -87,15 +96,11 @@ export function EmployeeMemoManagement() {
       } else if (user?.role === "SERVICE_PROVIDER") {
         const ctx = getSidebarContext();
         const companyID = ctx?.companyID ?? user?.companyID;
-        if (companyID) {
-          result = result.filter((r: any) => Number(getCompanyID(r)) === Number(companyID));
-        }
+        if (companyID) result = result.filter((r: any) => Number(getCompanyID(r)) === Number(companyID));
       } else if (user?.role === "COMPANY_ADMIN" || user?.role === "BRANCH_ADMIN") {
         const ctx = getSidebarContext();
         const companyID = ctx?.companyID ?? user?.companyID;
-        if (companyID) {
-          result = result.filter((r: any) => Number(getCompanyID(r)) === Number(companyID));
-        }
+        if (companyID) result = result.filter((r: any) => Number(getCompanyID(r)) === Number(companyID));
       }
       setRows(result);
     } catch {
@@ -108,11 +113,12 @@ export function EmployeeMemoManagement() {
   useEffect(() => { if (user) fetchRows(); }, [user]);
 
   useEffect(() => {
-    const handler = () => { fetchRows(); };
+    const handler = () => fetchRows();
     window.addEventListener("sidebar-context-changed", handler);
     return () => window.removeEventListener("sidebar-context-changed", handler);
   }, []);
 
+  // ── Employee autocomplete ──────────────────────────────────────────────────
   const runFetchEmp = (q: string) => {
     if (empTimerRef.current) clearTimeout(empTimerRef.current);
     empTimerRef.current = setTimeout(async () => {
@@ -122,12 +128,9 @@ export function EmployeeMemoManagement() {
         const res = await fetch(EMP_API);
         const raw = await res.json();
         let all = Array.isArray(raw) ? raw : raw?.data ?? [];
-        // Filter by company from sidebar context
         const ctx = getSidebarContext();
         const companyID = ctx?.companyID ?? user?.companyID;
-        if (companyID) {
-          all = all.filter((e: any) => e.companyID === companyID);
-        }
+        if (companyID) all = all.filter((e: any) => e.companyID === companyID);
         const ql = q.toLowerCase();
         const filtered = all.filter((e: any) => {
           const name = `${e.employeeFirstName ?? ""} ${e.employeeLastName ?? ""}`.toLowerCase();
@@ -135,8 +138,11 @@ export function EmployeeMemoManagement() {
           return name.includes(ql) || eid.includes(ql);
         });
         setEmpList(filtered.slice(0, 20));
-      } catch { setEmpList([]); }
-      finally { setEmpLoading(false); }
+      } catch {
+        setEmpList([]);
+      } finally {
+        setEmpLoading(false);
+      }
     }, 250);
   };
 
@@ -148,6 +154,7 @@ export function EmployeeMemoManagement() {
     return () => document.removeEventListener("mousedown", onClick);
   }, []);
 
+  // ── Form helpers ───────────────────────────────────────────────────────────
   const resetForm = () => {
     setForm({
       employeeID: null,
@@ -158,27 +165,79 @@ export function EmployeeMemoManagement() {
       issuedDate: new Date().toISOString().split("T")[0],
       issuedBy: user?.username ?? "",
     });
+    setSelectedEmployees([]);
+    setEmpSearch("");
+    setEmpList([]);
     setEditingRow(null);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.employeeID) { toast.error("Please select an employee"); return; }
+
+    if (editingRow) {
+      // Edit mode — single employee, unchanged behaviour
+      if (!form.employeeID) { toast.error("Please select an employee"); return; }
+      setSaving(true);
+      try {
+        const payload = {
+          employeeID: form.employeeID,
+          memoType: form.memoType || null,
+          subject: form.subject || null,
+          description: form.description || null,
+          issuedDate: form.issuedDate || null,
+          issuedBy: form.issuedBy || null,
+        };
+        const res = await fetch(`${API}/${editingRow.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        if (!res.ok) throw new Error(await res.text());
+        toast.success("Memo updated");
+        resetForm();
+        setIsAddingNew(false);
+        fetchRows();
+      } catch (err: any) {
+        toast.error(err?.message || "Failed to save");
+      } finally {
+        setSaving(false);
+      }
+      return;
+    }
+
+    // Add mode — send to all selected employees
+    if (selectedEmployees.length === 0) {
+      toast.error("Please select at least one employee");
+      return;
+    }
     setSaving(true);
     try {
-      const payload = {
-        employeeID: form.employeeID,
+      const basePayload = {
         memoType: form.memoType || null,
         subject: form.subject || null,
         description: form.description || null,
         issuedDate: form.issuedDate || null,
         issuedBy: form.issuedBy || null,
       };
-      const url = editingRow ? `${API}/${editingRow.id}` : API;
-      const method = editingRow ? "PATCH" : "POST";
-      const res = await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
-      if (!res.ok) throw new Error(await res.text());
-      toast.success(editingRow ? "Memo updated" : "Memo created");
+      const results = await Promise.allSettled(
+        selectedEmployees.map((emp) =>
+          fetch(API, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ ...basePayload, employeeID: emp.id }),
+          })
+        )
+      );
+      const failed = results.filter(
+        (r) => r.status === "rejected" || (r.status === "fulfilled" && !r.value.ok)
+      ).length;
+      if (failed === 0) {
+        toast.success(
+          `Memo sent to ${selectedEmployees.length} employee${selectedEmployees.length > 1 ? "s" : ""}`
+        );
+      } else {
+        toast.warning(`Sent to ${selectedEmployees.length - failed} employees, ${failed} failed`);
+      }
       resetForm();
       setIsAddingNew(false);
       fetchRows();
@@ -191,6 +250,8 @@ export function EmployeeMemoManagement() {
 
   const handleEdit = (row: MemoRow) => {
     setEditingRow(row);
+    setSelectedEmployees([]);
+    setEmpSearch("");
     setForm({
       employeeID: row.employeeID,
       empAutocomplete: `${row.manageEmployee?.employeeFirstName ?? ""} ${row.manageEmployee?.employeeLastName ?? ""} - ${row.manageEmployee?.employeeID ?? ""}`.trim(),
@@ -216,7 +277,9 @@ export function EmployeeMemoManagement() {
       await fetch(`${API}/${id}`, { method: "DELETE" });
       toast.success("Deleted");
       fetchRows();
-    } catch { toast.error("Delete failed"); }
+    } catch {
+      toast.error("Delete failed");
+    }
   };
 
   const filteredRows = useMemo(() => {
@@ -231,6 +294,7 @@ export function EmployeeMemoManagement() {
     });
   }, [rows, searchTerm]);
 
+  // ── JSX ────────────────────────────────────────────────────────────────────
   return (
     <div className="space-y-6 w-full max-w-7xl mx-auto px-4">
       <div className="flex items-center justify-between w-full">
@@ -247,42 +311,128 @@ export function EmployeeMemoManagement() {
         )}
       </div>
 
-      {/* Add/Edit FormDrawer */}
-      <FormDrawer open={isAddingNew} onOpenChange={(v) => { if (!v) handleCancel(); }}
-        title={editingRow ? "Edit Warning / Notice" : "Add Warning / Notice"}>
+      {/* ── Add / Edit drawer ─────────────────────────────────────────────── */}
+      <FormDrawer
+        open={isAddingNew}
+        onOpenChange={(v) => { if (!v) handleCancel(); }}
+        title={editingRow ? "Edit Warning / Notice" : "Add Warning / Notice"}
+      >
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div ref={empRef} className="space-y-2 relative">
-            <Label>Employee *</Label>
-            <Input
-              value={form.empAutocomplete}
-              onChange={(e) => {
-                setForm((p) => ({ ...p, empAutocomplete: e.target.value, employeeID: null }));
-                runFetchEmp(e.target.value);
-              }}
-              onFocus={(e) => { if (e.target.value.length >= 1) runFetchEmp(e.target.value); }}
-              placeholder="Type employee name or ID…"
-              autoComplete="off"
-              required
-            />
-            {empList.length > 0 && (
-              <div className="absolute z-10 bg-white border rounded w-full shadow max-h-48 overflow-y-auto">
-                {empList.map((e) => (
-                  <div key={e.id} className="px-3 py-2 hover:bg-gray-100 cursor-pointer" onMouseDown={(ev) => ev.preventDefault()}
-                    onClick={() => {
-                      setForm((p) => ({ ...p, employeeID: e.id, empAutocomplete: `${e.employeeFirstName ?? ""} ${e.employeeLastName ?? ""} - ${e.employeeID ?? ""}`.trim() }));
-                      setEmpList([]);
-                    }}>
-                    {e.employeeFirstName ?? ""} {e.employeeLastName ?? ""} - {e.employeeID ?? ""}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+
+          {editingRow ? (
+            /* Edit mode: single employee autocomplete */
+            <div ref={empRef} className="space-y-2 relative">
+              <Label>Employee *</Label>
+              <Input
+                value={form.empAutocomplete}
+                onChange={(e) => {
+                  setForm((p) => ({ ...p, empAutocomplete: e.target.value, employeeID: null }));
+                  runFetchEmp(e.target.value);
+                }}
+                onFocus={(e) => { if (e.target.value.length >= 1) runFetchEmp(e.target.value); }}
+                placeholder="Type employee name or ID…"
+                autoComplete="off"
+                required
+              />
+              {empList.length > 0 && (
+                <div className="absolute z-10 bg-white border rounded w-full shadow max-h-48 overflow-y-auto">
+                  {empList.map((e) => (
+                    <div
+                      key={e.id}
+                      className="px-3 py-2 hover:bg-gray-100 cursor-pointer"
+                      onMouseDown={(ev) => ev.preventDefault()}
+                      onClick={() => {
+                        setForm((p) => ({
+                          ...p,
+                          employeeID: e.id,
+                          empAutocomplete: `${e.employeeFirstName ?? ""} ${e.employeeLastName ?? ""} - ${e.employeeID ?? ""}`.trim(),
+                        }));
+                        setEmpList([]);
+                      }}
+                    >
+                      {e.employeeFirstName ?? ""} {e.employeeLastName ?? ""} - {e.employeeID ?? ""}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : (
+            /* Add mode: multi-select employees with chips */
+            <div ref={empRef} className="space-y-2 relative">
+              <Label>
+                Employees *{" "}
+                <span className="text-gray-400 font-normal text-xs">(select one or more)</span>
+              </Label>
+
+              {selectedEmployees.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 p-2 border rounded-md bg-gray-50 min-h-[36px]">
+                  {selectedEmployees.map((emp) => (
+                    <span
+                      key={emp.id}
+                      className="inline-flex items-center gap-1 bg-indigo-100 text-indigo-800 text-xs font-medium px-2 py-1 rounded-full"
+                    >
+                      {emp.label}
+                      <button
+                        type="button"
+                        onClick={() => setSelectedEmployees((prev) => prev.filter((x) => x.id !== emp.id))}
+                        className="text-indigo-500 hover:text-indigo-800 leading-none"
+                        aria-label="Remove"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
+
+              <Input
+                value={empSearch}
+                onChange={(e) => { setEmpSearch(e.target.value); runFetchEmp(e.target.value); }}
+                onFocus={(e) => { if (e.target.value.length >= 1) runFetchEmp(e.target.value); }}
+                placeholder="Search and add employees…"
+                autoComplete="off"
+              />
+              {empList.length > 0 && (
+                <div className="absolute z-10 bg-white border rounded w-full shadow max-h-48 overflow-y-auto">
+                  {empList.map((e) => {
+                    const alreadyAdded = selectedEmployees.some((s) => s.id === e.id);
+                    return (
+                      <div
+                        key={e.id}
+                        className={`px-3 py-2 cursor-pointer flex items-center justify-between ${
+                          alreadyAdded ? "bg-gray-50 text-gray-400 cursor-default" : "hover:bg-gray-100"
+                        }`}
+                        onMouseDown={(ev) => ev.preventDefault()}
+                        onClick={() => {
+                          if (alreadyAdded) return;
+                          const label = `${e.employeeFirstName ?? ""} ${e.employeeLastName ?? ""} (${e.employeeID ?? ""})`.trim();
+                          setSelectedEmployees((prev) => [...prev, { id: e.id, label }]);
+                          setEmpSearch("");
+                          setEmpList([]);
+                        }}
+                      >
+                        <span>
+                          {e.employeeFirstName ?? ""} {e.employeeLastName ?? ""} -{" "}
+                          {e.employeeID ?? ""}
+                        </span>
+                        {alreadyAdded && (
+                          <span className="text-xs text-green-600 font-medium">Added ✓</span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>Type</Label>
-              <Select value={form.memoType} onValueChange={(v) => setForm((p) => ({ ...p, memoType: v }))}>
+              <Select
+                value={form.memoType}
+                onValueChange={(v) => setForm((p) => ({ ...p, memoType: v }))}
+              >
                 <SelectTrigger><SelectValue placeholder="Select type…" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="Warning">Warning</SelectItem>
@@ -292,18 +442,31 @@ export function EmployeeMemoManagement() {
             </div>
             <div className="space-y-2">
               <Label>Issued Date</Label>
-              <Input type="date" value={form.issuedDate} onChange={(e) => setForm((p) => ({ ...p, issuedDate: e.target.value }))} />
+              <Input
+                type="date"
+                value={form.issuedDate}
+                onChange={(e) => setForm((p) => ({ ...p, issuedDate: e.target.value }))}
+              />
             </div>
           </div>
 
           <div className="space-y-2">
             <Label>Subject</Label>
-            <Input value={form.subject} onChange={(e) => setForm((p) => ({ ...p, subject: e.target.value }))} placeholder="Subject of warning/notice" />
+            <Input
+              value={form.subject}
+              onChange={(e) => setForm((p) => ({ ...p, subject: e.target.value }))}
+              placeholder="Subject of warning/notice"
+            />
           </div>
 
           <div className="space-y-2">
             <Label>Description</Label>
-            <Textarea value={form.description} onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))} rows={4} placeholder="Details…" />
+            <Textarea
+              value={form.description}
+              onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))}
+              rows={4}
+              placeholder="Details…"
+            />
           </div>
 
           <div className="space-y-2">
@@ -312,28 +475,47 @@ export function EmployeeMemoManagement() {
           </div>
 
           <div className="flex justify-end gap-2 pt-4">
-            <Button type="button" variant="outline" onClick={handleCancel}>Cancel</Button>
-            <Button type="submit" disabled={saving}>{saving ? "Saving…" : editingRow ? "Update" : "Create"}</Button>
+            <Button type="button" variant="outline" onClick={handleCancel}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={saving}>
+              {saving
+                ? "Saving…"
+                : editingRow
+                ? "Update"
+                : `Send${selectedEmployees.length > 1 ? ` (${selectedEmployees.length})` : ""}`}
+            </Button>
           </div>
         </form>
       </FormDrawer>
 
-      {/* View Details FormDrawer */}
-      <FormDrawer open={!!(isViewing && viewRow)} onOpenChange={(v) => { if (!v) handleCancel(); }}
-        title="Warning / Notice Details">
+      {/* ── View details drawer ───────────────────────────────────────────── */}
+      <FormDrawer
+        open={!!(isViewing && viewRow)}
+        onOpenChange={(v) => { if (!v) handleCancel(); }}
+        title="Warning / Notice Details"
+      >
         {viewRow && (
           <div className="space-y-3 text-sm">
-            <p><strong>Employee:</strong> {viewRow.manageEmployee?.employeeFirstName ?? ""} {viewRow.manageEmployee?.employeeLastName ?? ""} ({viewRow.manageEmployee?.employeeID ?? ""})</p>
+            <p>
+              <strong>Employee:</strong>{" "}
+              {viewRow.manageEmployee?.employeeFirstName ?? ""}{" "}
+              {viewRow.manageEmployee?.employeeLastName ?? ""}{" "}
+              ({viewRow.manageEmployee?.employeeID ?? ""})
+            </p>
             <p><strong>Type:</strong> {viewRow.memoType ?? "—"}</p>
             <p><strong>Subject:</strong> {viewRow.subject ?? "—"}</p>
             <p><strong>Description:</strong> {viewRow.description ?? "—"}</p>
-            <p><strong>Issued Date:</strong> {viewRow.issuedDate ? new Date(viewRow.issuedDate).toLocaleDateString() : "—"}</p>
+            <p>
+              <strong>Issued Date:</strong>{" "}
+              {viewRow.issuedDate ? new Date(viewRow.issuedDate).toLocaleDateString() : "—"}
+            </p>
             <p><strong>Issued By:</strong> {viewRow.issuedBy ?? "—"}</p>
           </div>
         )}
       </FormDrawer>
 
-      {/* Table listing - shown only when neither form nor view is open */}
+      {/* ── Table listing ─────────────────────────────────────────────────── */}
       {!isAddingNew && !isViewing && (
         <>
           <div className="flex items-center gap-2 bg-white rounded-lg border px-3 py-2 max-w-sm">
@@ -361,28 +543,60 @@ export function EmployeeMemoManagement() {
                 </TableHeader>
                 <TableBody>
                   {loading ? (
-                    <TableRow><TableCell colSpan={6} className="text-center py-8 text-gray-400">Loading…</TableCell></TableRow>
+                    <TableRow>
+                      <TableCell colSpan={6} className="text-center py-8 text-gray-400">
+                        Loading…
+                      </TableCell>
+                    </TableRow>
                   ) : filteredRows.length === 0 ? (
-                    <TableRow><TableCell colSpan={6} className="text-center py-8 text-gray-400">No memos found</TableCell></TableRow>
+                    <TableRow>
+                      <TableCell colSpan={6} className="text-center py-8 text-gray-400">
+                        No memos found
+                      </TableCell>
+                    </TableRow>
                   ) : (
                     filteredRows.map((r) => (
                       <TableRow key={r.id}>
                         <TableCell>
-                          <div className="font-medium">{r.manageEmployee?.employeeFirstName ?? ""} {r.manageEmployee?.employeeLastName ?? ""}</div>
-                          <div className="text-xs text-gray-500">{r.manageEmployee?.employeeID ?? ""}</div>
+                          <div className="font-medium">
+                            {r.manageEmployee?.employeeFirstName ?? ""}{" "}
+                            {r.manageEmployee?.employeeLastName ?? ""}
+                          </div>
+                          <div className="text-xs text-gray-500">
+                            {r.manageEmployee?.employeeID ?? ""}
+                          </div>
                         </TableCell>
                         <TableCell>
-                          <Badge variant={r.memoType === "Warning" ? "destructive" : "secondary"}>{r.memoType || "—"}</Badge>
+                          <Badge variant={r.memoType === "Warning" ? "destructive" : "secondary"}>
+                            {r.memoType || "—"}
+                          </Badge>
                         </TableCell>
                         <TableCell>{r.subject || "—"}</TableCell>
-                        <TableCell>{r.issuedDate ? new Date(r.issuedDate).toLocaleDateString() : "—"}</TableCell>
+                        <TableCell>
+                          {r.issuedDate ? new Date(r.issuedDate).toLocaleDateString() : "—"}
+                        </TableCell>
                         <TableCell>{r.issuedBy || "—"}</TableCell>
                         {canManage && (
                           <TableCell className="text-right">
                             <div className="flex justify-end gap-1">
-                              <Button variant="ghost" size="sm" onClick={() => { setViewRow(r); setIsViewing(true); }}><Eye className="w-4 h-4" /></Button>
-                              <Button variant="ghost" size="sm" onClick={() => handleEdit(r)}><Edit className="w-4 h-4" /></Button>
-                              <Button variant="ghost" size="sm" onClick={() => handleDelete(r.id)} className="text-red-500 hover:text-red-700"><Trash2 className="w-4 h-4" /></Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => { setViewRow(r); setIsViewing(true); }}
+                              >
+                                <Eye className="w-4 h-4" />
+                              </Button>
+                              <Button variant="ghost" size="sm" onClick={() => handleEdit(r)}>
+                                <Edit className="w-4 h-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleDelete(r.id)}
+                                className="text-red-500 hover:text-red-700"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
                             </div>
                           </TableCell>
                         )}

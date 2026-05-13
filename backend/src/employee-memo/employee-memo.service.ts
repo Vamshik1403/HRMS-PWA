@@ -26,30 +26,42 @@ export class EmployeeMemoService {
   }
 
   async create(dto: CreateEmployeeMemoDto) {
-    const created = await this.prisma.employeeMemo.create({
-      data: {
-        serviceProviderID: dto.serviceProviderID,
-        companyID: dto.companyID,
-        branchesID: dto.branchesID,
-        employeeID: dto.employeeID,
-        memoType: dto.memoType,
-        subject: dto.subject,
-        description: dto.description,
-        issuedDate: dto.issuedDate ? new Date(dto.issuedDate) : null,
-        issuedBy: dto.issuedBy,
-      },
-    });
+    // Handle both single and multiple employee scenarios
+    const employeeIDs = dto.employeeIDs && dto.employeeIDs.length > 0 
+      ? dto.employeeIDs 
+      : (dto.employeeID ? [dto.employeeID] : []);
 
-    if (dto.employeeID) {
+    // Create memos for each employee
+    const memos = await Promise.all(
+      employeeIDs.map(empId =>
+        this.prisma.employeeMemo.create({
+          data: {
+            serviceProviderID: dto.serviceProviderID,
+            companyID: dto.companyID,
+            branchesID: dto.branchesID,
+            employeeID: empId,
+            employeeIDs: employeeIDs,
+            memoType: dto.memoType,
+            subject: dto.subject,
+            description: dto.description,
+            issuedDate: dto.issuedDate ? new Date(dto.issuedDate) : null,
+            issuedBy: dto.issuedBy,
+          },
+        })
+      )
+    );
+
+    // Send push notifications to all employees
+    employeeIDs.forEach(empId => {
       this.pushService.sendToEmployee(
-        dto.employeeID,
+        empId,
         'New Notice',
         dto.subject || 'You have a new notice on the board.',
         { url: '/empdashboard' },
       ).catch(() => null);
-    }
+    });
 
-    return created;
+    return memos.length === 1 ? memos[0] : memos;
   }
 
   update(id: number, dto: UpdateEmployeeMemoDto) {

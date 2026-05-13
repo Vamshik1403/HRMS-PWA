@@ -1502,24 +1502,27 @@ useEffect(() => {
       const branchId = Number(row.branchesID);
       const monthLabel = row.monthPeriod;
 
-      // === EMPLOYEE DATA — use row data directly, skip fetching all employees ===
-      const emp: any = row.manageEmployee;
-      if (!emp) throw new Error("Employee not found");
-
       // === DATE RANGE ===
       const { start, end } = parseCycle(monthLabel);
       const totalDaysInCycle = Math.floor((end.getTime() - start.getTime()) / 86400000) + 1;
 
-      // === RUN ALL INDEPENDENT CALLS IN PARALLEL ===
-      const [counts, shiftDays, holidays, { nonLoPDays, lopDays }, grade, { companyName, branchName }] =
+      // === PHASE 1: fetch employee by ID (gets full nested data) + other independent calls in parallel ===
+      const [emp, { companyName, branchName }, holidays, { nonLoPDays, lopDays }] =
         await Promise.all([
-          calculateSalaryCounts(employeeId, monthLabel, companyId, branchId),
-          getShiftDays(emp),
+          robustGet(`/backend/manage-emp/${employeeId}`),
+          getCompanyAndBranch(companyId, branchId),
           getHolidayCount(branchId, start, end),
           getLeaveBreakdown(employeeId, start, end),
-          getMonthlyPayGrade(companyId, branchId, emp),
-          getCompanyAndBranch(companyId, branchId),
         ]);
+
+      if (!emp) throw new Error("Employee not found");
+
+      // === PHASE 2: calls that need the full employee object — run in parallel ===
+      const [counts, shiftDays, grade] = await Promise.all([
+        calculateSalaryCounts(employeeId, monthLabel, companyId, branchId),
+        getShiftDays(emp),
+        getMonthlyPayGrade(companyId, branchId, emp),
+      ]);
 
       if (!counts) throw new Error("Could not compute attendance counts");
 
@@ -1550,11 +1553,19 @@ useEffect(() => {
       }
 
       // === SALARY STRUCTURE ===
-      const gross = getGrossFromEmp(emp);
+      const gross = getGrossFromEmp(emp, grade);
       if (!gross || isNaN(gross)) throw new Error("Gross salary not found on employee record");
 
-      const { basic, allowances, earningsTotal } = await computeEarnings(gross, grade, employeeId, monthLabel);
-      const { deductions, deductionsTotal } = await computeDeductions(gross, basic, grade, employeeId, monthLabel);
+      // basic is 50% of gross — compute it early so earnings + deductions can run in parallel
+      const basicForDeductions = Math.round(gross * 0.50);
+
+      // === PHASE 3: earnings and deductions run in parallel ===
+      const [earningsResult, deductionsResult] = await Promise.all([
+        computeEarnings(gross, grade, employeeId, monthLabel),
+        computeDeductions(gross, basicForDeductions, grade, employeeId, monthLabel),
+      ]);
+      const { basic, allowances, earningsTotal } = earningsResult;
+      const { deductions, deductionsTotal } = deductionsResult;
 
       // === CORRECTED LOP CALCULATION - EXCLUDE REIMBURSEMENT & USE CALENDAR DAYS ===
       // Calculate total for LOP (basic + all allowances EXCLUDING reimbursement)
