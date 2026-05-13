@@ -2,10 +2,14 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateReimbursementDto } from './dto/create-reimbursement.dto';
 import { UpdateReimbursementDto } from './dto/update-reimbursement.dto';
+import { PushNotificationsService } from '../push-notifications/push-notifications.service';
 
 @Injectable()
 export class ReimbursementService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly pushService: PushNotificationsService,
+  ) {}
 
   /** Include all necessary relations in queries */
   private includeRels() {
@@ -190,7 +194,7 @@ export class ReimbursementService {
   }) {
     await this.ensureExists(id);
 
-    return this.prisma.reimbursement.update({
+    const updated = await this.prisma.reimbursement.update({
       where: { id },
       data: {
         ...approvalData,
@@ -198,6 +202,17 @@ export class ReimbursementService {
       },
       include: this.includeRels(),
     });
+
+    if ((updated as any).manageEmployeeID) {
+      this.pushService.sendToEmployee(
+        (updated as any).manageEmployeeID,
+        'Reimbursement Approved',
+        'Your reimbursement request has been approved.',
+        { url: '/empReimbursement' },
+      ).catch(() => null);
+    }
+
+    return updated;
   }
 
   /** ─────────────── DELETE ─────────────── */

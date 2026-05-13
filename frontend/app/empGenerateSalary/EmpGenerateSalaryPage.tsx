@@ -14,6 +14,7 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { useCurrentUser } from "../hooks/useCurrentUser"
 import { getSidebarContext } from "../utils/sidebarContext";
+import { getPageCache, setPageCache } from "../utils/pageCache";
 
 
 /* =======================
@@ -422,7 +423,6 @@ function getGrossFromEmp(emp: any, grade?: any): number {
   if (emp?.monthlyPayGrade?.grossSalary) {
     const v = Number(emp.monthlyPayGrade.grossSalary);
     if (Number.isFinite(v) && v > 0) {
-      alert("✅ Using gross from emp.monthlyPayGrade.grossSalary = " + v);
       return v;
     }
   }
@@ -435,7 +435,6 @@ function getGrossFromEmp(emp: any, grade?: any): number {
   for (const f of fields) {
     const v = Number(emp?.[f]);
     if (Number.isFinite(v) && v > 0) {
-      alert(`✅ Using gross from emp.${f} = ${v}`);
       return v;
     }
   }
@@ -444,16 +443,11 @@ function getGrossFromEmp(emp: any, grade?: any): number {
   if (grade?.grossSalary) {
     const v = Number(grade.grossSalary);
     if (Number.isFinite(v) && v > 0) {
-      alert("✅ Using gross from fetched MonthlyPayGrade.grossSalary = " + v);
       return v;
     }
   }
 
   // Nothing found – show a precise alert to help you spot the data shape
-  alert(
-    "❌ Gross salary not found.\n" +
-    "Checked:\n- emp.monthlyPayGrade.grossSalary\n- emp.monthlyGrossSalary/grossSalary/monthlySalary/ctcMonthly/ctc/salary/totalSalary/payrollSalary\n- grade.grossSalary"
-  );
   throw new Error("Gross salary not found (expected on employee or monthly pay grade).");
 }
 
@@ -621,7 +615,6 @@ async function calculateSalaryCounts(
   branchId: number
 ) {
   try {
-    alert("[STEP-1] Calculating salary counts for employee: " + employeeId);
 
     const monthNum = (name: string) => {
       const months = [
@@ -782,19 +775,15 @@ async function calculateSalaryCounts(
       if (isFlexible) {
         if (dayLogs.length < 2) {
           dayStatus = "absent";
-          alert(`❌ [ABSENT-FLEX-NO-LOGS] ${key} | ${dayLogs.length} punch`);
         } else {
           dayLogs.sort((a, b) => a.getTime() - b.getTime());
           const totalWorkedMinutes = Math.round((dayLogs[dayLogs.length - 1].getTime() - dayLogs[0].getTime()) / 60000);
           if (totalWorkedMinutes < halfDayMin) {
             dayStatus = "absent";
-            alert(`❌ [ABSENT-FLEX-LOW-HOURS] ${key} | Worked ${totalWorkedMinutes}min < ${halfDayMin}`);
           } else if (totalWorkedMinutes >= frame.fullMinutes) {
             dayStatus = "full";
-            alert(`✅ [FULL-FLEX] ${key} | Worked ${totalWorkedMinutes}min >= ${frame.fullMinutes}`);
           } else {
             dayStatus = "half";
-            alert(`⚠️ [HALF-FLEX] ${key} | Worked ${totalWorkedMinutes}min (>=${halfDayMin} but <${frame.fullMinutes})`);
           }
         }
       }
@@ -837,10 +826,8 @@ async function calculateSalaryCounts(
     }
 
     const totalDays = Math.floor((endDate.getTime() - startDate.getTime()) / 86400000) + 1;
-    alert(`[RESULT] Type=${isFlexible ? "Flexible" : "Fixed"} | Full=${flex_fullDayPresent} | Half=${flex_halfDayPresent} | Absent=${flex_absent}`);
     return { startDate: startDate.toDateString(), endDate: endDate.toDateString(), totalDays, flex_fullDayPresent, flex_halfDayPresent, flex_absent, lateMarksUsed, lateMarkCount };
   } catch (err) {
-    alert("❌ Error calculating salary counts: " + (err as any).message);
     console.error(err);
     return null;
   }
@@ -1106,7 +1093,6 @@ function downloadSalarySlipPDF(payload: {
   }
   catch (err) {
     console.error("Error generating salary slip:", err);
-    alert("Error generating salary slip. Please check console for details.");
   }
 }
 
@@ -1122,7 +1108,7 @@ export function EmpGenerateSalary() {
   const [salaryPeriod, setSalaryPeriod] = useState("");
 
 const user = useCurrentUser()
-const [items, setItems] = useState<GenerateSalaryRow[]>([])
+const [items, setItems] = useState<GenerateSalaryRow[]>(() => getPageCache<GenerateSalaryRow[]>("empPayslips") ?? [])
 const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN" || user?.role === "BRANCH_ADMIN"
 
   // suggestion states
@@ -1225,12 +1211,10 @@ const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDE
     });
 
     if (!res.ok) throw new Error(await res.text());
-    alert("✅ Payment marked successfully!");
     setIsPaymentDialogOpen(false);
     fetchAll(); // reload table
   } catch (error) {
     console.error("Payment update failed:", error);
-    alert("❌ Payment update failed: " + (error as any).message);
   }
 }
 
@@ -1317,6 +1301,7 @@ if (emp) {
     ) &&
     r.status === "Paid" // <-- show ONLY Paid
   );
+  setPageCache("empPayslips", filtered);
   setItems(filtered);
 } else {
   setItems([]);
@@ -1517,37 +1502,34 @@ useEffect(() => {
       const branchId = Number(row.branchesID);
       const monthLabel = row.monthPeriod;
 
-      alert(`[STEP-0] Generating slip for Emp=${employeeId}, Company=${companyId}, Branch=${branchId}, Month=${monthLabel}`);
-
-      // === EMPLOYEE DATA ===
-      const empList: any[] = await robustGet(API.emp);
-      const emp = empList.find((e: any) => e.id === employeeId);
+      // === EMPLOYEE DATA — use row data directly, skip fetching all employees ===
+      const emp: any = row.manageEmployee;
       if (!emp) throw new Error("Employee not found");
 
       // === DATE RANGE ===
       const { start, end } = parseCycle(monthLabel);
       const totalDaysInCycle = Math.floor((end.getTime() - start.getTime()) / 86400000) + 1;
 
-      // === ATTENDANCE COUNTS ===
-      const counts = await calculateSalaryCounts(employeeId, monthLabel, companyId, branchId);
+      // === RUN ALL INDEPENDENT CALLS IN PARALLEL ===
+      const [counts, shiftDays, holidays, { nonLoPDays, lopDays }, grade, { companyName, branchName }] =
+        await Promise.all([
+          calculateSalaryCounts(employeeId, monthLabel, companyId, branchId),
+          getShiftDays(emp),
+          getHolidayCount(branchId, start, end),
+          getLeaveBreakdown(employeeId, start, end),
+          getMonthlyPayGrade(companyId, branchId, emp),
+          getCompanyAndBranch(companyId, branchId),
+        ]);
+
       if (!counts) throw new Error("Could not compute attendance counts");
 
-      alert(`[STEP-1] Attendance Counts → Full Days: ${counts.flex_fullDayPresent}, Half Days: ${counts.flex_halfDayPresent}, Absent Days: ${counts.flex_absent}`);
-      // === SHIFT AND HOLIDAY INFO ===
-      const shiftDays = await getShiftDays(emp);
       const weeklyOffDays = countWeeklyOffOccurrences(shiftDays, start, end);
-      const holidays = await getHolidayCount(branchId, start, end);
-
-      // === LEAVES (Approved) ===
-      const { nonLoPDays, lopDays } = await getLeaveBreakdown(employeeId, start, end);
 
       // === CALCULATE PAID + LOP DAYS ===
       const fullDays = Number(counts.flex_fullDayPresent || 0);
       const halfDays = Number(counts.flex_halfDayPresent || 0);
       const absentDays = Number(counts.flex_absent || 0);
 
-      // Debug: Check what calculateSalaryCounts returned
-      alert(`[STEP-2] Calculated Days → Full Days: ${fullDays}, Half Days: ${halfDays}, Absent Days: ${absentDays}, LOP Days from Leaves: ${lopDays ?? 0}`);
       // CORRECTED: Working days should exclude only weekly offs and holidays
       const workingDaysInCycle = totalDaysInCycle - weeklyOffDays - holidays;
 
@@ -1560,32 +1542,12 @@ useEffect(() => {
       // Validation
       const calculatedTotal = totalPaidDays + totalLopDays;
 
-      alert(`[CORRECTED-LOP-CALCULATION] 
-      Total Days in Cycle: ${totalDaysInCycle}
-      Weekly Off Days: ${weeklyOffDays}
-      Holidays: ${holidays}
-      Working Days: ${workingDaysInCycle}
-      
-      Full Days: ${fullDays}
-      Half Days: ${halfDays} (counts as ${halfDays * 0.5} paid days)
-      Absent Days: ${absentDays}
-      LOP Leaves: ${lopDays ?? 0}
-      
-      Total Paid Days: ${totalPaidDays}
-      Total LOP Days: ${totalLopDays}
-      Validation: ${totalPaidDays} + ${totalLopDays} = ${calculatedTotal} (should equal ${workingDaysInCycle})`);
 
       const expectedTotal = workingDaysInCycle + holidays; // Include holidays in expected total
       if (Math.abs((totalPaidDays + totalLopDays) - expectedTotal) > 0.1) {
-        alert(`⚠️ [DAY-MISMATCH] Paid(${totalPaidDays}) + LOP(${totalLopDays}) = ${totalPaidDays + totalLopDays}, Expected: ${expectedTotal} (Working Days: ${workingDaysInCycle} + Holidays: ${holidays})`);
       } else {
 
-        alert(`✅ [DAY-MATCH] Paid(${totalPaidDays}) + LOP(${totalLopDays}) = ${totalPaidDays + totalLopDays}, Expected: ${expectedTotal}`);
       }
-
-      // === PAY GRADE AND COMPANY INFO ===
-      const grade = await getMonthlyPayGrade(companyId, branchId, emp);
-      const { companyName, branchName } = await getCompanyAndBranch(companyId, branchId);
 
       // === SALARY STRUCTURE ===
       const gross = getGrossFromEmp(emp);
@@ -1604,11 +1566,6 @@ useEffect(() => {
       });
 
       // DEBUG: Show what's included in LOP calculation
-      alert(`[LOP-BREAKDOWN] 
-      Basic: ${basic}
-      Allowances for LOP: ${allowances.filter(a => a.name.toLowerCase() !== 'reimbursement').map(a => `${a.name}: ${a.amount}`).join(', ')}
-      Total for LOP: ${totalForLOP}
-      Reimbursement excluded: ${allowances.find(a => a.name.toLowerCase() === 'reimbursement')?.amount || 0}`);
 
       // ✅ FIXED: Use CALENDAR DAYS (totalDaysInCycle) instead of working days for LOP calculation
       const daysForLOPCalculation = totalDaysInCycle; // Changed from workingDaysInCycle to totalDaysInCycle
@@ -1620,32 +1577,10 @@ useEffect(() => {
 
       const lopAmount = (perDaySalary * fullDayLOP) + (perDaySalary * 0.5 * halfDays);
 
-      alert(`[CORRECTED-SALARY-CALCULATION] 
-      Total for LOP: ${totalForLOP}
-      Days for LOP Calculation: ${daysForLOPCalculation} (using calendar days)
-      Per Day Salary: ${perDaySalary.toFixed(2)}
-      
-      Full Day LOP: ${fullDayLOP} days
-      Half Day LOP: ${halfDayLOP} days (${halfDays} half days)
-      Total LOP Days: ${totalLopDays}
-      
-      LOP Amount Breakdown:
-      - Full Day LOP: ${perDaySalary.toFixed(2)} × ${fullDayLOP} = ${(perDaySalary * fullDayLOP).toFixed(2)}
-      - Half Day LOP: ${(perDaySalary * 0.5).toFixed(2)} × ${halfDays} = ${(perDaySalary * 0.5 * halfDays).toFixed(2)}
-      Total LOP Amount: ${lopAmount.toFixed(2)}`);
 
       const netPayBeforeRounding = Math.max(0, earningsTotal - (deductionsTotal + lopAmount));
       const netPay = roundToNearestRupee(netPayBeforeRounding);
 
-      alert(`[STEP-3] 
-      Gross=${gross}
-      Total for LOP=${totalForLOP}
-      Days for LOP Calculation=${daysForLOPCalculation}
-      Per Day Salary=${perDaySalary.toFixed(2)}
-      Half Day Salary=${(perDaySalary * 0.5).toFixed(2)}
-      LOP Amount=${lopAmount.toFixed(2)}
-      Net Pay Before Rounding=${netPayBeforeRounding.toFixed(2)}
-      Net Pay Rounded=${netPay}`);
 
       // === GENERATE PDF ===
       downloadSalarySlipPDF({
@@ -1672,11 +1607,9 @@ useEffect(() => {
         netPay,
       });
 
-      alert(`[STEP-4 ✅] Salary Slip generated successfully for ${emp.employeeFirstName ?? emp.firstName ?? emp.empName ?? emp.name ?? ""}`);
 
     } catch (err) {
       console.error("Error generating salary slip:", err);
-      alert("❌ Error generating salary slip: " + (err instanceof Error ? err.message : String(err)));
     }
   }
 

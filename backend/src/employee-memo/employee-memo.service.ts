@@ -2,10 +2,14 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateEmployeeMemoDto } from './dto/create-employee-memo.dto';
 import { UpdateEmployeeMemoDto } from './dto/update-employee-memo.dto';
+import { PushNotificationsService } from '../push-notifications/push-notifications.service';
 
 @Injectable()
 export class EmployeeMemoService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private pushService: PushNotificationsService,
+  ) {}
 
   findAll() {
     return this.prisma.employeeMemo.findMany({
@@ -21,8 +25,8 @@ export class EmployeeMemoService {
     });
   }
 
-  create(dto: CreateEmployeeMemoDto) {
-    return this.prisma.employeeMemo.create({
+  async create(dto: CreateEmployeeMemoDto) {
+    const created = await this.prisma.employeeMemo.create({
       data: {
         serviceProviderID: dto.serviceProviderID,
         companyID: dto.companyID,
@@ -35,6 +39,17 @@ export class EmployeeMemoService {
         issuedBy: dto.issuedBy,
       },
     });
+
+    if (dto.employeeID) {
+      this.pushService.sendToEmployee(
+        dto.employeeID,
+        'New Notice',
+        dto.subject || 'You have a new notice on the board.',
+        { url: '/empdashboard' },
+      ).catch(() => null);
+    }
+
+    return created;
   }
 
   update(id: number, dto: UpdateEmployeeMemoDto) {

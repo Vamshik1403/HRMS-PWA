@@ -117,6 +117,7 @@ export default function LoginPage() {
   const [error, setError] = useState('')
   const [termsAccepted, setTermsAccepted] = useState(false)
   const [showTermsModal, setShowTermsModal] = useState(false)
+  const [authChecked, setAuthChecked] = useState(false)
 
   const setAccessTokenCookie = (token: string) => {
     const secure = window.location.protocol === 'https:' ? '; secure' : ''
@@ -125,13 +126,19 @@ export default function LoginPage() {
 
   useEffect(() => {
     const token = localStorage.getItem('accessToken')
-    if (!token) return
+    if (!token) {
+      setAuthChecked(true)
+      return
+    }
 
     // Ensure middleware can see auth after app relaunch in PWA/browser.
     setAccessTokenCookie(token)
 
     const userRaw = localStorage.getItem('user')
-    if (!userRaw) return
+    if (!userRaw) {
+      setAuthChecked(true)
+      return
+    }
 
     try {
       const user = JSON.parse(userRaw)
@@ -141,11 +148,16 @@ export default function LoginPage() {
         router.replace('/empdashboard')
       } else if (role) {
         router.replace('/dashboard')
+      } else {
+        setAuthChecked(true)
       }
     } catch {
       // Keep user on login if stored user object is invalid.
+      setAuthChecked(true)
     }
   }, [router])
+
+  if (!authChecked) return null
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()

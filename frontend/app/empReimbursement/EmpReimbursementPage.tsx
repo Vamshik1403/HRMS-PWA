@@ -19,6 +19,7 @@ import jsPDF from "jspdf"
 import html2canvas from "html2canvas"
 import { useCurrentUser } from "../hooks/useCurrentUser"
 import { toast } from "sonner"
+import { getPageCache, setPageCache } from "../utils/pageCache"
 
 interface ReimbursementItem {
   id?: number
@@ -273,7 +274,7 @@ const PDFTemplate = ({ reimbursement }: { reimbursement: Reimbursement }) => {
 };
     
 export function EmpReimbursement() {
-  const [reimbursements, setReimbursements] = useState<Reimbursement[]>([])
+  const [reimbursements, setReimbursements] = useState<Reimbursement[]>(() => getPageCache<Reimbursement[]>("empReimbursements") ?? [])
   const [searchTerm, setSearchTerm] = useState("")
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editing, setEditing] = useState<Reimbursement | null>(null)
@@ -316,41 +317,65 @@ const [employee, setEmployee] = useState<Employee | null>(null)
   }
   
  useEffect(() => {
-  if (!user?.id) return
+  if (!user?.username) return;
 
-robustGet(`${BACKEND_URL}/manage-emp`).then((allEmp) => {
+  // Use the credentials-by-username endpoint for reliable employee mapping
+  robustGet(`${BACKEND_URL}/manage-emp/credentials/${encodeURIComponent(user.username)}`).then((creds: any) => {
+    if (!creds || !creds.employee) {
+      toast.error("Employee mapping not found");
+      return;
+    }
 
-const emp = allEmp.find((e: any) =>
-  Array.isArray(e.employeeCredentials) &&
-  e.employeeCredentials.some(
-    (c: any) => c.username === user.username
-  )
-);
+    const empRecord = {
+      id: creds.employee.id,
+      serviceProviderID: creds.serviceProviderID,
+      companyID: creds.companyID,
+      branchesID: creds.branchesID,
+      employeeFirstName: creds.employee.employeeFirstName || "",
+      employeeLastName: creds.employee.employeeLastName || "",
+      employeeID: creds.employee.employeeID,
+      company: creds.company,
+      branches: creds.branches,
+    };
 
+    setEmployee(empRecord as any);
 
-  if (!emp) {
-    toast.error("Employee mapping not found");
-    return;
-  }
+    setFormData(p => ({
+      ...p,
+      serviceProviderID: creds.serviceProviderID,
+      companyID: creds.companyID,
+      branchesID: creds.branchesID,
+      manageEmployeeID: creds.employee.id,
+      employeeName: (creds.employee.employeeFirstName || "") + " " + (creds.employee.employeeLastName || ""),
+      companyName: creds.company?.companyName || "",
+      branchName: creds.branches?.branchName || "",
+    }));
 
-  setEmployee(emp);
-
-  setFormData(p => ({
-    ...p,
-    serviceProviderID: emp.serviceProviderID,
-    companyID: emp.companyID,
-    branchesID: emp.branchesID,
-    manageEmployeeID: emp.id,              // ✅ FIXED
-    employeeName: emp.employeeFirstName + " " + emp.employeeLastName,
-    companyName: emp.company?.companyName || "",
-    branchName: emp.branches?.branchName || "",
-  }));
-
-  loadReimbursements(emp.id);               // ✅ FIXED
-});
-
+    loadReimbursements(creds.employee.id);
+  }).catch(() => {
+    toast.error("Failed to load employee details. Please try again.");
+  });
 
 }, [user])
+
+  // Poll for status updates every 15 s + refresh when app becomes visible
+  useEffect(() => {
+    if (!employee?.id) return;
+    const empId = employee.id;
+
+    const interval = setInterval(() => {
+      if (document.visibilityState === "visible") loadReimbursements(empId);
+    }, 15000);
+    const onVisible = () => {
+      if (document.visibilityState === "visible") loadReimbursements(empId);
+    };
+    document.addEventListener("visibilitychange", onVisible);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [employee?.id]);
 
   
 
@@ -405,6 +430,7 @@ const filtered = data
     paymentProof: r.paymentProof || "",
   };
 });
+      setPageCache("empReimbursements", mapped);
       setReimbursements(mapped);
     } catch (error) {
       console.error("Failed to load reimbursements:", error);

@@ -6,6 +6,9 @@ const withPWA = require('next-pwa')({
   
   // Service Worker configuration
   sw: 'sw.js',
+
+  // Include custom worker code (push handlers) — persists across builds
+  customWorkerDir: 'worker',
   
   // Runtime caching strategies
   runtimeCaching: [

@@ -1,12 +1,32 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { Icon } from "@iconify/react";
 
 interface EmpMobileLayoutProps {
   children: React.ReactNode;
+}
+
+function urlBase64ToUint8Array(base64String: string): Uint8Array<ArrayBuffer> {
+  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const rawData = window.atob(base64);
+  const outputArray = new Uint8Array(rawData.length);
+  for (let i = 0; i < rawData.length; ++i) {
+    outputArray[i] = rawData.charCodeAt(i);
+  }
+  return outputArray;
+}
+
+/** Returns true when the app is running as an installed PWA (standalone mode). */
+function isRunningStandalone(): boolean {
+  if (typeof window === "undefined") return false;
+  return (
+    window.matchMedia("(display-mode: standalone)").matches ||
+    (window.navigator as any).standalone === true
+  );
 }
 
 const navItems = [
@@ -21,6 +41,9 @@ const navItems = [
 export default function EmpMobileLayout({ children }: EmpMobileLayoutProps) {
   const pathname = usePathname();
   const router = useRouter();
+  const [showInstallBanner, setShowInstallBanner] = useState(false);
+  const [showNotifButton, setShowNotifButton] = useState(false);
+  const subscribeAttempted = useRef(false);
 
   // Auth guard
   useEffect(() => {
@@ -28,12 +51,114 @@ export default function EmpMobileLayout({ children }: EmpMobileLayoutProps) {
     if (!token) router.replace("/login");
   }, [router]);
 
+  const doSubscribe = useCallback(async () => {
+    try {
+      if (!("serviceWorker" in navigator) || !("PushManager" in window)) return;
+      const userRaw = localStorage.getItem("user");
+      if (!userRaw) return;
+      const user = JSON.parse(userRaw);
+      const employeeID = user?.employee?.id;
+      if (!employeeID) return;
+
+      // Request permission (must be called within a user gesture on iOS)
+      const permission = await Notification.requestPermission();
+      if (permission !== "granted") return;
+
+      const reg = await navigator.serviceWorker.ready;
+      const keyRes = await fetch("/backend/push-notifications/vapid-public-key");
+      if (!keyRes.ok) return;
+      const { publicKey } = await keyRes.json();
+
+      const appServerKey = urlBase64ToUint8Array(publicKey);
+      const subscription = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: appServerKey,
+      });
+
+      await fetch("/backend/push-notifications/subscribe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ employeeID, subscription }),
+      });
+
+      // Remember that we've subscribed so we don't show the button again
+      localStorage.setItem("_push_subscribed", "1");
+      setShowNotifButton(false);
+    } catch {
+      // Non-critical
+    }
+  }, []);
+
+  // Push notification setup
+  useEffect(() => {
+    const setup = async () => {
+      if (!("Notification" in window) || !("serviceWorker" in navigator) || !("PushManager" in window)) return;
+      if (subscribeAttempted.current) return;
+      subscribeAttempted.current = true;
+
+      const standalone = isRunningStandalone();
+      // iOS requires standalone (Add to Home Screen) for push to work.
+      // Detect iOS by checking for standalone property on navigator (only exists on iOS Safari).
+      const isIOS = typeof (window.navigator as any).standalone !== "undefined";
+
+      if (!standalone && isIOS) {
+        // iOS not in standalone mode — push won't work, show install prompt
+        setShowInstallBanner(true);
+        return;
+      }
+
+      // Already subscribed this session — skip
+      if (localStorage.getItem("_push_subscribed") === "1") return;
+
+      const permState = Notification.permission;
+
+      if (permState === "granted") {
+        // Already granted — re-subscribe silently (handles app reinstalls / new SW)
+        await doSubscribe();
+      } else if (permState === "default") {
+        // Show enable button so user can grant permission via gesture
+        setShowNotifButton(true);
+      }
+      // If "denied" — nothing we can do
+    };
+
+    setup();
+  }, [doSubscribe]);
+
   const isActive = (href: string) => pathname === href || pathname.startsWith(href + "/");
 
   return (
     <div className="bg-[#f2f4f7]" style={{ position: 'fixed', inset: 0, display: 'flex', flexDirection: 'column', overscrollBehavior: 'none' }}>
       {/* Top safe-area spacer — prevents content going under notch/status bar */}
       <div style={{ height: 'env(safe-area-inset-top)', background: '#f2f4f7', flexShrink: 0 }} />
+
+      {/* iOS install-to-homescreen banner */}
+      {showInstallBanner && (
+        <div className="flex items-center justify-between gap-2 px-4 py-2 bg-blue-600 text-white text-xs" style={{ flexShrink: 0 }}>
+          <span>Add to Home Screen to enable notifications</span>
+          <button
+            onClick={() => { setShowInstallBanner(false); localStorage.setItem("_push_banner_dismissed", "1"); }}
+            className="text-white/80 hover:text-white font-bold text-sm leading-none"
+            aria-label="Dismiss"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
+      {/* Enable notifications button (standalone, permission not yet requested) */}
+      {showNotifButton && (
+        <div className="flex items-center justify-between gap-2 px-4 py-2 bg-blue-600 text-white text-xs" style={{ flexShrink: 0 }}>
+          <span>Enable push notifications</span>
+          <button
+            onClick={doSubscribe}
+            className="bg-white text-blue-600 font-semibold rounded-full px-3 py-0.5 text-xs"
+          >
+            Enable
+          </button>
+        </div>
+      )}
+
       {/* Main scrollable content */}
       <main className="flex-1 overflow-y-auto overscroll-none" style={{ paddingBottom: 'calc(72px + env(safe-area-inset-bottom))', WebkitOverflowScrolling: 'touch', overscrollBehavior: 'none' }}>
         {children}

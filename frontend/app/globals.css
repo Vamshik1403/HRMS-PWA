@@ -116,6 +116,13 @@
     @apply bg-background text-foreground;
     overscroll-behavior: none;
   }
+  /* Restore natural scrolling on desktop — overscroll-behavior: none can block
+     trackpad two-finger scrolling on Windows/macOS on desktop viewports */
+  @media (min-width: 768px) {
+    html, body {
+      overscroll-behavior: auto;
+    }
+  }
 }
 
 /* Prevent mobile browsers from auto-zooming focused form fields in PWA mode */

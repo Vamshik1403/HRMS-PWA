@@ -425,7 +425,9 @@ export function PageLayout({ children }: PageLayoutProps) {
                 <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/designations" className={cn(sbSubRow, isActiveLink('/designations', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Designations</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
                 <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/manage-employees" className={cn(sbSubRow, isActiveLink('/manage-employees', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Manage Employees</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
                 {/* Promotions & Transfers - temporarily hidden */}
-                {/* Warning & Notices - temporarily hidden */}
+                {isSuperAdmin && (
+                  <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/employee-memo" className={cn(sbSubRow, isActiveLink('/employee-memo', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Notice Board</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
+                )}
                 <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/termination" className={cn(sbSubRow, isActiveLink('/termination', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Off Boarding</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
               </SidebarMenuSub>
             </CollapsibleContent>
@@ -458,8 +460,8 @@ export function PageLayout({ children }: PageLayoutProps) {
           </Collapsible>
         )}
 
-        {/* Leave Policy - temporarily hidden */}
-        {false && (isSuperAdmin || isServiceProvider || isCompanyAdmin || isBranchAdmin || isRegularUser) && !isAdmin && (
+        {/* Leave Policy - visible for superadmin only */}
+        {isSuperAdmin && !isAdmin && (
           <Collapsible open={openSections[k('leave')]} onOpenChange={o => toggleSection(k('leave'), o)}>
             <CollapsibleTrigger asChild>
               <SidebarMenuButton size="lg" className={cn(sbMenuBtnReset, sbRow, "mx-0 justify-between", leaveSectionActive ? sbActive : cn(sbIdle, openSections[k('leave')] && "font-semibold text-[#4f46e5]"))}>
@@ -484,8 +486,8 @@ export function PageLayout({ children }: PageLayoutProps) {
           </Collapsible>
         )}
 
-        {/* Payroll Policy - temporarily hidden */}
-        {false && (isSuperAdmin || isServiceProvider || isCompanyAdmin || isBranchAdmin) && !isAdmin && (
+        {/* Payroll Policy - visible for superadmin only */}
+        {isSuperAdmin && !isAdmin && (
           <Collapsible open={openSections[k('payrollPolicy')]} onOpenChange={o => toggleSection(k('payrollPolicy'), o)}>
             <CollapsibleTrigger asChild>
               <SidebarMenuButton size="lg" className={cn(sbMenuBtnReset, sbRow, "mx-0 justify-between", payrollPolicySectionActive ? sbActive : cn(sbIdle, openSections[k('payrollPolicy')] && "font-semibold text-[#4f46e5]"))}>
@@ -508,8 +510,8 @@ export function PageLayout({ children }: PageLayoutProps) {
           </Collapsible>
         )}
 
-        {/* Payroll Management - temporarily hidden */}
-        {false && (isSuperAdmin || isServiceProvider || isCompanyAdmin || isBranchAdmin || isRegularUser) && !isAdmin && (
+        {/* Payroll Management - visible for superadmin only */}
+        {isSuperAdmin && !isAdmin && (
           <Collapsible open={openSections[k('salary')]} onOpenChange={o => toggleSection(k('salary'), o)}>
             <CollapsibleTrigger asChild>
               <SidebarMenuButton size="lg" className={cn(sbMenuBtnReset, sbRow, "mx-0 justify-between", salarySectionActive ? sbActive : cn(sbIdle, openSections[k('salary')] && "font-semibold text-[#4f46e5]"))}>
@@ -536,8 +538,8 @@ export function PageLayout({ children }: PageLayoutProps) {
 
         {/* Attendance Management - merged into Shift & Attendance Management */}
 
-        {/* Leave Management - temporarily hidden */}
-        {false && (isSuperAdmin || isServiceProvider || isCompanyAdmin || isBranchAdmin || isRegularUser) && !isAdmin && (
+        {/* Leave Management - visible for superadmin only */}
+        {isSuperAdmin && !isAdmin && (
           <Collapsible open={openSections[k('leaveManagement')]} onOpenChange={o => toggleSection(k('leaveManagement'), o)}>
             <CollapsibleTrigger asChild>
               <SidebarMenuButton size="lg" className={cn(sbMenuBtnReset, sbRow, "mx-0 justify-between", leaveManagementSectionActive ? sbActive : cn(sbIdle, openSections[k('leaveManagement')] && "font-semibold text-[#4f46e5]"))}>

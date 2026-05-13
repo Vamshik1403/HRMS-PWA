@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Icon } from "@iconify/react";
@@ -50,9 +50,8 @@ const quickLinks = [
   { label: "Request Leave",    icon: "solar:document-add-bold-duotone",    color: "bg-blue-50",    iconColor: "text-blue-600",    href: "/empLeaveApplication" },
   { label: "History",          icon: "solar:clock-circle-bold-duotone",color: "bg-violet-50",  iconColor: "text-violet-600",  href: "/empHistory" },
   { label: "Reimbursement",    icon: "solar:wallet-bold-duotone",      color: "bg-emerald-50", iconColor: "text-emerald-600", href: "/empReimbursement" },
-  { label: "Leave Application",icon: "solar:document-bold-duotone",    color: "bg-orange-50",  iconColor: "text-orange-600",  href: "/empLeaveApplication" },
   { label: "Pay Slips",        icon: "solar:bill-bold-duotone",        color: "bg-pink-50",    iconColor: "text-pink-600",    href: "/empGenerateSalary" },
-  { label: "Notice Board",     icon: "solar:bell-bold-duotone",        color: "bg-amber-50",   iconColor: "text-amber-600",   href: "/empdashboard" },
+  { label: "Notice Board",     icon: "solar:bell-bold-duotone",        color: "bg-amber-50",   iconColor: "text-amber-600",   href: "/empNoticeboard" },
 ];
 
 export default function EmpDashboardPage() {
@@ -62,6 +61,10 @@ export default function EmpDashboardPage() {
   const [todayStatus, setTodayStatus] = useState<TodayStatus | null>(() => getPageCache<TodayStatus>("todayAttendance"));
   const [recentHistory, setRecentHistory] = useState<DayRow[]>(() => getPageCache<DayRow[]>("recentAttendance") ?? []);
   const [loadingStatus, setLoadingStatus] = useState(() => getPageCache<TodayStatus>("todayAttendance") === null);
+  const [noticeBadge, setNoticeBadge] = useState(0);
+  const [reimbBadge, setReimbBadge] = useState(0);
+  const [payslipBadge, setPayslipBadge] = useState(0);
+  const [leaveBadge, setLeaveBadge] = useState(0);
 
   useEffect(() => {
     try {
@@ -72,6 +75,92 @@ export default function EmpDashboardPage() {
     const cached = localStorage.getItem("_emp_photo");
     if (cached) setPhotoUrl(cached);
   }, []);
+
+  // Fetch badge counts — wrapped in useCallback so polling can reuse it
+  const fetchBadges = useCallback(() => {
+    if (!empUser?.employee?.id) return;
+    const token = localStorage.getItem("token");
+    if (!token) return;
+    const eid = empUser.employee.id;
+    const headers = { Authorization: `Bearer ${token}` };
+
+    fetch(`${BACKEND}/employee-memo?employeeID=${eid}`, { headers })
+      .then((r) => r.json())
+      .then((memos: any[]) => {
+        if (!Array.isArray(memos)) return;
+        const lastViewed = parseInt(localStorage.getItem("_notice_last_viewed") || "0", 10);
+        const unread = memos.filter((m: any) => {
+          const ts = m.createdAt ? new Date(m.createdAt).getTime() : 0;
+          return ts > lastViewed && m.employeeID === eid;
+        });
+        setNoticeBadge(unread.length);
+      })
+      .catch(() => {});
+
+    fetch(`${BACKEND}/reimbursement`, { headers })
+      .then((r) => r.json())
+      .then((data: any[]) => {
+        if (!Array.isArray(data)) return;
+        const lastViewed = parseInt(localStorage.getItem("_reimb_last_viewed") || "0", 10);
+        const unread = data.filter((r: any) => {
+          if (r.manageEmployeeID !== eid) return false;
+          if (r.status !== "Approved") return false;
+          const ts = r.updatedAt ? new Date(r.updatedAt).getTime() : 0;
+          return ts > lastViewed;
+        });
+        setReimbBadge(unread.length);
+      })
+      .catch(() => {});
+
+    fetch(`${BACKEND}/generate-salary`, { headers })
+      .then((r) => r.json())
+      .then((data: any[]) => {
+        if (!Array.isArray(data)) return;
+        const lastViewed = parseInt(localStorage.getItem("_payslip_last_viewed") || "0", 10);
+        const unread = data.filter((s: any) => {
+          if (s.manageEmployeeID !== eid) return false;
+          const ts = s.createdAt ? new Date(s.createdAt).getTime() : 0;
+          return ts > lastViewed;
+        });
+        setPayslipBadge(unread.length);
+      })
+      .catch(() => {});
+
+    fetch(`${BACKEND}/leave-application`, { headers })
+      .then((r) => r.json())
+      .then((data: any[]) => {
+        if (!Array.isArray(data)) return;
+        const lastViewed = parseInt(localStorage.getItem("_leave_last_viewed") || "0", 10);
+        const unread = data.filter((l: any) => {
+          if (l.manageEmployeeID !== eid) return false;
+          if (l.status !== "Approved") return false;
+          const ts = l.updatedAt ? new Date(l.updatedAt).getTime() : 0;
+          return ts > lastViewed;
+        });
+        setLeaveBadge(unread.length);
+      })
+      .catch(() => {});
+  }, [empUser]);
+
+  // Fetch notice board badge count
+  useEffect(() => {
+    if (!empUser?.employee?.id) return;
+    fetchBadges();
+
+    // Poll every 30 s + refresh on visibility change
+    const interval = setInterval(() => {
+      if (document.visibilityState === "visible") fetchBadges();
+    }, 30000);
+    const onVisible = () => {
+      if (document.visibilityState === "visible") fetchBadges();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [empUser, fetchBadges]);
 
   useEffect(() => {
     const token = localStorage.getItem("token");
@@ -211,16 +300,41 @@ export default function EmpDashboardPage() {
         {/* Quick Shortcuts */}
         <div className="mb-4">
           <div className="grid grid-cols-2 gap-3">
-            {quickLinks.map((ql) => (
-              <Link key={ql.label} href={ql.href}>
-                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 flex items-center gap-3 active:scale-[0.97] transition-transform">
-                  <div className={`w-10 h-10 rounded-xl ${ql.color} flex items-center justify-center shrink-0`}>
-                    <Icon icon={ql.icon} className={`w-5 h-5 ${ql.iconColor}`} />
+            {quickLinks.map((ql) => {
+              const isNoticeBoard = ql.label === "Notice Board";
+              const isReimbursement = ql.label === "Reimbursement";
+              const isPaySlips = ql.label === "Pay Slips";
+              const isLeave = ql.label === "Leave Application" || ql.label === "Request Leave";
+              const badge = isNoticeBoard ? noticeBadge
+                : isReimbursement ? reimbBadge
+                : isPaySlips ? payslipBadge
+                : isLeave ? leaveBadge
+                : 0;
+              return (
+                <Link
+                  key={ql.label}
+                  href={ql.href}
+                  onClick={() => {
+                    if (isNoticeBoard) { localStorage.setItem("_notice_last_viewed", Date.now().toString()); setNoticeBadge(0); }
+                    if (isReimbursement) { localStorage.setItem("_reimb_last_viewed", Date.now().toString()); setReimbBadge(0); }
+                    if (isPaySlips) { localStorage.setItem("_payslip_last_viewed", Date.now().toString()); setPayslipBadge(0); }
+                    if (isLeave) { localStorage.setItem("_leave_last_viewed", Date.now().toString()); setLeaveBadge(0); }
+                  }}
+                >
+                  <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 flex items-center gap-3 active:scale-[0.97] transition-transform relative">
+                    <div className={`w-10 h-10 rounded-xl ${ql.color} flex items-center justify-center shrink-0`}>
+                      <Icon icon={ql.icon} className={`w-5 h-5 ${ql.iconColor}`} />
+                    </div>
+                    <span className="text-[13px] font-bold text-gray-800 leading-tight">{ql.label}</span>
+                    {badge > 0 && (
+                      <span className="absolute top-2 right-2 min-w-[18px] h-[18px] bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1 shadow">
+                        {badge > 99 ? "99+" : badge}
+                      </span>
+                    )}
                   </div>
-                  <span className="text-[13px] font-bold text-gray-800 leading-tight">{ql.label}</span>
-                </div>
-              </Link>
-            ))}
+                </Link>
+              );
+            })}
           </div>
         </div>
 

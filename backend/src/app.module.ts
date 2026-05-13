@@ -63,6 +63,8 @@ import { FactualAttendancePolicyModule } from './factual-attendance-policy/factu
 import { FactualRosterModule } from './factual-roster/factual-roster.module';
 import { ComplianceRulesModule } from './compliance-rules/compliance-rules.module';
 import { EmpLocationAttendanceModule } from './emp-location-attendance/emp-location-attendance.module';
+import { PushNotificationsModule } from './push-notifications/push-notifications.module';
+import { EmpLeaveBalanceModule } from './emp-leave-balance/emp-leave-balance.module';
 
 
 @Module({
@@ -131,6 +133,8 @@ import { EmpLocationAttendanceModule } from './emp-location-attendance/emp-locat
     FactualRosterModule,
     ComplianceRulesModule,
     EmpLocationAttendanceModule,
+    PushNotificationsModule,
+    EmpLeaveBalanceModule,
   ],
   providers: [AuthService],
   controllers: [AuthController],

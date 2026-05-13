@@ -27,6 +27,7 @@ import { Icon } from "@iconify/react"
 import { Plus, Search, Edit, Trash2, Check, X } from "lucide-react"
 import { useCurrentUser } from "../hooks/useCurrentUser"
 import { getSidebarContext } from "../utils/sidebarContext"
+import { getPageCache, setPageCache } from "../utils/pageCache"
 
 interface LeaveApplication {
   id: string
@@ -67,7 +68,7 @@ interface EmployeeCredentials {
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "/backend"
 
 export function EmpLeaveApplication() {
-  const [leaveApplications, setLeaveApplications] = useState<LeaveApplication[]>([])
+  const [leaveApplications, setLeaveApplications] = useState<LeaveApplication[]>(() => getPageCache<LeaveApplication[]>("empLeaveApps") ?? [])
   const [searchTerm, setSearchTerm] = useState("")
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editingApplication, setEditingApplication] = useState<LeaveApplication | null>(null)
@@ -135,20 +136,19 @@ export function EmpLeaveApplication() {
         if (Array.isArray(woData)) totalCompOff = woData.filter((w: any) => w.status === "Present").length;
       } catch {}
 
-      const allLeaves = await robustGet<any[]>(`${BACKEND_URL}/leave-application`);
-      const approved = (Array.isArray(allLeaves) ? allLeaves : []).filter(
-        (l: any) => l.manageEmployeeID === employeeId && l.status === "Approved"
-      );
-
-      const used: Record<string, number> = { Sick: 0, Casual: 0, Privileged: 0, CompOff: 0, MtL: 0, PtL: 0 };
-      approved.forEach((leave: any) => {
-        if (leave.dayStatuses && Array.isArray(leave.dayStatuses)) {
-          leave.dayStatuses.forEach((day: any) => { if (used[day.status] !== undefined) used[day.status]++; });
-        } else if (leave.fromDate && leave.toDate) {
-          const days = Math.ceil(Math.abs(new Date(leave.toDate).getTime() - new Date(leave.fromDate).getTime()) / 86400000) + 1;
-          if (used[leave.appliedLeaveType] !== undefined) used[leave.appliedLeaveType] += days;
-        }
-      });
+      // Fetch per-employee stored balance from DB (seeded from historical approved leaves on first call)
+      let balanceRecord: any = {};
+      try {
+        balanceRecord = await robustGet<any>(`${BACKEND_URL}/emp-leave-balance/employee/${employeeId}`);
+      } catch {}
+      const used: Record<string, number> = {
+        Sick:       Number(balanceRecord.sickUsed)       || 0,
+        Casual:     Number(balanceRecord.casualUsed)     || 0,
+        Privileged: Number(balanceRecord.privilegedUsed) || 0,
+        CompOff:    Number(balanceRecord.compOffUsed)    || 0,
+        MtL:        Number(balanceRecord.maternityUsed)  || 0,
+        PtL:        Number(balanceRecord.paternityUsed)  || 0,
+      };
 
       const numChildren = empRes.numberOfChildren ?? null;
       const totalMaternity = Number(policy.maternityLeaveCount) || 182;
@@ -231,6 +231,21 @@ export function EmpLeaveApplication() {
   useEffect(() => {
     if (userCredentials) {
       loadLeaveApplications()
+
+      // Poll every 15 s so status changes (approvals) appear without needing to navigate away
+      const interval = setInterval(() => {
+        if (document.visibilityState === "visible") loadLeaveApplications();
+      }, 15000);
+
+      const onVisible = () => {
+        if (document.visibilityState === "visible") loadLeaveApplications();
+      };
+      document.addEventListener("visibilitychange", onVisible);
+
+      return () => {
+        clearInterval(interval);
+        document.removeEventListener("visibilitychange", onVisible);
+      };
     }
   }, [userCredentials])
 
@@ -354,7 +369,10 @@ export function EmpLeaveApplication() {
         const filtered = mapped.filter(
           (a) => a.manageEmployeeID === userCredentials.employeeID
         )
+        setPageCache("empLeaveApps", filtered)
         setLeaveApplications(filtered)
+        // Refresh balance so approved leaves are immediately reflected
+        loadLeaveBalance(userCredentials.employeeID)
       } else {
         setLeaveApplications([])
       }

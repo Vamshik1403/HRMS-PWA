@@ -738,6 +738,7 @@ model ManageEmployee {
   empFactualAttendancePolicy     EmpFactualAttendancePolicy[]
   employeeMemo                   EmployeeMemo[]
   attendanceLocations            AttendanceLocation[]
+  empLeaveBalance                EmpLeaveBalance?
 
   @@unique([employeeID, companyID], name: "unique_employee_id_per_company")
 }
@@ -975,6 +976,23 @@ model EmpLeavePolicy {
   effectFrom       String?        @db.VarChar
   manageEmployee   ManageEmployee @relation(fields: [manageEmployeeID], references: [id], onDelete: Cascade)
   leavePolicy      leavePolicy    @relation("EmpLeavePolicyLink", fields: [leavePolicyID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([manageEmployeeID])
+}
+
+// Per-employee leave balance — tracks used days per leave type
+model EmpLeaveBalance {
+  id               Int            @id @default(autoincrement())
+  manageEmployeeID Int            @unique
+  sickUsed         Int            @default(0)
+  casualUsed       Int            @default(0)
+  privilegedUsed   Int            @default(0)
+  compOffUsed      Int            @default(0)
+  maternityUsed    Int            @default(0)
+  paternityUsed    Int            @default(0)
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  manageEmployee   ManageEmployee @relation(fields: [manageEmployeeID], references: [id], onDelete: Cascade)
 
   @@index([manageEmployeeID])
 }

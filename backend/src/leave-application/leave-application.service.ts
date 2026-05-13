@@ -2,10 +2,16 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateLeaveApplicationDto } from './dto/create-leave-application.dto';
 import { UpdateLeaveApplicationDto } from './dto/update-leave-application.dto';
+import { PushNotificationsService } from '../push-notifications/push-notifications.service';
+import { EmpLeaveBalanceService } from '../emp-leave-balance/emp-leave-balance.service';
 
 @Injectable()
 export class LeaveApplicationService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private pushService: PushNotificationsService,
+    private leaveBalanceService: EmpLeaveBalanceService,
+  ) {}
 
   create(createLeaveApplicationDto: CreateLeaveApplicationDto) {
     return this.prisma.leaveApplication.create({
@@ -93,8 +99,11 @@ export class LeaveApplicationService {
 
 
 
-  update(id: number, updateLeaveApplicationDto: UpdateLeaveApplicationDto) {
-    return this.prisma.leaveApplication.update({
+  async update(id: number, updateLeaveApplicationDto: UpdateLeaveApplicationDto) {
+    // Fetch the current leave record so we know the previous status
+    const current = await this.prisma.leaveApplication.findUnique({ where: { id } });
+
+    const updated = await this.prisma.leaveApplication.update({
       where: { id },
       data: updateLeaveApplicationDto,
       include: {
@@ -104,6 +113,44 @@ export class LeaveApplicationService {
         manageEmployee: true,
       },
     });
+
+    const APPROVED_STATUSES = ['Approved', 'Accepted'];
+    const isNowApproved = APPROVED_STATUSES.includes(updated.status ?? '');
+    const wasNotApproved = !APPROVED_STATUSES.includes(current?.status ?? '');
+
+    // Deduct leave balance when status changes to Approved/Accepted for the first time
+    if (isNowApproved && wasNotApproved && updated.manageEmployeeID) {
+      try {
+        let days = 0;
+        const ds = updated.dayStatuses as any[] | null;
+        if (Array.isArray(ds) && ds.length > 0) {
+          days = ds.length;
+        } else if (updated.fromDate && updated.toDate) {
+          const from = new Date(updated.fromDate as any);
+          const to = new Date(updated.toDate as any);
+          days = Math.ceil(Math.abs(to.getTime() - from.getTime()) / 86400000) + 1;
+        }
+        if (days > 0) {
+          await this.leaveBalanceService.deductLeave(
+            updated.manageEmployeeID,
+            updated.appliedLeaveType ?? '',
+            days,
+          );
+        }
+      } catch (_) { /* non-critical */ }
+    }
+
+    // Send push notification when leave is approved or accepted
+    if (isNowApproved && updated.manageEmployeeID) {
+      this.pushService.sendToEmployee(
+        updated.manageEmployeeID,
+        'Leave Approved',
+        'Your leave application has been approved.',
+        { url: '/empLeaveApplication' },
+      ).catch(() => null);
+    }
+
+    return updated;
   }
 
   remove(id: number) {

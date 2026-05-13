@@ -8,6 +8,10 @@
 const TTLs: Record<string, number> = {
   todayAttendance:  30_000,   // 30 s  — attendance status changes infrequently
   recentAttendance: 120_000,  // 2 min — history list
+  empPayslips:      60_000,   // 1 min — payslip list
+  empLeaveApps:     30_000,   // 30 s  — leave list (status can change)
+  empReimbursements:30_000,   // 30 s  — reimbursement list
+  empMemos:         60_000,   // 1 min — notice board
 };
 
 const DEFAULT_TTL = 60_000; // 1 min fallback
