@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Icon } from "@iconify/react";
 import EmpMobileLayout from "../components/layout/EmpMobileLayout";
 
@@ -43,18 +44,25 @@ function sumHours(rows: DayRow[]): string {
 }
 
 export default function EmpHistoryPage() {
+  const router = useRouter();
   const [records, setRecords] = useState<AttendanceRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [dayRows, setDayRows] = useState<DayRow[]>([]);
 
   useEffect(() => {
     const token = localStorage.getItem("token") || localStorage.getItem("accessToken") || "";
-    if (!token) return;
+    if (!token) { router.replace("/login"); return; }
     fetch(`${BACKEND}/emp-location-attendance/my`, {
       headers: { Authorization: `Bearer ${token}` },
       cache: "no-store",
     })
-      .then((r) => r.json())
+      .then((r) => {
+        if (!r.ok) {
+          if (r.status === 401) { localStorage.removeItem("token"); localStorage.removeItem("accessToken"); router.replace("/login"); }
+          return Promise.reject(r.status);
+        }
+        return r.json();
+      })
       .then((data: AttendanceRecord[]) => {
         if (!Array.isArray(data)) return;
         setRecords(data);

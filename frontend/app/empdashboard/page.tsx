@@ -163,19 +163,31 @@ export default function EmpDashboardPage() {
     };
   }, [empUser, fetchBadges]);
 
-  useEffect(() => {
+  const fetchAttendance = useCallback(() => {
     const token = localStorage.getItem("token");
-    if (!token) return;
+    if (!token) { router.replace("/login"); return; }
     const headers = { Authorization: `Bearer ${token}` };
 
     fetch(`${BACKEND}/emp-location-attendance/today`, { headers })
-      .then((r) => r.json())
+      .then((r) => {
+        if (!r.ok) {
+          if (r.status === 401) { localStorage.removeItem("token"); localStorage.removeItem("accessToken"); router.replace("/login"); }
+          return Promise.reject(r.status);
+        }
+        return r.json();
+      })
       .then((d) => { setTodayStatus(d); setPageCache("todayAttendance", d); })
       .catch(() => {})
       .finally(() => setLoadingStatus(false));
 
     fetch(`${BACKEND}/emp-location-attendance/my`, { headers })
-      .then((r) => r.json())
+      .then((r) => {
+        if (!r.ok) {
+          if (r.status === 401) { localStorage.removeItem("token"); localStorage.removeItem("accessToken"); router.replace("/login"); }
+          return Promise.reject(r.status);
+        }
+        return r.json();
+      })
       .then((data: AttendanceRecord[]) => {
         if (!Array.isArray(data)) return;
         const byDate: Record<string, AttendanceRecord[]> = {};
@@ -201,7 +213,14 @@ export default function EmpDashboardPage() {
         setPageCache("recentAttendance", rows);
       })
       .catch(() => {});
-  }, []);
+  }, [router]);
+
+  useEffect(() => {
+    fetchAttendance();
+    const onVisible = () => { if (document.visibilityState === "visible") fetchAttendance(); };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, [fetchAttendance]);
 
   const empName = empUser?.employee
     ? `${empUser.employee.firstName || ""}`.trim() || empUser.username || "there"
