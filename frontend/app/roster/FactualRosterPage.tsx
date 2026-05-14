@@ -1086,7 +1086,7 @@ export function FactualRosterManagement() {
               <div className="space-y-2">
                 <Label className="text-sm font-medium">Service Provider</Label>
                 <select
-                  className="w-full border rounded-lg h-10 px-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full border rounded-lg h-10 px-3 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
                   value={serviceProviderID}
                   onChange={(e) => {
                     const newSP = e.target.value ? Number(e.target.value) : ""
@@ -1111,7 +1111,7 @@ export function FactualRosterManagement() {
             <div className="space-y-2">
               <Label className="text-sm font-medium">Company</Label>
               <select
-                className="w-full border rounded-lg h-10 px-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50"
+                className="w-full border rounded-lg h-10 px-3 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
                 value={companyID}
                 onChange={(e) => {
                   const newCompanyID = e.target.value ? Number(e.target.value) : ""
@@ -1150,7 +1150,7 @@ export function FactualRosterManagement() {
                 )}
               </div>
               <select
-                className="w-full border rounded-lg h-10 px-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50"
+                className="w-full border rounded-lg h-10 px-3 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
                 value={branchesID}
                 onChange={(e) => setBranchesID(e.target.value ? Number(e.target.value) : "")}
                 disabled={
@@ -1174,7 +1174,7 @@ export function FactualRosterManagement() {
             <div className="space-y-2">
               <Label className="text-sm font-medium">Department *</Label>
               <select
-                className="w-full border rounded-lg h-10 px-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50"
+                className="w-full border rounded-lg h-10 px-3 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
                 value={departmentID}
                 onChange={(e) => {
                   const newDeptID = e.target.value ? Number(e.target.value) : ""
@@ -1204,7 +1204,7 @@ export function FactualRosterManagement() {
             <div className="space-y-2">
               <Label className="text-sm font-medium">Designation</Label>
               <select
-                className="w-full border rounded-lg h-10 px-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50"
+                className="w-full border rounded-lg h-10 px-3 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
                 value={designationID}
                 onChange={(e) => setDesignationID(e.target.value ? Number(e.target.value) : "")}
                 disabled={

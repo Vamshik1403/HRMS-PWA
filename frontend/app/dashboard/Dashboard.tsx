@@ -365,11 +365,18 @@ export default function DashboardPage() {
         : `Employee #${log.employeeID}`;
       const time = log.punchTimeStamp.split(" ")[1]?.slice(0, 5) || "—";
 
+      // Determine check-in vs check-out based on punch order for this employee today
+      const empTodayLogs = attendanceLogs
+        .filter((l) => l.employeeID === log.employeeID)
+        .sort((a, b) => new Date(a.punchTimeStamp).getTime() - new Date(b.punchTimeStamp).getTime());
+      const isFirstPunch = empTodayLogs.length === 0 || empTodayLogs[0].id === log.id;
+      const body = isFirstPunch ? "Checked in for today." : "Checked out for today.";
+
       return {
         id: log.id,
         name,
         headline: `${name.split(" ")[0]} · attendance`,
-        body: "Checked in for today.",
+        body,
         time,
         avatarInitial: name.charAt(0).toUpperCase(),
         avatarBg: avatarColors[i % avatarColors.length],
