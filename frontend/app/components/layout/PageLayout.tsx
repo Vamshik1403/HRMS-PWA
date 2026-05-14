@@ -827,7 +827,7 @@ export function PageLayout({ children }: PageLayoutProps) {
                   </div>
                 </div>
                 <div className="order-2 lg:order-3 flex items-center justify-end gap-2 sm:gap-2 shrink-0">
-                  <DropdownMenu>
+                  <DropdownMenu modal={false}>
                     <DropdownMenuTrigger asChild>
                       <button type="button" className="flex items-center gap-2 cursor-pointer focus:outline-none rounded-full pl-1 pr-1 py-1 hover:bg-white/80 transition-colors">
                         <Avatar className="w-10 h-10 ring-[3px] ring-white shadow-md">
