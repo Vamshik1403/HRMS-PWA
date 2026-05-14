@@ -43,7 +43,25 @@ export default function EmpMobileLayout({ children }: EmpMobileLayoutProps) {
   const router = useRouter();
   const [showInstallBanner, setShowInstallBanner] = useState(false);
   const [showNotifButton, setShowNotifButton] = useState(false);
+  const [theme, setTheme] = useState<"light" | "dark">("light");
   const subscribeAttempted = useRef(false);
+
+  useEffect(() => {
+    const applyStoredTheme = () => {
+      const stored = (localStorage.getItem("_emp_appearance") || "light") as "light" | "dark";
+      const next = stored === "dark" ? "dark" : "light";
+      setTheme(next);
+      document.documentElement.setAttribute("data-emp-theme", next);
+    };
+
+    applyStoredTheme();
+    window.addEventListener("emp-theme-change", applyStoredTheme);
+    window.addEventListener("storage", applyStoredTheme);
+    return () => {
+      window.removeEventListener("emp-theme-change", applyStoredTheme);
+      window.removeEventListener("storage", applyStoredTheme);
+    };
+  }, []);
 
   // Auth guard
   useEffect(() => {
@@ -128,9 +146,9 @@ export default function EmpMobileLayout({ children }: EmpMobileLayoutProps) {
   const isActive = (href: string) => pathname === href || pathname.startsWith(href + "/");
 
   return (
-    <div className="bg-[#f2f4f7]" style={{ position: 'fixed', inset: 0, display: 'flex', flexDirection: 'column', overscrollBehavior: 'none' }}>
+    <div className="emp-pwa-shell bg-[#f2f4f7]" data-theme={theme} style={{ position: 'fixed', inset: 0, display: 'flex', flexDirection: 'column', overscrollBehavior: 'none' }}>
       {/* Top safe-area spacer — prevents content going under notch/status bar */}
-      <div style={{ height: 'env(safe-area-inset-top)', background: '#f2f4f7', flexShrink: 0 }} />
+      <div className="emp-pwa-safe-top" style={{ height: 'env(safe-area-inset-top)', background: '#f2f4f7', flexShrink: 0 }} />
 
       {/* iOS install-to-homescreen banner */}
       {showInstallBanner && (
@@ -165,7 +183,7 @@ export default function EmpMobileLayout({ children }: EmpMobileLayoutProps) {
       </main>
 
       {/* Bottom nav bar */}
-      <nav className="fixed bottom-0 inset-x-0 z-50 bg-white border-t border-gray-100 shadow-[0_-4px_24px_rgba(0,0,0,0.07)]" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
+      <nav className="emp-pwa-bottom-nav fixed bottom-0 inset-x-0 z-50 bg-white border-t border-gray-100 shadow-[0_-4px_24px_rgba(0,0,0,0.07)]" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
         <div className="flex items-center justify-around h-[60px] px-3">
           {navItems.map((item) => {
             const active = isActive(item.href);

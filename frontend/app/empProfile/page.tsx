@@ -25,6 +25,7 @@ export default function EmpProfilePage() {
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [showPhotoActions, setShowPhotoActions] = useState(false);
   const [showPhotoViewer, setShowPhotoViewer] = useState(false);
+  const [appearance, setAppearance] = useState<"light" | "dark">("light");
   const [photoUrl, setPhotoUrl] = useState<string | null>(() => {
     const cached = getPageCache<any>("empProfileData");
     return cached?.employeePhotoUrl || (typeof window !== "undefined" ? localStorage.getItem("_emp_photo") : null);
@@ -66,6 +67,13 @@ export default function EmpProfilePage() {
     } catch {}
   }, [fetchEmpData]);
 
+  useEffect(() => {
+    const saved = (localStorage.getItem("_emp_appearance") || "light") as "light" | "dark";
+    const next = saved === "dark" ? "dark" : "light";
+    setAppearance(next);
+    document.documentElement.setAttribute("data-emp-theme", next);
+  }, []);
+
   const emp = empData || empUser?.employee || null;
 
   const displayName = emp
@@ -87,6 +95,13 @@ export default function EmpProfilePage() {
   const email = emp?.businessEmail || emp?.personalEmail || empUser?.email || empUser?.username || "—";
   const phone = emp?.businessPhoneNo || emp?.personalPhoneNo || "—";
   const joinedOn = emp?.joiningDate || null;
+
+  const changeAppearance = (next: "light" | "dark") => {
+    setAppearance(next);
+    localStorage.setItem("_emp_appearance", next);
+    document.documentElement.setAttribute("data-emp-theme", next);
+    window.dispatchEvent(new Event("emp-theme-change"));
+  };
 
   const handlePhotoClick = () => {
     setShowPhotoActions(true);
@@ -222,6 +237,27 @@ export default function EmpProfilePage() {
               <span className="text-[13px] font-bold text-gray-900 flex-1 text-right truncate">{row.value}</span>
             </div>
           ))}
+
+          <div className="flex items-center gap-3 px-4 py-4 border-t border-gray-50">
+            <Icon icon="solar:palette-bold-duotone" className="w-5 h-5 text-gray-400 shrink-0" />
+            <span className="text-[13px] text-gray-500 w-20 shrink-0">Appearance</span>
+            <div className="ml-auto inline-flex rounded-xl bg-gray-100 p-1">
+              <button
+                type="button"
+                onClick={() => changeAppearance("light")}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${appearance === "light" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500"}`}
+              >
+                Light
+              </button>
+              <button
+                type="button"
+                onClick={() => changeAppearance("dark")}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${appearance === "dark" ? "bg-[#1f2937] text-white shadow-sm" : "text-gray-500"}`}
+              >
+                Dark
+              </button>
+            </div>
+          </div>
         </div>
 
         {/* Log out */}

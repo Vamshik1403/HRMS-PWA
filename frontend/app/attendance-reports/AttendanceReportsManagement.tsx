@@ -244,9 +244,14 @@ const parsePunchTime = (punchTime: string): { dateKey: string; timeStr: string }
   if (!punchTime) return null;
   
   if (punchTime.includes("T")) {
-    const datePart = punchTime.split("T")[0];
-    const timePart = punchTime.split("T")[1].split(".")[0];
-    return { dateKey: datePart, timeStr: timePart };
+    const dt = new Date(punchTime);
+    const year = dt.getFullYear();
+    const month = String(dt.getMonth() + 1).padStart(2, '0');
+    const day = String(dt.getDate()).padStart(2, '0');
+    const hours = String(dt.getHours()).padStart(2, '0');
+    const minutes = String(dt.getMinutes()).padStart(2, '0');
+    const seconds = String(dt.getSeconds()).padStart(2, '0');
+    return { dateKey: `${year}-${month}-${day}`, timeStr: `${hours}:${minutes}:${seconds}` };
   }
   
   const match = punchTime.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2})$/);

@@ -301,3 +301,70 @@
 .form-drawer-body .bg-red-50 {
   border-radius: 8px;
 }
+
+/* Employee PWA appearance theme (scoped) */
+html[data-emp-theme="dark"] .emp-pwa-shell,
+html[data-emp-theme="dark"] .emp-pwa-safe-top {
+  background: #0b1220 !important;
+  color: #e5e7eb !important;
+}
+
+html[data-emp-theme="dark"] .emp-pwa-shell .bg-white {
+  background-color: #111827 !important;
+}
+
+html[data-emp-theme="dark"] .emp-pwa-shell .bg-gray-50 {
+  background-color: #0f172a !important;
+}
+
+html[data-emp-theme="dark"] .emp-pwa-shell .bg-gray-100 {
+  background-color: #1f2937 !important;
+}
+
+html[data-emp-theme="dark"] .emp-pwa-shell .text-gray-900 {
+  color: #f9fafb !important;
+}
+
+html[data-emp-theme="dark"] .emp-pwa-shell .text-gray-800 {
+  color: #e5e7eb !important;
+}
+
+html[data-emp-theme="dark"] .emp-pwa-shell .text-gray-700 {
+  color: #d1d5db !important;
+}
+
+html[data-emp-theme="dark"] .emp-pwa-shell .text-gray-600 {
+  color: #9ca3af !important;
+}
+
+html[data-emp-theme="dark"] .emp-pwa-shell .text-gray-500,
+html[data-emp-theme="dark"] .emp-pwa-shell .text-gray-400 {
+  color: #94a3b8 !important;
+}
+
+html[data-emp-theme="dark"] .emp-pwa-shell .border-gray-50,
+html[data-emp-theme="dark"] .emp-pwa-shell .border-gray-100 {
+  border-color: #1f2937 !important;
+}
+
+html[data-emp-theme="dark"] .emp-pwa-shell .border-gray-200 {
+  border-color: #334155 !important;
+}
+
+html[data-emp-theme="dark"] .emp-pwa-bottom-nav {
+  background: #0f172a !important;
+  border-top-color: #1f2937 !important;
+  box-shadow: 0 -8px 28px rgba(2, 6, 23, 0.55) !important;
+}
+
+html[data-emp-theme="dark"] .emp-pwa-shell .bg-blue-50 {
+  background-color: #1e3a8a33 !important;
+}
+
+html[data-emp-theme="dark"] .emp-pwa-shell .bg-emerald-50 {
+  background-color: #064e3b55 !important;
+}
+
+html[data-emp-theme="dark"] .emp-pwa-shell .bg-red-50 {
+  background-color: #7f1d1d55 !important;
+}
