@@ -52,6 +52,7 @@ const quickLinks = [
   { label: "Reimbursement",    icon: "solar:wallet-bold-duotone",      color: "bg-emerald-50", iconColor: "text-emerald-600", href: "/empReimbursement" },
   { label: "Pay Slips",        icon: "solar:bill-bold-duotone",        color: "bg-pink-50",    iconColor: "text-pink-600",    href: "/empGenerateSalary" },
   { label: "Notice Board",     icon: "solar:bell-bold-duotone",        color: "bg-amber-50",   iconColor: "text-amber-600",   href: "/empNoticeboard" },
+  { label: "Tasks",            icon: "solar:checklist-bold-duotone",   color: "bg-cyan-50",    iconColor: "text-cyan-600",    href: "/empMyTasks" },
 ];
 
 export default function EmpDashboardPage() {

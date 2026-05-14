@@ -2949,7 +2949,7 @@ export function GenerateSalaryManagement() {
           </FormDrawer>
 
         {!isDialogOpen && (<>
-        <div className="flex items-center justify-between w-full">
+        <div className="mt-6 flex items-center justify-between w-full">
           <div className="min-w-0 flex-1">
             <p className="text-gray-600 mt-1 text-sm">Generate and manage employee salary payments</p>
           </div>

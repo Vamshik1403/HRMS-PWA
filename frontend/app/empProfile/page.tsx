@@ -23,6 +23,8 @@ export default function EmpProfilePage() {
   const [empData, setEmpData] = useState<any>(() => getPageCache<any>("empProfileData"));
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [showPhotoActions, setShowPhotoActions] = useState(false);
+  const [showPhotoViewer, setShowPhotoViewer] = useState(false);
   const [photoUrl, setPhotoUrl] = useState<string | null>(() => {
     const cached = getPageCache<any>("empProfileData");
     return cached?.employeePhotoUrl || (typeof window !== "undefined" ? localStorage.getItem("_emp_photo") : null);
@@ -87,7 +89,17 @@ export default function EmpProfilePage() {
   const joinedOn = emp?.joiningDate || null;
 
   const handlePhotoClick = () => {
+    setShowPhotoActions(true);
+  };
+
+  const handleChangePhotoFromActions = () => {
+    setShowPhotoActions(false);
     fileInputRef.current?.click();
+  };
+
+  const handleViewPhotoFromActions = () => {
+    setShowPhotoActions(false);
+    setShowPhotoViewer(true);
   };
 
   const handlePhotoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -223,6 +235,106 @@ export default function EmpProfilePage() {
         {/* Version */}
         <p className="text-center text-[12px] text-gray-400">OpenHRM Mobile · {APP_VERSION}</p>
       </div>
+
+      {showPhotoActions && (
+        <div
+          className="fixed inset-0 z-[120] bg-slate-900/45 backdrop-blur-[2px] flex items-end pb-[calc(env(safe-area-inset-bottom)+84px)]"
+          onClick={() => setShowPhotoActions(false)}
+        >
+          <div
+            className="w-full bg-white rounded-t-[28px] px-4 pt-3 pb-4 shadow-[0_-14px_40px_rgba(15,23,42,0.24)] max-h-[72vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mx-auto h-1.5 w-12 rounded-full bg-slate-200 mb-3" />
+
+            <div className="flex items-center gap-3 px-1 pb-3 border-b border-slate-100">
+              <div className="w-11 h-11 rounded-full overflow-hidden bg-[#2563eb] flex items-center justify-center shrink-0">
+                {photoUrl && !imgFailed ? (
+                  <img src={photoUrl} alt={displayName} className="w-full h-full object-cover" />
+                ) : (
+                  <span className="text-white font-bold text-sm">{initials}</span>
+                )}
+              </div>
+              <div className="min-w-0">
+                <p className="text-[15px] font-semibold text-slate-900">Profile picture</p>
+                <p className="text-xs text-slate-500 truncate">Manage how your photo appears in the app</p>
+              </div>
+            </div>
+
+            <div className="mt-3 space-y-2.5">
+              {photoUrl && !imgFailed && (
+                <button
+                  type="button"
+                  onClick={handleViewPhotoFromActions}
+                  className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3.5 text-left transition-colors hover:bg-slate-50 active:scale-[0.995]"
+                >
+                  <span className="flex items-center justify-between gap-3">
+                    <span className="flex items-center gap-3 min-w-0">
+                      <span className="w-9 h-9 rounded-xl bg-slate-100 flex items-center justify-center shrink-0">
+                        <Icon icon="solar:eye-bold-duotone" className="w-5 h-5 text-slate-700" />
+                      </span>
+                      <span className="min-w-0">
+                        <span className="block text-sm font-semibold text-slate-900">View profile picture</span>
+                        <span className="block text-xs text-slate-500">Open photo in full screen</span>
+                      </span>
+                    </span>
+                    <Icon icon="solar:alt-arrow-right-linear" className="w-4 h-4 text-slate-400" />
+                  </span>
+                </button>
+              )}
+
+              <button
+                type="button"
+                onClick={handleChangePhotoFromActions}
+                className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3.5 text-left transition-colors hover:bg-slate-50 active:scale-[0.995]"
+              >
+                <span className="flex items-center justify-between gap-3">
+                  <span className="flex items-center gap-3 min-w-0">
+                    <span className="w-9 h-9 rounded-xl bg-blue-50 flex items-center justify-center shrink-0">
+                      <Icon icon="solar:camera-bold-duotone" className="w-5 h-5 text-blue-700" />
+                    </span>
+                    <span className="min-w-0">
+                      <span className="block text-sm font-semibold text-slate-900">Change image</span>
+                      <span className="block text-xs text-slate-500">Upload a new profile photo</span>
+                    </span>
+                  </span>
+                  <Icon icon="solar:alt-arrow-right-linear" className="w-4 h-4 text-slate-400" />
+                </span>
+              </button>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setShowPhotoActions(false)}
+              className="mt-4 w-full rounded-2xl bg-slate-100 px-4 py-3 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-200"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {showPhotoViewer && photoUrl && !imgFailed && (
+        <div
+          className="fixed inset-0 z-[60] bg-black/90 flex items-center justify-center p-4"
+          onClick={() => setShowPhotoViewer(false)}
+        >
+          <button
+            type="button"
+            onClick={() => setShowPhotoViewer(false)}
+            className="absolute top-5 right-5 text-white"
+            aria-label="Close profile picture viewer"
+          >
+            <Icon icon="mdi:close" className="w-7 h-7" />
+          </button>
+          <img
+            src={photoUrl}
+            alt={`${displayName} profile`}
+            className="max-h-[88vh] max-w-full rounded-2xl object-contain"
+            onClick={(e) => e.stopPropagation()}
+          />
+        </div>
+      )}
     </EmpMobileLayout>
   );
 }
