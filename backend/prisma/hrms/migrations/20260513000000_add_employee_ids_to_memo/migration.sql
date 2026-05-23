@@ -1,6 +1,6 @@
 -- AlterTable: make employeeID nullable and add employeeIDs array
 ALTER TABLE "EmployeeMemo" ALTER COLUMN "employeeID" DROP NOT NULL;
-ALTER TABLE "EmployeeMemo" ADD COLUMN "employeeIDs" INTEGER[] NOT NULL DEFAULT '{}';
+ALTER TABLE "EmployeeMemo" ADD COLUMN IF NOT EXISTS "employeeIDs" INTEGER[] NOT NULL DEFAULT '{}';
 
 -- Drop old cascade FK, add new SetNull FK
 ALTER TABLE "EmployeeMemo" DROP CONSTRAINT IF EXISTS "EmployeeMemo_employeeID_fkey";

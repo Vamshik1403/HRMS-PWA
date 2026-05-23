@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { Icon } from "@iconify/react";
 import EmpMobileLayout from "../components/layout/EmpMobileLayout";
 import { getPageCache, setPageCache } from "../utils/pageCache";
+import { clearLegacyEmpPhoto, resolveEmpPhoto } from "../utils/empPhotoCache";
 
 // ─── Ambient Greeting Accent ───────────────────────────────────────────────────
 const _ambientCss = `
@@ -229,13 +230,16 @@ export default function EmpDashboardPage() {
   const [leaveBadge, setLeaveBadge] = useState(0);
 
   useEffect(() => {
+    clearLegacyEmpPhoto();
     try {
       const s = localStorage.getItem("user");
-      if (s) setEmpUser(JSON.parse(s));
+      if (s) {
+        const u = JSON.parse(s);
+        setEmpUser(u);
+        const empId = u?.employee?.id;
+        setPhotoUrl(resolveEmpPhoto(empId, u?.employee?.employeePhotoUrl));
+      }
     } catch {}
-    // Read cached photo URL saved by the profile page
-    const cached = localStorage.getItem("_emp_photo");
-    if (cached) setPhotoUrl(cached);
   }, []);
 
   // Fetch badge counts — wrapped in useCallback so polling can reuse it
@@ -391,7 +395,7 @@ export default function EmpDashboardPage() {
     : empUser?.username || "Employee";
   const empInitials = empFullName.split(" ").filter(Boolean).slice(0, 2)
     .map((w: string) => w[0].toUpperCase()).join("") || "E";
-  const empPhoto = photoUrl || empUser?.employee?.employeePhotoUrl || null;
+  const empPhoto = photoUrl || resolveEmpPhoto(empUser?.employee?.id, empUser?.employee?.employeePhotoUrl) || null;
 
   const { isCheckedIn, isCheckedOut, checkIn, checkOut } = todayStatus || {};
   const workedHrs = checkIn && checkOut ? calcHrs(checkIn.checkinTime, checkOut.checkinTime) : null;

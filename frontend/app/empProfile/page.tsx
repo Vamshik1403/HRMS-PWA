@@ -4,7 +4,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Icon } from "@iconify/react";
 import EmpMobileLayout from "../components/layout/EmpMobileLayout";
-import { getPageCache, setPageCache } from "../utils/pageCache";
+import { getPageCache, setPageCache, clearPageCache } from "../utils/pageCache";
+import { clearLegacyEmpPhoto, getEmpPhoto, setEmpPhoto } from "../utils/empPhotoCache";
 
 const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL || "/backend";
 const APP_VERSION = "v1.0.0";
@@ -20,16 +21,13 @@ export default function EmpProfilePage() {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [empUser, setEmpUser] = useState<any>(null);
-  const [empData, setEmpData] = useState<any>(() => getPageCache<any>("empProfileData"));
+  const [empData, setEmpData] = useState<any>(null);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [showPhotoActions, setShowPhotoActions] = useState(false);
   const [showPhotoViewer, setShowPhotoViewer] = useState(false);
   const [appearance, setAppearance] = useState<"light" | "dark">("light");
-  const [photoUrl, setPhotoUrl] = useState<string | null>(() => {
-    const cached = getPageCache<any>("empProfileData");
-    return cached?.employeePhotoUrl || (typeof window !== "undefined" ? localStorage.getItem("_emp_photo") : null);
-  });
+  const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   const [imgFailed, setImgFailed] = useState(false);
 
   const fetchEmpData = useCallback(async (u: any, token: string) => {
@@ -43,25 +41,30 @@ export default function EmpProfilePage() {
       const data = await res.json();
       setEmpData(data);
       setPageCache("empProfileData", data);
-      if (data?.employeePhotoUrl) {
-        setPhotoUrl(data.employeePhotoUrl);
-        setImgFailed(false);
-        // Cache so home dashboard shows it immediately on next visit
-        try { localStorage.setItem("_emp_photo", data.employeePhotoUrl); } catch {}
-      }
+      const url = data?.employeePhotoUrl || null;
+      setPhotoUrl(url);
+      setImgFailed(false);
+      setEmpPhoto(empId, url);
     } catch {}
   }, []);
 
   useEffect(() => {
     try {
+      clearLegacyEmpPhoto();
       const s = localStorage.getItem("user");
       const token = localStorage.getItem("token") || localStorage.getItem("accessToken") || "";
       if (s) {
         const u = JSON.parse(s);
         setEmpUser(u);
-        // Only fall back to stored user photo if we have no better cache
-        const storedPhoto = u?.employee?.employeePhotoUrl;
-        if (storedPhoto) setPhotoUrl((prev) => prev || storedPhoto);
+        const empId = u?.employee?.id || u?.employeeId || u?.id;
+        const cached = getPageCache<any>("empProfileData");
+        if (cached?.id === empId) {
+          setEmpData(cached);
+          setPhotoUrl(cached.employeePhotoUrl || getEmpPhoto(empId));
+        } else {
+          clearPageCache("empProfileData");
+          setPhotoUrl(u?.employee?.employeePhotoUrl || getEmpPhoto(empId));
+        }
         fetchEmpData(u, token);
       }
     } catch {}
@@ -147,7 +150,7 @@ export default function EmpProfilePage() {
 
       setImgFailed(false);
       setPhotoUrl(fullUrl);
-      try { localStorage.setItem("_emp_photo", fullUrl); } catch {};
+      setEmpPhoto(empId, fullUrl);
       try {
         const stored = localStorage.getItem("user");
         if (stored) {
@@ -165,6 +168,10 @@ export default function EmpProfilePage() {
   };
 
   const handleLogout = () => {
+    const empId = empUser?.employee?.id || empUser?.employeeId;
+    setEmpPhoto(empId, null);
+    clearLegacyEmpPhoto();
+    clearPageCache("empProfileData");
     localStorage.removeItem("token");
     localStorage.removeItem("accessToken");
     localStorage.removeItem("user");

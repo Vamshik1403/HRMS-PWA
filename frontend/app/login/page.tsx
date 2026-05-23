@@ -3,6 +3,8 @@ import { useState, useRef, useEffect } from 'react'
 import axios from 'axios'
 import { useRouter } from 'next/navigation'
 import { Eye, EyeOff, Lock, User, LogIn } from 'lucide-react'
+import { clearLegacyEmpPhoto } from '../utils/empPhotoCache'
+import { clearPageCache } from '../utils/pageCache'
 
 const TERMS_AND_CONDITIONS = `TERMS AND CONDITIONS & END USER LICENSE AGREEMENT
 
@@ -175,6 +177,9 @@ export default function LoginPage() {
       })
       
       const { accessToken, user: basicUser } = loginRes.data
+
+      clearLegacyEmpPhoto()
+      clearPageCache('empProfileData')
 
       // Save token in localStorage and cookie (middleware reads the cookie)
       localStorage.setItem('accessToken', accessToken)
