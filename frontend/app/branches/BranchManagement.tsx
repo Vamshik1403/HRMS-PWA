@@ -21,6 +21,7 @@ import {
   DropdownMenuTrigger,
 } from "../components/ui/dropdown-menu";
 import { FormDrawer } from "../components/ui/form-drawer";
+import { TimezoneSelect } from "../components/ui/timezone-select";
 import { toast } from "sonner";
 import { getSidebarContext } from "../utils/sidebarContext";
 
@@ -895,7 +896,10 @@ export function BranchManagement() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Time Zone</Label>
-                  <Input value={formData.timeZone} onChange={(e) => setFormData((p) => ({ ...p, timeZone: e.target.value }))} />
+                  <TimezoneSelect
+                    value={formData.timeZone || ""}
+                    onChange={(value) => setFormData((p) => ({ ...p, timeZone: value }))}
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label>Currency</Label>
@@ -1017,7 +1021,15 @@ export function BranchManagement() {
 
               <div className="space-y-2">
                 <Label>Financial Year Start</Label>
-                <Input type="date" value={formData.financialYearStart} onChange={(e) => setFormData((p) => ({ ...p, financialYearStart: e.target.value }))} />
+                <select
+                  className="w-full rounded-md border px-3 py-2"
+                  value={formData.financialYearStart || ""}
+                  onChange={(e) => setFormData((p) => ({ ...p, financialYearStart: e.target.value }))}
+                >
+                  <option value="">-- Select Start Date --</option>
+                  <option value="1st Jan">1st Jan</option>
+                  <option value="1st April">1st April</option>
+                </select>
               </div>
 
               {/* Bank Details repeater - hidden for ADMIN and COMPANY_ADMIN */}

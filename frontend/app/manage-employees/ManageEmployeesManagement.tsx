@@ -1197,6 +1197,12 @@ const runFetchCombinedDev = (q: string) => {
     }, DEBOUNCE_MS);
   };
 
+  const getActiveDepartmentId = (): ID | null => {
+    if (stagingDept.departmentNameID) return stagingDept.departmentNameID;
+    const latest = formData.empDepartmentForm[formData.empDepartmentForm.length - 1];
+    return latest?.departmentNameID ?? formData.departmentNameID ?? null;
+  };
+
   const runFetchDesg = (q: string) => {
     if (desgTimerRef.current) clearTimeout(desgTimerRef.current);
     desgTimerRef.current = setTimeout(async () => {
@@ -1210,6 +1216,10 @@ const runFetchCombinedDev = (q: string) => {
           all = filterForManager(all);
         } else if (formData.companyID) {
           all = all.filter(x => x.companyID === formData.companyID);
+        }
+        const activeDeptId = getActiveDepartmentId();
+        if (activeDeptId) {
+          all = all.filter(x => x.departmentID === activeDeptId);
         }
         const filtered = (all || []).filter(d => (d.designation ?? "").toLowerCase().includes(q.toLowerCase()));
         setDesgList(filtered.slice(0, 20));
@@ -1431,7 +1441,7 @@ const runFetchCombinedDev = (q: string) => {
   };
 
   interface Dept { id: ID; departmentName?: string | null; companyID?: ID | null; branchesID?: ID | null; }
-  interface Desg { id: ID; designation?: string | null; companyID?: ID | null; branchesID?: ID | null; }
+  interface Desg { id: ID; designation?: string | null; companyID?: ID | null; branchesID?: ID | null; departmentID?: ID | null; }
   interface Contr { id: ID; contractorName?: string | null; companyID?: ID | null; branchesID?: ID | null; }
   interface Mgr { id: ID; employeeFirstName?: string | null; employeeLastName?: string | null; companyID?: ID | null; branchesID?: ID | null; }
   interface WS { id: ID; workShiftName?: string | null; companyID?: ID | null; branchesID?: ID | null; isRotating?: boolean | null; isFlexible?: boolean | null; _isFactual?: boolean; }
@@ -3153,6 +3163,8 @@ const addCombinedDevMap = () => {
                         {deptList.map((d) => (
                           <div key={d.id} className="px-3 py-2 hover:bg-gray-100 cursor-pointer" onMouseDown={(e) => e.preventDefault()} onClick={() => {
                             setStagingDept(p => ({ ...p, departmentNameID: d.id, label: d.departmentName ?? String(d.id) }));
+                            setStagingDesg({ designationID: null, label: "", effectFrom: today });
+                            setDesgList([]);
                             setDeptList([]);
                           }}>{d.departmentName}</div>
                         ))}
@@ -3172,6 +3184,8 @@ const addCombinedDevMap = () => {
                       return { ...p, empDepartmentForm: updated, departmentNameID: last?.departmentNameID ?? null, deptAutocomplete: last?._deptAutocomplete ?? "", promotion: { ...p.promotion, departmentNameID: last?.departmentNameID ?? null } };
                     });
                     setStagingDept({ departmentNameID: null, label: "", effectFrom: today });
+                    setStagingDesg({ designationID: null, label: "", effectFrom: today });
+                    setDesgList([]);
                   }}>Add</Button>
                 </div>
                 <div className="border border-gray-200 rounded-lg overflow-hidden">
@@ -3206,15 +3220,19 @@ const addCombinedDevMap = () => {
                 <div className="flex items-end gap-2">
                   <div ref={desgRef} className="flex-1 space-y-2 relative">
                     <Label>Designation Name</Label>
+                    {!getActiveDepartmentId() && (
+                      <p className="text-xs text-amber-600">Select a department first to load matching designations.</p>
+                    )}
                     <Input
                       value={stagingDesg.label}
+                      disabled={!getActiveDepartmentId()}
                       onChange={(e) => {
                         const val = e.target.value;
                         setStagingDesg(p => ({ ...p, label: val, designationID: null }));
                         runFetchDesg(val);
                       }}
-                      onFocus={(e) => { if (e.target.value.length >= MIN_CHARS) runFetchDesg(e.target.value); }}
-                      placeholder="Search designation…"
+                      onFocus={(e) => { if (getActiveDepartmentId() && e.target.value.length >= MIN_CHARS) runFetchDesg(e.target.value); }}
+                      placeholder={getActiveDepartmentId() ? "Search designation…" : "Select department first"}
                       autoComplete="off"
                     />
                     {desgList.length > 0 && (

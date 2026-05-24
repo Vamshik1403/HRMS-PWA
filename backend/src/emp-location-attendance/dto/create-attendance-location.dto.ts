@@ -1,5 +1,5 @@
 export class CreateAttendanceLocationDto {
-  checkType: 'CHECK_IN' | 'CHECK_OUT';
+  checkType: 'CHECK_IN' | 'CHECK_OUT' | 'BREAK_IN' | 'BREAK_OUT';
   latitude: number;
   longitude: number;
   accuracy?: number;

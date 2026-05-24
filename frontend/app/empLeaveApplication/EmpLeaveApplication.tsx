@@ -163,20 +163,7 @@ export function EmpLeaveApplication() {
       };
       setLeaveBalance(balance);
 
-      // Tenure warning
-      const joiningDate = empRes.joiningDate ?? null;
-      if (joiningDate) {
-        const joining = new Date(joiningDate);
-        const today = new Date();
-        const daysSinceJoining = Math.floor((today.getTime() - joining.getTime()) / (1000 * 60 * 60 * 24));
-        if (daysSinceJoining < 80) {
-          setTenureWarning(`You have only ${daysSinceJoining} days of service. Minimum 80 days required — leave subject to approval.`);
-        } else {
-          setTenureWarning(null);
-        }
-      } else {
-        setTenureWarning(null);
-      }
+      // Tenure warning removed per product requirement
 
       // numberOfChildren null warning
       if (numChildren === null && (employeeGenderVal === "Female" || employeeGenderVal === "Male" || employeeGenderVal === "Others")) {
@@ -600,12 +587,6 @@ export function EmpLeaveApplication() {
 
       {/* Form Container */}
       <div className="bg-white rounded-2xl border border-gray-200 p-4 space-y-5">
-        {tenureWarning && (
-          <div className="p-3 bg-amber-50 rounded-xl border border-amber-100">
-            <p className="text-[12px] text-amber-700">⚠️ {tenureWarning}</p>
-          </div>
-        )}
-
         {/* Leave Type */}
         <div>
           <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest mb-2.5">Leave Type</p>
@@ -659,14 +640,14 @@ export function EmpLeaveApplication() {
         )}
 
         {/* Start / End Date — image-2 style: bordered box with arrows + stacked date inside */}
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 min-[380px]:grid-cols-2 gap-3 min-w-0">
           {(["fromDate", "toDate"] as const).map((key) => {
             const label = key === "fromDate" ? "START" : "END";
             const parts = formatDateParts(formData[key]);
             return (
-              <div key={key}>
+              <div key={key} className="min-w-0">
                 <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest mb-1.5">{label}</p>
-                <div className="relative flex items-center justify-between border border-gray-200 rounded-xl bg-white px-2 py-3">
+                <div className="relative flex items-center justify-between border border-gray-200 rounded-xl bg-white px-1.5 py-2.5 min-w-0">
                   {/* Transparent native date input — covers entire box for tap-to-pick */}
                   <input
                     type="date"
@@ -682,14 +663,14 @@ export function EmpLeaveApplication() {
                       d.setDate(d.getDate() - 1);
                       setFormData(p => ({ ...p, [key]: d.toISOString().split("T")[0] }));
                     }}
-                    className="relative z-10 w-7 h-7 flex items-center justify-center text-gray-400 text-[18px] font-light shrink-0 active:scale-[0.85]"
+                    className="relative z-10 w-6 h-7 flex items-center justify-center text-gray-400 text-[16px] font-light shrink-0 active:scale-[0.85]"
                   >‹</button>
                   {/* Stacked date display */}
-                  <div className="relative z-10 flex flex-col items-center flex-1 pointer-events-none select-none">
+                  <div className="relative z-10 flex flex-col items-center flex-1 min-w-0 pointer-events-none select-none px-1">
                     {formData[key] ? (
                       <>
-                        <span className="text-[14px] font-bold text-gray-900 leading-tight">{parts.top}</span>
-                        <span className="text-[12px] font-medium text-gray-500 leading-tight">{parts.bottom}</span>
+                        <span className="text-[13px] font-bold text-gray-900 leading-tight truncate max-w-full">{parts.top}</span>
+                        <span className="text-[11px] font-medium text-gray-500 leading-tight truncate max-w-full">{parts.bottom}</span>
                       </>
                     ) : (
                       <span className="text-[12px] text-gray-400">Select</span>
@@ -703,7 +684,7 @@ export function EmpLeaveApplication() {
                       d.setDate(d.getDate() + 1);
                       setFormData(p => ({ ...p, [key]: d.toISOString().split("T")[0] }));
                     }}
-                    className="relative z-10 w-7 h-7 flex items-center justify-center text-gray-400 text-[18px] font-light shrink-0 active:scale-[0.85]"
+                    className="relative z-10 w-6 h-7 flex items-center justify-center text-gray-400 text-[16px] font-light shrink-0 active:scale-[0.85]"
                   >›</button>
                 </div>
               </div>

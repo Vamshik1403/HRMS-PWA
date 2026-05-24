@@ -746,22 +746,22 @@ if (employee) await loadReimbursements(employee.employeeID)
 
   
   return (
-    <div className="px-4 pt-5 pb-4 space-y-4">
+    <div className="px-4 pt-5 pb-4 space-y-4 min-w-0 overflow-x-hidden">
       {/* Header */}
       <h1 className="text-[22px] font-bold text-gray-900">Reimbursement</h1>
 
       {/* Inline Form */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 space-y-4">
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 space-y-4 min-w-0 overflow-hidden">
         <p className="text-[13px] font-bold text-gray-700">{editing ? "Edit Request" : "New Request"}</p>
 
         {/* Date */}
-        <div>
+        <div className="min-w-0">
           <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">Date</p>
           <input
             type="date"
             value={formData.date}
             onChange={(e) => setFormData(p => ({ ...p, date: e.target.value }))}
-            className="w-full px-3 py-2.5 text-[13px] rounded-xl border border-gray-100 bg-gray-50 focus:outline-none"
+            className="block w-full min-w-0 max-w-full box-border px-3 py-2.5 text-[13px] rounded-xl border border-gray-100 bg-gray-50 focus:outline-none appearance-none"
           />
         </div>
 
@@ -779,20 +779,21 @@ if (employee) await loadReimbursements(employee.employeeID)
           <div className="space-y-3">
             {items.map((item, idx) => (
               <div key={idx} className="bg-gray-50 rounded-xl p-3 space-y-2">
-                <div className="flex gap-2">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                   <input
                     value={item.reimbursementType}
                     onChange={(e) => updateItemRow(idx, "reimbursementType", e.target.value)}
                     placeholder="Category (Travel, Food…)"
-                    className="flex-1 px-3 py-2 text-[13px] rounded-xl border border-gray-100 bg-white focus:outline-none"
+                    className="flex-1 min-w-0 px-3 py-2 text-[13px] rounded-xl border border-gray-100 bg-white focus:outline-none"
                   />
+                  <div className="flex gap-2">
                   <input
                     type="number"
                     step="0.01"
                     value={item.amount}
                     onChange={(e) => updateItemRow(idx, "amount", e.target.value)}
                     placeholder="₹ Amount"
-                    className="w-28 px-3 py-2 text-[13px] rounded-xl border border-gray-100 bg-white focus:outline-none"
+                    className="flex-1 min-w-0 sm:w-28 sm:flex-none px-3 py-2 text-[13px] rounded-xl border border-gray-100 bg-white focus:outline-none"
                   />
                   {items.length > 1 && (
                     <button
@@ -802,6 +803,7 @@ if (employee) await loadReimbursements(employee.employeeID)
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
                   )}
+                  </div>
                 </div>
                 <input
                   value={item.description}

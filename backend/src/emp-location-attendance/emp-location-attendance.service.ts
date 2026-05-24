@@ -2,45 +2,133 @@ import { Injectable, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateAttendanceLocationDto } from './dto/create-attendance-location.dto';
 
+const VALID_TYPES = ['CHECK_IN', 'CHECK_OUT', 'BREAK_IN', 'BREAK_OUT'] as const;
+type PunchType = (typeof VALID_TYPES)[number];
+
 @Injectable()
 export class EmpLocationAttendanceService {
   constructor(private prisma: PrismaService) {}
 
+  private dayWindow(now = new Date()) {
+    const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
+    const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+    return { startOfDay, endOfDay };
+  }
+
+  private getLastPunch(records: { checkType: string; checkinTime: Date }[]) {
+    if (!records.length) return null;
+    return [...records].sort((a, b) => a.checkinTime.getTime() - b.checkinTime.getTime()).at(-1)!;
+  }
+
+  private getPunchState(lastType: string | null): 'OUT' | 'IN' | 'ON_BREAK' {
+    if (!lastType || lastType === 'CHECK_OUT') return 'OUT';
+    if (lastType === 'CHECK_IN' || lastType === 'BREAK_OUT') return 'IN';
+    if (lastType === 'BREAK_IN') return 'ON_BREAK';
+    return 'OUT';
+  }
+
+  private validatePunch(lastType: string | null, checkType: PunchType) {
+    const state = this.getPunchState(lastType);
+
+    if (checkType === 'CHECK_IN') {
+      if (state !== 'OUT') {
+        throw new BadRequestException('You must check out before checking in again.');
+      }
+      return;
+    }
+
+    if (checkType === 'CHECK_OUT') {
+      if (state === 'OUT') {
+        throw new BadRequestException('You must check in before checking out.');
+      }
+      if (state === 'ON_BREAK') {
+        throw new BadRequestException('Please end your break before checking out.');
+      }
+      return;
+    }
+
+    if (checkType === 'BREAK_IN') {
+      if (state !== 'IN') {
+        throw new BadRequestException('You must be checked in to start a break.');
+      }
+      return;
+    }
+
+    if (checkType === 'BREAK_OUT') {
+      if (state !== 'ON_BREAK') {
+        throw new BadRequestException('No active break to end.');
+      }
+    }
+  }
+
+  private computeMinutes(records: { checkType: string; checkinTime: Date }[], now = new Date()) {
+    const sorted = [...records].sort((a, b) => a.checkinTime.getTime() - b.checkinTime.getTime());
+    let workMs = 0;
+    let breakMs = 0;
+    let workStart: Date | null = null;
+    let breakStart: Date | null = null;
+
+    for (const rec of sorted) {
+      const t = rec.checkinTime;
+
+      if (rec.checkType === 'CHECK_IN') {
+        workStart = t;
+      } else if (rec.checkType === 'BREAK_IN') {
+        if (workStart) {
+          workMs += t.getTime() - workStart.getTime();
+        }
+        workStart = null;
+        breakStart = t;
+      } else if (rec.checkType === 'BREAK_OUT') {
+        if (breakStart) {
+          breakMs += t.getTime() - breakStart.getTime();
+        }
+        breakStart = null;
+        workStart = t;
+      } else if (rec.checkType === 'CHECK_OUT') {
+        if (workStart) {
+          workMs += t.getTime() - workStart.getTime();
+        }
+        workStart = null;
+        breakStart = null;
+      }
+    }
+
+    const state = this.getPunchState(sorted.at(-1)?.checkType ?? null);
+    if (state === 'IN' && workStart) {
+      workMs += now.getTime() - workStart.getTime();
+    }
+    if (state === 'ON_BREAK' && breakStart) {
+      breakMs += now.getTime() - breakStart.getTime();
+    }
+
+    return {
+      workMinutes: Math.max(0, Math.round(workMs / 60000)),
+      breakMinutes: Math.max(0, Math.round(breakMs / 60000)),
+      workSeconds: Math.max(0, Math.round(workMs / 1000)),
+      breakSeconds: Math.max(0, Math.round(breakMs / 1000)),
+    };
+  }
+
   async checkIn(employeeId: number, dto: CreateAttendanceLocationDto, ipAddress: string) {
-    if (!['CHECK_IN', 'CHECK_OUT'].includes(dto.checkType)) {
-      throw new BadRequestException('checkType must be CHECK_IN or CHECK_OUT');
+    if (!VALID_TYPES.includes(dto.checkType as PunchType)) {
+      throw new BadRequestException('checkType must be CHECK_IN, CHECK_OUT, BREAK_IN, or BREAK_OUT');
     }
 
     const now = new Date();
-    const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
-    const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+    const { startOfDay, endOfDay } = this.dayWindow(now);
 
     const todayRecords = await this.prisma.attendanceLocation.findMany({
       where: {
         employeeId,
         checkinTime: { gte: startOfDay, lte: endOfDay },
       },
+      orderBy: { checkinTime: 'asc' },
     });
 
-    const alreadyCheckedIn = todayRecords.some((r) => r.checkType === 'CHECK_IN');
-    const alreadyCheckedOut = todayRecords.some((r) => r.checkType === 'CHECK_OUT');
+    const lastPunch = this.getLastPunch(todayRecords);
+    this.validatePunch(lastPunch?.checkType ?? null, dto.checkType as PunchType);
 
-    if (dto.checkType === 'CHECK_IN') {
-      if (alreadyCheckedIn) {
-        throw new BadRequestException('You have already checked in today.');
-      }
-    }
-
-    if (dto.checkType === 'CHECK_OUT') {
-      if (!alreadyCheckedIn) {
-        throw new BadRequestException('You must check in before checking out.');
-      }
-      if (alreadyCheckedOut) {
-        throw new BadRequestException('You have already checked out today.');
-      }
-    }
-
-    // Fetch employee details to populate process_att_logs with name/company/branch/dept
     const employee = await this.prisma.manageEmployee.findUnique({
       where: { id: employeeId },
       select: {
@@ -68,7 +156,6 @@ export class EmpLocationAttendanceService {
       },
     });
 
-    // Mirror the punch into process_att_logs so it appears in attendance reports
     try {
       const fullName = [employee?.employeeFirstName, employee?.employeeLastName]
         .filter(Boolean)
@@ -101,7 +188,7 @@ export class EmpLocationAttendanceService {
         },
       });
     } catch {
-      // Non-critical: do not fail the punch if process_att_logs write fails
+      // Non-critical
     }
 
     return record;
@@ -117,8 +204,7 @@ export class EmpLocationAttendanceService {
 
   async getTodayStatus(employeeId: number) {
     const now = new Date();
-    const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
-    const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+    const { startOfDay, endOfDay } = this.dayWindow(now);
 
     const records = await this.prisma.attendanceLocation.findMany({
       where: {
@@ -128,15 +214,31 @@ export class EmpLocationAttendanceService {
       orderBy: { checkinTime: 'asc' },
     });
 
-    const checkIn = records.find((r) => r.checkType === 'CHECK_IN') ?? null;
-    const checkOut = [...records].reverse().find((r) => r.checkType === 'CHECK_OUT') ?? null;
+    const checkIns = records.filter((r) => r.checkType === 'CHECK_IN');
+    const checkOuts = records.filter((r) => r.checkType === 'CHECK_OUT');
+    const checkIn = checkIns[0] ?? null;
+    const checkOut = checkOuts.at(-1) ?? null;
+    const lastPunch = this.getLastPunch(records);
+    const punchState = this.getPunchState(lastPunch?.checkType ?? null);
+    const { workMinutes, breakMinutes, workSeconds, breakSeconds } = this.computeMinutes(records, now);
 
     return {
-      isCheckedIn: !!checkIn,
-      isCheckedOut: !!checkOut,
+      isCheckedIn: punchState === 'IN' || punchState === 'ON_BREAK',
+      isCheckedOut: punchState === 'OUT' && checkOuts.length > 0,
+      punchState,
+      canCheckIn: punchState === 'OUT',
+      canCheckOut: punchState === 'IN',
+      canBreakIn: punchState === 'IN',
+      canBreakOut: punchState === 'ON_BREAK',
       checkIn,
       checkOut,
+      lastPunch,
       allToday: records,
+      workMinutes,
+      breakMinutes,
+      workSeconds,
+      breakSeconds,
+      sessionCount: checkIns.length,
     };
   }
 }

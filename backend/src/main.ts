@@ -15,7 +15,12 @@ async function bootstrap() {
     logger: ['log', 'error', 'warn', 'debug', 'verbose'],
   });
   app.enableCors({
-    origin: ['https://openhrm.openwan.in/backend', 'http://localhost:3001', 'https://openhrm.openwan.in'],
+    origin: [
+      'https://app.openhrm.in',
+      'http://localhost:3000',
+      'https://openhrm.openwan.in',
+      'http://localhost:3001',
+    ],
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
     credentials: true,
   });
@@ -24,8 +29,9 @@ async function bootstrap() {
     verify: (req: any, _res, buf) => { req._raw = buf?.toString('utf8') ?? ''; },
   }));
   app.use(bodyParser.urlencoded({ extended: true, limit: '5mb' }));
-  await app.listen(8001, '0.0.0.0');
-  console.log('API listening on localhost:8001');
+  const port = parseInt(process.env.PORT || '8000', 10);
+  await app.listen(port, '0.0.0.0');
+  console.log(`API listening on 0.0.0.0:${port}`);
 
   // --- Raw/device listener (8080) ---
   // const app8080 = await NestFactory.create(RawListenerModule, {

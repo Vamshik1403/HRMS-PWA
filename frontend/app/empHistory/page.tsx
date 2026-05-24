@@ -4,13 +4,12 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Icon } from "@iconify/react";
 import EmpMobileLayout from "../components/layout/EmpMobileLayout";
+import { buildDaySummary, formatWorkHoursDecimal, type PunchRecord } from "../utils/attendanceDuration";
 
 const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL || "/backend";
 
-interface AttendanceRecord {
+interface AttendanceRecord extends PunchRecord {
   id: number;
-  checkType: "CHECK_IN" | "CHECK_OUT";
-  checkinTime: string;
   accuracy: number | null;
 }
 
@@ -18,7 +17,10 @@ interface DayRow {
   date: string;
   checkIn: string | null;
   checkOut: string | null;
-  totalHours: string | null;
+  workSeconds: number;
+  breakSeconds: number;
+  workLabel: string;
+  breakLabel: string;
   accuracy: number | null;
 }
 
@@ -28,19 +30,9 @@ function fmt(iso: string) {
 function fmtDate(iso: string) {
   return new Date(iso).toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" });
 }
-function calcHrs(inIso: string, outIso: string): string | null {
-  const diff = (new Date(outIso).getTime() - new Date(inIso).getTime()) / 3600000;
-  return diff > 0 ? `${diff.toFixed(2)}h` : null;
-}
-function sumHours(rows: DayRow[]): string {
-  let total = 0;
-  rows.forEach((r) => {
-    if (r.checkIn && r.checkOut) {
-      const diff = (new Date(r.checkOut).getTime() - new Date(r.checkIn).getTime()) / 3600000;
-      if (diff > 0) total += diff;
-    }
-  });
-  return total.toFixed(1) + "h";
+function sumWorkHours(rows: DayRow[]): string {
+  const totalSec = rows.reduce((sum, r) => sum + r.workSeconds, 0);
+  return formatWorkHoursDecimal(totalSec);
 }
 
 export default function EmpHistoryPage() {
@@ -75,13 +67,17 @@ export default function EmpHistoryPage() {
         const rows: DayRow[] = Object.entries(byDate)
           .sort(([a], [b]) => new Date(b).getTime() - new Date(a).getTime())
           .map(([, recs]) => {
+            const summary = buildDaySummary(recs);
             const ci = recs.find((r) => r.checkType === "CHECK_IN") || null;
-            const co = recs.find((r) => r.checkType === "CHECK_OUT") || null;
+            const co = [...recs].reverse().find((r) => r.checkType === "CHECK_OUT") || null;
             return {
-              date: ci?.checkinTime || co?.checkinTime || "",
-              checkIn: ci?.checkinTime || null,
-              checkOut: co?.checkinTime || null,
-              totalHours: ci && co ? calcHrs(ci.checkinTime, co.checkinTime) : null,
+              date: summary.date,
+              checkIn: summary.checkIn,
+              checkOut: summary.checkOut,
+              workSeconds: summary.workSeconds,
+              breakSeconds: summary.breakSeconds,
+              workLabel: summary.workLabel,
+              breakLabel: summary.breakLabel,
               accuracy: ci?.accuracy ?? co?.accuracy ?? null,
             };
           });
@@ -92,7 +88,7 @@ export default function EmpHistoryPage() {
   }, []);
 
   const presentDays = dayRows.filter((r) => r.checkIn && r.checkOut).length;
-  const totalHours = sumHours(dayRows);
+  const totalHours = sumWorkHours(dayRows);
 
   return (
     <EmpMobileLayout>
@@ -140,9 +136,10 @@ export default function EmpHistoryPage() {
                     )}
                   </div>
                   <div className="flex flex-col items-end gap-1.5">
-                    {day.totalHours && (
-                      <span className="text-[14px] font-bold text-gray-800">{day.totalHours}</span>
-                    )}
+                    <div className="text-right">
+                      <p className="text-[12px] font-bold text-gray-800">Work {day.workLabel}</p>
+                      <p className="text-[12px] font-bold text-amber-600">Break {day.breakLabel}</p>
+                    </div>
                     {day.checkIn && day.checkOut ? (
                       <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-100 px-2.5 py-0.5 rounded-full uppercase tracking-wide">
                         Present

@@ -7,162 +7,166 @@ import { Icon } from "@iconify/react";
 import EmpMobileLayout from "../components/layout/EmpMobileLayout";
 import { getPageCache, setPageCache } from "../utils/pageCache";
 import { clearLegacyEmpPhoto, resolveEmpPhoto } from "../utils/empPhotoCache";
+import { buildDaySummary, type PunchRecord } from "../utils/attendanceDuration";
 
 // ─── Ambient Greeting Accent ───────────────────────────────────────────────────
 const _ambientCss = `
-  @keyframes _amb_twinkle { 0%,100%{ opacity:.12; } 50%{ opacity:.32; } }
-  @keyframes _amb_pulse { 0%,100%{ opacity:.18; } 50%{ opacity:.28; } }
+  @keyframes _amb_twinkle { 0%,100%{ opacity:.15; } 50%{ opacity:.55; } }
+  @keyframes _amb_pulse { 0%,100%{ opacity:.2; } 50%{ opacity:.35; } }
 `;
 
+const HORIZON_BOTTOM = 6;
+const SKY_W = 88;
+const SKY_H = 52;
+const ARC_HEIGHT = 22;
+
+function celestialPosition(progress: number, radius: number) {
+  const arc = Math.sin(Math.max(0, Math.min(1, progress)) * Math.PI);
+  const centerY = arc * ARC_HEIGHT;
+  const bodyBottom = centerY - radius;
+  const clipHeight = centerY + radius + 4;
+  return { arc, centerY, bodyBottom, clipHeight };
+}
+
+function CrescentMoon({ size, bottom, left }: { size: number; bottom: number; left: number }) {
+  return (
+    <svg
+      aria-hidden
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      style={{ position: "absolute", left, bottom, overflow: "visible" }}
+    >
+      <defs>
+        <linearGradient id="moonSurface" x1="15%" y1="5%" x2="90%" y2="95%">
+          <stop offset="0%" stopColor="#fffbeb" />
+          <stop offset="45%" stopColor="#fde68a" />
+          <stop offset="100%" stopColor="#d97706" />
+        </linearGradient>
+        <filter id="moonGlow" x="-50%" y="-50%" width="200%" height="200%">
+          <feDropShadow dx="0" dy="1" stdDeviation="1.5" floodColor="#78350f" floodOpacity="0.45" />
+        </filter>
+      </defs>
+      <path
+        filter="url(#moonGlow)"
+        fill="url(#moonSurface)"
+        stroke="#92400e"
+        strokeWidth="0.55"
+        strokeLinejoin="round"
+        d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"
+      />
+      <circle cx="14.5" cy="10" r="0.85" fill="rgba(120,53,15,0.22)" />
+      <circle cx="12.8" cy="14.2" r="0.5" fill="rgba(120,53,15,0.18)" />
+    </svg>
+  );
+}
+
+function HorizonLine() {
+  return (
+    <div style={{
+      position: "absolute", left: 8, bottom: HORIZON_BOTTOM,
+      width: SKY_W - 16, height: 1,
+      background: "linear-gradient(to right, transparent, rgba(148,163,184,0.45) 15%, rgba(148,163,184,0.45) 85%, transparent)",
+      borderRadius: 1,
+    }} />
+  );
+}
+
 function AmbientAccent() {
-  // Update every minute so position reflects the actual time
   const [now, setNow] = useState(() => new Date());
   useEffect(() => {
-    const id = setInterval(() => setNow(new Date()), 60_000);
+    const id = setInterval(() => setNow(new Date()), 30_000);
     return () => clearInterval(id);
   }, []);
 
   const h = now.getHours();
   const m = now.getMinutes();
-  const totalMin = h * 60 + m;
+  const totalMin = h * 60 + m + now.getSeconds() / 60;
+
+  // Day: 5:00 AM → 8:00 PM  |  Night: 8:00 PM → 5:00 AM
   const isDay = h >= 5 && h < 20;
 
-  // ── Sun arc: 5 AM (horizon) → 12:30 PM (peak) → 8 PM (horizon) ─────────────
-  // dayProgress 0..1, sunArc = sine curve 0→1→0
-  const SUN_R = 10;
-  const RAY_LEN = 6;   // length of each sun ray
-  const RAY_GAP = 3;   // gap between sun surface and ray start
-  const dayProgress = Math.max(0, Math.min(1, (totalMin - 300) / 900)); // 5h=300min, span=900min(15h)
-  const sunArc = Math.sin(dayProgress * Math.PI);     // 0 at edges, 1 at noon
-  const sunCY  = sunArc * 10;                          // px the sun center rises above horizon (0–10)
-  const sunBot = sunCY - SUN_R;                        // bottom of circle inside clip container
-  const SUN_CLIP_W = (SUN_R + RAY_GAP + RAY_LEN + 3) * 2; // wide enough for all rays (44px)
-  const sunClipLeft = 28 - SUN_CLIP_W / 2;            // center clip container at x=28
-  const sunCX_in_clip = SUN_CLIP_W / 2;               // sun center x within clip container
-  const sunClipH = sunCY + SUN_R + RAY_GAP + RAY_LEN + 3; // tall enough for top rays
+  // Sun arc — rises from horizon at 5 AM, peaks ~12:30 PM, sets at 8 PM
+  const SUN_R = 11;
+  const dayProgress = Math.max(0, Math.min(1, (totalMin - 300) / 900));
+  const sun = celestialPosition(dayProgress, SUN_R);
+  const sunClipW = SUN_R * 2 + 24;
 
-  // ── Moon arc: 8 PM (horizon) → ~midnight (peak) → 5 AM (horizon) ───────────
-  // nightMin = minutes elapsed since 8 PM (wraps through midnight)
-  const MOON_R = 7;
-  const nightMin = h >= 20 ? totalMin - 1200 : totalMin + 240; // 8PM=1200min; pre-midnight wraps +240
-  const nightProgress = Math.max(0, Math.min(1, nightMin / 540)); // 9h span = 540 min
-  const moonArc = Math.sin(nightProgress * Math.PI);
-  const moonCY  = moonArc * 10;
-  const moonBot = moonCY - MOON_R;
-  const moonClipH = moonCY + MOON_R + 3;
+  // Moon arc — rises from horizon at 8 PM, peaks ~12:30 AM, sets at 5 AM
+  const MOON_R = 9;
+  const nightMin = h >= 20 ? totalMin - 1200 : totalMin + 240;
+  const nightProgress = Math.max(0, Math.min(1, nightMin / 540));
+  const moon = celestialPosition(nightProgress, MOON_R);
+  const moonClipW = MOON_R * 2 + 8;
 
   if (isDay) {
     return (
       <>
         <style>{_ambientCss}</style>
-        <div aria-hidden style={{ position: "relative", width: 80, height: 44, marginBottom: 2 }}>
-          {/* Warm glow — centered under sun+rays */}
+        <div aria-hidden style={{ position: "relative", width: SKY_W, height: SKY_H, marginBottom: 2 }}>
           <div style={{
-            position: "absolute", left: 3, bottom: 4 + sunCY * 0.5,
-            width: 50, height: 28,
-            background: "radial-gradient(ellipse at 50% 80%, rgba(251,191,36,0.22) 0%, transparent 70%)",
-            animation: "_amb_pulse 4s ease-in-out infinite",
-          }} />
-          {/* Sun + rays inside one clip container — all clip at the horizon together */}
-          <div style={{
-            position: "absolute", left: sunClipLeft, bottom: 4,
-            width: SUN_CLIP_W, height: sunClipH,
+            position: "absolute",
+            left: SKY_W / 2 - sunClipW / 2,
+            bottom: HORIZON_BOTTOM,
+            width: sunClipW,
+            height: sun.clipHeight,
             overflow: "hidden",
           }}>
-            {/* Sun body */}
             <div style={{
               position: "absolute",
-              left: sunCX_in_clip - SUN_R, bottom: sunBot,
-              width: SUN_R * 2, height: SUN_R * 2, borderRadius: "50%",
-              background: "rgba(251,191,36,0.55)",
+              left: sunClipW / 2 - SUN_R,
+              bottom: sun.bodyBottom,
+              width: SUN_R * 2,
+              height: SUN_R * 2,
+              borderRadius: "50%",
+              background: "linear-gradient(145deg, rgba(253,224,71,0.95) 0%, rgba(251,191,36,0.75) 100%)",
+              boxShadow: "0 0 10px rgba(251,191,36,0.35)",
             }} />
-            {/* 8 rays fanning out from the sun surface */}
             {[0, 45, 90, 135, 180, 225, 270, 315].map((deg, i) => {
               const rad = (deg * Math.PI) / 180;
-              const d = SUN_R + RAY_GAP + RAY_LEN / 2; // distance from sun center to ray midpoint
+              const d = SUN_R + 4;
               const rx = d * Math.cos(rad);
               const ry = d * Math.sin(rad);
               return (
                 <div key={i} style={{
                   position: "absolute",
-                  left: sunCX_in_clip + rx - RAY_LEN / 2,
-                  bottom: sunCY + ry - 1,
-                  width: RAY_LEN,
+                  left: sunClipW / 2 + rx - 3,
+                  bottom: sun.centerY + ry - 1,
+                  width: 6,
                   height: 2,
                   borderRadius: 1,
-                  background: "rgba(251,191,36,0.5)",
+                  background: "rgba(251,191,36,0.55)",
                   transform: `rotate(${-deg}deg)`,
-                  transformOrigin: "50% 50%",
+                  opacity: sun.arc > 0.15 ? 1 : 0.35,
                 }} />
               );
             })}
           </div>
-          {/* Thin horizon line */}
-          <div style={{
-            position: "absolute", left: 0, bottom: 4,
-            width: 56, height: 1,
-            background: "linear-gradient(to right, transparent, rgba(203,213,225,0.5) 20%, rgba(203,213,225,0.5) 80%, transparent)",
-            borderRadius: 1,
-          }} />
+          <HorizonLine />
         </div>
       </>
     );
   }
 
-  // Night — crescent moon rises and sets across the night hours
   return (
     <>
       <style>{_ambientCss}</style>
-      <div aria-hidden style={{ position: "relative", width: 80, height: 36, marginBottom: 2 }}>
-        {/* Soft glow — centered under moon */}
+      <div aria-hidden style={{ position: "relative", width: SKY_W, height: SKY_H, marginBottom: 2 }}>
         <div style={{
-          position: "absolute", left: 13, bottom: 4 + moonCY * 0.5,
-          width: 30, height: 20,
-          background: "radial-gradient(ellipse at 50% 60%, rgba(148,163,184,0.18) 0%, transparent 70%)",
-          animation: "_amb_pulse 5s ease-in-out infinite",
-        }} />
-        {/* Moon — centered on horizon line */}
-        <div style={{
-          position: "absolute", left: 28 - (MOON_R + 1), bottom: 4,
-          width: MOON_R * 2 + 2, height: moonClipH,
+          position: "absolute",
+          left: SKY_W / 2 - moonClipW / 2,
+          bottom: HORIZON_BOTTOM,
+          width: moonClipW,
+          height: moon.clipHeight,
           overflow: "hidden",
         }}>
-          {/* Moon body */}
-          <div style={{
-            position: "absolute", left: 1, bottom: moonBot,
-            width: MOON_R * 2, height: MOON_R * 2, borderRadius: "50%",
-            background: "rgba(203,213,225,0.55)",
-          }} />
-          {/* Crescent shadow cutout */}
-          <div style={{
-            position: "absolute", left: 4, bottom: moonBot + 2,
-            width: MOON_R * 2 - 2, height: MOON_R * 2 - 2, borderRadius: "50%",
-            background: "#f2f4f7",
-          }} />
+          <CrescentMoon
+            size={MOON_R * 2}
+            left={moonClipW / 2 - MOON_R}
+            bottom={moon.bodyBottom}
+          />
         </div>
-        {/* Thin horizon line */}
-        <div style={{
-          position: "absolute", left: 0, bottom: 4,
-          width: 56, height: 1,
-          background: "linear-gradient(to right, transparent, rgba(148,163,184,0.25) 20%, rgba(148,163,184,0.25) 80%, transparent)",
-          borderRadius: 1,
-        }} />
-        {/* Tiny stars */}
-        {[
-          { left: 36, bottom: 18, delay: "0s",   dur: "3.5s" },
-          { left: 48, bottom: 12, delay: "1.2s", dur: "4s"   },
-          { left: 58, bottom: 20, delay: "2.4s", dur: "3s"   },
-          { left: 66, bottom: 9,  delay: "0.8s", dur: "4.5s" },
-          { left: 28, bottom: 22, delay: "1.8s", dur: "3.8s" },
-        ].map((s, i) => (
-          <div key={i} style={{
-            position: "absolute", left: s.left, bottom: s.bottom,
-            width: 1.5, height: 1.5, borderRadius: "50%",
-            background: "rgba(148,163,184,0.6)",
-            animation: `_amb_twinkle ${s.dur} ease-in-out infinite`,
-            animationDelay: s.delay,
-          }} />
-        ))}
+        <HorizonLine />
       </div>
     </>
   );
@@ -171,24 +175,33 @@ function AmbientAccent() {
 
 const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL || "/backend";
 
-interface AttendanceRecord {
+interface AttendanceRecord extends PunchRecord {
   id: number;
-  checkType: "CHECK_IN" | "CHECK_OUT";
-  checkinTime: string;
   accuracy: number | null;
 }
 interface TodayStatus {
   isCheckedIn: boolean;
   isCheckedOut: boolean;
+  punchState?: 'OUT' | 'IN' | 'ON_BREAK';
+  canCheckIn?: boolean;
+  canCheckOut?: boolean;
+  canBreakIn?: boolean;
+  canBreakOut?: boolean;
   checkIn: AttendanceRecord | null;
   checkOut: AttendanceRecord | null;
   allToday: AttendanceRecord[];
+  workMinutes?: number;
+  breakMinutes?: number;
+  workSeconds?: number;
+  breakSeconds?: number;
+  sessionCount?: number;
 }
 interface DayRow {
   date: string;
   checkIn: string | null;
   checkOut: string | null;
-  totalHours: string | null;
+  workLabel: string;
+  breakLabel: string;
 }
 
 function fmt(iso: string) {
@@ -203,9 +216,10 @@ function calcHrs(inIso: string, outIso: string) {
 }
 function greeting() {
   const h = new Date().getHours();
-  if (h < 12) return "Good morning";
-  if (h < 17) return "Good afternoon";
-  return "Good evening";
+  if (h >= 5 && h < 12) return "Good morning";
+  if (h >= 12 && h < 17) return "Good afternoon";
+  if (h >= 17 && h < 20) return "Good evening";
+  return "Good night";
 }
 
 const quickLinks = [
@@ -365,13 +379,13 @@ export default function EmpDashboardPage() {
           .sort(([a], [b]) => new Date(b).getTime() - new Date(a).getTime())
           .slice(0, 5)
           .map(([, recs]) => {
-            const ci = recs.find((r) => r.checkType === "CHECK_IN") || null;
-            const co = recs.find((r) => r.checkType === "CHECK_OUT") || null;
+            const summary = buildDaySummary(recs);
             return {
-              date: ci?.checkinTime || co?.checkinTime || "",
-              checkIn: ci?.checkinTime || null,
-              checkOut: co?.checkinTime || null,
-              totalHours: ci && co ? calcHrs(ci.checkinTime, co.checkinTime) : null,
+              date: summary.date,
+              checkIn: summary.checkIn,
+              checkOut: summary.checkOut,
+              workLabel: summary.workLabel,
+              breakLabel: summary.breakLabel,
             };
           });
         setRecentHistory(rows);
@@ -397,8 +411,32 @@ export default function EmpDashboardPage() {
     .map((w: string) => w[0].toUpperCase()).join("") || "E";
   const empPhoto = photoUrl || resolveEmpPhoto(empUser?.employee?.id, empUser?.employee?.employeePhotoUrl) || null;
 
-  const { isCheckedIn, isCheckedOut, checkIn, checkOut } = todayStatus || {};
-  const workedHrs = checkIn && checkOut ? calcHrs(checkIn.checkinTime, checkOut.checkinTime) : null;
+  const punchState = todayStatus?.punchState ?? (todayStatus?.isCheckedIn ? "IN" : "OUT");
+  const canCheckIn = todayStatus?.canCheckIn ?? punchState === "OUT";
+  const canCheckOut = todayStatus?.canCheckOut ?? punchState === "IN";
+  const isOnBreak = punchState === "ON_BREAK";
+  const { checkIn, checkOut } = todayStatus || {};
+  const workedHrs = todayStatus?.workSeconds != null
+    ? (() => {
+        const totalSec = todayStatus.workSeconds;
+        const h = Math.floor(totalSec / 3600);
+        const m = Math.floor((totalSec % 3600) / 60);
+        if (h > 0) return `${h}h ${m}m`;
+        if (m > 0) return `${m}m`;
+        return `${totalSec}s`;
+      })()
+    : (todayStatus?.workMinutes != null
+      ? (() => { const h = Math.floor(todayStatus.workMinutes / 60); const m = todayStatus.workMinutes % 60; return h > 0 ? `${h}h ${m}m` : `${m}m`; })()
+      : (checkIn && checkOut ? calcHrs(checkIn.checkinTime, checkOut.checkinTime) : null));
+  const breakHrs = todayStatus?.breakSeconds != null
+    ? (() => {
+        const totalSec = todayStatus.breakSeconds;
+        const m = Math.floor(totalSec / 60);
+        const s = totalSec % 60;
+        if (m > 0) return s > 0 ? `${m}m ${s}s` : `${m}m`;
+        return totalSec > 0 ? `${s}s` : "0m";
+      })()
+    : (todayStatus?.breakMinutes != null ? `${todayStatus.breakMinutes}m` : null);
 
   return (
     <EmpMobileLayout>
@@ -427,13 +465,11 @@ export default function EmpDashboardPage() {
             <p className="text-[11px] font-bold tracking-widest text-gray-400 uppercase">Today&apos;s Status</p>
             {loadingStatus ? (
               <span className="text-[10px] font-semibold text-gray-300 bg-gray-50 px-2.5 py-1 rounded-full">Loading…</span>
-            ) : isCheckedIn ? (
-              isCheckedOut ? (
-                <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-100 px-2.5 py-1 rounded-full uppercase tracking-wide">Completed</span>
-              ) : (
+            ) : isOnBreak ? (
+                <span className="text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-100 px-2.5 py-1 rounded-full uppercase tracking-wide">On Break</span>
+              ) : punchState === "IN" ? (
                 <span className="text-[10px] font-bold text-blue-700 bg-blue-50 border border-blue-100 px-2.5 py-1 rounded-full uppercase tracking-wide">Checked In</span>
-              )
-            ) : (
+              ) : (
               <span className="text-[10px] font-bold text-red-500 bg-red-50 border border-red-100 px-2.5 py-1 rounded-full uppercase tracking-wide">Not Punched In</span>
             )}
           </div>
@@ -459,7 +495,7 @@ export default function EmpDashboardPage() {
             </div>
           </div>
 
-          {!isCheckedIn && !loadingStatus && (
+          {canCheckIn && !loadingStatus && (
             <Link href="/empAttendance">
               <button className="w-full py-3 rounded-xl bg-[#2563eb] text-white font-bold text-sm flex items-center justify-center gap-2 shadow-md shadow-blue-200 active:scale-[0.98] transition-transform">
                 <Icon icon="solar:fingerprint-bold-duotone" className="w-5 h-5" />
@@ -467,19 +503,13 @@ export default function EmpDashboardPage() {
               </button>
             </Link>
           )}
-          {isCheckedIn && !isCheckedOut && !loadingStatus && (
+          {canCheckOut && !loadingStatus && (
             <Link href="/empAttendance">
               <button className="w-full py-3 rounded-xl bg-[#2563eb] text-white font-bold text-sm flex items-center justify-center gap-2 shadow-md shadow-blue-200 active:scale-[0.98] transition-transform">
                 <Icon icon="solar:fingerprint-bold-duotone" className="w-5 h-5" />
-                Mark Out
+                {isOnBreak ? "End Break / Mark Out" : "Mark Out"}
               </button>
             </Link>
-          )}
-          {isCheckedIn && isCheckedOut && !loadingStatus && (
-            <div className="w-full py-3 rounded-xl bg-emerald-50 border border-emerald-100 text-emerald-700 font-bold text-sm flex items-center justify-center gap-2">
-              <Icon icon="solar:check-circle-bold-duotone" className="w-5 h-5" />
-              Attendance Completed
-            </div>
           )}
         </div>
 
@@ -543,7 +573,11 @@ export default function EmpDashboardPage() {
                     <p className="text-[13px] font-bold text-gray-900">{fmtDate(day.date)}</p>
                     <p className="text-[11px] text-gray-500 mt-0.5">
                       {day.checkIn ? fmt(day.checkIn) : "--:--"} – {day.checkOut ? fmt(day.checkOut) : "--:--"}
-                      {day.totalHours ? ` · ${day.totalHours}` : ""}
+                    </p>
+                    <p className="text-[11px] mt-0.5">
+                      <span className="font-semibold text-gray-700">Work {day.workLabel}</span>
+                      <span className="text-gray-400"> · </span>
+                      <span className="font-semibold text-amber-600">Break {day.breakLabel}</span>
                     </p>
                   </div>
                   <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-100 px-2.5 py-1 rounded-full uppercase tracking-wide">

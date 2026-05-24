@@ -13,6 +13,7 @@ import { Plus, Search, Edit, Trash2, Eye, ArrowLeft, X, Save, ChevronDown, FileT
 import { useCurrentUser } from "../hooks/useCurrentUser"
 import { useRouter } from "next/navigation"
 import { FormDrawer } from "../components/ui/form-drawer"
+import { TimezoneSelect } from "../components/ui/timezone-select"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -77,6 +78,7 @@ export function CompanyManagement() {
   const user = useCurrentUser()
   const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN" || user?.role === "ADMIN"
   const isNonSuperAdmin = user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN" || user?.role === "ADMIN" || user?.role === "BRANCH_ADMIN"
+  const isCompanyProfileOnly = user?.role === "COMPANY_ADMIN" || user?.role === "ADMIN"
 
   interface CompanyFormData extends Partial<Company> {
     autocompleteName?: string
@@ -607,7 +609,10 @@ export function CompanyManagement() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Time Zone</Label>
-                  <Input value={formData.timeZone || ""} onChange={(e) => setFormData((p) => ({ ...p, timeZone: e.target.value }))} />
+                  <TimezoneSelect
+                    value={formData.timeZone || ""}
+                    onChange={(value) => setFormData((p) => ({ ...p, timeZone: value }))}
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label>Currency</Label>
@@ -796,7 +801,11 @@ export function CompanyManagement() {
         )}
       </FormDrawer>
 
-      {!isAddingNew && !isViewing && (<>
+      {isCompanyProfileOnly && !isAddingNew && companies.length === 0 && (
+        <div className="text-center py-16 text-gray-500">Loading company profile…</div>
+      )}
+
+      {!isAddingNew && !isViewing && !isCompanyProfileOnly && (<>
           <Card>
             <CardContent className="p-6 flex items-center space-x-4">
               <div className="relative flex-1 min-w-0">

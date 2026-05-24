@@ -66,13 +66,13 @@ const sbSubIdle =
 const SETUP_PATHS = ["/company", "/branches", "/devices"];
 const CONTRACTOR_MANAGEMENT_PATHS = ["/contractors", "/contractor-rates"];
 const EMPLOYEE_PATHS = ["/departments", "/designations", "/manage-employees", "/employees-promotions", "/employee-memo", "/termination"];
-const PAYROLL_PATHS = ["/work-shifts", "/attendance-policy", "/factual-work-shifts", "/factual-attendance-policy"];
+const PAYROLL_PATHS = ["/work-shifts", "/attendance-policy"];
 const SALARY_PATHS = ["/salary-advance", "/reimbursement", "/bonus-allocations", "/generate-salary", "/contractor-payout"];
 const PAYROLL_POLICY_PATHS = ["/monthly-salary-cycle", "/salary-allowances", "/salary-deductions", "/monthly-pay-grade", "/bonus-setup"];
 const LEAVE_PATHS = ["/manage-holidays", "/public-holiday", "/leave-policy"];
-const ATTENDANCE_PATHS = ["/field-attendance-schedule", "/attendance-regularisation", "/roster", "/factual-roster"];
+const ATTENDANCE_PATHS = ["/field-attendance-schedule", "/attendance-regularisation", "/roster"];
 const LEAVE_MANAGEMENT_PATHS = ["/leave-applications", "/privileged-leave"];
-const REPORTS_PATHS = ["/attendance-reports", "/payroll-reports", "/factual-reports"];
+const REPORTS_PATHS = ["/attendance-reports", "/payroll-reports"];
 const CANTEEN_PATHS = ["/canteen", "/canteen/setup", "/canteen/reports"];
 const SETTINGS_PATHS = ["/import-attendance", "/hrms-integrations", "/system-settings", "/system-settings/compliance"];
 const ADMIN_PATHS = ["/system-users", "/backup-restore"];
@@ -102,6 +102,7 @@ export function PageLayout({ children }: PageLayoutProps) {
   const isAdmin = currentUser?.role === 'ADMIN'
   const isBranchAdmin = currentUser?.role === 'BRANCH_ADMIN'
   const isRegularUser = !isSuperAdmin && !isServiceProvider && !isCompanyAdmin && !isAdmin && !isBranchAdmin
+  const canAccessFullHrSections = (isSuperAdmin || isCompanyAdmin || isServiceProvider || isBranchAdmin) && !isAdmin
 
   // Profile modal state
   const [profileOpen, setProfileOpen] = useState(false)
@@ -449,19 +450,16 @@ export function PageLayout({ children }: PageLayoutProps) {
             <CollapsibleContent>
               <SidebarMenuSub className="ml-5 mt-1 space-y-0.5 border-l border-[#f0f0f0] pl-3">
                 <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/work-shifts" className={cn(sbSubRow, isActiveLink('/work-shifts', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Work Shifts</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
-                <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/factual-work-shifts" className={cn(sbSubRow, isActiveLink('/factual-work-shifts', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>FCT-Work Shifts</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
                 <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/attendance-policy" className={cn(sbSubRow, isActiveLink('/attendance-policy', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Attendance Policy</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
-                <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/factual-attendance-policy" className={cn(sbSubRow, isActiveLink('/factual-attendance-policy', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>FCT-Attendance Policy</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
                 <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/roster" className={cn(sbSubRow, isActiveLink('/roster', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Workshift Roster</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
-                <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/factual-roster" className={cn(sbSubRow, isActiveLink('/factual-roster', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>FCT-Workshift Roster</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
                 <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/attendance-regularisation" className={cn(sbSubRow, isActiveLink('/attendance-regularisation', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Attendance Regularisation</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
               </SidebarMenuSub>
             </CollapsibleContent>
           </Collapsible>
         )}
 
-        {/* Leave Policy - visible for superadmin only */}
-        {isSuperAdmin && !isAdmin && (
+        {/* Leave Policy */}
+        {canAccessFullHrSections && (
           <Collapsible open={openSections[k('leave')]} onOpenChange={o => toggleSection(k('leave'), o)}>
             <CollapsibleTrigger asChild>
               <SidebarMenuButton size="lg" className={cn(sbMenuBtnReset, sbRow, "mx-0 justify-between", leaveSectionActive ? sbActive : cn(sbIdle, openSections[k('leave')] && "font-semibold text-[#4f46e5]"))}>
@@ -486,8 +484,8 @@ export function PageLayout({ children }: PageLayoutProps) {
           </Collapsible>
         )}
 
-        {/* Payroll Policy - visible for superadmin only */}
-        {isSuperAdmin && !isAdmin && (
+        {/* Payroll Policy */}
+        {canAccessFullHrSections && (
           <Collapsible open={openSections[k('payrollPolicy')]} onOpenChange={o => toggleSection(k('payrollPolicy'), o)}>
             <CollapsibleTrigger asChild>
               <SidebarMenuButton size="lg" className={cn(sbMenuBtnReset, sbRow, "mx-0 justify-between", payrollPolicySectionActive ? sbActive : cn(sbIdle, openSections[k('payrollPolicy')] && "font-semibold text-[#4f46e5]"))}>
@@ -510,8 +508,8 @@ export function PageLayout({ children }: PageLayoutProps) {
           </Collapsible>
         )}
 
-        {/* Payroll Management - visible for superadmin only */}
-        {isSuperAdmin && !isAdmin && (
+        {/* Payroll Management */}
+        {canAccessFullHrSections && (
           <Collapsible open={openSections[k('salary')]} onOpenChange={o => toggleSection(k('salary'), o)}>
             <CollapsibleTrigger asChild>
               <SidebarMenuButton size="lg" className={cn(sbMenuBtnReset, sbRow, "mx-0 justify-between", salarySectionActive ? sbActive : cn(sbIdle, openSections[k('salary')] && "font-semibold text-[#4f46e5]"))}>
@@ -538,8 +536,8 @@ export function PageLayout({ children }: PageLayoutProps) {
 
         {/* Attendance Management - merged into Shift & Attendance Management */}
 
-        {/* Leave Management - visible for superadmin only */}
-        {isSuperAdmin && !isAdmin && (
+        {/* Leave Management */}
+        {canAccessFullHrSections && (
           <Collapsible open={openSections[k('leaveManagement')]} onOpenChange={o => toggleSection(k('leaveManagement'), o)}>
             <CollapsibleTrigger asChild>
               <SidebarMenuButton size="lg" className={cn(sbMenuBtnReset, sbRow, "mx-0 justify-between", leaveManagementSectionActive ? sbActive : cn(sbIdle, openSections[k('leaveManagement')] && "font-semibold text-[#4f46e5]"))}>
@@ -597,8 +595,7 @@ export function PageLayout({ children }: PageLayoutProps) {
             </CollapsibleTrigger>
             <CollapsibleContent>
               <SidebarMenuSub className="ml-5 mt-1 space-y-0.5 border-l border-[#f0f0f0] pl-3">
-                <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href={isAdmin ? "/factual-reports" : "/attendance-reports"} className={cn(sbSubRow, (isActiveLink('/attendance-reports', companyId) || (isAdmin && isActiveLink('/factual-reports', companyId))) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Attendance Reports</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
-                {!isAdmin && (<SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/factual-reports" className={cn(sbSubRow, isActiveLink('/factual-reports', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>FCT Reports</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>)}
+                <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/attendance-reports" className={cn(sbSubRow, isActiveLink('/attendance-reports', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Attendance Reports</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
                 {/* Payroll Reports - temporarily hidden */}
                 {/* Leave Reports - temporarily hidden */}
                 {/* Canteen Reports - moved to Canteen Management */}

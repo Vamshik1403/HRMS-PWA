@@ -7,7 +7,23 @@ import { getPageCache, setPageCache } from "../utils/pageCache";
 const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL || "/backend";
 
 interface LocationCoords { latitude: number; longitude: number; accuracy: number; capturedAt: string; }
-interface TodayStatus { isCheckedIn: boolean; isCheckedOut: boolean; checkIn: any; checkOut: any; allToday: any[]; }
+interface TodayStatus {
+  isCheckedIn: boolean;
+  isCheckedOut: boolean;
+  punchState?: 'OUT' | 'IN' | 'ON_BREAK';
+  canCheckIn?: boolean;
+  canCheckOut?: boolean;
+  canBreakIn?: boolean;
+  canBreakOut?: boolean;
+  checkIn: any;
+  checkOut: any;
+  allToday: any[];
+  workMinutes?: number;
+  breakMinutes?: number;
+  workSeconds?: number;
+  breakSeconds?: number;
+  sessionCount?: number;
+}
 
 function accuracyLabel(acc: number) {
   if (acc <= 15) return { text: "EXCELLENT", color: "text-emerald-600 bg-emerald-50 border-emerald-100" };
@@ -69,6 +85,12 @@ export default function EmpAttendancePage() {
 
   useEffect(() => { loadStatus(); }, [loadStatus]);
 
+  // Keep work/break timers live while on this page
+  useEffect(() => {
+    const id = setInterval(() => loadStatus(), 30_000);
+    return () => clearInterval(id);
+  }, [loadStatus]);
+
   // Fetch reverse-geocoded address when checked in
   useEffect(() => {
     const lat = todayStatus?.checkIn?.latitude;
@@ -117,7 +139,7 @@ export default function EmpAttendancePage() {
 
   useEffect(() => { refreshGPS(); }, []);
 
-  const handlePunch = async (checkType: "CHECK_IN" | "CHECK_OUT") => {
+  const handlePunch = async (checkType: "CHECK_IN" | "CHECK_OUT" | "BREAK_IN" | "BREAK_OUT") => {
     setPunchError(null);
     setPunchSuccess(null);
     setPunchLoading(true);
@@ -147,7 +169,12 @@ export default function EmpAttendancePage() {
         const body = await res.json().catch(() => null);
         throw new Error(body?.message || "Failed to record attendance");
       }
-      setPunchSuccess(checkType === "CHECK_IN" ? "Checked in successfully!" : "Checked out successfully!");
+      setPunchSuccess(
+        checkType === "CHECK_IN" ? "Checked in successfully!"
+        : checkType === "CHECK_OUT" ? "Checked out successfully!"
+        : checkType === "BREAK_IN" ? "Break started!"
+        : "Break ended!"
+      );
       await loadStatus();
     } catch (e: any) {
       setPunchError(e.message);
@@ -156,8 +183,24 @@ export default function EmpAttendancePage() {
     }
   };
 
-  const isCheckedIn = todayStatus?.isCheckedIn ?? false;
-  const isCheckedOut = todayStatus?.isCheckedOut ?? false;
+  const punchState = todayStatus?.punchState ?? (todayStatus?.isCheckedIn ? "IN" : "OUT");
+  const canCheckIn = todayStatus?.canCheckIn ?? punchState === "OUT";
+  const canCheckOut = todayStatus?.canCheckOut ?? punchState === "IN";
+  const canBreakIn = todayStatus?.canBreakIn ?? punchState === "IN";
+  const canBreakOut = todayStatus?.canBreakOut ?? punchState === "ON_BREAK";
+  const isOnBreak = punchState === "ON_BREAK";
+  const isActiveSession = punchState === "IN" || punchState === "ON_BREAK";
+
+  const formatDuration = (minutes?: number, seconds?: number) => {
+    const totalSec = seconds ?? ((minutes ?? 0) * 60);
+    if (totalSec <= 0) return "0m";
+    const h = Math.floor(totalSec / 3600);
+    const m = Math.floor((totalSec % 3600) / 60);
+    const s = totalSec % 60;
+    if (h > 0) return `${h}h ${m}m`;
+    if (m > 0) return s > 0 ? `${m}m ${s}s` : `${m}m`;
+    return `${s}s`;
+  };
 
   const hh = time.getHours().toString().padStart(2, "0");
   const mm = time.getMinutes().toString().padStart(2, "0");
@@ -165,13 +208,10 @@ export default function EmpAttendancePage() {
   const dateLabel = time.toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
 
   // When checked in, GPS card shows check-in location; otherwise shows fresh GPS
-  const displayAccuracy = isCheckedIn && todayStatus?.checkIn?.accuracy != null
+  const displayAccuracy = isActiveSession && todayStatus?.checkIn?.accuracy != null
     ? Number(todayStatus.checkIn.accuracy)
     : coords?.accuracy ?? null;
   const accLabel = displayAccuracy != null ? accuracyLabel(displayAccuracy) : null;
-
-  const canCheckIn = !isCheckedIn && !isCheckedOut;
-  const canCheckOut = isCheckedIn && !isCheckedOut;
 
   return (
     <EmpMobileLayout>
@@ -206,12 +246,12 @@ export default function EmpAttendancePage() {
             )}
           </div>
 
-          {locationError && !isCheckedIn && (
+          {locationError && !isActiveSession && (
             <p className="text-[12px] text-red-500 mb-2">{locationError}</p>
           )}
 
           {/* Address shown when checked in */}
-          {isCheckedIn && (
+          {isActiveSession && (
             <div className="mb-2">
               {loadingAddress ? (
                 <p className="text-[12px] text-gray-400 animate-pulse">Fetching address…</p>
@@ -222,7 +262,7 @@ export default function EmpAttendancePage() {
           )}
 
           {/* Coordinates: check-in location when checked in, fresh GPS otherwise */}
-          {isCheckedIn && todayStatus?.checkIn ? (
+          {isActiveSession && todayStatus?.checkIn ? (
             <div className="mb-3 space-y-0.5">
               <p className="text-[13px] text-gray-600">Latitude: <span className="font-mono font-semibold text-gray-800">{Number(todayStatus.checkIn.latitude).toFixed(6)}</span></p>
               <p className="text-[13px] text-gray-600">Longitude: <span className="font-mono font-semibold text-gray-800">{Number(todayStatus.checkIn.longitude).toFixed(6)}</span></p>
@@ -236,7 +276,7 @@ export default function EmpAttendancePage() {
             </div>
           ) : null}
 
-          {!isCheckedIn && (
+          {!isActiveSession && (
             <button
               onClick={refreshGPS}
               disabled={locationLoading}
@@ -249,25 +289,45 @@ export default function EmpAttendancePage() {
         </div>
 
         {/* Today's status indicator */}
-        {todayStatus && (isCheckedIn || isCheckedOut) && (
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-4">
-            <div className="flex items-center gap-3">
-              {isCheckedIn && (
+        {todayStatus && (todayStatus.allToday?.length > 0 || todayStatus.sessionCount) && (
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-4 space-y-3">
+            <div className="flex flex-wrap items-center gap-3">
+              {todayStatus.checkIn && (
                 <div className="flex items-center gap-2 text-emerald-600">
                   <div className="w-2 h-2 rounded-full bg-emerald-500" />
                   <span className="text-[12px] font-semibold">
-                    In: {new Date(todayStatus.checkIn.checkinTime).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true })}
+                    First In: {new Date(todayStatus.checkIn.checkinTime).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true })}
                   </span>
                 </div>
               )}
-              {isCheckedOut && (
+              {todayStatus.checkOut && (
                 <div className="flex items-center gap-2 text-blue-600">
                   <div className="w-2 h-2 rounded-full bg-blue-500" />
                   <span className="text-[12px] font-semibold">
-                    Out: {new Date(todayStatus.checkOut.checkinTime).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true })}
+                    Last Out: {new Date(todayStatus.checkOut.checkinTime).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true })}
                   </span>
                 </div>
               )}
+              {isOnBreak && (
+                <div className="flex items-center gap-2 text-amber-600">
+                  <div className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+                  <span className="text-[12px] font-semibold">On Break</span>
+                </div>
+              )}
+            </div>
+            <div className="grid grid-cols-3 gap-2 pt-1 border-t border-gray-100">
+              <div className="text-center">
+                <p className="text-[10px] font-bold text-gray-400 uppercase">Work</p>
+                <p className="text-[14px] font-bold text-emerald-600">{formatDuration(todayStatus.workMinutes, todayStatus.workSeconds)}</p>
+              </div>
+              <div className="text-center border-x border-gray-100">
+                <p className="text-[10px] font-bold text-gray-400 uppercase">Break</p>
+                <p className="text-[14px] font-bold text-amber-600">{formatDuration(todayStatus.breakMinutes, todayStatus.breakSeconds)}</p>
+              </div>
+              <div className="text-center">
+                <p className="text-[10px] font-bold text-gray-400 uppercase">Sessions</p>
+                <p className="text-[14px] font-bold text-gray-800">{todayStatus.sessionCount ?? 0}</p>
+              </div>
             </div>
           </div>
         )}
@@ -286,42 +346,58 @@ export default function EmpAttendancePage() {
           </div>
         )}
 
-        {/* Mark IN / Mark OUT button */}
-        {isCheckedIn && isCheckedOut ? (
-          <div className="w-full py-5 rounded-2xl bg-emerald-50 border border-emerald-100 flex flex-col items-center gap-2">
-            <Icon icon="solar:check-circle-bold-duotone" className="w-10 h-10 text-emerald-500" />
-            <p className="text-[15px] font-bold text-emerald-700">Attendance Completed</p>
-            <p className="text-[12px] text-emerald-500">You have checked in and out for today</p>
-          </div>
-        ) : canCheckIn ? (
-          <button
-            onClick={() => handlePunch("CHECK_IN")}
-            disabled={punchLoading || locationLoading}
-            className="w-full py-5 rounded-2xl bg-[#2563eb] text-white flex flex-col items-center gap-2 shadow-lg shadow-blue-200 active:scale-[0.98] transition-all disabled:opacity-60"
-          >
-            {punchLoading ? (
-              <Icon icon="solar:refresh-bold-duotone" className="w-10 h-10 animate-spin" />
-            ) : (
-              <Icon icon="solar:login-bold-duotone" className="w-10 h-10" />
-            )}
-            <p className="text-[18px] font-bold">{punchLoading ? "Submitting…" : "Mark IN"}</p>
-            <p className="text-[12px] text-blue-200">{punchLoading ? "Please wait" : "Tap to submit"}</p>
-          </button>
-        ) : canCheckOut ? (
-          <button
-            onClick={() => handlePunch("CHECK_OUT")}
-            disabled={punchLoading || locationLoading}
-            className="w-full py-5 rounded-2xl bg-[#2563eb] text-white flex flex-col items-center gap-2 shadow-lg shadow-blue-200 active:scale-[0.98] transition-all disabled:opacity-60"
-          >
-            {punchLoading ? (
-              <Icon icon="solar:refresh-bold-duotone" className="w-10 h-10 animate-spin" />
-            ) : (
-              <Icon icon="solar:logout-bold-duotone" className="w-10 h-10" />
-            )}
-            <p className="text-[18px] font-bold">{punchLoading ? "Submitting…" : "Mark OUT"}</p>
-            <p className="text-[12px] text-blue-200">{punchLoading ? "Please wait" : "Tap to submit"}</p>
-          </button>
-        ) : null}
+        {/* Punch actions */}
+        <div className="space-y-3">
+          {canCheckIn && (
+            <button
+              onClick={() => handlePunch("CHECK_IN")}
+              disabled={punchLoading || locationLoading}
+              className="w-full py-5 rounded-2xl bg-[#2563eb] text-white flex flex-col items-center gap-2 shadow-lg shadow-blue-200 active:scale-[0.98] transition-all disabled:opacity-60"
+            >
+              {punchLoading ? (
+                <Icon icon="solar:refresh-bold-duotone" className="w-10 h-10 animate-spin" />
+              ) : (
+                <Icon icon="solar:login-bold-duotone" className="w-10 h-10" />
+              )}
+              <p className="text-[18px] font-bold">{punchLoading ? "Submitting…" : "Mark IN"}</p>
+            </button>
+          )}
+
+          {(canCheckOut || canBreakIn || canBreakOut) && (
+            <div className={`grid gap-3 ${canCheckOut && (canBreakIn || canBreakOut) ? "grid-cols-2" : "grid-cols-1"}`}>
+              {canCheckOut && (
+                <button
+                  onClick={() => handlePunch("CHECK_OUT")}
+                  disabled={punchLoading || locationLoading}
+                  className="py-4 rounded-2xl bg-[#2563eb] text-white flex flex-col items-center gap-1 shadow-lg shadow-blue-200 active:scale-[0.98] transition-all disabled:opacity-60"
+                >
+                  <Icon icon="solar:logout-bold-duotone" className="w-8 h-8" />
+                  <p className="text-[15px] font-bold">Mark OUT</p>
+                </button>
+              )}
+              {canBreakIn && (
+                <button
+                  onClick={() => handlePunch("BREAK_IN")}
+                  disabled={punchLoading || locationLoading}
+                  className="py-4 rounded-2xl bg-amber-500 text-white flex flex-col items-center gap-1 shadow-lg shadow-amber-200 active:scale-[0.98] transition-all disabled:opacity-60"
+                >
+                  <Icon icon="solar:cup-hot-bold-duotone" className="w-8 h-8" />
+                  <p className="text-[15px] font-bold">Break IN</p>
+                </button>
+              )}
+              {canBreakOut && (
+                <button
+                  onClick={() => handlePunch("BREAK_OUT")}
+                  disabled={punchLoading || locationLoading}
+                  className="py-4 rounded-2xl bg-emerald-600 text-white flex flex-col items-center gap-1 shadow-lg shadow-emerald-200 active:scale-[0.98] transition-all disabled:opacity-60 col-span-full"
+                >
+                  <Icon icon="solar:play-bold-duotone" className="w-8 h-8" />
+                  <p className="text-[15px] font-bold">Break OUT</p>
+                </button>
+              )}
+            </div>
+          )}
+        </div>
       </div>
     </EmpMobileLayout>
   );
