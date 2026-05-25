@@ -66,11 +66,11 @@ const sbSubIdle =
 const SETUP_PATHS = ["/company", "/branches", "/devices"];
 const CONTRACTOR_MANAGEMENT_PATHS = ["/contractors", "/contractor-rates"];
 const EMPLOYEE_PATHS = ["/departments", "/designations", "/manage-employees", "/employees-promotions", "/employee-memo", "/termination"];
-const PAYROLL_PATHS = ["/work-shifts", "/attendance-policy"];
+const PAYROLL_PATHS = ["/work-shifts", "/attendance-policy", "/roster", "/attendance-regularisation"];
 const SALARY_PATHS = ["/salary-advance", "/reimbursement", "/bonus-allocations", "/generate-salary", "/contractor-payout"];
 const PAYROLL_POLICY_PATHS = ["/monthly-salary-cycle", "/salary-allowances", "/salary-deductions", "/monthly-pay-grade", "/bonus-setup"];
 const LEAVE_PATHS = ["/manage-holidays", "/public-holiday", "/leave-policy"];
-const ATTENDANCE_PATHS = ["/field-attendance-schedule", "/attendance-regularisation", "/roster"];
+const ATTENDANCE_PATHS = ["/field-attendance-schedule"];
 const LEAVE_MANAGEMENT_PATHS = ["/leave-applications", "/privileged-leave"];
 const REPORTS_PATHS = ["/attendance-reports", "/payroll-reports"];
 const CANTEEN_PATHS = ["/canteen", "/canteen/setup", "/canteen/reports"];
@@ -387,8 +387,8 @@ export function PageLayout({ children }: PageLayoutProps) {
           </Collapsible>
         )}
 
-        {/* Contractor Management - hidden for COMPANY_ADMIN temporarily */}
-        {(isSuperAdmin || isServiceProvider || isBranchAdmin) && (
+        {/* Contractor Management */}
+        {canAccessFullHrSections && (
           <Collapsible open={openSections[k('contractorMgmt')]} onOpenChange={o => toggleSection(k('contractorMgmt'), o)}>
             <CollapsibleTrigger asChild>
               <SidebarMenuButton size="lg" className={cn(sbMenuBtnReset, sbRow, "mx-0 justify-between", contractorManagementSectionActive ? sbActive : cn(sbIdle, openSections[k('contractorMgmt')] && "font-semibold text-[#4f46e5]"))}>

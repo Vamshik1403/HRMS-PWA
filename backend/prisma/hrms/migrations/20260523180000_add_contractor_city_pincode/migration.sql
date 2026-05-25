@@ -1,0 +1,3 @@
+-- AlterTable
+ALTER TABLE "Contractors" ADD COLUMN IF NOT EXISTS "city" VARCHAR;
+ALTER TABLE "Contractors" ADD COLUMN IF NOT EXISTS "pincode" VARCHAR;

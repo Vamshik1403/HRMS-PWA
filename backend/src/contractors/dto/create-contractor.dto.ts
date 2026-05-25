@@ -9,6 +9,8 @@ export class CreateContractorDto {
     @IsOptional() @IsString() rateCardName?: string;
   @IsOptional() @IsString() country?: string;
   @IsOptional() @IsString() state?: string;
+  @IsOptional() @IsString() city?: string;
+  @IsOptional() @IsString() pincode?: string;
   @IsOptional() @IsString() timeZone?: string;
   @IsOptional() @IsString() currency?: string;
   @IsOptional() @IsString() pfNo?: string;

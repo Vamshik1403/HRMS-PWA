@@ -859,27 +859,18 @@ export function DeviceManagement() {
               <div className="space-y-2">
                 <Label>Device Type</Label>
                 <select
-                  value={formData.deviceType}
+                  value={formData.deviceType || "AT"}
                   onChange={(e) => {
-                    const val = e.target.value;
                     setFormData((p) => ({
                       ...p,
-                      deviceType: val,
-                      attendanceAuthType: val !== "AT+TR" ? "" : p.attendanceAuthType,
-                      tokenRegAuthType: val !== "AT+TR" ? "" : p.tokenRegAuthType,
+                      deviceType: "AT",
+                      attendanceAuthType: "",
+                      tokenRegAuthType: "",
                     }));
                   }}
                   className="w-full px-3 py-2 border border-gray-300 rounded-sm border-[#d0d0d0] focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-900/15 focus-visible:border-[#b0b0b0]"
                 >
-                  <option value="">Select device type</option>
                   <option value="AT">Attendance</option>
-                  {!(user?.role === "ADMIN" || user?.role === "COMPANY_ADMIN") && (
-                    <>
-                      <option value="TR">Token Registration</option>
-                      <option value="TV">Token Verifier</option>
-                      <option value="AT+TR">Attendance + Token Register</option>
-                    </>
-                  )}
                 </select>
               </div>
 

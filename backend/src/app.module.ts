@@ -65,6 +65,7 @@ import { ComplianceRulesModule } from './compliance-rules/compliance-rules.modul
 import { EmpLocationAttendanceModule } from './emp-location-attendance/emp-location-attendance.module';
 import { PushNotificationsModule } from './push-notifications/push-notifications.module';
 import { EmpLeaveBalanceModule } from './emp-leave-balance/emp-leave-balance.module';
+import { GeoModule } from './geo/geo.module';
 
 
 @Module({
@@ -135,6 +136,7 @@ import { EmpLeaveBalanceModule } from './emp-leave-balance/emp-leave-balance.mod
     EmpLocationAttendanceModule,
     PushNotificationsModule,
     EmpLeaveBalanceModule,
+    GeoModule,
   ],
   providers: [AuthService],
   controllers: [AuthController],

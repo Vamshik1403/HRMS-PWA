@@ -229,6 +229,8 @@ model Contractors {
   address            String?          @db.VarChar
   country            String?          @db.VarChar
   state              String?          @db.VarChar
+  city               String?          @db.VarChar
+  pincode            String?          @db.VarChar
   timeZone           String?          @db.VarChar
   currency           String?          @db.VarChar
   pfNo               String?          @db.VarChar

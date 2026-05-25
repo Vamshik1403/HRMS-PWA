@@ -21,6 +21,10 @@ import { Plus, Search, Edit, Trash2, Eye, IndianRupee } from "lucide-react";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import { toast } from "sonner";
 import { getSidebarContext } from "../utils/sidebarContext";
+import { LocationFields } from "../components/ui/location-fields";
+import { TimezoneSelect } from "../components/ui/timezone-select";
+import { SearchSuggestInput } from "../components/SearchSuggestInput";
+import { fetchCurrencies } from "../utils/geoApi";
 
 
 // ---------------------------
@@ -38,6 +42,8 @@ interface ContractorRead {
   address?: string | null;
   country?: string | null;
   state?: string | null;
+  city?: string | null;
+  pincode?: string | null;
   timeZone?: string | null;
   currency?: string | null;
   pfNo?: string | null;
@@ -243,6 +249,8 @@ export function ContractorManagement() {
     address: "",
     country: "",
     state: "",
+    city: "",
+    pincode: "",
     timeZone: "",
     currency: "",
     pfNo: "",
@@ -477,6 +485,8 @@ export function ContractorManagement() {
       address: "",
       country: "",
       state: "",
+      city: "",
+      pincode: "",
       timeZone: "",
       currency: "",
       pfNo: "",
@@ -555,6 +565,8 @@ export function ContractorManagement() {
       address: r.address ?? "",
       country: r.country ?? "",
       state: r.state ?? "",
+      city: r.city ?? "",
+      pincode: r.pincode ?? "",
       timeZone: r.timeZone ?? "",
       currency: r.currency ?? "",
       pfNo: r.pfNo ?? "",
@@ -638,6 +650,8 @@ export function ContractorManagement() {
         address: formData.address || undefined,
         country: formData.country || undefined,
         state: formData.state || undefined,
+        city: formData.city || undefined,
+        pincode: formData.pincode || undefined,
         timeZone: formData.timeZone || undefined,
         currency: formData.currency || undefined,
         pfNo: formData.pfNo || undefined,
@@ -897,26 +911,36 @@ export function ContractorManagement() {
                 />
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Country</Label>
-                  <Input value={formData.country} onChange={(e) => setFormData((p) => ({ ...p, country: e.target.value }))} />
-                </div>
-                <div className="space-y-2">
-                  <Label>State</Label>
-                  <Input value={formData.state} onChange={(e) => setFormData((p) => ({ ...p, state: e.target.value }))} />
-                </div>
-              </div>
+              <LocationFields
+                values={{
+                  city: formData.city,
+                  state: formData.state,
+                  pincode: formData.pincode,
+                  country: formData.country,
+                  currency: formData.currency,
+                }}
+                onChange={(patch) => setFormData((p) => ({ ...p, ...patch }))}
+                showCurrency={false}
+              />
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Time Zone</Label>
-                  <Input value={formData.timeZone} onChange={(e) => setFormData((p) => ({ ...p, timeZone: e.target.value }))} />
+                  <TimezoneSelect
+                    value={formData.timeZone || ""}
+                    onChange={(value) => setFormData((p) => ({ ...p, timeZone: value }))}
+                  />
                 </div>
-                <div className="space-y-2">
-                  <Label>Currency</Label>
-                  <Input value={formData.currency} onChange={(e) => setFormData((p) => ({ ...p, currency: e.target.value }))} />
-                </div>
+                <SearchSuggestInput
+                  label="Currency"
+                  placeholder="Type currency code…"
+                  value={formData.currency}
+                  onChange={(v) => setFormData((p) => ({ ...p, currency: v }))}
+                  onSelect={({ display }) => setFormData((p) => ({ ...p, currency: display }))}
+                  fetchData={fetchCurrencies}
+                  displayField="code"
+                  valueField="code"
+                />
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -931,7 +955,15 @@ export function ContractorManagement() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Financial Year Start</Label>
-                  <Input type="date" value={formData.financialYearStart} onChange={(e) => setFormData((p) => ({ ...p, financialYearStart: e.target.value }))} />
+                  <select
+                    value={formData.financialYearStart || ""}
+                    onChange={(e) => setFormData((p) => ({ ...p, financialYearStart: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-sm border-[#d0d0d0] focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-900/15 focus-visible:border-[#b0b0b0]"
+                  >
+                    <option value="">Select financial year start</option>
+                    <option value="1st Jan">1st Jan</option>
+                    <option value="1st April">1st April</option>
+                  </select>
                 </div>
                 <div className="space-y-2">
                   <Label>Contact Number</Label>

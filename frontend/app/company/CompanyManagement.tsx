@@ -14,6 +14,9 @@ import { useCurrentUser } from "../hooks/useCurrentUser"
 import { useRouter } from "next/navigation"
 import { FormDrawer } from "../components/ui/form-drawer"
 import { TimezoneSelect } from "../components/ui/timezone-select"
+import { LocationFields } from "../components/ui/location-fields"
+import { SearchSuggestInput } from "../components/SearchSuggestInput"
+import { fetchCurrencies } from "../utils/geoApi"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -584,27 +587,17 @@ export function CompanyManagement() {
                 />
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Country</Label>
-                  <Input value={formData.country || ""} onChange={(e) => setFormData((p) => ({ ...p, country: e.target.value }))} />
-                </div>
-                <div className="space-y-2">
-                  <Label>State</Label>
-                  <Input value={formData.state || ""} onChange={(e) => setFormData((p) => ({ ...p, state: e.target.value }))} />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>City</Label>
-                  <Input value={formData.city || ""} onChange={(e) => setFormData((p) => ({ ...p, city: e.target.value }))} />
-                </div>
-                <div className="space-y-2">
-                  <Label>Pincode</Label>
-                  <Input value={formData.pincode || ""} onChange={(e) => setFormData((p) => ({ ...p, pincode: e.target.value }))} />
-                </div>
-              </div>
+              <LocationFields
+                values={{
+                  city: formData.city,
+                  state: formData.state,
+                  pincode: formData.pincode,
+                  country: formData.country,
+                  currency: formData.currency,
+                }}
+                onChange={(patch) => setFormData((p) => ({ ...p, ...patch }))}
+                showCurrency={false}
+              />
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
@@ -614,10 +607,16 @@ export function CompanyManagement() {
                     onChange={(value) => setFormData((p) => ({ ...p, timeZone: value }))}
                   />
                 </div>
-                <div className="space-y-2">
-                  <Label>Currency</Label>
-                  <Input value={formData.currency || ""} onChange={(e) => setFormData((p) => ({ ...p, currency: e.target.value }))} />
-                </div>
+                <SearchSuggestInput
+                  label="Currency"
+                  placeholder="Type currency code…"
+                  value={formData.currency || ""}
+                  onChange={(v) => setFormData((p) => ({ ...p, currency: v }))}
+                  onSelect={({ display }) => setFormData((p) => ({ ...p, currency: display }))}
+                  fetchData={fetchCurrencies}
+                  displayField="code"
+                  valueField="code"
+                />
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
