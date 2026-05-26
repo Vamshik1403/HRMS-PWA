@@ -54,8 +54,23 @@ export function useCurrentUser() {
         const parts = token.split('.')
         if (parts.length < 2) return
         const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')))
-        // Only recover admin/manager users (not employees)
-        if (!payload.sub || payload.type === 'employee' || payload.role === 'EMPLOYEE') return
+        // Recover admin/manager or employee users from JWT when localStorage user is missing
+        if (!payload.sub) return
+        if (payload.type === 'employee' || payload.role === 'EMPLOYEE') {
+          const employeeUser = {
+            id: payload.employeeId ?? payload.sub,
+            username: payload.username,
+            role: 'EMPLOYEE' as const,
+            type: 'employee',
+            companyID: payload.companyID,
+            serviceProviderID: payload.serviceProviderID,
+            branchesID: payload.branchesID,
+            employee: { id: payload.employeeId ?? payload.sub },
+          }
+          localStorage.setItem('user', JSON.stringify(employeeUser))
+          setUser(employeeUser as CurrentUser)
+          return
+        }
         const res = await fetch(`/backend/users/${payload.sub}`)
         if (!res.ok) return
         const userData = await res.json()

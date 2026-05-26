@@ -302,6 +302,54 @@
   border-radius: 8px;
 }
 
+/* Shared select styling (filters, tables, modals outside form drawer) */
+.app-select {
+  height: 2.5rem;
+  border-radius: 3px;
+  border: 1px solid #cbd5e1;
+  font-size: 13px;
+  color: #111827;
+  background-color: #f9fafb;
+  padding: 0.5rem 0.75rem;
+  color-scheme: light;
+  transition: border-color 0.15s, box-shadow 0.15s, background-color 0.15s;
+}
+
+.app-select:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.25);
+  border-color: #4f46e5;
+  background-color: white;
+}
+
+/* Date/time inputs — visible picker icon and native calendar */
+input[type="date"],
+input[type="datetime-local"],
+input[type="time"],
+input[type="month"],
+input[type="week"] {
+  color-scheme: light;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator,
+input[type="datetime-local"]::-webkit-calendar-picker-indicator,
+input[type="time"]::-webkit-calendar-picker-indicator,
+input[type="month"]::-webkit-calendar-picker-indicator,
+input[type="week"]::-webkit-calendar-picker-indicator {
+  opacity: 1;
+  cursor: pointer;
+  width: 1.125rem;
+  height: 1.125rem;
+  margin-left: 0.25rem;
+  filter: invert(28%) sepia(8%) saturate(900%) hue-rotate(182deg) brightness(92%) contrast(88%);
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator:hover,
+input[type="datetime-local"]::-webkit-calendar-picker-indicator:hover,
+input[type="time"]::-webkit-calendar-picker-indicator:hover {
+  filter: invert(24%) sepia(90%) saturate(2500%) hue-rotate(234deg) brightness(92%) contrast(95%);
+}
+
 /* Employee PWA appearance theme (scoped) */
 html[data-emp-theme="dark"] .emp-pwa-shell,
 html[data-emp-theme="dark"] .emp-pwa-safe-top {

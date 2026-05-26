@@ -45,11 +45,11 @@ export class DevicesService {
   }
 
   async update(id: number, dto: UpdateDeviceDto) {
-    const { serviceProviderID, companyID, branchesID, ...rest } = dto;
+    const { serviceProviderID, companyID, branchesID, authTypes, ...rest } = dto;
 
-    // Build relation updates only if keys are present on dto (can connect or set null)
     const relationData: Prisma.DevicesUpdateInput = {
       ...rest,
+      ...(authTypes !== undefined ? { authTypes } : {}),
       ...(serviceProviderID !== undefined
         ? serviceProviderID == null
           ? { serviceProvider: { disconnect: true } }

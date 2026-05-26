@@ -465,18 +465,10 @@ export function DeviceManagement() {
       }
     }
 
-    // Build authTypes from attendance and token register selections
-    const authTypes: string[] = [];
-    if (formData.deviceType === 'AT+TR') {
-      if (formData.attendanceAuthType) authTypes.push(`ATT:${formData.attendanceAuthType}`);
-      if (formData.tokenRegAuthType) authTypes.push(`TR:${formData.tokenRegAuthType}`);
-    }
-
     const payload: any = {
       status: formData.status,
       deviceName: formData.deviceName || undefined,
-      deviceType: formData.deviceType || undefined,
-      authTypes: authTypes,
+      deviceType: formData.deviceType || "AT",
       deviceMake: formData.deviceMake || undefined,
       deviceModel: formData.deviceModel || undefined,
       deviceSN: formData.deviceSN || undefined,
@@ -485,6 +477,9 @@ export function DeviceManagement() {
       companyID: finalCompanyID ?? undefined,
       branchesID: finalBranchesID ?? undefined,
     };
+    if (formData.attendanceAuthType) {
+      payload.authTypes = [`ATT:${formData.attendanceAuthType}`];
+    }
 
     try {
       if (editingDevice) {

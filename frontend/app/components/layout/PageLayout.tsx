@@ -63,6 +63,7 @@ const sbSubIdle =
   "text-[#6b7280] hover:bg-[#eef2ff] hover:text-[#4f46e5] !bg-transparent";
 
 // Path groups for section active-state detection
+const TASK_MANAGEMENT_PATHS = ["/task-customers", "/task-customer-sites", "/task-projects"];
 const SETUP_PATHS = ["/company", "/branches", "/devices"];
 const CONTRACTOR_MANAGEMENT_PATHS = ["/contractors", "/contractor-rates"];
 const EMPLOYEE_PATHS = ["/departments", "/designations", "/manage-employees", "/employees-promotions", "/employee-memo", "/termination"];
@@ -76,7 +77,7 @@ const REPORTS_PATHS = ["/attendance-reports", "/payroll-reports"];
 const CANTEEN_PATHS = ["/canteen", "/canteen/setup", "/canteen/reports"];
 const SETTINGS_PATHS = ["/import-attendance", "/hrms-integrations", "/system-settings", "/system-settings/compliance"];
 const ADMIN_PATHS = ["/system-users", "/backup-restore"];
-const ALL_SECTION_PATHS = [...SETUP_PATHS, ...CONTRACTOR_MANAGEMENT_PATHS, ...EMPLOYEE_PATHS, ...PAYROLL_PATHS, ...SALARY_PATHS, ...PAYROLL_POLICY_PATHS, ...LEAVE_PATHS, ...LEAVE_MANAGEMENT_PATHS, ...ATTENDANCE_PATHS, ...REPORTS_PATHS, ...CANTEEN_PATHS, ...SETTINGS_PATHS];
+const ALL_SECTION_PATHS = [...SETUP_PATHS, ...CONTRACTOR_MANAGEMENT_PATHS, ...EMPLOYEE_PATHS, ...TASK_MANAGEMENT_PATHS, ...PAYROLL_PATHS, ...SALARY_PATHS, ...PAYROLL_POLICY_PATHS, ...LEAVE_PATHS, ...LEAVE_MANAGEMENT_PATHS, ...ATTENDANCE_PATHS, ...REPORTS_PATHS, ...CANTEEN_PATHS, ...SETTINGS_PATHS];
 
 export function PageLayout({ children }: PageLayoutProps) {
   const pathname = usePathname()
@@ -289,6 +290,7 @@ export function PageLayout({ children }: PageLayoutProps) {
           if (SETUP_PATHS.includes(pathname)) newOpen[`c${comp.id}_setup`] = true
           if (CONTRACTOR_MANAGEMENT_PATHS.includes(pathname)) newOpen[`c${comp.id}_contractorMgmt`] = true
           if (EMPLOYEE_PATHS.includes(pathname)) newOpen[`c${comp.id}_employee`] = true
+          if (TASK_MANAGEMENT_PATHS.includes(pathname)) newOpen[`c${comp.id}_taskMgmt`] = true
           if (PAYROLL_PATHS.includes(pathname)) newOpen[`c${comp.id}_payroll`] = true
           if (SALARY_PATHS.includes(pathname)) newOpen[`c${comp.id}_salary`] = true
           if (PAYROLL_POLICY_PATHS.includes(pathname)) newOpen[`c${comp.id}_payrollPolicy`] = true
@@ -351,6 +353,7 @@ export function PageLayout({ children }: PageLayoutProps) {
     const setupSectionActive = isSectionActiveForCompany(SETUP_PATHS, companyId);
     const contractorManagementSectionActive = isSectionActiveForCompany(CONTRACTOR_MANAGEMENT_PATHS, companyId);
     const employeeSectionActive = isSectionActiveForCompany(EMPLOYEE_PATHS, companyId);
+    const taskMgmtSectionActive = isSectionActiveForCompany(TASK_MANAGEMENT_PATHS, companyId);
     const payrollSectionActive = isSectionActiveForCompany(PAYROLL_PATHS, companyId);
     const salarySectionActive = isSectionActiveForCompany(SALARY_PATHS, companyId);
     const payrollPolicySectionActive = isSectionActiveForCompany(PAYROLL_POLICY_PATHS, companyId);
@@ -430,6 +433,28 @@ export function PageLayout({ children }: PageLayoutProps) {
                   <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/employee-memo" className={cn(sbSubRow, isActiveLink('/employee-memo', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Notice Board</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
                 )}
                 <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/termination" className={cn(sbSubRow, isActiveLink('/termination', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Off Boarding</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
+              </SidebarMenuSub>
+            </CollapsibleContent>
+          </Collapsible>
+        )}
+
+        {/* Task Management System */}
+        {(isSuperAdmin || isCompanyAdmin) && (
+          <Collapsible open={openSections[k('taskMgmt')]} onOpenChange={o => toggleSection(k('taskMgmt'), o)}>
+            <CollapsibleTrigger asChild>
+              <SidebarMenuButton size="lg" className={cn(sbMenuBtnReset, sbRow, "mx-0 justify-between", taskMgmtSectionActive ? sbActive : cn(sbIdle, openSections[k('taskMgmt')] && "font-semibold text-[#4f46e5]"))}>
+                <span className="flex items-center gap-3 min-w-0">
+                  <Icon icon="mdi:clipboard-check-outline" className={cn("w-5 h-5 shrink-0", taskMgmtSectionActive ? "text-[#4f46e5]" : "text-gray-400")} />
+                  <span className="truncate font-semibold text-sm">Task Management System</span>
+                </span>
+                <Icon icon="mdi:chevron-down" className={cn("w-4 h-4 shrink-0 text-gray-500 transition-transform duration-300", openSections[k('taskMgmt')] && "rotate-180")} />
+              </SidebarMenuButton>
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <SidebarMenuSub className="ml-5 mt-1 space-y-0.5 border-l border-[#f0f0f0] pl-3">
+                <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/task-customers" className={cn(sbSubRow, isActiveLink('/task-customers', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Customers</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
+                <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/task-customer-sites" className={cn(sbSubRow, isActiveLink('/task-customer-sites', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Sites / Branches</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
+                <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/task-projects" className={cn(sbSubRow, isActiveLink('/task-projects', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Tasks / Projects</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
               </SidebarMenuSub>
             </CollapsibleContent>
           </Collapsible>

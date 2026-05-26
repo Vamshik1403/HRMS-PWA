@@ -1010,6 +1010,10 @@ async findOne(id: number) {
         const toUpdate = devices.filter((d) => !!d.id);
         const toCreate = devices.filter((d) => !d.id);
         for (const d of toUpdate) {
+          const owned = await tx.empDeviceMapping.findFirst({
+            where: { id: d.id!, manageEmployeeID: id },
+          });
+          if (!owned) continue;
           await tx.empDeviceMapping.update({
             where: { id: d.id! },
             data: {
@@ -1039,6 +1043,10 @@ async findOne(id: number) {
         const toUpdate = tokenDevices.filter((d) => !!d.id);
         const toCreate = tokenDevices.filter((d) => !d.id);
         for (const d of toUpdate) {
+          const owned = await tx.tokenDeviceMapping.findFirst({
+            where: { id: d.id!, manageEmployeeID: id },
+          });
+          if (!owned) continue;
           await tx.tokenDeviceMapping.update({
             where: { id: d.id! },
             data: {

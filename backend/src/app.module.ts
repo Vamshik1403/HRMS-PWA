@@ -66,6 +66,7 @@ import { EmpLocationAttendanceModule } from './emp-location-attendance/emp-locat
 import { PushNotificationsModule } from './push-notifications/push-notifications.module';
 import { EmpLeaveBalanceModule } from './emp-leave-balance/emp-leave-balance.module';
 import { GeoModule } from './geo/geo.module';
+import { TaskManagementModule } from './task-management/task-management.module';
 
 
 @Module({
@@ -137,6 +138,7 @@ import { GeoModule } from './geo/geo.module';
     PushNotificationsModule,
     EmpLeaveBalanceModule,
     GeoModule,
+    TaskManagementModule,
   ],
   providers: [AuthService],
   controllers: [AuthController],
