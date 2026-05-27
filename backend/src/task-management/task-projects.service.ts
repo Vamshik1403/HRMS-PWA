@@ -1,4 +1,4 @@
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   CreateTaskProjectDto,
@@ -25,6 +25,7 @@ const TASK_INCLUDE = {
       },
     },
   },
+  chats: { orderBy: { createdAt: 'desc' as const }, take: 1, select: { createdAt: true } },
   _count: { select: { remarks: true, chats: true, activities: true } },
 };
 
@@ -117,8 +118,12 @@ export class TaskProjectsService {
     const limit = Math.min(100, Math.max(1, Number(query.limit) || 10));
     const search = (query.search || '').trim();
     const status = query.status?.trim();
+    const priority = query.priority?.trim();
+    const taskType = query.taskType?.trim();
     const where = this.visibilityWhere(viewer, query.companyID ? Number(query.companyID) : undefined);
     if (status) where.status = status;
+    if (priority) where.priority = priority;
+    if (taskType) where.taskType = taskType;
     if (search) {
       where.AND = [
         {
@@ -236,6 +241,9 @@ export class TaskProjectsService {
 
   async changeStatus(id: number, dto: TaskStatusChangeDto, query: Record<string, string | undefined>) {
     const viewer = parseViewer(query);
+    if (!canManageTaskModule(viewer)) {
+      throw new ForbiddenException('Only administrators can change task status');
+    }
     const task = await this.assertTaskAccess(id, viewer);
     const updated = await this.prisma.taskProject.update({
       where: { id },
@@ -257,6 +265,9 @@ export class TaskProjectsService {
 
   async changePriority(id: number, dto: TaskPriorityChangeDto, query: Record<string, string | undefined>) {
     const viewer = parseViewer(query);
+    if (!canManageTaskModule(viewer)) {
+      throw new ForbiddenException('Only administrators can change task priority');
+    }
     const task = await this.assertTaskAccess(id, viewer);
     const updated = await this.prisma.taskProject.update({
       where: { id },
@@ -306,20 +317,33 @@ export class TaskProjectsService {
   async addChat(id: number, dto: CreateTaskChatDto, query: Record<string, string | undefined>) {
     const viewer = parseViewer(query);
     await this.assertTaskAccess(id, viewer);
+    const text = (dto.message || '').trim();
+    const attachmentUrl = (dto.attachmentUrl || '').trim() || null;
+    if (!text && !attachmentUrl) {
+      throw new BadRequestException('Message or attachment is required');
+    }
+    if (dto.status && !canManageTaskModule(viewer)) {
+      throw new ForbiddenException('Only administrators can change task status');
+    }
+    if (dto.priority && !canManageTaskModule(viewer)) {
+      throw new ForbiddenException('Only administrators can change task priority');
+    }
     const chat = await this.prisma.taskChat.create({
       data: {
         taskID: id,
-        message: dto.message,
+        message: text || (attachmentUrl ? '📷 Photo' : ''),
+        attachmentUrl,
         userID: dto.userID ?? viewer.userId ?? null,
         employeeID: dto.employeeID ?? viewer.employeeId ?? null,
         senderName: dto.senderName,
       },
     });
+    const activityRemark = text || (attachmentUrl ? 'Image attachment' : '');
     await this.logActivity(id, 'CHAT', {
       userID: chat.userID ?? undefined,
       employeeID: chat.employeeID ?? undefined,
       actorName: dto.senderName,
-      remark: dto.message,
+      remark: activityRemark,
     });
     if (dto.status) {
       await this.changeStatus(id, { status: dto.status, remark: dto.remark, actorName: dto.senderName, userID: dto.userID, employeeID: dto.employeeID }, query);

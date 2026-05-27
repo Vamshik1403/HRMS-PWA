@@ -17,9 +17,10 @@ interface LocationFieldsProps {
   values: LocationValues;
   onChange: (patch: Partial<LocationValues>) => void;
   showCurrency?: boolean;
+  disabled?: boolean;
 }
 
-export function LocationFields({ values, onChange, showCurrency = true }: LocationFieldsProps) {
+export function LocationFields({ values, onChange, showCurrency = true, disabled = false }: LocationFieldsProps) {
   return (
     <>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -32,6 +33,7 @@ export function LocationFields({ values, onChange, showCurrency = true }: Locati
           fetchData={(q) => fetchCities(values.country || "", values.state || "", q)}
           displayField="name"
           valueField="name"
+          disabled={disabled}
         />
         <SearchSuggestInput
           label="State"
@@ -42,6 +44,7 @@ export function LocationFields({ values, onChange, showCurrency = true }: Locati
           fetchData={(q) => fetchStates(values.country || "", q)}
           displayField="name"
           valueField="name"
+          disabled={disabled}
         />
       </div>
 
@@ -52,6 +55,7 @@ export function LocationFields({ values, onChange, showCurrency = true }: Locati
             value={values.pincode || ""}
             onChange={(e) => onChange({ pincode: e.target.value })}
             placeholder="Enter pincode"
+            disabled={disabled}
           />
         </div>
         <SearchSuggestInput
@@ -70,6 +74,7 @@ export function LocationFields({ values, onChange, showCurrency = true }: Locati
           fetchData={fetchCountries}
           displayField="name"
           valueField="name"
+          disabled={disabled}
         />
       </div>
 
@@ -84,6 +89,7 @@ export function LocationFields({ values, onChange, showCurrency = true }: Locati
             fetchData={fetchCurrencies}
             displayField="code"
             valueField="code"
+            disabled={disabled}
           />
         </div>
       )}

@@ -96,6 +96,15 @@ export class TaskProjectsController {
     return this.service.addChat(id, dto, query);
   }
 
+  @Patch(':id/assign')
+  assignEmployees(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() body: { assignedEmployeeIds: number[] },
+    @Query() query: Record<string, string>,
+  ) {
+    return this.service.update(id, { assignedEmployeeIds: body.assignedEmployeeIds }, query);
+  }
+
   @Get(':id/activities')
   getActivities(@Param('id', ParseIntPipe) id: number, @Query() query: Record<string, string>) {
     return this.service.getActivities(id, query);

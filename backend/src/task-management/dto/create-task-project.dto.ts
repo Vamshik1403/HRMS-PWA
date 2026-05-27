@@ -56,7 +56,8 @@ export class CreateTaskRemarkDto {
 }
 
 export class CreateTaskChatDto {
-  @IsString() message!: string;
+  @IsOptional() @IsString() message?: string;
+  @IsOptional() @IsString() attachmentUrl?: string;
   @IsOptional() @IsInt() userID?: number;
   @IsOptional() @IsInt() employeeID?: number;
   @IsOptional() @IsString() senderName?: string;

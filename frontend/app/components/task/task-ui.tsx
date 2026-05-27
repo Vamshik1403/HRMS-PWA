@@ -78,11 +78,11 @@ export function initials(name?: string | null) {
   return parts.map((p) => p[0]?.toUpperCase() || "").join("") || "U";
 }
 
-export function TaskStatusBadge({ status, size = "sm" }: { status: string; size?: "sm" | "xs" }) {
+export function TaskStatusBadge({ status, size = "sm", className = "" }: { status: string; size?: "sm" | "xs"; className?: string }) {
   const meta = STATUS_META[status as TaskStatus] || STATUS_META.Open;
   const cls = size === "xs" ? "text-[10px] px-2 py-0.5 gap-1" : "text-xs px-2.5 py-1 gap-1.5";
   return (
-    <span className={`inline-flex items-center rounded-md font-medium border ${cls} ${meta.bg} ${meta.text} ${meta.border}`}>
+    <span className={`inline-flex items-center rounded-md font-medium border ${cls} ${meta.bg} ${meta.text} ${meta.border} ${className}`}>
       <span className={`w-1.5 h-1.5 rounded-full ${meta.dot}`} />
       {status}
     </span>

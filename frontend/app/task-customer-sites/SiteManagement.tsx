@@ -14,33 +14,19 @@ import { useCurrentUser } from "../hooks/useCurrentUser";
 import { toast } from "sonner";
 import { LocationFields } from "../components/ui/location-fields";
 import { taskFetch } from "../utils/taskApi";
+import { SearchSuggestInput } from "../components/SearchSuggestInput";
+import { TaskContactsRepeater, sanitizeContacts, type TaskContactRow } from "../components/task/TaskContactsRepeater";
 
-interface CustomerOpt { id: number; customerCode: string; customerName: string; }
+interface CustomerOpt { id: number; customerCode: string; customerName: string; address?: string | null; city?: string | null; state?: string | null; pincode?: string | null; country?: string | null; }
+interface Contact { id?: number; contactPerson: string; contactNumber: string; designation?: string | null; email?: string | null; }
 interface Site {
-  id: number;
-  customerID: number;
-  branchName: string;
-  address?: string | null;
-  city?: string | null;
-  state?: string | null;
-  pincode?: string | null;
-  country?: string | null;
-  latitude?: string | null;
-  longitude?: string | null;
-  customer?: CustomerOpt;
+  id: number; customerID: number; branchName: string;
+  address?: string | null; city?: string | null; state?: string | null; pincode?: string | null; country?: string | null;
+  latitude?: string | null; longitude?: string | null;
+  customer?: CustomerOpt; contacts?: Contact[];
 }
 
-const emptyForm = {
-  customerID: "",
-  branchName: "",
-  address: "",
-  city: "",
-  state: "",
-  pincode: "",
-  country: "",
-  latitude: "",
-  longitude: "",
-};
+const emptyForm = { customerID: "", branchName: "", address: "", city: "", state: "", pincode: "", country: "", latitude: "", longitude: "" };
 
 export default function SiteManagement() {
   const user = useCurrentUser();
@@ -58,13 +44,20 @@ export default function SiteManagement() {
   const [editing, setEditing] = useState<Site | null>(null);
   const [viewRow, setViewRow] = useState<Site | null>(null);
   const [form, setForm] = useState(emptyForm);
+  const [customerLabel, setCustomerLabel] = useState("");
+  const [selectedCustomer, setSelectedCustomer] = useState<CustomerOpt | null>(null);
+  const [sameAsCustomer, setSameAsCustomer] = useState(false);
+  const [contacts, setContacts] = useState<TaskContactRow[]>([]);
   const [saving, setSaving] = useState(false);
 
+  const searchCustomers = useCallback(async (q: string) => {
+    const data = await taskFetch<CustomerOpt[]>("/task-customers/dropdown", user, undefined, { q, limit: 20 });
+    return data.map((c) => ({ ...c, label: `${c.customerCode} — ${c.customerName}` }));
+  }, [user]);
+
   const loadCustomers = useCallback(async () => {
-    try {
-      const data = await taskFetch<CustomerOpt[]>("/task-customers/dropdown", user);
-      setCustomers(data);
-    } catch { /* ignore */ }
+    try { const data = await taskFetch<CustomerOpt[]>("/task-customers/dropdown", user, undefined, { limit: 100 }); setCustomers(data); }
+    catch { /* ignore */ }
   }, [user]);
 
   const load = useCallback(async () => {
@@ -74,49 +67,46 @@ export default function SiteManagement() {
       const extra: Record<string, string | number> = { page, limit: 10, search };
       if (filterCustomer) extra.customerID = filterCustomer;
       const data = await taskFetch<{ items: Site[]; total: number; totalPages: number }>("/task-customer-sites", user, undefined, extra);
-      setRows(data.items);
-      setTotal(data.total);
-      setTotalPages(data.totalPages || 1);
-    } catch (e: any) {
-      toast.error(e.message || "Failed to load sites");
-    } finally {
-      setLoading(false);
-    }
+      setRows(data.items); setTotal(data.total); setTotalPages(data.totalPages || 1);
+    } catch (e: any) { toast.error(e.message || "Failed to load sites"); }
+    finally { setLoading(false); }
   }, [canManage, user, page, search, filterCustomer]);
 
   useEffect(() => { loadCustomers(); }, [loadCustomers]);
   useEffect(() => { load(); }, [load]);
 
-  const openCreate = () => {
-    setEditing(null);
-    setForm(emptyForm);
-    setFormOpen(true);
+  const applyCustomerAddress = (c: CustomerOpt) => {
+    setForm((p) => ({ ...p, address: c.address || "", city: c.city || "", state: c.state || "", pincode: c.pincode || "", country: c.country || "" }));
   };
 
-  const openEdit = (r: Site) => {
-    setEditing(r);
-    setForm({
-      customerID: String(r.customerID),
-      branchName: r.branchName,
-      address: r.address || "",
-      city: r.city || "",
-      state: r.state || "",
-      pincode: r.pincode || "",
-      country: r.country || "",
-      latitude: r.latitude || "",
-      longitude: r.longitude || "",
-    });
-    setFormOpen(true);
+  const openCreate = () => { setEditing(null); setForm(emptyForm); setCustomerLabel(""); setSelectedCustomer(null); setSameAsCustomer(false); setContacts([]); setFormOpen(true); };
+
+  const openEdit = async (r: Site) => {
+    try {
+      const full = await taskFetch<Site>(`/task-customer-sites/${r.id}`, user);
+      setEditing(full);
+      setForm({ customerID: String(full.customerID), branchName: full.branchName, address: full.address || "", city: full.city || "",
+        state: full.state || "", pincode: full.pincode || "", country: full.country || "", latitude: full.latitude || "", longitude: full.longitude || "" });
+      setSelectedCustomer(full.customer || null);
+      setCustomerLabel(full.customer ? `${full.customer.customerCode} — ${full.customer.customerName}` : "");
+      setSameAsCustomer(false);
+      setContacts(full.contacts?.length
+        ? full.contacts.map((c) => ({ contactPerson: c.contactPerson, contactNumber: c.contactNumber, designation: c.designation || "", email: c.email || "" }))
+        : []);
+      setFormOpen(true);
+    } catch (e: any) { toast.error(e.message || "Failed to load site"); }
+  };
+
+  const openView = async (r: Site) => {
+    try { const full = await taskFetch<Site>(`/task-customer-sites/${r.id}`, user); setViewRow(full); setViewOpen(true); }
+    catch (e: any) { toast.error(e.message || "Failed to load site"); }
   };
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.branchName.trim() || !form.customerID) {
-      toast.error("Customer and branch name are required");
-      return;
-    }
+    if (!form.branchName.trim() || !form.customerID) { toast.error("Customer and branch name are required"); return; }
     setSaving(true);
-    const payload = { ...form, customerID: Number(form.customerID) };
+    const payload = { ...form, customerID: Number(form.customerID), contacts: sanitizeContacts(contacts) };
     try {
       if (editing) {
         await taskFetch(`/task-customer-sites/${editing.id}`, user, { method: "PATCH", body: JSON.stringify(payload) });
@@ -125,40 +115,26 @@ export default function SiteManagement() {
         await taskFetch("/task-customer-sites", user, { method: "POST", body: JSON.stringify(payload) });
         toast.success("Site created");
       }
-      setFormOpen(false);
-      load();
-    } catch (err: any) {
-      toast.error(err.message || "Save failed");
-    } finally {
-      setSaving(false);
-    }
+      setFormOpen(false); load();
+    } catch (err: any) { toast.error(err.message || "Save failed"); }
+    finally { setSaving(false); }
   };
 
   const remove = async (id: number) => {
     if (!confirm("Delete this site?")) return;
-    try {
-      await taskFetch(`/task-customer-sites/${id}`, user, { method: "DELETE" });
-      toast.success("Site deleted");
-      load();
-    } catch (err: any) {
-      toast.error(err.message || "Delete failed");
-    }
+    try { await taskFetch(`/task-customer-sites/${id}`, user, { method: "DELETE" }); toast.success("Site deleted"); load(); }
+    catch (err: any) { toast.error(err.message || "Delete failed"); }
   };
 
-  if (!canManage) {
-    return <div className="p-6 text-gray-500">Access denied.</div>;
-  }
+  if (!canManage) return <div className="p-6 text-gray-500">Access denied.</div>;
 
   return (
     <div className="space-y-6">
       {!formOpen && !viewOpen && (
         <div className="flex items-center justify-end">
-          {canManage && (
-            <Button onClick={openCreate}><Plus className="w-4 h-4 mr-1" /> Add Site</Button>
-          )}
+          {canManage && <Button onClick={openCreate}><Plus className="w-4 h-4 mr-1" /> Add Site</Button>}
         </div>
       )}
-
       {!formOpen && !viewOpen && (
         <>
           <Card>
@@ -174,16 +150,13 @@ export default function SiteManagement() {
               <Badge variant="secondary">{total} sites</Badge>
             </CardContent>
           </Card>
-
           <Card>
             <CardContent className="p-0 overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Customer</TableHead>
-                    <TableHead>Branch</TableHead>
-                    <TableHead>City</TableHead>
-                    <TableHead>Lat / Long</TableHead>
+                    <TableHead>Customer</TableHead><TableHead>Branch</TableHead>
+                    <TableHead>City</TableHead><TableHead>Lat / Long</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -199,7 +172,7 @@ export default function SiteManagement() {
                       <TableCell>{r.city || "—"}</TableCell>
                       <TableCell className="text-xs">{r.latitude || "—"} / {r.longitude || "—"}</TableCell>
                       <TableCell className="text-right space-x-1">
-                        <Button variant="ghost" size="sm" onClick={() => { setViewRow(r); setViewOpen(true); }}><Eye className="w-4 h-4" /></Button>
+                        <Button variant="ghost" size="sm" onClick={() => openView(r)}><Eye className="w-4 h-4" /></Button>
                         <Button variant="ghost" size="sm" onClick={() => openEdit(r)}><Edit className="w-4 h-4" /></Button>
                         <Button variant="ghost" size="sm" onClick={() => remove(r.id)}><Trash2 className="w-4 h-4 text-red-500" /></Button>
                       </TableCell>
@@ -209,7 +182,6 @@ export default function SiteManagement() {
               </Table>
             </CardContent>
           </Card>
-
           <div className="flex items-center justify-between">
             <span className="text-sm text-gray-500">Page {page} of {totalPages}</span>
             <div className="flex gap-2">
@@ -222,26 +194,40 @@ export default function SiteManagement() {
 
       <FormDrawer open={formOpen} onOpenChange={(v) => { if (!v) setFormOpen(false); }} title={editing ? "Edit Site" : "Add Site"} showHeaderCancel>
         <form onSubmit={submit} className="space-y-4">
-          <div className="space-y-2">
-            <Label>Customer *</Label>
-            <select className="app-select w-full" value={form.customerID} onChange={(e) => setForm((p) => ({ ...p, customerID: e.target.value }))} required>
-              <option value="">Select customer</option>
-              {customers.map((c) => <option key={c.id} value={c.id}>{c.customerCode} — {c.customerName}</option>)}
-            </select>
-          </div>
+          <SearchSuggestInput
+            label="Customer *"
+            placeholder="Search customer by name or ID…"
+            value={customerLabel}
+            onChange={setCustomerLabel}
+            fetchData={searchCustomers}
+            displayField="label"
+            valueField="id"
+            required
+            onSelect={({ value, item }) => {
+              setForm((p) => ({ ...p, customerID: String(value) }));
+              setSelectedCustomer(item);
+              if (sameAsCustomer) applyCustomerAddress(item);
+            }}
+          />
+          <label className="flex items-center gap-2 text-sm cursor-pointer">
+            <input type="checkbox" checked={sameAsCustomer} disabled={!form.customerID}
+              onChange={(e) => { setSameAsCustomer(e.target.checked); if (e.target.checked && selectedCustomer) applyCustomerAddress(selectedCustomer); }} />
+            Same as selected customer address
+          </label>
           <div className="space-y-2">
             <Label>Branch Name *</Label>
             <Input value={form.branchName} onChange={(e) => setForm((p) => ({ ...p, branchName: e.target.value }))} required />
           </div>
           <div className="space-y-2">
             <Label>Address</Label>
-            <Textarea value={form.address} onChange={(e) => setForm((p) => ({ ...p, address: e.target.value }))} rows={2} />
+            <Textarea value={form.address} onChange={(e) => setForm((p) => ({ ...p, address: e.target.value }))} rows={2} disabled={sameAsCustomer} />
           </div>
-          <LocationFields values={form} onChange={(patch) => setForm((p) => ({ ...p, ...patch }))} showCurrency={false} />
+          <LocationFields values={form} onChange={(patch) => setForm((p) => ({ ...p, ...patch }))} showCurrency={false} disabled={sameAsCustomer} />
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2"><Label>Latitude</Label><Input value={form.latitude} onChange={(e) => setForm((p) => ({ ...p, latitude: e.target.value }))} /></div>
             <div className="space-y-2"><Label>Longitude</Label><Input value={form.longitude} onChange={(e) => setForm((p) => ({ ...p, longitude: e.target.value }))} /></div>
           </div>
+          <TaskContactsRepeater title="Site Contacts" contacts={contacts} onChange={setContacts} />
           <div className="flex justify-end gap-2 pt-4 border-t">
             <Button type="button" variant="outline" onClick={() => setFormOpen(false)}>Cancel</Button>
             <Button type="submit" disabled={saving}>{saving ? "Saving…" : "Save"}</Button>
@@ -256,7 +242,18 @@ export default function SiteManagement() {
             <div className="p-3 bg-gray-50 rounded-lg"><strong>Branch:</strong> {viewRow.branchName}</div>
             <div className="p-3 bg-gray-50 rounded-lg"><strong>Address:</strong> {viewRow.address || "—"}</div>
             <div className="p-3 bg-gray-50 rounded-lg"><strong>Location:</strong> {[viewRow.city, viewRow.state, viewRow.pincode, viewRow.country].filter(Boolean).join(", ") || "—"}</div>
-            <div className="p-3 bg-gray-50 rounded-lg"><strong>Coordinates:</strong> {viewRow.latitude}, {viewRow.longitude}</div>
+            <div className="p-3 bg-gray-50 rounded-lg"><strong>Coordinates:</strong> {viewRow.latitude || "—"} / {viewRow.longitude || "—"}</div>
+            {viewRow.contacts && viewRow.contacts.length > 0 && (
+              <div className="space-y-2">
+                <p className="font-semibold">Site Contacts</p>
+                {viewRow.contacts.map((c, i) => (
+                  <div key={c.id ?? i} className="p-3 bg-gray-50 rounded-lg">
+                    <div>{c.contactPerson} · {c.contactNumber}</div>
+                    {(c.designation || c.email) && <div className="text-gray-500 text-xs mt-1">{[c.designation, c.email].filter(Boolean).join(" · ")}</div>}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </FormDrawer>

@@ -106,10 +106,27 @@ export class TaskCustomersService {
   async dropdown(query: Record<string, string | undefined>) {
     const viewer = parseViewer(query);
     const where = this.baseWhere(viewer, query.companyID ? Number(query.companyID) : undefined);
+    const q = (query.q || query.search || '').trim();
+    if (q) {
+      where.OR = [
+        { customerName: { contains: q, mode: 'insensitive' } },
+        { customerCode: { contains: q, mode: 'insensitive' } },
+      ];
+    }
     return this.prisma.taskCustomer.findMany({
       where,
       orderBy: { customerName: 'asc' },
-      select: { id: true, customerCode: true, customerName: true },
+      take: Math.min(50, Math.max(1, Number(query.limit) || 20)),
+      select: {
+        id: true,
+        customerCode: true,
+        customerName: true,
+        address: true,
+        city: true,
+        state: true,
+        pincode: true,
+        country: true,
+      },
     });
   }
 }

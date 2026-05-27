@@ -2090,13 +2090,14 @@ model TaskRemark {
 }
 
 model TaskChat {
-  id         Int         @id @default(autoincrement())
-  taskID     Int
-  userID     Int?
-  employeeID Int?
-  senderName String?     @db.VarChar(255)
-  message    String
-  createdAt  DateTime    @default(now())
+  id            Int         @id @default(autoincrement())
+  taskID        Int
+  userID        Int?
+  employeeID    Int?
+  senderName    String?     @db.VarChar(255)
+  message       String
+  attachmentUrl String?     @db.VarChar(512)
+  createdAt     DateTime    @default(now())
   task       TaskProject @relation(fields: [taskID], references: [id], onDelete: Cascade)
 
   @@index([taskID])

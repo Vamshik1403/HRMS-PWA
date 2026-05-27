@@ -14,6 +14,7 @@ interface SearchSuggestInputProps {
   displayField: string;
   valueField: string;
   required?: boolean;
+  disabled?: boolean;
 }
 
 export function SearchSuggestInput({
@@ -26,6 +27,7 @@ export function SearchSuggestInput({
   displayField,
   valueField,
   required = false,
+  disabled = false,
 }: SearchSuggestInputProps) {
   const [suggestions, setSuggestions] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -117,6 +119,7 @@ export function SearchSuggestInput({
         onFocus={handleFocus}
         placeholder={placeholder}
         required={required}
+        disabled={disabled}
         spellCheck={false}
         autoComplete="off"
         autoCorrect="off"

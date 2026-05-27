@@ -21,6 +21,7 @@ interface TaskDetailTabsProps {
   compact?: boolean;
   fluid?: boolean;
   className?: string;
+  showComposer?: boolean;
 }
 
 export function TaskDetailTabs({
@@ -36,6 +37,7 @@ export function TaskDetailTabs({
   compact = false,
   fluid = false,
   className = "",
+  showComposer = true,
 }: TaskDetailTabsProps) {
   const [tab, setTab] = useState<TaskDetailTab>("discussion");
   const displayActivities = activities.filter((a) => a.action !== "CHAT");
@@ -96,7 +98,7 @@ export function TaskDetailTabs({
           footer={footer}
           compact={compact}
           fluid={fluid}
-          showComposer
+          showComposer={showComposer}
           hideHeader
         />
       ) : (

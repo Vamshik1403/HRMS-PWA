@@ -7,6 +7,8 @@ import { Icon } from "@iconify/react";
 
 interface EmpMobileLayoutProps {
   children: React.ReactNode;
+  /** Hide bottom tab bar (e.g. full-screen task chat) */
+  hideBottomNav?: boolean;
 }
 
 function urlBase64ToUint8Array(base64String: string): Uint8Array<ArrayBuffer> {
@@ -38,7 +40,7 @@ const navItems = [
   { label: "Profile",    icon: "solar:user-bold-duotone",          outlineIcon: "solar:user-linear",             href: "/empProfile" },
 ];
 
-export default function EmpMobileLayout({ children }: EmpMobileLayoutProps) {
+export default function EmpMobileLayout({ children, hideBottomNav = false }: EmpMobileLayoutProps) {
   const pathname = usePathname();
   const router = useRouter();
   const [showInstallBanner, setShowInstallBanner] = useState(false);
@@ -178,13 +180,21 @@ export default function EmpMobileLayout({ children }: EmpMobileLayoutProps) {
       )}
 
       {/* Main scrollable content */}
-      <main className="flex-1 overflow-y-auto overscroll-none" style={{ paddingBottom: 'calc(72px + env(safe-area-inset-bottom))', WebkitOverflowScrolling: 'touch', overscrollBehavior: 'none' }}>
+      <main
+        className="flex-1 overflow-y-auto overscroll-none"
+        style={{
+          paddingBottom: hideBottomNav ? 'env(safe-area-inset-bottom)' : 'calc(56px + env(safe-area-inset-bottom))',
+          WebkitOverflowScrolling: 'touch',
+          overscrollBehavior: 'none',
+        }}
+      >
         {children}
       </main>
 
       {/* Bottom nav bar */}
-      <nav className="emp-pwa-bottom-nav fixed bottom-0 inset-x-0 z-50 bg-white border-t border-gray-100 shadow-[0_-4px_24px_rgba(0,0,0,0.07)]" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
-        <div className="flex items-center justify-around h-[60px] px-3">
+      {!hideBottomNav && (
+      <nav className="emp-pwa-bottom-nav fixed bottom-0 inset-x-0 z-50 bg-white/95 backdrop-blur-md border-t border-gray-100/80 shadow-[0_-2px_16px_rgba(0,0,0,0.06)]" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
+        <div className="flex items-center justify-around h-[56px] px-2">
           {navItems.map((item) => {
             const active = isActive(item.href);
             return (
@@ -193,18 +203,18 @@ export default function EmpMobileLayout({ children }: EmpMobileLayoutProps) {
                 href={item.href}
                 className="flex flex-col items-center justify-center gap-0.5 min-w-[48px] py-1 group"
               >
-                <div className={`w-8 h-8 rounded-xl flex items-center justify-center transition-all duration-200 ${
-                  active ? "bg-blue-50" : ""
+                <div className={`w-7 h-7 rounded-lg flex items-center justify-center transition-all duration-200 ${
+                  active ? "bg-[#4f46e5]/10" : ""
                 }`}>
                   <Icon
                     icon={active ? item.icon : item.outlineIcon}
-                    className={`w-[22px] h-[22px] transition-colors duration-200 ${
-                      active ? "text-[#2563eb]" : "text-gray-400 group-hover:text-gray-600"
+                    className={`w-[20px] h-[20px] transition-colors duration-200 ${
+                      active ? "text-[#4f46e5]" : "text-gray-400 group-active:text-gray-600"
                     }`}
                   />
                 </div>
-                <span className={`text-[10px] font-semibold tracking-tight transition-colors duration-200 ${
-                  active ? "text-[#2563eb]" : "text-gray-400 group-hover:text-gray-500"
+                <span className={`text-[9px] font-semibold tracking-tight transition-colors duration-200 ${
+                  active ? "text-[#4f46e5]" : "text-gray-400 group-active:text-gray-500"
                 }`}>
                   {item.label}
                 </span>
@@ -213,6 +223,7 @@ export default function EmpMobileLayout({ children }: EmpMobileLayoutProps) {
           })}
         </div>
       </nav>
+      )}
     </div>
   );
 }

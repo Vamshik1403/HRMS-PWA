@@ -1,0 +1,1 @@
+ALTER TABLE "TaskChat" ADD COLUMN IF NOT EXISTS "attachmentUrl" VARCHAR(512);

@@ -15,5 +15,6 @@ export interface TaskChatMessage {
   id: number;
   message: string;
   senderName?: string | null;
+  attachmentUrl?: string | null;
   createdAt: string;
 }

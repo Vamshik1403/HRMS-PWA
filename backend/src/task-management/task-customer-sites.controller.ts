@@ -12,6 +12,11 @@ export class TaskCustomerSitesController {
     return this.service.findAll(query);
   }
 
+  @Get('dropdown')
+  dropdown(@Query() query: Record<string, string>) {
+    return this.service.dropdown(query);
+  }
+
   @Get('by-customer/:customerId')
   findByCustomer(@Param('customerId', ParseIntPipe) customerId: number, @Query() query: Record<string, string>) {
     return this.service.findByCustomer(customerId, query);

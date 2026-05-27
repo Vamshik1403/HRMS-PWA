@@ -126,4 +126,34 @@ export class TaskCustomerSitesService {
     await this.findOne(id, query);
     return this.prisma.taskCustomerSite.update({ where: { id }, data: { isDeleted: true } });
   }
+
+  async dropdown(query: Record<string, string | undefined>) {
+    const viewer = parseViewer(query);
+    assertCanManageTaskModule(viewer);
+    const q = (query.q || query.search || '').trim();
+    const customerID = query.customerID ? Number(query.customerID) : undefined;
+    const where: any = { isDeleted: false };
+    if (customerID) where.customerID = customerID;
+    if (viewer.companyID && viewer.role !== 'SUPERADMIN') {
+      where.customer = { companyID: viewer.companyID, isDeleted: false };
+    }
+    if (q) {
+      where.OR = [
+        { branchName: { contains: q, mode: 'insensitive' } },
+        { city: { contains: q, mode: 'insensitive' } },
+      ];
+    }
+    return this.prisma.taskCustomerSite.findMany({
+      where,
+      orderBy: { branchName: 'asc' },
+      take: Math.min(50, Math.max(1, Number(query.limit) || 20)),
+      select: {
+        id: true,
+        branchName: true,
+        city: true,
+        customerID: true,
+        customer: { select: { id: true, customerCode: true, customerName: true } },
+      },
+    });
+  }
 }

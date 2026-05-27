@@ -416,3 +416,91 @@ html[data-emp-theme="dark"] .emp-pwa-shell .bg-emerald-50 {
 html[data-emp-theme="dark"] .emp-pwa-shell .bg-red-50 {
   background-color: #7f1d1d55 !important;
 }
+
+/* ── Mobile Tasks (PWA) ── */
+.mobile-chat-bg {
+  background-color: #e5ddd5;
+  background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23d4cdc4' fill-opacity='0.35'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+}
+
+.mobile-chat-header {
+  padding-top: max(4px, env(safe-area-inset-top));
+}
+
+@keyframes mobile-msg-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.mobile-msg-enter {
+  animation: mobile-msg-enter 0.22s ease-out forwards;
+}
+
+@keyframes mobile-msg-sent-pop {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.02); }
+  100% { transform: scale(1); }
+}
+
+.mobile-msg-sent-pop {
+  animation: mobile-msg-sent-pop 0.35s ease-out;
+}
+
+@keyframes mobile-sheet-up {
+  from {
+    opacity: 0;
+    transform: translateY(100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.mobile-sheet-up {
+  animation: mobile-sheet-up 0.28s cubic-bezier(0.32, 0.72, 0, 1) forwards;
+}
+
+@keyframes mobile-sheet-backdrop-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.mobile-sheet-backdrop {
+  animation: mobile-sheet-backdrop-in 0.2s ease-out forwards;
+}
+
+.mobile-input-focus-ring:focus-within {
+  box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.2);
+  border-color: rgba(79, 70, 229, 0.35);
+  transition: box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.mobile-send-btn:not(:disabled):active {
+  transform: scale(0.88);
+}
+
+.mobile-task-card:active {
+  box-shadow: 0 1px 6px rgba(15, 23, 42, 0.08);
+}
+
+.mobile-fab {
+  animation: mobile-fab-in 0.4s cubic-bezier(0.32, 0.72, 0, 1) 0.15s both;
+}
+
+@keyframes mobile-fab-in {
+  from {
+    opacity: 0;
+    transform: scale(0.5) translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
