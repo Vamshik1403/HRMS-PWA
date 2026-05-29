@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next'
 import { Inter } from 'next/font/google'
 import './globals.css'
 import { Toaster } from 'sonner'
+import ServiceWorkerBootstrap from './components/ServiceWorkerBootstrap'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -17,6 +18,9 @@ export const viewport: Viewport = {
 }
 
 export const metadata: Metadata = {
+  metadataBase: new URL(
+    process.env.NEXT_PUBLIC_APP_URL || 'https://app.openhrm.in',
+  ),
   title: 'HR Management System',
   description: 'Comprehensive HR Management Dashboard - Manage employees, attendance, payroll, and compliance with ease',
   
@@ -108,6 +112,7 @@ export default function RootLayout({
         <meta name="description" content="Comprehensive HR Management Dashboard" />
       </head>
       <body className={inter.className}>
+        <ServiceWorkerBootstrap />
         {children}
         <Toaster position="top-right" richColors closeButton />
       </body>

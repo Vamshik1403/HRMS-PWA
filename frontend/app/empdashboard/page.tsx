@@ -7,7 +7,17 @@ import { Icon } from "@iconify/react";
 import EmpMobileLayout from "../components/layout/EmpMobileLayout";
 import { getPageCache, setPageCache } from "../utils/pageCache";
 import { clearLegacyEmpPhoto, resolveEmpPhoto } from "../utils/empPhotoCache";
-import { buildDaySummary, type PunchRecord } from "../utils/attendanceDuration";
+import { EmpAttendanceDayRow } from "../components/emp/EmpAttendanceDayRow";
+import {
+  encodeDateKey,
+  filterDaysByCount,
+  groupAttendanceByDay,
+  type AttendanceLocationRecord,
+} from "../utils/empAttendanceHistory";
+import { EmpTodayStatusCard } from "../components/emp/EmpTodayStatusCard";
+import type { TodayStatus } from "../hooks/useEmpPunch";
+import { taskFetch } from "../utils/taskApi";
+import { syncAppBadge } from "@/lib/appBadge";
 
 // ─── Ambient Greeting Accent ───────────────────────────────────────────────────
 const _ambientCss = `
@@ -175,45 +185,7 @@ function AmbientAccent() {
 
 const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL || "/backend";
 
-interface AttendanceRecord extends PunchRecord {
-  id: number;
-  accuracy: number | null;
-}
-interface TodayStatus {
-  isCheckedIn: boolean;
-  isCheckedOut: boolean;
-  punchState?: 'OUT' | 'IN' | 'ON_BREAK';
-  canCheckIn?: boolean;
-  canCheckOut?: boolean;
-  canBreakIn?: boolean;
-  canBreakOut?: boolean;
-  checkIn: AttendanceRecord | null;
-  checkOut: AttendanceRecord | null;
-  allToday: AttendanceRecord[];
-  workMinutes?: number;
-  breakMinutes?: number;
-  workSeconds?: number;
-  breakSeconds?: number;
-  sessionCount?: number;
-}
-interface DayRow {
-  date: string;
-  checkIn: string | null;
-  checkOut: string | null;
-  workLabel: string;
-  breakLabel: string;
-}
-
-function fmt(iso: string) {
-  return new Date(iso).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true });
-}
-function fmtDate(iso: string) {
-  return new Date(iso).toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" });
-}
-function calcHrs(inIso: string, outIso: string) {
-  const diff = (new Date(outIso).getTime() - new Date(inIso).getTime()) / 3600000;
-  return diff > 0 ? `${diff.toFixed(2)}h` : null;
-}
+const RECENT_ACTIVITY_DAYS = 3;
 function greeting() {
   const h = new Date().getHours();
   if (h >= 5 && h < 12) return "Good morning";
@@ -222,13 +194,11 @@ function greeting() {
   return "Good night";
 }
 
-const quickLinks = [
-  { label: "Request Leave",    icon: "solar:document-add-bold-duotone",    color: "bg-blue-50",    iconColor: "text-blue-600",    href: "/empLeaveApplication" },
-  { label: "History",          icon: "solar:clock-circle-bold-duotone",color: "bg-violet-50",  iconColor: "text-violet-600",  href: "/empHistory" },
-  { label: "Reimbursement",    icon: "solar:wallet-bold-duotone",      color: "bg-emerald-50", iconColor: "text-emerald-600", href: "/empReimbursement" },
-  { label: "Pay Slips",        icon: "solar:bill-bold-duotone",        color: "bg-pink-50",    iconColor: "text-pink-600",    href: "/empGenerateSalary" },
-  { label: "Notice Board",     icon: "solar:bell-bold-duotone",        color: "bg-amber-50",   iconColor: "text-amber-600",   href: "/empNoticeboard" },
-  { label: "Tasks",            icon: "solar:checklist-bold-duotone",   color: "bg-cyan-50",    iconColor: "text-cyan-600",    href: "/empMyTasks" },
+const menuCards = [
+  { key: "tasks", label: "Tasks", sub: "Open & WIP", icon: "solar:checklist-bold-duotone", color: "bg-violet-50", iconColor: "text-violet-600", href: "/empMyTasks" },
+  { key: "notice", label: "Notice", sub: "Unread memos", icon: "solar:bell-bold-duotone", color: "bg-amber-50", iconColor: "text-amber-600", href: "/empNoticeboard" },
+  { key: "reimb", label: "Reimbursement", sub: "Pending approval", icon: "solar:wallet-bold-duotone", color: "bg-emerald-50", iconColor: "text-emerald-600", href: "/empReimbursement" },
+  { key: "leave", label: "Leaves", sub: "Pending approval", icon: "solar:calendar-bold-duotone", color: "bg-blue-50", iconColor: "text-blue-600", href: "/empLeaveApplication" },
 ];
 
 export default function EmpDashboardPage() {
@@ -236,11 +206,11 @@ export default function EmpDashboardPage() {
   const [empUser, setEmpUser] = useState<any>(null);
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   const [todayStatus, setTodayStatus] = useState<TodayStatus | null>(() => getPageCache<TodayStatus>("todayAttendance"));
-  const [recentHistory, setRecentHistory] = useState<DayRow[]>(() => getPageCache<DayRow[]>("recentAttendance") ?? []);
+  const [recentHistory, setRecentHistory] = useState(() => getPageCache<ReturnType<typeof filterDaysByCount>>("recentAttendance") ?? []);
   const [loadingStatus, setLoadingStatus] = useState(() => getPageCache<TodayStatus>("todayAttendance") === null);
+  const [taskBadge, setTaskBadge] = useState(0);
   const [noticeBadge, setNoticeBadge] = useState(0);
   const [reimbBadge, setReimbBadge] = useState(0);
-  const [payslipBadge, setPayslipBadge] = useState(0);
   const [leaveBadge, setLeaveBadge] = useState(0);
 
   useEffect(() => {
@@ -277,32 +247,22 @@ export default function EmpDashboardPage() {
       })
       .catch(() => {});
 
+    const userForTask = empUser;
+    taskFetch<{ items: { status: string }[] }>("/task-projects", userForTask, undefined, { limit: 100 })
+      .then((data) => {
+        const items = data.items || [];
+        setTaskBadge(items.filter((t) => t.status === "Open" || t.status === "WIP").length);
+      })
+      .catch(() => setTaskBadge(0));
+
     fetch(`${BACKEND}/reimbursement`, { headers })
       .then((r) => r.json())
       .then((data: any[]) => {
         if (!Array.isArray(data)) return;
-        const lastViewed = parseInt(localStorage.getItem("_reimb_last_viewed") || "0", 10);
-        const unread = data.filter((r: any) => {
-          if (r.manageEmployeeID !== eid) return false;
-          if (r.status !== "Approved") return false;
-          const ts = r.updatedAt ? new Date(r.updatedAt).getTime() : 0;
-          return ts > lastViewed;
-        });
-        setReimbBadge(unread.length);
-      })
-      .catch(() => {});
-
-    fetch(`${BACKEND}/generate-salary`, { headers })
-      .then((r) => r.json())
-      .then((data: any[]) => {
-        if (!Array.isArray(data)) return;
-        const lastViewed = parseInt(localStorage.getItem("_payslip_last_viewed") || "0", 10);
-        const unread = data.filter((s: any) => {
-          if (s.manageEmployeeID !== eid) return false;
-          const ts = s.createdAt ? new Date(s.createdAt).getTime() : 0;
-          return ts > lastViewed;
-        });
-        setPayslipBadge(unread.length);
+        const pending = data.filter(
+          (r: any) => r.manageEmployeeID === eid && (r.status === "Pending" || !r.status),
+        );
+        setReimbBadge(pending.length);
       })
       .catch(() => {});
 
@@ -310,17 +270,18 @@ export default function EmpDashboardPage() {
       .then((r) => r.json())
       .then((data: any[]) => {
         if (!Array.isArray(data)) return;
-        const lastViewed = parseInt(localStorage.getItem("_leave_last_viewed") || "0", 10);
-        const unread = data.filter((l: any) => {
-          if (l.manageEmployeeID !== eid) return false;
-          if (l.status !== "Approved") return false;
-          const ts = l.updatedAt ? new Date(l.updatedAt).getTime() : 0;
-          return ts > lastViewed;
-        });
-        setLeaveBadge(unread.length);
+        const pending = data.filter(
+          (l: any) => l.manageEmployeeID === eid && l.status === "Pending",
+        );
+        setLeaveBadge(pending.length);
       })
       .catch(() => {});
   }, [empUser]);
+
+  useEffect(() => {
+    const total = taskBadge + noticeBadge + reimbBadge + leaveBadge;
+    void syncAppBadge(total);
+  }, [taskBadge, noticeBadge, reimbBadge, leaveBadge]);
 
   // Fetch notice board badge count
   useEffect(() => {
@@ -367,27 +328,9 @@ export default function EmpDashboardPage() {
         }
         return r.json();
       })
-      .then((data: AttendanceRecord[]) => {
+      .then((data: AttendanceLocationRecord[]) => {
         if (!Array.isArray(data)) return;
-        const byDate: Record<string, AttendanceRecord[]> = {};
-        data.forEach((r) => {
-          const key = new Date(r.checkinTime).toDateString();
-          if (!byDate[key]) byDate[key] = [];
-          byDate[key].push(r);
-        });
-        const rows: DayRow[] = Object.entries(byDate)
-          .sort(([a], [b]) => new Date(b).getTime() - new Date(a).getTime())
-          .slice(0, 5)
-          .map(([, recs]) => {
-            const summary = buildDaySummary(recs);
-            return {
-              date: summary.date,
-              checkIn: summary.checkIn,
-              checkOut: summary.checkOut,
-              workLabel: summary.workLabel,
-              breakLabel: summary.breakLabel,
-            };
-          });
+        const rows = filterDaysByCount(groupAttendanceByDay(data), RECENT_ACTIVITY_DAYS);
         setRecentHistory(rows);
         setPageCache("recentAttendance", rows);
       })
@@ -411,32 +354,13 @@ export default function EmpDashboardPage() {
     .map((w: string) => w[0].toUpperCase()).join("") || "E";
   const empPhoto = photoUrl || resolveEmpPhoto(empUser?.employee?.id, empUser?.employee?.employeePhotoUrl) || null;
 
-  const punchState = todayStatus?.punchState ?? (todayStatus?.isCheckedIn ? "IN" : "OUT");
-  const canCheckIn = todayStatus?.canCheckIn ?? punchState === "OUT";
-  const canCheckOut = todayStatus?.canCheckOut ?? punchState === "IN";
-  const isOnBreak = punchState === "ON_BREAK";
-  const { checkIn, checkOut } = todayStatus || {};
-  const workedHrs = todayStatus?.workSeconds != null
-    ? (() => {
-        const totalSec = todayStatus.workSeconds;
-        const h = Math.floor(totalSec / 3600);
-        const m = Math.floor((totalSec % 3600) / 60);
-        if (h > 0) return `${h}h ${m}m`;
-        if (m > 0) return `${m}m`;
-        return `${totalSec}s`;
-      })()
-    : (todayStatus?.workMinutes != null
-      ? (() => { const h = Math.floor(todayStatus.workMinutes / 60); const m = todayStatus.workMinutes % 60; return h > 0 ? `${h}h ${m}m` : `${m}m`; })()
-      : (checkIn && checkOut ? calcHrs(checkIn.checkinTime, checkOut.checkinTime) : null));
-  const breakHrs = todayStatus?.breakSeconds != null
-    ? (() => {
-        const totalSec = todayStatus.breakSeconds;
-        const m = Math.floor(totalSec / 60);
-        const s = totalSec % 60;
-        if (m > 0) return s > 0 ? `${m}m ${s}s` : `${m}m`;
-        return totalSec > 0 ? `${s}s` : "0m";
-      })()
-    : (todayStatus?.breakMinutes != null ? `${todayStatus.breakMinutes}m` : null);
+  const badgeFor = (key: string) => {
+    if (key === "tasks") return taskBadge;
+    if (key === "notice") return noticeBadge;
+    if (key === "reimb") return reimbBadge;
+    if (key === "leave") return leaveBadge;
+    return 0;
+  };
 
   return (
     <EmpMobileLayout>
@@ -459,99 +383,49 @@ export default function EmpDashboardPage() {
           </Link>
         </div>
 
-        {/* Today's Status card */}
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 mb-4">
-          <div className="flex items-center justify-between mb-3">
-            <p className="text-[11px] font-bold tracking-widest text-gray-400 uppercase">Today&apos;s Status</p>
-            {loadingStatus ? (
-              <span className="text-[10px] font-semibold text-gray-300 bg-gray-50 px-2.5 py-1 rounded-full">Loading…</span>
-            ) : isOnBreak ? (
-                <span className="text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-100 px-2.5 py-1 rounded-full uppercase tracking-wide">On Break</span>
-              ) : punchState === "IN" ? (
-                <span className="text-[10px] font-bold text-blue-700 bg-blue-50 border border-blue-100 px-2.5 py-1 rounded-full uppercase tracking-wide">Checked In</span>
-              ) : (
-              <span className="text-[10px] font-bold text-red-500 bg-red-50 border border-red-100 px-2.5 py-1 rounded-full uppercase tracking-wide">Not Punched In</span>
-            )}
-          </div>
+        <EmpTodayStatusCard
+          todayStatus={todayStatus}
+          loading={loadingStatus}
+          onStatusUpdate={(d) => {
+            setTodayStatus(d);
+            setPageCache("todayAttendance", d);
+          }}
+        />
 
-          <div className="grid grid-cols-3 gap-2 mb-4">
-            <div className="flex flex-col items-center">
-              <p className="text-[10px] font-bold tracking-widest text-gray-400 uppercase mb-1">Check In</p>
-              <p className={`text-base font-bold tabular-nums ${checkIn ? "text-gray-900" : "text-gray-300"}`}>
-                {checkIn ? fmt(checkIn.checkinTime) : "--:--"}
-              </p>
-            </div>
-            <div className="flex flex-col items-center border-x border-gray-100">
-              <p className="text-[10px] font-bold tracking-widest text-gray-400 uppercase mb-1">Check Out</p>
-              <p className={`text-base font-bold tabular-nums ${checkOut ? "text-gray-900" : "text-gray-300"}`}>
-                {checkOut ? fmt((checkOut as AttendanceRecord).checkinTime) : "--:--"}
-              </p>
-            </div>
-            <div className="flex flex-col items-center">
-              <p className="text-[10px] font-bold tracking-widest text-gray-400 uppercase mb-1">Hours</p>
-              <p className={`text-base font-bold tabular-nums ${workedHrs ? "text-emerald-600" : "text-gray-300"}`}>
-                {workedHrs || "—"}
-              </p>
-            </div>
-          </div>
-
-          {canCheckIn && !loadingStatus && (
-            <Link href="/empAttendance">
-              <button className="w-full py-3 rounded-xl bg-[#2563eb] text-white font-bold text-sm flex items-center justify-center gap-2 shadow-md shadow-blue-200 active:scale-[0.98] transition-transform">
-                <Icon icon="solar:fingerprint-bold-duotone" className="w-5 h-5" />
-                Mark In
-              </button>
-            </Link>
-          )}
-          {canCheckOut && !loadingStatus && (
-            <Link href="/empAttendance">
-              <button className="w-full py-3 rounded-xl bg-[#2563eb] text-white font-bold text-sm flex items-center justify-center gap-2 shadow-md shadow-blue-200 active:scale-[0.98] transition-transform">
-                <Icon icon="solar:fingerprint-bold-duotone" className="w-5 h-5" />
-                {isOnBreak ? "End Break / Mark Out" : "Mark Out"}
-              </button>
-            </Link>
-          )}
-        </div>
-
-        {/* Quick Shortcuts */}
-        <div className="mb-4">
-          <div className="grid grid-cols-2 gap-3">
-            {quickLinks.map((ql) => {
-              const isNoticeBoard = ql.label === "Notice Board";
-              const isReimbursement = ql.label === "Reimbursement";
-              const isPaySlips = ql.label === "Pay Slips";
-              const isLeave = ql.label === "Leave Application" || ql.label === "Request Leave";
-              const badge = isNoticeBoard ? noticeBadge
-                : isReimbursement ? reimbBadge
-                : isPaySlips ? payslipBadge
-                : isLeave ? leaveBadge
-                : 0;
-              return (
-                <Link
-                  key={ql.label}
-                  href={ql.href}
-                  onClick={() => {
-                    if (isNoticeBoard) { localStorage.setItem("_notice_last_viewed", Date.now().toString()); setNoticeBadge(0); }
-                    if (isReimbursement) { localStorage.setItem("_reimb_last_viewed", Date.now().toString()); setReimbBadge(0); }
-                    if (isPaySlips) { localStorage.setItem("_payslip_last_viewed", Date.now().toString()); setPayslipBadge(0); }
-                    if (isLeave) { localStorage.setItem("_leave_last_viewed", Date.now().toString()); setLeaveBadge(0); }
-                  }}
-                >
-                  <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 flex items-center gap-3 active:scale-[0.97] transition-transform relative">
-                    <div className={`w-10 h-10 rounded-xl ${ql.color} flex items-center justify-center shrink-0`}>
-                      <Icon icon={ql.icon} className={`w-5 h-5 ${ql.iconColor}`} />
-                    </div>
-                    <span className="text-[13px] font-bold text-gray-800 leading-tight">{ql.label}</span>
-                    {badge > 0 && (
-                      <span className="absolute top-2 right-2 min-w-[18px] h-[18px] bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1 shadow">
-                        {badge > 99 ? "99+" : badge}
-                      </span>
-                    )}
+        {/* Menu grid */}
+        <div className="grid grid-cols-2 gap-3 mb-4">
+          {menuCards.map((card) => {
+            const badge = badgeFor(card.key);
+            return (
+              <Link
+                key={card.key}
+                href={card.href}
+                onClick={() => {
+                  if (card.key === "notice") {
+                    localStorage.setItem("_notice_last_viewed", Date.now().toString());
+                    setNoticeBadge(0);
+                  }
+                }}
+              >
+                <div className="bg-white rounded-[20px] border border-gray-100 shadow-[0_2px_12px_rgba(15,23,42,0.06)] p-4 min-h-[100px] flex flex-col justify-between active:scale-[0.97] transition-transform relative">
+                  <div className={`w-11 h-11 rounded-2xl ${card.color} flex items-center justify-center`}>
+                    <Icon icon={card.icon} className={`w-6 h-6 ${card.iconColor}`} />
                   </div>
-                </Link>
-              );
-            })}
-          </div>
+                  <div className="mt-3">
+                    <p className="text-[15px] font-bold text-gray-900">{card.label}</p>
+                    <p className="text-[11px] text-gray-500 mt-0.5">
+                      {card.key === "tasks" && badge > 0 ? `${badge} active` : card.sub}
+                    </p>
+                  </div>
+                  {badge > 0 && (
+                    <span className="absolute top-3 right-3 min-w-[20px] h-5 px-1.5 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
+                      {badge > 99 ? "99+" : badge}
+                    </span>
+                  )}
+                </div>
+              </Link>
+            );
+          })}
         </div>
 
         {/* Recent Activity */}
@@ -567,23 +441,12 @@ export default function EmpDashboardPage() {
             </div>
           ) : (
             <div className="space-y-2.5">
-              {recentHistory.map((day, i) => (
-                <div key={i} className="bg-white rounded-2xl border border-gray-100 shadow-sm px-4 py-3.5 flex items-center justify-between">
-                  <div>
-                    <p className="text-[13px] font-bold text-gray-900">{fmtDate(day.date)}</p>
-                    <p className="text-[11px] text-gray-500 mt-0.5">
-                      {day.checkIn ? fmt(day.checkIn) : "--:--"} – {day.checkOut ? fmt(day.checkOut) : "--:--"}
-                    </p>
-                    <p className="text-[11px] mt-0.5">
-                      <span className="font-semibold text-gray-700">Work {day.workLabel}</span>
-                      <span className="text-gray-400"> · </span>
-                      <span className="font-semibold text-amber-600">Break {day.breakLabel}</span>
-                    </p>
-                  </div>
-                  <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-100 px-2.5 py-1 rounded-full uppercase tracking-wide">
-                    Present
-                  </span>
-                </div>
+              {recentHistory.map((day) => (
+                <EmpAttendanceDayRow
+                  key={day.dateKey}
+                  day={day}
+                  href={`/empHistory/${encodeDateKey(day.dateKey)}`}
+                />
               ))}
             </div>
           )}

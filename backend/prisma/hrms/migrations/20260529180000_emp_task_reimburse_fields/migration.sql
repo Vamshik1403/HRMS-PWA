@@ -1,0 +1,2 @@
+ALTER TABLE "ManageEmployee" ADD COLUMN IF NOT EXISTS "allowCreateTaskOnMobile" BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE "Reimbursement" ADD COLUMN IF NOT EXISTS "taskProjectID" INTEGER;

@@ -524,7 +524,7 @@ curl -I https://app.yourapp.com | grep -E "X-|Strict|Referrer|Permissions"
 # X-XSS-Protection: 1; mode=block
 # Strict-Transport-Security: max-age=...
 # Referrer-Policy: strict-origin-when-cross-origin
-# Permissions-Policy: camera=(), microphone=(), geolocation=()
+# Permissions-Policy: camera=(), microphone=(), geolocation=(self)
 ```
 
 ### CSP (Content Security Policy)

@@ -15,16 +15,22 @@ export class AttlogListenerService {
 
   /**
    * Map ESSL verify mode (status field) to a normalized auth type.
-   * ESSL verify modes: 0=PASSWORD/PIN, 1=FINGERPRINT, 2=CARD, 3=PIN (CP Plus), 15=FACE
+   * ZKTeco/eSSL verify modes: 0/3=PIN, 1=FINGER, 2/4=CARD (firmware-dependent), 15=FACE
    */
   private mapVerifyModeToAuthType(verifyMode: string): string | null {
     switch (verifyMode) {
-      case '0':  return 'PIN';
-      case '1':  return 'FINGER';
-      case '2':  return 'CARD';
-      case '3':  return 'PIN';
-      case '15': return 'FACE';
-      default:   return null;
+      case '0':
+      case '3':
+        return 'PIN';
+      case '1':
+        return 'FINGER';
+      case '2':
+      case '4':
+        return 'CARD';
+      case '15':
+        return 'FACE';
+      default:
+        return null;
     }
   }
 

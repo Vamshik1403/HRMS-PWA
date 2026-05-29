@@ -10,15 +10,14 @@ export interface TaskViewerContext {
 
 export function parseViewer(query: Record<string, string | undefined>): TaskViewerContext {
   const role = (query.viewerRole || '').toUpperCase().replace(/\s+/g, '_');
-  const employeeId = query.viewerEmployeeId
-    ? Number(query.viewerEmployeeId)
-    : role === 'EMPLOYEE' && query.viewerUserId
-      ? Number(query.viewerUserId)
-      : undefined;
+  let employeeId = query.viewerEmployeeId ? Number(query.viewerEmployeeId) : undefined;
+  if (!employeeId && role === 'EMPLOYEE' && query.viewerUserId) {
+    employeeId = Number(query.viewerUserId);
+  }
   return {
     role,
     userId: query.viewerUserId ? Number(query.viewerUserId) : undefined,
-    employeeId,
+    employeeId: employeeId && !Number.isNaN(employeeId) ? employeeId : undefined,
     companyID: query.companyID ? Number(query.companyID) : undefined,
     serviceProviderID: query.serviceProviderID ? Number(query.serviceProviderID) : undefined,
   };

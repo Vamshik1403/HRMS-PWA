@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { Eye, EyeOff, Lock, User, LogIn } from 'lucide-react'
 import { clearLegacyEmpPhoto } from '../utils/empPhotoCache'
 import { clearPageCache } from '../utils/pageCache'
+import { registerPushSubscription } from '@/lib/pushSubscribe'
 
 const TERMS_AND_CONDITIONS = `TERMS AND CONDITIONS & END USER LICENSE AGREEMENT
 
@@ -190,9 +191,9 @@ export default function LoginPage() {
       // Employee IDs can collide with user IDs in the Users table, so skip the fetch.
       if (basicUser.type === 'employee' || basicUser.role === 'EMPLOYEE') {
         localStorage.setItem('user', JSON.stringify(basicUser))
-        setTimeout(() => {
-          router.push('/empdashboard')
-        }, 100)
+        // Register push after session is stored (non-blocking)
+        router.push('/empdashboard')
+        // Push registration runs on EmpMobileLayout (needs user gesture on some browsers)
       } else {
         // For admin/manager users, fetch complete user details with all relations
         try {

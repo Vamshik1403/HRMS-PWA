@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { pool } from "@/lib/db";
+import { mapEsslVerifyModeToAuthType } from "@/lib/esslVerifyMode";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -19,6 +20,7 @@ async function handleRequest(req: NextRequest) {
       url.searchParams.get("serial");
 
     const table = url.searchParams.get("table");
+    const tableNorm = table?.toUpperCase() ?? "";
     const body = await req.text();
 
     const ip =
@@ -44,7 +46,7 @@ async function handleRequest(req: NextRequest) {
     // 2. Payload validation
     if (body.length > 10000) return OK();
     if (body.length < 5) return OK();
-    if (table !== "ATTLOG") return OK();
+    if (tableNorm !== "ATTLOG") return OK();
 
     // 3. Reject suspicious payloads
     const upper = body.toUpperCase();
@@ -74,15 +76,7 @@ async function handleRequest(req: NextRequest) {
         // ESSL format: user_id date time status verify_mode ...
         // parts[3] = status (in/out), parts[4] = verify_mode (auth type)
         if (parts[4] !== undefined) {
-          const verifyMode = parts[4];
-          switch (verifyMode) {
-            case '0':  authType = 'PIN'; break;
-            case '1':  authType = 'FINGER'; break;
-            case '2':  authType = 'CARD'; break;
-            case '3':  authType = 'PIN'; break;
-            case '15': authType = 'FACE'; break;
-            default:   authType = null;
-          }
+          authType = mapEsslVerifyModeToAuthType(parts[4]);
         }
       }
     }

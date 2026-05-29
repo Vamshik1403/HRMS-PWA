@@ -429,9 +429,7 @@ export function PageLayout({ children }: PageLayoutProps) {
                 <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/designations" className={cn(sbSubRow, isActiveLink('/designations', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Designations</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
                 <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/manage-employees" className={cn(sbSubRow, isActiveLink('/manage-employees', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Manage Employees</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
                 {/* Promotions & Transfers - temporarily hidden */}
-                {isSuperAdmin && (
-                  <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/employee-memo" className={cn(sbSubRow, isActiveLink('/employee-memo', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Notice Board</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
-                )}
+                <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/employee-memo" className={cn(sbSubRow, isActiveLink('/employee-memo', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Notice Board</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
                 <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/termination" className={cn(sbSubRow, isActiveLink('/termination', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Off Boarding</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
               </SidebarMenuSub>
             </CollapsibleContent>

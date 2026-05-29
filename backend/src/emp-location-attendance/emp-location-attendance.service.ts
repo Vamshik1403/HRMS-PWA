@@ -1,6 +1,7 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateAttendanceLocationDto } from './dto/create-attendance-location.dto';
+import { MarkAbsentDto } from './dto/mark-absent.dto';
 
 const VALID_TYPES = ['CHECK_IN', 'CHECK_OUT', 'BREAK_IN', 'BREAK_OUT'] as const;
 type PunchType = (typeof VALID_TYPES)[number];
@@ -194,11 +195,22 @@ export class EmpLocationAttendanceService {
     return record;
   }
 
-  async getMyRecords(employeeId: number) {
+  async getMyRecords(
+    employeeId: number,
+    opts?: { from?: Date; to?: Date; limit?: number },
+  ) {
+    const where: { employeeId: number; checkinTime?: { gte?: Date; lte?: Date } } = {
+      employeeId,
+    };
+    if (opts?.from || opts?.to) {
+      where.checkinTime = {};
+      if (opts.from) where.checkinTime.gte = opts.from;
+      if (opts.to) where.checkinTime.lte = opts.to;
+    }
     return this.prisma.attendanceLocation.findMany({
-      where: { employeeId },
+      where,
       orderBy: { checkinTime: 'desc' },
-      take: 100,
+      take: opts?.limit ?? 500,
     });
   }
 
@@ -222,14 +234,27 @@ export class EmpLocationAttendanceService {
     const punchState = this.getPunchState(lastPunch?.checkType ?? null);
     const { workMinutes, breakMinutes, workSeconds, breakSeconds } = this.computeMinutes(records, now);
 
+    const todayDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const absentDeclaration = await this.prisma.empAbsentDeclaration.findUnique({
+      where: {
+        employeeId_absentDate: { employeeId, absentDate: todayDate },
+      },
+    });
+
+    const hasPunches = records.length > 0;
+    const isAbsentToday = !!absentDeclaration;
+
     return {
       isCheckedIn: punchState === 'IN' || punchState === 'ON_BREAK',
       isCheckedOut: punchState === 'OUT' && checkOuts.length > 0,
+      isAbsentToday,
+      absentDeclaration,
       punchState,
-      canCheckIn: punchState === 'OUT',
+      canCheckIn: punchState === 'OUT' && !isAbsentToday,
       canCheckOut: punchState === 'IN',
       canBreakIn: punchState === 'IN',
       canBreakOut: punchState === 'ON_BREAK',
+      canMarkAbsent: !hasPunches && !isAbsentToday && punchState === 'OUT',
       checkIn,
       checkOut,
       lastPunch,
@@ -240,5 +265,59 @@ export class EmpLocationAttendanceService {
       breakSeconds,
       sessionCount: checkIns.length,
     };
+  }
+
+  async markAbsent(employeeId: number, dto: MarkAbsentDto) {
+    const now = new Date();
+    const { startOfDay, endOfDay } = this.dayWindow(now);
+    const todayDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+    const existingPunches = await this.prisma.attendanceLocation.count({
+      where: { employeeId, checkinTime: { gte: startOfDay, lte: endOfDay } },
+    });
+    if (existingPunches > 0) {
+      throw new BadRequestException('Cannot mark absent after attendance has been recorded today.');
+    }
+
+    const existingAbsent = await this.prisma.empAbsentDeclaration.findUnique({
+      where: { employeeId_absentDate: { employeeId, absentDate: todayDate } },
+    });
+    if (existingAbsent) {
+      throw new BadRequestException('You have already marked absent for today.');
+    }
+
+    const employee = await this.prisma.manageEmployee.findUnique({
+      where: { id: employeeId },
+      select: { serviceProviderID: true, companyID: true, branchesID: true },
+    });
+    if (!employee) throw new BadRequestException('Employee not found');
+
+    const dateStr = todayDate.toISOString().slice(0, 10);
+    const leaveApp = await this.prisma.leaveApplication.create({
+      data: {
+        serviceProviderID: employee.serviceProviderID ?? undefined,
+        companyID: employee.companyID ?? undefined,
+        branchesID: employee.branchesID ?? undefined,
+        manageEmployeeID: employeeId,
+        appliedLeaveType: dto.leaveType,
+        fromDate: new Date(dateStr),
+        toDate: new Date(dateStr),
+        purpose: `[Absent – emergency] ${dto.reason}`,
+        status: 'Pending',
+        dayStatuses: JSON.stringify([{ date: dateStr, status: 'absent' }]),
+      },
+    });
+
+    const declaration = await this.prisma.empAbsentDeclaration.create({
+      data: {
+        employeeId,
+        absentDate: todayDate,
+        reason: dto.reason,
+        leaveType: dto.leaveType,
+        leaveApplicationId: leaveApp.id,
+      },
+    });
+
+    return { declaration, leaveApplication: leaveApp };
   }
 }

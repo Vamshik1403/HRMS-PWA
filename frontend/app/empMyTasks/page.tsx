@@ -9,11 +9,15 @@ import { MobileTaskListView } from "../components/task/mobile/MobileTaskListView
 import type { MobileTaskListItem } from "../components/task/mobile/MobileTaskListCard";
 import { toast } from "sonner";
 
+const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL || "/backend";
+
 interface Task extends MobileTaskListItem {
   taskType: string;
   description?: string | null;
+  scheduleDateTime?: string | null;
   department?: { departmentName?: string };
   chats?: { id: number; message: string; senderName?: string; createdAt: string }[];
+  assignments?: { manageEmployee?: { employeeFirstName?: string; employeeLastName?: string } }[];
 }
 
 export default function EmpMyTasksPage() {
@@ -22,11 +26,13 @@ export default function EmpMyTasksPage() {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [detail, setDetail] = useState<Task | null>(null);
+  const [infoTask, setInfoTask] = useState<Task | null>(null);
   const [chatMsg, setChatMsg] = useState("");
   const [sending, setSending] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [newTaskName, setNewTaskName] = useState("");
   const [creating, setCreating] = useState(false);
+  const [canCreateTask, setCanCreateTask] = useState(false);
 
   const load = useCallback(async () => {
     if (!user) return;
@@ -43,7 +49,17 @@ export default function EmpMyTasksPage() {
   }, [user]);
 
   useEffect(() => {
-    if (user) load();
+    if (!user?.username) return;
+    load();
+    fetch(`${BACKEND}/manage-emp/credentials/${encodeURIComponent(user.username)}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((creds) => {
+        const empId = creds?.employee?.id;
+        if (!empId) return;
+        return fetch(`${BACKEND}/manage-emp/${empId}`).then((r) => (r.ok ? r.json() : null));
+      })
+      .then((emp) => setCanCreateTask(!!emp?.allowCreateTaskOnMobile))
+      .catch(() => setCanCreateTask(false));
   }, [user, load]);
 
   const openTask = async (t: Task) => {
@@ -71,12 +87,14 @@ export default function EmpMyTasksPage() {
     if (!payload.message.trim() && !payload.attachmentUrl) return;
     setSending(true);
     try {
+      const employeeId = (user as { employee?: { id?: number } }).employee?.id ?? user.id;
       await taskFetch(`/task-projects/${detail.id}/chats`, user, {
         method: "POST",
         body: JSON.stringify({
           message: payload.message,
           attachmentUrl: payload.attachmentUrl,
           senderName: user.username,
+          employeeID: employeeId,
           remark: payload.message || "Image attachment",
         }),
       });
@@ -90,6 +108,52 @@ export default function EmpMyTasksPage() {
     }
   };
 
+  const postSitePunch = async (taskId: number, kind: "in" | "out") => {
+    if (!user) return;
+    const label = kind === "in" ? "Site Mark IN" : "Site Mark OUT";
+    const msg = `${label} at ${new Date().toLocaleString("en-IN")}`;
+    const employeeId = (user as { employee?: { id?: number } }).employee?.id ?? user.id;
+    setSending(true);
+    try {
+      await taskFetch(`/task-projects/${taskId}/chats`, user, {
+        method: "POST",
+        body: JSON.stringify({
+          message: msg,
+          senderName: user.username,
+          employeeID: employeeId,
+          remark: msg,
+        }),
+      });
+      toast.success(label);
+      if (detail?.id === taskId) await refreshDetail();
+      load();
+    } catch (e: any) {
+      toast.error(e.message);
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const sitePunch = async (kind: "in" | "out") => {
+    if (!detail) return;
+    await postSitePunch(detail.id, kind);
+  };
+
+  const updateStatus = async (status: string) => {
+    if (!detail || !user) return;
+    try {
+      await taskFetch(`/task-projects/${detail.id}`, user, {
+        method: "PATCH",
+        body: JSON.stringify({ status }),
+      });
+      toast.success(status === "Closed" ? "Task closed" : "Task reopened");
+      await refreshDetail();
+      load();
+    } catch (e: any) {
+      toast.error(e.message || "Could not update status");
+    }
+  };
+
   const createTask = async () => {
     if (!newTaskName.trim() || !user) return;
     setCreating(true);
@@ -98,7 +162,7 @@ export default function EmpMyTasksPage() {
         method: "POST",
         body: JSON.stringify({
           taskName: newTaskName.trim(),
-          taskType: "Site Visit",
+          taskType: "Work task",
           priority: "Medium",
         }),
       });
@@ -126,7 +190,10 @@ export default function EmpMyTasksPage() {
           onBack={() => {
             setDetail(null);
             setChatMsg("");
+            load();
           }}
+          onStatusChange={updateStatus}
+          onSitePunch={sitePunch}
         />
       </EmpMobileLayout>
     );
@@ -140,43 +207,52 @@ export default function EmpMyTasksPage() {
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
         onTaskClick={(t) => openTask(t as Task)}
-        onCreateClick={() => setCreateOpen(true)}
+        onCheckInOut={(t) => {
+          const kind = window.confirm("Mark OUT at site? Cancel for Mark IN.") ? "out" : "in";
+          void postSitePunch(t.id, kind);
+        }}
+        onViewInfo={(t) => setInfoTask(t as Task)}
+        onCreateClick={canCreateTask ? () => setCreateOpen(true) : undefined}
+        showCreateFab={canCreateTask}
       />
+
+      {infoTask && (
+        <>
+          <div className="fixed inset-0 z-50 bg-black/40" onClick={() => setInfoTask(null)} />
+          <div className="fixed inset-x-4 top-[15%] z-50 bg-white rounded-2xl shadow-xl p-5 max-h-[70vh] overflow-y-auto">
+            <h3 className="text-[17px] font-bold text-gray-900 mb-3">{infoTask.taskName}</h3>
+            <div className="space-y-2 text-[13px]">
+              <p><span className="text-gray-500">Task ID:</span> {infoTask.id}</p>
+              <p><span className="text-gray-500">Type:</span> {infoTask.taskType}</p>
+              <p><span className="text-gray-500">Status:</span> {infoTask.status}</p>
+              <p><span className="text-gray-500">Priority:</span> {infoTask.priority}</p>
+              {(infoTask.taskType || "").toLowerCase().includes("site visit") && (
+                <p><span className="text-gray-500">Site:</span> {infoTask.site?.branchName || "—"}</p>
+              )}
+            </div>
+            <button type="button" className="mt-4 w-full py-2.5 rounded-xl bg-[#2563eb] text-white font-semibold text-sm" onClick={() => { setInfoTask(null); openTask(infoTask); }}>
+              Open chat
+            </button>
+          </div>
+        </>
+      )}
 
       {createOpen && (
         <>
-          <div
-            className="fixed inset-0 z-50 bg-black/40 mobile-sheet-backdrop"
-            onClick={() => setCreateOpen(false)}
-          />
-          <div
-            className="fixed inset-x-0 bottom-0 z-50 mobile-sheet-up rounded-t-2xl bg-white px-5 pt-3 pb-6"
-            style={{ paddingBottom: "max(24px, calc(16px + env(safe-area-inset-bottom)))" }}
-          >
-            <div className="w-10 h-1 rounded-full bg-gray-200 mx-auto mb-4" />
+          <div className="fixed inset-0 z-50 bg-black/40" onClick={() => setCreateOpen(false)} />
+          <div className="fixed inset-x-0 bottom-0 z-50 bg-white rounded-t-2xl px-5 pt-3 pb-6" style={{ paddingBottom: "max(24px, env(safe-area-inset-bottom))" }}>
             <h3 className="text-[17px] font-semibold text-gray-900 mb-3">New task</h3>
             <input
               type="text"
               value={newTaskName}
               onChange={(e) => setNewTaskName(e.target.value)}
               placeholder="Task name"
-              className="w-full h-11 px-4 rounded-xl border border-gray-200 text-[15px] focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/30 focus:border-[#4f46e5]"
+              className="w-full h-11 px-4 rounded-xl border border-gray-200 text-[15px]"
               autoFocus
             />
             <div className="flex gap-2 mt-4">
-              <button
-                type="button"
-                onClick={() => setCreateOpen(false)}
-                className="flex-1 h-11 rounded-xl border border-gray-200 text-[14px] font-medium text-gray-700 active:bg-gray-50"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={createTask}
-                disabled={creating || !newTaskName.trim()}
-                className="flex-1 h-11 rounded-xl bg-[#4f46e5] text-white text-[14px] font-semibold disabled:opacity-50 active:scale-[0.98] transition-transform"
-              >
+              <button type="button" onClick={() => setCreateOpen(false)} className="flex-1 h-11 rounded-xl border border-gray-200 text-[14px]">Cancel</button>
+              <button type="button" onClick={createTask} disabled={creating || !newTaskName.trim()} className="flex-1 h-11 rounded-xl bg-[#4f46e5] text-white text-[14px] font-semibold disabled:opacity-50">
                 {creating ? "Creating…" : "Create"}
               </button>
             </div>

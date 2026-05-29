@@ -57,7 +57,7 @@ export class EmployeeMemoService {
         empId,
         'New Notice',
         dto.subject || 'You have a new notice on the board.',
-        { url: '/empdashboard' },
+        { url: '/empNoticeboard', tag: `notice-${empId}-${Date.now()}` },
       ).catch(() => null);
     });
 

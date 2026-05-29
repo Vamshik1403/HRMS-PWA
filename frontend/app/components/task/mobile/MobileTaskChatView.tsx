@@ -20,14 +20,17 @@ export interface MobileTaskChatDetail {
   id: number;
   taskCode: string;
   taskName: string;
+  taskType?: string;
   status: string;
   priority: string;
   description?: string | null;
+  scheduleDateTime?: string | null;
   dueDateTime?: string | null;
   customer?: { customerName?: string };
-  site?: { branchName?: string };
+  site?: { branchName?: string; city?: string };
   department?: { departmentName?: string };
   chats?: MobileChatMessage[];
+  assignments?: { manageEmployee?: { employeeFirstName?: string; employeeLastName?: string; employeeID?: string } }[];
 }
 
 function formatBubbleTime(value: string) {
@@ -64,6 +67,8 @@ export function MobileTaskChatView({
   onSend,
   sending,
   onBack,
+  onStatusChange,
+  onSitePunch,
 }: {
   task: MobileTaskChatDetail;
   currentUserName?: string;
@@ -72,6 +77,8 @@ export function MobileTaskChatView({
   onSend: (payload: { message: string; attachmentUrl?: string }) => void | Promise<void>;
   sending?: boolean;
   onBack: () => void;
+  onStatusChange?: (status: string) => void | Promise<void>;
+  onSitePunch?: (kind: "in" | "out") => void | Promise<void>;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [infoOpen, setInfoOpen] = useState(false);
@@ -147,14 +154,34 @@ export function MobileTaskChatView({
             {menuOpen && (
               <>
                 <div className="fixed inset-0 z-30" onClick={() => setMenuOpen(false)} />
-                <div className="absolute right-0 top-full mt-1 z-40 w-44 rounded-xl bg-white shadow-lg border border-gray-100 py-1 overflow-hidden">
+                <div className="absolute right-0 top-full mt-1 z-40 w-48 rounded-xl bg-white shadow-lg border border-gray-100 py-1 overflow-hidden">
                   <button
                     type="button"
                     className="w-full text-left px-4 py-2.5 text-[13px] text-gray-700 active:bg-gray-50"
                     onClick={() => { setInfoOpen(true); setMenuOpen(false); }}
                   >
-                    Task info
+                    View Task info
                   </button>
+                  {(task.taskType || "").toLowerCase().includes("site visit") && onSitePunch && (
+                    <>
+                      <button type="button" className="w-full text-left px-4 py-2.5 text-[13px] text-[#2563eb] active:bg-gray-50" onClick={() => { setMenuOpen(false); onSitePunch("in"); }}>
+                        Site Check-In
+                      </button>
+                      <button type="button" className="w-full text-left px-4 py-2.5 text-[13px] text-[#2563eb] active:bg-gray-50" onClick={() => { setMenuOpen(false); onSitePunch("out"); }}>
+                        Site Check-Out
+                      </button>
+                    </>
+                  )}
+                  {onStatusChange && task.status !== "Closed" && (
+                    <button type="button" className="w-full text-left px-4 py-2.5 text-[13px] text-gray-700 active:bg-gray-50" onClick={() => { setMenuOpen(false); onStatusChange("Closed"); }}>
+                      Closed
+                    </button>
+                  )}
+                  {onStatusChange && task.status === "Closed" && (
+                    <button type="button" className="w-full text-left px-4 py-2.5 text-[13px] text-emerald-700 active:bg-gray-50" onClick={() => { setMenuOpen(false); onStatusChange("Open"); }}>
+                      Reopen
+                    </button>
+                  )}
                 </div>
               </>
             )}
@@ -281,11 +308,13 @@ export function MobileTaskChatView({
           <div className="fixed inset-x-0 bottom-0 z-50 mobile-sheet-up rounded-t-2xl bg-white max-h-[70vh] overflow-y-auto" style={{ paddingBottom: "env(safe-area-inset-bottom)" }}>
             <div className="w-10 h-1 rounded-full bg-gray-200 mx-auto mt-3 mb-4" />
             <div className="px-5 pb-6 space-y-3">
-              <h3 className="text-[17px] font-semibold text-gray-900">Task details</h3>
+              <h3 className="text-[17px] font-semibold text-gray-900">Task info</h3>
               {[
                 ["Customer", task.customer?.customerName],
-                ["Branch", task.site?.branchName],
-                ["Department", task.department?.departmentName],
+                ["Site", task.site?.branchName || task.site?.city],
+                ["Type", task.taskType],
+                ["Schedule", task.scheduleDateTime ? new Date(task.scheduleDateTime).toLocaleString("en-IN") : "—"],
+                ["ETC", task.dueDateTime ? new Date(task.dueDateTime).toLocaleString("en-IN") : "—"],
                 ["Priority", task.priority],
                 ["Status", task.status],
               ].map(([label, val]) => (
@@ -296,8 +325,27 @@ export function MobileTaskChatView({
               ))}
               {task.description && (
                 <div className="pt-2">
-                  <p className="text-[12px] text-gray-500 mb-1">Description</p>
+                  <p className="text-[12px] text-gray-500 mb-1">Details</p>
                   <p className="text-[13px] text-gray-800 leading-relaxed">{task.description}</p>
+                </div>
+              )}
+              {(task.taskType || "").toLowerCase().includes("site visit") && (
+                <div className="pt-3 border-t border-gray-100">
+                  <p className="text-[12px] font-bold text-gray-400 uppercase mb-2">Site check-in / check-out</p>
+                  <div className="space-y-1.5 max-h-40 overflow-y-auto">
+                    {(task.chats || [])
+                      .filter((c) => /\b(mark(?:ed)?\s*(in|out)|check(?:ed)?\s*(in|out)|site\s*check)/i.test(c.message || ""))
+                      .map((c) => (
+                        <div key={c.id} className="text-[11px] bg-gray-50 rounded-lg px-2 py-1.5">
+                          <span className="font-semibold text-gray-700">{c.senderName || "User"}</span>
+                          <span className="text-gray-400 ml-1">{formatBubbleTime(c.createdAt)}</span>
+                          <p className="text-gray-600 mt-0.5 line-clamp-2">{c.message}</p>
+                        </div>
+                      ))}
+                    {(task.chats || []).filter((c) => /\bmark/i.test(c.message || "")).length === 0 && (
+                      <p className="text-[12px] text-gray-400">No check-in/out logged yet</p>
+                    )}
+                  </div>
                 </div>
               )}
             </div>

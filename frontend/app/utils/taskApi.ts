@@ -16,11 +16,13 @@ function viewerFromToken(): CurrentUserLike | null {
     const payload = JSON.parse(atob(token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/")));
     const role = String(payload.role || "").toUpperCase();
     const isEmployee = role === "EMPLOYEE" || payload.type === "employee";
+    const employeeDbId = payload.employeeId != null ? Number(payload.employeeId) : undefined;
     return {
-      id: isEmployee ? Number(payload.employeeId ?? payload.sub) : Number(payload.sub),
+      id: isEmployee ? Number(employeeDbId ?? payload.sub) : Number(payload.sub),
       role,
       companyID: payload.companyID ? Number(payload.companyID) : undefined,
       serviceProviderID: payload.serviceProviderID ? Number(payload.serviceProviderID) : undefined,
+      employee: employeeDbId ? { id: employeeDbId } : undefined,
     };
   } catch {
     return null;
@@ -35,7 +37,8 @@ export function buildTaskViewerQuery(user: CurrentUserLike | null | undefined) {
   if (role) params.set("viewerRole", role);
   if (u) {
     if (role === "EMPLOYEE") {
-      const employeeId = u.employee?.id ?? u.id;
+      const tokenViewer = viewerFromToken();
+      const employeeId = u.employee?.id ?? tokenViewer?.employee?.id ?? u.id;
       if (employeeId) params.set("viewerEmployeeId", String(employeeId));
     } else if (u.id) {
       params.set("viewerUserId", String(u.id));

@@ -60,6 +60,7 @@ export class CreateTaskChatDto {
   @IsOptional() @IsString() attachmentUrl?: string;
   @IsOptional() @IsInt() userID?: number;
   @IsOptional() @IsInt() employeeID?: number;
+  @IsOptional() @IsInt() recipientEmployeeID?: number;
   @IsOptional() @IsString() senderName?: string;
   @IsOptional() @IsString() status?: string;
   @IsOptional() @IsString() priority?: string;

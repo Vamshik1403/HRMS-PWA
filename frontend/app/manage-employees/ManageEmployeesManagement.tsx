@@ -753,6 +753,7 @@ export function ManageEmployeesManagement() {
     noticePeriodDaysForResignation: "",
     noticePeriodDaysForTermination: "",
     allowRotatingShift: false,
+    allowCreateTaskOnMobile: false,
 
     typeOfEmployee: "employee",
 
@@ -1806,6 +1807,7 @@ const addCombinedDevMap = () => {
       noticePeriodDaysForResignation: "",
       noticePeriodDaysForTermination: "",
       allowRotatingShift: false,
+      allowCreateTaskOnMobile: false,
 
       typeOfEmployee: "employee",
 
@@ -2371,6 +2373,7 @@ const addCombinedDevMap = () => {
         noticePeriodDaysForResignation: formData.noticePeriodDaysForResignation || undefined,
         noticePeriodDaysForTermination: formData.noticePeriodDaysForTermination || undefined,
         allowRotatingShift: formData.allowRotatingShift,
+        allowCreateTaskOnMobile: formData.allowCreateTaskOnMobile,
 
         typeOfEmployee: formData.typeOfEmployee || undefined,
 
@@ -2619,6 +2622,7 @@ const addCombinedDevMap = () => {
       noticePeriodDaysForResignation: freshData.noticePeriodDaysForResignation ?? "",
       noticePeriodDaysForTermination: freshData.noticePeriodDaysForTermination ?? "",
       allowRotatingShift: freshData.allowRotatingShift ?? false,
+      allowCreateTaskOnMobile: freshData.allowCreateTaskOnMobile ?? false,
       typeOfEmployee: freshData.typeOfEmployee ?? "",
       workShiftID: effectiveWorkShiftID,
       attendancePolicyID: effectiveAttendancePolicyID,
@@ -3133,6 +3137,15 @@ const addCombinedDevMap = () => {
                     <option value="employee">Employee</option>
                   </select>
                 </div>
+                <label className="flex items-center gap-2 cursor-pointer pt-1">
+                  <input
+                    type="checkbox"
+                    checked={!!formData.allowCreateTaskOnMobile}
+                    onChange={(e) => setFormData((p) => ({ ...p, allowCreateTaskOnMobile: e.target.checked }))}
+                    className="rounded border-gray-300"
+                  />
+                  <span className="text-sm text-gray-700">Allow employee to create tasks from mobile app</span>
+                </label>
               </div>
 
               {/* Department - Search & Add with History (visible for all roles including COMPANY_ADMIN) */}

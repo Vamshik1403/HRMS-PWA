@@ -1,67 +1,115 @@
 "use client";
 
-import { Calendar } from "lucide-react";
-import { PriorityBadge, TaskStatusBadge, formatTaskDateShort } from "../task-ui";
+import { useState } from "react";
+import { Icon } from "@iconify/react";
+import { PriorityBadge, TaskStatusBadge } from "../task-ui";
 
 export interface MobileTaskListItem {
   id: number;
   taskCode: string;
   taskName: string;
+  taskType: string;
   status: string;
   priority: string;
+  scheduleDateTime?: string | null;
   dueDateTime?: string | null;
   customer?: { customerName?: string };
-  site?: { branchName?: string };
+  site?: { branchName?: string; city?: string };
+}
+
+function fmtSchedule(iso?: string | null) {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "—";
+  const dd = d.toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric" });
+  const tt = d.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: false });
+  return `${dd} ${tt}`;
+}
+
+function isSiteVisit(type: string) {
+  return (type || "").toLowerCase().includes("site visit");
 }
 
 export function MobileTaskListCard({
   task,
-  onClick,
+  onOpenChat,
+  onCheckInOut,
+  onViewInfo,
 }: {
   task: MobileTaskListItem;
-  onClick: () => void;
+  onOpenChat: () => void;
+  onCheckInOut?: () => void;
+  onViewInfo?: () => void;
 }) {
-  const due = formatTaskDateShort(task.dueDateTime);
-  const location = [task.customer?.customerName, task.site?.branchName].filter(Boolean).join(" · ");
+  const [menuOpen, setMenuOpen] = useState(false);
+  const siteLine = isSiteVisit(task.taskType)
+    ? [task.site?.branchName, task.site?.city].filter(Boolean).join(", ") || "—"
+    : null;
 
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="mobile-task-card w-full text-left rounded-[20px] bg-white px-3.5 py-3 shadow-[0_2px_12px_rgba(15,23,42,0.06)] border border-gray-100/80 active:scale-[0.98] transition-transform duration-150"
-    >
-      <div className="flex items-start gap-2.5">
-        <div className="min-w-0 flex-1">
-          <div className="flex items-start justify-between gap-2">
-            <p className="text-[15px] font-semibold text-gray-900 leading-tight line-clamp-2 pr-1">
-              {task.taskName}
+    <div className="mobile-task-card w-full rounded-[16px] bg-white border border-gray-100 shadow-sm overflow-hidden">
+      <button type="button" onClick={onOpenChat} className="w-full text-left px-3 py-3 active:bg-gray-50">
+        <div className="flex gap-2">
+          <div className="flex-1 min-w-0 space-y-1">
+            <p className="text-[14px] font-bold text-gray-900 leading-tight line-clamp-2">{task.taskName}</p>
+            <p className="text-[11px] text-gray-500">
+              <span className="text-gray-400">Task ID:</span> {task.id}
             </p>
-            <TaskStatusBadge status={task.status} size="xs" className="shrink-0 !rounded-full" />
-          </div>
-          <p className="text-[11px] font-mono text-gray-400 mt-0.5 tracking-tight">{task.taskCode}</p>
-          {location && (
-            <p className="text-[12px] text-gray-500 mt-1 line-clamp-1">{location}</p>
-          )}
-          <div className="flex items-center justify-between mt-2 gap-2">
-            <PriorityBadge priority={task.priority} size="xs" />
-            {due && (
-              <span className="inline-flex items-center gap-1 text-[11px] text-gray-400 shrink-0">
-                <Calendar className="w-3.5 h-3.5" />
-                {due}
-              </span>
+            <p className="text-[11px] text-gray-500">
+              <span className="text-gray-400">Type:</span> {task.taskType}
+            </p>
+            {siteLine && (
+              <p className="text-[11px] text-gray-600 line-clamp-1">
+                <span className="text-gray-400">Customer Site:</span> {siteLine}
+              </p>
             )}
+            <p className="text-[11px] text-gray-600">
+              <span className="text-gray-400">Schedule:</span> {fmtSchedule(task.scheduleDateTime)}
+            </p>
+            <p className="text-[11px] text-gray-600">
+              <span className="text-gray-400">ETC:</span> {fmtSchedule(task.dueDateTime)}
+            </p>
+          </div>
+          <div className="flex flex-col items-end gap-1.5 shrink-0">
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setMenuOpen((v) => !v);
+              }}
+              className="w-8 h-8 rounded-lg flex items-center justify-center text-gray-500"
+              aria-label="Task menu"
+            >
+              <Icon icon="solar:menu-dots-bold" className="w-5 h-5" />
+            </button>
+            <TaskStatusBadge status={task.status} size="xs" className="!rounded-full" />
+            <PriorityBadge priority={task.priority} size="xs" />
           </div>
         </div>
-      </div>
-    </button>
+      </button>
+      {menuOpen && (
+        <div className="border-t border-gray-100 flex flex-wrap px-1 py-1 bg-gray-50/80">
+          {isSiteVisit(task.taskType) && onCheckInOut && (
+            <button type="button" className="text-[12px] font-semibold text-[#2563eb] px-3 py-2" onClick={() => { setMenuOpen(false); onCheckInOut(); }}>
+              Check-In / Check-out
+            </button>
+          )}
+          {onViewInfo && (
+            <button type="button" className="text-[12px] font-semibold text-gray-700 px-3 py-2" onClick={() => { setMenuOpen(false); onViewInfo(); }}>
+              View Task Info
+            </button>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 
 export function MobileTaskListSkeleton() {
   return (
-    <div className="space-y-2 animate-pulse px-3">
+    <div className="space-y-2 animate-pulse">
       {[1, 2, 3, 4, 5].map((i) => (
-        <div key={i} className="h-[88px] rounded-[20px] bg-white border border-gray-100" />
+        <div key={i} className="h-[120px] rounded-[16px] bg-white border border-gray-100" />
       ))}
     </div>
   );

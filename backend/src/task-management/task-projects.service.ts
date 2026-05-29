@@ -1,5 +1,6 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { PushNotificationsService } from '../push-notifications/push-notifications.service';
 import {
   CreateTaskProjectDto,
   CreateTaskChatDto,
@@ -11,27 +12,57 @@ import {
 import { canManageTaskModule, parseViewer, TaskViewerContext } from './task-context';
 import { nextTaskCode } from './task-code.util';
 
-const TASK_INCLUDE = {
-  department: { select: { id: true, departmentName: true } },
-  customer: { select: { id: true, customerCode: true, customerName: true } },
-  site: { select: { id: true, branchName: true, city: true } },
-  createdByEmployee: {
-    select: { id: true, employeeFirstName: true, employeeLastName: true, employeeID: true },
-  },
-  assignments: {
-    include: {
-      manageEmployee: {
-        select: { id: true, employeeFirstName: true, employeeLastName: true, employeeID: true },
+function taskListInclude(viewer: TaskViewerContext) {
+  return {
+    department: { select: { id: true, departmentName: true } },
+    customer: { select: { id: true, customerCode: true, customerName: true } },
+    site: { select: { id: true, branchName: true, city: true } },
+    createdByEmployee: {
+      select: { id: true, employeeFirstName: true, employeeLastName: true, employeeID: true },
+    },
+    assignments: {
+      include: {
+        manageEmployee: {
+          select: { id: true, employeeFirstName: true, employeeLastName: true, employeeID: true },
+        },
       },
     },
-  },
-  chats: { orderBy: { createdAt: 'desc' as const }, take: 1, select: { createdAt: true } },
-  _count: { select: { remarks: true, chats: true, activities: true } },
+    chats: {
+      orderBy: { createdAt: 'desc' as const },
+      take: 1,
+      select: { createdAt: true, employeeID: true, userID: true, recipientEmployeeID: true },
+    },
+    _count: { select: { remarks: true, chats: true, activities: true } },
+  };
+}
+
+type TaskChatRow = {
+  employeeID: number | null;
+  userID: number | null;
+  recipientEmployeeID?: number | null;
 };
+
+/** Employees only see their own messages and admin messages addressed to them. */
+function filterChatsForEmployeeViewer(
+  chats: TaskChatRow[],
+  viewer: TaskViewerContext,
+): TaskChatRow[] {
+  if (canManageTaskModule(viewer) || !viewer.employeeId) return chats;
+  const me = viewer.employeeId;
+  return chats.filter((c) => {
+    if (c.employeeID != null && c.employeeID === me) return true;
+    if (c.employeeID != null && c.employeeID !== me) return false;
+    if (c.userID != null && c.recipientEmployeeID === me) return true;
+    return false;
+  });
+}
 
 @Injectable()
 export class TaskProjectsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private pushService: PushNotificationsService,
+  ) {}
 
   private visibilityWhere(viewer: TaskViewerContext, companyID?: number) {
     const base: any = { isDeleted: false };
@@ -93,12 +124,52 @@ export class TaskProjectsService {
     });
   }
 
-  private async syncAssignments(taskID: number, employeeIds: number[]) {
+  private normalizeAssigneeIds(employeeIds: number[]): number[] {
+    return [
+      ...new Set(
+        employeeIds
+          .map((id) => Number(id))
+          .filter((id) => Number.isFinite(id) && id > 0),
+      ),
+    ];
+  }
+
+  private notifyTaskAssigned(
+    taskID: number,
+    manageEmployeeIDs: number[],
+    taskLabel: string,
+  ): void {
+    for (const manageEmployeeID of manageEmployeeIDs) {
+      this.pushService
+        .sendToEmployee(
+          manageEmployeeID,
+          'Task Assigned',
+          `You have been assigned: ${taskLabel}`,
+          {
+            url: '/empMyTasks',
+            tag: `task-assign-${taskID}-${manageEmployeeID}`,
+          },
+        )
+        .catch(() => null);
+    }
+  }
+
+  /**
+   * @param notify 'added' = only new assignees (task create/update).
+   *             'all' = everyone in the saved list (assign modal — iOS users expect this).
+   */
+  private async syncAssignments(
+    taskID: number,
+    employeeIds: number[],
+    options?: { notify?: 'added' | 'all' },
+  ) {
+    const normalizedIds = this.normalizeAssigneeIds(employeeIds);
     const existing = await this.prisma.taskAssignment.findMany({ where: { taskID } });
-    const existingIds = new Set(existing.map((e) => e.manageEmployeeID));
-    const nextIds = new Set(employeeIds);
-    const toAdd = employeeIds.filter((id) => !existingIds.has(id));
-    const toRemove = existing.filter((e) => !nextIds.has(e.manageEmployeeID));
+    const existingIds = new Set(existing.map((e) => Number(e.manageEmployeeID)));
+    const nextIds = new Set(normalizedIds);
+    const toAdd = normalizedIds.filter((id) => !existingIds.has(id));
+    const toRemove = existing.filter((e) => !nextIds.has(Number(e.manageEmployeeID)));
+
     if (toRemove.length) {
       await this.prisma.taskAssignment.deleteMany({
         where: { id: { in: toRemove.map((r) => r.id) } },
@@ -110,6 +181,30 @@ export class TaskProjectsService {
         skipDuplicates: true,
       });
     }
+
+    const notifyIds =
+      options?.notify === 'all' ? normalizedIds : toAdd;
+    if (notifyIds.length) {
+      const task = await this.prisma.taskProject.findUnique({
+        where: { id: taskID },
+        select: { taskName: true, taskCode: true },
+      });
+      const label = task?.taskName || task?.taskCode || 'a new task';
+      this.notifyTaskAssigned(taskID, notifyIds, label);
+    }
+  }
+
+  /** Assign employees from the UI modal — notify every selected assignee (fixes iOS missed pushes). */
+  async assignEmployees(
+    id: number,
+    employeeIds: number[],
+    query: Record<string, string | undefined>,
+  ) {
+    const viewer = parseViewer(query);
+    assertCanManage(viewer);
+    await this.assertTaskAccess(id, viewer);
+    await this.syncAssignments(id, employeeIds, { notify: 'all' });
+    return this.findOne(id, query);
   }
 
   async findAll(query: Record<string, string | undefined>) {
@@ -134,37 +229,58 @@ export class TaskProjectsService {
         },
       ];
     }
-    const [items, total] = await Promise.all([
+    const [rawItems, total] = await Promise.all([
       this.prisma.taskProject.findMany({
         where,
         orderBy: { createdAt: 'desc' },
         skip: (page - 1) * limit,
         take: limit,
-        include: TASK_INCLUDE,
+        include: taskListInclude(viewer),
       }),
       this.prisma.taskProject.count({ where }),
     ]);
+    const items =
+      !canManageTaskModule(viewer) && viewer.employeeId
+        ? rawItems.map((item) => ({
+            ...item,
+            chats: filterChatsForEmployeeViewer(item.chats, viewer) as typeof item.chats,
+          }))
+        : rawItems;
     return { items, total, page, limit, totalPages: Math.ceil(total / limit) };
   }
 
   async findOne(id: number, query: Record<string, string | undefined>) {
     const viewer = parseViewer(query);
     await this.assertTaskAccess(id, viewer);
-    return this.prisma.taskProject.findFirst({
+    const task = await this.prisma.taskProject.findFirst({
       where: { id, isDeleted: false },
       include: {
-        ...TASK_INCLUDE,
+        ...taskListInclude(viewer),
         remarks: { orderBy: { createdAt: 'desc' }, take: 50 },
-        chats: { orderBy: { createdAt: 'asc' }, take: 100 },
+        chats: { orderBy: { createdAt: 'asc' }, take: 200 },
         activities: { orderBy: { createdAt: 'desc' }, take: 100 },
       },
     });
+    if (!task) return null;
+    if (!canManageTaskModule(viewer) && viewer.employeeId) {
+      task.chats = filterChatsForEmployeeViewer(task.chats, viewer) as typeof task.chats;
+    }
+    return task;
   }
 
   async create(dto: CreateTaskProjectDto, query: Record<string, string | undefined>) {
     const viewer = parseViewer(query);
     if (!canManageTaskModule(viewer) && !viewer.employeeId) {
       throw new ForbiddenException('Access denied');
+    }
+    if (!canManageTaskModule(viewer) && viewer.employeeId) {
+      const emp = await this.prisma.manageEmployee.findUnique({
+        where: { id: viewer.employeeId },
+        select: { allowCreateTaskOnMobile: true },
+      });
+      if (!emp?.allowCreateTaskOnMobile) {
+        throw new ForbiddenException('Task creation is not enabled for your account');
+      }
     }
     const companyID = dto.companyID ?? viewer.companyID ?? null;
     let code = await nextTaskCode(this.prisma, companyID);
@@ -328,13 +444,31 @@ export class TaskProjectsService {
     if (dto.priority && !canManageTaskModule(viewer)) {
       throw new ForbiddenException('Only administrators can change task priority');
     }
+    let recipientEmployeeID = dto.recipientEmployeeID ?? null;
+    const employeeID = canManageTaskModule(viewer)
+      ? dto.employeeID ?? null
+      : viewer.employeeId ?? dto.employeeID ?? null;
+    const userID = canManageTaskModule(viewer) ? dto.userID ?? viewer.userId ?? null : null;
+
+    if (userID && !recipientEmployeeID) {
+      const lastEmployeeChat = await this.prisma.taskChat.findFirst({
+        where: { taskID: id, employeeID: { not: null } },
+        orderBy: { createdAt: 'desc' },
+        select: { employeeID: true },
+      });
+      if (lastEmployeeChat?.employeeID) {
+        recipientEmployeeID = lastEmployeeChat.employeeID;
+      }
+    }
+
     const chat = await this.prisma.taskChat.create({
       data: {
         taskID: id,
         message: text || (attachmentUrl ? '📷 Photo' : ''),
         attachmentUrl,
-        userID: dto.userID ?? viewer.userId ?? null,
-        employeeID: dto.employeeID ?? viewer.employeeId ?? null,
+        userID,
+        employeeID,
+        recipientEmployeeID,
         senderName: dto.senderName,
       },
     });
@@ -359,7 +493,11 @@ export class TaskProjectsService {
   async getChats(id: number, query: Record<string, string | undefined>) {
     const viewer = parseViewer(query);
     await this.assertTaskAccess(id, viewer);
-    return this.prisma.taskChat.findMany({ where: { taskID: id }, orderBy: { createdAt: 'asc' } });
+    const chats = await this.prisma.taskChat.findMany({
+      where: { taskID: id },
+      orderBy: { createdAt: 'asc' },
+    });
+    return filterChatsForEmployeeViewer(chats, viewer);
   }
 
   async getActivities(id: number, query: Record<string, string | undefined>) {

@@ -102,7 +102,7 @@ export class TaskProjectsController {
     @Body() body: { assignedEmployeeIds: number[] },
     @Query() query: Record<string, string>,
   ) {
-    return this.service.update(id, { assignedEmployeeIds: body.assignedEmployeeIds }, query);
+    return this.service.assignEmployees(id, body.assignedEmployeeIds ?? [], query);
   }
 
   @Get(':id/activities')

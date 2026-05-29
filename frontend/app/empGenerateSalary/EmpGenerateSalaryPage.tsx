@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
@@ -1101,6 +1102,7 @@ function downloadSalarySlipPDF(payload: {
    ======================= */
 
 export function EmpGenerateSalary() {
+  const router = useRouter();
   // table + UI
   const [searchTerm, setSearchTerm] = useState("");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -1624,6 +1626,15 @@ useEffect(() => {
     }
   }
 
+  useEffect(() => {
+    const autoId = typeof window !== "undefined" ? sessionStorage.getItem("empPayslipAutoDownload") : null;
+    if (!autoId || !items.length) return;
+    const row = items.find((r) => r.id === Number(autoId));
+    if (row) {
+      sessionStorage.removeItem("empPayslipAutoDownload");
+      handleDownloadSalarySlipForRow(row).finally(() => router.replace("/empPayout"));
+    }
+  }, [items, router]);
 
   /* ====== Filter for table ====== */
   const filtered = useMemo(() => {

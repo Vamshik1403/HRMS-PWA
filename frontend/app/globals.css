@@ -417,6 +417,31 @@ html[data-emp-theme="dark"] .emp-pwa-shell .bg-red-50 {
   background-color: #7f1d1d55 !important;
 }
 
+/* PWA date fields — force light native picker, separate white cells */
+.emp-pwa-shell .emp-mobile-date-field {
+  color-scheme: light;
+  background-color: #ffffff !important;
+  isolation: isolate;
+}
+
+html[data-emp-theme="dark"] .emp-pwa-shell .emp-mobile-date-field {
+  background-color: #111827 !important;
+  border-color: #334155 !important;
+}
+
+html[data-emp-theme="dark"] .emp-pwa-shell .emp-mobile-date-field input[type="date"] {
+  color-scheme: dark;
+}
+
+.emp-pwa-shell .emp-mobile-date-field input[type="date"] {
+  color-scheme: light;
+}
+
+.emp-pwa-shell .emp-mobile-date-field input[type="date"]::-webkit-datetime-edit,
+.emp-pwa-shell .emp-mobile-date-field input[type="date"]::-webkit-date-and-time-value {
+  opacity: 0;
+}
+
 /* ── Mobile Tasks (PWA) ── */
 .mobile-chat-bg {
   background-color: #e5ddd5;

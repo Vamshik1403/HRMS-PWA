@@ -1,11 +1,14 @@
 /** @type {import('next').NextConfig} */
 const withPWA = require('next-pwa')({
   dest: 'public',
-  register: true,
-  skipWaiting: false,
+  // Single registration path in ServiceWorkerBootstrap (avoids races with push flow)
+  register: false,
+  // Activate new SW immediately — avoids hung push registration after PWA reinstall
+  skipWaiting: true,
   
   // Service Worker configuration
-  sw: 'sw.js',
+  // Distinct name avoids stale CDN cache on /sw.js after deploys (broke push on iOS)
+  sw: 'openhrm-sw.js',
 
   // Include custom worker code (push handlers) — persists across builds
   customWorkerDir: 'worker',
@@ -118,7 +121,20 @@ const nextConfig = {
           },
           {
             key: 'Permissions-Policy',
-            value: 'camera=(), microphone=(), geolocation=()'
+            value: 'camera=(), microphone=(), geolocation=(self)'
+          }
+        ]
+      },
+      {
+        source: '/openhrm-sw.js',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'no-store, no-cache, must-revalidate'
+          },
+          {
+            key: 'Service-Worker-Allowed',
+            value: '/'
           }
         ]
       },
@@ -127,7 +143,38 @@ const nextConfig = {
         headers: [
           {
             key: 'Cache-Control',
-            value: 'public, max-age=0, must-revalidate'
+            value: 'no-store, no-cache, must-revalidate'
+          },
+          {
+            key: 'Service-Worker-Allowed',
+            value: '/'
+          }
+        ]
+      },
+      {
+        source: '/workbox-:path*',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'no-store, no-cache, must-revalidate'
+          }
+        ]
+      },
+      {
+        source: '/worker-:path*',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'no-store, no-cache, must-revalidate'
+          }
+        ]
+      },
+      {
+        source: '/push-sw.js',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'no-store, no-cache, must-revalidate'
           },
           {
             key: 'Service-Worker-Allowed',

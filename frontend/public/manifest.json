@@ -8,6 +8,7 @@
   "orientation": "portrait-primary",
   "theme_color": "#000000",
   "background_color": "#ffffff",
+  "permissions": ["geolocation"],
   "icons": [
     {
       "src": "/icons/icon-192.png",

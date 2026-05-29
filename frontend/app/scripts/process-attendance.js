@@ -258,12 +258,18 @@ async function processAttendanceLogs() {
       if (parts.length < 5) return null;
       const mode = parts[4];
       switch (mode) {
-        case '0':  return 'PIN';
-        case '1':  return 'FINGER';
-        case '2':  return 'CARD';
-        case '3':  return 'PIN';
-        case '15': return 'FACE';
-        default:   return null;
+        case '0':
+        case '3':
+          return 'PIN';
+        case '1':
+          return 'FINGER';
+        case '2':
+        case '4':
+          return 'CARD';
+        case '15':
+          return 'FACE';
+        default:
+          return null;
       }
     }
     

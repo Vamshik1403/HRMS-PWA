@@ -4,22 +4,18 @@ import { useEffect, useState, useRef, useCallback } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { Icon } from "@iconify/react";
+import {
+  registerPushSubscription,
+  resetPushClientStateIfNeeded,
+} from "@/lib/pushSubscribe";
+import { refreshHomeScreenBadge } from "@/lib/empNotificationBadge";
+import PushNotificationPrompt from "../PushNotificationPrompt";
+import { toast } from "sonner";
 
 interface EmpMobileLayoutProps {
   children: React.ReactNode;
   /** Hide bottom tab bar (e.g. full-screen task chat) */
   hideBottomNav?: boolean;
-}
-
-function urlBase64ToUint8Array(base64String: string): Uint8Array<ArrayBuffer> {
-  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
-  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
-  const rawData = window.atob(base64);
-  const outputArray = new Uint8Array(rawData.length);
-  for (let i = 0; i < rawData.length; ++i) {
-    outputArray[i] = rawData.charCodeAt(i);
-  }
-  return outputArray;
 }
 
 /** Returns true when the app is running as an installed PWA (standalone mode). */
@@ -31,13 +27,18 @@ function isRunningStandalone(): boolean {
   );
 }
 
+function isIOSDevice(): boolean {
+  if (typeof navigator === "undefined") return false;
+  return /iPad|iPhone|iPod/.test(navigator.userAgent);
+}
+
 const navItems = [
-  { label: "Home",       icon: "solar:home-2-bold-duotone",        outlineIcon: "solar:home-2-linear",           href: "/empdashboard" },
-  { label: "Attendance", icon: "solar:map-point-bold-duotone",     outlineIcon: "solar:map-point-linear",        href: "/empAttendance" },
-  { label: "History",    icon: "solar:clock-circle-bold-duotone",  outlineIcon: "solar:clock-circle-linear",     href: "/empHistory" },
-  { label: "Leave",      icon: "solar:calendar-bold-duotone",      outlineIcon: "solar:calendar-linear",         href: "/empLeaveApplication" },
-  { label: "Tasks",      icon: "solar:checklist-bold-duotone",     outlineIcon: "solar:checklist-linear",        href: "/empMyTasks" },
-  { label: "Profile",    icon: "solar:user-bold-duotone",          outlineIcon: "solar:user-linear",             href: "/empProfile" },
+  { label: "Home",         icon: "solar:home-2-bold-duotone",    outlineIcon: "solar:home-2-linear",         href: "/empdashboard" },
+  { label: "Attendance",   icon: "solar:map-point-bold-duotone", outlineIcon: "solar:map-point-linear",      href: "/empAttendance" },
+  { label: "Leave",        icon: "solar:calendar-bold-duotone",  outlineIcon: "solar:calendar-linear",       href: "/empLeaveApplication" },
+  { label: "Reimbursement", icon: "solar:wallet-bold-duotone",   outlineIcon: "solar:wallet-linear",         href: "/empReimbursement" },
+  { label: "Payout",       icon: "solar:bill-bold-duotone",      outlineIcon: "solar:bill-linear",           href: "/empPayout" },
+  { label: "Tasks",        icon: "solar:checklist-bold-duotone", outlineIcon: "solar:checklist-linear",      href: "/empMyTasks" },
 ];
 
 export default function EmpMobileLayout({ children, hideBottomNav = false }: EmpMobileLayoutProps) {
@@ -45,8 +46,9 @@ export default function EmpMobileLayout({ children, hideBottomNav = false }: Emp
   const router = useRouter();
   const [showInstallBanner, setShowInstallBanner] = useState(false);
   const [showNotifButton, setShowNotifButton] = useState(false);
+  const [pushModalOpen, setPushModalOpen] = useState(false);
   const [theme, setTheme] = useState<"light" | "dark">("light");
-  const subscribeAttempted = useRef(false);
+  const syncInFlight = useRef(false);
 
   useEffect(() => {
     const applyStoredTheme = () => {
@@ -71,84 +73,87 @@ export default function EmpMobileLayout({ children, hideBottomNav = false }: Emp
     if (!token) router.replace("/login");
   }, [router]);
 
-  const doSubscribe = useCallback(async () => {
+  const syncPushSubscription = useCallback(async (requestPermission = false) => {
+    if (syncInFlight.current) return;
+    syncInFlight.current = true;
     try {
-      if (!("serviceWorker" in navigator) || !("PushManager" in window)) return;
-      const userRaw = localStorage.getItem("user");
-      if (!userRaw) return;
-      const user = JSON.parse(userRaw);
-      const employeeID = user?.employee?.id;
-      if (!employeeID) return;
-
-      // Request permission (must be called within a user gesture on iOS)
-      const permission = await Notification.requestPermission();
-      if (permission !== "granted") return;
-
-      const reg = await navigator.serviceWorker.ready;
-      const keyRes = await fetch("/backend/push-notifications/vapid-public-key");
-      if (!keyRes.ok) return;
-      const { publicKey } = await keyRes.json();
-
-      const appServerKey = urlBase64ToUint8Array(publicKey);
-      const subscription = await reg.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: appServerKey,
-      });
-
-      await fetch("/backend/push-notifications/subscribe", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ employeeID, subscription }),
-      });
-
-      // Remember that we've subscribed so we don't show the button again
-      localStorage.setItem("_push_subscribed", "1");
-      setShowNotifButton(false);
-    } catch {
-      // Non-critical
+      const result = await registerPushSubscription(requestPermission);
+      if (result.ok) {
+        setShowNotifButton(false);
+        if (requestPermission) toast.success("Notifications enabled");
+      } else {
+        console.warn("[push]", result.reason);
+        localStorage.removeItem("_push_subscribed");
+        if (result.reason.includes("denied")) {
+          toast.error("Notifications blocked in browser settings");
+        } else if (
+          Notification.permission === "default" ||
+          Notification.permission === "granted"
+        ) {
+          setShowNotifButton(true);
+        }
+      }
+    } finally {
+      syncInFlight.current = false;
     }
   }, []);
 
-  // Push notification setup
+  const doSubscribe = useCallback(async () => {
+    await syncPushSubscription(true);
+  }, [syncPushSubscription]);
+
+  // Push: reset stale flags after reinstall; layout only syncs when permission already granted
   useEffect(() => {
+    resetPushClientStateIfNeeded();
+
     const setup = async () => {
-      if (!("Notification" in window) || !("serviceWorker" in navigator) || !("PushManager" in window)) return;
-      if (subscribeAttempted.current) return;
-      subscribeAttempted.current = true;
+      if (!("Notification" in window) || !("serviceWorker" in navigator) || !("PushManager" in window)) {
+        return;
+      }
 
       const standalone = isRunningStandalone();
-      // iOS requires standalone (Add to Home Screen) for push to work.
-      // Detect iOS by checking for standalone property on navigator (only exists on iOS Safari).
-      const isIOS = typeof (window.navigator as any).standalone !== "undefined";
+      const isIOS = isIOSDevice();
 
       if (!standalone && isIOS) {
-        // iOS not in standalone mode — push won't work, show install prompt
         setShowInstallBanner(true);
         return;
       }
 
-      // Already subscribed this session — skip
-      if (localStorage.getItem("_push_subscribed") === "1") return;
-
-      const permState = Notification.permission;
-
-      if (permState === "granted") {
-        // Already granted — re-subscribe silently (handles app reinstalls / new SW)
-        await doSubscribe();
-      } else if (permState === "default") {
-        // Show enable button so user can grant permission via gesture
+      if (Notification.permission === "granted") {
+        await syncPushSubscription(false);
+      } else if (Notification.permission === "default") {
         setShowNotifButton(true);
       }
-      // If "denied" — nothing we can do
     };
 
-    setup();
-  }, [doSubscribe]);
+    void setup();
+  }, [syncPushSubscription]);
+
+  useEffect(() => {
+    const refresh = () => {
+      if (document.visibilityState === "visible") {
+        void refreshHomeScreenBadge();
+      }
+    };
+    void refreshHomeScreenBadge();
+    document.addEventListener("visibilitychange", refresh);
+    const interval = setInterval(() => {
+      if (document.visibilityState === "visible") void refreshHomeScreenBadge();
+    }, 60000);
+    return () => {
+      document.removeEventListener("visibilitychange", refresh);
+      clearInterval(interval);
+    };
+  }, []);
 
   const isActive = (href: string) => pathname === href || pathname.startsWith(href + "/");
 
   return (
     <div className="emp-pwa-shell bg-[#f2f4f7]" data-theme={theme} style={{ position: 'fixed', inset: 0, display: 'flex', flexDirection: 'column', overscrollBehavior: 'none' }}>
+      <PushNotificationPrompt
+        onSubscribed={() => setShowNotifButton(false)}
+        onModalOpenChange={setPushModalOpen}
+      />
       {/* Top safe-area spacer — prevents content going under notch/status bar */}
       <div className="emp-pwa-safe-top" style={{ height: 'env(safe-area-inset-top)', background: '#f2f4f7', flexShrink: 0 }} />
 
@@ -167,7 +172,7 @@ export default function EmpMobileLayout({ children, hideBottomNav = false }: Emp
       )}
 
       {/* Enable notifications button (standalone, permission not yet requested) */}
-      {showNotifButton && (
+      {showNotifButton && !pushModalOpen && (
         <div className="flex items-center justify-between gap-2 px-4 py-2 bg-blue-600 text-white text-xs" style={{ flexShrink: 0 }}>
           <span>Enable push notifications</span>
           <button

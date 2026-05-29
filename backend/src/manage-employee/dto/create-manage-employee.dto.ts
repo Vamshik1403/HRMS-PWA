@@ -289,6 +289,7 @@ export class CreateManageEmployeeDto {
 
   @IsOptional() @IsBoolean()
   allowRotatingShift?: boolean;
+  allowCreateTaskOnMobile?: boolean;
 
   // Nested arrays
   @IsOptional() @IsArray()

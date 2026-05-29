@@ -693,6 +693,7 @@ model ManageEmployee {
   typeOfEmployee                 String?                   @db.VarChar
   weeklyOffPattern               String?                   @db.VarChar
   allowRotatingShift             Boolean                   @default(false)
+  allowCreateTaskOnMobile        Boolean                   @default(false)
   bonusAllocation                BonusAllocation[]
   empAttendanceRegularise        EmpAttendanceRegularise[]
   empCurrentPosition             EmpCurrentPosition[]
@@ -743,6 +744,7 @@ model ManageEmployee {
   empFactualAttendancePolicy     EmpFactualAttendancePolicy[]
   employeeMemo                   EmployeeMemo[]
   attendanceLocations            AttendanceLocation[]
+  absentDeclarations             EmpAbsentDeclaration[]
   empLeaveBalance                EmpLeaveBalance?
   taskAssignments                TaskAssignment[]
   tasksCreated                   TaskProject[]         @relation("TaskCreatorEmployee")
@@ -1340,6 +1342,7 @@ model Reimbursement {
   companyID         Int?
   branchesID        Int?
   manageEmployeeID  Int?
+  taskProjectID     Int?
   date              String?
   reimbursementType String?
   amount            String?
@@ -1977,6 +1980,20 @@ model AttendanceLocation {
   @@map("attendance_locations")
 }
 
+model EmpAbsentDeclaration {
+  id                 Int            @id @default(autoincrement())
+  employeeId         Int
+  absentDate         DateTime       @db.Date
+  reason             String
+  leaveType          String         @db.VarChar(32)
+  leaveApplicationId Int?
+  createdAt          DateTime       @default(now())
+  employee           ManageEmployee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@unique([employeeId, absentDate])
+  @@index([employeeId])
+}
+
 // ==================== TASK MANAGEMENT SYSTEM ====================
 
 model TaskCustomer {
@@ -2090,18 +2107,20 @@ model TaskRemark {
 }
 
 model TaskChat {
-  id            Int         @id @default(autoincrement())
-  taskID        Int
-  userID        Int?
-  employeeID    Int?
-  senderName    String?     @db.VarChar(255)
-  message       String
-  attachmentUrl String?     @db.VarChar(512)
-  createdAt     DateTime    @default(now())
-  task       TaskProject @relation(fields: [taskID], references: [id], onDelete: Cascade)
+  id                   Int         @id @default(autoincrement())
+  taskID               Int
+  userID               Int?
+  employeeID           Int?
+  recipientEmployeeID  Int?
+  senderName           String?     @db.VarChar(255)
+  message              String
+  attachmentUrl        String?     @db.VarChar(512)
+  createdAt            DateTime    @default(now())
+  task                 TaskProject @relation(fields: [taskID], references: [id], onDelete: Cascade)
 
   @@index([taskID])
   @@index([createdAt])
+  @@index([recipientEmployeeID])
 }
 
 model TaskActivityLog {

@@ -1,6 +1,7 @@
 const { Pool } = require('pg');
 const path = require('path');
-require('dotenv').config({ path: path.join(__dirname, '../../.env') });
+require('dotenv').config({ path: path.join(__dirname, '../.env.local') });
+require('dotenv').config({ path: path.join(__dirname, '../../backend/.env') });
 
 // Debug levels
 const DEBUG = {
@@ -320,12 +321,18 @@ async function processAttendanceLogs(): Promise<ProcessResult> {
       if (parts.length < 5) return null;
       const mode = parts[4];
       switch (mode) {
-        case '0':  return 'PIN';
-        case '1':  return 'FINGER';
-        case '2':  return 'CARD';
-        case '3':  return 'PIN';
-        case '15': return 'FACE';
-        default:   return null;
+        case '0':
+        case '3':
+          return 'PIN';
+        case '1':
+          return 'FINGER';
+        case '2':
+        case '4':
+          return 'CARD';
+        case '15':
+          return 'FACE';
+        default:
+          return null;
       }
     }
     

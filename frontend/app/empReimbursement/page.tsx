@@ -1,10 +1,10 @@
 import EmpMobileLayout from "../components/layout/EmpMobileLayout";
-import { EmpReimbursement } from "./EmpReimbursementPage";
+import { EmpReimbursementMobile } from "../components/emp/EmpReimbursementMobile";
 
 export default function EmpReimbursementPage() {
   return (
     <EmpMobileLayout>
-      <EmpReimbursement />
+      <EmpReimbursementMobile />
     </EmpMobileLayout>
   );
 }
