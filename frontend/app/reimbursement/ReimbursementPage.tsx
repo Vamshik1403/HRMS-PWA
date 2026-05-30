@@ -14,7 +14,7 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "../components/ui/table"
 import { Badge } from "../components/ui/badge"
-import { Search, Edit, Trash2, Check, X, Plus, PlusCircle, MinusCircle, Settings, Download, CreditCard, User, Building, MapPin, Calendar, Loader2 } from "lucide-react"
+import { Search, Edit, Trash2, Check, X, Plus, PlusCircle, MinusCircle, Settings, Download, CreditCard, User, Building, MapPin, Calendar, Loader2, Eye } from "lucide-react"
 import { SearchSuggestInput } from "../components/SearchSuggestInput"
 import jsPDF from "jspdf"
 import html2canvas from "html2canvas"
@@ -28,6 +28,10 @@ interface ReimbursementItem {
   reimbursementType: string
   amount: string
   description: string
+  status?: string
+  approvalType?: string
+  paidStatus?: string
+  paymentRemark?: string
 }
 
 interface EmployeeBankDetails {
@@ -372,6 +376,10 @@ export function ReimbursementManagement() {
   const [searchTerm, setSearchTerm] = useState("")
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [isSettingsDialogOpen, setIsSettingsDialogOpen] = useState(false)
+  const [isViewDrawerOpen, setIsViewDrawerOpen] = useState(false)
+  const [viewReimbursement, setViewReimbursement] = useState<Reimbursement | null>(null)
+  const [itemPaymentRemarks, setItemPaymentRemarks] = useState<Record<number, string>>({})
+  const [itemPaidDraft, setItemPaidDraft] = useState<Record<number, boolean>>({})
   const [isPaymentDialogOpen, setIsPaymentDialogOpen] = useState(false)
   const [editing, setEditing] = useState<Reimbursement | null>(null)
   const [settingsReimbursement, setSettingsReimbursement] = useState<Reimbursement | null>(null)
@@ -801,7 +809,16 @@ useEffect(() => {
     voucherCode: r.voucherCode || "",
     voucherDate: r.voucherDate || "",
     // ✅ FIX: Fetch items from the correct API structure
-    items: r.items || r.reimbursementItems || [],
+    items: (r.items || r.reimbursementItems || []).map((i: any) => ({
+      id: i.id,
+      reimbursementType: i.reimbursementType || "",
+      amount: i.amount || "",
+      description: i.description || "",
+      status: i.status || "Pending",
+      approvalType: i.approvalType || "",
+      paidStatus: i.paidStatus || "",
+      paymentRemark: i.paymentRemark || "",
+    })),
     // Payment fields
     paymentMode: r.paymentMode || "",
     paymentType: r.paymentType || "",
@@ -1195,6 +1212,106 @@ const handleSubmit = async (e: React.FormEvent) => {
     toast.success("Reimbursement rejected successfully")
   }
 
+  const mapApiReimbursement = (r: any): Reimbursement => ({
+    id: String(r.id),
+    date: r.date || "",
+    serviceProviderID: r.serviceProviderID,
+    companyID: r.companyID,
+    branchesID: r.branchesID,
+    manageEmployeeID: r.manageEmployeeID,
+    companyName: r.company?.companyName || "",
+    branchName: r.branches?.branchName || "",
+    employeeName: r.manageEmployee
+      ? `${r.manageEmployee.employeeFirstName || ""} ${r.manageEmployee.employeeLastName || ""} (${r.manageEmployee.employeeID})`
+      : "",
+    reimbursementType: r.reimbursementType || "",
+    amount: r.amount || "",
+    description: r.description || "",
+    status: r.status || "Pending",
+    approvalType: r.approvalType || "",
+    voucherCode: r.voucherCode || "",
+    voucherDate: r.voucherDate || "",
+    items: (r.items || []).map((i: any) => ({
+      id: i.id,
+      reimbursementType: i.reimbursementType || "",
+      amount: i.amount || "",
+      description: i.description || "",
+      status: i.status || "Pending",
+      approvalType: i.approvalType || "",
+      paidStatus: i.paidStatus || "",
+      paymentRemark: i.paymentRemark || "",
+    })),
+    paymentMode: r.paymentMode || "",
+    paymentType: r.paymentType || "",
+    paymentDate: r.paymentDate || "",
+    paymentRemark: r.paymentRemark || "",
+    paymentProof: r.paymentProof || "",
+  })
+
+  const openViewReimbursement = async (r: Reimbursement) => {
+    try {
+      const fresh = await robustGet<any>(`${BACKEND_URL}/reimbursement/${r.id}`)
+      setViewReimbursement(mapApiReimbursement(fresh))
+      setItemPaymentRemarks({})
+      setItemPaidDraft({})
+      setIsViewDrawerOpen(true)
+    } catch {
+      setViewReimbursement(r)
+      setIsViewDrawerOpen(true)
+    }
+  }
+
+  const refreshViewReimbursement = async () => {
+    if (!viewReimbursement) return
+    const fresh = await robustGet<any>(`${BACKEND_URL}/reimbursement/${viewReimbursement.id}`)
+    setViewReimbursement(mapApiReimbursement(fresh))
+    await loadReimbursements()
+  }
+
+  const handleApproveReimbursementItem = async (itemId: number) => {
+    if (!viewReimbursement) return
+    await robustFetch(`${BACKEND_URL}/reimbursement/${viewReimbursement.id}/items/${itemId}/approve`, {
+      method: "PATCH",
+    })
+    await refreshViewReimbursement()
+    toast.success("Item approved (Voucher)")
+  }
+
+  const handleRejectReimbursementItem = async (itemId: number) => {
+    if (!viewReimbursement) return
+    if (!confirm("Reject this reimbursement item?")) return
+    await robustFetch(`${BACKEND_URL}/reimbursement/${viewReimbursement.id}/items/${itemId}/reject`, {
+      method: "PATCH",
+    })
+    await refreshViewReimbursement()
+    toast.success("Item rejected")
+  }
+
+  const handleItemPaymentUpdate = async (itemId: number, paidStatus: "Paid" | "Unpaid") => {
+    if (!viewReimbursement) return
+    if (paidStatus === "Paid") {
+      const remark = (itemPaymentRemarks[itemId] || "").trim()
+      if (!remark) {
+        toast.error("Please enter a payment remark.")
+        return
+      }
+      await robustFetch(`${BACKEND_URL}/reimbursement/${viewReimbursement.id}/items/${itemId}/payment`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ paidStatus: "Paid", paymentRemark: remark }),
+      })
+    } else {
+      await robustFetch(`${BACKEND_URL}/reimbursement/${viewReimbursement.id}/items/${itemId}/payment`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ paidStatus: "Unpaid" }),
+      })
+    }
+    setItemPaidDraft((p) => ({ ...p, [itemId]: false }))
+    await refreshViewReimbursement()
+    toast.success(paidStatus === "Paid" ? "Marked as paid" : "Marked as unpaid")
+  }
+
   const filteredReimbursements = reimbursements.filter((r) =>
     Object.values(r).some((val) =>
       String(val).toLowerCase().includes(searchTerm.toLowerCase())
@@ -1349,6 +1466,8 @@ onClick={async () => {
                               ? "bg-green-100 text-green-800 border-green-200"
                               : r.status === "Approved"
                               ? "bg-blue-100 text-blue-800 border-blue-200"
+                              : r.status === "Partly Approved"
+                              ? "bg-amber-100 text-amber-800 border-amber-200"
                               : r.status === "Rejected"
                               ? "bg-red-100 text-red-800 border-red-200"
                               : "bg-yellow-100 text-yellow-800 border-yellow-200"
@@ -1360,38 +1479,18 @@ onClick={async () => {
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-1">
   {/* ✅ SUPERADMIN / MANAGER actions */}
-  {canManage && (
+      {canManage && (
     <>
-      {r.status === "Pending" && (
-        <>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => handleAccept(r)}
-            className="h-8 w-8 text-green-600 hover:text-green-800 hover:bg-green-50 rounded-lg"
-            title="Accept"
-          >
-            <Check className="h-4 w-4" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => handleReject(r)}
-            className="h-8 w-8 text-red-600 hover:text-red-800 hover:bg-red-50 rounded-lg"
-            title="Reject"
-          >
-            <X className="h-4 w-4" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => handleSettings(r)}
-            className="h-8 w-8 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg"
-            title="Settings"
-          >
-            <Settings className="h-4 w-4" />
-          </Button>
-        </>
+      {(r.status === "Pending" || r.status === "Partly Approved" || r.status === "Approved") && (
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => openViewReimbursement(r)}
+          className="h-8 w-8 text-gray-600 hover:text-[#4f46e5] hover:bg-[#eef2ff] rounded-lg"
+          title="View & approve items"
+        >
+          <Eye className="h-4 w-4" />
+        </Button>
       )}
 
       {r.status === "Approved" && r.approvalType === "Voucher" && (
@@ -1713,6 +1812,178 @@ fetchData={(q) => fetchBranches(q)}
               </Button>
             </div>
           </DialogFooter>
+      </FormDrawer>
+
+      {/* View & per-item approval */}
+      <FormDrawer
+        open={isViewDrawerOpen}
+        onOpenChange={setIsViewDrawerOpen}
+        title="View Reimbursement"
+        description="Review details and approve or reject each item."
+      >
+        {viewReimbursement && (
+          <div className="space-y-6 mt-2">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-[#f8fafc] rounded-lg border border-[#d1d5db]">
+              <div>
+                <Label className="text-sm text-gray-500">Employee</Label>
+                <p className="font-semibold">{viewReimbursement.employeeName}</p>
+              </div>
+              <div>
+                <Label className="text-sm text-gray-500">Company</Label>
+                <p className="font-semibold">{viewReimbursement.companyName}</p>
+              </div>
+              <div>
+                <Label className="text-sm text-gray-500">Branch</Label>
+                <p className="font-semibold">{viewReimbursement.branchName}</p>
+              </div>
+              <div>
+                <Label className="text-sm text-gray-500">Status</Label>
+                <Badge variant="secondary">{viewReimbursement.status}</Badge>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <Label className="text-lg font-semibold">Reimbursement Items</Label>
+              {(viewReimbursement.items || []).map((item, idx) => {
+                const itemId = item.id
+                const isPending = (item.status || "Pending") === "Pending"
+                const isApproved = item.status === "Approved"
+                const isRejected = item.status === "Rejected"
+                const showPaidForm = itemId != null && Boolean(itemPaidDraft[itemId])
+
+                return (
+                  <div key={itemId ?? `item-${idx}`} className="border rounded-lg p-4 space-y-3 bg-white shadow-sm">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
+                      <div>
+                        <span className="text-gray-500">Type</span>
+                        <p className="font-medium">{item.reimbursementType}</p>
+                      </div>
+                      <div>
+                        <span className="text-gray-500">Amount</span>
+                        <p className="font-medium">₹{parseFloat(item.amount || "0").toFixed(2)}</p>
+                      </div>
+                      <div>
+                        <span className="text-gray-500">Description</span>
+                        <p className="font-medium">{item.description}</p>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge
+                        variant="secondary"
+                        className={
+                          isApproved
+                            ? "bg-blue-100 text-blue-800"
+                            : isRejected
+                            ? "bg-red-100 text-red-800"
+                            : "bg-yellow-100 text-yellow-800"
+                        }
+                      >
+                        {item.status || "Pending"}
+                      </Badge>
+                      {isApproved && (
+                        <Badge className="bg-indigo-100 text-indigo-800 border-indigo-200">
+                          Approval: {item.approvalType || "Voucher"}
+                        </Badge>
+                      )}
+                      {isApproved && item.paidStatus && (
+                        <Badge
+                          className={
+                            item.paidStatus === "Paid"
+                              ? "bg-green-100 text-green-800"
+                              : "bg-gray-100 text-gray-700"
+                          }
+                        >
+                          {item.paidStatus}
+                        </Badge>
+                      )}
+                    </div>
+
+                    {isPending && canManage && itemId && (
+                      <div className="flex gap-2 pt-1">
+                        <Button
+                          type="button"
+                          size="sm"
+                          className="bg-green-600 hover:bg-green-700"
+                          onClick={() => handleApproveReimbursementItem(itemId)}
+                        >
+                          <Check className="w-4 h-4 mr-1" />
+                          Approve
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          className="text-red-600 border-red-200"
+                          onClick={() => handleRejectReimbursementItem(itemId)}
+                        >
+                          <X className="w-4 h-4 mr-1" />
+                          Reject
+                        </Button>
+                      </div>
+                    )}
+
+                    {isApproved && canManage && itemId && (
+                      <div className="space-y-2 border-t pt-3">
+                        <Label className="text-sm font-medium">Payment status</Label>
+                        <div className="flex gap-2">
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant={item.paidStatus === "Paid" ? "default" : "outline"}
+                            onClick={() => setItemPaidDraft((p) => ({ ...p, [itemId]: true }))}
+                          >
+                            Paid
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant={item.paidStatus === "Unpaid" || !item.paidStatus ? "default" : "outline"}
+                            onClick={() => handleItemPaymentUpdate(itemId, "Unpaid")}
+                          >
+                            Unpaid
+                          </Button>
+                        </div>
+                        {(showPaidForm || item.paidStatus === "Paid") && (
+                          <div className="space-y-2">
+                            <Label htmlFor={`remark-${itemId}`}>Payment remark *</Label>
+                            <Input
+                              id={`remark-${itemId}`}
+                              value={itemPaymentRemarks[itemId] ?? item.paymentRemark ?? ""}
+                              onChange={(e) =>
+                                setItemPaymentRemarks((p) => ({ ...p, [itemId]: e.target.value }))
+                              }
+                              placeholder="How was this item paid?"
+                            />
+                            {showPaidForm && (
+                              <Button
+                                type="button"
+                                size="sm"
+                                className="bg-green-600 hover:bg-green-700"
+                                onClick={() => handleItemPaymentUpdate(itemId, "Paid")}
+                              >
+                                Save as paid
+                              </Button>
+                            )}
+                          </div>
+                        )}
+                        {item.paymentRemark && !showPaidForm && (
+                          <p className="text-sm text-gray-600">Remark: {item.paymentRemark}</p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+
+            <div className="flex justify-end pt-2">
+              <Button variant="outline" onClick={() => setIsViewDrawerOpen(false)}>
+                Close
+              </Button>
+            </div>
+          </div>
+        )}
       </FormDrawer>
 
       {/* Settings/Approve Dialog */}

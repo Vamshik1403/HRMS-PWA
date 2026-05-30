@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
+import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
@@ -1094,7 +1095,94 @@ function downloadSalarySlipPDF(payload: {
   }
   catch (err) {
     console.error("Error generating salary slip:", err);
+    throw err;
   }
+}
+
+/** Download payslip PDF for a payroll row (shared by PWA Pay Slips and Payout). */
+export async function downloadPayslipForSalaryRow(row: GenerateSalaryRow) {
+  const employeeId = Number(row.employeeID);
+  const companyId = Number(row.companyID);
+  const branchId = Number(row.branchesID);
+  const monthLabel = row.monthPeriod;
+
+  const { start, end } = parseCycle(monthLabel);
+  const totalDaysInCycle = Math.floor((end.getTime() - start.getTime()) / 86400000) + 1;
+
+  const [emp, { companyName, branchName }, holidays, { nonLoPDays, lopDays }] =
+    await Promise.all([
+      robustGet(`/backend/manage-emp/${employeeId}`),
+      getCompanyAndBranch(companyId, branchId),
+      getHolidayCount(branchId, start, end),
+      getLeaveBreakdown(employeeId, start, end),
+    ]);
+
+  if (!emp) throw new Error("Employee not found");
+
+  const [counts, shiftDays, grade] = await Promise.all([
+    calculateSalaryCounts(employeeId, monthLabel, companyId, branchId),
+    getShiftDays(emp),
+    getMonthlyPayGrade(companyId, branchId, emp),
+  ]);
+
+  if (!counts) throw new Error("Could not compute attendance counts");
+
+  const weeklyOffDays = countWeeklyOffOccurrences(shiftDays, start, end);
+  const fullDays = Number(counts.flex_fullDayPresent || 0);
+  const halfDays = Number(counts.flex_halfDayPresent || 0);
+  const absentDays = Number(counts.flex_absent || 0);
+  const workingDaysInCycle = totalDaysInCycle - weeklyOffDays - holidays;
+  const totalPaidDays = fullDays + halfDays * 0.5;
+  const totalLopDays = absentDays + halfDays * 0.5 + (lopDays ?? 0);
+
+  const gross = getGrossFromEmp(emp, grade);
+  if (!gross || isNaN(gross)) throw new Error("Gross salary not found on employee record");
+
+  const basicForDeductions = Math.round(gross * 0.5);
+  const [earningsResult, deductionsResult] = await Promise.all([
+    computeEarnings(gross, grade, employeeId, monthLabel),
+    computeDeductions(gross, basicForDeductions, grade, employeeId, monthLabel),
+  ]);
+  const { basic, allowances, earningsTotal } = earningsResult;
+  const { deductions, deductionsTotal } = deductionsResult;
+
+  let totalForLOP = basic;
+  allowances.forEach((allowance) => {
+    if (allowance.name.toLowerCase() !== "reimbursement") {
+      totalForLOP += allowance.amount;
+    }
+  });
+
+  const daysForLOPCalculation = totalDaysInCycle;
+  const perDaySalary = totalForLOP / daysForLOPCalculation;
+  const fullDayLOP = absentDays + (lopDays ?? 0);
+  const lopAmount = perDaySalary * fullDayLOP + perDaySalary * 0.5 * halfDays;
+  const netPayBeforeRounding = Math.max(0, earningsTotal - (deductionsTotal + lopAmount));
+  const netPay = roundToNearestRupee(netPayBeforeRounding);
+
+  downloadSalarySlipPDF({
+    companyName,
+    branchName,
+    employee: emp,
+    monthLabel,
+    start,
+    end,
+    cycleDays: totalDaysInCycle,
+    paidUnits: Number(totalPaidDays.toFixed(2)),
+    lopDays: Number(totalLopDays.toFixed(2)),
+    nonLoPLeaveDays: Number(nonLoPDays.toFixed(2)),
+    weeklyOffDays,
+    holidays,
+    halfDaysUnits: Number((halfDays * 0.5).toFixed(2)),
+    gross,
+    basic,
+    earnings: allowances,
+    deductions,
+    lopAmount,
+    earningsTotal,
+    deductionsTotal,
+    netPay,
+  });
 }
 
 /* =======================
@@ -1102,6 +1190,7 @@ function downloadSalarySlipPDF(payload: {
    ======================= */
 
 export function EmpGenerateSalary() {
+  const searchParams = useSearchParams();
   const router = useRouter();
   // table + UI
   const [searchTerm, setSearchTerm] = useState("");
@@ -1301,7 +1390,7 @@ if (emp) {
       r.manageEmployee?.id === emp.employeeID ||
       r.employeeID === emp.employeeID
     ) &&
-    r.status === "Paid" // <-- show ONLY Paid
+    (!r.status || r.status === "Pending" || r.status === "Paid")
   );
   setPageCache("empPayslips", filtered);
   setItems(filtered);
@@ -1496,145 +1585,47 @@ useEffect(() => {
     }
   }
 
-  /* ====== Generate / Download Salary Slip (single copy) ====== */
-  async function handleDownloadSalarySlipForRow(row: GenerateSalaryRow) {
-    try {
-      const employeeId = Number(row.employeeID);
-      const companyId = Number(row.companyID);
-      const branchId = Number(row.branchesID);
-      const monthLabel = row.monthPeriod;
-
-      // === DATE RANGE ===
-      const { start, end } = parseCycle(monthLabel);
-      const totalDaysInCycle = Math.floor((end.getTime() - start.getTime()) / 86400000) + 1;
-
-      // === PHASE 1: fetch employee by ID (gets full nested data) + other independent calls in parallel ===
-      const [emp, { companyName, branchName }, holidays, { nonLoPDays, lopDays }] =
-        await Promise.all([
-          robustGet(`/backend/manage-emp/${employeeId}`),
-          getCompanyAndBranch(companyId, branchId),
-          getHolidayCount(branchId, start, end),
-          getLeaveBreakdown(employeeId, start, end),
-        ]);
-
-      if (!emp) throw new Error("Employee not found");
-
-      // === PHASE 2: calls that need the full employee object — run in parallel ===
-      const [counts, shiftDays, grade] = await Promise.all([
-        calculateSalaryCounts(employeeId, monthLabel, companyId, branchId),
-        getShiftDays(emp),
-        getMonthlyPayGrade(companyId, branchId, emp),
-      ]);
-
-      if (!counts) throw new Error("Could not compute attendance counts");
-
-      const weeklyOffDays = countWeeklyOffOccurrences(shiftDays, start, end);
-
-      // === CALCULATE PAID + LOP DAYS ===
-      const fullDays = Number(counts.flex_fullDayPresent || 0);
-      const halfDays = Number(counts.flex_halfDayPresent || 0);
-      const absentDays = Number(counts.flex_absent || 0);
-
-      // CORRECTED: Working days should exclude only weekly offs and holidays
-      const workingDaysInCycle = totalDaysInCycle - weeklyOffDays - holidays;
-
-      // CORRECTED: Calculate paid days (excluding LOP)
-      const totalPaidDays = fullDays + (halfDays * 0.5);
-
-      // CORRECTED: LOP days calculation
-      const totalLopDays = absentDays + (halfDays * 0.5) + (lopDays ?? 0);
-
-      // Validation
-      const calculatedTotal = totalPaidDays + totalLopDays;
-
-
-      const expectedTotal = workingDaysInCycle + holidays; // Include holidays in expected total
-      if (Math.abs((totalPaidDays + totalLopDays) - expectedTotal) > 0.1) {
-      } else {
-
-      }
-
-      // === SALARY STRUCTURE ===
-      const gross = getGrossFromEmp(emp, grade);
-      if (!gross || isNaN(gross)) throw new Error("Gross salary not found on employee record");
-
-      // basic is 50% of gross — compute it early so earnings + deductions can run in parallel
-      const basicForDeductions = Math.round(gross * 0.50);
-
-      // === PHASE 3: earnings and deductions run in parallel ===
-      const [earningsResult, deductionsResult] = await Promise.all([
-        computeEarnings(gross, grade, employeeId, monthLabel),
-        computeDeductions(gross, basicForDeductions, grade, employeeId, monthLabel),
-      ]);
-      const { basic, allowances, earningsTotal } = earningsResult;
-      const { deductions, deductionsTotal } = deductionsResult;
-
-      // === CORRECTED LOP CALCULATION - EXCLUDE REIMBURSEMENT & USE CALENDAR DAYS ===
-      // Calculate total for LOP (basic + all allowances EXCLUDING reimbursement)
-      let totalForLOP = basic;
-      allowances.forEach(allowance => {
-        if (allowance.name.toLowerCase() !== "reimbursement") {
-          totalForLOP += allowance.amount;
-        }
-      });
-
-      // DEBUG: Show what's included in LOP calculation
-
-      // ✅ FIXED: Use CALENDAR DAYS (totalDaysInCycle) instead of working days for LOP calculation
-      const daysForLOPCalculation = totalDaysInCycle; // Changed from workingDaysInCycle to totalDaysInCycle
-      const perDaySalary = totalForLOP / daysForLOPCalculation;
-
-      // Calculate LOP amount based on different types of LOP days
-      const fullDayLOP = absentDays + (lopDays ?? 0); // Full day LOP (absent days + LOP leaves)
-      const halfDayLOP = halfDays * 0.5; // Half days count as 0.5 LOP days
-
-      const lopAmount = (perDaySalary * fullDayLOP) + (perDaySalary * 0.5 * halfDays);
-
-
-      const netPayBeforeRounding = Math.max(0, earningsTotal - (deductionsTotal + lopAmount));
-      const netPay = roundToNearestRupee(netPayBeforeRounding);
-
-
-      // === GENERATE PDF ===
-      downloadSalarySlipPDF({
-        companyName,
-        branchName,
-        employee: emp,
-        monthLabel,
-        start,
-        end,
-        cycleDays: totalDaysInCycle,
-        paidUnits: Number(totalPaidDays.toFixed(2)),
-        lopDays: Number(totalLopDays.toFixed(2)),
-        nonLoPLeaveDays: Number(nonLoPDays.toFixed(2)),
-        weeklyOffDays,
-        holidays,
-        halfDaysUnits: Number((halfDays * 0.5).toFixed(2)),
-        gross,
-        basic,
-        earnings: allowances,
-        deductions,
-        lopAmount,
-        earningsTotal,
-        deductionsTotal,
-        netPay,
-      });
-
-
-    } catch (err) {
-      console.error("Error generating salary slip:", err);
-    }
-  }
+  const downloadHandledRef = useRef(false);
 
   useEffect(() => {
-    const autoId = typeof window !== "undefined" ? sessionStorage.getItem("empPayslipAutoDownload") : null;
-    if (!autoId || !items.length) return;
-    const row = items.find((r) => r.id === Number(autoId));
-    if (row) {
+    if (typeof window !== "undefined") {
       sessionStorage.removeItem("empPayslipAutoDownload");
-      handleDownloadSalarySlipForRow(row).finally(() => router.replace("/empPayout"));
     }
-  }, [items, router]);
+  }, []);
+
+  useEffect(() => {
+    const downloadParam = searchParams.get("download");
+    if (!downloadParam || !user || downloadHandledRef.current) return;
+    const idNum = Number(downloadParam);
+    if (!Number.isFinite(idNum)) return;
+
+    downloadHandledRef.current = true;
+
+    (async () => {
+      let row = items.find((r) => r.id === idNum);
+      if (!row) {
+        try {
+          row = await robustGet(`${BACKEND_URL}/generate-salary/${idNum}`);
+        } catch {
+          row = undefined;
+        }
+      }
+      if (!row) {
+        toast.error("Could not load payslip for download");
+        router.replace("/empGenerateSalary");
+        return;
+      }
+      try {
+        await downloadPayslipForSalaryRow(row);
+        toast.success("Payslip downloaded");
+      } catch (err) {
+        console.error("Payslip download failed:", err);
+        toast.error("Download failed. Check attendance/shift setup and try again.");
+      } finally {
+        router.replace("/empGenerateSalary");
+      }
+    })();
+  }, [searchParams, user, items, router]);
 
   /* ====== Filter for table ====== */
   const filtered = useMemo(() => {
@@ -2188,7 +2179,21 @@ useEffect(() => {
                       </button>
                     </>
                   )}
-                  <button onClick={() => handleDownloadSalarySlipForRow(row)} className="flex items-center gap-1 text-[11px] font-bold text-gray-600 border border-gray-100 bg-gray-50 rounded-lg px-2.5 py-1.5 active:scale-[0.97]">
+                  <button
+                    type="button"
+                    onClick={async (e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      try {
+                        await downloadPayslipForSalaryRow(row);
+                        toast.success("Payslip downloaded");
+                      } catch (err) {
+                        console.error("Payslip download failed:", err);
+                        toast.error("Download failed. Check attendance/shift setup and try again.");
+                      }
+                    }}
+                    className="flex items-center gap-1 text-[11px] font-bold text-gray-600 border border-gray-100 bg-gray-50 rounded-lg px-2.5 py-1.5 active:scale-[0.97]"
+                  >
                     <Download className="w-3 h-3" /> Slip
                   </button>
                 </div>

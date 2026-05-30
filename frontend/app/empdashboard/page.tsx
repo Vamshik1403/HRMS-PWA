@@ -7,14 +7,12 @@ import { Icon } from "@iconify/react";
 import EmpMobileLayout from "../components/layout/EmpMobileLayout";
 import { getPageCache, setPageCache } from "../utils/pageCache";
 import { clearLegacyEmpPhoto, resolveEmpPhoto } from "../utils/empPhotoCache";
-import { EmpAttendanceDayRow } from "../components/emp/EmpAttendanceDayRow";
-import {
-  encodeDateKey,
-  filterDaysByCount,
-  groupAttendanceByDay,
-  type AttendanceLocationRecord,
-} from "../utils/empAttendanceHistory";
+import { EmpNotificationsPanel } from "../components/emp/EmpNotificationsPanel";
 import { EmpTodayStatusCard } from "../components/emp/EmpTodayStatusCard";
+import {
+  countUnseenLeaveBadge,
+  countUnseenReimbursementBadge,
+} from "../utils/empHomeSeen";
 import type { TodayStatus } from "../hooks/useEmpPunch";
 import { taskFetch } from "../utils/taskApi";
 import { syncAppBadge } from "@/lib/appBadge";
@@ -185,7 +183,6 @@ function AmbientAccent() {
 
 const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL || "/backend";
 
-const RECENT_ACTIVITY_DAYS = 3;
 function greeting() {
   const h = new Date().getHours();
   if (h >= 5 && h < 12) return "Good morning";
@@ -206,7 +203,6 @@ export default function EmpDashboardPage() {
   const [empUser, setEmpUser] = useState<any>(null);
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   const [todayStatus, setTodayStatus] = useState<TodayStatus | null>(() => getPageCache<TodayStatus>("todayAttendance"));
-  const [recentHistory, setRecentHistory] = useState(() => getPageCache<ReturnType<typeof filterDaysByCount>>("recentAttendance") ?? []);
   const [loadingStatus, setLoadingStatus] = useState(() => getPageCache<TodayStatus>("todayAttendance") === null);
   const [taskBadge, setTaskBadge] = useState(0);
   const [noticeBadge, setNoticeBadge] = useState(0);
@@ -251,31 +247,47 @@ export default function EmpDashboardPage() {
     taskFetch<{ items: { status: string }[] }>("/task-projects", userForTask, undefined, { limit: 100 })
       .then((data) => {
         const items = data.items || [];
-        setTaskBadge(items.filter((t) => t.status === "Open" || t.status === "WIP").length);
+        setTaskBadge(items.filter((t) => t.status === "Open" || t.status === "WIP" || t.status === "Reopen").length);
       })
       .catch(() => setTaskBadge(0));
 
-    fetch(`${BACKEND}/reimbursement`, { headers })
+    fetch(`${BACKEND}/reimbursement/employee/${eid}`, { headers })
       .then((r) => r.json())
       .then((data: any[]) => {
         if (!Array.isArray(data)) return;
-        const pending = data.filter(
-          (r: any) => r.manageEmployeeID === eid && (r.status === "Pending" || !r.status),
+        setReimbBadge(
+          countUnseenReimbursementBadge(
+            data.map((r: any) => ({ id: r.id, status: r.status })),
+          ),
         );
-        setReimbBadge(pending.length);
       })
-      .catch(() => {});
+      .catch(() => setReimbBadge(0));
 
-    fetch(`${BACKEND}/leave-application`, { headers })
+    fetch(`${BACKEND}/leave-application/employee/${eid}`, { headers })
       .then((r) => r.json())
       .then((data: any[]) => {
         if (!Array.isArray(data)) return;
-        const pending = data.filter(
-          (l: any) => l.manageEmployeeID === eid && l.status === "Pending",
+        setLeaveBadge(
+          countUnseenLeaveBadge(
+            data.map((l: any) => ({ id: l.id, status: l.status })),
+          ),
         );
-        setLeaveBadge(pending.length);
       })
-      .catch(() => {});
+      .catch(() => {
+        fetch(`${BACKEND}/leave-application`, { headers })
+          .then((r) => r.json())
+          .then((data: any[]) => {
+            if (!Array.isArray(data)) return;
+            setLeaveBadge(
+              countUnseenLeaveBadge(
+                data
+                  .filter((l: any) => l.manageEmployeeID === eid)
+                  .map((l: any) => ({ id: l.id, status: l.status })),
+              ),
+            );
+          })
+          .catch(() => setLeaveBadge(0));
+      });
   }, [empUser]);
 
   useEffect(() => {
@@ -296,10 +308,13 @@ export default function EmpDashboardPage() {
       if (document.visibilityState === "visible") fetchBadges();
     };
     document.addEventListener("visibilitychange", onVisible);
+    const onBadgesChanged = () => fetchBadges();
+    window.addEventListener("emp-home-badges-changed", onBadgesChanged);
 
     return () => {
       clearInterval(interval);
       document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("emp-home-badges-changed", onBadgesChanged);
     };
   }, [empUser, fetchBadges]);
 
@@ -320,21 +335,6 @@ export default function EmpDashboardPage() {
       .catch(() => {})
       .finally(() => setLoadingStatus(false));
 
-    fetch(`${BACKEND}/emp-location-attendance/my`, { headers })
-      .then((r) => {
-        if (!r.ok) {
-          if (r.status === 401) { localStorage.removeItem("token"); localStorage.removeItem("accessToken"); router.replace("/login"); }
-          return Promise.reject(r.status);
-        }
-        return r.json();
-      })
-      .then((data: AttendanceLocationRecord[]) => {
-        if (!Array.isArray(data)) return;
-        const rows = filterDaysByCount(groupAttendanceByDay(data), RECENT_ACTIVITY_DAYS);
-        setRecentHistory(rows);
-        setPageCache("recentAttendance", rows);
-      })
-      .catch(() => {});
   }, [router]);
 
   useEffect(() => {
@@ -428,29 +428,7 @@ export default function EmpDashboardPage() {
           })}
         </div>
 
-        {/* Recent Activity */}
-        <div className="mb-2">
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-[15px] font-bold text-gray-900">Recent Activity</h2>
-            <Link href="/empHistory" className="text-sm font-bold text-[#2563eb]">See all</Link>
-          </div>
-          {recentHistory.length === 0 ? (
-            <div className="bg-white rounded-2xl border border-gray-100 p-6 flex flex-col items-center gap-2">
-              <Icon icon="solar:calendar-bold-duotone" className="w-8 h-8 text-gray-200" />
-              <p className="text-[12px] text-gray-400">No recent attendance</p>
-            </div>
-          ) : (
-            <div className="space-y-2.5">
-              {recentHistory.map((day) => (
-                <EmpAttendanceDayRow
-                  key={day.dateKey}
-                  day={day}
-                  href={`/empHistory/${encodeDateKey(day.dateKey)}`}
-                />
-              ))}
-            </div>
-          )}
-        </div>
+        <EmpNotificationsPanel />
       </div>
     </EmpMobileLayout>
   );

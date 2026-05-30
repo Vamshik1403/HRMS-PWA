@@ -11,6 +11,7 @@ import { Filter, MessageCircle, Pencil, Plus, Search, Trash2, Eye, AlertTriangle
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import { toast } from "sonner";
 import { taskFetch } from "../utils/taskApi";
+import { NEXT_TASK_STATUS } from "../utils/taskStatusFlow";
 import { SearchSuggestInput } from "../components/SearchSuggestInput";
 import { TaskDetailTabs } from "../components/task/TaskDetailTabs";
 import { TaskDetailSidebar } from "../components/task/TaskDetailSidebar";
@@ -23,7 +24,6 @@ import {
   type TaskStatus,
 } from "../components/task/task-ui";
 
-const STATUS_CHANGE_OPTIONS: TaskStatus[] = ["WIP", "Closed"];
 const STATUSES = TASK_STATUSES;
 const PRIORITIES = ["Urgent", "Medium", "Low"];
 const TASK_TYPES = ["Site Visit", "Meeting", "Job / Work Task"];
@@ -42,9 +42,6 @@ interface Task {
   chats?: { id: number; message: string; senderName?: string; attachmentUrl?: string | null; createdAt: string }[];
   activities?: { id: number; action: string; oldValue?: string; newValue?: string; remark?: string; actorName?: string; createdAt: string }[];
 }
-
-// Status flow: Open → WIP → Closed
-const NEXT_STATUS: Record<string, TaskStatus> = { Open: "WIP", WIP: "Closed" };
 
 interface Dept { id: number; departmentName?: string | null; }
 interface Employee { id: number; employeeFirstName?: string; employeeLastName?: string; employeeID?: string; }
@@ -66,7 +63,7 @@ function getLastActivityTime(task: Task): number {
 }
 
 function isOverdue24h(task: Task) {
-  if (task.status === "Closed") return false;
+  if (task.status === "Closed" || task.status === "Reopen") return false;
   const last = getLastActivityTime(task);
   if (!last) return false;
   return (Date.now() - last) / (1000 * 60 * 60) > 24;
@@ -175,13 +172,14 @@ export default function TaskManagement() {
   }, [assignTask, user]);
 
   const stats = useMemo(() => {
-    const g = { Open: 0, WIP: 0, Closed: 0 };
+    const g = { Open: 0, WIP: 0, Closed: 0, Reopen: 0 };
     tasks.forEach((t) => {
       if (t.status === "Open") g.Open++;
       else if (t.status === "WIP") g.WIP++;
       else if (t.status === "Closed") g.Closed++;
+      else if (t.status === "Reopen") g.Reopen++;
     });
-    return { total: tasks.length, Open: g.Open, WIP: g.WIP, Closed: g.Closed };
+    return { total: tasks.length, Open: g.Open, WIP: g.WIP, Closed: g.Closed, Reopen: g.Reopen };
   }, [tasks]);
 
   const resetForm = () => {
@@ -339,7 +337,11 @@ export default function TaskManagement() {
                       onChange={(e) => setStatusFilter(e.target.value)}
                     >
                       <option value="">All statuses</option>
-                      {STATUSES.map((s) => <option key={s} value={s}>{s === "Closed" ? "Completed" : s === "WIP" ? "Work In Progress" : s}</option>)}
+                      {STATUSES.map((s) => (
+                        <option key={s} value={s}>
+                          {s === "Closed" ? "Completed" : s === "WIP" ? "Work In Progress" : s === "Reopen" ? "Reopened" : s}
+                        </option>
+                      ))}
                     </select>
                   </div>
                   <div className="space-y-2">
@@ -385,6 +387,7 @@ export default function TaskManagement() {
               { label: "Completed", status: "Closed", value: stats.Closed, cls: "bg-emerald-50 text-emerald-700 border-emerald-200" },
               { label: "Open", status: "Open", value: stats.Open, cls: "bg-slate-50 text-slate-700 border-slate-200" },
               { label: "Work In Progress", status: "WIP", value: stats.WIP, cls: "bg-amber-50 text-amber-800 border-amber-200" },
+              { label: "Reopened", status: "Reopen", value: stats.Reopen, cls: "bg-violet-50 text-violet-800 border-violet-200" },
             ].map((s) => (
               <button key={s.status} type="button"
                 onClick={() => setStatusFilter(statusFilter === s.status ? "" : s.status)}
@@ -548,7 +551,7 @@ export default function TaskManagement() {
           chats={chatTask.chats || []} activities={chatTask.activities || []}
           message={chatMsg} onMessageChange={setChatMsg}
           statusValue={chatStatus} onStatusChange={setChatStatus}
-          statusOptions={NEXT_STATUS[chatTask.status] ? [NEXT_STATUS[chatTask.status]] : []}
+          statusOptions={NEXT_TASK_STATUS[chatTask.status as TaskStatus] ? [NEXT_TASK_STATUS[chatTask.status as TaskStatus]] : []}
           onSend={sendChat} sending={chatSending} />
       )}
 

@@ -299,7 +299,7 @@ export class EmpLocationAttendanceService {
         companyID: employee.companyID ?? undefined,
         branchesID: employee.branchesID ?? undefined,
         manageEmployeeID: employeeId,
-        appliedLeaveType: dto.leaveType,
+        appliedLeaveType: null,
         fromDate: new Date(dateStr),
         toDate: new Date(dateStr),
         purpose: `[Absent – emergency] ${dto.reason}`,
@@ -313,7 +313,7 @@ export class EmpLocationAttendanceService {
         employeeId,
         absentDate: todayDate,
         reason: dto.reason,
-        leaveType: dto.leaveType,
+        leaveType: '',
         leaveApplicationId: leaveApp.id,
       },
     });

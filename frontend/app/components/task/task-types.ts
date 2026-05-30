@@ -1,5 +1,5 @@
-export type TaskStatus = "Open" | "WIP" | "Closed";
-export const TASK_STATUSES: TaskStatus[] = ["Open", "WIP", "Closed"];
+export type TaskStatus = "Open" | "WIP" | "Closed" | "Reopen";
+export const TASK_STATUSES: TaskStatus[] = ["Open", "WIP", "Closed", "Reopen"];
 
 export interface TaskActivity {
   id: number;

@@ -9,6 +9,8 @@ import {
   resetPushClientStateIfNeeded,
 } from "@/lib/pushSubscribe";
 import { refreshHomeScreenBadge } from "@/lib/empNotificationBadge";
+import { appendInAppNotification } from "../../utils/empInAppNotifications";
+import { empPayoutHrefForPeriod } from "../../utils/empPayslipApi";
 import PushNotificationPrompt from "../PushNotificationPrompt";
 import { toast } from "sonner";
 
@@ -144,6 +146,40 @@ export default function EmpMobileLayout({ children, hideBottomNav = false }: Emp
       document.removeEventListener("visibilitychange", refresh);
       clearInterval(interval);
     };
+  }, []);
+
+  useEffect(() => {
+    if (!("serviceWorker" in navigator)) return;
+    const onMessage = (event: MessageEvent) => {
+      const data = event.data;
+      if (!data || data.type !== "PUSH_NOTIFICATION") return;
+      const title = String(data.title || "OpenHRM");
+      const body = String(data.body || "");
+      const isPaid =
+        data.event === "paid" || /salary paid|marked as paid/i.test(title);
+      let href = typeof data.url === "string" ? data.url : "/empPayout";
+      if (
+        data.kind === "payslip" &&
+        href === "/empPayout" &&
+        typeof body === "string"
+      ) {
+        const periodMatch = body.match(/for (.+?) is ready/i);
+        if (periodMatch?.[1]) {
+          href = empPayoutHrefForPeriod(periodMatch[1].trim());
+        }
+      }
+      appendInAppNotification({
+        kind: data.kind === "payslip" ? "payslip" : "general",
+        title,
+        body,
+        emoji: isPaid ? "💰" : title.toLowerCase().includes("payslip") ? "🧾" : "🔔",
+        at: new Date().toISOString(),
+        href,
+      });
+      void refreshHomeScreenBadge();
+    };
+    navigator.serviceWorker.addEventListener("message", onMessage);
+    return () => navigator.serviceWorker.removeEventListener("message", onMessage);
   }, []);
 
   const isActive = (href: string) => pathname === href || pathname.startsWith(href + "/");

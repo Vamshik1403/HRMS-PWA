@@ -87,6 +87,18 @@ self.addEventListener("push", function (event) {
     Promise.all([
       badgePromise,
       self.registration.showNotification(title, options),
+      clients.matchAll({ type: "window", includeUncontrolled: true }).then(function (list) {
+        list.forEach(function (client) {
+          client.postMessage({
+            type: "PUSH_NOTIFICATION",
+            title: title,
+            body: options.body,
+            url: options.data.url,
+            kind: inner.kind || "general",
+            event: inner.event || "",
+          });
+        });
+      }),
     ]),
   );
 });

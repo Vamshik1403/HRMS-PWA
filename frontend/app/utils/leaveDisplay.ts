@@ -62,6 +62,7 @@ export function getApprovedDateRange(app: {
 export function getDisplayLeaveStatus(status?: string | null, dayStatuses?: unknown): string {
   const s = status || "Pending";
   if (s === "Pending") return "Approval Pending";
+  if (s === "Partly Approved") return "Partly Approved";
   if (s === "Rejected") return "Rejected";
   if (s === "RevokePending") return "Cancel Pending";
   if (s === "Revoked") return "Cancelled";

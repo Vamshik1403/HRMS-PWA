@@ -18,18 +18,20 @@ interface SoftBarChartProps {
   data: SoftBarPoint[];
   highlightColor?: string;
   barColor?: string;
+  className?: string;
 }
 
 export default function SoftBarChart({
   data,
   highlightColor = "#22c55e",
   barColor = "#e8e8e8",
+  className = "h-[220px]",
 }: SoftBarChartProps) {
   const maxVal = Math.max(0, ...data.map((d) => d.value));
   const maxIndex = data.findIndex((d) => d.value === maxVal && maxVal > 0);
 
   return (
-    <div className="w-full h-[220px]">
+    <div className={`w-full ${className}`}>
       <ResponsiveContainer width="100%" height="100%">
         <BarChart data={data} barCategoryGap="28%" margin={{ top: 28, right: 8, left: -8, bottom: 0 }}>
           <XAxis

@@ -34,6 +34,7 @@ import { BonousAllocationModule } from './bonous-allocation/bonous-allocation.mo
 import { WorkShiftModule } from './work-shift/work-shift.module';
 import { AttlogListenerModule } from './attlog-listener/attlog-listener.module';
 import { EmpAttendanceSyncModule } from './emp-attendance-sync/emp-attendance-sync.module';
+import { EsslRawProcessorModule } from './essl-raw-processor/essl-raw-processor.module';
 import { CalenderModule } from './calender/calender.module';
 import { GenerateSalaryModule } from './generate-salary/generate-salary.module';
 import { EmpAttendanceLogsModule } from './emp-attendance-logs/emp-attendance-logs.module';
@@ -67,6 +68,8 @@ import { PushNotificationsModule } from './push-notifications/push-notifications
 import { EmpLeaveBalanceModule } from './emp-leave-balance/emp-leave-balance.module';
 import { GeoModule } from './geo/geo.module';
 import { TaskManagementModule } from './task-management/task-management.module';
+import { EmpNotificationsModule } from './emp-notifications/emp-notifications.module';
+import { DashboardOverviewModule } from './dashboard-overview/dashboard-overview.module';
 
 
 @Module({
@@ -108,6 +111,7 @@ import { TaskManagementModule } from './task-management/task-management.module';
     WorkShiftModule,
     AttlogListenerModule,
     EmpAttendanceSyncModule,
+    EsslRawProcessorModule,
     CalenderModule,
     GenerateSalaryModule,
     EmpAttendanceLogsModule,
@@ -139,6 +143,8 @@ import { TaskManagementModule } from './task-management/task-management.module';
     EmpLeaveBalanceModule,
     GeoModule,
     TaskManagementModule,
+    EmpNotificationsModule,
+    DashboardOverviewModule,
   ],
   providers: [AuthService],
   controllers: [AuthController],

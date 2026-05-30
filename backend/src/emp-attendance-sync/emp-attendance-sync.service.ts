@@ -1,6 +1,7 @@
 // src/emp-attendance-sync/emp-attendance-sync.service.ts
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { devicePunchToStorageDate } from '../common/device-punch-time';
 import { DeviceStatus, Prisma } from '@prisma/client';
 
 @Injectable()
@@ -236,7 +237,7 @@ for (const log of logs) {
     device_sn:          dev.deviceSN,
     user_id:            log.userId,
     username,
-    punch_time:         log.logTime ? new Date(log.logTime) : null,
+    punch_time:         log.logTime ? devicePunchToStorageDate(log.logTime) : null,
     company_name:       emp?.company?.companyName ?? null,
     branch_name:        emp?.branches?.branchName ?? null,
     department_name:    emp?.departments?.departmentName ?? null,

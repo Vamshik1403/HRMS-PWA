@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Icon } from "@iconify/react";
 import EmpMobileLayout from "../../../components/layout/EmpMobileLayout";
+import { toast } from "sonner";
+import { downloadPayslipForSalaryRow } from "../../../empGenerateSalary/EmpGenerateSalaryPage";
 import { formatPayslipMonthYear, type EmpPayslipRow } from "../../../utils/empPayslipApi";
 
 const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL || "/backend";
@@ -14,6 +16,7 @@ export default function EmpPayoutViewPage() {
   const id = Number(params.id);
   const [row, setRow] = useState<EmpPayslipRow | null>(null);
   const [loading, setLoading] = useState(true);
+  const [downloading, setDownloading] = useState(false);
 
   useEffect(() => {
     const token = localStorage.getItem("token") || localStorage.getItem("accessToken") || "";
@@ -64,7 +67,13 @@ export default function EmpPayoutViewPage() {
             <dl className="space-y-3 text-[13px]">
               <div className="flex justify-between gap-4">
                 <dt className="text-gray-500">Status</dt>
-                <dd className="font-bold text-emerald-700">{row.status || "Paid"}</dd>
+                <dd
+                  className={`font-bold ${
+                    row.status === "Paid" ? "text-emerald-700" : "text-amber-700"
+                  }`}
+                >
+                  {row.status || "Pending"}
+                </dd>
               </div>
               {row.paymentDate && (
                 <div className="flex justify-between gap-4">
@@ -98,13 +107,22 @@ export default function EmpPayoutViewPage() {
 
             <button
               type="button"
-              onClick={() => {
-                sessionStorage.setItem("empPayslipAutoDownload", String(row.id));
-                window.location.href = "/empGenerateSalary";
+              disabled={downloading}
+              onClick={async () => {
+                setDownloading(true);
+                try {
+                  await downloadPayslipForSalaryRow(row as Parameters<typeof downloadPayslipForSalaryRow>[0]);
+                  toast.success("Payslip downloaded");
+                } catch (err) {
+                  console.error("Payslip download failed:", err);
+                  toast.error("Download failed. Check attendance/shift setup and try again.");
+                } finally {
+                  setDownloading(false);
+                }
               }}
-              className="w-full h-12 rounded-xl bg-[#2563eb] text-white text-[14px] font-bold active:scale-[0.98]"
+              className="w-full h-12 rounded-xl bg-[#2563eb] text-white text-[14px] font-bold active:scale-[0.98] disabled:opacity-60"
             >
-              Download PDF
+              {downloading ? "Generating…" : "Download PDF"}
             </button>
           </div>
         )}

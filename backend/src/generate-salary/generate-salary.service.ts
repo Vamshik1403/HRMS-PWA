@@ -3,10 +3,51 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateGenerateSalaryDto } from './dto/create-generate-salary.dto';
 import { UpdateGenerateSalaryDto } from './dto/update-generate-salary.dto';
+import { empPayoutHrefForPeriod } from '../common/payslip-period.util';
+import { PushNotificationsService } from '../push-notifications/push-notifications.service';
 
 @Injectable()
 export class GenerateSalaryService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private readonly pushService: PushNotificationsService,
+  ) {}
+
+  private async notifyPayslipGenerated(record: {
+    employeeID: number;
+    monthPeriod: string;
+  }) {
+    await this.pushService
+      .sendToEmployee(
+        record.employeeID,
+        'Payslip generated',
+        `Your payslip for ${record.monthPeriod} is ready. Review it in Payout and raise a query if needed.`,
+        {
+          url: empPayoutHrefForPeriod(record.monthPeriod),
+          kind: 'payslip',
+          event: 'generated',
+        },
+      )
+      .catch(() => null);
+  }
+
+  private async notifyPayslipPaid(record: {
+    employeeID: number;
+    monthPeriod: string;
+  }) {
+    await this.pushService
+      .sendToEmployee(
+        record.employeeID,
+        'Salary paid',
+        `Your salary for ${record.monthPeriod} has been marked as paid.`,
+        {
+          url: empPayoutHrefForPeriod(record.monthPeriod),
+          kind: 'payslip',
+          event: 'paid',
+        },
+      )
+      .catch(() => null);
+  }
 
   async create(dto: CreateGenerateSalaryDto) {
     const {
@@ -22,19 +63,19 @@ export class GenerateSalaryService {
       paymentProof,
     } = dto;
 
-    return this.prisma.generateSalary.create({
+    const created = await this.prisma.generateSalary.create({
       data: {
         serviceProviderID: serviceProviderID ?? null,
         companyID: companyID ?? null,
         branchesID: branchesID ?? null,
-        employeeID, 
+        employeeID,
         monthPeriod: monthPeriod,
-        paymentMode: paymentMode ? `${paymentMode}` : null, 
+        paymentMode: paymentMode ? `${paymentMode}` : null,
         paymentType: paymentType ? `${paymentType}` : null,
         paymentDate: paymentDate ? `${paymentDate}` : null,
         paymentRemark: paymentRemark ? `${paymentRemark}` : null,
         paymentProof: paymentProof ? `${paymentProof}` : null,
-        status: "Pending",
+        status: 'Pending',
       },
       include: {
         serviceProvider: true,
@@ -43,6 +84,9 @@ export class GenerateSalaryService {
         manageEmployee: true,
       },
     });
+
+    await this.notifyPayslipGenerated(created);
+    return created;
   }
 
   findAll() {
@@ -69,54 +113,62 @@ export class GenerateSalaryService {
     });
   }
 
- async update(id: number, dto: UpdateGenerateSalaryDto) {
-  const {
-    serviceProviderID,
-    companyID,
-    branchesID,
-    employeeID,
-    monthPeriod,
-    paymentMode,
-    paymentType,
-    paymentDate,
-    paymentRemark,
-    paymentProof,
-  } = dto;
+  async update(id: number, dto: UpdateGenerateSalaryDto) {
+    const existing = await this.prisma.generateSalary.findUnique({
+      where: { id },
+    });
 
-  // 👇 Automatically mark Paid if paymentMode and paymentDate exist
-  const newStatus =
-    paymentMode && paymentDate ? "Paid" : undefined;
+    const {
+      serviceProviderID,
+      companyID,
+      branchesID,
+      employeeID,
+      monthPeriod,
+      paymentMode,
+      paymentType,
+      paymentDate,
+      paymentRemark,
+      paymentProof,
+      status,
+    } = dto;
 
-  // Build updateData dynamically — only include defined values
-  const updateData: any = {};
+    const newStatus =
+      status ??
+      (paymentMode && paymentDate ? 'Paid' : undefined);
 
-  if (serviceProviderID !== undefined) updateData.serviceProviderID = serviceProviderID;
-  if (companyID !== undefined) updateData.companyID = companyID;
-  if (branchesID !== undefined) updateData.branchesID = branchesID;
-  if (employeeID !== undefined) updateData.employeeID = employeeID;
-  if (monthPeriod !== undefined) updateData.monthPeriod = monthPeriod;
+    const updateData: Record<string, unknown> = {};
 
-  // ✅ Only update payment fields if provided
-  if (paymentMode !== undefined) updateData.paymentMode = paymentMode;
-  if (paymentType !== undefined) updateData.paymentType = paymentType;
-  if (paymentDate !== undefined) updateData.paymentDate = paymentDate;
-  if (paymentRemark !== undefined) updateData.paymentRemark = paymentRemark;
-  if (paymentProof !== undefined) updateData.paymentProof = paymentProof;
+    if (serviceProviderID !== undefined) updateData.serviceProviderID = serviceProviderID;
+    if (companyID !== undefined) updateData.companyID = companyID;
+    if (branchesID !== undefined) updateData.branchesID = branchesID;
+    if (employeeID !== undefined) updateData.employeeID = employeeID;
+    if (monthPeriod !== undefined) updateData.monthPeriod = monthPeriod;
 
-  // ✅ Apply newStatus if calculated
-  if (newStatus) updateData.status = newStatus;
+    if (paymentMode !== undefined) updateData.paymentMode = paymentMode;
+    if (paymentType !== undefined) updateData.paymentType = paymentType;
+    if (paymentDate !== undefined) updateData.paymentDate = paymentDate;
+    if (paymentRemark !== undefined) updateData.paymentRemark = paymentRemark;
+    if (paymentProof !== undefined) updateData.paymentProof = paymentProof;
 
-  return this.prisma.generateSalary.update({
-    where: { id },
-    data: updateData,
-    include: {
-      serviceProvider: true,
-      company: true,
-      branches: true,
-      manageEmployee: true,
-    },
-  });
-}
+    if (newStatus) updateData.status = newStatus;
+
+    const updated = await this.prisma.generateSalary.update({
+      where: { id },
+      data: updateData,
+      include: {
+        serviceProvider: true,
+        company: true,
+        branches: true,
+        manageEmployee: true,
+      },
+    });
+
+    if (existing?.status !== 'Paid' && updated.status === 'Paid') {
+      await this.notifyPayslipPaid(updated);
+    }
+
+    return updated;
+  }
 
   remove(id: number) {
     return this.prisma.generateSalary.delete({ where: { id } });

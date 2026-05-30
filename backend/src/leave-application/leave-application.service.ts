@@ -99,9 +99,132 @@ export class LeaveApplicationService {
 
 
 
+  private static readonly BALANCE_LEAVE_TYPES = [
+    'Sick',
+    'Casual',
+    'Privileged',
+    'CompOff',
+    'MtL',
+    'PtL',
+  ] as const;
+
+  private async countUsedLeaveDaysByType(
+    manageEmployeeID: number,
+    excludeApplicationId?: number,
+  ): Promise<Record<string, number>> {
+    const used: Record<string, number> = {};
+    const leaves = await this.prisma.leaveApplication.findMany({
+      where: {
+        manageEmployeeID,
+        status: { in: ['Approved', 'Accepted', 'Partly Approved'] },
+        ...(excludeApplicationId ? { id: { not: excludeApplicationId } } : {}),
+      },
+    });
+
+    for (const leave of leaves) {
+      const ds = leave.dayStatuses as { status?: string }[] | null;
+      if (Array.isArray(ds) && ds.length > 0) {
+        for (const day of ds) {
+          const t = day?.status;
+          if (t) used[t] = (used[t] || 0) + 1;
+        }
+        continue;
+      }
+      if (!leave.fromDate || !leave.toDate || !leave.appliedLeaveType) continue;
+      const from = new Date(String(leave.fromDate));
+      const to = new Date(String(leave.toDate));
+      if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime())) continue;
+      const days =
+        Math.ceil(Math.abs(to.getTime() - from.getTime()) / 86400000) + 1;
+      const t = leave.appliedLeaveType;
+      used[t] = (used[t] || 0) + days;
+    }
+    return used;
+  }
+
+  private async assertApprovalWithinLeaveBalance(
+    manageEmployeeID: number,
+    excludeApplicationId: number,
+    dayStatuses: { status?: string }[],
+  ) {
+    if (!dayStatuses?.length) return;
+
+    const employee = await this.prisma.manageEmployee.findUnique({
+      where: { id: manageEmployeeID },
+      include: {
+        leavePolicy: true,
+        empLeavePolicy: {
+          include: { leavePolicy: true },
+          orderBy: { id: 'desc' },
+          take: 1,
+        },
+      },
+    });
+    if (!employee) {
+      throw new BadRequestException('Employee not found');
+    }
+
+    const policy =
+      employee.leavePolicy ?? employee.empLeavePolicy?.[0]?.leavePolicy;
+
+    const totals: Record<string, number> = {
+      Sick: Number(policy?.sickLeaveCount) || 0,
+      Casual: Number(policy?.casualLeaveCount) || 0,
+      Privileged: 0,
+      CompOff: 0,
+      MtL: Number(policy?.maternityLeaveCount) || 182,
+      PtL: Number(policy?.paternityLeaveCount) || 15,
+    };
+
+    const used = await this.countUsedLeaveDaysByType(
+      manageEmployeeID,
+      excludeApplicationId,
+    );
+
+    const requested: Record<string, number> = {};
+    for (const day of dayStatuses) {
+      const t = day?.status;
+      if (!t || t === 'LoP' || t === 'ShortLeave') continue;
+      requested[t] = (requested[t] || 0) + 1;
+    }
+
+    for (const type of LeaveApplicationService.BALANCE_LEAVE_TYPES) {
+      const req = requested[type] || 0;
+      if (req === 0) continue;
+      const total = totals[type] ?? 0;
+      if (total <= 0) continue;
+      const usedCount = used[type] || 0;
+      const remaining = Math.max(total - usedCount, 0);
+      if (req > remaining) {
+        throw new BadRequestException(
+          `Cannot approve ${req} ${type} day(s): only ${remaining} day(s) remaining in balance.`,
+        );
+      }
+    }
+  }
+
   async update(id: number, updateLeaveApplicationDto: UpdateLeaveApplicationDto) {
     // Fetch the current leave record so we know the previous status
     const current = await this.prisma.leaveApplication.findUnique({ where: { id } });
+
+    const APPROVED_STATUSES = ['Approved', 'Accepted', 'Partly Approved'];
+    const nextStatus = updateLeaveApplicationDto.status ?? current?.status ?? '';
+    const ds = updateLeaveApplicationDto.dayStatuses as
+      | { status?: string }[]
+      | undefined;
+
+    if (
+      APPROVED_STATUSES.includes(nextStatus) &&
+      current?.manageEmployeeID &&
+      Array.isArray(ds) &&
+      ds.some((d) => d?.status)
+    ) {
+      await this.assertApprovalWithinLeaveBalance(
+        current.manageEmployeeID,
+        id,
+        ds,
+      );
+    }
 
     const updated = await this.prisma.leaveApplication.update({
       where: { id },
@@ -114,40 +237,78 @@ export class LeaveApplicationService {
       },
     });
 
-    const APPROVED_STATUSES = ['Approved', 'Accepted'];
     const isNowApproved = APPROVED_STATUSES.includes(updated.status ?? '');
     const wasNotApproved = !APPROVED_STATUSES.includes(current?.status ?? '');
 
-    // Deduct leave balance when status changes to Approved/Accepted for the first time
+    // Deduct leave balance when status changes to Approved/Partly Approved for the first time
     if (isNowApproved && wasNotApproved && updated.manageEmployeeID) {
       try {
-        let days = 0;
-        const ds = updated.dayStatuses as any[] | null;
-        if (Array.isArray(ds) && ds.length > 0) {
-          days = ds.length;
-        } else if (updated.fromDate && updated.toDate) {
-          const from = new Date(updated.fromDate as any);
-          const to = new Date(updated.toDate as any);
-          days = Math.ceil(Math.abs(to.getTime() - from.getTime()) / 86400000) + 1;
-        }
-        if (days > 0) {
-          await this.leaveBalanceService.deductLeave(
+        const ds = updated.dayStatuses as { status?: string }[] | null;
+        if (Array.isArray(ds) && ds.some((d) => d?.status)) {
+          await this.leaveBalanceService.deductFromDayStatuses(
             updated.manageEmployeeID,
-            updated.appliedLeaveType ?? '',
-            days,
+            ds,
           );
+        } else {
+          let days = 0;
+          if (updated.fromDate && updated.toDate) {
+            const from = new Date(updated.fromDate as any);
+            const to = new Date(updated.toDate as any);
+            days =
+              Math.ceil(Math.abs(to.getTime() - from.getTime()) / 86400000) + 1;
+          }
+          if (days > 0) {
+            await this.leaveBalanceService.deductLeave(
+              updated.manageEmployeeID,
+              updated.appliedLeaveType ?? '',
+              days,
+            );
+          }
         }
       } catch (_) { /* non-critical */ }
     }
 
-    // Send push notification when leave is approved or accepted
-    if (isNowApproved && updated.manageEmployeeID) {
-      this.pushService.sendToEmployee(
-        updated.manageEmployeeID,
-        'Leave Approved',
-        'Your leave application has been approved.',
-        { url: '/empLeaveApplication' },
-      ).catch(() => null);
+    const empId = updated.manageEmployeeID;
+    if (empId) {
+      const newStatus = updated.status ?? '';
+      const prevStatus = current?.status ?? '';
+      if (newStatus === 'Rejected' && prevStatus !== 'Rejected') {
+        this.pushService
+          .sendToEmployee(
+            empId,
+            'Leave Rejected',
+            'Your leave application has been rejected.',
+            { url: '/empLeaveApplication' },
+          )
+          .catch(() => null);
+      } else if (
+        newStatus === 'Partly Approved' &&
+        prevStatus !== 'Partly Approved'
+      ) {
+        const ds = (updated.dayStatuses as { status?: string }[]) || [];
+        const approved = ds.filter((d) => d?.status).length;
+        const total = ds.length;
+        this.pushService
+          .sendToEmployee(
+            empId,
+            'Leave Partly Approved',
+            `Your leave was partly approved: ${approved} of ${total} day(s) approved.`,
+            { url: '/empLeaveApplication' },
+          )
+          .catch(() => null);
+      } else if (
+        (newStatus === 'Approved' || newStatus === 'Accepted') &&
+        !['Approved', 'Accepted'].includes(prevStatus)
+      ) {
+        this.pushService
+          .sendToEmployee(
+            empId,
+            'Leave Approved',
+            'Your leave application has been approved.',
+            { url: '/empLeaveApplication' },
+          )
+          .catch(() => null);
+      }
     }
 
     return updated;

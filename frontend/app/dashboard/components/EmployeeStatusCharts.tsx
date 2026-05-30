@@ -12,34 +12,59 @@ import {
   Pie,
 } from "recharts";
 
+export type StatusBreakdownItem = {
+  name: string;
+  value: number;
+  fill: string;
+};
+
 interface EmployeeStatusChartsProps {
   total: number;
   present: number;
   absent: number;
+  statusBreakdown?: StatusBreakdownItem[];
 }
+
+const DEFAULT_COLORS: Record<string, string> = {
+  Present: "#22c55e",
+  "Late Mark": "#f59e0b",
+  "Half Day": "#a855f7",
+  Absent: "#fb7185",
+  "No checkout": "#6366f1",
+  Leave: "#ec4899",
+  "Week Off": "#94a3b8",
+  Holiday: "#0ea5e9",
+  OT: "#14b8a6",
+  Regularized: "#8b5cf6",
+};
 
 export default function EmployeeStatusCharts({
   total,
   present,
   absent,
+  statusBreakdown,
 }: EmployeeStatusChartsProps) {
+  const breakdown =
+    statusBreakdown && statusBreakdown.length > 0
+      ? statusBreakdown.filter((d) => d.value > 0)
+      : [
+          { name: "Present", value: present, fill: DEFAULT_COLORS.Present },
+          { name: "Absent", value: absent, fill: DEFAULT_COLORS.Absent },
+        ].filter((d) => d.value > 0);
+
   const barData = [
     { name: "All employees", value: total, fill: "#374151" },
-    { name: "Present", value: present, fill: "#22c55e" },
-    { name: "Absent", value: absent, fill: "#fb7185" },
+    ...breakdown.map((d) => ({
+      name: d.name,
+      value: d.value,
+      fill: d.fill || DEFAULT_COLORS[d.name] || "#6b7280",
+    })),
   ];
 
-  const rawMax = Math.max(total, present, absent, 1);
-  // Add 20% headroom so bars never fill the full width, giving a proportional feel
+  const rawMax = Math.max(...barData.map((d) => d.value), 1);
   const barAxisMax = Math.ceil(rawMax * 1.2) || 1;
 
-  const pieData =
-    total === 0
-      ? []
-      : [
-          { name: "Present", value: present },
-          { name: "Absent", value: Math.max(0, absent) },
-        ].filter((d) => d.value > 0);
+  const pieData = total === 0 ? [] : breakdown;
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
@@ -51,12 +76,7 @@ export default function EmployeeStatusCharts({
             margin={{ top: 8, right: 16, left: 8, bottom: 8 }}
             barCategoryGap="18%"
           >
-            <XAxis
-              type="number"
-              domain={[0, barAxisMax]}
-              hide
-              allowDataOverflow={false}
-            />
+            <XAxis type="number" domain={[0, barAxisMax]} hide allowDataOverflow={false} />
             <YAxis
               type="category"
               dataKey="name"
@@ -105,7 +125,9 @@ export default function EmployeeStatusCharts({
                   <Cell
                     key={i}
                     fill={
-                      entry.name === "Present" ? "#22c55e" : "#fb7185"
+                      entry.fill ||
+                      DEFAULT_COLORS[entry.name] ||
+                      "#6b7280"
                     }
                   />
                 ))}

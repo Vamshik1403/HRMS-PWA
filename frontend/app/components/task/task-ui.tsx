@@ -42,6 +42,15 @@ export const STATUS_META: Record<TaskStatus, {
     accent: "border-l-[#10b981]",
     columnBg: "bg-[#f9fefb]",
   },
+  Reopen: {
+    dot: "bg-[#8b5cf6]",
+    ring: "ring-[#8b5cf6]/20",
+    bg: "bg-[#f5f3ff]",
+    text: "text-[#6d28d9]",
+    border: "border-[#ede9fe]",
+    accent: "border-l-[#8b5cf6]",
+    columnBg: "bg-[#faf9ff]",
+  },
 };
 
 export const PRIORITY_META: Record<string, { dot: string; label: string; className: string }> = {

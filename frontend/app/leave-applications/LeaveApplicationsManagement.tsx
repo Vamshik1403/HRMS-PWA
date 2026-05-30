@@ -16,7 +16,8 @@ import {
 } from "../components/ui/table"
 import { Badge } from "../components/ui/badge"
 import { Icon } from "@iconify/react"
-import { Plus, Search, Edit, Trash2, Check, X } from "lucide-react"
+import { Plus, Search, Edit, Trash2, Check, X, Eye } from "lucide-react"
+import { formatDateShort, getDisplayLeaveStatus } from "../utils/leaveDisplay"
 import { useCurrentUser } from "../hooks/useCurrentUser"
 import { SearchSuggestInput } from "../components/SearchSuggestInput"
 import { toast } from "sonner";
@@ -39,7 +40,8 @@ interface LeaveApplication {
   fromDate: string
   toDate: string
   purpose?: string
-  status?: "Pending" | "Approved" | "Rejected" | "RevokePending" | "Revoked" | "Accepted"
+  status?: "Pending" | "Approved" | "Rejected" | "RevokePending" | "Revoked" | "Accepted" | "Partly Approved"
+  dayStatuses?: DayStatus[]
   createdAt: string
 }
 
@@ -69,11 +71,25 @@ interface LeaveBalance {
 // Backend URL
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "/backend"
 
+/** Set true to show leave-type hints and tenure/children warnings on approval drawer */
+const SHOW_LEAVE_APPROVAL_NOTICES = false
+
+const BALANCE_LIMITED_LEAVE_TYPES: Record<string, keyof LeaveBalance> = {
+  Sick: "sick",
+  Casual: "casual",
+  Privileged: "privileged",
+  CompOff: "compOff",
+  MtL: "maternity",
+  PtL: "paternity",
+}
+
 export function LeaveApplicationsManagement() {
   const [leaveApplications, setLeaveApplications] = useState<LeaveApplication[]>([])
   const [searchTerm, setSearchTerm] = useState("")
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editingApplication, setEditingApplication] = useState<LeaveApplication | null>(null)
+  const [viewingApplication, setViewingApplication] = useState<LeaveApplication | null>(null)
+  const [isViewDrawerOpen, setIsViewDrawerOpen] = useState(false)
   const [formData, setFormData] = useState({
     serviceProvider: "",
     companyName: "",
@@ -134,6 +150,11 @@ export function LeaveApplicationsManagement() {
     paternity: { used: 0, total: 0, remaining: 0 },
   })
   const [currentAvailableTypes, setCurrentAvailableTypes] = useState<string[]>(["LoP"])
+  const [managerLeaveBalanceBase, setManagerLeaveBalanceBase] = useState<LeaveBalance | null>(null)
+  const [rangeAssignFrom, setRangeAssignFrom] = useState("")
+  const [rangeAssignTo, setRangeAssignTo] = useState("")
+  const [rangeAssignType, setRangeAssignType] = useState<DayStatus["status"]>("")
+  const [rangeAssignDayType, setRangeAssignDayType] = useState<DayStatus["dayType"]>("")
 
   // Load user data based on role
   useEffect(() => {
@@ -430,31 +451,6 @@ export function LeaveApplicationsManagement() {
     };
   };
 
-  // Day status change handler
-  const handleDayStatusChange = (index: number, status: DayStatus["status"]) => {
-    console.log("Changing day", index, "to:", status);
-    
-    // Create a new array with the updated day status
-    const updatedDayStatuses = dayStatuses.map((day, i) => 
-      i === index ? { ...day, status } : { ...day }
-    );
-    
-    console.log("Updated dayStatuses:", updatedDayStatuses);
-    
-    // Update the state
-    setDayStatuses(updatedDayStatuses);
-    
-    // Update available types and balance
-    const updatedBalance = updateAvailableLeaveTypes(updatedDayStatuses);
-    
-    // Update pending count
-    const pendingCount = updatedDayStatuses.filter(day => day.status === "").length;
-    setPendingDaysCount(pendingCount);
-    
-    // Update balance for display
-    setManagerLeaveBalance(updatedBalance);
-  };
-
   // Manager approval modal opener
   const openManagerApprovalModal = async (application: LeaveApplication) => {
     setManagerApprovalApplication(application);
@@ -464,6 +460,7 @@ export function LeaveApplicationsManagement() {
       const result = await calculateLeaveBalance(application.manageEmployeeID);
       const { gender, numberOfChildren, joiningDate, ...balance } = result as any;
       setManagerLeaveBalance(balance);
+      setManagerLeaveBalanceBase(balance);
       setSelectedEmployeeGender(gender ?? null);
 
       // Tenure warning
@@ -517,9 +514,12 @@ export function LeaveApplicationsManagement() {
       currentDate.setDate(currentDate.getDate() + 1);
     }
     
-    console.log("Initialized dayStatuses:", days);
     setDayStatuses(days);
     setPendingDaysCount(days.length);
+    setRangeAssignFrom(application.fromDate.slice(0, 10));
+    setRangeAssignTo(application.toDate.slice(0, 10));
+    setRangeAssignType("");
+    setRangeAssignDayType("");
     setIsManagerApprovalDialogOpen(true);
   };
 
@@ -527,14 +527,30 @@ export function LeaveApplicationsManagement() {
     if (!managerApprovalApplication) return
 
     try {
-      if (pendingDaysCount > 0) {
-        toast.error("Please assign leave types for all days before approving.")
+      const base = managerLeaveBalanceBase ?? managerLeaveBalance
+      const { days: balancedDays, stripped } = enforceBalanceOnDayStatuses(dayStatuses, base)
+      if (stripped > 0) {
+        setDayStatuses(balancedDays)
+        syncPendingFromDays(balancedDays)
+        toast.error(
+          `${stripped} day(s) exceed available leave balance. Only days within balance can be approved.`,
+        )
         return
       }
 
+      const assignedDays = balancedDays.filter((day) => day.status);
+      if (assignedDays.length === 0) {
+        toast.error("Assign at least one day to a leave type, or reject the application.")
+        return
+      }
+
+      const unassignedCount = balancedDays.filter((day) => !day.status).length;
+      const finalStatus =
+        unassignedCount > 0 ? ("Partly Approved" as const) : ("Approved" as const);
+
       // Calculate the main leave type (most frequent type used)
       const leaveTypeCounts: Record<string, number> = {};
-      dayStatuses.forEach(day => {
+      balancedDays.forEach(day => {
         if (day.status && day.status !== "LoP" && day.status !== "ShortLeave") {
           leaveTypeCounts[day.status] = (leaveTypeCounts[day.status] || 0) + 1;
         }
@@ -550,17 +566,17 @@ export function LeaveApplicationsManagement() {
       });
 
       if (maxCount === 0) {
-        // Check if all are ShortLeave
-        const shortLeaveDays = dayStatuses.filter(day => day.status === "ShortLeave").length;
-        mainLeaveType = shortLeaveDays > 0 ? "ShortLeave" : "LoP";
+        const shortLeaveDays = balancedDays.filter(day => day.status === "ShortLeave").length;
+        const lopDays = balancedDays.filter(day => day.status === "LoP").length;
+        mainLeaveType = shortLeaveDays > 0 ? "ShortLeave" : lopDays > 0 ? "LoP" : "LoP";
       }
 
-      const countType = (t: string) => dayStatuses.filter(day => day.status === t).length;
+      const countType = (t: string) => balancedDays.filter(day => day.status === t).length;
 
       const updateData = {
-        status: "Approved" as const,
+        status: finalStatus,
         appliedLeaveType: mainLeaveType,
-        dayStatuses: dayStatuses,
+        dayStatuses: balancedDays,
         remainingSickLeave: Math.max(managerLeaveBalance.sick.total - (managerLeaveBalance.sick.used + countType("Sick")), 0),
         remainingCasualLeave: Math.max(managerLeaveBalance.casual.total - (managerLeaveBalance.casual.used + countType("Casual")), 0),
       };
@@ -574,13 +590,24 @@ export function LeaveApplicationsManagement() {
       })
 
       if (!res.ok) {
-        const errorText = await res.text();
-        throw new Error(`Failed to approve leave application: ${res.status} - ${errorText}`)
+        let message = `Failed to approve leave application (${res.status})`;
+        try {
+          const errJson = await res.json();
+          message = errJson?.message || message;
+        } catch {
+          const errorText = await res.text();
+          if (errorText) message = errorText;
+        }
+        throw new Error(message);
       }
 
       await loadLeaveApplications()
       setIsManagerApprovalDialogOpen(false)
-      toast.success("Leave application approved successfully.")
+      toast.success(
+        finalStatus === "Partly Approved"
+          ? `Leave partly approved (${assignedDays.length} of ${balancedDays.length} day(s)).`
+          : "Leave application approved successfully.",
+      )
     } catch (error) {
       console.error("Error approving leave application:", error)
       toast.error("Error approving leave application. Please try again.")
@@ -1027,7 +1054,7 @@ export function LeaveApplicationsManagement() {
           fromDate: application.fromDate ? new Date(application.fromDate).toISOString().split("T")[0] : "",
           toDate: application.toDate ? new Date(application.toDate).toISOString().split("T")[0] : "",
           purpose: application.purpose,
-          status: (application.status || "Pending") as "Pending" | "Approved" | "Rejected" | "Accepted" | "RevokePending" | "Revoked",
+          status: (application.status || "Pending") as LeaveApplication["status"],
           createdAt: application.createdAt ? new Date(application.createdAt).toISOString().split("T")[0] : new Date().toISOString().split("T")[0],
           dayStatuses: application.dayStatuses || []
         };
@@ -1289,6 +1316,229 @@ export function LeaveApplicationsManagement() {
     return diffDays
   }
 
+  const toDateOnly = (iso: string) => iso.slice(0, 10)
+
+  const parseDateOnly = (iso: string) => {
+    const [y, m, d] = toDateOnly(iso).split("-").map(Number)
+    return new Date(y, m - 1, d)
+  }
+
+  const syncPendingFromDays = (days: DayStatus[]) => {
+    setPendingDaysCount(days.filter((d) => !d.status).length)
+    setManagerLeaveBalance(updateAvailableLeaveTypes(days))
+  }
+
+  const isDateInRange = (date: string, rangeFrom: string, rangeTo: string) => {
+    const d = parseDateOnly(date)
+    return d >= parseDateOnly(rangeFrom) && d <= parseDateOnly(rangeTo)
+  }
+
+  const slotsAvailableForLeaveTypeAfterClearingRange = (
+    days: DayStatus[],
+    rangeFrom: string,
+    rangeTo: string,
+    status: DayStatus["status"],
+    baseBalance: LeaveBalance,
+  ): number => {
+    const key = status ? BALANCE_LIMITED_LEAVE_TYPES[status] : undefined
+    if (!key) return Number.POSITIVE_INFINITY
+    const outsideCount = days.filter(
+      (d) => d.status === status && !isDateInRange(d.date, rangeFrom, rangeTo),
+    ).length
+    const ob = baseBalance[key]
+    return Math.max(ob.total - ob.used - outsideCount, 0)
+  }
+
+  const applyLeaveTypeToRange = (
+    days: DayStatus[],
+    rangeFrom: string,
+    rangeTo: string,
+    status: DayStatus["status"],
+    baseBalance: LeaveBalance,
+    dayType?: DayStatus["dayType"],
+  ): { days: DayStatus[]; assigned: number; skipped: number } => {
+    if (!status) return { days, assigned: 0, skipped: 0 }
+
+    const balanceKey = BALANCE_LIMITED_LEAVE_TYPES[status]
+    const inRangeSorted = days
+      .filter((d) => isDateInRange(d.date, rangeFrom, rangeTo))
+      .sort((a, b) => a.date.localeCompare(b.date))
+
+    let slots = Number.POSITIVE_INFINITY
+    if (balanceKey) {
+      slots = slotsAvailableForLeaveTypeAfterClearingRange(
+        days,
+        rangeFrom,
+        rangeTo,
+        status,
+        baseBalance,
+      )
+    }
+
+    const assignDates = new Set<string>()
+    let skipped = 0
+    inRangeSorted.forEach((day, index) => {
+      if (!balanceKey || index < slots) {
+        assignDates.add(day.date)
+      } else {
+        skipped += 1
+      }
+    })
+
+    const updated = days.map((day) => {
+      if (!isDateInRange(day.date, rangeFrom, rangeTo)) return day
+      if (assignDates.has(day.date)) {
+        return {
+          ...day,
+          status,
+          dayType: status === "ShortLeave" ? dayType || day.dayType : undefined,
+        }
+      }
+      return { ...day, status: "" as const, dayType: undefined }
+    })
+
+    return { days: updated, assigned: assignDates.size, skipped }
+  }
+
+  const enforceBalanceOnDayStatuses = (
+    days: DayStatus[],
+    baseBalance: LeaveBalance,
+  ): { days: DayStatus[]; stripped: number } => {
+    let result = days.map((d) => ({ ...d }))
+    let stripped = 0
+
+    for (const type of Object.keys(BALANCE_LIMITED_LEAVE_TYPES)) {
+      const key = BALANCE_LIMITED_LEAVE_TYPES[type]
+      const limit = Math.max(baseBalance[key].total - baseBalance[key].used, 0)
+      const matching = result
+        .map((d, i) => ({ i, date: d.date, status: d.status }))
+        .filter((x) => x.status === type)
+        .sort((a, b) => a.date.localeCompare(b.date))
+
+      for (let j = limit; j < matching.length; j++) {
+        const idx = matching[j].i
+        result[idx] = { ...result[idx], status: "" as const, dayType: undefined }
+        stripped += 1
+      }
+    }
+
+    return { days: result, stripped }
+  }
+
+  const clearLeaveTypeInRange = (days: DayStatus[], rangeFrom: string, rangeTo: string): DayStatus[] => {
+    const from = parseDateOnly(rangeFrom)
+    const to = parseDateOnly(rangeTo)
+    return days.map((day) => {
+      const d = parseDateOnly(day.date)
+      if (d >= from && d <= to) {
+        return { ...day, status: "" as const, dayType: undefined }
+      }
+      return day
+    })
+  }
+
+  const groupAssignedRanges = (days: DayStatus[]) => {
+    const assigned = days.filter((d) => d.status)
+    if (assigned.length === 0) return [] as { from: string; to: string; status: string; dayType?: string; count: number }[]
+
+    const segments: { from: string; to: string; status: string; dayType?: string; count: number }[] = []
+    let cur = {
+      from: assigned[0].date,
+      to: assigned[0].date,
+      status: assigned[0].status,
+      dayType: assigned[0].dayType,
+      count: 1,
+    }
+
+    for (let i = 1; i < assigned.length; i++) {
+      const d = assigned[i]
+      const prev = parseDateOnly(cur.to)
+      const next = parseDateOnly(d.date)
+      const adjacent = next.getTime() - prev.getTime() === 86400000
+      const same =
+        d.status === cur.status &&
+        (d.status !== "ShortLeave" || d.dayType === cur.dayType)
+
+      if (same && adjacent) {
+        cur.to = d.date
+        cur.count += 1
+      } else {
+        segments.push({ ...cur, status: cur.status! })
+        cur = { from: d.date, to: d.date, status: d.status, dayType: d.dayType, count: 1 }
+      }
+    }
+    segments.push({ ...cur, status: cur.status! })
+    return segments
+  }
+
+  const handleApplyRangeAssignment = () => {
+    if (!managerApprovalApplication) return
+    if (!rangeAssignType) {
+      toast.error("Select a leave type for this date range.")
+      return
+    }
+    if (!rangeAssignFrom || !rangeAssignTo) {
+      toast.error("Select from and to dates.")
+      return
+    }
+    const from = parseDateOnly(rangeAssignFrom)
+    const to = parseDateOnly(rangeAssignTo)
+    if (from > to) {
+      toast.error("From date must be on or before to date.")
+      return
+    }
+    const appFrom = parseDateOnly(managerApprovalApplication.fromDate)
+    const appTo = parseDateOnly(managerApprovalApplication.toDate)
+    if (from < appFrom || to > appTo) {
+      toast.error("Date range must be within the requested leave period.")
+      return
+    }
+    if (rangeAssignType === "ShortLeave" && !rangeAssignDayType) {
+      toast.error("Select how short leave should be marked.")
+      return
+    }
+
+    const base = managerLeaveBalanceBase ?? managerLeaveBalance
+    const { days: updated, assigned, skipped } = applyLeaveTypeToRange(
+      dayStatuses,
+      rangeAssignFrom,
+      rangeAssignTo,
+      rangeAssignType,
+      base,
+      rangeAssignDayType || undefined,
+    )
+    setDayStatuses(updated)
+    syncPendingFromDays(updated)
+    if (assigned === 0) {
+      toast.error(`No days assigned. ${leaveTypeLabel(rangeAssignType)} balance is exhausted.`)
+      return
+    }
+    if (skipped > 0) {
+      toast.warning(
+        `Assigned ${leaveTypeLabel(rangeAssignType)} to ${assigned} day(s) only (${skipped} day(s) left unassigned — insufficient balance).`,
+      )
+    } else {
+      toast.success(`Assigned ${leaveTypeLabel(rangeAssignType)} to ${assigned} day(s).`)
+    }
+  }
+
+  const handleClearRangeAssignment = () => {
+    if (!rangeAssignFrom || !rangeAssignTo) {
+      toast.error("Select from and to dates to clear.")
+      return
+    }
+    const from = parseDateOnly(rangeAssignFrom)
+    const to = parseDateOnly(rangeAssignTo)
+    if (from > to) {
+      toast.error("From date must be on or before to date.")
+      return
+    }
+    const updated = clearLeaveTypeInRange(dayStatuses, rangeAssignFrom, rangeAssignTo)
+    setDayStatuses(updated)
+    syncPendingFromDays(updated)
+    toast.success("Cleared assignments for selected dates.")
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     
@@ -1382,6 +1632,11 @@ export function LeaveApplicationsManagement() {
       paternity: { used: 0, total: 0, remaining: 0 },
     })
     setIsEmployeeSelected(isNormalUser) // For normal users, employee is pre-selected
+  }
+
+  const openViewModal = (application: LeaveApplication) => {
+    setViewingApplication(application)
+    setIsViewDrawerOpen(true)
   }
 
   const handleEdit = (application: LeaveApplication) => {
@@ -1726,7 +1981,64 @@ export function LeaveApplicationsManagement() {
       </FormDrawer>
 
       {/* Manager Approval Modal */}
-      <FormDrawer open={isManagerApprovalDialogOpen} onOpenChange={setIsManagerApprovalDialogOpen} title={"Manage Leave Approval"} description={`Assign leave types for each day. {pendingDaysCount} day(s) pending assignment.`}>
+      <FormDrawer open={isViewDrawerOpen} onOpenChange={setIsViewDrawerOpen} title="View Leave Application" description="Leave application details (read-only).">
+        {viewingApplication && (
+          <div className="space-y-4 mt-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <Label>Employee</Label>
+                <div className="border rounded-md px-3 py-2 bg-gray-50 text-gray-700">{viewingApplication.employeeName}</div>
+              </div>
+              <div>
+                <Label>Branch</Label>
+                <div className="border rounded-md px-3 py-2 bg-gray-50 text-gray-700">{viewingApplication.branchName || "—"}</div>
+              </div>
+              <div>
+                <Label>From Date</Label>
+                <div className="border rounded-md px-3 py-2 bg-gray-50 text-gray-700">{viewingApplication.fromDate}</div>
+              </div>
+              <div>
+                <Label>To Date</Label>
+                <div className="border rounded-md px-3 py-2 bg-gray-50 text-gray-700">{viewingApplication.toDate}</div>
+              </div>
+              <div>
+                <Label>No. of Days</Label>
+                <div className="border rounded-md px-3 py-2 bg-gray-50 text-gray-700">
+                  {calculateDays(viewingApplication.fromDate, viewingApplication.toDate)}
+                </div>
+              </div>
+              <div>
+                <Label>Status</Label>
+                <div className="border rounded-md px-3 py-2 bg-gray-50 text-gray-700">
+                  {getDisplayLeaveStatus(viewingApplication.status, viewingApplication.dayStatuses)}
+                </div>
+              </div>
+            </div>
+            <div>
+              <Label>Purpose</Label>
+              <div className="border rounded-md px-3 py-2 bg-gray-50 text-gray-700 min-h-[60px]">
+                {viewingApplication.purpose || "—"}
+              </div>
+            </div>
+            {Array.isArray(viewingApplication.dayStatuses) && viewingApplication.dayStatuses.length > 0 && (
+              <div className="space-y-2">
+                <Label>Day-wise assignment</Label>
+                {viewingApplication.dayStatuses.map((day, idx) => (
+                  <div key={idx} className="flex justify-between text-sm border rounded px-3 py-2">
+                    <span>{new Date(day.date).toLocaleDateString()}</span>
+                    <span className="font-medium">{day.status ? leaveTypeLabel(day.status) : "Not approved"}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div className="flex justify-end pt-4">
+              <Button variant="outline" onClick={() => setIsViewDrawerOpen(false)}>Close</Button>
+            </div>
+          </div>
+        )}
+      </FormDrawer>
+
+      <FormDrawer open={isManagerApprovalDialogOpen} onOpenChange={setIsManagerApprovalDialogOpen} title={"Manage Leave Approval"} description={`Assign leave types by date range (from–to). Unassigned days will not be approved. ${pendingDaysCount} day(s) not yet assigned.`}>
           <div className="space-y-4 mt-4">
             {managerApprovalApplication && (
               <>
@@ -1765,7 +2077,12 @@ export function LeaveApplicationsManagement() {
                         {isEligible ? (
                           <>
                             <div className={`text-base font-bold ${color}`}>
-                              {managerLeaveBalance[key].used + dayStatuses.filter(day => day.status === statusKey).length}/{managerLeaveBalance[key].total}
+                              {Math.min(
+                                managerLeaveBalance[key].used +
+                                  dayStatuses.filter((day) => day.status === statusKey).length,
+                                managerLeaveBalance[key].total,
+                              )}
+                              /{managerLeaveBalance[key].total}
                             </div>
                             <div className="text-xs text-gray-500">
                               {managerLeaveBalance[key].remaining} remaining
@@ -1779,97 +2096,168 @@ export function LeaveApplicationsManagement() {
                   })}
                 </div>
 
-                {/* Available Leave Types Info */}
-                <div className="p-3 bg-yellow-50 rounded-md">
-                  <p className="text-sm text-yellow-700">
-                    <strong>Available Leave Types:</strong> {currentAvailableTypes.map(t => leaveTypeLabel(t)).join(", ")}
-                  </p>
-                </div>
-
-                {/* Tenure Warning */}
-                {tenureWarning && (
-                  <div className="p-3 bg-orange-50 rounded-md border border-orange-200">
-                    <p className="text-sm text-orange-700">⚠️ {tenureWarning}</p>
-                  </div>
-                )}
-
-                {/* Children Count Warning */}
-                {childrenCountWarning && (
-                  <div className="p-3 bg-yellow-50 rounded-md border border-yellow-200">
-                    <p className="text-sm text-yellow-700">⚠️ {childrenCountWarning}</p>
-                  </div>
+                {SHOW_LEAVE_APPROVAL_NOTICES && (
+                  <>
+                    <div className="p-3 bg-yellow-50 rounded-md">
+                      <p className="text-sm text-yellow-700">
+                        <strong>Available Leave Types:</strong>{" "}
+                        {currentAvailableTypes.map((t) => leaveTypeLabel(t)).join(", ")}
+                      </p>
+                      <p className="text-sm text-yellow-700 mt-2">
+                        Pick a <strong>from</strong> and <strong>to</strong> date, choose a leave type, then click Apply.
+                        Unassigned days are not approved. Use <strong>LoP</strong> when balance is zero.
+                      </p>
+                    </div>
+                    {tenureWarning && (
+                      <div className="p-3 bg-orange-50 rounded-md border border-orange-200">
+                        <p className="text-sm text-orange-700">⚠️ {tenureWarning}</p>
+                      </div>
+                    )}
+                    {childrenCountWarning && (
+                      <div className="p-3 bg-yellow-50 rounded-md border border-yellow-200">
+                        <p className="text-sm text-yellow-700">⚠️ {childrenCountWarning}</p>
+                      </div>
+                    )}
+                  </>
                 )}
               </>
             )}
 
-            <div className="space-y-3">
-              <Label>Assign Leave Types for Each Day</Label>
-              {dayStatuses.map((day, index) => {
-                // Calculate if a type should be available for this specific day
-                const getAvailableTypesForDay = () => {
-                  const types: string[] = [];
-                  
-                  if (managerLeaveBalance.sick.remaining > 0 || day.status === "Sick") types.push("Sick");
-                  if (managerLeaveBalance.casual.remaining > 0 || day.status === "Casual") types.push("Casual");
-                  if (managerLeaveBalance.privileged.remaining > 0 || day.status === "Privileged") types.push("Privileged");
-                  types.push("ShortLeave");
-                  if (managerLeaveBalance.compOff.remaining > 0 || day.status === "CompOff") types.push("CompOff");
-                  types.push("LoP");
-                  if ((managerLeaveBalance.maternity.remaining > 0 || day.status === "MtL") && (selectedEmployeeGender === "Female" || selectedEmployeeGender === "Others")) types.push("MtL");
-                  if ((managerLeaveBalance.paternity.remaining > 0 || day.status === "PtL") && (selectedEmployeeGender === "Male" || selectedEmployeeGender === "Others")) types.push("PtL");
-                  
-                  return types;
-                };
-
-                const availableTypesForThisDay = getAvailableTypesForDay();
-                const showMtLDisabled = !availableTypesForThisDay.includes("MtL") && selectedEmployeeGender !== null && selectedEmployeeGender !== "Female" && selectedEmployeeGender !== "Others";
-                const showPtLDisabled = !availableTypesForThisDay.includes("PtL") && selectedEmployeeGender !== null && selectedEmployeeGender !== "Male" && selectedEmployeeGender !== "Others";
-                                          
-                return (
-                  <div key={index} className="flex items-center gap-4 p-3 border rounded-md">
-                    <div className="w-32 flex-shrink-0">
-                      <Label>Date</Label>
-                      <div className="text-sm font-medium text-gray-700">
-                        {new Date(day.date).toLocaleDateString()}
-                      </div>
-                    </div>
-                    <div className="flex-1">
-                      <Label>Leave Type</Label>
-                      <select
-                        value={day.status}
-                        onChange={(e) => handleDayStatusChange(index, e.target.value as DayStatus["status"])}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-sm border-[#d0d0d0] focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-900/15 focus-visible:border-[#b0b0b0]"
-                      >
-                        <option value="">Select Type</option>
-                        {availableTypesForThisDay.map((type) => (
-                          <option key={type} value={type}>{leaveTypeLabel(type)}</option>
-                        ))}
-                        {showMtLDisabled && <option value="" disabled>Maternity (MtL) — Not eligible (Male)</option>}
-                        {showPtLDisabled && <option value="" disabled>Paternity (PtL) — Not eligible (Female)</option>}
-                      </select>
-                      {day.status === "ShortLeave" && (
-                        <select
-                          value={day.dayType || ""}
-                          onChange={(e) => {
-                            const updated = dayStatuses.map((d, i) => 
-                              i === index ? { ...d, dayType: e.target.value as DayStatus["dayType"] } : d
-                            );
-                            setDayStatuses(updated);
-                          }}
-                          className="w-full mt-2 px-3 py-2 border border-gray-300 rounded-sm border-[#d0d0d0] focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-900/15 focus-visible:border-[#b0b0b0]"
-                        >
-                          <option value="">Mark As...</option>
-                          <option value="Present">Present</option>
-                          <option value="LateMark">Late Mark</option>
-                          <option value="Halfday">Half Day</option>
-                          <option value="Absent">Absent</option>
-                        </select>
-                      )}
-                    </div>
+            {managerApprovalApplication && (
+              <div className="space-y-4">
+                <Label className="text-base font-semibold">Assign leave by date range</Label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 p-4 border rounded-lg bg-gray-50">
+                  <div className="space-y-2">
+                    <Label>From Date</Label>
+                    <Input
+                      type="date"
+                      min={managerApprovalApplication.fromDate.slice(0, 10)}
+                      max={managerApprovalApplication.toDate.slice(0, 10)}
+                      value={rangeAssignFrom}
+                      onChange={(e) => setRangeAssignFrom(e.target.value)}
+                    />
                   </div>
-                );
-              })}
-            </div>
+                  <div className="space-y-2">
+                    <Label>To Date</Label>
+                    <Input
+                      type="date"
+                      min={managerApprovalApplication.fromDate.slice(0, 10)}
+                      max={managerApprovalApplication.toDate.slice(0, 10)}
+                      value={rangeAssignTo}
+                      onChange={(e) => setRangeAssignTo(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Leave Type</Label>
+                    <select
+                      value={rangeAssignType}
+                      onChange={(e) => {
+                        const v = e.target.value as DayStatus["status"]
+                        setRangeAssignType(v)
+                        if (v !== "ShortLeave") setRangeAssignDayType("")
+                      }}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-sm"
+                    >
+                      <option value="">Select type</option>
+                      {currentAvailableTypes.map((type) => (
+                        <option key={type} value={type}>{leaveTypeLabel(type)}</option>
+                      ))}
+                    </select>
+                  </div>
+                  {rangeAssignType === "ShortLeave" && (
+                    <div className="space-y-2">
+                      <Label>Mark as</Label>
+                      <select
+                        value={rangeAssignDayType}
+                        onChange={(e) => setRangeAssignDayType(e.target.value as DayStatus["dayType"])}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-sm"
+                      >
+                        <option value="">Select…</option>
+                        <option value="Present">Present</option>
+                        <option value="LateMark">Late Mark</option>
+                        <option value="Halfday">Half Day</option>
+                        <option value="Absent">Absent</option>
+                      </select>
+                    </div>
+                  )}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Button type="button" size="sm" onClick={handleApplyRangeAssignment} disabled={!rangeAssignType}>
+                    Apply to range
+                  </Button>
+                  <Button type="button" size="sm" variant="outline" onClick={handleClearRangeAssignment}>
+                    Clear range
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      if (!managerApprovalApplication || !rangeAssignType) {
+                        toast.error("Select a leave type first.")
+                        return
+                      }
+                      const baseBal = managerLeaveBalanceBase ?? managerLeaveBalance
+                      const from = managerApprovalApplication.fromDate.slice(0, 10)
+                      const to = managerApprovalApplication.toDate.slice(0, 10)
+                      const { days: updated, assigned, skipped } = applyLeaveTypeToRange(
+                        dayStatuses,
+                        from,
+                        to,
+                        rangeAssignType,
+                        baseBal,
+                        rangeAssignDayType || undefined,
+                      )
+                      setDayStatuses(updated)
+                      syncPendingFromDays(updated)
+                      setRangeAssignFrom(from)
+                      setRangeAssignTo(to)
+                      if (skipped > 0) {
+                        toast.warning(
+                          `Applied ${leaveTypeLabel(rangeAssignType)} to ${assigned} of ${calculateDays(from, to)} day(s) — insufficient balance for the rest.`,
+                        )
+                      } else {
+                        toast.success("Applied to full requested period.")
+                      }
+                    }}
+                  >
+                    Apply to full period
+                  </Button>
+                </div>
+
+                <div className="border border-gray-200 rounded-lg overflow-hidden">
+                  <div className="bg-gray-50 px-3 py-2 text-xs font-semibold text-gray-600 uppercase tracking-wide flex justify-between">
+                    <span>Assigned ranges</span>
+                    <span>
+                      {dayStatuses.filter((d) => d.status).length} / {dayStatuses.length} day(s) assigned
+                    </span>
+                  </div>
+                  {groupAssignedRanges(dayStatuses).length === 0 ? (
+                    <div className="text-center py-4 text-gray-400 text-sm">No leave types assigned yet</div>
+                  ) : (
+                    groupAssignedRanges(dayStatuses).map((seg, i) => (
+                      <div
+                        key={`${seg.from}-${seg.to}-${seg.status}-${i}`}
+                        className={`flex items-center justify-between px-3 py-2 text-sm ${i > 0 ? "border-t border-gray-100" : ""}`}
+                      >
+                        <span>
+                          {formatDateShort(seg.from)} – {formatDateShort(seg.to)}{" "}
+                          <span className="font-medium text-gray-900">
+                            ({seg.count} day{seg.count !== 1 ? "s" : ""}) — {leaveTypeLabel(seg.status)}
+                            {seg.status === "ShortLeave" && seg.dayType ? ` (${seg.dayType})` : ""}
+                          </span>
+                        </span>
+                      </div>
+                    ))
+                  )}
+                  {pendingDaysCount > 0 && (
+                    <div className="px-3 py-2 text-sm text-amber-700 bg-amber-50 border-t border-amber-100">
+                      {pendingDaysCount} day(s) in the request period will not be approved.
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
           <div className="flex justify-end gap-3 pt-4">
             <Button variant="outline" onClick={() => setIsManagerApprovalDialogOpen(false)}>
@@ -1878,9 +2266,9 @@ export function LeaveApplicationsManagement() {
             <Button 
               onClick={handleManagerApprovalSubmit} 
               className="bg-green-600 hover:bg-green-700 text-white"
-              disabled={pendingDaysCount > 0}
+              disabled={dayStatuses.every((d) => !d.status)}
             >
-              Approve Leave ({pendingDaysCount} pending)
+              Submit approval{pendingDaysCount > 0 ? ` (${pendingDaysCount} day(s) not assigned)` : ""}
             </Button>
           </div>
         
@@ -1964,7 +2352,9 @@ export function LeaveApplicationsManagement() {
                               : "secondary"
                           }
                         >
-                          {application.status === "RevokePending" ? "Revoke Pending" : application.status}
+                          {application.status === "RevokePending"
+                            ? "Revoke Pending"
+                            : getDisplayLeaveStatus(application.status, (application as any).dayStatuses)}
                         </Badge>
                       </TableCell>
 
@@ -1975,14 +2365,24 @@ export function LeaveApplicationsManagement() {
                           {canManage ? (
                             <>
                               {/* Pending approval flow */}
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => openViewModal(application)}
+                                className="h-7 w-7 p-0 text-gray-600 hover:text-gray-800 hover:bg-gray-50"
+                                title="View"
+                              >
+                                <Eye className="w-3 h-3" />
+                              </Button>
+
                               {application.status === "Pending" && (
                                 <>
                                   <Button
                                     variant="ghost"
                                     size="sm"
-                                    onClick={() => handleAccept(application.id, false)}
+                                    onClick={() => openManagerApprovalModal(application)}
                                     className="h-7 w-7 p-0 text-green-600 hover:text-green-700 hover:bg-green-50"
-                                    title="Accept"
+                                    title="Approve leave (assign days)"
                                   >
                                     <Check className="w-3 h-3" />
                                   </Button>
@@ -2035,16 +2435,7 @@ export function LeaveApplicationsManagement() {
                                 </Button>
                               )}
 
-                              {/* Edit/Delete always available for managers */}
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleEdit(application)}
-                                className="h-7 w-7 p-0"
-                                title="Edit"
-                              >
-                                <Edit className="w-3 h-3" />
-                              </Button>
+                              {/* Delete for managers */}
                               <Button
                                 variant="ghost"
                                 size="sm"

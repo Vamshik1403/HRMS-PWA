@@ -153,6 +153,10 @@ interface ManageEmpRead {
   empType?: string | null;
   pfMemberStatus?: string | null;
   pfNumber?: string | null;
+  aadharNo?: string | null;
+  panNo?: string | null;
+  uanNo?: string | null;
+  esiNo?: string | null;
 
   // Basic position fields (now stored directly on ManageEmployee)
   departmentNameID?: ID | null;
@@ -742,6 +746,10 @@ export function ManageEmployeesManagement() {
     empType: "",
     pfMemberStatus: "",
     pfNumber: "",
+    aadharNo: "",
+    panNo: "",
+    uanNo: "",
+    esiNo: "",
 
     monthlyPGAutocomplete: "",
     hourlyPGAutocomplete: "",
@@ -1349,10 +1357,16 @@ const runFetchCombinedDev = (q: string) => {
       setLpLoading(true);
       try {
         let all = await fetchJSONSafe<LP[]>(API.leavePolicies, ctrl.signal);
+        const ctx = getSidebarContext();
+        const companyId = formData.companyID ?? ctx?.companyID ?? user?.companyID;
+        const branchId = formData.branchesID ?? user?.branchesID;
         if (user?.role === "SERVICE_PROVIDER" && currentUserMapping) {
           all = filterForManager(all);
-        } else if (formData.companyID) {
-          all = all.filter(x => x.companyID === formData.companyID);
+        } else if (companyId) {
+          all = all.filter((x) => x.companyID === companyId);
+        }
+        if (branchId) {
+          all = all.filter((x) => !x.branchesID || x.branchesID === branchId);
         }
         const filtered = (all || []).filter(l => (l.leavePolicyName ?? "").toLowerCase().includes(q.toLowerCase()));
         setLpList(filtered.slice(0, 20));
@@ -1796,6 +1810,10 @@ const addCombinedDevMap = () => {
       empType: "",
       pfMemberStatus: "",
       pfNumber: "",
+      aadharNo: "",
+      panNo: "",
+      uanNo: "",
+      esiNo: "",
 
       monthlyPGAutocomplete: "",
       hourlyPGAutocomplete: "",
@@ -2350,6 +2368,10 @@ const addCombinedDevMap = () => {
 
         pfMemberStatus: formData.pfMemberStatus || undefined,
         pfNumber: formData.pfNumber || undefined,
+        aadharNo: formData.aadharNo || undefined,
+        panNo: formData.panNo || undefined,
+        uanNo: formData.uanNo || undefined,
+        esiNo: formData.esiNo || undefined,
 
         departmentNameID: formData.departmentNameID ?? undefined,
         designationID: formData.empDesignationForm.length > 0
@@ -2613,6 +2635,10 @@ const addCombinedDevMap = () => {
       empType: freshData.empType ?? "",
       pfMemberStatus: freshData.pfMemberStatus ?? "",
       pfNumber: freshData.pfNumber ?? "",
+      aadharNo: freshData.aadharNo ?? "",
+      panNo: freshData.panNo ?? "",
+      uanNo: freshData.uanNo ?? "",
+      esiNo: freshData.esiNo ?? "",
       monthlyPGAutocomplete: "",
       hourlyPGAutocomplete: "",
       shiftEligibility: freshData.shiftEligibility ?? "",
@@ -3059,6 +3085,28 @@ const addCombinedDevMap = () => {
                 </div>
               )}
 
+              {(isCompanyAdmin || isBranchAdmin || isSuperAdmin) && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Date of Birth</Label>
+                    <Input
+                      type="date"
+                      value={formData.dateOfBirth}
+                      onChange={(e) => setFormData((p) => ({ ...p, dateOfBirth: e.target.value }))}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Personal Email</Label>
+                    <Input
+                      type="email"
+                      value={formData.personalEmail}
+                      onChange={(e) => setFormData((p) => ({ ...p, personalEmail: e.target.value }))}
+                      placeholder="employee@example.com"
+                    />
+                  </div>
+                </div>
+              )}
+
               {/* Branch - Search & Add with History */}
               <div className="relative my-6">
                 <div className="absolute inset-0 flex items-center"><div className="w-full border-t-2 border-blue-200"></div></div>
@@ -3368,9 +3416,9 @@ const addCombinedDevMap = () => {
                 )}
               </div>
 
-              {/* Codes / Date — hidden for COMPANY_ADMIN and BRANCH_ADMIN (they see joining date/photo at top) */}
-              {!isAdmin && !isCompanyAdmin && !isBranchAdmin && (<><div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                {!isSuperAdmin && (
+              {/* Employment, contact, personal, education, bank — hidden for pure ADMIN only */}
+              {!isAdmin && (<><div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                {!isSuperAdmin && !isCompanyAdmin && !isBranchAdmin && (
                   <div className="space-y-2">
                     <Label>Joining Date <span className="text-red-500">*</span></Label>
                     <Input
@@ -3659,75 +3707,6 @@ const addCombinedDevMap = () => {
                 </div>
               </div>
 
-              {/* Leave Policy - Search & Add with History */}
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-lg font-semibold">Leave Policy</h3>
-                  {canManage && <Button type="button" variant="outline" size="sm" onClick={() => window.open('/leave-policy', '_blank')}><Plus className="w-4 h-4 mr-1" /> Manage Policies</Button>}
-                </div>
-                <div className="flex items-end gap-2">
-                  <div ref={lpRef} className="flex-1 space-y-2 relative">
-                    <Label>Leave Policy</Label>
-                    <Input
-                      value={stagingLP.label}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        setStagingLP(p => ({ ...p, label: val, leavePolicyID: null }));
-                        runFetchLP(val);
-                      }}
-                      onFocus={(e) => {
-                        if (e.target.value.length >= MIN_CHARS) runFetchLP(e.target.value);
-                      }}
-                      placeholder="Search leave policy…"
-                      autoComplete="off"
-                    />
-                    {lpList.length > 0 && (
-                      <div className="absolute z-10 bg-white border rounded w-full shadow max-h-48 overflow-y-auto">
-                        {lpLoading && <div className="px-3 py-2 text-sm text-gray-500">Loading…</div>}
-                        {lpList.map((l) => (
-                          <div key={l.id} className="px-3 py-2 hover:bg-gray-100 cursor-pointer" onMouseDown={(e) => e.preventDefault()} onClick={() => {
-                            setStagingLP(p => ({ ...p, leavePolicyID: l.id, label: l.leavePolicyName ?? "" }));
-                            setLpList([]);
-                          }}>{l.leavePolicyName}</div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                  <div className="space-y-2">
-                    <Label>WEF</Label>
-                    <Input type="date" value={stagingLP.effectFrom} onChange={(e) => setStagingLP(p => ({ ...p, effectFrom: e.target.value }))} />
-                  </div>
-                  <Button type="button" size="sm" disabled={!stagingLP.leavePolicyID} onClick={() => {
-                    if (!stagingLP.leavePolicyID) return;
-                    const newEntry: EmpLeavePolicyForm = { _localId: uid(), leavePolicyID: stagingLP.leavePolicyID, _lpAutocomplete: stagingLP.label, effectFrom: stagingLP.effectFrom };
-                    setFormData(p => {
-                      const newList = upsertHistoryEntry(p.empLeavePolicyForm, newEntry, (item) => item.leavePolicyID === newEntry.leavePolicyID);
-                      const last = newList[newList.length - 1];
-                      return { ...p, empLeavePolicyForm: newList, leavePolicyID: last?.leavePolicyID ?? null };
-                    });
-                    setStagingLP({ leavePolicyID: null, label: "", effectFrom: today });
-                  }}>Add</Button>
-                </div>
-                {/* History Box */}
-                <div className="border border-gray-200 rounded-lg overflow-hidden">
-                  <div className="bg-gray-50 px-3 py-2 text-xs font-semibold text-gray-600 uppercase tracking-wide flex">
-                    <span className="flex-1">Leave Policy</span><span className="w-32 text-center">WEF</span><span className="w-10"></span>
-                  </div>
-                  {formData.empLeavePolicyForm.length === 0 ? (
-                    <div className="text-center py-4 text-gray-400 text-sm">No leave policies added</div>
-                  ) : (
-                    formData.empLeavePolicyForm.map((el, i) => (
-                      <div key={el._localId} className={`flex items-center px-3 py-2 text-sm ${i === formData.empLeavePolicyForm.length - 1 ? 'bg-blue-50 font-medium' : 'bg-white'} ${i > 0 ? 'border-t border-gray-100' : ''}`}>
-                        <span className="flex-1">{el._lpAutocomplete || '—'}</span>
-                        <span className="w-32 text-center text-gray-500">{el.effectFrom || '—'}</span>
-                        {<Button type="button" variant="ghost" size="sm" onClick={() => removeEmpLeavePolicy(el._localId)} className="h-6 w-6 p-0 text-red-500 hover:text-red-700 hover:bg-red-50"><X className="w-3 h-3" /></Button>}
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
-
-              {/* Work Shift - Search & Add with History */}
               <div className="relative my-6">
                 <div className="absolute inset-0 flex items-center"><div className="w-full border-t-2 border-blue-200"></div></div>
                 <div className="relative flex justify-start"><span className="bg-white pr-3 text-sm font-semibold text-blue-700 uppercase tracking-wide">Contact & Address</span></div>
@@ -3753,6 +3732,17 @@ const addCombinedDevMap = () => {
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {!isCompanyAdmin && !isBranchAdmin && (
+                  <div className="space-y-2">
+                    <Label>Personal Email</Label>
+                    <Input
+                      type="email"
+                      value={formData.personalEmail}
+                      onChange={(e) => setFormData((p) => ({ ...p, personalEmail: e.target.value }))}
+                      placeholder="employee@example.com"
+                    />
+                  </div>
+                )}
                 <div className="space-y-2">
                   <Label>Emergency Contact</Label>
                   <Input
@@ -3789,7 +3779,7 @@ const addCombinedDevMap = () => {
 
               {/* Personal */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                {!isSuperAdmin && (
+                {!isSuperAdmin && !isCompanyAdmin && !isBranchAdmin && (
                   <div className="space-y-2">
                     <Label>Gender</Label>
                     <Select
@@ -3813,14 +3803,16 @@ const addCombinedDevMap = () => {
                   </div>
                 )}
 
-                <div className="space-y-2">
-                  <Label>Date of Birth</Label>
-                  <Input
-                    type="date"
-                    value={formData.dateOfBirth}
-                    onChange={(e) => setFormData((p) => ({ ...p, dateOfBirth: e.target.value }))}
-                  />
-                </div>
+                {!isCompanyAdmin && !isBranchAdmin && (
+                  <div className="space-y-2">
+                    <Label>Date of Birth</Label>
+                    <Input
+                      type="date"
+                      value={formData.dateOfBirth}
+                      onChange={(e) => setFormData((p) => ({ ...p, dateOfBirth: e.target.value }))}
+                    />
+                  </div>
+                )}
                 <div className="space-y-2">
                   <Label>Blood Group</Label>
                   <Input
@@ -3886,7 +3878,50 @@ const addCombinedDevMap = () => {
                   placeholder="0"
                 />
               </div>
-              {!isSuperAdmin && (
+
+              <div className="relative my-6">
+                <div className="absolute inset-0 flex items-center"><div className="w-full border-t-2 border-blue-200"></div></div>
+                <div className="relative flex justify-start"><span className="bg-white pr-3 text-sm font-semibold text-blue-700 uppercase tracking-wide">Identity & Statutory</span></div>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Aadhaar Number</Label>
+                  <Input
+                    value={formData.aadharNo}
+                    onChange={(e) => setFormData((p) => ({ ...p, aadharNo: e.target.value.replace(/\D/g, "").slice(0, 12) }))}
+                    placeholder="12-digit Aadhaar"
+                    inputMode="numeric"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>PAN</Label>
+                  <Input
+                    value={formData.panNo}
+                    onChange={(e) => setFormData((p) => ({ ...p, panNo: e.target.value.toUpperCase().slice(0, 10) }))}
+                    placeholder="ABCDE1234F"
+                    maxLength={10}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>UAN (PF)</Label>
+                  <Input
+                    value={formData.uanNo}
+                    onChange={(e) => setFormData((p) => ({ ...p, uanNo: e.target.value.replace(/\D/g, "").slice(0, 12) }))}
+                    placeholder="Universal Account Number"
+                    inputMode="numeric"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>ESI Number</Label>
+                  <Input
+                    value={formData.esiNo}
+                    onChange={(e) => setFormData((p) => ({ ...p, esiNo: e.target.value }))}
+                    placeholder="ESI insurance number"
+                  />
+                </div>
+              </div>
+
+              {!isSuperAdmin && !isCompanyAdmin && !isBranchAdmin && (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label>Photo</Label>
@@ -4111,6 +4146,127 @@ const addCombinedDevMap = () => {
                 )}
               </div>
               </>)}
+
+              {/* Leave Policy — visible for COMPANY_ADMIN / BRANCH_ADMIN / SERVICE_PROVIDER (hidden for ADMIN) */}
+              {!isAdmin && (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-semibold">Leave Policy</h3>
+                  {canManage && (
+                    <Button type="button" variant="outline" size="sm" onClick={() => window.open('/leave-policy', '_blank')}>
+                      <Plus className="w-4 h-4 mr-1" /> Manage Policies
+                    </Button>
+                  )}
+                </div>
+                <div className="flex items-end gap-2">
+                  <div ref={lpRef} className="flex-1 space-y-2 relative">
+                    <Label>Leave Policy</Label>
+                    <Input
+                      value={stagingLP.label}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setStagingLP((p) => ({ ...p, label: val, leavePolicyID: null }));
+                        runFetchLP(val);
+                      }}
+                      onFocus={(e) => {
+                        if (e.target.value.length >= MIN_CHARS) runFetchLP(e.target.value);
+                      }}
+                      placeholder="Search leave policy…"
+                      autoComplete="off"
+                    />
+                    {lpList.length > 0 && (
+                      <div className="absolute z-10 bg-white border rounded w-full shadow max-h-48 overflow-y-auto">
+                        {lpLoading && <div className="px-3 py-2 text-sm text-gray-500">Loading…</div>}
+                        {lpList.map((l) => (
+                          <div
+                            key={l.id}
+                            className="px-3 py-2 hover:bg-gray-100 cursor-pointer"
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={() => {
+                              setStagingLP((p) => ({ ...p, leavePolicyID: l.id, label: l.leavePolicyName ?? "" }));
+                              setLpList([]);
+                            }}
+                          >
+                            {l.leavePolicyName}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <div className="space-y-2">
+                    <Label>WEF</Label>
+                    <Input
+                      type="date"
+                      value={stagingLP.effectFrom}
+                      onChange={(e) => setStagingLP((p) => ({ ...p, effectFrom: e.target.value }))}
+                    />
+                  </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    disabled={!stagingLP.leavePolicyID}
+                    onClick={() => {
+                      if (!stagingLP.leavePolicyID) return;
+                      const newEntry: EmpLeavePolicyForm = {
+                        _localId: uid(),
+                        leavePolicyID: stagingLP.leavePolicyID,
+                        _lpAutocomplete: stagingLP.label,
+                        effectFrom: stagingLP.effectFrom,
+                      };
+                      setFormData((p) => {
+                        const newList = upsertHistoryEntry(
+                          p.empLeavePolicyForm,
+                          newEntry,
+                          (item) => item.leavePolicyID === newEntry.leavePolicyID,
+                        );
+                        const last = newList[newList.length - 1];
+                        return {
+                          ...p,
+                          empLeavePolicyForm: newList,
+                          leavePolicyID: last?.leavePolicyID ?? null,
+                        };
+                      });
+                      setStagingLP({ leavePolicyID: null, label: "", effectFrom: today });
+                    }}
+                  >
+                    Add
+                  </Button>
+                </div>
+                <div className="border border-gray-200 rounded-lg overflow-hidden">
+                  <div className="bg-gray-50 px-3 py-2 text-xs font-semibold text-gray-600 uppercase tracking-wide flex">
+                    <span className="flex-1">Leave Policy</span>
+                    <span className="w-32 text-center">WEF</span>
+                    <span className="w-10"></span>
+                  </div>
+                  {formData.empLeavePolicyForm.length === 0 ? (
+                    <div className="text-center py-4 text-gray-400 text-sm">No leave policies added</div>
+                  ) : (
+                    formData.empLeavePolicyForm.map((el, i) => (
+                      <div
+                        key={el._localId}
+                        className={`flex items-center px-3 py-2 text-sm ${
+                          i === formData.empLeavePolicyForm.length - 1 ? "bg-blue-50 font-medium" : "bg-white"
+                        } ${i > 0 ? "border-t border-gray-100" : ""}`}
+                      >
+                        <span className="flex-1">{el._lpAutocomplete || "—"}</span>
+                        <span className="w-32 text-center text-gray-500">{el.effectFrom || "—"}</span>
+                        {
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => removeEmpLeavePolicy(el._localId)}
+                            className="h-6 w-6 p-0 text-red-500 hover:text-red-700 hover:bg-red-50"
+                          >
+                            <X className="w-3 h-3" />
+                          </Button>
+                        }
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+              )}
 
               {/* Attendance Policy - Search & Add with History (visible for COMPANY_ADMIN and above, hidden for ADMIN) */}
               {!isAdmin && <div className="space-y-3">

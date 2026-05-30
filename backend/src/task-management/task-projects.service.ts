@@ -28,9 +28,16 @@ function taskListInclude(viewer: TaskViewerContext) {
       },
     },
     chats: {
-      orderBy: { createdAt: 'desc' as const },
-      take: 1,
-      select: { createdAt: true, employeeID: true, userID: true, recipientEmployeeID: true },
+      orderBy: { createdAt: 'asc' as const },
+      take: 80,
+      select: {
+        id: true,
+        message: true,
+        createdAt: true,
+        employeeID: true,
+        userID: true,
+        recipientEmployeeID: true,
+      },
     },
     _count: { select: { remarks: true, chats: true, activities: true } },
   };

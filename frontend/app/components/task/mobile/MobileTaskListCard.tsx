@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Icon } from "@iconify/react";
 import { PriorityBadge, TaskStatusBadge } from "../task-ui";
+import { getNextSitePunchKind } from "../../../utils/taskSitePunch";
 
 export interface MobileTaskListItem {
   id: number;
@@ -15,6 +16,7 @@ export interface MobileTaskListItem {
   dueDateTime?: string | null;
   customer?: { customerName?: string };
   site?: { branchName?: string; city?: string };
+  chats?: { message?: string | null; createdAt?: string }[];
 }
 
 function fmtSchedule(iso?: string | null) {
@@ -45,6 +47,12 @@ export function MobileTaskListCard({
   const siteLine = isSiteVisit(task.taskType)
     ? [task.site?.branchName, task.site?.city].filter(Boolean).join(", ") || "—"
     : null;
+  const siteCheckLabel =
+    isSiteVisit(task.taskType) && onCheckInOut
+      ? getNextSitePunchKind(task.chats) === "in"
+        ? "Check-In"
+        : "Check-Out"
+      : null;
 
   return (
     <div className="mobile-task-card w-full rounded-[16px] bg-white border border-gray-100 shadow-sm overflow-hidden">
@@ -89,9 +97,9 @@ export function MobileTaskListCard({
       </button>
       {menuOpen && (
         <div className="border-t border-gray-100 flex flex-wrap px-1 py-1 bg-gray-50/80">
-          {isSiteVisit(task.taskType) && onCheckInOut && (
-            <button type="button" className="text-[12px] font-semibold text-[#2563eb] px-3 py-2" onClick={() => { setMenuOpen(false); onCheckInOut(); }}>
-              Check-In / Check-out
+          {siteCheckLabel && (
+            <button type="button" className="text-[12px] font-semibold text-[#2563eb] px-3 py-2" onClick={() => { setMenuOpen(false); onCheckInOut?.(); }}>
+              {siteCheckLabel}
             </button>
           )}
           {onViewInfo && (

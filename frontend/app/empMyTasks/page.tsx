@@ -8,6 +8,8 @@ import { MobileTaskChatView } from "../components/task/mobile/MobileTaskChatView
 import { MobileTaskListView } from "../components/task/mobile/MobileTaskListView";
 import type { MobileTaskListItem } from "../components/task/mobile/MobileTaskListCard";
 import { toast } from "sonner";
+import { getNextSitePunchKind, sitePunchLabel } from "../utils/taskSitePunch";
+import { nextTaskStatus } from "../utils/taskStatusFlow";
 
 const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL || "/backend";
 
@@ -108,9 +110,10 @@ export default function EmpMyTasksPage() {
     }
   };
 
-  const postSitePunch = async (taskId: number, kind: "in" | "out") => {
+  const postSitePunch = async (taskId: number, chats?: { message?: string; createdAt?: string }[]) => {
     if (!user) return;
-    const label = kind === "in" ? "Site Mark IN" : "Site Mark OUT";
+    const kind = getNextSitePunchKind(chats);
+    const label = sitePunchLabel(kind);
     const msg = `${label} at ${new Date().toLocaleString("en-IN")}`;
     const employeeId = (user as { employee?: { id?: number } }).employee?.id ?? user.id;
     setSending(true);
@@ -134,9 +137,9 @@ export default function EmpMyTasksPage() {
     }
   };
 
-  const sitePunch = async (kind: "in" | "out") => {
+  const sitePunch = async () => {
     if (!detail) return;
-    await postSitePunch(detail.id, kind);
+    await postSitePunch(detail.id, detail.chats);
   };
 
   const updateStatus = async (status: string) => {
@@ -146,7 +149,13 @@ export default function EmpMyTasksPage() {
         method: "PATCH",
         body: JSON.stringify({ status }),
       });
-      toast.success(status === "Closed" ? "Task closed" : "Task reopened");
+      const labels: Record<string, string> = {
+        Closed: "Task closed",
+        Reopen: "Task reopened",
+        Open: "Task set to Open",
+        WIP: "Task in progress",
+      };
+      toast.success(labels[status] || "Status updated");
       await refreshDetail();
       load();
     } catch (e: any) {
@@ -192,8 +201,12 @@ export default function EmpMyTasksPage() {
             setChatMsg("");
             load();
           }}
-          onStatusChange={updateStatus}
+          onAdvanceStatus={() => {
+            const next = nextTaskStatus(detail.status);
+            if (next) void updateStatus(next);
+          }}
           onSitePunch={sitePunch}
+          sitePunchNextKind={detail ? getNextSitePunchKind(detail.chats) : "in"}
         />
       </EmpMobileLayout>
     );
@@ -207,9 +220,13 @@ export default function EmpMyTasksPage() {
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
         onTaskClick={(t) => openTask(t as Task)}
-        onCheckInOut={(t) => {
-          const kind = window.confirm("Mark OUT at site? Cancel for Mark IN.") ? "out" : "in";
-          void postSitePunch(t.id, kind);
+        onCheckInOut={async (t) => {
+          try {
+            const full = await taskFetch<Task>(`/task-projects/${t.id}`, user);
+            await postSitePunch(t.id, full.chats);
+          } catch (e: any) {
+            toast.error(e.message || "Could not record site attendance");
+          }
         }}
         onViewInfo={(t) => setInfoTask(t as Task)}
         onCreateClick={canCreateTask ? () => setCreateOpen(true) : undefined}

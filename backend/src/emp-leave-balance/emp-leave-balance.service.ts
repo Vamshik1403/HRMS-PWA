@@ -75,6 +75,23 @@ export class EmpLeaveBalanceService {
    * Called when a leave application is approved.
    * Adds the leave days to the corresponding used counter.
    */
+  /** Deduct balance per leave type from manager day-by-day assignments. */
+  async deductFromDayStatuses(
+    manageEmployeeID: number,
+    dayStatuses: { status?: string }[] | null,
+  ) {
+    if (!Array.isArray(dayStatuses) || dayStatuses.length === 0) return;
+    const counts: Record<string, number> = {};
+    for (const d of dayStatuses) {
+      const t = d?.status?.trim();
+      if (!t || t === 'LoP' || t === 'ShortLeave') continue;
+      counts[t] = (counts[t] || 0) + 1;
+    }
+    for (const [type, days] of Object.entries(counts)) {
+      await this.deductLeave(manageEmployeeID, type, days);
+    }
+  }
+
   async deductLeave(
     manageEmployeeID: number,
     appliedLeaveType: string,

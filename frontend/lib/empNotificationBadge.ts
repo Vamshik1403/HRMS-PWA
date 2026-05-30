@@ -1,5 +1,9 @@
 /** Fetch total pending/unread count for home-screen badge. */
 import { taskFetch } from "@/app/utils/taskApi";
+import {
+  countUnseenLeaveBadge,
+  countUnseenReimbursementBadge,
+} from "@/app/utils/empHomeSeen";
 import { getEmployeeIdFromStorage } from "./pushSubscribe";
 import { syncAppBadge } from "./appBadge";
 
@@ -50,31 +54,46 @@ export async function fetchEmpNotificationTotal(
     })()
       .then((data) => {
         tasks = (data.items || []).filter(
-          (t) => t.status === "Open" || t.status === "WIP",
+          (t) => t.status === "Open" || t.status === "WIP" || t.status === "Reopen",
         ).length;
       })
       .catch(() => {}),
-    fetch(`${BACKEND}/reimbursement`, { headers })
+    fetch(`${BACKEND}/reimbursement/employee/${employeeId}`, { headers })
       .then((r) => r.json())
       .then((data: unknown) => {
         if (!Array.isArray(data)) return;
-        reimb = data.filter(
-          (r: { manageEmployeeID?: number; status?: string }) =>
-            r.manageEmployeeID === employeeId &&
-            (r.status === "Pending" || !r.status),
-        ).length;
+        reimb = countUnseenReimbursementBadge(
+          data.map((r: { id?: number; status?: string }) => ({
+            id: r.id ?? "",
+            status: r.status,
+          })),
+        );
       })
       .catch(() => {}),
-    fetch(`${BACKEND}/leave-application`, { headers })
+    fetch(`${BACKEND}/leave-application/employee/${employeeId}`, { headers })
       .then((r) => r.json())
       .then((data: unknown) => {
         if (!Array.isArray(data)) return;
-        leave = data.filter(
-          (l: { manageEmployeeID?: number; status?: string }) =>
-            l.manageEmployeeID === employeeId && l.status === "Pending",
-        ).length;
+        leave = countUnseenLeaveBadge(
+          data.map((l: { id?: number; status?: string }) => ({
+            id: l.id ?? "",
+            status: l.status,
+          })),
+        );
       })
-      .catch(() => {}),
+      .catch(() => {
+        fetch(`${BACKEND}/leave-application`, { headers })
+          .then((r) => r.json())
+          .then((all: unknown) => {
+            if (!Array.isArray(all)) return;
+            leave = countUnseenLeaveBadge(
+              all
+                .filter((l: { manageEmployeeID?: number }) => l.manageEmployeeID === employeeId)
+                .map((l: { id?: number; status?: string }) => ({ id: l.id ?? "", status: l.status })),
+            );
+          })
+          .catch(() => {});
+      }),
   ]);
 
   return notice + tasks + reimb + leave;

@@ -689,6 +689,10 @@ model ManageEmployee {
   noticePeriodDaysForTermination String?                   @db.VarChar
   pfMemberStatus                 String?                   @db.VarChar
   pfNumber                       String?                   @db.VarChar
+  aadharNo                       String?                   @db.VarChar
+  panNo                          String?                   @db.VarChar
+  uanNo                          String?                   @db.VarChar
+  esiNo                          String?                   @db.VarChar
   shiftEligibility               String?                   @db.VarChar
   typeOfEmployee                 String?                   @db.VarChar
   weeklyOffPattern               String?                   @db.VarChar
@@ -1158,6 +1162,8 @@ model GenerateSalary {
   paymentRemark     String?
   paymentProof      String?
   status            String?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
   branches          Branches?        @relation(fields: [branchesID], references: [id], onDelete: NoAction, onUpdate: NoAction)
   company           Company?         @relation(fields: [companyID], references: [id], onDelete: NoAction, onUpdate: NoAction)
   manageEmployee    ManageEmployee   @relation(fields: [employeeID], references: [id], onDelete: NoAction, onUpdate: NoAction)
@@ -1370,6 +1376,10 @@ model ReimbursementItem {
   reimbursementType String?
   amount            String?
   description       String?
+  status            String?       @default("Pending")
+  approvalType      String?
+  paidStatus        String?
+  paymentRemark     String?
   reimbursement     Reimbursement @relation(fields: [reimbursementID], references: [id], onDelete: Cascade)
 }
 

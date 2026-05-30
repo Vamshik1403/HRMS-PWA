@@ -224,6 +224,11 @@ export class CreateManageEmployeeDto {
 
   @IsOptional() @IsString() pfNumber?: string;
 
+  @IsOptional() @IsString() aadharNo?: string;
+  @IsOptional() @IsString() panNo?: string;
+  @IsOptional() @IsString() uanNo?: string;
+  @IsOptional() @IsString() esiNo?: string;
+
   @IsOptional() @IsString() joiningDate?: string;
 
   @IsOptional() @IsString() businessPhoneNo?: string;

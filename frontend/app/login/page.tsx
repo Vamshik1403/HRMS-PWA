@@ -118,7 +118,7 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const [termsAccepted, setTermsAccepted] = useState(false)
+  const [termsAccepted, setTermsAccepted] = useState(true)
   const [showTermsModal, setShowTermsModal] = useState(false)
   const [authChecked, setAuthChecked] = useState(false)
 
@@ -243,7 +243,7 @@ export default function LoginPage() {
       {showTermsModal && (
         <TermsModal onClose={() => { setShowTermsModal(false); setTermsAccepted(true) }} />
       )}
-    <div style={{ position: 'fixed', inset: 0, overflowY: 'auto', overscrollBehavior: 'none' }} className="flex items-center justify-center bg-[#f4f4f4] relative">
+    <div style={{ position: 'fixed', inset: 0, overflowY: 'auto', overscrollBehavior: 'none' }} className="login-page flex items-center justify-center bg-[#f4f4f4] relative">
       {/* Subtle background pattern */}
       <div className="absolute inset-0 opacity-[0.03] pointer-events-none" style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, #000 1px, transparent 0)', backgroundSize: '32px 32px' }} />
 
@@ -272,7 +272,7 @@ export default function LoginPage() {
                   placeholder="Enter username"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
-                  className="w-full pl-11 pr-4 py-2.5 bg-[#f8f8f8] border border-gray-200 rounded-xl focus:ring-2 focus:ring-gray-900/10 focus:border-gray-300 focus:bg-white outline-none text-gray-800 text-sm transition-all placeholder:text-gray-400"
+                  className="app-form-control w-full pl-11 pr-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-gray-900/10 focus:border-gray-300 outline-none text-sm transition-all placeholder:text-gray-400"
                   required
                 />
               </div>
@@ -288,7 +288,7 @@ export default function LoginPage() {
                   placeholder="Enter password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full pl-11 pr-11 py-2.5 bg-[#f8f8f8] border border-gray-200 rounded-xl focus:ring-2 focus:ring-gray-900/10 focus:border-gray-300 focus:bg-white outline-none text-gray-800 text-sm transition-all placeholder:text-gray-400"
+                  className="app-form-control w-full pl-11 pr-11 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-gray-900/10 focus:border-gray-300 outline-none text-sm transition-all placeholder:text-gray-400"
                   required
                 />
                 <button
@@ -312,7 +312,7 @@ export default function LoginPage() {
                 type="checkbox"
                 checked={termsAccepted}
                 onChange={(e) => setTermsAccepted(e.target.checked)}
-                className="mt-0.5 h-4 w-4 shrink-0 rounded border-gray-300 text-[#4f46e5] accent-[#4f46e5] cursor-pointer"
+                className="app-form-checkbox mt-0.5 h-4 w-4 shrink-0 rounded border-gray-300 cursor-pointer"
               />
               <label htmlFor="terms-checkbox" className="text-xs text-gray-500 leading-snug cursor-pointer select-none">
                 Accept the{' '}

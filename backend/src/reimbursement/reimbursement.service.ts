@@ -154,6 +154,10 @@ export class ReimbursementService {
               reimbursementType: i.reimbursementType ?? null,
               amount: i.amount ?? null,
               description: i.description ?? null,
+              status: i.status ?? 'Pending',
+              approvalType: i.approvalType ?? null,
+              paidStatus: i.paidStatus ?? null,
+              paymentRemark: i.paymentRemark ?? null,
             })),
           });
         }
@@ -228,6 +232,153 @@ export class ReimbursementService {
       where: { id },
       include: this.includeRels(),
     });
+  }
+
+  /** Approve a single reimbursement line (voucher only for now). */
+  async approveItem(reimbursementID: number, itemId: number) {
+    await this.ensureExists(reimbursementID);
+    const item = await this.prisma.reimbursementItem.findFirst({
+      where: { id: itemId, reimbursementID },
+    });
+    if (!item) throw new NotFoundException(`Item ${itemId} not found`);
+
+    await this.prisma.reimbursementItem.update({
+      where: { id: itemId },
+      data: {
+        status: 'Approved',
+        approvalType: 'Voucher',
+        paidStatus: 'Unpaid',
+      },
+    });
+
+    const rec = await this.syncParentStatus(reimbursementID);
+    if ((rec as any).manageEmployeeID) {
+      this.pushService
+        .sendToEmployee(
+          (rec as any).manageEmployeeID,
+          'Reimbursement Approved',
+          'An item on your reimbursement request has been approved.',
+          { url: '/empReimbursement' },
+        )
+        .catch(() => null);
+    }
+    return rec;
+  }
+
+  /** Reject a single reimbursement line. */
+  async rejectItem(reimbursementID: number, itemId: number) {
+    await this.ensureExists(reimbursementID);
+    const item = await this.prisma.reimbursementItem.findFirst({
+      where: { id: itemId, reimbursementID },
+    });
+    if (!item) throw new NotFoundException(`Item ${itemId} not found`);
+
+    await this.prisma.reimbursementItem.update({
+      where: { id: itemId },
+      data: { status: 'Rejected', paidStatus: null, paymentRemark: null },
+    });
+
+    const rec = await this.syncParentStatus(reimbursementID);
+    if ((rec as any).manageEmployeeID) {
+      this.pushService
+        .sendToEmployee(
+          (rec as any).manageEmployeeID,
+          'Reimbursement Rejected',
+          'An item on your reimbursement request has been rejected.',
+          { url: '/empReimbursement' },
+        )
+        .catch(() => null);
+    }
+    return rec;
+  }
+
+  /** Mark item paid/unpaid; remark required when marking paid. */
+  async updateItemPayment(
+    reimbursementID: number,
+    itemId: number,
+    body: { paidStatus: string; paymentRemark?: string },
+  ) {
+    await this.ensureExists(reimbursementID);
+    const item = await this.prisma.reimbursementItem.findFirst({
+      where: { id: itemId, reimbursementID },
+    });
+    if (!item) throw new NotFoundException(`Item ${itemId} not found`);
+    if (item.status !== 'Approved') {
+      throw new NotFoundException('Only approved items can be marked paid');
+    }
+
+    const paidStatus = body.paidStatus === 'Paid' ? 'Paid' : 'Unpaid';
+    await this.prisma.reimbursementItem.update({
+      where: { id: itemId },
+      data: {
+        paidStatus,
+        paymentRemark:
+          paidStatus === 'Paid' ? body.paymentRemark ?? null : null,
+      },
+    });
+
+    const rec = await this.syncParentStatus(reimbursementID);
+    if (paidStatus === 'Paid' && (rec as any).manageEmployeeID) {
+      this.pushService
+        .sendToEmployee(
+          (rec as any).manageEmployeeID,
+          'Reimbursement Paid',
+          body.paymentRemark?.trim()
+            ? `Reimbursement paid: ${body.paymentRemark.trim()}`
+            : 'Your reimbursement has been marked as paid.',
+          { url: '/empReimbursement' },
+        )
+        .catch(() => null);
+    }
+    return rec;
+  }
+
+  private async syncParentStatus(reimbursementID: number) {
+    const items = await this.prisma.reimbursementItem.findMany({
+      where: { reimbursementID },
+    });
+    const statuses = items.map((i) => i.status || 'Pending');
+
+    let status = 'Pending';
+    let approvalType: string | null = null;
+
+    if (items.length === 0) {
+      status = 'Pending';
+    } else if (statuses.every((s) => s === 'Rejected')) {
+      status = 'Rejected';
+    } else if (statuses.every((s) => s === 'Approved' || s === 'Rejected')) {
+      status = statuses.some((s) => s === 'Rejected')
+        ? 'Partly Approved'
+        : 'Approved';
+      if (statuses.some((s) => s === 'Approved')) {
+        approvalType = 'Voucher';
+      }
+    } else if (
+      statuses.some((s) => s === 'Approved' || s === 'Rejected')
+    ) {
+      status = 'Partly Approved';
+      if (statuses.some((s) => s === 'Approved')) {
+        approvalType = 'Voucher';
+      }
+    }
+
+    const approvedItems = items.filter((i) => i.status === 'Approved');
+    if (
+      approvedItems.length > 0 &&
+      approvedItems.every((i) => i.paidStatus === 'Paid')
+    ) {
+      status = 'Paid';
+    }
+
+    await this.prisma.reimbursement.update({
+      where: { id: reimbursementID },
+      data: {
+        status,
+        approvalType: approvalType ?? undefined,
+      },
+    });
+
+    return this.findOne(reimbursementID);
   }
 
   /** ─────────────── UTILS ─────────────── */

@@ -1,9 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { Icon } from "@iconify/react";
 import type { TodayStatus } from "../../hooks/useEmpPunch";
-import { useEmpPunch } from "../../hooks/useEmpPunch";
 import {
   extractDayPunchTimes,
   formatLocationLabel,
@@ -33,26 +32,7 @@ export function EmpAttendanceTodayPanel({
   loading,
   onStatusUpdate,
 }: EmpAttendanceTodayPanelProps) {
-  const [absentOpen, setAbsentOpen] = useState(false);
-  const [absentReason, setAbsentReason] = useState("");
-  const [absentLeaveType, setAbsentLeaveType] = useState("LoP");
-
-  const {
-    punch,
-    markAbsent,
-    requestLocationAccess,
-    punchLoading,
-    locationLoading,
-    punchError,
-    punchSuccess,
-    setPunchError,
-  } = useEmpPunch(onStatusUpdate);
-
   const punchState = todayStatus?.punchState ?? (todayStatus?.isCheckedIn ? "IN" : "OUT");
-  const canCheckIn = todayStatus?.canCheckIn ?? punchState === "OUT";
-  const canCheckOut = todayStatus?.canCheckOut ?? punchState === "IN";
-  const canBreakIn = todayStatus?.canBreakIn ?? punchState === "IN";
-  const canBreakOut = todayStatus?.canBreakOut ?? punchState === "ON_BREAK";
   const isOnBreak = punchState === "ON_BREAK";
   const isAbsent = todayStatus?.isAbsentToday;
 
@@ -67,13 +47,6 @@ export function EmpAttendanceTodayPanel({
     month: "long",
     year: "numeric",
   });
-
-  const submitAbsent = async () => {
-    if (absentReason.trim().length < 3) return;
-    await markAbsent(absentReason.trim(), absentLeaveType);
-    setAbsentOpen(false);
-    setAbsentReason("");
-  };
 
   return (
     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden flex flex-col min-h-0 h-full max-h-full">
@@ -147,152 +120,10 @@ export function EmpAttendanceTodayPanel({
           />
         </div>
 
-        {(punchError || punchSuccess) && (
-          <div className="mb-2 space-y-1.5">
-            {punchSuccess && (
-              <div className="text-[11px] text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-xl px-3 py-2 flex gap-2">
-                <Icon icon="solar:check-circle-bold" className="w-4 h-4 shrink-0" />
-                <span>{punchSuccess}</span>
-              </div>
-            )}
-            {punchError && (
-              <div className="text-[11px] text-red-700 bg-red-50 border border-red-100 rounded-xl px-3 py-2">
-                <p>{punchError}</p>
-                {punchError.toLowerCase().includes("permission") && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setPunchError(null);
-                      requestLocationAccess();
-                    }}
-                    disabled={locationLoading}
-                    className="mt-2 w-full py-2 rounded-lg bg-white border border-red-200 text-red-700 text-[11px] font-semibold"
-                  >
-                    {locationLoading ? "Checking…" : "Enable location"}
-                  </button>
-                )}
-              </div>
-            )}
-          </div>
-        )}
       </div>
-
-      {!loading && !isAbsent && (
-        <div className="px-4 pb-3 pt-1 space-y-2 shrink-0 border-t border-gray-100">
-          {canCheckIn && (
-            <>
-              <button
-                type="button"
-                onClick={() => punch("CHECK_IN")}
-                disabled={punchLoading}
-                className="w-full py-2.5 rounded-xl bg-[#2563eb] text-white font-bold text-sm flex items-center justify-center gap-2 shadow-md shadow-blue-200 active:scale-[0.98] disabled:opacity-60"
-              >
-                <Icon icon="solar:login-bold-duotone" className="w-5 h-5" />
-                {punchLoading ? "Please wait…" : "Mark IN"}
-              </button>
-              {todayStatus?.canMarkAbsent && (
-                <button
-                  type="button"
-                  onClick={() => setAbsentOpen(true)}
-                  disabled={punchLoading}
-                  className="w-full py-2 rounded-xl border-2 border-dashed border-red-200 text-red-600 font-semibold text-xs"
-                >
-                  Mark Absent
-                </button>
-              )}
-            </>
-          )}
-          {(canCheckOut || canBreakIn || canBreakOut) && (
-            <div
-              className={`grid gap-2 ${canCheckOut && (canBreakIn || canBreakOut) ? "grid-cols-2" : "grid-cols-1"}`}
-            >
-              {canCheckOut && (
-                <button
-                  type="button"
-                  onClick={() => punch("CHECK_OUT")}
-                  disabled={punchLoading}
-                  className="py-2.5 rounded-xl bg-[#2563eb] text-white font-bold text-xs flex flex-col items-center gap-0.5 disabled:opacity-60"
-                >
-                  <Icon icon="solar:logout-bold-duotone" className="w-5 h-5" />
-                  Mark OUT
-                </button>
-              )}
-              {canBreakIn && (
-                <button
-                  type="button"
-                  onClick={() => punch("BREAK_IN")}
-                  disabled={punchLoading}
-                  className="py-2.5 rounded-xl bg-amber-500 text-white font-bold text-xs flex flex-col items-center gap-0.5 disabled:opacity-60"
-                >
-                  <Icon icon="solar:cup-hot-bold-duotone" className="w-5 h-5" />
-                  Break IN
-                </button>
-              )}
-              {canBreakOut && (
-                <button
-                  type="button"
-                  onClick={() => punch("BREAK_OUT")}
-                  disabled={punchLoading}
-                  className="py-2.5 rounded-xl bg-emerald-600 text-white font-bold text-xs flex flex-col items-center gap-0.5 col-span-full disabled:opacity-60"
-                >
-                  <Icon icon="solar:play-bold-duotone" className="w-5 h-5" />
-                  Break OUT
-                </button>
-              )}
-            </div>
-          )}
-        </div>
-      )}
 
       {isAbsent && (
         <p className="px-4 pb-3 text-[12px] text-gray-600 text-center shrink-0">Marked absent today</p>
-      )}
-
-      {absentOpen && (
-        <>
-          <div className="fixed inset-0 z-50 bg-black/40" onClick={() => setAbsentOpen(false)} />
-          <div className="fixed inset-x-4 top-[20%] z-50 bg-white rounded-2xl shadow-xl p-5 max-h-[70vh] overflow-y-auto">
-            <h3 className="text-[17px] font-bold text-gray-900 mb-1">Mark Absent</h3>
-            <p className="text-[12px] text-gray-500 mb-4">
-              Emergency absence without prior notice. A leave request will be sent to your manager.
-            </p>
-            <label className="text-[12px] font-semibold text-gray-600 block mb-1">Leave type</label>
-            <select
-              className="w-full h-10 rounded-xl border border-gray-200 px-3 text-[14px] mb-3"
-              value={absentLeaveType}
-              onChange={(e) => setAbsentLeaveType(e.target.value)}
-            >
-              <option value="LoP">Loss of Pay (LoP)</option>
-              <option value="Sick">Sick Leave (SL)</option>
-              <option value="Casual">Casual Leave (CL)</option>
-            </select>
-            <label className="text-[12px] font-semibold text-gray-600 block mb-1">Reason *</label>
-            <textarea
-              value={absentReason}
-              onChange={(e) => setAbsentReason(e.target.value)}
-              rows={3}
-              placeholder="Describe the reason…"
-              className="w-full rounded-xl border border-gray-200 px-3 py-2 text-[14px] mb-4 resize-none"
-            />
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={() => setAbsentOpen(false)}
-                className="flex-1 h-11 rounded-xl border border-gray-200 font-medium text-gray-700"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={submitAbsent}
-                disabled={punchLoading || absentReason.trim().length < 3}
-                className="flex-1 h-11 rounded-xl bg-red-600 text-white font-semibold disabled:opacity-50"
-              >
-                {punchLoading ? "Submitting…" : "Submit"}
-              </button>
-            </div>
-          </div>
-        </>
       )}
     </div>
   );

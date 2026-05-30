@@ -7,6 +7,24 @@ export const dynamic = "force-dynamic";
 
 const OK = () => new NextResponse("OK", { status: 200 });
 
+/** Nest API – processes essl_raw_attlog → process_att_logs for dashboard */
+function backendProcessUrl() {
+  const base =
+    process.env.BACKEND_INTERNAL_URL ||
+    process.env.NEXT_PUBLIC_BACKEND_URL ||
+    "http://127.0.0.1:8000";
+  const normalized = base.replace(/\/$/, "");
+  return `${normalized}/process-essl-raw?limit=100`;
+}
+
+async function triggerEsslProcessing() {
+  try {
+    await fetch(backendProcessUrl(), { method: "GET", cache: "no-store" });
+  } catch (err) {
+    console.error("ESSL process trigger failed:", err);
+  }
+}
+
 const VALID_SN = /^[A-Za-z0-9]+$/;
 const SUSPICIOUS = ["DROP", "DELETE", "INSERT", "UPDATE", "--", ";"];
 
@@ -90,6 +108,11 @@ async function handleRequest(req: NextRequest) {
       );
 
       console.log("✅ INSERT SUCCESS - log_type:", logType, "user_id:", userId, "punchTime:", punchTime, "authType:", authType);
+
+      // Verified device punches → process_att_logs (dashboard "present")
+      if (logType === "verified") {
+        void triggerEsslProcessing();
+      }
     } catch (err) {
       console.error("❌ DB INSERT ERROR:", err);
     }

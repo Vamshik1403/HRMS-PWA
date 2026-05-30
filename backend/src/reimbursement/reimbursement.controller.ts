@@ -46,6 +46,31 @@ export class ReimbursementController {
     return this.service.findByCompany(companyId);
   }
 
+  @Patch(':id/items/:itemId/approve')
+  approveItem(
+    @Param('id', ParseIntPipe) id: number,
+    @Param('itemId', ParseIntPipe) itemId: number,
+  ) {
+    return this.service.approveItem(id, itemId);
+  }
+
+  @Patch(':id/items/:itemId/reject')
+  rejectItem(
+    @Param('id', ParseIntPipe) id: number,
+    @Param('itemId', ParseIntPipe) itemId: number,
+  ) {
+    return this.service.rejectItem(id, itemId);
+  }
+
+  @Patch(':id/items/:itemId/payment')
+  updateItemPayment(
+    @Param('id', ParseIntPipe) id: number,
+    @Param('itemId', ParseIntPipe) itemId: number,
+    @Body() body: { paidStatus: string; paymentRemark?: string },
+  ) {
+    return this.service.updateItemPayment(id, itemId, body);
+  }
+
   // 🔍 Single reimbursement
   @Get(':id')
   findOne(@Param('id', ParseIntPipe) id: number) {

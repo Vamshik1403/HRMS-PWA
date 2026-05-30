@@ -687,10 +687,10 @@ export function AttendanceRegularisationManagement() {
         requestedStatus: formData.requestedStatus || null,
         reason: formData.reason || null,
         remarks: formData.remarks,
-        overtimeApplicable: formData.overtimeApplicable || false,
-        otMealApply: formData.otMealApply || false,
-        otMealMinutes: formData.otMealMinutes ? parseInt(String(formData.otMealMinutes)) : null,
-        otBreakMinutes: formData.otBreakMinutes ? parseInt(String(formData.otBreakMinutes)) : null,
+        overtimeApplicable: false,
+        otMealApply: false,
+        otMealMinutes: null,
+        otBreakMinutes: null,
       }
 
       const url = editingRegularisation
@@ -1016,75 +1016,6 @@ export function AttendanceRegularisationManagement() {
                         <option value="LOP">Loss of Pay (LOP)</option>
                       </select>
                     </div>
-                  </div>
-
-                  {/* Overtime Section */}
-                  <div className="space-y-3 border-t pt-4">
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="checkbox"
-                        id="overtimeApplicable"
-                        checked={formData.overtimeApplicable}
-                        onChange={(e) => setFormData(prev => ({ 
-                          ...prev, 
-                          overtimeApplicable: e.target.checked,
-                          otMealApply: e.target.checked ? prev.otMealApply : false,
-                          otMealMinutes: e.target.checked ? prev.otMealMinutes : "",
-                          otBreakMinutes: e.target.checked ? prev.otBreakMinutes : "",
-                        }))}
-                        className="w-4 h-4 rounded border-gray-300"
-                      />
-                      <Label htmlFor="overtimeApplicable" className="cursor-pointer font-medium">Overtime Applicable</Label>
-                    </div>
-
-                    {formData.overtimeApplicable && (
-                      <div className="space-y-3 pl-6">
-                        <div className="flex items-center gap-2">
-                          <input
-                            type="checkbox"
-                            id="otMealApply"
-                            checked={formData.otMealApply}
-                            onChange={(e) => setFormData(prev => ({ 
-                              ...prev, 
-                              otMealApply: e.target.checked,
-                              otMealMinutes: e.target.checked ? prev.otMealMinutes : "",
-                              otBreakMinutes: e.target.checked ? prev.otBreakMinutes : "",
-                            }))}
-                            className="w-4 h-4 rounded border-gray-300"
-                          />
-                          <Label htmlFor="otMealApply" className="cursor-pointer">OT Meal Apply</Label>
-                        </div>
-
-                        {formData.otMealApply && (
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                            <div className="space-y-2">
-                              <Label htmlFor="otMealMinutes">Mins for OT Hours for Meal Token</Label>
-                              <Input
-                                id="otMealMinutes"
-                                type="number"
-                                min="0"
-                                value={formData.otMealMinutes}
-                                onChange={(e) => setFormData(prev => ({ ...prev, otMealMinutes: e.target.value }))}
-                                placeholder="Enter minutes"
-                                className="w-full"
-                              />
-                            </div>
-                            <div className="space-y-2">
-                              <Label htmlFor="otBreakMinutes">Mins for Break Time for Meal</Label>
-                              <Input
-                                id="otBreakMinutes"
-                                type="number"
-                                min="0"
-                                value={formData.otBreakMinutes}
-                                onChange={(e) => setFormData(prev => ({ ...prev, otBreakMinutes: e.target.value }))}
-                                placeholder="Enter minutes"
-                                className="w-full"
-                              />
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    )}
                   </div>
 
                   <div className="space-y-2">

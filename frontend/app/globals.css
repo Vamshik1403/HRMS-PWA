@@ -111,6 +111,7 @@
   }
   html {
     overflow-y: scroll;
+    color-scheme: light;
   }
   body {
     @apply bg-background text-foreground;
@@ -132,6 +133,75 @@
   textarea {
     font-size: 16px !important;
   }
+}
+
+/* ── Consistent form control backgrounds (login, PWA, admin) ── */
+.login-page,
+.emp-pwa-shell,
+.form-drawer-body {
+  color-scheme: light;
+}
+
+.app-form-control,
+.login-page input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):not([type="hidden"]),
+.login-page select,
+.login-page textarea,
+.emp-pwa-shell input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):not([type="hidden"]),
+.emp-pwa-shell select,
+.emp-pwa-shell textarea {
+  background-color: #ffffff !important;
+  color: #111827 !important;
+  color-scheme: light;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.app-form-control::placeholder,
+.login-page input::placeholder,
+.emp-pwa-shell input::placeholder {
+  color: #9ca3af !important;
+  opacity: 1;
+}
+
+.app-form-control:-webkit-autofill,
+.app-form-control:-webkit-autofill:hover,
+.app-form-control:-webkit-autofill:focus,
+.login-page input:-webkit-autofill,
+.login-page input:-webkit-autofill:hover,
+.login-page input:-webkit-autofill:focus,
+.emp-pwa-shell input:-webkit-autofill,
+.emp-pwa-shell input:-webkit-autofill:hover,
+.emp-pwa-shell input:-webkit-autofill:focus,
+.emp-pwa-shell select:-webkit-autofill,
+.emp-pwa-shell textarea:-webkit-autofill {
+  -webkit-box-shadow: 0 0 0 1000px #ffffff inset !important;
+  -webkit-text-fill-color: #111827 !important;
+  caret-color: #111827 !important;
+  transition: background-color 9999s ease-in-out 0s;
+}
+
+.app-form-checkbox,
+.login-page input[type="checkbox"],
+.emp-pwa-shell input[type="checkbox"] {
+  accent-color: #4f46e5;
+  background-color: #ffffff !important;
+  color-scheme: light;
+}
+
+html[data-emp-theme="dark"] .emp-pwa-shell .app-form-control,
+html[data-emp-theme="dark"] .emp-pwa-shell input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):not([type="hidden"]),
+html[data-emp-theme="dark"] .emp-pwa-shell select,
+html[data-emp-theme="dark"] .emp-pwa-shell textarea {
+  background-color: #ffffff !important;
+  color: #111827 !important;
+  border-color: #e5e7eb !important;
+  color-scheme: light;
+}
+
+html[data-emp-theme="dark"] .emp-pwa-shell input:-webkit-autofill,
+html[data-emp-theme="dark"] .emp-pwa-shell select:-webkit-autofill {
+  -webkit-box-shadow: 0 0 0 1000px #ffffff inset !important;
+  -webkit-text-fill-color: #111827 !important;
 }
 
 /* ── Sidebar icon‑collapse mode ── */
@@ -430,7 +500,7 @@ html[data-emp-theme="dark"] .emp-pwa-shell .emp-mobile-date-field {
 }
 
 html[data-emp-theme="dark"] .emp-pwa-shell .emp-mobile-date-field input[type="date"] {
-  color-scheme: dark;
+  color-scheme: light;
 }
 
 .emp-pwa-shell .emp-mobile-date-field input[type="date"] {

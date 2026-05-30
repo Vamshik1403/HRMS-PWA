@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Icon } from "@iconify/react";
 import EmpMobileLayout from "../../components/layout/EmpMobileLayout";
+import { markEmpRecordSeen } from "../../utils/empHomeSeen";
 import {
   getAppliedDateRange,
   getApprovedDateRange,
@@ -26,6 +27,7 @@ export default function EmpLeaveDetailPage() {
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
         if (data) {
+          markEmpRecordSeen("leave", data.id, data.status);
           setApp({
             ...data,
             fromDate: data.fromDate ? new Date(data.fromDate).toISOString().slice(0, 10) : "",

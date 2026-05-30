@@ -14,7 +14,72 @@ import { useEffect, useMemo, useState } from "react";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import SoftBarChart from "./components/SoftBarChart";
 import type { SoftBarPoint } from "./components/SoftBarChart";
-import EmployeeStatusCharts from "./components/EmployeeStatusCharts";
+import EmployeeStatusCharts, {
+  type StatusBreakdownItem,
+} from "./components/EmployeeStatusCharts";
+import { formatDevicePunchForDisplay } from "../utils/devicePunchTime";
+
+interface Branch {
+  id: number;
+  companyID: number;
+  branchName?: string | null;
+  serviceProviderID?: number;
+}
+
+interface OverviewEmployee {
+  id: number;
+  employeeFirstName: string;
+  employeeLastName: string;
+  branchesID: number;
+  departmentNameID: number | null;
+  inTime: string | null;
+  outTime: string | null;
+  statusType: string;
+  statusLabel: string;
+  statusDisplay: string;
+  hasPunches: boolean;
+}
+
+interface OverviewSummary {
+  total: number;
+  present: number;
+  absent: number;
+  lateMark: number;
+  halfDay: number;
+  noCheckout: number;
+  onLeave: number;
+  weekOff: number;
+  holiday: number;
+  ot: number;
+  regularized: number;
+}
+
+function statusBadgeClass(statusType: string): string {
+  switch (statusType) {
+    case "PRESENT":
+      return "bg-emerald-50 text-emerald-700";
+    case "LATE_MARK":
+      return "bg-amber-50 text-amber-700";
+    case "HALF_DAY":
+      return "bg-violet-50 text-violet-700";
+    case "ABSENT":
+      return "bg-orange-50 text-orange-600";
+    case "SINGLE_PUNCH":
+      return "bg-indigo-50 text-indigo-700";
+    case "OT":
+      return "bg-teal-50 text-teal-700";
+    case "REGULARIZATION":
+      return "bg-purple-50 text-purple-700";
+    case "LEAVE":
+      return "bg-pink-50 text-pink-700";
+    case "WEEK_OFF":
+      return "bg-slate-100 text-slate-600";
+    case "HOLIDAY":
+      return "bg-sky-50 text-sky-700";
+    default:
+      return "bg-gray-100 text-gray-700";
+  }
+}
 
 interface Employee {
   id: number;
@@ -55,6 +120,7 @@ interface ActivityComment {
   headline: string;
   body: string;
   time: string;
+  sortAt: number;
   avatarInitial: string;
   avatarBg: string;
 }
@@ -79,6 +145,13 @@ export default function DashboardPage() {
     DepartmentHeadcount[]
   >([]);
   const [presentCount, setPresentCount] = useState(0);
+  const [branches, setBranches] = useState<Branch[]>([]);
+  const [selectedBranchId, setSelectedBranchId] = useState<string>("");
+  const [selectedDepartmentId, setSelectedDepartmentId] = useState<string>("");
+  const [overviewEmployees, setOverviewEmployees] = useState<OverviewEmployee[]>([]);
+  const [overviewSummary, setOverviewSummary] = useState<OverviewSummary | null>(null);
+  const [overviewStatusCounts, setOverviewStatusCounts] = useState<Record<string, number>>({});
+  const [overviewLoading, setOverviewLoading] = useState(false);
   const [todayDate] = useState(() => {
     const now = new Date();
     const y = now.getFullYear();
@@ -114,17 +187,75 @@ export default function DashboardPage() {
     loadDashboard();
   }, [user, currentUserMapping]);
 
+  const overviewQueryParams = useMemo(() => {
+    const params = new URLSearchParams();
+    if (user?.role === "SUPERADMIN") {
+      // no company filter
+    } else if (user?.role === "SERVICE_PROVIDER" && currentUserMapping?.serviceProviderID) {
+      params.set("serviceProviderID", String(currentUserMapping.serviceProviderID));
+      if (currentUserMapping.companyID) {
+        params.set("companyID", String(currentUserMapping.companyID));
+      }
+    } else if (
+      (user?.role === "COMPANY_ADMIN" || user?.role === "ADMIN") &&
+      currentUserMapping?.companyID
+    ) {
+      params.set("companyID", String(currentUserMapping.companyID));
+    } else if (user?.role === "EMPLOYEE" || user?.role === "BRANCH_ADMIN") {
+      if (user.companyID) params.set("companyID", String(user.companyID));
+      if (user.branchesID) params.set("branchId", String(user.branchesID));
+    }
+    if (selectedBranchId) params.set("branchId", selectedBranchId);
+    if (selectedDepartmentId) params.set("departmentId", selectedDepartmentId);
+    return params;
+  }, [user, currentUserMapping, selectedBranchId, selectedDepartmentId]);
+
+  useEffect(() => {
+    if (!user) return;
+    if (
+      (user.role === "SERVICE_PROVIDER" ||
+        user.role === "COMPANY_ADMIN" ||
+        user.role === "ADMIN") &&
+      !currentUserMapping
+    ) {
+      return;
+    }
+    loadTodayOverview();
+  }, [user, currentUserMapping, overviewQueryParams.toString()]);
+
+  const loadTodayOverview = async () => {
+    try {
+      setOverviewLoading(true);
+      const qs = overviewQueryParams.toString();
+      const url = `${BACKEND_URL}/dashboard-overview/today-overview${qs ? `?${qs}` : ""}`;
+      const res = await fetch(url, { cache: "no-store" });
+      if (!res.ok) throw new Error("overview failed");
+      const data = await res.json();
+      setOverviewEmployees(Array.isArray(data.employees) ? data.employees : []);
+      setOverviewSummary(data.summary || null);
+      setOverviewStatusCounts(data.statusCounts || {});
+      setPresentCount(data.summary?.present ?? 0);
+    } catch (err) {
+      console.error("Today overview load error:", err);
+      setOverviewEmployees([]);
+      setOverviewSummary(null);
+    } finally {
+      setOverviewLoading(false);
+    }
+  };
+
   const loadDashboard = async () => {
     try {
       setLoading(true);
 
-      const [empRes, deptRes, hcRes, processAttRes] = await Promise.all([
+      const [empRes, deptRes, hcRes, processAttRes, branchesRes] = await Promise.all([
         fetch(`${BACKEND_URL}/manage-emp`, { cache: "no-store" }),
         fetch(`${BACKEND_URL}/departments`, { cache: "no-store" }),
         fetch(`${BACKEND_URL}/departments/with-headcount`, {
           cache: "no-store",
         }),
         fetch(`${BACKEND_URL}/process-att-logs?dateFrom=${weekAgoDate}&dateTo=${todayDate}&limit=10000`, { cache: "no-store" }),
+        fetch(`${BACKEND_URL}/branches`, { cache: "no-store" }),
       ]);
 
       const empJson = await empRes.json();
@@ -133,6 +264,9 @@ export default function DashboardPage() {
       const allDepartments: Department[] = Array.isArray(deptJson) ? deptJson : [];
       const allHeadcounts: DepartmentHeadcount[] = hcRes.ok
         ? await hcRes.json()
+        : [];
+      const allBranches: Branch[] = branchesRes.ok
+        ? await branchesRes.json()
         : [];
 
       // Parse process_att_logs and convert to AttendanceLog format
@@ -146,26 +280,24 @@ export default function DashboardPage() {
       const allAttendanceMerged: AttendanceLog[] = processAttData
         .filter((p: any) => p.manage_employee_id != null && p.punch_time != null)
         .map((p: any) => {
-          const pt = new Date(p.punch_time);
-          const y = pt.getFullYear();
-          const mo = String(pt.getMonth() + 1).padStart(2, '0');
-          const d = String(pt.getDate()).padStart(2, '0');
-          const h = String(pt.getHours()).padStart(2, '0');
-          const mi = String(pt.getMinutes()).padStart(2, '0');
-          const s = String(pt.getSeconds()).padStart(2, '0');
+          const formatted = formatDevicePunchForDisplay(p.punch_time);
+          if (!formatted) return null;
           return {
             id: p.id || 0,
             employeeID: p.manage_employee_id,
-            punchTimeStamp: `${y}-${mo}-${d} ${h}:${mi}:${s}`,
+            punchTimeStamp: formatted.punchTimeStamp,
           };
-        });
+        })
+        .filter((x): x is AttendanceLog => x != null);
 
       let scopedEmployees: Employee[] = [];
       let scopedDepartments: Department[] = [];
+      let scopedBranches: Branch[] = [];
 
       if (user!.role === "SUPERADMIN") {
         scopedEmployees = allEmployees;
         scopedDepartments = allDepartments;
+        scopedBranches = allBranches;
       } else if (user!.role === "SERVICE_PROVIDER" && currentUserMapping) {
         if (currentUserMapping.serviceProviderID) {
           scopedEmployees = allEmployees.filter(
@@ -174,6 +306,9 @@ export default function DashboardPage() {
           scopedDepartments = allDepartments.filter(
             (d) => d.serviceProviderID === currentUserMapping.serviceProviderID
           );
+          scopedBranches = allBranches.filter(
+            (b) => b.serviceProviderID === currentUserMapping.serviceProviderID
+          );
         }
       } else if ((user!.role === "COMPANY_ADMIN" || user!.role === "ADMIN") && currentUserMapping) {
         scopedEmployees = allEmployees.filter(
@@ -181,6 +316,9 @@ export default function DashboardPage() {
         );
         scopedDepartments = allDepartments.filter(
           (d) => d.companyID === currentUserMapping.companyID
+        );
+        scopedBranches = allBranches.filter(
+          (b) => b.companyID === currentUserMapping.companyID
         );
       } else if (user!.role === "EMPLOYEE") {
         scopedEmployees = allEmployees.filter(
@@ -191,6 +329,10 @@ export default function DashboardPage() {
           (d) =>
             d.companyID === user!.companyID && d.branchesID === user!.branchesID
         );
+        scopedBranches = allBranches.filter(
+          (b) =>
+            b.companyID === user!.companyID && b.id === user!.branchesID
+        );
       } else if (user!.role === "BRANCH_ADMIN") {
         scopedEmployees = allEmployees.filter(
           (e) =>
@@ -200,10 +342,18 @@ export default function DashboardPage() {
           (d) =>
             d.companyID === user!.companyID && d.branchesID === user!.branchesID
         );
+        scopedBranches = allBranches.filter(
+          (b) =>
+            b.companyID === user!.companyID && b.id === user!.branchesID
+        );
+        if (!selectedBranchId && user!.branchesID) {
+          setSelectedBranchId(String(user!.branchesID));
+        }
       }
 
       setEmployees(scopedEmployees);
       setDepartments(scopedDepartments);
+      setBranches(scopedBranches);
 
       const scopedDeptIds = new Set(scopedDepartments.map((d) => d.id));
       const scopedHc = allHeadcounts.filter((h) => scopedDeptIds.has(h.id));
@@ -217,8 +367,6 @@ export default function DashboardPage() {
         );
       });
 
-      const presentIds = new Set(todayLogs.map((l) => l.employeeID));
-      setPresentCount(presentIds.size);
       setAttendanceLogs(todayLogs);
 
       const scopedEmpIds = new Set(scopedEmployees.map((e) => e.id));
@@ -331,18 +479,47 @@ export default function DashboardPage() {
       .slice(0, 5);
   }, [departmentHeadcounts, departments, employees]);
 
+  const filterDepartments = useMemo(() => {
+    if (!selectedBranchId) return departments;
+    const branchNum = Number(selectedBranchId);
+    return departments.filter((d) => d.branchesID === branchNum);
+  }, [departments, selectedBranchId]);
+
+  const overviewTotal = overviewSummary?.total ?? overviewEmployees.length;
+  const overviewPresent = overviewSummary?.present ?? presentCount;
+  const overviewAbsent = overviewSummary?.absent ?? Math.max(0, overviewTotal - overviewPresent);
+
+  const statusBreakdown: StatusBreakdownItem[] = useMemo(() => {
+    const labels: Record<string, { name: string; fill: string }> = {
+      PRESENT: { name: "Present", fill: "#22c55e" },
+      LATE_MARK: { name: "Late Mark", fill: "#f59e0b" },
+      HALF_DAY: { name: "Half Day", fill: "#a855f7" },
+      ABSENT: { name: "Absent", fill: "#fb7185" },
+      SINGLE_PUNCH: { name: "No checkout", fill: "#6366f1" },
+      OT: { name: "OT", fill: "#14b8a6" },
+      REGULARIZATION: { name: "Regularized", fill: "#8b5cf6" },
+      LEAVE: { name: "Leave", fill: "#ec4899" },
+      WEEK_OFF: { name: "Week Off", fill: "#94a3b8" },
+      HOLIDAY: { name: "Holiday", fill: "#0ea5e9" },
+    };
+    return Object.entries(overviewStatusCounts)
+      .map(([type, value]) => {
+        const meta = labels[type] || { name: type, fill: "#6b7280" };
+        return { name: meta.name, value, fill: meta.fill };
+      })
+      .filter((x) => x.value > 0);
+  }, [overviewStatusCounts]);
+
   const checkInAvatars = useMemo(() => {
-    const presentIds = new Set(attendanceLogs.map((l) => l.employeeID));
-    return employees
-      .filter((e) => presentIds.has(e.id))
+    return overviewEmployees
+      .filter((e) => e.hasPunches)
       .slice(0, 5)
       .map((e) => ({
         id: e.id,
         name: e.employeeFirstName || "?",
-        initial:
-          (e.employeeFirstName?.charAt(0) || "?").toUpperCase(),
+        initial: (e.employeeFirstName?.charAt(0) || "?").toUpperCase(),
       }));
-  }, [employees, attendanceLogs]);
+  }, [overviewEmployees]);
 
   const commentFeed: ActivityComment[] = useMemo(() => {
     const avatarColors = [
@@ -352,36 +529,59 @@ export default function DashboardPage() {
       "bg-blue-500",
       "bg-violet-500",
     ];
-    const sorted = [...attendanceLogs].sort(
-      (a, b) =>
-        new Date(b.punchTimeStamp).getTime() -
-        new Date(a.punchTimeStamp).getTime()
-    );
 
-    return sorted.slice(0, 4).map((log, i) => {
-      const emp = employees.find((e) => e.id === log.employeeID);
+    const byEmployee = new Map<number, AttendanceLog[]>();
+    for (const log of attendanceLogs) {
+      const list = byEmployee.get(log.employeeID) ?? [];
+      list.push(log);
+      byEmployee.set(log.employeeID, list);
+    }
+
+    const items: ActivityComment[] = [];
+
+    for (const [employeeID, logs] of byEmployee) {
+      const sorted = [...logs].sort(
+        (a, b) =>
+          new Date(a.punchTimeStamp).getTime() -
+          new Date(b.punchTimeStamp).getTime()
+      );
+      if (sorted.length === 0) continue;
+
+      const emp = employees.find((e) => e.id === employeeID);
       const name = emp
         ? `${emp.employeeFirstName} ${emp.employeeLastName}`
-        : `Employee #${log.employeeID}`;
-      const time = log.punchTimeStamp.split(" ")[1]?.slice(0, 5) || "—";
+        : `Employee #${employeeID}`;
+      const firstName = name.split(" ")[0];
 
-      // Determine check-in vs check-out based on punch order for this employee today
-      const empTodayLogs = attendanceLogs
-        .filter((l) => l.employeeID === log.employeeID)
-        .sort((a, b) => new Date(a.punchTimeStamp).getTime() - new Date(b.punchTimeStamp).getTime());
-      const isFirstPunch = empTodayLogs.length === 0 || empTodayLogs[0].id === log.id;
-      const body = isFirstPunch ? "Checked in for today." : "Checked out for today.";
+      if (sorted.length === 1) {
+        const log = sorted[0];
+        items.push({
+          id: log.id,
+          name,
+          headline: `${firstName} · attendance`,
+          body: "Checked in for today.",
+          time: log.punchTimeStamp.split(" ")[1]?.slice(0, 5) || "—",
+          sortAt: new Date(log.punchTimeStamp).getTime(),
+          avatarInitial: name.charAt(0).toUpperCase(),
+          avatarBg: avatarColors[items.length % avatarColors.length],
+        });
+        continue;
+      }
 
-      return {
-        id: log.id,
+      const lastLog = sorted[sorted.length - 1];
+      items.push({
+        id: lastLog.id,
         name,
-        headline: `${name.split(" ")[0]} · attendance`,
-        body,
-        time,
+        headline: `${firstName} · attendance`,
+        body: "Checked out for today.",
+        time: lastLog.punchTimeStamp.split(" ")[1]?.slice(0, 5) || "—",
+        sortAt: new Date(lastLog.punchTimeStamp).getTime(),
         avatarInitial: name.charAt(0).toUpperCase(),
-        avatarBg: avatarColors[i % avatarColors.length],
-      };
-    });
+        avatarBg: avatarColors[items.length % avatarColors.length],
+      });
+    }
+
+    return items.sort((a, b) => b.sortAt - a.sortAt).slice(0, 20);
   }, [attendanceLogs, employees]);
 
   if (!user || loading) {
@@ -389,20 +589,22 @@ export default function DashboardPage() {
       <div className="space-y-5 animate-pulse">
         <div className={`${cardShell} p-6 h-48`} />
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-          <div className={`lg:col-span-2 ${cardShell} p-6 h-72`} />
-          <div className={`${cardShell} p-6 h-72`} />
+          <div className="lg:col-span-2 space-y-5">
+            <div className={`${cardShell} p-6 h-72`} />
+            <div className={`${cardShell} p-6 h-52`} />
+          </div>
+          <div className={`${cardShell} p-6 h-96`} />
         </div>
       </div>
     );
   }
 
   const attRate =
-    employees.length > 0
-      ? Math.round((presentCount / employees.length) * 1000) / 10
+    overviewTotal > 0
+      ? Math.round((overviewPresent / overviewTotal) * 1000) / 10
       : 0;
 
-  const absentCount = Math.max(0, employees.length - presentCount);
-  const rosterCap = Math.max(employees.length, 1);
+  const absentCount = overviewAbsent;
 
   return (
     <div className="space-y-5">
@@ -424,16 +626,48 @@ export default function DashboardPage() {
           </div>
         </section>
       )}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 items-start">
-        <div className="lg:col-span-2 space-y-5">
-          <section className={`${cardShell} p-6 sm:p-7`}>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 items-stretch">
+        <div className="lg:col-span-2 flex flex-col gap-5 min-h-0">
+          <section className={`${cardShell} p-6 sm:p-7 shrink-0`}>
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
               <h2 className="text-lg font-bold text-gray-900 tracking-tight">
                 Overview
               </h2>
-              <div className="flex items-center gap-2 rounded-full bg-[#eef2ff] px-3 py-1.5 text-xs font-medium text-[#4338ca] border border-[#e5e7eb]">
-                <span>Last month</span>
-                <Icon icon="mdi:chevron-down" className="w-4 h-4" />
+              <div className="flex flex-wrap items-center gap-2">
+                {user.role !== "EMPLOYEE" && user.role !== "BRANCH_ADMIN" && (
+                  <select
+                    value={selectedBranchId}
+                    onChange={(e) => {
+                      setSelectedBranchId(e.target.value);
+                      setSelectedDepartmentId("");
+                    }}
+                    className="rounded-full border border-[#e5e7eb] bg-white px-3 py-1.5 text-xs font-medium text-gray-700 min-w-[140px]"
+                    aria-label="Filter by branch"
+                  >
+                    <option value="">All branches</option>
+                    {branches.map((b) => (
+                      <option key={b.id} value={String(b.id)}>
+                        {b.branchName || `Branch ${b.id}`}
+                      </option>
+                    ))}
+                  </select>
+                )}
+                <select
+                  value={selectedDepartmentId}
+                  onChange={(e) => setSelectedDepartmentId(e.target.value)}
+                  className="rounded-full border border-[#e5e7eb] bg-white px-3 py-1.5 text-xs font-medium text-gray-700 min-w-[140px]"
+                  aria-label="Filter by department"
+                >
+                  <option value="">All departments</option>
+                  {filterDepartments.map((d) => (
+                    <option key={d.id} value={String(d.id)}>
+                      {d.departmentName || `Department ${d.id}`}
+                    </option>
+                  ))}
+                </select>
+                {overviewLoading && (
+                  <Icon icon="mdi:loading" className="w-4 h-4 animate-spin text-[#4f46e5]" />
+                )}
               </div>
             </div>
 
@@ -448,7 +682,7 @@ export default function DashboardPage() {
                     <span className="text-[11px] font-medium text-[#4338ca] bg-[#eef2ff] px-2.5 py-1 rounded-full">Total</span>
                   </div>
                   <p className="text-3xl font-bold tracking-tight tabular-nums text-[#111827]">
-                    {employees.length.toLocaleString()}
+                    {overviewTotal.toLocaleString()}
                   </p>
                   <p className="text-[13px] font-medium text-gray-500 mt-1">
                     All employees
@@ -469,7 +703,7 @@ export default function DashboardPage() {
                     <span className="text-[11px] font-medium text-[#4338ca] bg-[#eef2ff] px-2.5 py-1 rounded-full">{attRate}%</span>
                   </div>
                   <p className="text-3xl font-bold tracking-tight tabular-nums text-[#111827]">
-                    {presentCount.toLocaleString()}
+                    {overviewPresent.toLocaleString()}
                   </p>
                   <p className="text-[13px] font-medium text-gray-500 mt-1">
                     Present today
@@ -492,7 +726,7 @@ export default function DashboardPage() {
                     <div className="w-10 h-10 rounded-lg bg-[#eef2ff] flex items-center justify-center">
                       <Icon icon="mdi:account-remove" className="w-5 h-5 text-[#4f46e5]" />
                     </div>
-                    <span className="text-[11px] font-medium text-[#4338ca] bg-[#eef2ff] px-2.5 py-1 rounded-full">{employees.length > 0 ? Math.round((absentCount / employees.length) * 100) : 0}%</span>
+                    <span className="text-[11px] font-medium text-[#4338ca] bg-[#eef2ff] px-2.5 py-1 rounded-full">{overviewTotal > 0 ? Math.round((absentCount / overviewTotal) * 100) : 0}%</span>
                   </div>
                   <p className="text-3xl font-bold tracking-tight tabular-nums text-[#111827]">
                     {absentCount.toLocaleString()}
@@ -501,7 +735,7 @@ export default function DashboardPage() {
                     Absent today
                   </p>
                   <div className="mt-3 h-1 w-full rounded-full bg-[#eef2ff] overflow-hidden">
-                    <div className="h-full rounded-full bg-[#4f46e5] transition-[width] duration-500" style={{ width: `${employees.length > 0 ? Math.round((absentCount / employees.length) * 100) : 0}%`, minWidth: absentCount > 0 ? "4px" : undefined }} />
+                    <div className="h-full rounded-full bg-[#4f46e5] transition-[width] duration-500" style={{ width: `${overviewTotal > 0 ? Math.round((absentCount / overviewTotal) * 100) : 0}%`, minWidth: absentCount > 0 ? "4px" : undefined }} />
                   </div>
                 </div>
               </div>
@@ -512,14 +746,21 @@ export default function DashboardPage() {
                 Workforce mix
               </p>
               <EmployeeStatusCharts
-                total={employees.length}
-                present={presentCount}
+                total={overviewTotal}
+                present={overviewPresent}
                 absent={absentCount}
+                statusBreakdown={statusBreakdown}
               />
             </div>
 
             <p className="text-sm font-semibold text-gray-800 mb-4">
-              {presentCount} new check-ins today!
+              {overviewPresent} checked in today
+              {overviewSummary && overviewSummary.lateMark > 0
+                ? ` · ${overviewSummary.lateMark} late mark`
+                : ""}
+              {overviewSummary && overviewSummary.halfDay > 0
+                ? ` · ${overviewSummary.halfDay} half day`
+                : ""}
             </p>
             <div className="flex items-center justify-between gap-4">
               <div className="flex -space-x-3">
@@ -553,10 +794,25 @@ export default function DashboardPage() {
               </Link>
             </div>
           </section>
+
+          <section className={`${cardShell} p-6 sm:p-7 flex flex-col flex-1 min-h-[240px]`}>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-2 shrink-0">
+              <h2 className="text-lg font-bold text-gray-900 tracking-tight">
+                Attendance view
+              </h2>
+              <div className="flex items-center gap-2 rounded-full bg-[#f4f4f4] px-3 py-1.5 text-xs font-medium text-gray-600 border border-[#ebebeb]">
+                <span>Last 7 days</span>
+                <Icon icon="mdi:chevron-down" className="w-4 h-4" />
+              </div>
+            </div>
+            <div className="flex-1 min-h-[200px]">
+              <SoftBarChart data={barData} className="h-full min-h-[200px]" />
+            </div>
+          </section>
         </div>
 
-        <div className="space-y-5">
-          <section className={`${cardShell} p-6`}>
+        <div className="flex flex-col gap-5 min-h-0">
+          <section className={`${cardShell} p-6 shrink-0`}>
             <h2 className="text-lg font-bold text-gray-900 tracking-tight mb-5">
               Popular departments
             </h2>
@@ -595,8 +851,8 @@ export default function DashboardPage() {
             </Link>
           </section>
 
-          <section className={`${cardShell} p-6`}>
-            <h2 className="text-lg font-bold text-gray-900 tracking-tight mb-5">
+          <section className={`${cardShell} p-6 flex flex-col min-h-0 flex-1`}>
+            <h2 className="text-lg font-bold text-gray-900 tracking-tight mb-4 shrink-0">
               Comments
             </h2>
             {commentFeed.length === 0 ? (
@@ -604,32 +860,34 @@ export default function DashboardPage() {
                 No comments yet
               </p>
             ) : (
-              <ul className="space-y-5">
-                {commentFeed.map((c) => (
-                  <li key={c.id} className="flex gap-3">
-                    <div
-                      className={`w-10 h-10 rounded-full ${c.avatarBg} flex items-center justify-center text-white text-sm font-bold shrink-0`}
-                    >
-                      {c.avatarInitial}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-xs font-semibold text-gray-900">
-                        {c.headline}
-                      </p>
-                      <p className="text-[11px] text-gray-400 mt-0.5">
-                        {c.time}
-                      </p>
-                      <p className="text-sm text-gray-600 mt-2 leading-relaxed">
-                        {c.body}
-                      </p>
-                    </div>
-                  </li>
-                ))}
-              </ul>
+              <div className="overflow-y-auto flex-1 min-h-[120px] max-h-[220px] pr-1 -mr-1">
+                <ul className="space-y-5">
+                  {commentFeed.map((c) => (
+                    <li key={`${c.id}-${c.sortAt}`} className="flex gap-3">
+                      <div
+                        className={`w-10 h-10 rounded-full ${c.avatarBg} flex items-center justify-center text-white text-sm font-bold shrink-0`}
+                      >
+                        {c.avatarInitial}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-xs font-semibold text-gray-900">
+                          {c.headline}
+                        </p>
+                        <p className="text-[11px] text-gray-400 mt-0.5">
+                          {c.time}
+                        </p>
+                        <p className="text-sm text-gray-600 mt-2 leading-relaxed">
+                          {c.body}
+                        </p>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </div>
             )}
           </section>
 
-          <section className={`${cardShell} p-5`}>
+          <section className={`${cardShell} p-5 shrink-0`}>
             <h2 className="text-sm font-bold text-gray-900 tracking-tight mb-3">
               Today&apos;s summary
             </h2>
@@ -651,7 +909,7 @@ export default function DashboardPage() {
                   </div>
                   <p className="text-sm font-medium text-gray-700">Total headcount</p>
                 </div>
-                <span className="text-sm font-bold text-gray-900 tabular-nums">{employees.length}</span>
+                <span className="text-sm font-bold text-gray-900 tabular-nums">{overviewTotal}</span>
               </div>
               <div className="h-px bg-[#f0f0f0]" />
               <div className="flex items-center justify-between">
@@ -677,19 +935,6 @@ export default function DashboardPage() {
           </section>
         </div>
       </div>
-
-      <section className={`${cardShell} p-6 sm:p-7`}>
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-2">
-          <h2 className="text-lg font-bold text-gray-900 tracking-tight">
-            Attendance view
-          </h2>
-          <div className="flex items-center gap-2 rounded-full bg-[#f4f4f4] px-3 py-1.5 text-xs font-medium text-gray-600 border border-[#ebebeb]">
-            <span>Last 7 days</span>
-            <Icon icon="mdi:chevron-down" className="w-4 h-4" />
-          </div>
-        </div>
-        <SoftBarChart data={barData} />
-      </section>
 
       <section className={`${cardShell} overflow-hidden`}>
         <div className="px-6 py-4 border-b border-[#f0f0f0] flex items-center justify-between">
@@ -722,19 +967,17 @@ export default function DashboardPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {employees.length === 0 ? (
+              {overviewEmployees.length === 0 ? (
                 <TableRow>
                   <TableCell
                     colSpan={5}
                     className="text-center py-10 text-sm text-gray-400"
                   >
-                    No employees found
+                    {overviewLoading ? "Loading attendance…" : "No employees found"}
                   </TableCell>
                 </TableRow>
               ) : (
-                employees.map((e, i) => {
-                  const a = getAttendance(e.id);
-                  return (
+                overviewEmployees.map((e, i) => (
                     <TableRow
                       key={e.id}
                       className="hover:bg-[#fafafa]/80 border-[#f5f5f5]"
@@ -754,25 +997,21 @@ export default function DashboardPage() {
                         </div>
                       </TableCell>
                       <TableCell className="text-sm text-gray-600 font-mono tabular-nums">
-                        {a.inTime}
+                        {e.inTime || "—"}
                       </TableCell>
                       <TableCell className="text-sm text-gray-600 font-mono tabular-nums">
-                        {a.outTime}
+                        {e.outTime || "—"}
                       </TableCell>
                       <TableCell>
-                        {a.isPresent ? (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700">
-                            Present
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-orange-50 text-orange-600">
-                            Absent
-                          </span>
-                        )}
+                        <span
+                          className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold ${statusBadgeClass(e.statusType)}`}
+                          title={e.statusLabel}
+                        >
+                          {e.statusDisplay}
+                        </span>
                       </TableCell>
                     </TableRow>
-                  );
-                })
+                  ))
               )}
             </TableBody>
           </Table>

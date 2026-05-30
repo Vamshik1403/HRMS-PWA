@@ -1,6 +1,14 @@
+import { Suspense } from "react";
+import EmpMobileLayout from "../components/layout/EmpMobileLayout";
 import { EmpGenerateSalary } from "./EmpGenerateSalaryPage";
 
-/** Legacy route — PWA payout uses /empPayout; this page remains for PDF download helper. */
+/** PWA Pay Slips list (employees + admins on mobile). */
 export default function EmpGenerateSalaryPage() {
-  return <EmpGenerateSalary />;
+  return (
+    <EmpMobileLayout>
+      <Suspense fallback={null}>
+        <EmpGenerateSalary />
+      </Suspense>
+    </EmpMobileLayout>
+  );
 }

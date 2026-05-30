@@ -7,6 +7,9 @@ import { TaskStatusBadge } from "../task-ui";
 import { TaskChatAttachmentImage } from "../TaskChatAttachment";
 import { taskAttachmentSrc, uploadTaskAttachment } from "../../../utils/taskAttachment";
 import { toast } from "sonner";
+import type { SitePunchKind } from "../../../utils/taskSitePunch";
+import { nextTaskStatus } from "../../../utils/taskStatusFlow";
+import { sitePunchLabel } from "../../../utils/taskSitePunch";
 
 export interface MobileChatMessage {
   id: number;
@@ -67,8 +70,9 @@ export function MobileTaskChatView({
   onSend,
   sending,
   onBack,
-  onStatusChange,
+  onAdvanceStatus,
   onSitePunch,
+  sitePunchNextKind = "in",
 }: {
   task: MobileTaskChatDetail;
   currentUserName?: string;
@@ -77,8 +81,9 @@ export function MobileTaskChatView({
   onSend: (payload: { message: string; attachmentUrl?: string }) => void | Promise<void>;
   sending?: boolean;
   onBack: () => void;
-  onStatusChange?: (status: string) => void | Promise<void>;
-  onSitePunch?: (kind: "in" | "out") => void | Promise<void>;
+  onAdvanceStatus?: () => void | Promise<void>;
+  onSitePunch?: () => void | Promise<void>;
+  sitePunchNextKind?: SitePunchKind;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [infoOpen, setInfoOpen] = useState(false);
@@ -163,23 +168,21 @@ export function MobileTaskChatView({
                     View Task info
                   </button>
                   {(task.taskType || "").toLowerCase().includes("site visit") && onSitePunch && (
-                    <>
-                      <button type="button" className="w-full text-left px-4 py-2.5 text-[13px] text-[#2563eb] active:bg-gray-50" onClick={() => { setMenuOpen(false); onSitePunch("in"); }}>
-                        Site Check-In
-                      </button>
-                      <button type="button" className="w-full text-left px-4 py-2.5 text-[13px] text-[#2563eb] active:bg-gray-50" onClick={() => { setMenuOpen(false); onSitePunch("out"); }}>
-                        Site Check-Out
-                      </button>
-                    </>
-                  )}
-                  {onStatusChange && task.status !== "Closed" && (
-                    <button type="button" className="w-full text-left px-4 py-2.5 text-[13px] text-gray-700 active:bg-gray-50" onClick={() => { setMenuOpen(false); onStatusChange("Closed"); }}>
-                      Closed
+                    <button
+                      type="button"
+                      className="w-full text-left px-4 py-2.5 text-[13px] text-[#2563eb] active:bg-gray-50"
+                      onClick={() => { setMenuOpen(false); void onSitePunch(); }}
+                    >
+                      {sitePunchLabel(sitePunchNextKind)}
                     </button>
                   )}
-                  {onStatusChange && task.status === "Closed" && (
-                    <button type="button" className="w-full text-left px-4 py-2.5 text-[13px] text-emerald-700 active:bg-gray-50" onClick={() => { setMenuOpen(false); onStatusChange("Open"); }}>
-                      Reopen
+                  {onAdvanceStatus && nextTaskStatus(task.status) && (
+                    <button
+                      type="button"
+                      className="w-full text-left px-4 py-2.5 text-[13px] text-gray-700 active:bg-gray-50"
+                      onClick={() => { setMenuOpen(false); void onAdvanceStatus(); }}
+                    >
+                      Set to {nextTaskStatus(task.status)}
                     </button>
                   )}
                 </div>

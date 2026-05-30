@@ -40,6 +40,7 @@ function displayStatus(s: string) {
     Rejected: "Rejected",
     "Partly Approved": "Partly Approved",
     "Partly approved": "Partly Approved",
+    Paid: "Paid",
   };
   return map[s] || s;
 }

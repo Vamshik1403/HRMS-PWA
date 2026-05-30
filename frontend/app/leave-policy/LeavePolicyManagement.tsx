@@ -64,6 +64,34 @@ interface LeavePolicy {
 // Holidays list fetched from Manage Holiday API (only holidayName is used)
 const BACKEND_URL = "/backend"
 
+const PL_EXPIRY_STORAGE_YEAR = 2000
+const MONTH_OPTIONS = [
+  { value: 1, label: "January" },
+  { value: 2, label: "February" },
+  { value: 3, label: "March" },
+  { value: 4, label: "April" },
+  { value: 5, label: "May" },
+  { value: 6, label: "June" },
+  { value: 7, label: "July" },
+  { value: 8, label: "August" },
+  { value: 9, label: "September" },
+  { value: 10, label: "October" },
+  { value: 11, label: "November" },
+  { value: 12, label: "December" },
+]
+
+function plExpiryFromParts(month: number, day: number): string | null {
+  if (!month || !day) return null
+  return `${PL_EXPIRY_STORAGE_YEAR}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`
+}
+
+function plExpiryToParts(iso?: string | null): { month: number; day: number } {
+  if (!iso) return { month: 0, day: 0 }
+  const d = new Date(iso.includes("T") ? iso : `${iso}T12:00:00`)
+  if (Number.isNaN(d.getTime())) return { month: 0, day: 0 }
+  return { month: d.getUTCMonth() + 1, day: d.getUTCDate() }
+}
+
 export function LeavePolicyManagement() {
   const [policies, setPolicies] = useState<LeavePolicy[]>([])
   const [searchTerm, setSearchTerm] = useState("")
@@ -90,52 +118,78 @@ export function LeavePolicyManagement() {
     paidLeaveConsideredInPL: false,
     plCarryForwardLimit: 0,
     lapseEncashmentDate: "",
+    plExpiryMonth: 0,
+    plExpiryDay: 0,
     applicableHolidays: [] as Holiday[]
   })
   const [availableHolidays, setAvailableHolidays] = useState<Holiday[]>([])
   const user = useCurrentUser();
-  const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN" || user?.role === "BRANCH_ADMIN";
+  const canManage =
+    user?.role === "SUPERADMIN" ||
+    user?.role === "SERVICE_PROVIDER" ||
+    user?.role === "COMPANY_ADMIN" ||
+    user?.role === "ADMIN" ||
+    user?.role === "BRANCH_ADMIN";
 const [currentUserMapping, setCurrentUserMapping] = useState<any>(null);
 
+
+const sidebarCtx = typeof window !== "undefined" ? getSidebarContext() : null;
 
 const resolvedServiceProviderID =
   user?.role === "SERVICE_PROVIDER"
     ? currentUserMapping?.serviceProviderID
-    : formData.serviceProviderID;
+    : user?.role === "SUPERADMIN"
+      ? sidebarCtx?.serviceProviderID || formData.serviceProviderID
+      : currentUserMapping?.serviceProviderID || formData.serviceProviderID;
 
 const resolvedCompanyID =
   user?.role === "SERVICE_PROVIDER"
     ? currentUserMapping?.companyID
-    : formData.companyID;
+    : user?.role === "SUPERADMIN"
+      ? sidebarCtx?.companyID || formData.companyID
+      : currentUserMapping?.companyID || formData.companyID;
 
 
 
-// Load mapping for MANAGER / BRANCH_ADMIN
+// Load user mapping for roles that scope company/branch
 useEffect(() => {
-  if (user?.role !== "SERVICE_PROVIDER" && user?.role !== "BRANCH_ADMIN") return;
-
-  if (user?.role === "SERVICE_PROVIDER") {
+  if (!user) return;
+  if (user.role === "BRANCH_ADMIN") {
+    setCurrentUserMapping(user);
+    return;
+  }
+  if (
+    user.role === "SERVICE_PROVIDER" ||
+    user.role === "COMPANY_ADMIN" ||
+    user.role === "ADMIN"
+  ) {
     (async () => {
       const res = await fetch(`${BACKEND_URL}/users`);
       const users = await res.json();
       const me = users.find((u: any) => u.username === user.username);
       setCurrentUserMapping(me || null);
     })();
-  } else if (user?.role === "BRANCH_ADMIN") {
-    setCurrentUserMapping(user);
   }
 }, [user]);
 
-// Auto-fill IDs for MANAGER / BRANCH_ADMIN
+// Auto-fill company/branch from mapping
 useEffect(() => {
-  if (user?.role === "SERVICE_PROVIDER" && currentUserMapping) {
+  if (!currentUserMapping) return;
+  if (user?.role === "SERVICE_PROVIDER") {
     setFormData((p) => ({
       ...p,
       serviceProviderID: currentUserMapping.serviceProviderID,
       companyID: currentUserMapping.companyID,
-      branchesID: currentUserMapping.branchesID,
+      branchesID: currentUserMapping.branchesID ?? p.branchesID,
     }));
-  } else if (user?.role === "BRANCH_ADMIN" && currentUserMapping) {
+  } else if (user?.role === "COMPANY_ADMIN" || user?.role === "ADMIN") {
+    setFormData((p) => ({
+      ...p,
+      serviceProviderID: currentUserMapping.serviceProviderID ?? p.serviceProviderID,
+      companyID: currentUserMapping.companyID ?? p.companyID,
+      companyName: currentUserMapping.companyName ?? p.companyName,
+    }));
+  } else if (user?.role === "BRANCH_ADMIN") {
     setFormData((p) => ({
       ...p,
       serviceProviderID: currentUserMapping.serviceProviderID ?? null,
@@ -144,6 +198,25 @@ useEffect(() => {
     }));
   }
 }, [user, currentUserMapping]);
+
+// Resolve branch display name when branchesID is set
+useEffect(() => {
+  if (!formData.branchesID || formData.branchName) return;
+  (async () => {
+    try {
+      const res = await fetch(`${BACKEND_URL}/branches`, { cache: "no-store" });
+      const list = await res.json();
+      const b = (Array.isArray(list) ? list : []).find(
+        (x: { id: number }) => Number(x.id) === Number(formData.branchesID),
+      );
+      if (b?.branchName) {
+        setFormData((p) => ({ ...p, branchName: b.branchName }));
+      }
+    } catch {
+      /* ignore */
+    }
+  })();
+}, [user, formData.branchesID, formData.branchName]);
 
 // Load available holidays with RBAC filtering
 const loadAvailableHolidays = async () => {
@@ -298,8 +371,18 @@ const fetchBranches = async (query: string) => {
 
   const loadLeavePolicies = async () => {
     try {
-      const response = await fetch(`${BACKEND_URL}/leave-policy`);
+      const [response, branchesRes] = await Promise.all([
+        fetch(`${BACKEND_URL}/leave-policy`),
+        fetch(`${BACKEND_URL}/branches`),
+      ]);
       const data = await response.json();
+      const branchesList = branchesRes.ok ? await branchesRes.json() : [];
+      const branchNameById = new Map<number, string>(
+        (Array.isArray(branchesList) ? branchesList : []).map((b: { id: number; branchName?: string }) => [
+          b.id,
+          b.branchName || "",
+        ]),
+      );
 
       const all = Array.isArray(data) ? data : [];
       const mapped = all.map((policy: any) => {
@@ -318,7 +401,10 @@ const fetchBranches = async (query: string) => {
           ...policy,
           serviceProvider: policy.serviceProvider?.companyName || "",
           companyName: policy.company?.companyName || "",
-          branchName: policy.branches?.branchName || "",
+          branchName:
+            policy.branches?.branchName ||
+            (policy.branchesID ? branchNameById.get(policy.branchesID) : "") ||
+            "",
           applicableHolidays: holidays,
         };
       });
@@ -398,6 +484,12 @@ const fetchBranches = async (query: string) => {
     // Validation
     const validationErrors: string[] = []
     if (!formData.leavePolicyName?.trim()) validationErrors.push("Leave Policy Name is required")
+    if (!formData.branchesID || Number(formData.branchesID) <= 0) {
+      validationErrors.push("Branch is required")
+    }
+    if (formData.isPrivilegedLeaveApplicable && (!formData.plExpiryMonth || !formData.plExpiryDay)) {
+      validationErrors.push("PL Expiry day and month are required when PL is applicable")
+    }
     if (validationErrors.length > 0) {
       validationErrors.forEach(msg => toast.error(msg))
       return
@@ -421,12 +513,14 @@ const fetchBranches = async (query: string) => {
   companyID:
     user?.role === "SERVICE_PROVIDER"
       ? currentUserMapping?.companyID || null
-      : formData.companyID || null,
+      : formData.companyID || currentUserMapping?.companyID || null,
 
   branchesID:
-    user?.role === "SERVICE_PROVIDER"
-      ? currentUserMapping?.branchesID || null
-      : formData.branchesID || null,
+    formData.branchesID && Number(formData.branchesID) > 0
+      ? Number(formData.branchesID)
+      : user?.role === "BRANCH_ADMIN"
+        ? currentUserMapping?.branchesID ?? null
+        : null,
 
   leavePolicyName: formData.leavePolicyName,
   sickLeaveCount: String(formData.sickLeaveCount),
@@ -441,7 +535,7 @@ const fetchBranches = async (query: string) => {
   holidayConsideredInPL: formData.holidayConsideredInPL,
   paidLeaveConsideredInPL: formData.paidLeaveConsideredInPL,
   plCarryForwardLimit: Number(formData.plCarryForwardLimit),
-  lapseEncashmentDate: formData.lapseEncashmentDate || null,
+  lapseEncashmentDate: plExpiryFromParts(formData.plExpiryMonth, formData.plExpiryDay),
   applicableHolidayIds,
 };
 
@@ -503,12 +597,15 @@ const fetchBranches = async (query: string) => {
       paidLeaveConsideredInPL: false,
       plCarryForwardLimit: 0,
       lapseEncashmentDate: "",
+      plExpiryMonth: 0,
+      plExpiryDay: 0,
       applicableHolidays: []
     })
     setEditingPolicy(null)
   }
 
   const handleEdit = (policy: LeavePolicy) => {
+    const plParts = plExpiryToParts(policy.lapseEncashmentDate)
     setFormData({
       serviceProviderID: policy.serviceProviderID || 0,
       companyID: policy.companyID || 0,
@@ -530,6 +627,8 @@ const fetchBranches = async (query: string) => {
       paidLeaveConsideredInPL: policy.paidLeaveConsideredInPL || false,
       plCarryForwardLimit: policy.plCarryForwardLimit || 0,
       lapseEncashmentDate: policy.lapseEncashmentDate ? policy.lapseEncashmentDate.split("T")[0] : "",
+      plExpiryMonth: plParts.month,
+      plExpiryDay: plParts.day,
       applicableHolidays: policy.applicableHolidays || []
     })
     setEditingPolicy(policy)
@@ -666,45 +765,36 @@ const handleCompanySelect = (selected: SelectedItem) => {
     </>
   )}
 
-  {/* MANAGER → Only Branch */}
-  {user?.role === "SERVICE_PROVIDER" && (
-    <SearchSuggestInput
-      label="Branch Name"
-      value={formData.branchName}
-      onChange={(value) =>
-        setFormData((prev) => ({ ...prev, branchName: value }))
-      }
-      onSelect={(selected) =>
-        setFormData((p) => ({
-          ...p,
-          branchesID: selected.value,
-          branchName: selected.display,
-        }))
-      }
-      fetchData={fetchBranches}
-      placeholder="Select Branch"
-      displayField="branchName"
-      valueField="id"
-      required
-    />
-  )}
-
-  {/* SUPERADMIN → Branch input (full list) */}
-  {user?.role === "SUPERADMIN" && (
-    <SearchSuggestInput
-      label="Branch Name"
-      value={formData.branchName}
-      onChange={(value) =>
-        setFormData((prev) => ({ ...prev, branchName: value }))
-      }
-      onSelect={handleBranchSelect}
-      fetchData={fetchBranches}
-      placeholder="Select Branch"
-      displayField="branchName"
-      valueField="id"
-      required
-    />
-  )}
+  <div className="space-y-2 sm:col-span-3">
+    {user?.role === "BRANCH_ADMIN" ? (
+      <>
+        <Label htmlFor="branchNameLocked">Branch Name *</Label>
+        <Input
+          id="branchNameLocked"
+          value={formData.branchName || "—"}
+          readOnly
+          disabled
+          className="bg-gray-50"
+        />
+      </>
+    ) : (
+      <SearchSuggestInput
+        label="Branch Name *"
+        value={formData.branchName}
+        onChange={(value) =>
+          setFormData((prev) => ({ ...prev, branchName: value, branchesID: 0 }))
+        }
+        onSelect={handleBranchSelect}
+        fetchData={fetchBranches}
+        placeholder={
+          resolvedCompanyID ? "Select Branch" : "Select company in sidebar first"
+        }
+        displayField="branchName"
+        valueField="id"
+        required
+      />
+    )}
+  </div>
 </div>
 
 
@@ -901,13 +991,46 @@ const handleCompanySelect = (selected: SelectedItem) => {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="lapseEncashmentDate">PL Expiry Date</Label>
-                    <Input
-                      id="lapseEncashmentDate"
-                      type="date"
-                      value={formData.lapseEncashmentDate}
-                      onChange={(e) => setFormData(prev => ({ ...prev, lapseEncashmentDate: e.target.value }))}
-                    />
+                    <Label>PL Expiry Date (day &amp; month)</Label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <select
+                        id="plExpiryMonth"
+                        value={formData.plExpiryMonth || ""}
+                        onChange={(e) =>
+                          setFormData((prev) => ({
+                            ...prev,
+                            plExpiryMonth: Number(e.target.value) || 0,
+                          }))
+                        }
+                        className="w-full px-3 py-2 border border-gray-300 rounded-sm text-sm"
+                      >
+                        <option value="">Month</option>
+                        {MONTH_OPTIONS.map((m) => (
+                          <option key={m.value} value={m.value}>
+                            {m.label}
+                          </option>
+                        ))}
+                      </select>
+                      <select
+                        id="plExpiryDay"
+                        value={formData.plExpiryDay || ""}
+                        onChange={(e) =>
+                          setFormData((prev) => ({
+                            ...prev,
+                            plExpiryDay: Number(e.target.value) || 0,
+                          }))
+                        }
+                        className="w-full px-3 py-2 border border-gray-300 rounded-sm text-sm"
+                      >
+                        <option value="">Day</option>
+                        {Array.from({ length: 31 }, (_, i) => i + 1).map((d) => (
+                          <option key={d} value={d}>
+                            {d}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <p className="text-xs text-gray-500">Year is not stored — only the calendar day and month apply each year.</p>
                   </div>
                 </div>
               </div>

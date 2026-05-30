@@ -103,6 +103,13 @@ export class UpdateManageEmployeeDto {
   @IsOptional() @IsString() employeeMotherName?: string | null;
   @IsOptional() @IsString() employeeSpouseName?: string | null;
 
+  @IsOptional() @IsString() pfMemberStatus?: string | null;
+  @IsOptional() @IsString() pfNumber?: string | null;
+  @IsOptional() @IsString() aadharNo?: string | null;
+  @IsOptional() @IsString() panNo?: string | null;
+  @IsOptional() @IsString() uanNo?: string | null;
+  @IsOptional() @IsString() esiNo?: string | null;
+
   // Basic position fields (stored directly on ManageEmployee)
   @IsOptional() @IsInt() departmentNameID?: number | null;
   @IsOptional() @IsInt() designationID?: number | null;

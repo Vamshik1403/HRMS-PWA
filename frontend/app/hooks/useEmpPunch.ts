@@ -118,7 +118,7 @@ export function useEmpPunch(onStatusChange?: (s: TodayStatus) => void) {
   );
 
   const markAbsent = useCallback(
-    async (reason: string, leaveType: string) => {
+    async (reason: string) => {
       setPunchError(null);
       setPunchSuccess(null);
       setPunchLoading(true);
@@ -127,7 +127,7 @@ export function useEmpPunch(onStatusChange?: (s: TodayStatus) => void) {
         const res = await fetch(`${BACKEND}/emp-location-attendance/mark-absent`, {
           method: "POST",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-          body: JSON.stringify({ reason, leaveType }),
+          body: JSON.stringify({ reason }),
         });
         if (!res.ok) {
           const body = await res.json().catch(() => null);

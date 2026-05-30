@@ -24,7 +24,12 @@ export class CreateReimbursementDto {
 }
 
 export class ReimbursementItemDto {
+  id?: number;
   reimbursementType?: string;
   amount?: string;
   description?: string;
+  status?: string;
+  approvalType?: string;
+  paidStatus?: string;
+  paymentRemark?: string;
 }

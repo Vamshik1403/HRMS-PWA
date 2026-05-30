@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { Icon } from "@iconify/react";
 import EmpMobileLayout from "../../components/layout/EmpMobileLayout";
 import { totalAmount, type ReimbursementRow } from "../../components/emp/EmpReimbursementMobile";
+import { markEmpRecordSeen } from "../../utils/empHomeSeen";
 import { useCurrentUser } from "../../hooks/useCurrentUser";
 import { taskFetch } from "../../utils/taskApi";
 
@@ -24,12 +25,14 @@ export default function EmpReimbursementDetailPage() {
       .then((r) => {
         if (!r) return;
         const items = Array.isArray(r.items) ? r.items : [];
+        const status = r.status || "Pending";
+        markEmpRecordSeen("reimb", r.id, status);
         setRow({
           id: String(r.id),
           date: r.date,
           taskProjectID: r.taskProjectID,
           amount: 0,
-          status: r.status,
+          status,
           items,
         });
         if (r.taskProjectID && user) {

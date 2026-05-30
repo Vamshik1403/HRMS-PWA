@@ -19,7 +19,6 @@ export function EmpTodayStatusCard({ todayStatus, loading, onStatusUpdate }: Emp
   const [time, setTime] = useState(new Date());
   const [absentOpen, setAbsentOpen] = useState(false);
   const [absentReason, setAbsentReason] = useState("");
-  const [absentLeaveType, setAbsentLeaveType] = useState("LoP");
 
   const {
     punch,
@@ -60,7 +59,7 @@ export function EmpTodayStatusCard({ todayStatus, loading, onStatusUpdate }: Emp
 
   const submitAbsent = async () => {
     if (absentReason.trim().length < 3) return;
-    await markAbsent(absentReason.trim(), absentLeaveType);
+    await markAbsent(absentReason.trim());
     setAbsentOpen(false);
     setAbsentReason("");
   };
@@ -215,9 +214,6 @@ export function EmpTodayStatusCard({ todayStatus, loading, onStatusUpdate }: Emp
         <div className="px-4 pb-4">
           <p className="text-[13px] text-gray-600 text-center py-2">
             Marked absent today
-            {todayStatus?.absentDeclaration?.leaveType
-              ? ` · Leave type: ${todayStatus.absentDeclaration.leaveType}`
-              : ""}
           </p>
         </div>
       )}
@@ -230,16 +226,6 @@ export function EmpTodayStatusCard({ todayStatus, loading, onStatusUpdate }: Emp
             <p className="text-[12px] text-gray-500 mb-4">
               Emergency absence without prior notice. A leave request will be sent to your manager.
             </p>
-            <label className="text-[12px] font-semibold text-gray-600 block mb-1">Leave type</label>
-            <select
-              className="w-full h-10 rounded-xl border border-gray-200 px-3 text-[14px] mb-3"
-              value={absentLeaveType}
-              onChange={(e) => setAbsentLeaveType(e.target.value)}
-            >
-              <option value="LoP">Loss of Pay (LoP)</option>
-              <option value="Sick">Sick Leave (SL)</option>
-              <option value="Casual">Casual Leave (CL)</option>
-            </select>
             <label className="text-[12px] font-semibold text-gray-600 block mb-1">Reason *</label>
             <textarea
               value={absentReason}
