@@ -21,6 +21,7 @@ import { SearchSuggestInput } from "../components/SearchSuggestInput"
 import { useCurrentUser } from "../hooks/useCurrentUser"
 import { toast } from "sonner";
 import { getSidebarContext } from "../utils/sidebarContext";
+import { formatDevicePunchForDisplay } from "../utils/devicePunchTime";
 
 interface AttendanceRegularisation {
   id: string
@@ -467,11 +468,8 @@ export function AttendanceRegularisationManagement() {
       }
 
       const parsePunchTime = (pt: string): string | null => {
-        if (!pt) return null
-        if (pt.includes("T")) return pt.split("T")[1].split(".")[0]
-        const m = pt.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2})$/)
-        if (m) return `${String(m[4]).padStart(2, "0")}:${m[5]}:00`
-        return null
+        const f = formatDevicePunchForDisplay(pt)
+        return f?.timeStr ?? null
       }
 
       const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]

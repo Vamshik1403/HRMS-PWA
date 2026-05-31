@@ -1,0 +1,14 @@
+{
+  "serviceProviderID": 2,
+  "companyID": 2,
+  "branchesID": 1,
+  "workShiftID": 1,
+  "attendancePolicyID": 1,
+  "leavePolicyID": 2,
+  "employmentType": "Permanent",
+  "employmentStatus": "Confirmed",
+  "probationPeriod": "",
+  "salaryPayGradeType": "Monthly",
+  "monthlyPayGradeID": 1,
+  "typeOfEmployee": "employee"
+}

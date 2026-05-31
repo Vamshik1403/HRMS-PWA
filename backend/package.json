@@ -11,6 +11,8 @@
     "generate": "prisma generate --schema=prisma/hrms/schema.prisma",
     "studio": "prisma studio --schema=prisma/hrms/schema.prisma --port 5556",
     "seed": "ts-node prisma/seed.ts",
+    "import:employees": "ts-node scripts/import-employees.ts",
+    "import:attendance-logs": "ts-node scripts/import-attendance-logs.ts",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "start": "nest start",
     "start:dev": "nest start --watch",

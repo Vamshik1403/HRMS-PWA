@@ -1,3 +1,5 @@
+import { formatDevicePunchStorage } from '../common/device-punch-time';
+
 /** Mirrors Attendance Marking Logs logic from the web reports (actual mode). */
 
 export const WEEKDAYS = [
@@ -35,27 +37,7 @@ export type AttendancePolicyLike = {
 };
 
 export function parsePunchTime(punchTime: string): { dateKey: string; timeStr: string } | null {
-  if (!punchTime) return null;
-  if (punchTime.includes('T')) {
-    const dt = new Date(punchTime);
-    if (Number.isNaN(dt.getTime())) return null;
-    const year = dt.getFullYear();
-    const month = String(dt.getMonth() + 1).padStart(2, '0');
-    const day = String(dt.getDate()).padStart(2, '0');
-    const hours = String(dt.getHours()).padStart(2, '0');
-    const minutes = String(dt.getMinutes()).padStart(2, '0');
-    const seconds = String(dt.getSeconds()).padStart(2, '0');
-    return { dateKey: `${year}-${month}-${day}`, timeStr: `${hours}:${minutes}:${seconds}` };
-  }
-  const match = punchTime.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2})/);
-  if (match) {
-    const [, day, month, year, hour, minute] = match;
-    return {
-      dateKey: `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`,
-      timeStr: `${String(hour).padStart(2, '0')}:${minute}:00`,
-    };
-  }
-  return null;
+  return formatDevicePunchStorage(punchTime);
 }
 
 export function dedupeSortedPunchList(times: string[]): string[] {

@@ -29,5 +29,15 @@
         "auth": "UFmN5lW3cxxNI8nAugWe9w"
       }
     }
+  },
+  {
+    "employeeID": 45,
+    "subscription": {
+      "endpoint": "https://web.push.apple.com/QAAMD0v28mdxF9mcrJ-pObCEJonVG3gzoJAFUcC7UJJrjUp3EP608W69vv1N7g4lITeLPsTu-WlIKwNkBzvm1NTiX4zEjkl8lZ7uBbEJWBMExrHlFeOBWfJwYy3orsH7fPosBuRPt_cdmckLOo4DlyamFsenj9IRanh1A-Z7dYQ",
+      "keys": {
+        "p256dh": "BAhsYnAwE1O2aEuoti2F01-QVHKAgpS_dZk9CDPyPVctWRlMNrP9LCy6nYkDqbnCDLqRDnMf27IxJjwaeTdV4yw",
+        "auth": "UFmN5lW3cxxNI8nAugWe9w"
+      }
+    }
   }
 ]

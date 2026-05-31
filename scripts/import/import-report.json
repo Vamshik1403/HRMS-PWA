@@ -1,0 +1,120 @@
+{
+  "runAt": "2026-05-31T19:40:30.492Z",
+  "sourceFile": "/var/www/openhrm/scripts/import/employees_import.json",
+  "dryRun": false,
+  "replaceExisting": true,
+  "totalRows": 18,
+  "imported": [],
+  "replaced": [
+    {
+      "employeeID": "Enpl_101",
+      "oldId": 19,
+      "newId": 36,
+      "name": "SEEMA SAHADEV KAWLE"
+    },
+    {
+      "employeeID": "ENPL_102",
+      "oldId": 20,
+      "newId": 37,
+      "name": "ARIF MOHAMMAD SOLKAR"
+    },
+    {
+      "employeeID": "ENPL_103",
+      "oldId": 21,
+      "newId": 38,
+      "name": "ANIL KUMAR SINGH"
+    },
+    {
+      "employeeID": "ENPL_104",
+      "oldId": 22,
+      "newId": 39,
+      "name": "MAYUR MADHUKAR UJAL"
+    },
+    {
+      "employeeID": "ENPL_109",
+      "oldId": 23,
+      "newId": 40,
+      "name": "SAGAR SATAYAVAN MADHAV"
+    },
+    {
+      "employeeID": "ENPL_111",
+      "oldId": 24,
+      "newId": 41,
+      "name": "SUJIT NARAYAN WAGHMARE"
+    },
+    {
+      "employeeID": "ENPL_118",
+      "oldId": 25,
+      "newId": 42,
+      "name": "VINAY RAMASHRAY YADAV"
+    },
+    {
+      "employeeID": "ENPL_121",
+      "oldId": 26,
+      "newId": 43,
+      "name": "KALPESH PRAVIN RATHOD"
+    },
+    {
+      "employeeID": "ENPL_122",
+      "oldId": 27,
+      "newId": 44,
+      "name": "NILESH SURESH MAHADESHWAR"
+    },
+    {
+      "employeeID": "ENPL_123",
+      "oldId": 1,
+      "newId": 45,
+      "name": "VAMSHIK MAIDHAM"
+    },
+    {
+      "employeeID": "3s_105",
+      "oldId": 28,
+      "newId": 46,
+      "name": "MANGESH MIRAJI YEWALE"
+    },
+    {
+      "employeeID": "3s_103",
+      "oldId": 29,
+      "newId": 47,
+      "name": "VIGHNESH PRAKASH BANBE"
+    },
+    {
+      "employeeID": "3s_109",
+      "oldId": 30,
+      "newId": 48,
+      "name": "SHRVAN KUMAR SINGH"
+    },
+    {
+      "employeeID": "3s_111",
+      "oldId": 31,
+      "newId": 49,
+      "name": "Abhishek Maddheshiya"
+    },
+    {
+      "employeeID": "3s_112",
+      "oldId": 32,
+      "newId": 50,
+      "name": "BHAVESH PRAMOD BHATKAR"
+    },
+    {
+      "employeeID": "3s_113",
+      "oldId": 33,
+      "newId": 51,
+      "name": "Prakash S"
+    },
+    {
+      "employeeID": "3s_114",
+      "oldId": 34,
+      "newId": 52,
+      "name": "MAYUR SUNIL ZEPALE"
+    },
+    {
+      "employeeID": "3s_115",
+      "oldId": 35,
+      "newId": 53,
+      "name": "VINIT PRADIP CHAVAN"
+    }
+  ],
+  "skipped": [],
+  "failed": []
+}

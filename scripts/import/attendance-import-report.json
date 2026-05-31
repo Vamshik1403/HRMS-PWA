@@ -1,0 +1,17 @@
+{
+  "runAt": "2026-05-31T20:03:03.059Z",
+  "sourceFile": "/var/www/openhrm/scripts/8_logs.sql",
+  "dateFrom": "2026-05-21",
+  "dateTo": "2026-05-30",
+  "cleared": {
+    "essl_raw_attlog": 0,
+    "process_att_logs": 0
+  },
+  "parsedFromFile": 1735,
+  "inDateRange": 74,
+  "esslInserted": 74,
+  "processInserted": 74,
+  "skippedNoEmployee": [],
+  "skippedOutOfRange": 1661,
+  "unmatchedHrmCodes": []
+}

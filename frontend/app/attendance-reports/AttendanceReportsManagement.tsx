@@ -8,6 +8,7 @@ import { Label } from "../components/ui/label";
 import { Search, Download, FileText, ChevronDown, X } from "lucide-react";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import * as XLSX from "xlsx";
+import { formatDevicePunchForDisplay } from "../utils/devicePunchTime";
 
 type ReportMode = "actual" | "factual";
 
@@ -240,30 +241,11 @@ const globalStatusCache = new Map<string, any>();
 
 // ==================== HELPER FUNCTIONS ====================
 
+/** Device punches are stored as UTC wall-clock; do not use local getHours(). */
 const parsePunchTime = (punchTime: string): { dateKey: string; timeStr: string } | null => {
-  if (!punchTime) return null;
-  
-  if (punchTime.includes("T")) {
-    const dt = new Date(punchTime);
-    const year = dt.getFullYear();
-    const month = String(dt.getMonth() + 1).padStart(2, '0');
-    const day = String(dt.getDate()).padStart(2, '0');
-    const hours = String(dt.getHours()).padStart(2, '0');
-    const minutes = String(dt.getMinutes()).padStart(2, '0');
-    const seconds = String(dt.getSeconds()).padStart(2, '0');
-    return { dateKey: `${year}-${month}-${day}`, timeStr: `${hours}:${minutes}:${seconds}` };
-  }
-  
-  const match = punchTime.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2})$/);
-  
-  if (match) {
-    const [, day, month, year, hour, minute] = match;
-    const dateKey = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-    const timeStr = `${String(hour).padStart(2, '0')}:${minute}:00`;
-    return { dateKey, timeStr };
-  }
-  
-  return null;
+  const formatted = formatDevicePunchForDisplay(punchTime);
+  if (!formatted) return null;
+  return { dateKey: formatted.dateKey, timeStr: formatted.timeStr };
 };
 
 const timeToMinutes = (timeStr: string): number => {
