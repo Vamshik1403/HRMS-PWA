@@ -16,6 +16,7 @@ import {
 import type { TodayStatus } from "../hooks/useEmpPunch";
 import { taskFetch } from "../utils/taskApi";
 import { syncAppBadge } from "@/lib/appBadge";
+import { TASK_MANAGEMENT_ENABLED } from "../config/featureFlags";
 
 // ─── Ambient Greeting Accent ───────────────────────────────────────────────────
 const _ambientCss = `
@@ -192,7 +193,9 @@ function greeting() {
 }
 
 const menuCards = [
-  { key: "tasks", label: "Tasks", sub: "Open & WIP", icon: "solar:checklist-bold-duotone", color: "bg-violet-50", iconColor: "text-violet-600", href: "/empMyTasks" },
+  ...(TASK_MANAGEMENT_ENABLED
+    ? [{ key: "tasks", label: "Tasks", sub: "Open & WIP", icon: "solar:checklist-bold-duotone", color: "bg-violet-50", iconColor: "text-violet-600", href: "/empMyTasks" }]
+    : [{ key: "payroll", label: "Payroll", sub: "View pay slips", icon: "solar:document-text-bold-duotone", color: "bg-indigo-50", iconColor: "text-indigo-600", href: "/empGenerateSalary" }]),
   { key: "notice", label: "Notice", sub: "Unread memos", icon: "solar:bell-bold-duotone", color: "bg-amber-50", iconColor: "text-amber-600", href: "/empNoticeboard" },
   { key: "reimb", label: "Reimbursement", sub: "Pending approval", icon: "solar:wallet-bold-duotone", color: "bg-emerald-50", iconColor: "text-emerald-600", href: "/empReimbursement" },
   { key: "leave", label: "Leaves", sub: "Pending approval", icon: "solar:calendar-bold-duotone", color: "bg-blue-50", iconColor: "text-blue-600", href: "/empLeaveApplication" },
@@ -243,13 +246,17 @@ export default function EmpDashboardPage() {
       })
       .catch(() => {});
 
-    const userForTask = empUser;
-    taskFetch<{ items: { status: string }[] }>("/task-projects", userForTask, undefined, { limit: 100 })
-      .then((data) => {
-        const items = data.items || [];
-        setTaskBadge(items.filter((t) => t.status === "Open" || t.status === "WIP" || t.status === "Reopen").length);
-      })
-      .catch(() => setTaskBadge(0));
+    if (TASK_MANAGEMENT_ENABLED) {
+      const userForTask = empUser;
+      taskFetch<{ items: { status: string }[] }>("/task-projects", userForTask, undefined, { limit: 100 })
+        .then((data) => {
+          const items = data.items || [];
+          setTaskBadge(items.filter((t) => t.status === "Open" || t.status === "WIP" || t.status === "Reopen").length);
+        })
+        .catch(() => setTaskBadge(0));
+    } else {
+      setTaskBadge(0);
+    }
 
     fetch(`${BACKEND}/reimbursement/employee/${eid}`, { headers })
       .then((r) => r.json())
@@ -291,7 +298,8 @@ export default function EmpDashboardPage() {
   }, [empUser]);
 
   useEffect(() => {
-    const total = taskBadge + noticeBadge + reimbBadge + leaveBadge;
+    const total =
+      (TASK_MANAGEMENT_ENABLED ? taskBadge : 0) + noticeBadge + reimbBadge + leaveBadge;
     void syncAppBadge(total);
   }, [taskBadge, noticeBadge, reimbBadge, leaveBadge]);
 

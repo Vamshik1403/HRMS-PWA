@@ -1,4 +1,5 @@
 /** Fetch total pending/unread count for home-screen badge. */
+import { TASK_MANAGEMENT_ENABLED } from "@/app/config/featureFlags";
 import { taskFetch } from "@/app/utils/taskApi";
 import {
   countUnseenLeaveBadge,
@@ -37,27 +38,31 @@ export async function fetchEmpNotificationTotal(
         }).length;
       })
       .catch(() => {}),
-    (() => {
-      let user: Record<string, unknown> = { role: "EMPLOYEE", employee: { id: employeeId } };
-      try {
-        const stored = JSON.parse(localStorage.getItem("user") || "{}");
-        if (stored?.employee?.id) user = stored;
-      } catch {
-        /* use minimal viewer */
-      }
-      return taskFetch<{ items: { status: string }[] }>(
-        "/task-projects",
-        user,
-        undefined,
-        { limit: 100 },
-      );
-    })()
-      .then((data) => {
-        tasks = (data.items || []).filter(
-          (t) => t.status === "Open" || t.status === "WIP" || t.status === "Reopen",
-        ).length;
-      })
-      .catch(() => {}),
+    ...(TASK_MANAGEMENT_ENABLED
+      ? [
+          (() => {
+            let user: Record<string, unknown> = { role: "EMPLOYEE", employee: { id: employeeId } };
+            try {
+              const stored = JSON.parse(localStorage.getItem("user") || "{}");
+              if (stored?.employee?.id) user = stored;
+            } catch {
+              /* use minimal viewer */
+            }
+            return taskFetch<{ items: { status: string }[] }>(
+              "/task-projects",
+              user,
+              undefined,
+              { limit: 100 },
+            );
+          })()
+            .then((data) => {
+              tasks = (data.items || []).filter(
+                (t) => t.status === "Open" || t.status === "WIP" || t.status === "Reopen",
+              ).length;
+            })
+            .catch(() => {}),
+        ]
+      : []),
     fetch(`${BACKEND}/reimbursement/employee/${employeeId}`, { headers })
       .then((r) => r.json())
       .then((data: unknown) => {

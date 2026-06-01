@@ -111,6 +111,42 @@ export function devicePunchToStorageDate(value: string | Date | null | undefined
   );
 }
 
+export const DEFAULT_APP_PUNCH_TIMEZONE =
+  process.env.APP_PUNCH_TIMEZONE || 'Asia/Kolkata';
+
+/**
+ * PWA / server "now" as wall-clock components in the app timezone, stored like device punches.
+ * Avoids storing a true UTC instant that displays ~5:30 early on India dashboards.
+ */
+export function wallClockInZoneToStorageDate(
+  date: Date = new Date(),
+  timeZone = DEFAULT_APP_PUNCH_TIMEZONE,
+): Date {
+  const formatter = new Intl.DateTimeFormat('en-GB', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  });
+  const parts = formatter.formatToParts(date);
+  const pick = (type: string) =>
+    Number(parts.find((p) => p.type === type)?.value ?? 0);
+  return new Date(
+    Date.UTC(
+      pick('year'),
+      pick('month') - 1,
+      pick('day'),
+      pick('hour'),
+      pick('minute'),
+      pick('second'),
+    ),
+  );
+}
+
 export function formatDevicePunchStorage(
   value: string | Date | null | undefined,
 ): { dateKey: string; timeStr: string } | null {

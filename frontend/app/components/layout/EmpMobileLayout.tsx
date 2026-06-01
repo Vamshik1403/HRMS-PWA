@@ -13,6 +13,7 @@ import { appendInAppNotification } from "../../utils/empInAppNotifications";
 import { empPayoutHrefForPeriod } from "../../utils/empPayslipApi";
 import PushNotificationPrompt from "../PushNotificationPrompt";
 import { toast } from "sonner";
+import { TASK_MANAGEMENT_ENABLED } from "@/app/config/featureFlags";
 
 interface EmpMobileLayoutProps {
   children: React.ReactNode;
@@ -40,7 +41,9 @@ const navItems = [
   { label: "Leave",        icon: "solar:calendar-bold-duotone",  outlineIcon: "solar:calendar-linear",       href: "/empLeaveApplication" },
   { label: "Reimbursement", icon: "solar:wallet-bold-duotone",   outlineIcon: "solar:wallet-linear",         href: "/empReimbursement" },
   { label: "Payout",       icon: "solar:bill-bold-duotone",      outlineIcon: "solar:bill-linear",           href: "/empPayout" },
-  { label: "Tasks",        icon: "solar:checklist-bold-duotone", outlineIcon: "solar:checklist-linear",      href: "/empMyTasks" },
+  ...(TASK_MANAGEMENT_ENABLED
+    ? [{ label: "Tasks", icon: "solar:checklist-bold-duotone", outlineIcon: "solar:checklist-linear", href: "/empMyTasks" }]
+    : []),
 ];
 
 export default function EmpMobileLayout({ children, hideBottomNav = false }: EmpMobileLayoutProps) {

@@ -51,6 +51,8 @@ export class AttendancePolicyService {
         otMealApply: data.otMealApply ?? false,
         minsForOTMealToken: data.minsForOTMealToken ?? 0,
         minsForBreakTimeForMeal: data.minsForBreakTimeForMeal ?? 0,
+        leaveAroundHolidayCounted: data.leaveAroundHolidayCounted ?? false,
+        countWorkhoursInMinutes: data.countWorkhoursInMinutes ?? false,
         lateMarkMarkAs: data.lateMarkMarkAs ?? null,
         lateMarkMarkCount: data.lateMarkMarkCount ?? null,
         maxLateCheckinMarkAs: data.maxLateCheckinMarkAs ?? null,
@@ -135,6 +137,12 @@ export class AttendancePolicyService {
     if (data.otMealApply !== undefined) updateData.otMealApply = data.otMealApply;
     if (data.minsForOTMealToken !== undefined) updateData.minsForOTMealToken = data.minsForOTMealToken;
     if (data.minsForBreakTimeForMeal !== undefined) updateData.minsForBreakTimeForMeal = data.minsForBreakTimeForMeal;
+    if (data.leaveAroundHolidayCounted !== undefined) {
+      updateData.leaveAroundHolidayCounted = data.leaveAroundHolidayCounted;
+    }
+    if (data.countWorkhoursInMinutes !== undefined) {
+      updateData.countWorkhoursInMinutes = data.countWorkhoursInMinutes;
+    }
     if (data.lateMarkMarkAs !== undefined) updateData.lateMarkMarkAs = data.lateMarkMarkAs;
     if (data.lateMarkMarkCount !== undefined) updateData.lateMarkMarkCount = data.lateMarkMarkCount;
     if (data.maxLateCheckinMarkAs !== undefined) updateData.maxLateCheckinMarkAs = data.maxLateCheckinMarkAs;

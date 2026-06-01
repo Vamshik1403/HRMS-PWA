@@ -21,16 +21,24 @@ export interface AttendanceDaySummary {
   records: AttendanceLocationRecord[];
 }
 
+/** Wall-clock ISO to "YYYY-MM-DD" using UTC getters (punch times stored as UTC wall-clock). */
+function punchDateKey(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`;
+}
+
 export function groupAttendanceByDay(records: AttendanceLocationRecord[]): AttendanceDaySummary[] {
   const byDate: Record<string, AttendanceLocationRecord[]> = {};
   records.forEach((r) => {
-    const key = new Date(r.checkinTime).toDateString();
+    const key = punchDateKey(r.checkinTime);
+    if (!key) return;
     if (!byDate[key]) byDate[key] = [];
     byDate[key].push(r);
   });
 
   return Object.entries(byDate)
-    .sort(([a], [b]) => new Date(b).getTime() - new Date(a).getTime())
+    .sort(([a], [b]) => new Date(b + "T12:00:00Z").getTime() - new Date(a + "T12:00:00Z").getTime())
     .map(([dateKey, recs]) => {
       const summary = buildDaySummary(recs);
       const ci = recs.find((r) => r.checkType === "CHECK_IN") || null;
@@ -95,19 +103,31 @@ export function punchTypeLabel(type: string) {
   }
 }
 
+/**
+ * Punch times are stored as wall-clock IST encoded as UTC
+ * (e.g. 11:08 AM IST is stored as "2026-06-01T11:08:00Z").
+ * Use UTC getters to display the correct wall-clock time.
+ */
 export function formatPunchTime(iso: string | null | undefined) {
   if (!iso) return "--:--";
-  return new Date(iso).toLocaleTimeString("en-IN", {
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: true,
-  });
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "--:--";
+  const h = d.getUTCHours();
+  const m = d.getUTCMinutes();
+  const ampm = h >= 12 ? "pm" : "am";
+  const h12 = h % 12 || 12;
+  return `${String(h12).padStart(2, "0")}:${String(m).padStart(2, "0")} ${ampm}`;
 }
 
 export function formatLocationLabel(
-  rec: { latitude?: number | null; longitude?: number | null } | null | undefined,
+  rec:
+    | { latitude?: number | null; longitude?: number | null; address?: string | null }
+    | null
+    | undefined,
 ) {
-  if (!rec || rec.latitude == null || rec.longitude == null) return "—";
+  if (!rec) return "—";
+  if (rec.address) return rec.address;
+  if (rec.latitude == null || rec.longitude == null) return "—";
   return `${Number(rec.latitude).toFixed(5)}, ${Number(rec.longitude).toFixed(5)}`;
 }
 

@@ -3,12 +3,14 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CreateReimbursementDto } from './dto/create-reimbursement.dto';
 import { UpdateReimbursementDto } from './dto/update-reimbursement.dto';
 import { PushNotificationsService } from '../push-notifications/push-notifications.service';
+import { MailService } from '../mail/mail.service';
 
 @Injectable()
 export class ReimbursementService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly pushService: PushNotificationsService,
+    private readonly mailService: MailService,
   ) {}
 
   /** Include all necessary relations in queries */
@@ -52,7 +54,23 @@ export class ReimbursementService {
       });
     }
 
-    return this.findOne(created.id);
+    const full = await this.findOne(created.id);
+    if (full?.manageEmployeeID) {
+      const total = (full.items ?? []).reduce(
+        (s, i) => s + (Number(i.amount) || 0),
+        0,
+      );
+      void this.mailService.sendToEmployeeWithManagerCc({
+        employeeId: full.manageEmployeeID,
+        companyID: full.companyID,
+        eventType: 'REIMBURSEMENT',
+        vars: {
+          status: String(full.status ?? 'Submitted'),
+          amount: String(total),
+        },
+      });
+    }
+    return full;
   }
 
   /** Bulk create multiple parent reimbursements */

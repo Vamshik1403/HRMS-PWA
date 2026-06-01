@@ -38,6 +38,8 @@ interface OverviewEmployee {
   statusLabel: string;
   statusDisplay: string;
   hasPunches: boolean;
+  inLocation: string | null;
+  outLocation: string | null;
 }
 
 interface OverviewSummary {
@@ -168,6 +170,16 @@ export default function DashboardPage() {
     return `${y}-${m}-${dd}`;
   });
   const [currentUserMapping, setCurrentUserMapping] = useState<any>(null);
+  const [probationAlerts, setProbationAlerts] = useState<
+    {
+      employeeId: number;
+      employeeName: string;
+      probationPeriod: string;
+      probationEndDate: string;
+      daysRemaining: number;
+      isOverdue: boolean;
+    }[]
+  >([]);
 
   useEffect(() => {
     if (user?.role !== "SERVICE_PROVIDER" && user?.role !== "COMPANY_ADMIN" && user?.role !== "ADMIN") return;
@@ -221,7 +233,21 @@ export default function DashboardPage() {
       return;
     }
     loadTodayOverview();
+    loadProbationAlerts();
   }, [user, currentUserMapping, overviewQueryParams.toString()]);
+
+  const loadProbationAlerts = async () => {
+    try {
+      const qs = overviewQueryParams.toString();
+      const url = `${BACKEND_URL}/dashboard-overview/probation-alerts${qs ? `?${qs}&daysAhead=60` : "?daysAhead=60"}`;
+      const res = await fetch(url, { cache: "no-store" });
+      if (!res.ok) return;
+      const data = await res.json();
+      setProbationAlerts(Array.isArray(data.alerts) ? data.alerts : []);
+    } catch {
+      setProbationAlerts([]);
+    }
+  };
 
   const loadTodayOverview = async () => {
     try {
@@ -608,6 +634,32 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-5">
+      {probationAlerts.length > 0 && (
+        <section className="rounded-xl border border-amber-200 bg-amber-50 p-4 sm:p-5">
+          <div className="flex items-start gap-3">
+            <Icon icon="mdi:alert-circle-outline" className="w-6 h-6 text-amber-700 shrink-0 mt-0.5" />
+            <div className="flex-1 min-w-0">
+              <h2 className="text-sm font-bold text-amber-900">Probation ending soon</h2>
+              <p className="text-xs text-amber-800 mt-1">
+                Employees on probation whose period is ending within 60 days (based on employment status WEF and probation period).
+              </p>
+              <ul className="mt-3 space-y-2 max-h-40 overflow-y-auto">
+                {probationAlerts.slice(0, 8).map((a) => (
+                  <li key={a.employeeId} className="text-xs text-amber-900 flex flex-wrap gap-x-2 gap-y-0.5">
+                    <Link href="/manage-employees" className="font-semibold underline">
+                      {a.employeeName}
+                    </Link>
+                    <span>· {a.probationPeriod} · ends {a.probationEndDate}</span>
+                    <span className={a.isOverdue ? "text-red-700 font-semibold" : ""}>
+                      {a.isOverdue ? "(overdue)" : `(${a.daysRemaining} days left)`}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        </section>
+      )}
       {/* Create Company Card - SUPERADMIN only */}
       {user?.role === "SUPERADMIN" && (
         <section className={`${cardShell} p-6 sm:p-7`}>
@@ -813,42 +865,32 @@ export default function DashboardPage() {
 
         <div className="flex flex-col gap-5 min-h-0">
           <section className={`${cardShell} p-6 shrink-0`}>
-            <h2 className="text-lg font-bold text-gray-900 tracking-tight mb-5">
-              Popular departments
+            <h2 className="text-lg font-bold text-gray-900 tracking-tight mb-4">
+              Quick actions
             </h2>
-            <ul className="space-y-4">
-              {deptSpotlight.length === 0 ? (
-                <li className="text-sm text-gray-400 py-6 text-center">
-                  No department data yet
-                </li>
-              ) : (
-                deptSpotlight.map((d) => (
-                  <li
-                    key={d.id}
-                    className="flex items-center gap-3 pb-4 border-b border-[#f0f0f0] last:border-0 last:pb-0"
-                  >
-                    <div className="w-11 h-11 rounded-xl bg-[#f0f0f0] shrink-0" />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-gray-900 truncate">
-                        {d.title}
-                      </p>
-                      <p className="text-xs text-gray-500 mt-0.5">
-                        {d.count} employee{d.count !== 1 ? "s" : ""}
-                      </p>
-                    </div>
-                    <span className="shrink-0 inline-flex items-center rounded-full bg-emerald-50 text-emerald-700 text-[10px] font-bold px-2.5 py-1">
-                      Active
-                    </span>
-                  </li>
-                ))
-              )}
-            </ul>
-            <Link
-              href="/departments"
-              className="mt-6 w-full inline-flex items-center justify-center rounded-full border border-[#e5e7eb] py-3 text-sm font-semibold text-gray-800 hover:bg-[#fafafa] transition-colors"
-            >
-              All departments
-            </Link>
+            <div className="grid grid-cols-2 gap-2">
+              {[
+                { href: "/manage-employees", label: "Manage employee", icon: "mdi:account-group" },
+                { href: "/employee-memo", label: "Notice board", icon: "mdi:bullhorn" },
+                { href: "/termination", label: "Off boarding", icon: "mdi:account-off" },
+                { href: "/attendance-regularisation", label: "Attendance regularization", icon: "mdi:calendar-check" },
+                { href: "/roster", label: "Workshift roster", icon: "mdi:calendar-sync" },
+                { href: "/leave-applications", label: "Leave application", icon: "mdi:calendar-remove" },
+                { href: "/reimbursement", label: "Reimbursement", icon: "mdi:cash-refund" },
+                { href: "/salary-advance", label: "Salary advance", icon: "mdi:cash-fast" },
+                { href: "/generate-salary", label: "Run payroll", icon: "mdi:currency-inr" },
+                { href: "/attendance-reports", label: "Reports", icon: "mdi:chart-line" },
+              ].map((a) => (
+                <Link
+                  key={a.href}
+                  href={a.href}
+                  className="flex items-center gap-2 rounded-lg border border-[#ebebeb] px-3 py-2.5 text-xs font-semibold text-gray-800 hover:bg-[#fafafa] transition-colors"
+                >
+                  <Icon icon={a.icon} className="w-4 h-4 text-[#4f46e5] shrink-0" />
+                  <span className="leading-tight">{a.label}</span>
+                </Link>
+              ))}
+            </div>
           </section>
 
           <section className={`${cardShell} p-6 flex flex-col min-h-0 flex-1`}>
@@ -962,6 +1004,9 @@ export default function DashboardPage() {
                   Out
                 </TableHead>
                 <TableHead className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">
+                  Location
+                </TableHead>
+                <TableHead className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">
                   Status
                 </TableHead>
               </TableRow>
@@ -970,7 +1015,7 @@ export default function DashboardPage() {
               {overviewEmployees.length === 0 ? (
                 <TableRow>
                   <TableCell
-                    colSpan={5}
+                    colSpan={6}
                     className="text-center py-10 text-sm text-gray-400"
                   >
                     {overviewLoading ? "Loading attendance…" : "No employees found"}
@@ -1001,6 +1046,26 @@ export default function DashboardPage() {
                       </TableCell>
                       <TableCell className="text-sm text-gray-600 font-mono tabular-nums">
                         {e.outTime || "—"}
+                      </TableCell>
+                      <TableCell className="max-w-[260px]">
+                        {e.inLocation || e.outLocation ? (
+                          <div className="space-y-0.5">
+                            {e.inLocation && (
+                              <p className="text-[11px] text-gray-600 flex items-start gap-1" title={e.inLocation}>
+                                <span className="text-emerald-500 font-bold shrink-0">IN</span>
+                                <span className="line-clamp-1">{e.inLocation}</span>
+                              </p>
+                            )}
+                            {e.outLocation && e.outLocation !== e.inLocation && (
+                              <p className="text-[11px] text-gray-600 flex items-start gap-1" title={e.outLocation}>
+                                <span className="text-rose-500 font-bold shrink-0">OUT</span>
+                                <span className="line-clamp-1">{e.outLocation}</span>
+                              </p>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-sm text-gray-400">—</span>
+                        )}
                       </TableCell>
                       <TableCell>
                         <span

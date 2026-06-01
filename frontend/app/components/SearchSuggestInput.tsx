@@ -134,7 +134,13 @@ export function SearchSuggestInput({
               <div
                 key={index}
                 className="px-3 py-2 hover:bg-gray-100 cursor-pointer text-sm"
-                onClick={() => handleSelect(item)}
+                // onMouseDown (not onClick) so the selection registers on the
+                // first press — before the input loses focus / list re-renders.
+                // This fixes having to click an option twice to select it.
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  handleSelect(item);
+                }}
               >
                 {item[displayField] || ""}
               </div>

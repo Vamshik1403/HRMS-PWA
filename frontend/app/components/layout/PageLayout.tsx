@@ -36,6 +36,7 @@ import { Button } from "../ui/button";
 import { Label } from "../ui/label";
 import { toast } from "sonner";
 import { Eye, EyeOff } from "lucide-react";
+import { TASK_MANAGEMENT_ENABLED } from "@/app/config/featureFlags";
 
 interface PageLayoutProps {
   children: React.ReactNode;
@@ -75,7 +76,7 @@ const ATTENDANCE_PATHS = ["/field-attendance-schedule"];
 const LEAVE_MANAGEMENT_PATHS = ["/leave-applications", "/privileged-leave"];
 const REPORTS_PATHS = ["/attendance-reports", "/payroll-reports"];
 const CANTEEN_PATHS = ["/canteen", "/canteen/setup", "/canteen/reports"];
-const SETTINGS_PATHS = ["/import-attendance", "/hrms-integrations", "/system-settings", "/system-settings/compliance"];
+const SETTINGS_PATHS = ["/import-attendance", "/hrms-integrations", "/system-settings", "/system-settings/compliance", "/system-settings/email-templates"];
 const ADMIN_PATHS = ["/system-users", "/backup-restore"];
 const ALL_SECTION_PATHS = [...SETUP_PATHS, ...CONTRACTOR_MANAGEMENT_PATHS, ...EMPLOYEE_PATHS, ...TASK_MANAGEMENT_PATHS, ...PAYROLL_PATHS, ...SALARY_PATHS, ...PAYROLL_POLICY_PATHS, ...LEAVE_PATHS, ...LEAVE_MANAGEMENT_PATHS, ...ATTENDANCE_PATHS, ...REPORTS_PATHS, ...CANTEEN_PATHS, ...SETTINGS_PATHS];
 
@@ -436,8 +437,8 @@ export function PageLayout({ children }: PageLayoutProps) {
           </Collapsible>
         )}
 
-        {/* Task Management System */}
-        {(isSuperAdmin || isCompanyAdmin) && (
+        {/* Task Management System — temporarily hidden */}
+        {TASK_MANAGEMENT_ENABLED && (isSuperAdmin || isCompanyAdmin) && (
           <Collapsible open={openSections[k('taskMgmt')]} onOpenChange={o => toggleSection(k('taskMgmt'), o)}>
             <CollapsibleTrigger asChild>
               <SidebarMenuButton size="lg" className={cn(sbMenuBtnReset, sbRow, "mx-0 justify-between", taskMgmtSectionActive ? sbActive : cn(sbIdle, openSections[k('taskMgmt')] && "font-semibold text-[#4f46e5]"))}>
@@ -645,6 +646,7 @@ export function PageLayout({ children }: PageLayoutProps) {
                 {!isAdmin && (<SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/import-attendance" className={cn(sbSubRow, isActiveLink('/import-attendance', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Import Attendance</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>)}
                 {isAdmin && (<SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/hrms-integrations" className={cn(sbSubRow, isActiveLink('/hrms-integrations', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>HRMS Integrations</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>)}
                 {(isSuperAdmin || isCompanyAdmin) && (<SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/system-settings/compliance" className={cn(sbSubRow, isActiveLink('/system-settings', companyId) || isActiveLink('/system-settings/compliance', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Compliance</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>)}
+                {(isSuperAdmin || isCompanyAdmin) && (<SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/system-settings/email-templates" className={cn(sbSubRow, isActiveLink('/system-settings/email-templates', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Email templates</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>)}
               </SidebarMenuSub>
             </CollapsibleContent>
           </Collapsible>

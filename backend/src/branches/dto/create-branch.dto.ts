@@ -26,6 +26,9 @@ export class CreateBranchesDto {
   @IsOptional() @IsString() esiNo?: string;
   @IsOptional() @IsString() linNo?: string;
   @IsOptional() @IsString() gstNo?: string;
+  @IsOptional() @IsString() gstCertUrl?: string;
+  @IsOptional() @IsString() msmeNo?: string;
+  @IsOptional() @IsString() msmeCertUrl?: string;
   @IsOptional() @IsString() shopRegNo?: string;
   @IsOptional() shopRegCertHistory?: any;
   @IsOptional() @IsString() financialYearStart?: string;

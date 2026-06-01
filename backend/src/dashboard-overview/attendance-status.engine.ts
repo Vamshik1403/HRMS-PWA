@@ -414,8 +414,18 @@ export function computeDayStatus(input: ComputeDayStatusInput): DayStatusResult 
     return { type: 'ABSENT', label: 'Absent', hasPunches: true, workedMinutes };
   }
 
+  // Early-checkout half-day penalty only applies when an early-checkout window
+  // is actually configured (> 0). Previously, with the window left at 0, ANY
+  // checkout even a minute before shift end was forced to Half Day — e.g. an
+  // employee who worked enough net hours but left slightly early was wrongly
+  // marked Half Day. Sufficient worked time is still validated below against
+  // requiredFullDayMinutes.
   const earlyCheckoutWindow = policy.earlyCheckoutBeforeEndMin || 0;
-  if (effectiveForCalc.length >= 2 && lastPunch < shiftEndMin - earlyCheckoutWindow) {
+  if (
+    earlyCheckoutWindow > 0 &&
+    effectiveForCalc.length >= 2 &&
+    lastPunch < shiftEndMin - earlyCheckoutWindow
+  ) {
     return { type: 'HALF_DAY', label: 'Half Day', hasPunches: true, workedMinutes };
   }
   if (workedMinutes < requiredFullDayMinutes && !isLate) {

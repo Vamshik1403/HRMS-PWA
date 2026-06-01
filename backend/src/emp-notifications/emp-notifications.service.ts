@@ -115,6 +115,16 @@ export class EmpNotificationsService {
     return Math.round((this.localDay(target).getTime() - this.localDay(today).getTime()) / 86400000);
   }
 
+  /**
+   * Returns a date-specific label for a holiday — the abbreviated month+day
+   * so the frontend can render a distinct date badge (e.g. "4 Mar").
+   * The emoji field is repurposed to carry this date string for holidays.
+   */
+  private calendarEmoji(date: Date): string {
+    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    return `${date.getDate()} ${months[date.getMonth()]}`;
+  }
+
   /** Personal / birthday items: visible only on the event calendar day. */
   private isEventToday(now: Date, at: Date | string) {
     return this.daysFromToday(now, new Date(at)) === 0;
@@ -247,7 +257,7 @@ export class EmpNotificationsService {
               title:
                 diff === 0 ? 'Today — public holiday' : 'Tomorrow — public holiday',
               body: name,
-              emoji: '📆',
+              emoji: this.calendarEmoji(cursor),
               at: notifyAt.toISOString(),
             });
           }
@@ -260,7 +270,7 @@ export class EmpNotificationsService {
               kind: 'holiday' as const,
               title: name,
               body: 'Office holiday — plan your day accordingly.',
-              emoji: '📆',
+              emoji: this.calendarEmoji(cursor),
               at: cursor.toISOString(),
             });
           }

@@ -70,11 +70,14 @@ import { GeoModule } from './geo/geo.module';
 import { TaskManagementModule } from './task-management/task-management.module';
 import { EmpNotificationsModule } from './emp-notifications/emp-notifications.module';
 import { DashboardOverviewModule } from './dashboard-overview/dashboard-overview.module';
+import { MailModule } from './mail/mail.module';
+import { EmailTemplateModule } from './email-template/email-template.module';
 
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
+    MailModule,
     PrismaModule,
     ServeStaticModule.forRoot({
       rootPath: join(__dirname, '..', '..', 'uploads'),
@@ -145,6 +148,7 @@ import { DashboardOverviewModule } from './dashboard-overview/dashboard-overview
     TaskManagementModule,
     EmpNotificationsModule,
     DashboardOverviewModule,
+    EmailTemplateModule,
   ],
   providers: [AuthService],
   controllers: [AuthController],

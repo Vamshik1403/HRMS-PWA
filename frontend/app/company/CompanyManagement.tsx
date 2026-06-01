@@ -17,6 +17,7 @@ import { TimezoneSelect } from "../components/ui/timezone-select"
 import { LocationFields } from "../components/ui/location-fields"
 import { SearchSuggestInput } from "../components/SearchSuggestInput"
 import { fetchCurrencies } from "../utils/geoApi"
+import { PdfUploadField } from "../components/PdfUploadField"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -52,6 +53,7 @@ interface Company {
   esiNo?: string
   linNo?: string
   gstNo?: string
+  gstCertUrl?: string
   shopRegNo?: string
   shopRegCertHistory?: { certNo: string; effectFrom: string; _localId: string }[]
   financialYearStart?: string
@@ -107,6 +109,7 @@ export function CompanyManagement() {
     esiNo: "",
     linNo: "",
     gstNo: "",
+    gstCertUrl: "",
     shopRegNo: "",
     shopRegCertHistory: [] as { certNo: string; effectFrom: string; _localId: string }[],
     financialYearStart: "",
@@ -405,6 +408,7 @@ export function CompanyManagement() {
       esiNo: "",
       linNo: "",
       gstNo: "",
+      gstCertUrl: "",
       shopRegNo: "",
       shopRegCertHistory: [],
       financialYearStart: "",
@@ -625,75 +629,15 @@ export function CompanyManagement() {
                 <div className="space-y-2"><Label>PAN No</Label><Input value={formData.panNo || ""} onChange={(e) => setFormData((p) => ({ ...p, panNo: e.target.value }))} /></div>
                 <div className="space-y-2"><Label>ESI No</Label><Input value={formData.esiNo || ""} onChange={(e) => setFormData((p) => ({ ...p, esiNo: e.target.value }))} /></div>
                 <div className="space-y-2"><Label>LIN No</Label><Input value={formData.linNo || ""} onChange={(e) => setFormData((p) => ({ ...p, linNo: e.target.value }))} /></div>
-                <div className="space-y-2"><Label>GST No</Label><Input value={formData.gstNo || ""} onChange={(e) => setFormData((p) => ({ ...p, gstNo: e.target.value }))} /></div>
-              </div>
-
-              <div className="space-y-2">
-                <Label>Shop Registration Certificate No</Label>
-                <div className="flex items-end gap-2">
-                  <div className="flex-1">
-                    <Input
-                      placeholder="Certificate No"
-                      value={stagingShopReg.certNo}
-                      onChange={(e) => setStagingShopReg((p) => ({ ...p, certNo: e.target.value }))}
-                    />
-                  </div>
-                  <div className="w-40">
-                    <Input
-                      type="date"
-                      value={stagingShopReg.effectFrom}
-                      onChange={(e) => setStagingShopReg((p) => ({ ...p, effectFrom: e.target.value }))}
-                    />
-                  </div>
-                  <Button
-                    type="button"
-                    size="sm"
-                    disabled={!stagingShopReg.certNo.trim()}
-                    onClick={() => {
-                      const entry = { certNo: stagingShopReg.certNo.trim(), effectFrom: stagingShopReg.effectFrom, _localId: Math.random().toString(36).slice(2, 10) };
-                      setFormData((p) => ({
-                        ...p,
-                        shopRegCertHistory: [...(p.shopRegCertHistory || []), entry],
-                        shopRegNo: entry.certNo,
-                      }));
-                      setStagingShopReg({ certNo: "", effectFrom: new Date().toISOString().slice(0, 10) });
-                    }}
-                  >
-                    Add
-                  </Button>
+                <div className="space-y-2 sm:col-span-2">
+                  <Label>GST No</Label>
+                  <Input value={formData.gstNo || ""} onChange={(e) => setFormData((p) => ({ ...p, gstNo: e.target.value }))} />
+                  <PdfUploadField
+                    label="GST certificate (PDF)"
+                    value={formData.gstCertUrl}
+                    onChange={(url) => setFormData((p) => ({ ...p, gstCertUrl: url ?? "" }))}
+                  />
                 </div>
-                {(formData.shopRegCertHistory || []).length > 0 && (
-                  <div className="border border-gray-200 rounded-lg overflow-hidden mt-2">
-                    <div className="bg-gray-50 px-3 py-2 text-xs font-semibold text-gray-600 uppercase tracking-wide flex">
-                      <span className="flex-1">Certificate No</span>
-                      <span className="w-32 text-center">Effect Date</span>
-                      <span className="w-10"></span>
-                    </div>
-                    {(formData.shopRegCertHistory || []).map((entry, i) => (
-                      <div
-                        key={entry._localId}
-                        className={`flex items-center px-3 py-2 text-sm ${i === (formData.shopRegCertHistory || []).length - 1 ? "bg-blue-50 font-medium" : "bg-white"} ${i > 0 ? "border-t border-gray-100" : ""}`}
-                      >
-                        <span className="flex-1">{entry.certNo}</span>
-                        <span className="w-32 text-center text-gray-500">{entry.effectFrom || "—"}</span>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => {
-                            setFormData((p) => {
-                              const updated = (p.shopRegCertHistory || []).filter((x) => x._localId !== entry._localId);
-                              return { ...p, shopRegCertHistory: updated, shopRegNo: updated.length > 0 ? updated[updated.length - 1].certNo : "" };
-                            });
-                          }}
-                          className="h-6 w-6 p-0 text-red-500"
-                        >
-                          <X className="w-3 h-3" />
-                        </Button>
-                      </div>
-                    ))}
-                  </div>
-                )}
               </div>
 
               <div className="space-y-2">

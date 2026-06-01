@@ -6,10 +6,14 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateTerminationDto } from './dto/create-termination.dto';
 import { ApproveTerminationDto } from './dto/approve-termination.dto';
+import { MailService } from '../mail/mail.service';
 
 @Injectable()
 export class TerminationService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private mailService: MailService,
+  ) {}
 
 
 
@@ -69,7 +73,7 @@ async findAll() {
     );
   }
 
-  return this.prisma.employeeTermination.create({
+  const created = await this.prisma.employeeTermination.create({
     data: {
       employeeId: employee.id,
       serviceProviderID: employee.serviceProviderID!,
@@ -88,6 +92,18 @@ async findAll() {
       exitStatus: 'DRAFT',
     },
   });
+
+  void this.mailService.sendToEmployeeWithManagerCc({
+    employeeId: employee.id,
+    companyID: employee.companyID,
+    eventType: 'OFFBOARDING',
+    vars: {
+      status: 'DRAFT',
+      details: `${dto.exitType ?? ''} – ${dto.reasonCategory ?? ''}`,
+    },
+  });
+
+  return created;
 }
     
 

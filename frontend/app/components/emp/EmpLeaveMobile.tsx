@@ -16,6 +16,41 @@ import {
 
 const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL || "/backend";
 
+function getUsernameFromStorage(): string | undefined {
+  if (typeof window === "undefined") return undefined;
+  try {
+    const raw = localStorage.getItem("user");
+    if (raw) return JSON.parse(raw).username as string | undefined;
+  } catch {
+    /* ignore */
+  }
+  return undefined;
+}
+
+/** Cached visibility for username — avoids flashing balance cards while API loads. */
+function readLeaveBalanceVisibility(username?: string): boolean | null {
+  const u = username ?? getUsernameFromStorage();
+  if (!u) return null;
+  try {
+    const fromLs = localStorage.getItem(`empPwaShowLeaveBalance_${u}`);
+    if (fromLs === "1") return true;
+    if (fromLs === "0") return false;
+  } catch {
+    /* ignore */
+  }
+  const cached = getPageCache<boolean>("empPwaShowLeaveBalance");
+  return cached === true || cached === false ? cached : null;
+}
+
+function writeLeaveBalanceVisibility(username: string, visible: boolean) {
+  try {
+    localStorage.setItem(`empPwaShowLeaveBalance_${username}`, visible ? "1" : "0");
+  } catch {
+    /* ignore */
+  }
+  setPageCache("empPwaShowLeaveBalance", visible);
+}
+
 export interface LeaveAppRow {
   id: string;
   manageEmployeeID?: number;
@@ -36,9 +71,14 @@ export function EmpLeaveMobile() {
   const { cards, loading: balanceLoading, load: loadBalance } = useEmpLeaveBalance();
   const [apps, setApps] = useState<LeaveAppRow[]>(() => getPageCache<LeaveAppRow[]>("empLeaveApps") ?? []);
   const [employeeId, setEmployeeId] = useState<number | null>(null);
+  const [companyId, setCompanyId] = useState<number | null>(null);
+  /** null = not yet known; do not render balance cards until true/false is resolved */
+  const [showLeaveBalance, setShowLeaveBalance] = useState<boolean | null>(() =>
+    readLeaveBalanceVisibility(),
+  );
   const [menuId, setMenuId] = useState<string | null>(null);
 
-  const loadApps = useCallback(async (empId: number) => {
+  const loadApps = useCallback(async (empId: number, fetchBalance: boolean) => {
     try {
       const data = await fetch(`${BACKEND}/leave-application`, { cache: "no-store" }).then((r) =>
         r.ok ? r.json() : [],
@@ -61,7 +101,7 @@ export function EmpLeaveMobile() {
         }));
       setPageCache("empLeaveApps", mapped);
       setApps(mapped);
-      loadBalance(empId);
+      if (fetchBalance) loadBalance(empId);
     } catch {
       setApps([]);
     }
@@ -69,25 +109,36 @@ export function EmpLeaveMobile() {
 
   useEffect(() => {
     if (!user?.username) return;
+    const cached = readLeaveBalanceVisibility(user.username);
+    if (cached !== null) setShowLeaveBalance(cached);
+
     fetch(`${BACKEND}/manage-emp/credentials/${encodeURIComponent(user.username)}`)
       .then((r) => (r.ok ? r.json() : null))
       .then((creds) => {
         const id = creds?.employee?.id ?? creds?.employeeID;
+        const cid = creds?.employee?.companyID ?? creds?.companyID ?? null;
+        const visible = creds?.employee?.pwaShowLeaveBalance !== false;
+        setShowLeaveBalance(visible);
+        writeLeaveBalanceVisibility(user.username, visible);
+
         if (id) {
           setEmployeeId(id);
-          loadApps(id);
+          loadApps(id, visible);
         }
+        if (cid) setCompanyId(Number(cid));
       })
-      .catch(() => {});
+      .catch(() => {
+        if (cached === null) setShowLeaveBalance(true);
+      });
   }, [user, loadApps]);
 
   useEffect(() => {
-    if (!employeeId) return;
+    if (!employeeId || showLeaveBalance !== true) return;
     const id = setInterval(() => {
-      if (document.visibilityState === "visible") loadApps(employeeId);
+      if (document.visibilityState === "visible") loadApps(employeeId, true);
     }, 15000);
     return () => clearInterval(id);
-  }, [employeeId, loadApps]);
+  }, [employeeId, showLeaveBalance, loadApps]);
 
   const statusClass = (label: string) => {
     if (label === "Approved") return "text-emerald-700 bg-emerald-50 border-emerald-100";
@@ -100,7 +151,7 @@ export function EmpLeaveMobile() {
   const handleDelete = async (id: string) => {
     if (!confirm("Delete this leave request?")) return;
     await fetch(`${BACKEND}/leave-application/${id}`, { method: "DELETE" });
-    if (employeeId) loadApps(employeeId);
+    if (employeeId) loadApps(employeeId, showLeaveBalance === true);
     setMenuId(null);
   };
 
@@ -112,17 +163,22 @@ export function EmpLeaveMobile() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ revokedReason: reason.trim() }),
     });
-    if (employeeId) loadApps(employeeId);
+    if (employeeId) loadApps(employeeId, showLeaveBalance === true);
     setMenuId(null);
   };
+
+  const balanceVisible = showLeaveBalance === true;
 
   return (
     <div className="flex flex-col min-h-full pb-24">
       <div className="px-4 pt-5 pb-3">
         <h1 className="text-[22px] font-bold text-gray-900">Leave</h1>
-        <p className="text-[12px] text-gray-500 mt-0.5">Available balance & requests</p>
+        <p className="text-[12px] text-gray-500 mt-0.5">
+          {balanceVisible ? "Available balance & requests" : "Leave requests"}
+        </p>
       </div>
 
+      {balanceVisible && (
       <div className="px-4 grid grid-cols-3 gap-2 mb-4">
         {(cards.length ? cards : [
           { key: "sick", label: "Sick", remaining: 0, total: 0 },
@@ -142,6 +198,7 @@ export function EmpLeaveMobile() {
           </div>
         ))}
       </div>
+      )}
 
       <div className="px-4 flex-1">
         <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2">

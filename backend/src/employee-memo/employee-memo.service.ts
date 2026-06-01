@@ -3,12 +3,14 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CreateEmployeeMemoDto } from './dto/create-employee-memo.dto';
 import { UpdateEmployeeMemoDto } from './dto/update-employee-memo.dto';
 import { PushNotificationsService } from '../push-notifications/push-notifications.service';
+import { MailService } from '../mail/mail.service';
 
 @Injectable()
 export class EmployeeMemoService {
   constructor(
     private prisma: PrismaService,
     private pushService: PushNotificationsService,
+    private mailService: MailService,
   ) {}
 
   findAll() {
@@ -52,7 +54,20 @@ export class EmployeeMemoService {
     );
 
     // Send push notifications to all employees
+    const isWarning =
+      (dto.memoType ?? '').toLowerCase().includes('warn') ||
+      (dto.memoType ?? '').toLowerCase() === 'warning';
+
     employeeIDs.forEach(empId => {
+      void this.mailService.sendToEmployeeWithManagerCc({
+        employeeId: empId,
+        companyID: dto.companyID,
+        eventType: isWarning ? 'WARNING' : 'NOTICE_BOARD',
+        vars: {
+          subject: dto.subject ?? '',
+          description: dto.description ?? '',
+        },
+      });
       this.pushService.sendToEmployee(
         empId,
         'New Notice',

@@ -1,0 +1,19 @@
+ALTER TABLE "Branches" ADD COLUMN IF NOT EXISTS "gstCertUrl" VARCHAR;
+ALTER TABLE "Branches" ADD COLUMN IF NOT EXISTS "msmeNo" VARCHAR;
+ALTER TABLE "Branches" ADD COLUMN IF NOT EXISTS "msmeCertUrl" VARCHAR;
+ALTER TABLE "Contractors" ADD COLUMN IF NOT EXISTS "gstCertUrl" VARCHAR;
+ALTER TABLE "Contractors" ADD COLUMN IF NOT EXISTS "shopRegCertUrl" VARCHAR;
+
+CREATE TABLE IF NOT EXISTS "EmailTemplate" (
+  "id" SERIAL NOT NULL,
+  "companyID" INTEGER,
+  "eventType" VARCHAR NOT NULL,
+  "subject" VARCHAR NOT NULL,
+  "bodyHtml" TEXT NOT NULL,
+  "enabled" BOOLEAN NOT NULL DEFAULT true,
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT "EmailTemplate_pkey" PRIMARY KEY ("id")
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS "EmailTemplate_companyID_eventType_key" ON "EmailTemplate"("companyID", "eventType");

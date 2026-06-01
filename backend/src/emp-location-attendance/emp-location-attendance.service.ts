@@ -1,4 +1,6 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
+import { wallClockInZoneToStorageDate } from '../common/device-punch-time';
+import { reverseGeocode } from '../common/reverse-geocode';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateAttendanceLocationDto } from './dto/create-attendance-location.dto';
 import { MarkAbsentDto } from './dto/mark-absent.dto';
@@ -10,10 +12,16 @@ type PunchType = (typeof VALID_TYPES)[number];
 export class EmpLocationAttendanceService {
   constructor(private prisma: PrismaService) {}
 
+  /** Day bounds in app wall-clock storage (aligned with PWA punch times). */
   private dayWindow(now = new Date()) {
-    const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
-    const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
-    return { startOfDay, endOfDay };
+    const anchor = wallClockInZoneToStorageDate(now);
+    const y = anchor.getUTCFullYear();
+    const m = anchor.getUTCMonth();
+    const d = anchor.getUTCDate();
+    return {
+      startOfDay: new Date(Date.UTC(y, m, d, 0, 0, 0, 0)),
+      endOfDay: new Date(Date.UTC(y, m, d, 23, 59, 59, 999)),
+    };
   }
 
   private getLastPunch(records: { checkType: string; checkinTime: Date }[]) {
@@ -111,12 +119,42 @@ export class EmpLocationAttendanceService {
     };
   }
 
+  /**
+   * Returns today's device-punch times from process_att_logs (sorted ascending).
+   * Device punches have no checkType — treated as alternating IN/OUT.
+   */
+  private async todayDevicePunchTimes(
+    employeeId: number,
+    startOfDay: Date,
+    endOfDay: Date,
+  ): Promise<Date[]> {
+    const logs = await this.prisma.process_att_logs.findMany({
+      where: {
+        manage_employee_id: employeeId,
+        device_sn: { not: 'LOCATION_APP' },
+        punch_time: { gte: startOfDay, lte: endOfDay },
+      },
+      orderBy: { punch_time: 'asc' },
+      select: { punch_time: true },
+    });
+    return logs.filter((l) => l.punch_time != null).map((l) => l.punch_time as Date);
+  }
+
+  /**
+   * Derive effective check state from device punches only.
+   * Device punches alternate IN/OUT by position (1st=IN, 2nd=OUT, ...).
+   */
+  private devicePunchState(times: Date[]): 'IN' | 'OUT' {
+    // odd count = currently IN, even = OUT
+    return times.length % 2 === 1 ? 'IN' : 'OUT';
+  }
+
   async checkIn(employeeId: number, dto: CreateAttendanceLocationDto, ipAddress: string) {
     if (!VALID_TYPES.includes(dto.checkType as PunchType)) {
       throw new BadRequestException('checkType must be CHECK_IN, CHECK_OUT, BREAK_IN, or BREAK_OUT');
     }
 
-    const now = new Date();
+    const now = wallClockInZoneToStorageDate();
     const { startOfDay, endOfDay } = this.dayWindow(now);
 
     const todayRecords = await this.prisma.attendanceLocation.findMany({
@@ -127,8 +165,22 @@ export class EmpLocationAttendanceService {
       orderBy: { checkinTime: 'asc' },
     });
 
-    const lastPunch = this.getLastPunch(todayRecords);
-    this.validatePunch(lastPunch?.checkType ?? null, dto.checkType as PunchType);
+    // If no PWA records yet for today, check device punches to seed the effective state
+    let effectiveLastType: string | null = null;
+    if (todayRecords.length === 0) {
+      const deviceTimes = await this.todayDevicePunchTimes(employeeId, startOfDay, endOfDay);
+      const devState = this.devicePunchState(deviceTimes);
+      // Mirror device state as if last PWA punch had this type
+      if (devState === 'IN') {
+        // Device says currently IN — treat as if PWA already has a CHECK_IN
+        effectiveLastType = 'CHECK_IN';
+      }
+      // devState=OUT → effectiveLastType stays null (can CHECK_IN via PWA)
+    } else {
+      effectiveLastType = this.getLastPunch(todayRecords)?.checkType ?? null;
+    }
+
+    this.validatePunch(effectiveLastType, dto.checkType as PunchType);
 
     const employee = await this.prisma.manageEmployee.findUnique({
       where: { id: employeeId },
@@ -142,6 +194,10 @@ export class EmpLocationAttendanceService {
       },
     });
 
+    // Resolve a human-readable address from the GPS coordinates. Cached and
+    // time-boxed so it never blocks the punch; falls back to null on failure.
+    const address = await reverseGeocode(dto.latitude, dto.longitude);
+
     const record = await this.prisma.attendanceLocation.create({
       data: {
         employeeId,
@@ -149,11 +205,13 @@ export class EmpLocationAttendanceService {
         latitude: dto.latitude,
         longitude: dto.longitude,
         accuracy: dto.accuracy ?? null,
+        address,
         ipAddress,
         deviceType: dto.deviceType ?? null,
         browser: dto.browser ?? null,
         operatingSystem: dto.operatingSystem ?? null,
         userAgent: dto.userAgent ?? null,
+        checkinTime: now,
       },
     });
 
@@ -162,32 +220,69 @@ export class EmpLocationAttendanceService {
         .filter(Boolean)
         .join(' ') || String(employeeId);
 
-      await this.prisma.process_att_logs.create({
-        data: {
-          device_sn: 'LOCATION_APP',
-          user_id: employee?.employeeID ?? String(employeeId),
-          username: fullName,
-          punch_time: record.checkinTime,
-          company_name: employee?.company?.companyName ?? null,
-          branch_name: employee?.branches?.branchName ?? null,
-          department_name: employee?.departments?.departmentName ?? null,
-          device_emp_code: employee?.employeeID ?? null,
-          manage_employee_id: employeeId,
-          device_id: null,
-          raw_body: JSON.stringify({
-            source: 'location_attendance',
-            checkType: dto.checkType,
-            latitude: dto.latitude,
-            longitude: dto.longitude,
-            accuracy: dto.accuracy ?? null,
-            ipAddress,
-          }),
-          status: '0',
-          device_name: 'Location Attendance App',
-          device_type: dto.deviceType ?? null,
-          auth_type: 'GPS',
-        },
-      });
+      const checkType = dto.checkType as PunchType;
+
+      // BREAK_IN / BREAK_OUT are PWA-only — never mirror to process_att_logs.
+      const shouldWrite = checkType !== 'BREAK_IN' && checkType !== 'BREAK_OUT';
+
+      if (shouldWrite) {
+        if (checkType === 'CHECK_OUT') {
+          // CHECK_OUT is ALWAYS written so the dashboard picks up the correct
+          // departure time regardless of whether the day started via device or PWA.
+          await this.prisma.process_att_logs.create({
+            data: {
+              device_sn: 'LOCATION_APP',
+              user_id: employee?.employeeID ?? String(employeeId),
+              username: fullName,
+              punch_time: record.checkinTime,
+              company_name: employee?.company?.companyName ?? null,
+              branch_name: employee?.branches?.branchName ?? null,
+              department_name: employee?.departments?.departmentName ?? null,
+              device_emp_code: employee?.employeeID ?? null,
+              manage_employee_id: employeeId,
+              device_id: null,
+              raw_body: JSON.stringify({ source: 'location_attendance', checkType, latitude: dto.latitude, longitude: dto.longitude, accuracy: dto.accuracy ?? null, address, ipAddress }),
+              status: '0',
+              device_name: 'Location Attendance App',
+              device_type: dto.deviceType ?? null,
+              auth_type: 'GPS',
+            },
+          });
+        } else if (checkType === 'CHECK_IN') {
+          // CHECK_IN is written only when this is the very first punch of the day
+          // (no prior device OR PWA entry in process_att_logs).  This prevents
+          // adding a second "IN" timestamp when the employee already punched in
+          // via a device, which would mis-pair IN/OUT on the dashboard.
+          const existingAnyPunch = await this.prisma.process_att_logs.count({
+            where: {
+              manage_employee_id: employeeId,
+              punch_time: { gte: startOfDay, lte: endOfDay },
+            },
+          });
+
+          if (existingAnyPunch === 0) {
+            await this.prisma.process_att_logs.create({
+              data: {
+                device_sn: 'LOCATION_APP',
+                user_id: employee?.employeeID ?? String(employeeId),
+                username: fullName,
+                punch_time: record.checkinTime,
+                company_name: employee?.company?.companyName ?? null,
+                branch_name: employee?.branches?.branchName ?? null,
+                department_name: employee?.departments?.departmentName ?? null,
+                device_emp_code: employee?.employeeID ?? null,
+                manage_employee_id: employeeId,
+                device_id: null,
+                raw_body: JSON.stringify({ source: 'location_attendance', checkType, latitude: dto.latitude, longitude: dto.longitude, accuracy: dto.accuracy ?? null, address, ipAddress }),
+                status: '0',
+                device_name: 'Location Attendance App',
+                device_type: dto.deviceType ?? null,
+                auth_type: 'GPS',
+              },
+            });
+          }
+        }
+      }
     } catch {
       // Non-critical
     }
@@ -215,7 +310,7 @@ export class EmpLocationAttendanceService {
   }
 
   async getTodayStatus(employeeId: number) {
-    const now = new Date();
+    const now = wallClockInZoneToStorageDate();
     const { startOfDay, endOfDay } = this.dayWindow(now);
 
     const records = await this.prisma.attendanceLocation.findMany({
@@ -228,10 +323,24 @@ export class EmpLocationAttendanceService {
 
     const checkIns = records.filter((r) => r.checkType === 'CHECK_IN');
     const checkOuts = records.filter((r) => r.checkType === 'CHECK_OUT');
-    const checkIn = checkIns[0] ?? null;
+
+    // Merge device-punch state when no PWA punches exist yet today
+    let deviceCheckIn: { checkinTime: Date } | null = null;
+    let deviceCheckedIn = false;
+    if (records.length === 0) {
+      const deviceTimes = await this.todayDevicePunchTimes(employeeId, startOfDay, endOfDay);
+      if (deviceTimes.length > 0) {
+        deviceCheckedIn = this.devicePunchState(deviceTimes) === 'IN';
+        deviceCheckIn = { checkinTime: deviceTimes[0] };
+      }
+    }
+
+    const checkIn = checkIns[0] ?? (deviceCheckIn as typeof checkIns[0] | null);
     const checkOut = checkOuts.at(-1) ?? null;
     const lastPunch = this.getLastPunch(records);
-    const punchState = this.getPunchState(lastPunch?.checkType ?? null);
+    const punchState = records.length > 0
+      ? this.getPunchState(lastPunch?.checkType ?? null)
+      : (deviceCheckedIn ? 'IN' : 'OUT');
     const { workMinutes, breakMinutes, workSeconds, breakSeconds } = this.computeMinutes(records, now);
 
     const todayDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -241,7 +350,7 @@ export class EmpLocationAttendanceService {
       },
     });
 
-    const hasPunches = records.length > 0;
+    const hasPunches = records.length > 0 || deviceCheckedIn;
     const isAbsentToday = !!absentDeclaration;
 
     return {
@@ -264,11 +373,12 @@ export class EmpLocationAttendanceService {
       workSeconds,
       breakSeconds,
       sessionCount: checkIns.length,
+      deviceCheckedIn,
     };
   }
 
   async markAbsent(employeeId: number, dto: MarkAbsentDto) {
-    const now = new Date();
+    const now = wallClockInZoneToStorageDate();
     const { startOfDay, endOfDay } = this.dayWindow(now);
     const todayDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 

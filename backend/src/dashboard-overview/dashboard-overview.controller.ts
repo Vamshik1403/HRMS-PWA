@@ -5,6 +5,19 @@ import { DashboardOverviewService } from './dashboard-overview.service';
 export class DashboardOverviewController {
   constructor(private readonly service: DashboardOverviewService) {}
 
+  @Get('probation-alerts')
+  getProbationAlerts(
+    @Query('companyID') companyID?: string,
+    @Query('branchId') branchId?: string,
+    @Query('daysAhead') daysAhead?: string,
+  ) {
+    return this.service.getProbationAlerts({
+      companyID: companyID ? Number(companyID) : undefined,
+      branchId: branchId ? Number(branchId) : undefined,
+      daysAhead: daysAhead ? Number(daysAhead) : 60,
+    });
+  }
+
   @Get('today-overview')
   getTodayOverview(
     @Query('companyID') companyID?: string,

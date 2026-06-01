@@ -38,11 +38,7 @@ interface SiteVisitWithPunches extends SiteVisitTask {
 }
 
 function fmtTime(iso: string) {
-  return new Date(iso).toLocaleTimeString("en-IN", {
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: true,
-  });
+  return formatPunchTime(iso);
 }
 
 export default function EmpHistoryDayPage() {
@@ -56,11 +52,13 @@ export default function EmpHistoryDayPage() {
 
   const dayTitle = useMemo(() => {
     try {
-      return new Date(dateKey).toLocaleDateString("en-IN", {
+      // dateKey is "YYYY-MM-DD" — use UTC noon to avoid local-tz date shift
+      return new Date(dateKey + "T12:00:00Z").toLocaleDateString("en-IN", {
         weekday: "long",
         day: "numeric",
         month: "long",
         year: "numeric",
+        timeZone: "UTC",
       });
     } catch {
       return dateKey;
@@ -88,7 +86,12 @@ export default function EmpHistoryDayPage() {
       .then((r) => (r.ok ? r.json() : []))
       .then((data: AttendanceLocationRecord[]) => {
         const list = Array.isArray(data) ? data : [];
-        const dayOnly = list.filter((r) => new Date(r.checkinTime).toDateString() === dateKey);
+        // checkinTime is stored as wall-clock UTC — match on UTC date to avoid timezone shift
+    const dayOnly = list.filter((r) => {
+      const d = new Date(r.checkinTime);
+      const utcKey = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`;
+      return utcKey === dateKey;
+    });
         setRecords(
           [...dayOnly].sort(
             (a, b) => new Date(a.checkinTime).getTime() - new Date(b.checkinTime).getTime(),
@@ -250,10 +253,17 @@ export default function EmpHistoryDayPage() {
                       {r.accuracy != null && (
                         <p className="text-[11px] text-gray-400 mt-1">GPS ±{Math.round(r.accuracy)}m</p>
                       )}
-                      {r.latitude != null && r.longitude != null && (
-                        <p className="text-[11px] text-gray-400 mt-0.5 truncate">
-                          {Number(r.latitude).toFixed(5)}, {Number(r.longitude).toFixed(5)}
+                      {r.address ? (
+                        <p className="text-[11px] text-gray-500 mt-0.5 flex items-start gap-1">
+                          <Icon icon="solar:map-point-bold-duotone" className="w-3.5 h-3.5 text-gray-400 shrink-0 mt-px" />
+                          <span className="min-w-0">{r.address}</span>
                         </p>
+                      ) : (
+                        r.latitude != null && r.longitude != null && (
+                          <p className="text-[11px] text-gray-400 mt-0.5 truncate">
+                            {Number(r.latitude).toFixed(5)}, {Number(r.longitude).toFixed(5)}
+                          </p>
+                        )
                       )}
                     </div>
                   ))}

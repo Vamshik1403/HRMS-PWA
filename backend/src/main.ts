@@ -2,8 +2,14 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { RawListenerModule } from './raw-listener/raw-listener.module';
 import * as bodyParser from 'body-parser';
+import * as dns from 'dns';
 import * as fs from 'fs';
 import * as path from 'path';
+
+// This host has no working IPv6 route. Prefer IPv4 for all outbound calls
+// (web push to Apple/Google, reverse geocoding, SMTP) to avoid slow
+// ENETUNREACH IPv6 attempts before falling back to IPv4.
+dns.setDefaultResultOrder('ipv4first');
 
 function sanitize(name: string) {
   return (name || '').replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 80);

@@ -27,6 +27,7 @@ import { SearchSuggestInput } from "../components/SearchSuggestInput";
 import { fetchCurrencies } from "../utils/geoApi";
 import { toast } from "sonner";
 import { getSidebarContext } from "../utils/sidebarContext";
+import { PdfUploadField } from "../components/PdfUploadField";
 
 // ---------------------------
 // Types aligned to backend
@@ -68,8 +69,11 @@ interface BranchRead {
   esiNo?: string | null;
   linNo?: string | null;
   gstNo?: string | null;
+  gstCertUrl?: string | null;
+  msmeNo?: string | null;
+  msmeCertUrl?: string | null;
   shopRegNo?: string | null;
-  shopRegCertHistory?: { certNo: string; effectFrom: string; _localId: string }[] | null;
+  shopRegCertHistory?: { certNo: string; effectFrom: string; pdfUrl?: string; _localId: string }[] | null;
   contactNo?: string | null;
   emailAdd?: string | null;
   companyLogoUrl?: string | null;
@@ -169,8 +173,11 @@ export function BranchManagement() {
     esiNo: "",
     linNo: "",
     gstNo: "",
+    gstCertUrl: "",
+    msmeNo: "",
+    msmeCertUrl: "",
     shopRegNo: "",
-    shopRegCertHistory: [] as { certNo: string; effectFrom: string; _localId: string }[],
+    shopRegCertHistory: [] as { certNo: string; effectFrom: string; pdfUrl?: string; _localId: string }[],
     contactNo: "",
     emailAdd: "",
     companyLogoUrl: "",
@@ -186,7 +193,7 @@ export function BranchManagement() {
   // Track original bank IDs on edit to compute deletions
   const [originalBankIds, setOriginalBankIds] = useState<ID[]>([]);
 
-  const [stagingShopReg, setStagingShopReg] = useState({ certNo: "", effectFrom: new Date().toISOString().slice(0, 10) });
+  const [stagingShopReg, setStagingShopReg] = useState({ certNo: "", effectFrom: new Date().toISOString().slice(0, 10), pdfUrl: "" as string });
 
   // Handle PT Compliance navigation
   const handlePTCompliance = () => {
@@ -383,6 +390,9 @@ export function BranchManagement() {
       esiNo: "",
       linNo: "",
       gstNo: "",
+      gstCertUrl: "",
+      msmeNo: "",
+      msmeCertUrl: "",
       shopRegNo: "",
       shopRegCertHistory: [],
       contactNo: "",
@@ -507,6 +517,9 @@ export function BranchManagement() {
       esiNo: formData.esiNo || undefined,
       linNo: formData.linNo || undefined,
       gstNo: formData.gstNo || undefined,
+      gstCertUrl: formData.gstCertUrl || undefined,
+      msmeNo: formData.msmeNo || undefined,
+      msmeCertUrl: formData.msmeCertUrl || undefined,
       shopRegNo: formData.shopRegNo || undefined,
       shopRegCertHistory: formData.shopRegCertHistory && formData.shopRegCertHistory.length > 0 ? formData.shopRegCertHistory : undefined,
       contactNo: formData.contactNo || undefined,
@@ -612,6 +625,9 @@ export function BranchManagement() {
       esiNo: b.esiNo ?? "",
       linNo: b.linNo ?? "",
       gstNo: b.gstNo ?? "",
+      gstCertUrl: (b as any).gstCertUrl ?? "",
+      msmeNo: (b as any).msmeNo ?? "",
+      msmeCertUrl: (b as any).msmeCertUrl ?? "",
       shopRegNo: b.shopRegNo ?? "",
       shopRegCertHistory: Array.isArray((b as any).shopRegCertHistory) ? (b as any).shopRegCertHistory : [],
       contactNo: b.contactNo ?? "",
@@ -911,13 +927,22 @@ export function BranchManagement() {
                 <div className="space-y-2"><Label>TAN No</Label><Input value={formData.tanNo} onChange={(e) => setFormData((p) => ({ ...p, tanNo: e.target.value }))} /></div>
                 <div className="space-y-2"><Label>ESI No</Label><Input value={formData.esiNo} onChange={(e) => setFormData((p) => ({ ...p, esiNo: e.target.value }))} /></div>
                 <div className="space-y-2"><Label>LIN No</Label><Input value={formData.linNo} onChange={(e) => setFormData((p) => ({ ...p, linNo: e.target.value }))} /></div>
-                <div className="space-y-2"><Label>GST No</Label><Input value={formData.gstNo} onChange={(e) => setFormData((p) => ({ ...p, gstNo: e.target.value }))} /></div>
+                <div className="space-y-2 sm:col-span-2">
+                  <Label>GST No</Label>
+                  <Input value={formData.gstNo} onChange={(e) => setFormData((p) => ({ ...p, gstNo: e.target.value }))} />
+                  <PdfUploadField label="GST certificate (PDF)" value={formData.gstCertUrl} onChange={(url) => setFormData((p) => ({ ...p, gstCertUrl: url ?? "" }))} />
+                </div>
+                <div className="space-y-2 sm:col-span-2">
+                  <Label>MSME certification no</Label>
+                  <Input value={formData.msmeNo} onChange={(e) => setFormData((p) => ({ ...p, msmeNo: e.target.value }))} />
+                  <PdfUploadField label="MSME certificate (PDF)" value={formData.msmeCertUrl} onChange={(url) => setFormData((p) => ({ ...p, msmeCertUrl: url ?? "" }))} />
+                </div>
               </div>
 
               <div className="space-y-2">
-                <Label>Shop Registration Certificate No</Label>
-                <div className="flex items-end gap-2">
-                  <div className="flex-1">
+                <Label>Shop Registration Certificate</Label>
+                <div className="flex flex-wrap items-end gap-2">
+                  <div className="flex-1 min-w-[140px]">
                     <Input
                       placeholder="Certificate No"
                       value={stagingShopReg.certNo}
@@ -931,18 +956,30 @@ export function BranchManagement() {
                       onChange={(e) => setStagingShopReg((p) => ({ ...p, effectFrom: e.target.value }))}
                     />
                   </div>
+                  <div className="min-w-[200px]">
+                    <PdfUploadField
+                      label="Certificate PDF"
+                      value={stagingShopReg.pdfUrl || null}
+                      onChange={(url) => setStagingShopReg((p) => ({ ...p, pdfUrl: url ?? "" }))}
+                    />
+                  </div>
                   <Button
                     type="button"
                     size="sm"
                     disabled={!stagingShopReg.certNo.trim()}
                     onClick={() => {
-                      const entry = { certNo: stagingShopReg.certNo.trim(), effectFrom: stagingShopReg.effectFrom, _localId: Math.random().toString(36).slice(2, 10) };
+                      const entry = {
+                        certNo: stagingShopReg.certNo.trim(),
+                        effectFrom: stagingShopReg.effectFrom,
+                        pdfUrl: stagingShopReg.pdfUrl || undefined,
+                        _localId: Math.random().toString(36).slice(2, 10),
+                      };
                       setFormData((p) => ({
                         ...p,
                         shopRegCertHistory: [...(p.shopRegCertHistory || []), entry],
                         shopRegNo: entry.certNo,
                       }));
-                      setStagingShopReg({ certNo: "", effectFrom: new Date().toISOString().slice(0, 10) });
+                      setStagingShopReg({ certNo: "", effectFrom: new Date().toISOString().slice(0, 10), pdfUrl: "" });
                     }}
                   >
                     Add

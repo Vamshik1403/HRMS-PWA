@@ -25,6 +25,7 @@ import { Plus, Search, Edit, Trash2, ArrowLeft } from "lucide-react";
 import { SearchSuggestInput } from "../components/SearchSuggestInput";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import { toast } from "sonner";
+import { getWorkShiftTypeLabel } from "../utils/workShiftLabels";
 import { getSidebarContext } from "../utils/sidebarContext";
 
 interface ShiftRow {
@@ -296,8 +297,8 @@ export function FactualWorkShiftsManagement() {
           companyName: shift.company?.companyName || "",
           branchName: shift.branches?.branchName || "",
           workShiftName: shift.workShiftName,
-          isFlexible: shift.isFlexible || false,
-          isRotating: shift.isRotating || false,
+          isFlexible: shift.isFlexible === true,
+          isRotating: shift.isRotating === true,
           workShiftType: shift.workShiftType || "",
           breakTimeMin: shift.breakTimeMin || 0,
           weeklySchedule: DAYS_OF_WEEK.map((d) => dayMap[d]),
@@ -492,8 +493,8 @@ export function FactualWorkShiftsManagement() {
             ? currentUserMapping?.branchesID
             : formData.branchesID,
         workShiftName: formData.workShiftName,
-        isFlexible: formData.isFlexible,
-        isRotating: formData.isRotating,
+        isFlexible: formData.isFlexible === true,
+        isRotating: formData.isRotating === true,
         workShiftType: formData.workShiftType,
         isActive: "1",
         breakTimeMin: 0,
@@ -584,8 +585,8 @@ export function FactualWorkShiftsManagement() {
       companyName: workShift.companyName || "",
       branchName: workShift.branchName || "",
       workShiftName: workShift.workShiftName,
-      isFlexible: workShift.isFlexible || false,
-      isRotating: workShift.isRotating || false,
+      isFlexible: workShift.isFlexible === true,
+      isRotating: workShift.isRotating === true,
       workShiftType: workShift.workShiftType || "",
       serviceProviderID: workShift.serviceProviderID,
       companyID: workShift.companyID,
@@ -802,6 +803,12 @@ export function FactualWorkShiftsManagement() {
                     ⚠️ Rotating shifts cannot have weekly off days. Weekly off checkboxes are disabled.
                   </p>
                 )}
+                <p className="text-xs text-gray-600 bg-white border border-gray-200 rounded px-2 py-1.5">
+                  Type:{" "}
+                  <span className="font-semibold text-gray-900">
+                    {getWorkShiftTypeLabel(formData.isFlexible, formData.isRotating)}
+                  </span>
+                </p>
               </div>
 
               {/* Weekly Schedule */}
@@ -1028,14 +1035,10 @@ export function FactualWorkShiftsManagement() {
                       .map((day) => `${day.day}: ${day.work.startTime}-${day.work.endTime}`)
                       .join(", ");
 
-                    let shiftTypeDisplay: string;
-                    if (workShift.isFlexible) {
-                      shiftTypeDisplay = "Flexible";
-                    } else if (workShift.isRotating) {
-                      shiftTypeDisplay = "Fixed Rotating";
-                    } else {
-                      shiftTypeDisplay = "Fixed Non Rotating";
-                    }
+                    const shiftTypeDisplay = getWorkShiftTypeLabel(
+                      workShift.isFlexible,
+                      workShift.isRotating,
+                    );
 
                     return (
                       <TableRow key={workShift.id}>

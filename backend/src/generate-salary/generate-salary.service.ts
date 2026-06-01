@@ -85,7 +85,8 @@ export class GenerateSalaryService {
       },
     });
 
-    await this.notifyPayslipGenerated(created);
+    // Fire-and-forget: never block the API response on push delivery.
+    void this.notifyPayslipGenerated(created).catch(() => null);
     return created;
   }
 
@@ -164,7 +165,8 @@ export class GenerateSalaryService {
     });
 
     if (existing?.status !== 'Paid' && updated.status === 'Paid') {
-      await this.notifyPayslipPaid(updated);
+      // Fire-and-forget: never block the API response on push delivery.
+      void this.notifyPayslipPaid(updated).catch(() => null);
     }
 
     return updated;

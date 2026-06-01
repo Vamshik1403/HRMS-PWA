@@ -417,6 +417,8 @@ export class ManageEmployeeService {
             employeeID: true,
             personalPhoneNo: true,
             businessEmail: true,
+            companyID: true,
+            pwaShowLeaveBalance: true,
           }
         },
         serviceProvider: {

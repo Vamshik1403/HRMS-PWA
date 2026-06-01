@@ -295,6 +295,7 @@ export class CreateManageEmployeeDto {
   @IsOptional() @IsBoolean()
   allowRotatingShift?: boolean;
   allowCreateTaskOnMobile?: boolean;
+  pwaShowLeaveBalance?: boolean;
 
   // Nested arrays
   @IsOptional() @IsArray()

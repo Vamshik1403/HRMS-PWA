@@ -161,11 +161,16 @@ export class DashboardOverviewService {
       this.prisma.process_att_logs.findMany({
         where: {
           manage_employee_id: { in: empIds },
-          punch_time: { not: null },
+          // Only the current tracker window is needed (month start → tomorrow).
+          // Filtering at the DB avoids scanning the entire historical table.
+          punch_time: {
+            gte: new Date(`${monthStart}T00:00:00`),
+            lte: new Date(`${tomorrow}T23:59:59`),
+          },
         },
         select: { manage_employee_id: true, punch_time: true },
         orderBy: { punch_time: 'asc' },
-        take: 500000,
+        take: 200000,
       }),
       policyOrClauses.length > 0
         ? this.prisma.attendancePolicy.findMany({ where: { OR: policyOrClauses } })
@@ -217,6 +222,60 @@ export class DashboardOverviewService {
         },
       }),
     ]);
+
+    // Today's punch rows with location/source detail (small, today-only query).
+    // Used to surface the exact punch address + whether it came from the mobile
+    // app (GPS) or a biometric device on the admin dashboard.
+    const todayLocationLogs = await this.prisma.process_att_logs.findMany({
+      where: {
+        manage_employee_id: { in: empIds },
+        punch_time: {
+          gte: new Date(`${today}T00:00:00`),
+          lte: new Date(`${tomorrow}T00:00:00`),
+        },
+      },
+      select: {
+        manage_employee_id: true,
+        punch_time: true,
+        device_sn: true,
+        device_name: true,
+        raw_body: true,
+      },
+      orderBy: { punch_time: 'asc' },
+    });
+
+    type PunchLoc = { source: 'app' | 'device'; address: string | null; deviceName: string | null };
+    const locByEmp = new Map<number, { first: PunchLoc; last: PunchLoc }>();
+    for (const log of todayLocationLogs) {
+      const empId = log.manage_employee_id;
+      if (empId == null || !log.punch_time) continue;
+      const dk = dateKeyLocal(new Date(log.punch_time));
+      if (dk !== today) continue;
+      const isApp = log.device_sn === 'LOCATION_APP';
+      let address: string | null = null;
+      if (isApp && log.raw_body) {
+        try {
+          address = JSON.parse(log.raw_body)?.address ?? null;
+        } catch {
+          address = null;
+        }
+      }
+      const loc: PunchLoc = {
+        source: isApp ? 'app' : 'device',
+        address,
+        deviceName: log.device_name ?? null,
+      };
+      const existing = locByEmp.get(empId);
+      if (!existing) locByEmp.set(empId, { first: loc, last: loc });
+      else existing.last = loc;
+    }
+
+    const formatPunchLocation = (loc: PunchLoc | undefined): string | null => {
+      // Show the human-readable punch address only. Device (biometric) punches
+      // carry no GPS, so they have no address to display.
+      if (!loc) return null;
+      return loc.address || null;
+    };
 
     const punchMap: PunchMap = new Map();
     for (const log of processLogs) {
@@ -307,6 +366,8 @@ export class DashboardOverviewService {
       statusLabel: string;
       statusDisplay: string;
       hasPunches: boolean;
+      inLocation: string | null;
+      outLocation: string | null;
     }> = [];
 
     const trackerDates = listDatesInclusive(monthStart, today);
@@ -453,6 +514,7 @@ export class DashboardOverviewService {
           else summary.absent++;
       }
 
+      const empLoc = locByEmp.get(emp.id);
       rows.push({
         id: emp.id,
         employeeFirstName: emp.employeeFirstName || '',
@@ -465,6 +527,8 @@ export class DashboardOverviewService {
         statusLabel: status.label,
         statusDisplay: statusDisplayLabel(status.type, status.label),
         hasPunches: status.hasPunches,
+        inLocation: formatPunchLocation(empLoc?.first),
+        outLocation: formatPunchLocation(empLoc?.last),
       });
     }
 
@@ -485,6 +549,104 @@ export class DashboardOverviewService {
       statusCounts,
       employees: rows,
     };
+  }
+
+  private parseProbationMonths(text: string | null | undefined): number | null {
+    if (!text?.trim()) return null;
+    const m = text.trim().match(/(\d+)/);
+    if (!m) return null;
+    const n = parseInt(m[1], 10);
+    return Number.isFinite(n) && n > 0 ? n : null;
+  }
+
+  private addMonthsToDateKey(dateKey: string, months: number): string {
+    const d = new Date(`${dateKey}T12:00:00`);
+    d.setMonth(d.getMonth() + months);
+    return dateKeyLocal(d);
+  }
+
+  async getProbationAlerts(query: {
+    companyID?: number;
+    branchId?: number;
+    daysAhead?: number;
+  }) {
+    const daysAhead = query.daysAhead ?? 60;
+    const today = dateKeyLocal(new Date());
+    const horizon = new Date(`${today}T12:00:00`);
+    horizon.setDate(horizon.getDate() + daysAhead);
+    const horizonKey = dateKeyLocal(horizon);
+
+    const where: Record<string, unknown> = { isDeleted: false };
+    if (query.companyID != null) where.companyID = query.companyID;
+    if (query.branchId != null) where.branchesID = query.branchId;
+
+    const employees = await this.prisma.manageEmployee.findMany({
+      where,
+      select: {
+        id: true,
+        employeeID: true,
+        employeeFirstName: true,
+        employeeLastName: true,
+        joiningDate: true,
+        companyID: true,
+        branchesID: true,
+        empEmploymentStatus: {
+          orderBy: { id: 'desc' },
+          take: 5,
+        },
+      },
+    });
+
+    const alerts: {
+      employeeId: number;
+      employeeCode: string | null;
+      employeeName: string;
+      probationPeriod: string;
+      employmentStatus: string;
+      effectFrom: string;
+      probationEndDate: string;
+      daysRemaining: number;
+      isOverdue: boolean;
+    }[] = [];
+
+    for (const emp of employees) {
+      const current =
+        emp.empEmploymentStatus.find((s) => s.employmentStatus === 'Probation') ??
+        emp.empEmploymentStatus[0];
+      if (!current || current.employmentStatus !== 'Probation') continue;
+
+      const months = this.parseProbationMonths(current.probationPeriod);
+      if (!months) continue;
+
+      const startKey =
+        (current.effectFrom && String(current.effectFrom).slice(0, 10)) ||
+        (emp.joiningDate && String(emp.joiningDate).slice(0, 10));
+      if (!startKey) continue;
+
+      const endKey = this.addMonthsToDateKey(startKey, months);
+      if (endKey > horizonKey) continue;
+
+      const endMs = new Date(`${endKey}T12:00:00`).getTime();
+      const todayMs = new Date(`${today}T12:00:00`).getTime();
+      const daysRemaining = Math.ceil((endMs - todayMs) / 86400000);
+
+      alerts.push({
+        employeeId: emp.id,
+        employeeCode: emp.employeeID,
+        employeeName:
+          `${emp.employeeFirstName ?? ''} ${emp.employeeLastName ?? ''}`.trim() ||
+          `#${emp.id}`,
+        probationPeriod: current.probationPeriod ?? `${months} months`,
+        employmentStatus: current.employmentStatus ?? 'Probation',
+        effectFrom: startKey,
+        probationEndDate: endKey,
+        daysRemaining,
+        isOverdue: daysRemaining < 0,
+      });
+    }
+
+    alerts.sort((a, b) => a.daysRemaining - b.daysRemaining);
+    return { today, daysAhead, alerts };
   }
 
   private emptyResponse(date: string, query: TodayOverviewQuery) {

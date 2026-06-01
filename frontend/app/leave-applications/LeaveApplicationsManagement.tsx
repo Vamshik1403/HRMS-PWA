@@ -24,6 +24,8 @@ import { toast } from "sonner";
 import { getSidebarContext } from "../utils/sidebarContext";
 
 interface LeaveApplication {
+  /** Database leave_application.id (use for API delete/update). */
+  recordId: string
   id: string
   serviceProviderID?: number
   companyID?: number
@@ -948,6 +950,7 @@ export function LeaveApplicationsManagement() {
     // If no dayStatuses or only one type, return as single entry
     if (!application.dayStatuses || application.dayStatuses.length === 0) {
       return [{
+        recordId: application.id.toString(),
         id: application.id.toString(),
         serviceProviderID: application.serviceProviderID,
         companyID: application.companyID,
@@ -989,6 +992,7 @@ export function LeaveApplicationsManagement() {
         const toDate = sortedDates[sortedDates.length - 1];
 
         entries.push({
+          recordId: application.id.toString(),
           id: `${application.id}-${status}-${fromDate}`,
           serviceProviderID: application.serviceProviderID,
           companyID: application.companyID,
@@ -1038,6 +1042,7 @@ export function LeaveApplicationsManagement() {
         console.log("Extracted employeeId:", employeeId);
         
         const mappedApp = {
+          recordId: application.id.toString(),
           id: application.id.toString(),
           serviceProviderID: application.serviceProviderID,
           companyID: application.companyID,
@@ -1665,13 +1670,20 @@ export function LeaveApplicationsManagement() {
     setIsEmployeeSelected(true)
   }
 
-  const handleDelete = async (id: string) => {
+  const handleDelete = async (application: LeaveApplication) => {
+    const dbId = application.recordId || application.id.split("-")[0]
+    if (!dbId || !/^\d+$/.test(dbId)) {
+      toast.error("Cannot delete this row — invalid leave record id.")
+      return
+    }
+    if (!window.confirm("Delete this leave application permanently?")) return
     try {
-      const res = await fetch(`${BACKEND_URL}/leave-application/${id}`, {
+      const res = await fetch(`${BACKEND_URL}/leave-application/${dbId}`, {
         method: "DELETE",
       })
       if (!res.ok) {
-        throw new Error(`Failed to delete leave application: ${res.status}`)
+        const errText = await res.text().catch(() => "")
+        throw new Error(`Failed to delete leave application: ${res.status} ${errText}`)
       }
       await loadLeaveApplications()
       toast.success("Deleted successfully");
@@ -2031,6 +2043,69 @@ export function LeaveApplicationsManagement() {
                 ))}
               </div>
             )}
+            {canManage && viewingApplication.status === "Pending" && (
+              <div className="border-t pt-4 mt-4 space-y-3">
+                <p className="text-sm font-semibold text-gray-800">Approval actions</p>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    className="bg-green-600 hover:bg-green-700 text-white"
+                    onClick={() => {
+                      setIsViewDrawerOpen(false);
+                      openManagerApprovalModal(viewingApplication);
+                    }}
+                  >
+                    Approve (assign days)
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="text-red-600 border-red-200 hover:bg-red-50"
+                    onClick={async () => {
+                      await handleReject(viewingApplication.id, false);
+                      setIsViewDrawerOpen(false);
+                    }}
+                  >
+                    Reject
+                  </Button>
+                </div>
+              </div>
+            )}
+            {canManage && viewingApplication.status === "RevokePending" && (
+              <div className="border-t pt-4 mt-4 space-y-3">
+                <p className="text-sm font-semibold text-gray-800">Revoke request</p>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    className="bg-green-600 hover:bg-green-700 text-white"
+                    onClick={async () => {
+                      await handleAccept(viewingApplication.id, true);
+                      setIsViewDrawerOpen(false);
+                    }}
+                  >
+                    Accept revoke
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={async () => {
+                      await handleReject(viewingApplication.id, true);
+                      setIsViewDrawerOpen(false);
+                    }}
+                  >
+                    Reject revoke
+                  </Button>
+                </div>
+              </div>
+            )}
+            {canManage && viewingApplication.status === "Accepted" && (
+              <div className="border-t pt-4 mt-4">
+                <Button
+                  onClick={() => {
+                    setIsViewDrawerOpen(false);
+                    openManagerApprovalModal(viewingApplication);
+                  }}
+                >
+                  Manage approval
+                </Button>
+              </div>
+            )}
             <div className="flex justify-end pt-4">
               <Button variant="outline" onClick={() => setIsViewDrawerOpen(false)}>Close</Button>
             </div>
@@ -2375,71 +2450,11 @@ export function LeaveApplicationsManagement() {
                                 <Eye className="w-3 h-3" />
                               </Button>
 
-                              {application.status === "Pending" && (
-                                <>
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => openManagerApprovalModal(application)}
-                                    className="h-7 w-7 p-0 text-green-600 hover:text-green-700 hover:bg-green-50"
-                                    title="Approve leave (assign days)"
-                                  >
-                                    <Check className="w-3 h-3" />
-                                  </Button>
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => handleReject(application.id, false)}
-                                    className="h-7 w-7 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
-                                    title="Reject"
-                                  >
-                                    <X className="w-3 h-3" />
-                                  </Button>
-                                </>
-                              )}
-
-                              {/* RevokePending status - show accept/reject for revoke requests */}
-                              {application.status === "RevokePending" && (
-                                <>
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => handleAccept(application.id, true)}
-                                    className="h-7 w-7 p-0 text-green-600 hover:text-green-700 hover:bg-green-50"
-                                    title="Accept Revoke"
-                                  >
-                                    <Check className="w-3 h-3" />
-                                  </Button>
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => handleReject(application.id, true)}
-                                    className="h-7 w-7 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
-                                    title="Reject Revoke"
-                                  >
-                                    <X className="w-3 h-3" />
-                                  </Button>
-                                </>
-                              )}
-
-                              {/* Accepted status - show manager approval icon (for both regular and revoke flows) */}
-                              {(application.status === "Accepted") && (
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => openManagerApprovalModal(application)}
-                                  className="h-7 w-7 p-0 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
-                                  title="Manage Approval"
-                                >
-                                  <Icon icon="mdi:account-cog" className="w-3 h-3" />
-                                </Button>
-                              )}
-
                               {/* Delete for managers */}
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                onClick={() => handleDelete(application.id)}
+                                onClick={() => handleDelete(application)}
                                 className="h-7 w-7 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
                                 title="Delete"
                               >
@@ -2463,7 +2478,7 @@ export function LeaveApplicationsManagement() {
                                   <Button
                                     variant="ghost"
                                     size="sm"
-                                    onClick={() => handleDelete(application.id)}
+                                    onClick={() => handleDelete(application)}
                                     className="h-7 w-7 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
                                     title="Delete"
                                   >

@@ -4,9 +4,16 @@ import { useEffect, useState } from "react";
 import { Icon } from "@iconify/react";
 import type { TodayStatus } from "../../hooks/useEmpPunch";
 import { useEmpPunch } from "../../hooks/useEmpPunch";
+import { formatLocationLabel } from "../../utils/empAttendanceHistory";
 
+/** Punch times stored as wall-clock IST in UTC — use UTC getters for display. */
 function fmt(iso: string) {
-  return new Date(iso).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true });
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "--:--";
+  const h = d.getUTCHours();
+  const m = d.getUTCMinutes();
+  const ampm = h >= 12 ? "PM" : "AM";
+  return `${String(h % 12 || 12).padStart(2, "0")}:${String(m).padStart(2, "0")} ${ampm}`;
 }
 
 interface EmpTodayStatusCardProps {
@@ -118,6 +125,33 @@ export function EmpTodayStatusCard({ todayStatus, loading, onStatusUpdate }: Emp
           </p>
         </div>
       </div>
+
+      {(checkIn || checkOut) && (
+        <div className="mx-4 mb-3 rounded-xl bg-gray-50/80 border border-gray-100 px-3 py-2 space-y-1.5">
+          {checkIn && (
+            <div className="flex items-start gap-2">
+              <Icon icon="solar:login-2-bold-duotone" className="w-4 h-4 text-gray-400 shrink-0 mt-0.5" />
+              <div className="min-w-0 flex-1">
+                <p className="text-[9px] font-bold text-gray-400 uppercase">Mark IN location</p>
+                <p className="text-[11px] text-gray-600 line-clamp-2" title={formatLocationLabel(checkIn)}>
+                  {formatLocationLabel(checkIn)}
+                </p>
+              </div>
+            </div>
+          )}
+          {checkOut && (
+            <div className="flex items-start gap-2">
+              <Icon icon="solar:logout-2-bold-duotone" className="w-4 h-4 text-gray-400 shrink-0 mt-0.5" />
+              <div className="min-w-0 flex-1">
+                <p className="text-[9px] font-bold text-gray-400 uppercase">Mark OUT location</p>
+                <p className="text-[11px] text-gray-600 line-clamp-2" title={formatLocationLabel(checkOut)}>
+                  {formatLocationLabel(checkOut)}
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {(punchError || punchSuccess) && (
         <div className="px-4 mb-2 space-y-1.5">

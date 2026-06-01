@@ -4,6 +4,7 @@ import { CreateLeaveApplicationDto } from './dto/create-leave-application.dto';
 import { UpdateLeaveApplicationDto } from './dto/update-leave-application.dto';
 import { PushNotificationsService } from '../push-notifications/push-notifications.service';
 import { EmpLeaveBalanceService } from '../emp-leave-balance/emp-leave-balance.service';
+import { MailService } from '../mail/mail.service';
 
 @Injectable()
 export class LeaveApplicationService {
@@ -11,10 +12,11 @@ export class LeaveApplicationService {
     private prisma: PrismaService,
     private pushService: PushNotificationsService,
     private leaveBalanceService: EmpLeaveBalanceService,
+    private mailService: MailService,
   ) {}
 
-  create(createLeaveApplicationDto: CreateLeaveApplicationDto) {
-    return this.prisma.leaveApplication.create({
+  async create(createLeaveApplicationDto: CreateLeaveApplicationDto) {
+    const created = await this.prisma.leaveApplication.create({
       data: createLeaveApplicationDto,
       include: {
         serviceProvider: true,
@@ -23,6 +25,20 @@ export class LeaveApplicationService {
         manageEmployee: true,
       },
     });
+    if (created.manageEmployeeID) {
+      void this.mailService.sendToEmployeeWithManagerCc({
+        employeeId: created.manageEmployeeID,
+        companyID: created.companyID,
+        eventType: 'LEAVE_APPLICATION',
+        vars: {
+          fromDate: String(created.fromDate ?? ''),
+          toDate: String(created.toDate ?? ''),
+          status: String(created.status ?? 'Pending'),
+          purpose: String(created.purpose ?? ''),
+        },
+      });
+    }
+    return created;
   }
 
   async findByEmployee(empId: number) {
@@ -309,12 +325,35 @@ export class LeaveApplicationService {
           )
           .catch(() => null);
       }
+
+      if (newStatus !== prevStatus) {
+        void this.mailService.sendToEmployeeWithManagerCc({
+          employeeId: empId,
+          companyID: updated.companyID,
+          eventType: 'LEAVE_APPLICATION',
+          vars: {
+            fromDate: String(updated.fromDate ?? ''),
+            toDate: String(updated.toDate ?? ''),
+            status: String(newStatus),
+            purpose: String(updated.purpose ?? ''),
+          },
+        });
+      }
     }
 
     return updated;
   }
 
-  remove(id: number) {
+  async remove(id: number) {
+    const existing = await this.prisma.leaveApplication.findUnique({
+      where: { id },
+    });
+    if (!existing) {
+      throw new NotFoundException('Leave application not found');
+    }
+    await this.prisma.leaveApplicationRequest.deleteMany({
+      where: { leaveApplicationID: id },
+    });
     return this.prisma.leaveApplication.delete({
       where: { id },
     });

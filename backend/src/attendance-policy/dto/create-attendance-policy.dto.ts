@@ -41,5 +41,6 @@ export class CreateAttendancePolicyDto {
   @IsOptional() @IsBoolean() otMealApply?: boolean;
   @IsOptional() @IsInt() minsForOTMealToken?: number;
   @IsOptional() @IsInt() minsForBreakTimeForMeal?: number;
-  
+
+  @IsOptional() @IsBoolean() leaveAroundHolidayCounted?: boolean;
 }

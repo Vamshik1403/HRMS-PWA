@@ -18,7 +18,9 @@ export class CreateContractorDto {
   @IsOptional() @IsString() esiNo?: string;
   @IsOptional() @IsString() linNo?: string;
   @IsOptional() @IsString() gstNo?: string;
+  @IsOptional() @IsString() gstCertUrl?: string;
   @IsOptional() @IsString() shopRegNo?: string;
+  @IsOptional() @IsString() shopRegCertUrl?: string;
   @IsOptional() @IsString() financialYearStart?: string;
   @IsOptional() @IsString() contactNo?: string;
   @IsOptional() @IsString() emailAdd?: string;

@@ -1,7 +1,22 @@
 import { Injectable, Logger } from '@nestjs/common';
 import * as fs from 'fs';
 import * as path from 'path';
+import * as https from 'https';
 import * as webpush from 'web-push';
+
+/**
+ * Force IPv4 + keep-alive for outbound push. The server has no working IPv6
+ * route, so Node's "happy eyeballs" wastes time on unreachable IPv6 addresses
+ * (ENETUNREACH) before falling back to IPv4 — and some Apple push IPs time out
+ * intermittently. Pinning IPv4 and reusing connections makes delivery to
+ * web.push.apple.com (iOS) and FCM (Android) fast and reliable.
+ */
+const pushAgent = new https.Agent({
+  keepAlive: true,
+  family: 4,
+  maxSockets: 20,
+  timeout: 8000,
+});
 
 const SUBSCRIPTIONS_DIR =
   process.env.PUSH_SUBSCRIPTIONS_DIR || path.join(process.cwd(), 'data');
@@ -100,7 +115,13 @@ export class PushNotificationsService {
       throw new Error('Invalid push subscription (missing endpoint or malformed keys)');
     }
     const records = this.readSubscriptions();
-    const filtered = records.filter(r => Number(r.employeeID) !== empId);
+    // Multi-device: keep one record per (employee, endpoint). A given physical
+    // device endpoint can only belong to one employee, so drop that endpoint
+    // from any other employee, but keep this employee's OTHER devices intact.
+    const endpoint = subscription.endpoint;
+    const filtered = records.filter(
+      (r) => r.subscription?.endpoint !== endpoint,
+    );
     filtered.push({ employeeID: empId, subscription });
     this.writeSubscriptions(filtered);
     this.logger.log(
@@ -121,38 +142,94 @@ export class PushNotificationsService {
 
     const empId = this.normalizeEmployeeId(employeeID);
     const records = this.readSubscriptions();
-    const record = records.find(r => Number(r.employeeID) === empId);
-    if (!record) {
+    // Deliver to ALL of the employee's registered devices.
+    const mine = records.filter((r) => Number(r.employeeID) === empId);
+    if (mine.length === 0) {
       this.logger.log(`No push subscription for employee ${empId}`);
       return;
     }
 
-    if (!isValidPushSubscription(record.subscription)) {
-      this.logger.warn(
-        `Removing invalid push subscription for employee ${empId} (corrupt keys)`,
-      );
-      this.writeSubscriptions(records.filter(r => Number(r.employeeID) !== empId));
-      return;
-    }
-
     const payload = JSON.stringify({ title, body, data: data || {} });
+    // urgency:high + short TTL tells the push service to deliver promptly and
+    // not sit on the message — this fixes the 20–30s delivery delays.
+    // agent pins IPv4 (see pushAgent above) so Apple/iOS endpoints connect.
+    const options: webpush.RequestOptions = {
+      TTL: 60,
+      urgency: 'high',
+      agent: pushAgent,
+    };
 
-    try {
-      await webpush.sendNotification(record.subscription, payload);
-      this.logger.log(`Push sent to employee ${empId}: ${title}`);
-    } catch (err: any) {
-      const remove =
-        err?.statusCode === 410 ||
-        (typeof err?.message === 'string' &&
-          (err.message.includes('p256dh') || err.message.includes('auth')));
-      if (remove) {
-        const updated = records.filter(r => Number(r.employeeID) !== empId);
-        this.writeSubscriptions(updated);
-        this.logger.warn(`Removed unusable subscription for employee ${empId}`);
-      } else {
-        this.logger.error(`Failed to send push to employee ${empId}`, err);
+    const deadEndpoints = new Set<string>();
+    await Promise.all(
+      mine.map(async (record) => {
+        if (!isValidPushSubscription(record.subscription)) {
+          deadEndpoints.add(record.subscription?.endpoint);
+          return;
+        }
+        try {
+          await this.sendWithRetry(record.subscription, payload, options);
+          this.logger.log(`Push sent to employee ${empId}: ${title}`);
+        } catch (err: any) {
+          const status = err?.statusCode;
+          const remove =
+            status === 410 ||
+            status === 404 ||
+            (typeof err?.message === 'string' &&
+              (err.message.includes('p256dh') || err.message.includes('auth')));
+          if (remove) {
+            deadEndpoints.add(record.subscription.endpoint);
+            this.logger.warn(
+              `Removing dead subscription for employee ${empId} (status ${status})`,
+            );
+          } else {
+            this.logger.error(
+              `Failed to send push to employee ${empId}: ${err?.code || err?.statusCode || err?.message}`,
+            );
+          }
+        }
+      }),
+    );
+
+    if (deadEndpoints.size > 0) {
+      const fresh = this.readSubscriptions().filter(
+        (r) => !deadEndpoints.has(r.subscription?.endpoint),
+      );
+      this.writeSubscriptions(fresh);
+    }
+  }
+
+  /**
+   * Send with up to 2 retries on transient network errors (ETIMEDOUT /
+   * ECONNRESET / EAI_AGAIN). Apple's push IPs are flaky from this host, so a
+   * retry typically lands on a reachable IP. HTTP 4xx (e.g. 410/404) are NOT
+   * retried — they are surfaced so the dead subscription gets pruned.
+   */
+  private async sendWithRetry(
+    subscription: webpush.PushSubscription,
+    payload: string,
+    options: webpush.RequestOptions,
+    attempts = 3,
+  ): Promise<void> {
+    let lastErr: any;
+    for (let i = 0; i < attempts; i++) {
+      try {
+        await webpush.sendNotification(subscription, payload, options);
+        return;
+      } catch (err: any) {
+        lastErr = err;
+        // HTTP status present => server responded; don't retry (let caller prune).
+        if (err?.statusCode) throw err;
+        const code = err?.code || err?.errors?.[0]?.code;
+        const transient =
+          code === 'ETIMEDOUT' ||
+          code === 'ECONNRESET' ||
+          code === 'EAI_AGAIN' ||
+          code === 'ECONNREFUSED';
+        if (!transient || i === attempts - 1) throw err;
+        await new Promise((r) => setTimeout(r, 400 * (i + 1)));
       }
     }
+    throw lastErr;
   }
 
   removeSubscription(employeeID: number): void {

@@ -20,6 +20,7 @@ import { Icon } from "@iconify/react";
 import { Plus, Search, Edit, Trash2, Eye, IndianRupee } from "lucide-react";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import { toast } from "sonner";
+import { PdfUploadField } from "../components/PdfUploadField";
 import { getSidebarContext } from "../utils/sidebarContext";
 import { LocationFields } from "../components/ui/location-fields";
 import { TimezoneSelect } from "../components/ui/timezone-select";
@@ -51,7 +52,9 @@ interface ContractorRead {
   esiNo?: string | null;
   linNo?: string | null;
   gstNo?: string | null;
+  gstCertUrl?: string | null;
   shopRegNo?: string | null;
+  shopRegCertUrl?: string | null;
   financialYearStart?: string | null;
   contactNo?: string | null;
   emailAdd?: string | null;
@@ -258,7 +261,9 @@ export function ContractorManagement() {
     esiNo: "",
     linNo: "",
     gstNo: "",
+    gstCertUrl: "",
     shopRegNo: "",
+    shopRegCertUrl: "",
     financialYearStart: "",
     contactNo: "",
     emailAdd: "",
@@ -494,7 +499,9 @@ export function ContractorManagement() {
       esiNo: "",
       linNo: "",
       gstNo: "",
+      gstCertUrl: "",
       shopRegNo: "",
+      shopRegCertUrl: "",
       financialYearStart: "",
       contactNo: "",
       emailAdd: "",
@@ -574,7 +581,9 @@ export function ContractorManagement() {
       esiNo: r.esiNo ?? "",
       linNo: r.linNo ?? "",
       gstNo: r.gstNo ?? "",
+      gstCertUrl: (r as any).gstCertUrl ?? "",
       shopRegNo: r.shopRegNo ?? "",
+      shopRegCertUrl: (r as any).shopRegCertUrl ?? "",
       financialYearStart: r.financialYearStart ?? "",
       contactNo: r.contactNo ?? "",
       emailAdd: r.emailAdd ?? "",
@@ -659,7 +668,9 @@ export function ContractorManagement() {
         esiNo: formData.esiNo || undefined,
         linNo: formData.linNo || undefined,
         gstNo: formData.gstNo || undefined,
+        gstCertUrl: formData.gstCertUrl || undefined,
         shopRegNo: formData.shopRegNo || undefined,
+        shopRegCertUrl: formData.shopRegCertUrl || undefined,
         financialYearStart: formData.financialYearStart || undefined,
         contactNo: formData.contactNo || undefined,
         emailAdd: formData.emailAdd || undefined,
@@ -948,8 +959,16 @@ export function ContractorManagement() {
                 <div className="space-y-2"><Label>TAN No</Label><Input value={formData.tanNo} onChange={(e) => setFormData((p) => ({ ...p, tanNo: e.target.value }))} /></div>
                 <div className="space-y-2"><Label>ESI No</Label><Input value={formData.esiNo} onChange={(e) => setFormData((p) => ({ ...p, esiNo: e.target.value }))} /></div>
                 <div className="space-y-2"><Label>LIN No</Label><Input value={formData.linNo} onChange={(e) => setFormData((p) => ({ ...p, linNo: e.target.value }))} /></div>
-                <div className="space-y-2"><Label>GST No</Label><Input value={formData.gstNo} onChange={(e) => setFormData((p) => ({ ...p, gstNo: e.target.value }))} /></div>
-                <div className="space-y-2"><Label>Shop Reg No</Label><Input value={formData.shopRegNo} onChange={(e) => setFormData((p) => ({ ...p, shopRegNo: e.target.value }))} /></div>
+                <div className="space-y-2 sm:col-span-2">
+                  <Label>GST No</Label>
+                  <Input value={formData.gstNo} onChange={(e) => setFormData((p) => ({ ...p, gstNo: e.target.value }))} />
+                  <PdfUploadField label="GST certificate (PDF)" value={formData.gstCertUrl} onChange={(url) => setFormData((p) => ({ ...p, gstCertUrl: url ?? "" }))} />
+                </div>
+                <div className="space-y-2 sm:col-span-2">
+                  <Label>Shop Reg No</Label>
+                  <Input value={formData.shopRegNo} onChange={(e) => setFormData((p) => ({ ...p, shopRegNo: e.target.value }))} />
+                  <PdfUploadField label="Shop registration (PDF)" value={formData.shopRegCertUrl} onChange={(url) => setFormData((p) => ({ ...p, shopRegCertUrl: url ?? "" }))} />
+                </div>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

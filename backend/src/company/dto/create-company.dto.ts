@@ -1,5 +1,5 @@
 // src/company/dto/create-company.dto.ts
-import { IsOptional, IsString, IsEmail, IsInt } from 'class-validator';
+import { IsBoolean, IsOptional, IsString, IsEmail, IsInt } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class CreateCompanyDto {
@@ -24,6 +24,7 @@ export class CreateCompanyDto {
   @IsOptional() @IsString() esiNo?: string;
   @IsOptional() @IsString() linNo?: string;
   @IsOptional() @IsString() gstNo?: string;
+  @IsOptional() @IsString() gstCertUrl?: string;
   @IsOptional() @IsString() shopRegNo?: string;
   @IsOptional() shopRegCertHistory?: any;
   @IsOptional() @IsString() financialYearStart?: string;
@@ -40,5 +41,8 @@ export class CreateCompanyDto {
       @IsOptional()
       @IsString()
       noticePeriodDaysForTermination?: string;
-     
+
+  @IsOptional()
+  @IsBoolean()
+  pwaShowLeaveBalance?: boolean;
 }

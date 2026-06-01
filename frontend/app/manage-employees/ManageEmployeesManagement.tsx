@@ -269,10 +269,46 @@ async function fetchJSONSafe<T>(url: string, signal?: AbortSignal): Promise<T> {
   return (raw?.data ?? raw) as T;
 }
 
+/**
+ * Session cache for slow-changing reference tables (departments, branches,
+ * designations, policies, etc.). The same lists were previously re-downloaded
+ * on every dropdown focus and on every form-modal open, which made opening
+ * forms feel sluggish. Cached for a short TTL and de-duplicated while in flight.
+ */
+const REF_CACHE_TTL_MS = 60_000;
+const refCache = new Map<string, { ts: number; data: unknown }>();
+const refInFlight = new Map<string, Promise<unknown>>();
+
+function clearRefCache() {
+  refCache.clear();
+  refInFlight.clear();
+}
+
+async function fetchRefCached<T>(url: string, signal?: AbortSignal): Promise<T> {
+  const hit = refCache.get(url);
+  if (hit && Date.now() - hit.ts < REF_CACHE_TTL_MS) {
+    return hit.data as T;
+  }
+  const inflight = refInFlight.get(url);
+  if (inflight) return inflight as Promise<T>;
+
+  const p = (async () => {
+    const data = await fetchJSONSafe<T>(url, signal);
+    refCache.set(url, { ts: Date.now(), data });
+    refInFlight.delete(url);
+    return data;
+  })().catch((err) => {
+    refInFlight.delete(url);
+    throw err;
+  });
+  refInFlight.set(url, p);
+  return p as Promise<T>;
+}
+
 async function fetchFirstById<T extends { id: number }>(url: string, id?: number | null) {
   if (!id) return null;
   try {
-    const list = await fetchJSONSafe<T[]>(url);
+    const list = await fetchRefCached<T[]>(url);
     return (list || []).find((x) => x.id === id) ?? null;
   } catch {
     return null;
@@ -290,7 +326,7 @@ async function resolveLabelsForEdit(
     fetchFirstById<{ id: ID; workShiftName?: string | null }>(API.workShifts, r.workShiftID),
     fetchFirstById<{ id: ID; attendancePolicyName?: string | null }>(API.attendancePolicies, r.attendancePolicyID),
     fetchFirstById<{ id: ID; leavePolicyName?: string | null }>(API.leavePolicies, r.leavePolicyID),
-    fetchJSONSafe<any[]>(API.devices),
+    fetchRefCached<any[]>(API.devices),
     fetchFirstById<{ id: ID; contractorName?: string | null }>(API.contractors, contractorId),
   ]);
 
@@ -625,7 +661,7 @@ export function ManageEmployeesManagement() {
       linkedEmpAbortRef.current = ctrl;
       setLinkedEmpLoading(true);
       try {
-        let all = await fetchJSONSafe<Mgr[]>(API.employees, ctrl.signal);
+        let all = await fetchRefCached<Mgr[]>(API.employees, ctrl.signal);
         all = all.filter(e => e.companyID === formData.companyID);
         // Exclude already linked employees and the current employee being edited
         const excludeIds = new Set(linkedEmployees.map(le => le.id));
@@ -762,6 +798,7 @@ export function ManageEmployeesManagement() {
     noticePeriodDaysForTermination: "",
     allowRotatingShift: false,
     allowCreateTaskOnMobile: false,
+    pwaShowLeaveBalance: true,
 
     typeOfEmployee: "employee",
 
@@ -827,12 +864,41 @@ export function ManageEmployeesManagement() {
     empContractorForm: [] as EmpContractorForm[],
   });
 
+  useEffect(() => {
+    const jd = formData.joiningDate?.trim();
+    if (!jd) return;
+    setStagingBranch((p) => ({ ...p, effectFrom: jd }));
+    setStagingDept((p) => ({ ...p, effectFrom: jd }));
+    setStagingDesg((p) => ({ ...p, effectFrom: jd }));
+    setStagingContr((p) => ({ ...p, effectFrom: jd }));
+    setStagingET((p) => ({ ...p, effectFrom: jd }));
+    setStagingES((p) => ({ ...p, effectFrom: jd }));
+    setStagingLP((p) => ({ ...p, effectFrom: jd }));
+    setStagingAP((p) => ({ ...p, effectFrom: jd }));
+    setStagingWS((p) => ({ ...p, effectFrom: jd }));
+    setFormData((p) => ({
+      ...p,
+      empBranchForm: p.empBranchForm.map((x) => ({ ...x, effectFrom: jd })),
+      empDepartmentForm: p.empDepartmentForm.map((x) => ({ ...x, effectFrom: jd })),
+      empDesignationForm: p.empDesignationForm.map((x) => ({ ...x, effectFrom: jd })),
+      empContractorForm: p.empContractorForm.map((x) => ({ ...x, effectFrom: jd })),
+      empEmploymentTypeForm: p.empEmploymentTypeForm.map((x) => ({ ...x, effectFrom: jd })),
+      empEmploymentStatusForm: p.empEmploymentStatusForm.map((x) => ({ ...x, effectFrom: jd })),
+      empLeavePolicyForm: p.empLeavePolicyForm.map((x) => ({ ...x, effectFrom: jd })),
+      empAttendancePolicyForm: p.empAttendancePolicyForm.map((x) => ({ ...x, effectFrom: jd })),
+      empWorkShiftForm: p.empWorkShiftForm.map((x) => ({ ...x, effectFrom: jd })),
+    }));
+  }, [formData.joiningDate]);
+
   /* ===========
      Data load
      =========== */
  const fetchRows = async () => {
   try {
     setLoading(true);
+    // Refresh reference-data cache on each list reload (e.g. after a save) so
+    // dropdowns pick up any newly created branches/departments/policies.
+    clearRefCache();
     const all = await fetchJSONSafe<ManageEmpRead[]>(API.manageEmp);
     
     // Fetch active terminations to show offboarding countdown
@@ -857,33 +923,15 @@ export function ManageEmployeesManagement() {
       // Non-critical, swallow error
     }
     
-    // For each employee, fetch both device mappings
-    const enrichedEmployees = await Promise.all(
-      all.map(async (emp) => {
-        try {
-          // Fetch AT devices (from EmpDeviceMapping)
-          const atDevicesRes = await fetch(`${API.manageEmp}/${emp.id}/device-mappings?type=AT`);
-          const atDevices = atDevicesRes.ok ? await atDevicesRes.json() : [];
-          
-          // Fetch TR/TV devices (from TokenDeviceMapping)
-          const tokenDevicesRes = await fetch(`${API.manageEmp}/${emp.id}/token-device-mappings?type=TR,TV`);
-          const tokenDevices = tokenDevicesRes.ok ? await tokenDevicesRes.json() : [];
-          
-          return {
-            ...emp,
-          empDeviceMapping: atDevices,
-tokenDeviceMapping: tokenDevices,
-          };
-        } catch (error) {
-          console.error(`Error fetching devices for employee ${emp.id}:`, error);
-          return {
-            ...emp,
-            empDeviceMapping: [],
-            tokenDeviceMapping: []
-          };
-        }
-      })
-    );
+    // Device mappings are already included in the /manage-emp payload
+    // (empDeviceMapping / tokenDeviceMapping). The previous code fired 2 extra
+    // HTTP requests per employee to endpoints that don't exist, which made the
+    // list extremely slow and overwrote the real mapping data with empty arrays.
+    const enrichedEmployees = all.map((emp: any) => ({
+      ...emp,
+      empDeviceMapping: emp.empDeviceMapping ?? [],
+      tokenDeviceMapping: emp.tokenDeviceMapping ?? [],
+    }));
 
     let filteredRows = enrichedEmployees;
 
@@ -998,7 +1046,7 @@ const runFetchTokenDevices = (q: string) => {
     tokenDevAbortRef.current = ctrl;
     setTokenDevLoading(true);
     try {
-      let all = await fetchJSONSafe<Device[]>(API.devices, ctrl.signal);
+      let all = await fetchRefCached<Device[]>(API.devices, ctrl.signal);
       if (user?.role === "SERVICE_PROVIDER" && currentUserMapping) {
         all = filterForManager(all);
       } else if (formData.companyID) {
@@ -1046,7 +1094,7 @@ const runFetchTokenVerifierDevices = (q: string) => {
     tokenVerifierDevAbortRef.current = ctrl;
     setTokenVerifierDevLoading(true);
     try {
-      let all = await fetchJSONSafe<Device[]>(API.devices, ctrl.signal);
+      let all = await fetchRefCached<Device[]>(API.devices, ctrl.signal);
       if (user?.role === "SERVICE_PROVIDER" && currentUserMapping) {
         all = filterForManager(all);
       } else if (formData.companyID) {
@@ -1072,7 +1120,7 @@ useEffect(() => {
   if (!isAddingNew) return;
   (async () => {
     try {
-      let all = await fetchJSONSafe<Device[]>(API.devices);
+      let all = await fetchRefCached<Device[]>(API.devices);
       if (user?.role === "SERVICE_PROVIDER" && currentUserMapping) {
         all = filterForManager(all);
       } else if (formData.companyID) {
@@ -1099,7 +1147,7 @@ const runFetchCombinedDev = (q: string) => {
     combinedDevAbortRef.current = ctrl;
     setCombinedDevLoading(true);
     try {
-      let all = await fetchJSONSafe<Device[]>(API.devices, ctrl.signal);
+      let all = await fetchRefCached<Device[]>(API.devices, ctrl.signal);
       if (user?.role === "SERVICE_PROVIDER" && currentUserMapping) {
         all = filterForManager(all);
       } else if (formData.companyID) {
@@ -1131,7 +1179,7 @@ const runFetchCombinedDev = (q: string) => {
       spAbortRef.current = ctrl;
       setSpLoading(true);
       try {
-        const all = await fetchJSONSafe<SP[]>(API.serviceProviders, ctrl.signal);
+        const all = await fetchRefCached<SP[]>(API.serviceProviders, ctrl.signal);
         const filtered = (all || []).filter(s => (s.companyName ?? "").toLowerCase().includes(query.toLowerCase()));
         setSpList(filtered.slice(0, 20));
       } catch (e) {
@@ -1148,7 +1196,7 @@ const runFetchCombinedDev = (q: string) => {
       const ctrl = new AbortController(); monthlyPGAbortRef.current = ctrl;
       setMonthlyPGLoading(true);
       try {
-        let all = await fetchJSONSafe<MonthlyPG[]>(API.monthlyGrades, ctrl.signal);
+        let all = await fetchRefCached<MonthlyPG[]>(API.monthlyGrades, ctrl.signal);
         if (user?.role === "SERVICE_PROVIDER" && currentUserMapping) {
           all = filterForManager(all);
         } else if (formData.companyID) {
@@ -1181,7 +1229,7 @@ const runFetchCombinedDev = (q: string) => {
       setDeptLoading(true);
 
       try {
-        let all = await fetchJSONSafe<Dept[]>(API.departments, ctrl.signal);
+        let all = await fetchRefCached<Dept[]>(API.departments, ctrl.signal);
 
         if (user?.role === "SERVICE_PROVIDER" && currentUserMapping) {
           all = filterForManager(all);
@@ -1220,7 +1268,7 @@ const runFetchCombinedDev = (q: string) => {
       const ctrl = new AbortController(); desgAbortRef.current = ctrl;
       setDesgLoading(true);
       try {
-        let all = await fetchJSONSafe<Desg[]>(API.designations, ctrl.signal);
+        let all = await fetchRefCached<Desg[]>(API.designations, ctrl.signal);
         if (user?.role === "SERVICE_PROVIDER" && currentUserMapping) {
           all = filterForManager(all);
         } else if (formData.companyID) {
@@ -1244,7 +1292,7 @@ const runFetchCombinedDev = (q: string) => {
       const ctrl = new AbortController(); contrAbortRef.current = ctrl;
       setContrLoading(true);
       try {
-        let all = await fetchJSONSafe<Contr[]>(API.contractors, ctrl.signal);
+        let all = await fetchRefCached<Contr[]>(API.contractors, ctrl.signal);
         if (user?.role === "SERVICE_PROVIDER" && currentUserMapping) {
           all = filterForManager(all);
         } else if (formData.companyID) {
@@ -1271,7 +1319,7 @@ const runFetchCombinedDev = (q: string) => {
     setDevLoading(true);
 
     try {
-      let all = await fetchJSONSafe<Device[]>(API.devices, ctrl.signal);
+      let all = await fetchRefCached<Device[]>(API.devices, ctrl.signal);
 
       if (user?.role === "SERVICE_PROVIDER" && currentUserMapping) {
         all = filterForManager(all);
@@ -1307,8 +1355,8 @@ const runFetchCombinedDev = (q: string) => {
       setWsLoading(true);
       try {
         const [regular, factual] = await Promise.all([
-          fetchJSONSafe<WS[]>(API.workShifts, ctrl.signal),
-          fetchJSONSafe<WS[]>(API.factualWorkShifts, ctrl.signal),
+          fetchRefCached<WS[]>(API.workShifts, ctrl.signal),
+          fetchRefCached<WS[]>(API.factualWorkShifts, ctrl.signal),
         ]);
         const factualTagged = (factual || []).map(w => ({ ...w, _isFactual: true as const }));
         let all = [...(regular || []), ...factualTagged];
@@ -1332,8 +1380,8 @@ const runFetchCombinedDev = (q: string) => {
       setApLoading(true);
       try {
         const [regular, factual] = await Promise.all([
-          fetchJSONSafe<AP[]>(API.attendancePolicies, ctrl.signal),
-          fetchJSONSafe<AP[]>(API.factualAttendancePolicies, ctrl.signal),
+          fetchRefCached<AP[]>(API.attendancePolicies, ctrl.signal),
+          fetchRefCached<AP[]>(API.factualAttendancePolicies, ctrl.signal),
         ]);
         const factualTagged = (factual || []).map(a => ({ ...a, _isFactual: true as const }));
         let all = [...(regular || []), ...factualTagged];
@@ -1356,7 +1404,7 @@ const runFetchCombinedDev = (q: string) => {
       const ctrl = new AbortController(); lpAbortRef.current = ctrl;
       setLpLoading(true);
       try {
-        let all = await fetchJSONSafe<LP[]>(API.leavePolicies, ctrl.signal);
+        let all = await fetchRefCached<LP[]>(API.leavePolicies, ctrl.signal);
         const ctx = getSidebarContext();
         const companyId = formData.companyID ?? ctx?.companyID ?? user?.companyID;
         const branchId = formData.branchesID ?? user?.branchesID;
@@ -1389,7 +1437,7 @@ const runFetchCombinedDev = (q: string) => {
       setCoLoading(true);
 
       try {
-        let all = await fetchJSONSafe<CO[]>(API.companies, ctrl.signal);
+        let all = await fetchRefCached<CO[]>(API.companies, ctrl.signal);
 
         all = (all || []).filter(
           c => c.serviceProviderID === formData.serviceProviderID
@@ -1431,7 +1479,7 @@ const runFetchCombinedDev = (q: string) => {
       setBrLoading(true);
 
       try {
-        let all = await fetchJSONSafe<BR[]>(API.branches, ctrl.signal);
+        let all = await fetchRefCached<BR[]>(API.branches, ctrl.signal);
 
         all = all.filter(b => b.companyID === companyID);
         // 🔒 BRANCH_ADMIN — restrict to their own branch only
@@ -1826,6 +1874,7 @@ const addCombinedDevMap = () => {
       noticePeriodDaysForTermination: "",
       allowRotatingShift: false,
       allowCreateTaskOnMobile: false,
+      pwaShowLeaveBalance: true,
 
       typeOfEmployee: "employee",
 
@@ -1973,7 +2022,7 @@ const addCombinedDevMap = () => {
           default:
             return;
         }
-        const all = await fetchJSONSafe<any[]>(url);
+        const all = await fetchRefCached<any[]>(url);
         let scoped = all;
         if (user?.role === "SERVICE_PROVIDER" && currentUserMapping) {
           scoped = filterForManager(scoped);
@@ -2396,6 +2445,7 @@ const addCombinedDevMap = () => {
         noticePeriodDaysForTermination: formData.noticePeriodDaysForTermination || undefined,
         allowRotatingShift: formData.allowRotatingShift,
         allowCreateTaskOnMobile: formData.allowCreateTaskOnMobile,
+        pwaShowLeaveBalance: formData.pwaShowLeaveBalance,
 
         typeOfEmployee: formData.typeOfEmployee || undefined,
 
@@ -2649,6 +2699,7 @@ const addCombinedDevMap = () => {
       noticePeriodDaysForTermination: freshData.noticePeriodDaysForTermination ?? "",
       allowRotatingShift: freshData.allowRotatingShift ?? false,
       allowCreateTaskOnMobile: freshData.allowCreateTaskOnMobile ?? false,
+      pwaShowLeaveBalance: freshData.pwaShowLeaveBalance ?? true,
       typeOfEmployee: freshData.typeOfEmployee ?? "",
       workShiftID: effectiveWorkShiftID,
       attendancePolicyID: effectiveAttendancePolicyID,
@@ -3107,6 +3158,16 @@ const addCombinedDevMap = () => {
                 </div>
               )}
 
+              {formData.pfMemberStatus === "Yes" && (
+              <div className="space-y-2">
+                <label>PF Number</label>
+                <Input
+                  value={formData.pfNumber}
+                  onChange={(e) => setFormData((p) => ({ ...p, pfNumber: e.target.value }))}
+                />
+              </div>
+              )}
+
               {/* Branch - Search & Add with History */}
               <div className="relative my-6">
                 <div className="absolute inset-0 flex items-center"><div className="w-full border-t-2 border-blue-200"></div></div>
@@ -3193,6 +3254,15 @@ const addCombinedDevMap = () => {
                     className="rounded border-gray-300"
                   />
                   <span className="text-sm text-gray-700">Allow employee to create tasks from mobile app</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer pt-1">
+                  <input
+                    type="checkbox"
+                    checked={!!formData.pwaShowLeaveBalance}
+                    onChange={(e) => setFormData((p) => ({ ...p, pwaShowLeaveBalance: e.target.checked }))}
+                    className="rounded border-gray-300"
+                  />
+                  <span className="text-sm text-gray-700">Show leave balance in PWA app</span>
                 </label>
               </div>
 
@@ -3453,16 +3523,6 @@ const addCombinedDevMap = () => {
                 </div>
               </div>
 
-              {formData.pfMemberStatus === "Yes" && (
-              <div className="space-y-2">
-                <label>PF Number</label>
-                <Input
-                  value={formData.pfNumber}
-                  onChange={(e) => setFormData((p) => ({ ...p, pfNumber: e.target.value }))}
-                />
-              </div>
-              )}
-
               <div className="relative my-6">
                 <div className="absolute inset-0 flex items-center"><div className="w-full border-t-2 border-blue-200"></div></div>
                 <div className="relative flex justify-start"><span className="bg-white pr-3 text-sm font-semibold text-blue-700 uppercase tracking-wide">Employment Details</span></div>
@@ -3620,6 +3680,273 @@ const addCombinedDevMap = () => {
                 </div>
               </div>
 
+{/* Leave Policy — visible for COMPANY_ADMIN / BRANCH_ADMIN / SERVICE_PROVIDER (hidden for ADMIN) */}
+              {!isAdmin && (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-semibold">Leave Policy</h3>
+                  {canManage && (
+                    <Button type="button" variant="outline" size="sm" onClick={() => window.open('/leave-policy', '_blank')}>
+                      <Plus className="w-4 h-4 mr-1" /> Manage Policies
+                    </Button>
+                  )}
+                </div>
+                <div className="flex items-end gap-2">
+                  <div ref={lpRef} className="flex-1 space-y-2 relative">
+                    <Label>Leave Policy</Label>
+                    <Input
+                      value={stagingLP.label}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setStagingLP((p) => ({ ...p, label: val, leavePolicyID: null }));
+                        runFetchLP(val);
+                      }}
+                      onFocus={(e) => {
+                        if (e.target.value.length >= MIN_CHARS) runFetchLP(e.target.value);
+                      }}
+                      placeholder="Search leave policy…"
+                      autoComplete="off"
+                    />
+                    {lpList.length > 0 && (
+                      <div className="absolute z-10 bg-white border rounded w-full shadow max-h-48 overflow-y-auto">
+                        {lpLoading && <div className="px-3 py-2 text-sm text-gray-500">Loading…</div>}
+                        {lpList.map((l) => (
+                          <div
+                            key={l.id}
+                            className="px-3 py-2 hover:bg-gray-100 cursor-pointer"
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={() => {
+                              setStagingLP((p) => ({ ...p, leavePolicyID: l.id, label: l.leavePolicyName ?? "" }));
+                              setLpList([]);
+                            }}
+                          >
+                            {l.leavePolicyName}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <div className="space-y-2">
+                    <Label>WEF</Label>
+                    <Input
+                      type="date"
+                      value={stagingLP.effectFrom}
+                      onChange={(e) => setStagingLP((p) => ({ ...p, effectFrom: e.target.value }))}
+                    />
+                  </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    disabled={!stagingLP.leavePolicyID}
+                    onClick={() => {
+                      if (!stagingLP.leavePolicyID) return;
+                      const newEntry: EmpLeavePolicyForm = {
+                        _localId: uid(),
+                        leavePolicyID: stagingLP.leavePolicyID,
+                        _lpAutocomplete: stagingLP.label,
+                        effectFrom: stagingLP.effectFrom,
+                      };
+                      setFormData((p) => {
+                        const newList = upsertHistoryEntry(
+                          p.empLeavePolicyForm,
+                          newEntry,
+                          (item) => item.leavePolicyID === newEntry.leavePolicyID,
+                        );
+                        const last = newList[newList.length - 1];
+                        return {
+                          ...p,
+                          empLeavePolicyForm: newList,
+                          leavePolicyID: last?.leavePolicyID ?? null,
+                        };
+                      });
+                      setStagingLP({ leavePolicyID: null, label: "", effectFrom: today });
+                    }}
+                  >
+                    Add
+                  </Button>
+                </div>
+                <div className="border border-gray-200 rounded-lg overflow-hidden">
+                  <div className="bg-gray-50 px-3 py-2 text-xs font-semibold text-gray-600 uppercase tracking-wide flex">
+                    <span className="flex-1">Leave Policy</span>
+                    <span className="w-32 text-center">WEF</span>
+                    <span className="w-10"></span>
+                  </div>
+                  {formData.empLeavePolicyForm.length === 0 ? (
+                    <div className="text-center py-4 text-gray-400 text-sm">No leave policies added</div>
+                  ) : (
+                    formData.empLeavePolicyForm.map((el, i) => (
+                      <div
+                        key={el._localId}
+                        className={`flex items-center px-3 py-2 text-sm ${
+                          i === formData.empLeavePolicyForm.length - 1 ? "bg-blue-50 font-medium" : "bg-white"
+                        } ${i > 0 ? "border-t border-gray-100" : ""}`}
+                      >
+                        <span className="flex-1">{el._lpAutocomplete || "—"}</span>
+                        <span className="w-32 text-center text-gray-500">{el.effectFrom || "—"}</span>
+                        {
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => removeEmpLeavePolicy(el._localId)}
+                            className="h-6 w-6 p-0 text-red-500 hover:text-red-700 hover:bg-red-50"
+                          >
+                            <X className="w-3 h-3" />
+                          </Button>
+                        }
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+              )}
+
+              {/* Attendance Policy - Search & Add with History (visible for COMPANY_ADMIN and above, hidden for ADMIN) */}
+              {!isAdmin && <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-semibold">Attendance Policy</h3>
+                  {canManage && <Button type="button" variant="outline" size="sm" onClick={() => window.open('/attendance-policy', '_blank')}><Plus className="w-4 h-4 mr-1" /> Manage Policies</Button>}
+                </div>
+                <div className="flex items-end gap-2">
+                  <div ref={apRef} className="flex-1 space-y-2 relative">
+                    <Label>Attendance Policy</Label>
+                    <Input
+                      value={stagingAP.label}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setStagingAP(p => ({ ...p, label: val, attendancePolicyID: null }));
+                        runFetchAP(val);
+                      }}
+                      onFocus={(e) => {
+                        if (e.target.value.length >= MIN_CHARS) runFetchAP(e.target.value);
+                      }}
+                      placeholder="Search attendance policy…"
+                      autoComplete="off"
+                    />
+                    {apList.length > 0 && (
+                      <div className="absolute z-10 bg-white border rounded w-full shadow max-h-48 overflow-y-auto">
+                        {apLoading && <div className="px-3 py-2 text-sm text-gray-500">Loading…</div>}
+                        {apList.map((a) => (
+                          <div key={a.id} className="px-3 py-2 hover:bg-gray-100 cursor-pointer" onMouseDown={(e) => e.preventDefault()} onClick={() => {
+                            setStagingAP(p => ({ ...p, attendancePolicyID: a.id, label: a.attendancePolicyName ?? "", _isFactual: a._isFactual ?? false }));
+                            setApList([]);
+                          }}>{a.attendancePolicyName}</div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <div className="space-y-2">
+                    <Label>WEF</Label>
+                    <Input type="date" value={stagingAP.effectFrom} onChange={(e) => setStagingAP(p => ({ ...p, effectFrom: e.target.value }))} />
+                  </div>
+                  <Button type="button" size="sm" disabled={!stagingAP.attendancePolicyID} onClick={() => {
+                    if (!stagingAP.attendancePolicyID) return;
+                    const newEntry: EmpAttendancePolicyForm = { _localId: uid(), attendancePolicyID: stagingAP.attendancePolicyID, _apAutocomplete: stagingAP.label, effectFrom: stagingAP.effectFrom, _isFactual: stagingAP._isFactual ?? false };
+                    setFormData(p => {
+                      const newList = upsertHistoryEntry(p.empAttendancePolicyForm, newEntry, (item) => item.attendancePolicyID === newEntry.attendancePolicyID);
+                      const last = newList[newList.length - 1];
+                      return { ...p, empAttendancePolicyForm: newList, attendancePolicyID: last?.attendancePolicyID ?? null };
+                    });
+                    setStagingAP({ attendancePolicyID: null, label: "", effectFrom: today });
+                  }}>Add</Button>
+                </div>
+                {/* History Box */}
+                <div className="border border-gray-200 rounded-lg overflow-hidden">
+                  <div className="bg-gray-50 px-3 py-2 text-xs font-semibold text-gray-600 uppercase tracking-wide flex">
+                    <span className="flex-1">Attendance Policy</span><span className="w-32 text-center">WEF</span><span className="w-10"></span>
+                  </div>
+                  {formData.empAttendancePolicyForm.length === 0 ? (
+                    <div className="text-center py-4 text-gray-400 text-sm">No attendance policies added</div>
+                  ) : (
+                    formData.empAttendancePolicyForm.map((ea, i) => (
+                      <div key={ea._localId} className={`flex items-center px-3 py-2 text-sm ${i === formData.empAttendancePolicyForm.length - 1 ? 'bg-blue-50 font-medium' : 'bg-white'} ${i > 0 ? 'border-t border-gray-100' : ''}`}>
+                        <span className="flex-1 flex items-center gap-1">{ea._apAutocomplete || '—'}</span>
+                        <span className="w-32 text-center text-gray-500">{ea.effectFrom || '—'}</span>
+                        {<Button type="button" variant="ghost" size="sm" onClick={() => removeEmpAttendancePolicy(ea._localId)} className="h-6 w-6 p-0 text-red-500 hover:text-red-700 hover:bg-red-50"><X className="w-3 h-3" /></Button>}
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>}
+
+              {/* Work Shift - Search & Add with History (visible for COMPANY_ADMIN and above, hidden for ADMIN) */}
+              {!isAdmin && <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-semibold">Work Shift</h3>
+                  {canManage && <Button type="button" variant="outline" size="sm" onClick={() => window.open('/work-shifts', '_blank')}><Plus className="w-4 h-4 mr-1" /> Manage Shifts</Button>}
+                </div>
+
+                {/* Work shift field */}
+                <div className="flex items-end gap-2">
+                  <div ref={wsRef} className="flex-1 space-y-2 relative">
+                    <Label>Work Shift</Label>
+                    <Input
+                      value={stagingWS.label}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setStagingWS(p => ({ ...p, label: val, workShiftID: null }));
+                        runFetchWS(val);
+                      }}
+                      onFocus={(e) => {
+                        if (e.target.value.length >= MIN_CHARS) runFetchWS(e.target.value);
+                      }}
+                      placeholder="Search work shift…"
+                      autoComplete="off"
+                    />
+                    {wsList.length > 0 && !formData.allowRotatingShift && (
+                      <div className="absolute z-10 bg-white border rounded w-full shadow max-h-48 overflow-y-auto">
+                        {wsLoading && <div className="px-3 py-2 text-sm text-gray-500">Loading…</div>}
+                        {wsList.map((w) => (
+                          <div key={w.id} className="px-3 py-2 hover:bg-gray-100 cursor-pointer" onMouseDown={(e) => e.preventDefault()} onClick={() => {
+                            setStagingWS(p => ({ ...p, workShiftID: w.id, label: w.workShiftName ?? "", _isFactual: w._isFactual ?? false }));
+                            setWsList([]);
+                          }}>{w.workShiftName}</div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <div className="space-y-2">
+                    <Label>WEF</Label>
+                    <Input type="date" disabled={formData.allowRotatingShift} value={stagingWS.effectFrom} onChange={(e) => setStagingWS(p => ({ ...p, effectFrom: e.target.value }))} />
+                  </div>
+                  <Button type="button" size="sm" disabled={!stagingWS.workShiftID || formData.allowRotatingShift} onClick={() => {
+                    if (!stagingWS.workShiftID) return;
+                    const newEntry: EmpWorkShiftForm = { _localId: uid(), workShiftID: stagingWS.workShiftID, _wsAutocomplete: stagingWS.label, effectFrom: stagingWS.effectFrom, _isFactual: stagingWS._isFactual ?? false };
+                    setFormData(p => {
+                      const newList = upsertHistoryEntry(p.empWorkShiftForm, newEntry, (item) => item.workShiftID === newEntry.workShiftID);
+                      const last = newList[newList.length - 1];
+                      return { ...p, empWorkShiftForm: newList, workShiftID: last?.workShiftID ?? null };
+                    });
+                    setStagingWS({ workShiftID: null, label: "", effectFrom: today });
+                  }}>Add</Button>
+                </div>
+                {/* History Box */}
+                {!formData.allowRotatingShift && (
+                <div className="border border-gray-200 rounded-lg overflow-hidden">
+                  <div className="bg-gray-50 px-3 py-2 text-xs font-semibold text-gray-600 uppercase tracking-wide flex">
+                    <span className="flex-1">Work Shift</span><span className="w-32 text-center">WEF</span><span className="w-10"></span>
+                  </div>
+                  {formData.empWorkShiftForm.length === 0 ? (
+                    <div className="text-center py-4 text-gray-400 text-sm">No work shifts added</div>
+                  ) : (
+                    formData.empWorkShiftForm.map((ew, i) => (
+                      <div key={ew._localId} className={`flex items-center px-3 py-2 text-sm ${i === formData.empWorkShiftForm.length - 1 ? 'bg-blue-50 font-medium' : 'bg-white'} ${i > 0 ? 'border-t border-gray-100' : ''}`}>
+                        <span className="flex-1 flex items-center gap-1">{ew._wsAutocomplete || '—'}</span>
+                        <span className="w-32 text-center text-gray-500">{ew.effectFrom || '—'}</span>
+                        {<Button type="button" variant="ghost" size="sm" onClick={() => removeEmpWorkShift(ew._localId)} className="h-6 w-6 p-0 text-red-500 hover:text-red-700 hover:bg-red-50"><X className="w-3 h-3" /></Button>}
+                      </div>
+                    ))
+                  )}
+                </div>
+                )}
+                {formData.allowRotatingShift && (
+                  <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-800">
+                    Rotating employee — shifts will be assigned day-by-day in the <strong>Workshift Roster</strong>.
+                  </div>
+                )}
+              </div>}
+
+          
               <div className="relative my-6">
                 <div className="absolute inset-0 flex items-center"><div className="w-full border-t-2 border-blue-200"></div></div>
                 <div className="relative flex justify-start"><span className="bg-white pr-3 text-sm font-semibold text-blue-700 uppercase tracking-wide">Salary / Policy / Shift</span></div>
@@ -4147,273 +4474,7 @@ const addCombinedDevMap = () => {
               </div>
               </>)}
 
-              {/* Leave Policy — visible for COMPANY_ADMIN / BRANCH_ADMIN / SERVICE_PROVIDER (hidden for ADMIN) */}
-              {!isAdmin && (
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-lg font-semibold">Leave Policy</h3>
-                  {canManage && (
-                    <Button type="button" variant="outline" size="sm" onClick={() => window.open('/leave-policy', '_blank')}>
-                      <Plus className="w-4 h-4 mr-1" /> Manage Policies
-                    </Button>
-                  )}
-                </div>
-                <div className="flex items-end gap-2">
-                  <div ref={lpRef} className="flex-1 space-y-2 relative">
-                    <Label>Leave Policy</Label>
-                    <Input
-                      value={stagingLP.label}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        setStagingLP((p) => ({ ...p, label: val, leavePolicyID: null }));
-                        runFetchLP(val);
-                      }}
-                      onFocus={(e) => {
-                        if (e.target.value.length >= MIN_CHARS) runFetchLP(e.target.value);
-                      }}
-                      placeholder="Search leave policy…"
-                      autoComplete="off"
-                    />
-                    {lpList.length > 0 && (
-                      <div className="absolute z-10 bg-white border rounded w-full shadow max-h-48 overflow-y-auto">
-                        {lpLoading && <div className="px-3 py-2 text-sm text-gray-500">Loading…</div>}
-                        {lpList.map((l) => (
-                          <div
-                            key={l.id}
-                            className="px-3 py-2 hover:bg-gray-100 cursor-pointer"
-                            onMouseDown={(e) => e.preventDefault()}
-                            onClick={() => {
-                              setStagingLP((p) => ({ ...p, leavePolicyID: l.id, label: l.leavePolicyName ?? "" }));
-                              setLpList([]);
-                            }}
-                          >
-                            {l.leavePolicyName}
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                  <div className="space-y-2">
-                    <Label>WEF</Label>
-                    <Input
-                      type="date"
-                      value={stagingLP.effectFrom}
-                      onChange={(e) => setStagingLP((p) => ({ ...p, effectFrom: e.target.value }))}
-                    />
-                  </div>
-                  <Button
-                    type="button"
-                    size="sm"
-                    disabled={!stagingLP.leavePolicyID}
-                    onClick={() => {
-                      if (!stagingLP.leavePolicyID) return;
-                      const newEntry: EmpLeavePolicyForm = {
-                        _localId: uid(),
-                        leavePolicyID: stagingLP.leavePolicyID,
-                        _lpAutocomplete: stagingLP.label,
-                        effectFrom: stagingLP.effectFrom,
-                      };
-                      setFormData((p) => {
-                        const newList = upsertHistoryEntry(
-                          p.empLeavePolicyForm,
-                          newEntry,
-                          (item) => item.leavePolicyID === newEntry.leavePolicyID,
-                        );
-                        const last = newList[newList.length - 1];
-                        return {
-                          ...p,
-                          empLeavePolicyForm: newList,
-                          leavePolicyID: last?.leavePolicyID ?? null,
-                        };
-                      });
-                      setStagingLP({ leavePolicyID: null, label: "", effectFrom: today });
-                    }}
-                  >
-                    Add
-                  </Button>
-                </div>
-                <div className="border border-gray-200 rounded-lg overflow-hidden">
-                  <div className="bg-gray-50 px-3 py-2 text-xs font-semibold text-gray-600 uppercase tracking-wide flex">
-                    <span className="flex-1">Leave Policy</span>
-                    <span className="w-32 text-center">WEF</span>
-                    <span className="w-10"></span>
-                  </div>
-                  {formData.empLeavePolicyForm.length === 0 ? (
-                    <div className="text-center py-4 text-gray-400 text-sm">No leave policies added</div>
-                  ) : (
-                    formData.empLeavePolicyForm.map((el, i) => (
-                      <div
-                        key={el._localId}
-                        className={`flex items-center px-3 py-2 text-sm ${
-                          i === formData.empLeavePolicyForm.length - 1 ? "bg-blue-50 font-medium" : "bg-white"
-                        } ${i > 0 ? "border-t border-gray-100" : ""}`}
-                      >
-                        <span className="flex-1">{el._lpAutocomplete || "—"}</span>
-                        <span className="w-32 text-center text-gray-500">{el.effectFrom || "—"}</span>
-                        {
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => removeEmpLeavePolicy(el._localId)}
-                            className="h-6 w-6 p-0 text-red-500 hover:text-red-700 hover:bg-red-50"
-                          >
-                            <X className="w-3 h-3" />
-                          </Button>
-                        }
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
-              )}
-
-              {/* Attendance Policy - Search & Add with History (visible for COMPANY_ADMIN and above, hidden for ADMIN) */}
-              {!isAdmin && <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-lg font-semibold">Attendance Policy</h3>
-                  {canManage && <Button type="button" variant="outline" size="sm" onClick={() => window.open('/attendance-policy', '_blank')}><Plus className="w-4 h-4 mr-1" /> Manage Policies</Button>}
-                </div>
-                <div className="flex items-end gap-2">
-                  <div ref={apRef} className="flex-1 space-y-2 relative">
-                    <Label>Attendance Policy</Label>
-                    <Input
-                      value={stagingAP.label}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        setStagingAP(p => ({ ...p, label: val, attendancePolicyID: null }));
-                        runFetchAP(val);
-                      }}
-                      onFocus={(e) => {
-                        if (e.target.value.length >= MIN_CHARS) runFetchAP(e.target.value);
-                      }}
-                      placeholder="Search attendance policy…"
-                      autoComplete="off"
-                    />
-                    {apList.length > 0 && (
-                      <div className="absolute z-10 bg-white border rounded w-full shadow max-h-48 overflow-y-auto">
-                        {apLoading && <div className="px-3 py-2 text-sm text-gray-500">Loading…</div>}
-                        {apList.map((a) => (
-                          <div key={a.id} className="px-3 py-2 hover:bg-gray-100 cursor-pointer" onMouseDown={(e) => e.preventDefault()} onClick={() => {
-                            setStagingAP(p => ({ ...p, attendancePolicyID: a.id, label: a.attendancePolicyName ?? "", _isFactual: a._isFactual ?? false }));
-                            setApList([]);
-                          }}>{a.attendancePolicyName}</div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                  <div className="space-y-2">
-                    <Label>WEF</Label>
-                    <Input type="date" value={stagingAP.effectFrom} onChange={(e) => setStagingAP(p => ({ ...p, effectFrom: e.target.value }))} />
-                  </div>
-                  <Button type="button" size="sm" disabled={!stagingAP.attendancePolicyID} onClick={() => {
-                    if (!stagingAP.attendancePolicyID) return;
-                    const newEntry: EmpAttendancePolicyForm = { _localId: uid(), attendancePolicyID: stagingAP.attendancePolicyID, _apAutocomplete: stagingAP.label, effectFrom: stagingAP.effectFrom, _isFactual: stagingAP._isFactual ?? false };
-                    setFormData(p => {
-                      const newList = upsertHistoryEntry(p.empAttendancePolicyForm, newEntry, (item) => item.attendancePolicyID === newEntry.attendancePolicyID);
-                      const last = newList[newList.length - 1];
-                      return { ...p, empAttendancePolicyForm: newList, attendancePolicyID: last?.attendancePolicyID ?? null };
-                    });
-                    setStagingAP({ attendancePolicyID: null, label: "", effectFrom: today });
-                  }}>Add</Button>
-                </div>
-                {/* History Box */}
-                <div className="border border-gray-200 rounded-lg overflow-hidden">
-                  <div className="bg-gray-50 px-3 py-2 text-xs font-semibold text-gray-600 uppercase tracking-wide flex">
-                    <span className="flex-1">Attendance Policy</span><span className="w-32 text-center">WEF</span><span className="w-10"></span>
-                  </div>
-                  {formData.empAttendancePolicyForm.length === 0 ? (
-                    <div className="text-center py-4 text-gray-400 text-sm">No attendance policies added</div>
-                  ) : (
-                    formData.empAttendancePolicyForm.map((ea, i) => (
-                      <div key={ea._localId} className={`flex items-center px-3 py-2 text-sm ${i === formData.empAttendancePolicyForm.length - 1 ? 'bg-blue-50 font-medium' : 'bg-white'} ${i > 0 ? 'border-t border-gray-100' : ''}`}>
-                        <span className="flex-1 flex items-center gap-1">{ea._apAutocomplete || '—'}</span>
-                        <span className="w-32 text-center text-gray-500">{ea.effectFrom || '—'}</span>
-                        {<Button type="button" variant="ghost" size="sm" onClick={() => removeEmpAttendancePolicy(ea._localId)} className="h-6 w-6 p-0 text-red-500 hover:text-red-700 hover:bg-red-50"><X className="w-3 h-3" /></Button>}
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>}
-
-              {/* Work Shift - Search & Add with History (visible for COMPANY_ADMIN and above, hidden for ADMIN) */}
-              {!isAdmin && <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-lg font-semibold">Work Shift</h3>
-                  {canManage && <Button type="button" variant="outline" size="sm" onClick={() => window.open('/work-shifts', '_blank')}><Plus className="w-4 h-4 mr-1" /> Manage Shifts</Button>}
-                </div>
-
-                {/* Work shift field */}
-                <div className="flex items-end gap-2">
-                  <div ref={wsRef} className="flex-1 space-y-2 relative">
-                    <Label>Work Shift</Label>
-                    <Input
-                      value={stagingWS.label}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        setStagingWS(p => ({ ...p, label: val, workShiftID: null }));
-                        runFetchWS(val);
-                      }}
-                      onFocus={(e) => {
-                        if (e.target.value.length >= MIN_CHARS) runFetchWS(e.target.value);
-                      }}
-                      placeholder="Search work shift…"
-                      autoComplete="off"
-                    />
-                    {wsList.length > 0 && !formData.allowRotatingShift && (
-                      <div className="absolute z-10 bg-white border rounded w-full shadow max-h-48 overflow-y-auto">
-                        {wsLoading && <div className="px-3 py-2 text-sm text-gray-500">Loading…</div>}
-                        {wsList.map((w) => (
-                          <div key={w.id} className="px-3 py-2 hover:bg-gray-100 cursor-pointer" onMouseDown={(e) => e.preventDefault()} onClick={() => {
-                            setStagingWS(p => ({ ...p, workShiftID: w.id, label: w.workShiftName ?? "", _isFactual: w._isFactual ?? false }));
-                            setWsList([]);
-                          }}>{w.workShiftName}</div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                  <div className="space-y-2">
-                    <Label>WEF</Label>
-                    <Input type="date" disabled={formData.allowRotatingShift} value={stagingWS.effectFrom} onChange={(e) => setStagingWS(p => ({ ...p, effectFrom: e.target.value }))} />
-                  </div>
-                  <Button type="button" size="sm" disabled={!stagingWS.workShiftID || formData.allowRotatingShift} onClick={() => {
-                    if (!stagingWS.workShiftID) return;
-                    const newEntry: EmpWorkShiftForm = { _localId: uid(), workShiftID: stagingWS.workShiftID, _wsAutocomplete: stagingWS.label, effectFrom: stagingWS.effectFrom, _isFactual: stagingWS._isFactual ?? false };
-                    setFormData(p => {
-                      const newList = upsertHistoryEntry(p.empWorkShiftForm, newEntry, (item) => item.workShiftID === newEntry.workShiftID);
-                      const last = newList[newList.length - 1];
-                      return { ...p, empWorkShiftForm: newList, workShiftID: last?.workShiftID ?? null };
-                    });
-                    setStagingWS({ workShiftID: null, label: "", effectFrom: today });
-                  }}>Add</Button>
-                </div>
-                {/* History Box */}
-                {!formData.allowRotatingShift && (
-                <div className="border border-gray-200 rounded-lg overflow-hidden">
-                  <div className="bg-gray-50 px-3 py-2 text-xs font-semibold text-gray-600 uppercase tracking-wide flex">
-                    <span className="flex-1">Work Shift</span><span className="w-32 text-center">WEF</span><span className="w-10"></span>
-                  </div>
-                  {formData.empWorkShiftForm.length === 0 ? (
-                    <div className="text-center py-4 text-gray-400 text-sm">No work shifts added</div>
-                  ) : (
-                    formData.empWorkShiftForm.map((ew, i) => (
-                      <div key={ew._localId} className={`flex items-center px-3 py-2 text-sm ${i === formData.empWorkShiftForm.length - 1 ? 'bg-blue-50 font-medium' : 'bg-white'} ${i > 0 ? 'border-t border-gray-100' : ''}`}>
-                        <span className="flex-1 flex items-center gap-1">{ew._wsAutocomplete || '—'}</span>
-                        <span className="w-32 text-center text-gray-500">{ew.effectFrom || '—'}</span>
-                        {<Button type="button" variant="ghost" size="sm" onClick={() => removeEmpWorkShift(ew._localId)} className="h-6 w-6 p-0 text-red-500 hover:text-red-700 hover:bg-red-50"><X className="w-3 h-3" /></Button>}
-                      </div>
-                    ))
-                  )}
-                </div>
-                )}
-                {formData.allowRotatingShift && (
-                  <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-800">
-                    Rotating employee — shifts will be assigned day-by-day in the <strong>Workshift Roster</strong>.
-                  </div>
-                )}
-              </div>}
-
-          {/* ==========================
+              {/* ==========================
     ATTENDANCE DEVICE MAPPING 
     ========================== */}
               <div className="relative my-6">

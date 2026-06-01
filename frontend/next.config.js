@@ -89,6 +89,10 @@ const nextConfig = {
         source: '/backend/:path*',
         destination: 'http://localhost:8000/:path*',
       },
+      {
+        source: '/uploads/:path*',
+        destination: 'http://localhost:8000/uploads/:path*',
+      },
     ]
   },
 

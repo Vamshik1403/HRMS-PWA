@@ -4,21 +4,26 @@ import Link from "next/link";
 import { Icon } from "@iconify/react";
 import type { AttendanceDaySummary } from "../../utils/empAttendanceHistory";
 
+/** Punch times are stored as wall-clock IST encoded as UTC — read with UTC getters. */
 function fmt(iso: string | null) {
   if (!iso) return "--:--";
-  return new Date(iso).toLocaleTimeString("en-IN", {
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: true,
-  });
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "--:--";
+  const h = d.getUTCHours();
+  const m = d.getUTCMinutes();
+  const ampm = h >= 12 ? "pm" : "am";
+  return `${String(h % 12 || 12).padStart(2, "0")}:${String(m).padStart(2, "0")} ${ampm}`;
 }
 
 function fmtDateLine(dateKey: string) {
-  return new Date(dateKey).toLocaleDateString("en-IN", {
+  // dateKey is "YYYY-MM-DD" — append T12:00:00Z to avoid local-tz date shift
+  const d = new Date(dateKey + "T12:00:00Z");
+  return d.toLocaleDateString("en-IN", {
     weekday: "short",
     day: "numeric",
     month: "short",
     year: "numeric",
+    timeZone: "UTC",
   });
 }
 

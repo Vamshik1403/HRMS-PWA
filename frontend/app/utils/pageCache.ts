@@ -10,8 +10,10 @@ const TTLs: Record<string, number> = {
   recentAttendance: 120_000,  // 2 min — history list
   empPayslips:      60_000,   // 1 min — payslip list
   empLeaveApps:     30_000,   // 30 s  — leave list (status can change)
+  empPwaShowLeaveBalance: 86_400_000, // 24 h — per-employee PWA leave balance visibility
   empReimbursements:30_000,   // 30 s  — reimbursement list
   empMemos:         60_000,   // 1 min — notice board
+  empNotifFeed:     60_000,   // 1 min — notifications feed (SWR)
 };
 
 const DEFAULT_TTL = 60_000; // 1 min fallback

@@ -111,6 +111,9 @@ model Branches {
   esiNo                   String?                   @db.VarChar
   linNo                   String?                   @db.VarChar
   gstNo                   String?                   @db.VarChar
+  gstCertUrl              String?                   @db.VarChar
+  msmeNo                  String?                   @db.VarChar
+  msmeCertUrl             String?                   @db.VarChar
   shopRegNo               String?                   @db.VarChar
   shopRegCertHistory      Json?
   financialYearStart      String?                   @db.VarChar
@@ -172,6 +175,7 @@ model Company {
   esiNo                          String?                   @db.VarChar
   linNo                          String?                   @db.VarChar
   gstNo                          String?                   @db.VarChar
+  gstCertUrl                     String?                   @db.VarChar
   shopRegNo                      String?                   @db.VarChar
   shopRegCertHistory              Json?
   financialYearStart             String?                   @db.VarChar
@@ -182,6 +186,7 @@ model Company {
   companyType                    String?                   @db.VarChar
   noticePeriodDaysForResignation String?                   @db.VarChar
   noticePeriodDaysForTermination String?                   @db.VarChar
+  pwaShowLeaveBalance            Boolean                   @default(true)
   attendancePolicy               AttendancePolicy[]
   bankDetails                    BankDetails[]
   bonusSetup                     BonusSetup[]
@@ -240,7 +245,9 @@ model Contractors {
   esiNo              String?          @db.VarChar
   linNo              String?          @db.VarChar
   gstNo              String?          @db.VarChar
+  gstCertUrl         String?          @db.VarChar
   shopRegNo          String?          @db.VarChar
+  shopRegCertUrl     String?          @db.VarChar
   financialYearStart String?          @db.VarChar
   contactNo          String?          @db.VarChar
   emailAdd           String?          @db.VarChar
@@ -698,6 +705,7 @@ model ManageEmployee {
   weeklyOffPattern               String?                   @db.VarChar
   allowRotatingShift             Boolean                   @default(false)
   allowCreateTaskOnMobile        Boolean                   @default(false)
+  pwaShowLeaveBalance            Boolean                   @default(true)
   bonusAllocation                BonusAllocation[]
   empAttendanceRegularise        EmpAttendanceRegularise[]
   empCurrentPosition             EmpCurrentPosition[]
@@ -1971,6 +1979,7 @@ model AttendanceLocation {
   latitude          Float
   longitude         Float
   accuracy          Float?
+  address           String?         @db.Text
   ipAddress         String?         @db.VarChar(64)
   deviceType        String?         @db.VarChar(64)
   browser           String?         @db.VarChar(128)
@@ -2148,4 +2157,17 @@ model TaskActivityLog {
 
   @@index([taskID])
   @@index([createdAt])
+}
+
+model EmailTemplate {
+  id         Int      @id @default(autoincrement())
+  companyID  Int?
+  eventType  String   @db.VarChar
+  subject    String   @db.VarChar
+  bodyHtml   String   @db.Text
+  enabled    Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([companyID, eventType])
 }

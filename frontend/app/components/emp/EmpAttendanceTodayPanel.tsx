@@ -168,7 +168,7 @@ function LocationRow({
       <Icon icon={icon} className="w-4 h-4 text-gray-400 shrink-0 mt-0.5" />
       <div className="min-w-0 flex-1">
         <p className="text-[9px] font-bold text-gray-400 uppercase">{label}</p>
-        <p className="text-[11px] text-gray-600 font-mono truncate">{value}</p>
+        <p className="text-[11px] text-gray-600 line-clamp-2" title={value}>{value}</p>
       </div>
     </div>
   );

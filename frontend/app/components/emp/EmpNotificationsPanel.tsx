@@ -8,6 +8,10 @@ import {
   type StoredInAppNotification,
 } from "../../utils/empInAppNotifications";
 import { empPayoutHrefForPeriod } from "../../utils/empPayslipApi";
+import { getPageCache, setPageCache } from "../../utils/pageCache";
+
+const FEED_CACHE_KEY = "empNotifFeed";
+type CachedFeed = { recent: FeedNotification[]; older: FeedNotification[]; hasMore: boolean };
 
 const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL || "/backend";
 
@@ -99,16 +103,19 @@ function mergeFeeds(
 }
 
 export function EmpNotificationsPanel() {
-  const [recent, setRecent] = useState<FeedNotification[]>([]);
-  const [older, setOlder] = useState<FeedNotification[]>([]);
+  // Stale-while-revalidate: render the last-known feed instantly from cache,
+  // then refresh in the background — no spinner on repeat visits.
+  const cached = typeof window !== "undefined" ? getPageCache<CachedFeed>(FEED_CACHE_KEY) : null;
+  const [recent, setRecent] = useState<FeedNotification[]>(cached?.recent ?? []);
+  const [older, setOlder] = useState<FeedNotification[]>(cached?.older ?? []);
   const [stored, setStored] = useState<StoredInAppNotification[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!cached);
   const [showOlder, setShowOlder] = useState(false);
-  const [hasMore, setHasMore] = useState(false);
+  const [hasMore, setHasMore] = useState(cached?.hasMore ?? false);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    setLoading(true);
+    setLoading((prev) => prev && true);
     setError(null);
     try {
       const res = await fetch(`${BACKEND}/emp-notifications/feed?recentDays=7&olderDays=90`, {
@@ -123,9 +130,12 @@ export function EmpNotificationsPanel() {
       } else {
         const data = await res.json();
         const olderList = Array.isArray(data.older) ? data.older : [];
-        setRecent(Array.isArray(data.recent) ? data.recent : []);
+        const recentList = Array.isArray(data.recent) ? data.recent : [];
+        const more = Boolean(data.hasMore) || olderList.length > 0;
+        setRecent(recentList);
         setOlder(olderList);
-        setHasMore(Boolean(data.hasMore) || olderList.length > 0);
+        setHasMore(more);
+        setPageCache(FEED_CACHE_KEY, { recent: recentList, older: olderList, hasMore: more });
       }
       setStored(loadInAppNotifications());
     } catch {
@@ -192,8 +202,19 @@ export function EmpNotificationsPanel() {
           {display.map((n) => {
             const inner = (
               <div className="bg-white rounded-2xl border border-gray-100 shadow-[0_1px_8px_rgba(15,23,42,0.04)] px-3.5 py-3 flex gap-3 active:scale-[0.99] transition-transform">
-                <div className="w-10 h-10 rounded-xl bg-gray-50 flex items-center justify-center text-xl flex-shrink-0">
-                  {n.emoji}
+                <div className="w-10 h-10 rounded-xl bg-gray-50 flex items-center justify-center flex-shrink-0 overflow-hidden">
+                  {n.kind === "holiday" && /^\d{1,2} [A-Z][a-z]{2}$/.test(n.emoji) ? (
+                    <div className="flex flex-col items-center justify-center w-full h-full bg-red-50 rounded-xl border border-red-100">
+                      <span className="text-[9px] font-semibold text-red-400 uppercase leading-none tracking-wide">
+                        {n.emoji.split(" ")[1]}
+                      </span>
+                      <span className="text-[14px] font-bold text-red-600 leading-none mt-0.5">
+                        {n.emoji.split(" ")[0]}
+                      </span>
+                    </div>
+                  ) : (
+                    <span className="text-xl">{n.emoji}</span>
+                  )}
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-start justify-between gap-2">

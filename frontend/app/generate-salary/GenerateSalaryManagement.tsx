@@ -274,10 +274,33 @@ function daysIterArray(start: Date, end: Date): Date[] {
    Data helpers (HTTP)
    ======================= */
 
+// Short-lived cache + in-flight de-duplication for reference data so dropdown
+// lists appear instantly (no re-fetch on every focus/keystroke). This is what
+// made the run-payroll dropdowns feel like they needed two clicks — the list
+// was still loading on the first click.
+const _refCache = new Map<string, { ts: number; data: any }>();
+const _refInflight = new Map<string, Promise<any>>();
+const REF_TTL = 60_000;
+
 async function robustGet(url: string) {
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
-  return res.json();
+  const hit = _refCache.get(url);
+  if (hit && Date.now() - hit.ts < REF_TTL) return hit.data;
+  const inflight = _refInflight.get(url);
+  if (inflight) return inflight;
+
+  const p = (async () => {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+    const data = await res.json();
+    _refCache.set(url, { ts: Date.now(), data });
+    _refInflight.delete(url);
+    return data;
+  })().catch((e) => {
+    _refInflight.delete(url);
+    throw e;
+  });
+  _refInflight.set(url, p);
+  return p;
 }
 
 // Add this interface at the top with other interfaces
@@ -2719,8 +2742,8 @@ export function GenerateSalaryManagement() {
                               <div
                                 key={sp.id}
                                 className="px-3 py-2 hover:bg-gray-100 cursor-pointer"
-                                onMouseDown={(e) => e.preventDefault()}
-                                onClick={() => {
+                                onMouseDown={(e) => {
+                                  e.preventDefault();
                                   setFormData((p) => ({
                                     ...p,
                                     serviceProviderID: sp.id,
@@ -2775,15 +2798,15 @@ export function GenerateSalaryManagement() {
                               <div
                                 key={co.id}
                                 className="px-3 py-2 hover:bg-gray-100 cursor-pointer"
-                                onMouseDown={(e) => e.preventDefault()}
-                                onClick={async () => {
+                                onMouseDown={(e) => {
+                                  e.preventDefault();
                                   setFormData((p) => ({
                                     ...p,
                                     companyID: co.id,
                                     coAutocomplete: co.companyName ?? ""
                                   }));
                                   setCoList([]);
-                                  await refreshCompanyDrivenOptions(co.id);
+                                  void refreshCompanyDrivenOptions(co.id);
                                 }}
                               >
                                 {co.companyName}
@@ -2832,9 +2855,9 @@ export function GenerateSalaryManagement() {
                             <div
                               key={br.id}
                               className="px-3 py-2 hover:bg-gray-100 cursor-pointer"
-                              onMouseDown={(e) => e.preventDefault()}
-                              onClick={async () => {
-                                await handleBranchSelect(br.id, br.branchName || "");
+                              onMouseDown={(e) => {
+                                e.preventDefault();
+                                void handleBranchSelect(br.id, br.branchName || "");
                                 setBrList([]); // Clear suggestions after selection
                               }}
                             >
@@ -2879,8 +2902,8 @@ export function GenerateSalaryManagement() {
                               <div
                                 key={emp.id}
                                 className="px-3 py-2 hover:bg-gray-100 cursor-pointer"
-                                onMouseDown={(e) => e.preventDefault()}
-                                onClick={() => {
+                                onMouseDown={(e) => {
+                                  e.preventDefault();
                                   setFormData((p) => ({
                                     ...p,
                                     employeeDbID: emp.id,
