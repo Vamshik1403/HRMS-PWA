@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import { wallClockInZoneToStorageDate } from '../common/device-punch-time';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   collapsePunchBursts,
@@ -126,7 +127,8 @@ export class DashboardOverviewService {
     const today = dateKeyLocal(nowDate);
     const monthStart = `${today.slice(0, 7)}-01`;
     const tomorrow = nextDateKey(today);
-    const nowMin = nowDate.getHours() * 60 + nowDate.getMinutes();
+    const wallNow = wallClockInZoneToStorageDate(nowDate);
+    const nowMin = wallNow.getUTCHours() * 60 + wallNow.getUTCMinutes();
 
     const employeeWhere: Record<string, unknown> = {};
     if (query.companyID != null) employeeWhere.companyID = query.companyID;
@@ -616,6 +618,8 @@ export class DashboardOverviewService {
           const nowNightAware = nowMin < firstMin ? nowMin + 1440 : nowMin;
           if (nowNightAware <= windowEnd) {
             effStatus = { ...status, type: 'PRESENT', label: 'P' };
+          } else {
+            effStatus = { ...status, type: 'SINGLE_PUNCH', label: 'no checkout' };
           }
         }
       }

@@ -863,7 +863,7 @@ export default function DashboardPage() {
           </section>
         </div>
 
-        <div className="flex flex-col gap-5 min-h-0">
+        <div className="flex flex-col gap-5 min-h-0 h-full lg:min-h-full">
           <section className={`${cardShell} p-6 shrink-0`}>
             <h2 className="text-lg font-bold text-gray-900 tracking-tight mb-4">
               Quick actions
@@ -893,16 +893,16 @@ export default function DashboardPage() {
             </div>
           </section>
 
-          <section className={`${cardShell} p-6 flex flex-col min-h-0 flex-1`}>
-            <h2 className="text-lg font-bold text-gray-900 tracking-tight mb-4 shrink-0">
+          <section className={`${cardShell} p-6 flex flex-col min-h-0 flex-1 overflow-hidden`}>
+            <h2 className="text-lg font-bold text-gray-900 tracking-tight mb-3 shrink-0">
               Comments
             </h2>
             {commentFeed.length === 0 ? (
-              <p className="text-sm text-gray-400 text-center py-8">
-                No comments yet
-              </p>
+              <div className="flex flex-1 min-h-0 basis-0 items-center justify-center">
+                <p className="text-sm text-gray-400 text-center">No comments yet</p>
+              </div>
             ) : (
-              <div className="overflow-y-auto flex-1 min-h-[120px] max-h-[220px] pr-1 -mr-1">
+              <div className="overflow-y-auto flex-1 min-h-0 basis-0 pr-1 -mr-1">
                 <ul className="space-y-5">
                   {commentFeed.map((c) => (
                     <li key={`${c.id}-${c.sortAt}`} className="flex gap-3">

@@ -17,7 +17,7 @@ export function computeDayDurations(records: PunchRecord[], now = new Date()) {
     const t = new Date(rec.checkinTime);
 
     if (rec.checkType === "CHECK_IN") {
-      workStart = t;
+      if (!workStart) workStart = t;
     } else if (rec.checkType === "BREAK_IN") {
       if (workStart) workMs += t.getTime() - workStart.getTime();
       workStart = null;
@@ -67,6 +67,15 @@ export function formatBreakDuration(totalSec: number): string {
 export function formatWorkHoursDecimal(totalSec: number): string {
   if (totalSec <= 0) return "0.00h";
   return `${(totalSec / 3600).toFixed(2)}h`;
+}
+
+/** Whole minutes only — punch times include seconds so raw totals can be fractional. */
+export function formatWorkedDuration(totalMinutes: number): string {
+  const total = Math.round(totalMinutes);
+  if (total <= 0) return "0h";
+  const h = Math.floor(total / 60);
+  const m = total % 60;
+  return m > 0 ? `${h}h ${m}m` : `${h}h`;
 }
 
 export function buildDaySummary(records: PunchRecord[], now = new Date()) {

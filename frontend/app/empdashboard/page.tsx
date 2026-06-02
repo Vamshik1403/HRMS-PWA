@@ -331,7 +331,10 @@ export default function EmpDashboardPage() {
     if (!token) { router.replace("/login"); return; }
     const headers = { Authorization: `Bearer ${token}` };
 
-    fetch(`${BACKEND}/emp-location-attendance/today`, { headers })
+    fetch(`${BACKEND}/emp-location-attendance/today?_=${Date.now()}`, {
+      headers,
+      cache: "no-store",
+    })
       .then((r) => {
         if (!r.ok) {
           if (r.status === 401) { localStorage.removeItem("token"); localStorage.removeItem("accessToken"); router.replace("/login"); }
@@ -372,15 +375,26 @@ export default function EmpDashboardPage() {
 
   return (
     <EmpMobileLayout>
-      <div className="px-4 pt-5 pb-2">
-        {/* Header */}
-        <div className="flex items-start justify-between mb-5">
-          <div>
-            <AmbientAccent />
-            <p className="text-sm text-gray-500 font-medium mt-1">{greeting()}</p>
-            <h1 className="text-2xl font-bold text-gray-900 tracking-tight">{empName}</h1>
+      <div className="px-4 pt-4 pb-2">
+        {/* Header — greeting block and avatar share one vertical center line */}
+        <div className="flex items-center justify-between gap-3 mb-3">
+          <div className="flex items-center gap-2.5 min-w-0 flex-1">
+            <div
+              className="shrink-0 flex h-11 w-[50px] items-center justify-center overflow-hidden"
+              aria-hidden
+            >
+              <div className="origin-center scale-[0.58]">
+                <AmbientAccent />
+              </div>
+            </div>
+            <div className="min-w-0">
+              <p className="text-sm text-gray-500 font-medium leading-tight">{greeting()}</p>
+              <h1 className="text-xl font-bold text-gray-900 tracking-tight leading-tight mt-0.5">
+                {empName}
+              </h1>
+            </div>
           </div>
-          <Link href="/empProfile">
+          <Link href="/empProfile" className="shrink-0">
             <div className="w-11 h-11 rounded-full overflow-hidden bg-[#2563eb] flex items-center justify-center shadow-md cursor-pointer">
               {empPhoto ? (
                 <img src={empPhoto} alt={empFullName} className="w-full h-full object-cover" />

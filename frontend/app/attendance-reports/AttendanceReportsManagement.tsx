@@ -9,6 +9,7 @@ import { Search, Download, FileText, ChevronDown, X } from "lucide-react";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import * as XLSX from "xlsx";
 import { formatDevicePunchForDisplay } from "../utils/devicePunchTime";
+import { formatWorkedDuration } from "../utils/attendanceDuration";
 
 type ReportMode = "actual" | "factual";
 
@@ -580,12 +581,10 @@ const DateCell = ({ punches, date, employeeID, formData, reportData, selectedCom
     if (status.hasPunches && punches.length > 0 && 
         (status.type === "WEEK_OFF" || status.type === "HOLIDAY" || status.type === "LEAVE")) {
       const workedMinutes = status.workedMinutes || 0;
-      const hours = Math.floor(workedMinutes / 60);
-      const mins = workedMinutes % 60;
       return (
         <td className="px-2 py-1 border-b min-w-[100px] text-center align-top">
           <div className={`text-[9px] font-bold py-1 px-2 rounded mb-1 ${statusClass}`}>{status.label}</div>
-          <div className="inline-block px-2 py-0.5 bg-blue-100 text-blue-800 text-[9px] font-medium rounded-full">{hours}h {mins}m</div>
+          <div className="inline-block px-2 py-0.5 bg-blue-100 text-blue-800 text-[9px] font-medium rounded-full">{formatWorkedDuration(workedMinutes)}</div>
         </td>
       );
     }
@@ -593,8 +592,6 @@ const DateCell = ({ punches, date, employeeID, formData, reportData, selectedCom
     // Regularization - always show AR badge + status label + hours
     if (status.type === "REGULARIZATION") {
       const workedMinutes = status.workedMinutes || 0;
-      const hours = Math.floor(workedMinutes / 60);
-      const mins = workedMinutes % 60;
       const regLabel = status.label || "P";
       const regStatusClass = regLabel === "P" ? "bg-green-100 text-green-800"
         : regLabel === "HD" ? "bg-yellow-100 text-yellow-800"
@@ -604,22 +601,18 @@ const DateCell = ({ punches, date, employeeID, formData, reportData, selectedCom
         <td className="px-2 py-1 border-b min-w-[100px] text-center align-top">
           <div className="inline-block px-2 py-0.5 bg-teal-100 text-teal-800 text-[9px] font-bold rounded-full mb-1">AR</div>
           <div className={`inline-block px-2 py-0.5 text-[9px] font-medium rounded-full mb-1 ${regStatusClass}`}>{regLabel}</div>
-          {workedMinutes > 0 && <div className="inline-block px-2 py-0.5 bg-blue-100 text-blue-800 text-[9px] font-medium rounded-full">{hours}h {mins}m</div>}
+          {workedMinutes > 0 && <div className="inline-block px-2 py-0.5 bg-blue-100 text-blue-800 text-[9px] font-medium rounded-full">{formatWorkedDuration(workedMinutes)}</div>}
         </td>
       );
     }
     
     // OT - show total worked hours → OT badge → OT hours
     if (status.type === "OT") {
-      const totalHours = Math.floor((status.workedMinutes || 0) / 60);
-      const totalMins = (status.workedMinutes || 0) % 60;
-      const otHours = Math.floor((status.otMinutes || 0) / 60);
-      const otMins = (status.otMinutes || 0) % 60;
       return (
         <td className="px-2 py-1 border-b min-w-[100px] text-center align-top">
-          <div className="inline-block px-2 py-0.5 bg-blue-100 text-blue-800 text-[9px] font-medium rounded-full mb-1">{totalHours}h {totalMins}m</div>
+          <div className="inline-block px-2 py-0.5 bg-blue-100 text-blue-800 text-[9px] font-medium rounded-full mb-1">{formatWorkedDuration(status.workedMinutes || 0)}</div>
           <div className="inline-block px-2 py-0.5 bg-indigo-100 text-indigo-800 text-[9px] font-medium rounded-full mb-1">OT</div>
-          <div className="inline-block px-2 py-0.5 bg-indigo-50 text-indigo-700 text-[9px] font-medium rounded-full">+{otHours}h {otMins}m</div>
+          <div className="inline-block px-2 py-0.5 bg-indigo-50 text-indigo-700 text-[9px] font-medium rounded-full">+{formatWorkedDuration(status.otMinutes || 0)}</div>
           {status.rosterShiftName && <div className="block mt-0.5 text-[8px] font-medium text-gray-500">{status.rosterShiftName}</div>}
         </td>
       );
@@ -627,12 +620,10 @@ const DateCell = ({ punches, date, employeeID, formData, reportData, selectedCom
     
     // Present - show P badge + working hours
     if (status.type === "PRESENT" && status.workedMinutes) {
-      const hours = Math.floor(status.workedMinutes / 60);
-      const mins = status.workedMinutes % 60;
       return (
         <td className="px-2 py-1 border-b min-w-[80px] text-center align-top">
           <div className="inline-block px-2 py-0.5 bg-green-100 text-green-800 text-[9px] font-medium rounded-full mb-1">P</div>
-          <div className="inline-block px-2 py-0.5 bg-blue-100 text-blue-800 text-[9px] font-medium rounded-full">{hours}h {mins}m</div>
+          <div className="inline-block px-2 py-0.5 bg-blue-100 text-blue-800 text-[9px] font-medium rounded-full">{formatWorkedDuration(status.workedMinutes)}</div>
           {status.rosterShiftName && <div className="block mt-0.5 text-[8px] font-medium text-gray-500">{status.rosterShiftName}</div>}
         </td>
       );
@@ -640,12 +631,10 @@ const DateCell = ({ punches, date, employeeID, formData, reportData, selectedCom
 
     // Half Day - show HD badge + working hours
     if (status.type === "HALF_DAY" && status.workedMinutes) {
-      const hours = Math.floor(status.workedMinutes / 60);
-      const mins = status.workedMinutes % 60;
       return (
         <td className="px-2 py-1 border-b min-w-[80px] text-center align-top">
           <div className="inline-block px-2 py-0.5 bg-yellow-100 text-yellow-800 text-[9px] font-medium rounded-full mb-1">HD</div>
-          <div className="inline-block px-2 py-0.5 bg-blue-100 text-blue-800 text-[9px] font-medium rounded-full">{hours}h {mins}m</div>
+          <div className="inline-block px-2 py-0.5 bg-blue-100 text-blue-800 text-[9px] font-medium rounded-full">{formatWorkedDuration(status.workedMinutes)}</div>
           {status.rosterShiftName && <div className="block mt-0.5 text-[8px] font-medium text-gray-500">{status.rosterShiftName}</div>}
         </td>
       );
@@ -653,12 +642,10 @@ const DateCell = ({ punches, date, employeeID, formData, reportData, selectedCom
     
     // Late Mark - show L badge + working hours
     if (status.type === "LATE_MARK") {
-      const hours = Math.floor((status.workedMinutes || 0) / 60);
-      const mins = (status.workedMinutes || 0) % 60;
       return (
         <td className="px-2 py-1 border-b min-w-[80px] text-center align-top">
           <div className="inline-block px-2 py-0.5 bg-blue-100 text-blue-800 text-[9px] font-medium rounded-full mb-1">L</div>
-          <div className="inline-block px-2 py-0.5 bg-blue-100 text-blue-800 text-[9px] font-medium rounded-full">{hours}h {mins}m</div>
+          <div className="inline-block px-2 py-0.5 bg-blue-100 text-blue-800 text-[9px] font-medium rounded-full">{formatWorkedDuration(status.workedMinutes || 0)}</div>
           {status.rosterShiftName && <div className="block mt-0.5 text-[8px] font-medium text-gray-500">{status.rosterShiftName}</div>}
         </td>
       );
@@ -706,13 +693,9 @@ const DateCell = ({ punches, date, employeeID, formData, reportData, selectedCom
     
     // Calculate worked hours (in minutes)
     const workedMinutes = status.workedMinutes || 0;
-    const workedHours = Math.floor(workedMinutes / 60);
-    const workedMins = workedMinutes % 60;
     
     // Calculate OT hours (in minutes)
     const otMinutes = status.otMinutes || 0;
-    const otHours = Math.floor(otMinutes / 60);
-    const otMins = otMinutes % 60;
     
     // Determine status badge
     let statusBadge = "";
@@ -778,7 +761,7 @@ const DateCell = ({ punches, date, employeeID, formData, reportData, selectedCom
            !(status.type === "HOLIDAY" && !status.hasPunches) && workedMinutes > 0 && (
             <div className="flex items-center justify-center">
               <span className="text-[9px] font-semibold text-blue-700">
-                {workedHours}h {workedMins}m
+                {formatWorkedDuration(workedMinutes)}
               </span>
               <span className="text-[7px] text-gray-400 ml-1">Work</span>
             </div>
@@ -788,7 +771,7 @@ const DateCell = ({ punches, date, employeeID, formData, reportData, selectedCom
           {otMinutes > 0 && (
             <div className="flex items-center justify-center">
               <span className="text-[9px] font-semibold text-indigo-700">
-                {otHours}h {otMins}m
+                {formatWorkedDuration(otMinutes)}
               </span>
               <span className="text-[7px] text-gray-400 ml-1">OT</span>
             </div>
@@ -798,7 +781,7 @@ const DateCell = ({ punches, date, employeeID, formData, reportData, selectedCom
           {workedMinutes > 0 && status.type !== "WEEK_OFF" && status.type !== "HOLIDAY" && status.type !== "LEAVE" && (
             <div className="flex items-center justify-center border-t border-gray-200 pt-0.5 mt-0.5">
               <span className="text-[8px] font-bold text-gray-600">
-                Total: {Math.floor((workedMinutes + otMinutes) / 60)}h {(workedMinutes + otMinutes) % 60}m
+                Total: {formatWorkedDuration(workedMinutes + otMinutes)}
               </span>
             </div>
           )}
@@ -1068,9 +1051,7 @@ const employeeOptions = filteredEmployees.map((e: Employee) => ({
       // Cap late check-out if OT not applicable
       if (!policy.overtimeApplicable) {
         const maxEndTime = shiftEndMin + (policy.checkout_end_after_min || 0);
-        if (endTime > maxEndTime) {
-          endTime = shiftEndMin;
-        }
+        if (endTime > maxEndTime) endTime = maxEndTime;
       }
     }
     
@@ -1092,7 +1073,7 @@ const employeeOptions = filteredEmployees.map((e: Employee) => ({
       workedMinutes -= (policy.trimPostshiftMin || 0);
     }
     
-    return Math.max(0, workedMinutes);
+    return Math.round(Math.max(0, workedMinutes));
   };
 
   const calculateOTMinutes = (
@@ -1501,8 +1482,21 @@ const employeeOptions = filteredEmployees.map((e: Employee) => ({
             return wa - wb;
           })
         : [...filteredPunches].sort((a, b) => timeToMinutes(a) - timeToMinutes(b));
-      // If filtering removes all punches, fall through as absent
-      const effectivePunches = sortedFiltered.length >= 2 ? sortedFiltered : (sortedFiltered.length === 1 ? sortedFiltered : effectivePunchesForDate.length > 0 ? [effectivePunchesForDate[0]] : []);
+      let effectivePunchesList = sortedFiltered;
+      if (effectivePunchesForDate.length >= 2 && sortedFiltered.length < 2) {
+        effectivePunchesList = [
+          effectivePunchesForDate[0],
+          effectivePunchesForDate[effectivePunchesForDate.length - 1],
+        ];
+      }
+      const effectivePunches =
+        effectivePunchesList.length >= 2
+          ? effectivePunchesList
+          : effectivePunchesList.length === 1
+            ? effectivePunchesList
+            : effectivePunchesForDate.length > 0
+              ? [effectivePunchesForDate[0]]
+              : [];
 
       // For night shifts, compute firstPunch/lastPunch in a way that spans midnight correctly.
       // Times in [0..latestOut] are post-midnight → add 1440 for comparison purposes.
@@ -1517,17 +1511,8 @@ const employeeOptions = filteredEmployees.map((e: Employee) => ({
       const maxLateWindowAfterGrace = policy.max_late_check_in_time || 0;
       const graceEnd = shiftStartMin + graceTime;
       const maxLateCutoffInclusive = graceEnd + maxLateWindowAfterGrace;
+      const isBeyondMaxLate = !isFlexible && firstPunch > maxLateCutoffInclusive;
 
-      // Late check-in rule starts strictly after the max late cutoff.
-      if (!isFlexible && firstPunch > maxLateCutoffInclusive) {
-        const markAs = policy.maxLateCheckinMarkAs || "Absent";
-        return { 
-          type: markAs === "Absent" ? "ABSENT" : "HALF_DAY", 
-          label: markAs, 
-          hasPunches: true 
-        };
-      }
-      
       const workedMinutes = calculateWorkedMinutes(effectivePunches, shiftDay.startTime, shiftDay.endTime, 
         { breakStart: shiftDay.breakStart || "", breakEnd: shiftDay.breakEnd || "" }, policy, isFlexible);
       
@@ -1536,6 +1521,16 @@ const employeeOptions = filteredEmployees.map((e: Employee) => ({
       const requiredFullDayMinutes = isFlexible
         ? totalShiftMinutes
         : Math.max(totalShiftMinutes - graceTime, halfDayMin);
+
+      if (isBeyondMaxLate && workedMinutes < requiredFullDayMinutes) {
+        const markAs = policy.maxLateCheckinMarkAs || "Absent";
+        return {
+          type: markAs === "Absent" ? "ABSENT" : "HALF_DAY",
+          label: markAs,
+          hasPunches: true,
+          workedMinutes,
+        };
+      }
       
       // Late mark tracking
       const isLate = !isFlexible && 
@@ -1582,6 +1577,8 @@ const employeeOptions = filteredEmployees.map((e: Employee) => ({
         return { type: "HALF_DAY", label: "Half Day", hasPunches: true, workedMinutes, rosterShiftName };
       } else if (otMinutes > 0) {
         return { type: "OT", label: "OT", hasPunches: true, workedMinutes, otMinutes, totalShiftMinutes, rosterShiftName };
+      } else if (workedMinutes >= requiredFullDayMinutes) {
+        return { type: "PRESENT", label: "P", hasPunches: true, workedMinutes, rosterShiftName };
       } else if (isLate) {
         return { type: "LATE_MARK", label: "Late Mark", hasPunches: true, workedMinutes, rosterShiftName };
       } else {
@@ -1911,41 +1908,34 @@ const employeeOptions = filteredEmployees.map((e: Employee) => ({
         } else if (formData.reportType === "Attendance Marking Logs") {
           let displayLabel = status.label;
           if (status.type === "OT" && status.workedMinutes && status.totalShiftMinutes && status.otMinutes) {
-            const nh = Math.floor(status.totalShiftMinutes / 60), nm = status.totalShiftMinutes % 60;
-            const oh = Math.floor(status.otMinutes / 60), om = status.otMinutes % 60;
-            displayLabel = `P (${nh}h${nm}m + ${oh}h${om}m OT)`;
+            displayLabel = `P (${formatWorkedDuration(status.totalShiftMinutes)} + ${formatWorkedDuration(status.otMinutes)} OT)`;
           } else if (status.type === "PRESENT" && status.workedMinutes) {
-            const h = Math.floor(status.workedMinutes / 60), m = status.workedMinutes % 60;
-            displayLabel = `P (${h}h${m}m)`;
+            displayLabel = `P (${formatWorkedDuration(status.workedMinutes)})`;
           } else if (status.type === "HALF_DAY" && status.workedMinutes) {
-            const h = Math.floor(status.workedMinutes / 60), m = status.workedMinutes % 60;
-            displayLabel = `HD (${h}h${m}m)`;
+            displayLabel = `HD (${formatWorkedDuration(status.workedMinutes)})`;
           } else if ((status.type === "WEEK_OFF" || status.type === "HOLIDAY" || status.type === "LEAVE") && status.workedMinutes) {
-            const h = Math.floor(status.workedMinutes / 60), m = status.workedMinutes % 60;
-            displayLabel = `${status.label}\n${h}h${m}m`;
+            displayLabel = `${status.label}\n${formatWorkedDuration(status.workedMinutes)}`;
           }
           dataRow[date] = displayLabel;
         } else if (formData.reportType === "Attendance Summary Logs") {
           let displayLabel = status.label;
           if (status.type === "WEEK_OFF") {
             displayLabel = status.label === "WO-P" ? "Weekly Off (Present)" : "Weekly Off";
-            if (status.workedMinutes) { const h = Math.floor(status.workedMinutes / 60), m = status.workedMinutes % 60; displayLabel += `\n${h}h${m}m`; }
+            if (status.workedMinutes) displayLabel += `\n${formatWorkedDuration(status.workedMinutes)}`;
           } else if (status.type === "HOLIDAY") {
             displayLabel = status.label === "PH-P" ? "Public Holiday (Present)" : "Public Holiday";
-            if (status.workedMinutes) { const h = Math.floor(status.workedMinutes / 60), m = status.workedMinutes % 60; displayLabel += `\n${h}h${m}m`; }
+            if (status.workedMinutes) displayLabel += `\n${formatWorkedDuration(status.workedMinutes)}`;
           } else if (status.type === "LEAVE") {
             displayLabel = status.label === "Leave-P" ? "Leave (Present)" : status.label;
-            if (status.workedMinutes) { const h = Math.floor(status.workedMinutes / 60), m = status.workedMinutes % 60; displayLabel += `\n${h}h${m}m`; }
+            if (status.workedMinutes) displayLabel += `\n${formatWorkedDuration(status.workedMinutes)}`;
           } else if (status.type === "ABSENT") {
             displayLabel = "Absent";
           } else if (status.type === "PRESENT" && status.workedMinutes) {
-            displayLabel = `Present (${Math.floor(status.workedMinutes / 60)}h${status.workedMinutes % 60}m)`;
+            displayLabel = `Present (${formatWorkedDuration(status.workedMinutes)})`;
           } else if (status.type === "HALF_DAY" && status.workedMinutes) {
-            displayLabel = `Half Day (${Math.floor(status.workedMinutes / 60)}h${status.workedMinutes % 60}m)`;
+            displayLabel = `Half Day (${formatWorkedDuration(status.workedMinutes)})`;
           } else if (status.type === "OT" && status.workedMinutes && status.totalShiftMinutes && status.otMinutes) {
-            const nh = Math.floor(status.totalShiftMinutes / 60), nm = status.totalShiftMinutes % 60;
-            const oh = Math.floor(status.otMinutes / 60), om = status.otMinutes % 60;
-            displayLabel = `Present (${nh}h${nm}m + ${oh}h${om}m OT)`;
+            displayLabel = `Present (${formatWorkedDuration(status.totalShiftMinutes)} + ${formatWorkedDuration(status.otMinutes)} OT)`;
           }
           dataRow[date] = displayLabel;
         } else {

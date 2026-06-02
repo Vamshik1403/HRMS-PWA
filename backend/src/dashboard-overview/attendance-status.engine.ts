@@ -127,7 +127,10 @@ function calculateWorkedMinutes(
     }
     if (!policy.overtimeApplicable) {
       const maxEndTime = shiftEndMin + (policy.checkout_end_after_min || 0);
-      if (endTime > maxEndTime) endTime = shiftEndMin;
+      // Cap at the end of the allowed checkout window, not at raw shift end — otherwise
+      // someone who leaves at 22:10 with a 19:00 shift and 180-min buffer is counted
+      // only until 19:00 and wrongly marked Half Day / Absent.
+      if (endTime > maxEndTime) endTime = maxEndTime;
     }
   }
   let workedMinutes = endTime - startTime;
@@ -144,7 +147,7 @@ function calculateWorkedMinutes(
     workedMinutes -= policy.trimPreshiftMin || 0;
     workedMinutes -= policy.trimPostshiftMin || 0;
   }
-  return Math.max(0, workedMinutes);
+  return Math.round(Math.max(0, workedMinutes));
 }
 
 function calculateOTMinutes(
@@ -364,11 +367,20 @@ export function computeDayStatus(input: ComputeDayStatusInput): DayStatusResult 
 
   const toNightAware = (t: number) =>
     shiftSpansMidnight && t < earliestInMin ? t + 1440 : t;
-  const sortedFiltered = shiftSpansMidnight
+  let sortedFiltered = shiftSpansMidnight
     ? [...filteredPunches].sort(
         (a, b) => toNightAware(timeToMinutes(a)) - toNightAware(timeToMinutes(b)),
       )
     : [...filteredPunches].sort((a, b) => timeToMinutes(a) - timeToMinutes(b));
+
+  // Window filtering can drop a valid checkout that is a few minutes past the buffer
+  // (e.g. 22:13 with buffer ending 22:00). Always keep the real first-in / last-out pair.
+  if (effectivePunches.length >= 2 && sortedFiltered.length < 2) {
+    sortedFiltered = dedupeSortedPunchList([
+      effectivePunches[0],
+      effectivePunches[effectivePunches.length - 1],
+    ]);
+  }
 
   const effectiveForCalc =
     sortedFiltered.length >= 2
@@ -390,15 +402,6 @@ export function computeDayStatus(input: ComputeDayStatusInput): DayStatusResult 
   const graceEnd = shiftStartMin + graceTime;
   const maxLateCutoffInclusive = graceEnd + maxLateWindowAfterGrace;
 
-  if (!isFlexible && firstPunch > maxLateCutoffInclusive) {
-    const markAs = policy.maxLateCheckinMarkAs || 'Absent';
-    return {
-      type: markAs === 'Absent' ? 'ABSENT' : 'HALF_DAY',
-      label: markAs,
-      hasPunches: true,
-    };
-  }
-
   const workedMinutes = calculateWorkedMinutes(
     effectiveForCalc,
     shiftDay.startTime,
@@ -414,6 +417,18 @@ export function computeDayStatus(input: ComputeDayStatusInput): DayStatusResult 
 
   const isLate =
     !isFlexible && firstPunch > graceEnd && firstPunch <= maxLateCutoffInclusive;
+
+  const isBeyondMaxLate = !isFlexible && firstPunch > maxLateCutoffInclusive;
+
+  if (isBeyondMaxLate && workedMinutes < requiredFullDayMinutes) {
+    const markAs = policy.maxLateCheckinMarkAs || 'Absent';
+    return {
+      type: markAs === 'Absent' ? 'ABSENT' : 'HALF_DAY',
+      label: markAs,
+      hasPunches: true,
+      workedMinutes,
+    };
+  }
 
   if (isLate) {
     const monthKey = `${employeeId}-${date.substring(0, 7)}`;
@@ -462,6 +477,10 @@ export function computeDayStatus(input: ComputeDayStatusInput): DayStatusResult 
   }
   if (otMinutes > 0) {
     return { type: 'OT', label: 'OT', hasPunches: true, workedMinutes };
+  }
+  // Full required hours (including late checkout past shift end) → Present, not Late Mark.
+  if (workedMinutes >= requiredFullDayMinutes) {
+    return { type: 'PRESENT', label: 'P', hasPunches: true, workedMinutes };
   }
   if (isLate) {
     return { type: 'LATE_MARK', label: 'Late Mark', hasPunches: true, workedMinutes };

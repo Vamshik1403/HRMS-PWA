@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Icon } from "@iconify/react";
 import type { TodayStatus } from "../../hooks/useEmpPunch";
 import { useEmpPunch } from "../../hooks/useEmpPunch";
-import { formatLocationLines } from "../../utils/empAttendanceHistory";
+import { extractDayPunchTimes, formatLocationLines } from "../../utils/empAttendanceHistory";
 
 /** Punch times stored as wall-clock IST in UTC — use UTC getters for display. */
 function fmt(iso: string) {
@@ -62,7 +62,12 @@ export function EmpTodayStatusCard({ todayStatus, loading, onStatusUpdate }: Emp
   const isOnBreak = punchState === "ON_BREAK";
   const isAbsent = todayStatus?.isAbsentToday;
   const canMarkAbsent = todayStatus?.canMarkAbsent ?? false;
-  const { checkIn, checkOut } = todayStatus || {};
+  const dayPunches = useMemo(
+    () => extractDayPunchTimes((todayStatus?.allToday as Parameters<typeof extractDayPunchTimes>[0]) || []),
+    [todayStatus?.allToday],
+  );
+  const checkIn = todayStatus?.checkIn ?? dayPunches.checkIn;
+  const checkOut = todayStatus?.checkOut ?? dayPunches.checkOut;
 
   const submitAbsent = async () => {
     if (absentReason.trim().length < 3) return;

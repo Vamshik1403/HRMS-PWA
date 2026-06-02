@@ -12,12 +12,15 @@ type PunchType = (typeof VALID_TYPES)[number];
 export class EmpLocationAttendanceService {
   constructor(private prisma: PrismaService) {}
 
-  /** Day bounds in app wall-clock storage (aligned with PWA punch times). */
-  private dayWindow(now = new Date()) {
-    const anchor = wallClockInZoneToStorageDate(now);
-    const y = anchor.getUTCFullYear();
-    const m = anchor.getUTCMonth();
-    const d = anchor.getUTCDate();
+  /**
+   * Day bounds in app wall-clock storage (aligned with PWA punch times).
+   * @param wallClockNow Already-normalized storage time from wallClockInZoneToStorageDate().
+   * Do not pass a raw UTC instant here — dayWindow reads UTC field components as wall clock.
+   */
+  private dayWindow(wallClockNow: Date = wallClockInZoneToStorageDate()) {
+    const y = wallClockNow.getUTCFullYear();
+    const m = wallClockNow.getUTCMonth();
+    const d = wallClockNow.getUTCDate();
     return {
       startOfDay: new Date(Date.UTC(y, m, d, 0, 0, 0, 0)),
       endOfDay: new Date(Date.UTC(y, m, d, 23, 59, 59, 999)),
@@ -99,7 +102,8 @@ export class EmpLocationAttendanceService {
       const t = rec.checkinTime;
 
       if (rec.checkType === 'CHECK_IN') {
-        workStart = t;
+        // Ignore duplicate CHECK_IN while a work segment is already open (bad data / race).
+        if (!workStart) workStart = t;
       } else if (rec.checkType === 'BREAK_IN') {
         if (workStart) {
           workMs += t.getTime() - workStart.getTime();
@@ -188,31 +192,6 @@ export class EmpLocationAttendanceService {
     const now = wallClockInZoneToStorageDate();
     const { startOfDay, endOfDay } = this.dayWindow(now);
 
-    const todayRecords = await this.prisma.attendanceLocation.findMany({
-      where: {
-        employeeId,
-        checkinTime: { gte: startOfDay, lte: endOfDay },
-      },
-      orderBy: { checkinTime: 'asc' },
-    });
-
-    // If no PWA records yet for today, check device punches to seed the effective state
-    let effectiveLastType: string | null = null;
-    if (todayRecords.length === 0) {
-      const deviceTimes = await this.todayDevicePunchTimes(employeeId, startOfDay, endOfDay);
-      const devState = this.devicePunchState(deviceTimes);
-      // Mirror device state as if last PWA punch had this type
-      if (devState === 'IN') {
-        // Device says currently IN — treat as if PWA already has a CHECK_IN
-        effectiveLastType = 'CHECK_IN';
-      }
-      // devState=OUT → effectiveLastType stays null (can CHECK_IN via PWA)
-    } else {
-      effectiveLastType = this.getLastPunch(todayRecords)?.checkType ?? null;
-    }
-
-    this.validatePunch(effectiveLastType, dto.checkType as PunchType, todayRecords);
-
     const employee = await this.prisma.manageEmployee.findUnique({
       where: { id: employeeId },
       select: {
@@ -229,43 +208,71 @@ export class EmpLocationAttendanceService {
     // time-boxed so it never blocks the punch; falls back to null on failure.
     const address = await reverseGeocode(dto.latitude, dto.longitude);
 
-    const record = await this.prisma.attendanceLocation.create({
-      data: {
-        employeeId,
-        checkType: dto.checkType,
-        latitude: dto.latitude,
-        longitude: dto.longitude,
-        accuracy: dto.accuracy ?? null,
-        address,
-        ipAddress,
-        deviceType: dto.deviceType ?? null,
-        browser: dto.browser ?? null,
-        operatingSystem: dto.operatingSystem ?? null,
-        userAgent: dto.userAgent ?? null,
-        checkinTime: now,
-      },
-    });
+    const record = await this.prisma.$transaction(async (tx) => {
+      const todayRecords = await tx.attendanceLocation.findMany({
+        where: {
+          employeeId,
+          checkinTime: { gte: startOfDay, lte: endOfDay },
+        },
+        orderBy: { checkinTime: 'asc' },
+      });
 
-    try {
-      const fullName = [employee?.employeeFirstName, employee?.employeeLastName]
-        .filter(Boolean)
-        .join(' ') || String(employeeId);
+      let effectiveLastType: string | null = null;
+      if (todayRecords.length === 0) {
+        const deviceTimes = await tx.process_att_logs.findMany({
+          where: {
+            manage_employee_id: employeeId,
+            device_sn: { not: 'LOCATION_APP' },
+            punch_time: { gte: startOfDay, lte: endOfDay },
+          },
+          orderBy: { punch_time: 'asc' },
+          select: { punch_time: true },
+        });
+        const times = deviceTimes
+          .filter((l) => l.punch_time != null)
+          .map((l) => l.punch_time as Date);
+        if (this.devicePunchState(times) === 'IN') {
+          effectiveLastType = 'CHECK_IN';
+        }
+      } else {
+        effectiveLastType = this.getLastPunch(todayRecords)?.checkType ?? null;
+      }
 
-      const checkType = dto.checkType as PunchType;
+      this.validatePunch(effectiveLastType, dto.checkType as PunchType, todayRecords);
 
-      // BREAK_IN / BREAK_OUT are PWA-only — never mirror to process_att_logs.
-      const shouldWrite = checkType !== 'BREAK_IN' && checkType !== 'BREAK_OUT';
+      const created = await tx.attendanceLocation.create({
+        data: {
+          employeeId,
+          checkType: dto.checkType,
+          latitude: dto.latitude,
+          longitude: dto.longitude,
+          accuracy: dto.accuracy ?? null,
+          address,
+          ipAddress,
+          deviceType: dto.deviceType ?? null,
+          browser: dto.browser ?? null,
+          operatingSystem: dto.operatingSystem ?? null,
+          userAgent: dto.userAgent ?? null,
+          checkinTime: now,
+        },
+      });
 
-      if (shouldWrite) {
-        if (checkType === 'CHECK_OUT') {
-          // CHECK_OUT is ALWAYS written so the dashboard picks up the correct
-          // departure time regardless of whether the day started via device or PWA.
-          await this.prisma.process_att_logs.create({
+      try {
+        const fullName = [employee?.employeeFirstName, employee?.employeeLastName]
+          .filter(Boolean)
+          .join(' ') || String(employeeId);
+
+        const checkType = dto.checkType as PunchType;
+        const shouldWrite = checkType !== 'BREAK_IN' && checkType !== 'BREAK_OUT';
+
+        if (shouldWrite) {
+          if (checkType === 'CHECK_OUT') {
+            await tx.process_att_logs.create({
             data: {
               device_sn: 'LOCATION_APP',
               user_id: employee?.employeeID ?? String(employeeId),
               username: fullName,
-              punch_time: record.checkinTime,
+              punch_time: created.checkinTime,
               company_name: employee?.company?.companyName ?? null,
               branch_name: employee?.branches?.branchName ?? null,
               department_name: employee?.departments?.departmentName ?? null,
@@ -279,28 +286,23 @@ export class EmpLocationAttendanceService {
               auth_type: 'GPS',
             },
           });
-        } else if (checkType === 'CHECK_IN') {
-          // Mirror CHECK_IN only once per day — never add a second IN timestamp
-          // (accidental re-tap or mistaken Mark IN) which the dashboard would pair
-          // as a false checkout when using device-style first/last punch logic.
-          const alreadyCheckedInToday = todayRecords.some(
-            (r) => r.checkType === 'CHECK_IN',
-          );
-          const existingInMirror = await this.prisma.process_att_logs.count({
-            where: {
-              manage_employee_id: employeeId,
-              device_sn: 'LOCATION_APP',
-              punch_time: { gte: startOfDay, lte: endOfDay },
-            },
-          });
+          } else if (checkType === 'CHECK_IN') {
+            const alreadyCheckedInToday = todayRecords.some((r) => r.checkType === 'CHECK_IN');
+            const existingInMirror = await tx.process_att_logs.count({
+              where: {
+                manage_employee_id: employeeId,
+                device_sn: 'LOCATION_APP',
+                punch_time: { gte: startOfDay, lte: endOfDay },
+              },
+            });
 
-          if (!alreadyCheckedInToday && existingInMirror === 0) {
-            await this.prisma.process_att_logs.create({
+            if (!alreadyCheckedInToday && existingInMirror === 0) {
+              await tx.process_att_logs.create({
               data: {
                 device_sn: 'LOCATION_APP',
                 user_id: employee?.employeeID ?? String(employeeId),
                 username: fullName,
-                punch_time: record.checkinTime,
+                punch_time: created.checkinTime,
                 company_name: employee?.company?.companyName ?? null,
                 branch_name: employee?.branches?.branchName ?? null,
                 department_name: employee?.departments?.departmentName ?? null,
@@ -314,12 +316,15 @@ export class EmpLocationAttendanceService {
                 auth_type: 'GPS',
               },
             });
+            }
           }
         }
+      } catch {
+        // Non-critical
       }
-    } catch {
-      // Non-critical
-    }
+
+      return created;
+    });
 
     return record;
   }
