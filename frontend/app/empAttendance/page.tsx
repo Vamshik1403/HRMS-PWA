@@ -39,10 +39,13 @@ export default function EmpAttendancePage() {
     const token = getToken();
     if (!token) return;
     try {
-      const res = await fetch(`${BACKEND}/emp-location-attendance/today`, {
-        headers: { Authorization: `Bearer ${token}` },
-        cache: "no-store",
-      });
+      const res = await fetch(
+        `${BACKEND}/emp-location-attendance/today?_=${Date.now()}`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+          cache: "no-store",
+        },
+      );
       if (res.ok) {
         const data = await res.json();
         setTodayStatus(data);

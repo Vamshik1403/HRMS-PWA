@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException, Logger } from '@nestjs/common';
+import { Injectable, BadRequestException } from '@nestjs/common';
 import { wallClockInZoneToStorageDate } from '../common/device-punch-time';
 import { reverseGeocode } from '../common/reverse-geocode';
 import { PrismaService } from '../prisma/prisma.service';
@@ -10,8 +10,6 @@ type PunchType = (typeof VALID_TYPES)[number];
 
 @Injectable()
 export class EmpLocationAttendanceService {
-  private readonly logger = new Logger(EmpLocationAttendanceService.name);
-
   constructor(private prisma: PrismaService) {}
 
   /** Day bounds in app wall-clock storage (aligned with PWA punch times). */
@@ -38,10 +36,28 @@ export class EmpLocationAttendanceService {
     return 'OUT';
   }
 
-  private validatePunch(lastType: string | null, checkType: PunchType) {
+  /** True when the employee still has an open work session (checked in, not yet out). */
+  private hasOpenWorkSession(records: { checkType: string; checkinTime?: Date }[]): boolean {
+    const dated = records.filter((r): r is { checkType: string; checkinTime: Date } => !!r.checkinTime);
+    const last = this.getLastPunch(dated);
+    if (!last) return false;
+    const state = this.getPunchState(last.checkType);
+    return state === 'IN' || state === 'ON_BREAK';
+  }
+
+  private validatePunch(
+    lastType: string | null,
+    checkType: PunchType,
+    todayRecords: { checkType: string; checkinTime?: Date }[],
+  ) {
     const state = this.getPunchState(lastType);
 
     if (checkType === 'CHECK_IN') {
+      if (this.hasOpenWorkSession(todayRecords)) {
+        throw new BadRequestException(
+          'You are already checked in. Please mark OUT before checking in again.',
+        );
+      }
       if (state !== 'OUT') {
         throw new BadRequestException('You must check out before checking in again.');
       }
@@ -195,7 +211,7 @@ export class EmpLocationAttendanceService {
       effectiveLastType = this.getLastPunch(todayRecords)?.checkType ?? null;
     }
 
-    this.validatePunch(effectiveLastType, dto.checkType as PunchType);
+    this.validatePunch(effectiveLastType, dto.checkType as PunchType, todayRecords);
 
     const employee = await this.prisma.manageEmployee.findUnique({
       where: { id: employeeId },
@@ -264,18 +280,21 @@ export class EmpLocationAttendanceService {
             },
           });
         } else if (checkType === 'CHECK_IN') {
-          // CHECK_IN is written only when this is the very first punch of the day
-          // (no prior device OR PWA entry in process_att_logs).  This prevents
-          // adding a second "IN" timestamp when the employee already punched in
-          // via a device, which would mis-pair IN/OUT on the dashboard.
-          const existingAnyPunch = await this.prisma.process_att_logs.count({
+          // Mirror CHECK_IN only once per day — never add a second IN timestamp
+          // (accidental re-tap or mistaken Mark IN) which the dashboard would pair
+          // as a false checkout when using device-style first/last punch logic.
+          const alreadyCheckedInToday = todayRecords.some(
+            (r) => r.checkType === 'CHECK_IN',
+          );
+          const existingInMirror = await this.prisma.process_att_logs.count({
             where: {
               manage_employee_id: employeeId,
+              device_sn: 'LOCATION_APP',
               punch_time: { gte: startOfDay, lte: endOfDay },
             },
           });
 
-          if (existingAnyPunch === 0) {
+          if (!alreadyCheckedInToday && existingInMirror === 0) {
             await this.prisma.process_att_logs.create({
               data: {
                 device_sn: 'LOCATION_APP',
@@ -298,12 +317,8 @@ export class EmpLocationAttendanceService {
           }
         }
       }
-    } catch (err) {
-      // attendance_locations is the source of truth for PWA; mirror failures are logged
-      // so ops can investigate, but the employee punch must not fail after GPS capture.
-      this.logger.error(
-        `Failed to mirror ${dto.checkType} to process_att_logs for employee ${employeeId}: ${(err as Error)?.message || err}`,
-      );
+    } catch {
+      // Non-critical
     }
 
     return record;

@@ -1,6 +1,5 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import { wallClockInZoneToStorageDate } from '../common/device-punch-time';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   collapsePunchBursts,
@@ -75,6 +74,49 @@ function punchInOut(times: string[]): { inTime: string | null; outTime: string |
   };
 }
 
+/** Wall-clock time string from a PWA punch Date (stored as UTC components). */
+function pwaPunchTimeStr(d: Date): string {
+  const h = String(d.getUTCHours()).padStart(2, '0');
+  const m = String(d.getUTCMinutes()).padStart(2, '0');
+  const s = String(d.getUTCSeconds()).padStart(2, '0');
+  return `${h}:${m}:${s}`;
+}
+
+type PwaDayRecord = { checkType: string; checkinTime: Date };
+
+/**
+ * PWA uses explicit CHECK_IN / CHECK_OUT — not alternating anonymous punches.
+ * Only these types count toward in/out display and status (break punches excluded).
+ */
+function pwaAttendancePunchTimes(records: PwaDayRecord[]): string[] {
+  const checkIns = records
+    .filter((r) => r.checkType === 'CHECK_IN')
+    .sort((a, b) => a.checkinTime.getTime() - b.checkinTime.getTime());
+  const checkOuts = records
+    .filter((r) => r.checkType === 'CHECK_OUT')
+    .sort((a, b) => a.checkinTime.getTime() - b.checkinTime.getTime());
+  const times: string[] = [];
+  if (checkIns.length > 0) times.push(pwaPunchTimeStr(checkIns[0].checkinTime));
+  if (checkOuts.length > 0) times.push(pwaPunchTimeStr(checkOuts[checkOuts.length - 1].checkinTime));
+  return times;
+}
+
+function pwaPunchInOut(records: PwaDayRecord[]): { inTime: string | null; outTime: string | null } {
+  const checkIns = records
+    .filter((r) => r.checkType === 'CHECK_IN')
+    .sort((a, b) => a.checkinTime.getTime() - b.checkinTime.getTime());
+  const checkOuts = records
+    .filter((r) => r.checkType === 'CHECK_OUT')
+    .sort((a, b) => a.checkinTime.getTime() - b.checkinTime.getTime());
+  return {
+    inTime: checkIns.length > 0 ? pwaPunchTimeStr(checkIns[0].checkinTime).slice(0, 5) : null,
+    outTime:
+      checkOuts.length > 0
+        ? pwaPunchTimeStr(checkOuts[checkOuts.length - 1].checkinTime).slice(0, 5)
+        : null,
+  };
+}
+
 @Injectable()
 export class DashboardOverviewService {
   constructor(private readonly prisma: PrismaService) {}
@@ -132,29 +174,6 @@ export class DashboardOverviewService {
 
     const empIds = employees.map((e) => e.id);
     const mobileEmpIds = employees.filter((e) => e.mobileAttendanceEnabled).map((e) => e.id);
-    const pwaDayAnchor = wallClockInZoneToStorageDate(nowDate);
-    const pwaDayStart = new Date(
-      Date.UTC(
-        pwaDayAnchor.getUTCFullYear(),
-        pwaDayAnchor.getUTCMonth(),
-        pwaDayAnchor.getUTCDate(),
-        0,
-        0,
-        0,
-        0,
-      ),
-    );
-    const pwaDayEnd = new Date(
-      Date.UTC(
-        pwaDayAnchor.getUTCFullYear(),
-        pwaDayAnchor.getUTCMonth(),
-        pwaDayAnchor.getUTCDate(),
-        23,
-        59,
-        59,
-        999,
-      ),
-    );
     const companyIds = [...new Set(employees.map((e) => e.companyID).filter(Boolean))] as number[];
     const branchIds = [...new Set(employees.map((e) => e.branchesID).filter(Boolean))] as number[];
     const policyIds = [
@@ -259,50 +278,25 @@ export class DashboardOverviewService {
       }),
     ]);
 
-    // PWA punches (CHECK_IN / CHECK_OUT only) — authoritative for mobile-attendance employees.
-    const mobilePwaRecords =
-      mobileEmpIds.length > 0
-        ? await this.prisma.attendanceLocation.findMany({
-            where: {
-              employeeId: { in: mobileEmpIds },
-              checkinTime: { gte: pwaDayStart, lte: pwaDayEnd },
-              checkType: { in: ['CHECK_IN', 'CHECK_OUT'] },
-            },
-            orderBy: { checkinTime: 'asc' },
-            select: {
-              employeeId: true,
-              checkType: true,
-              checkinTime: true,
-              address: true,
-            },
-          })
-        : [];
-
-    type PwaDayRollup = {
-      inTimes: string[];
-      outTimes: string[];
-      inAddr: string | null;
-      outAddr: string | null;
-    };
-    const pwaByEmp = new Map<number, PwaDayRollup>();
-    for (const rec of mobilePwaRecords) {
-      const parsed = parsePunchTime(String(rec.checkinTime));
-      if (!parsed || parsed.dateKey !== today) continue;
-      if (!pwaByEmp.has(rec.employeeId)) {
-        pwaByEmp.set(rec.employeeId, {
-          inTimes: [],
-          outTimes: [],
-          inAddr: null,
-          outAddr: null,
+    const pwaByEmp = new Map<number, PwaDayRecord[]>();
+    if (mobileEmpIds.length > 0) {
+      const pwaToday = await this.prisma.attendanceLocation.findMany({
+        where: {
+          employeeId: { in: mobileEmpIds },
+          checkinTime: {
+            gte: new Date(`${today}T00:00:00`),
+            lte: new Date(`${tomorrow}T00:00:00`),
+          },
+        },
+        select: { employeeId: true, checkType: true, checkinTime: true },
+        orderBy: { checkinTime: 'asc' },
+      });
+      for (const r of pwaToday) {
+        if (!pwaByEmp.has(r.employeeId)) pwaByEmp.set(r.employeeId, []);
+        pwaByEmp.get(r.employeeId)!.push({
+          checkType: r.checkType,
+          checkinTime: r.checkinTime,
         });
-      }
-      const row = pwaByEmp.get(rec.employeeId)!;
-      if (rec.checkType === 'CHECK_IN') {
-        row.inTimes.push(parsed.timeStr);
-        if (!row.inAddr && rec.address?.trim()) row.inAddr = rec.address.trim();
-      } else if (rec.checkType === 'CHECK_OUT') {
-        row.outTimes.push(parsed.timeStr);
-        if (rec.address?.trim()) row.outAddr = rec.address.trim();
       }
     }
 
@@ -383,22 +377,6 @@ export class DashboardOverviewService {
       else existing.last = loc;
     }
 
-    for (const [empId, pwa] of pwaByEmp) {
-      if (pwa.inTimes.length === 0 && pwa.outTimes.length === 0) continue;
-      locByEmp.set(empId, {
-        first: {
-          source: 'app',
-          address: pwa.inAddr,
-          deviceName: 'Location Attendance App',
-        },
-        last: {
-          source: 'app',
-          address: pwa.outTimes.length > 0 ? pwa.outAddr : pwa.inAddr,
-          deviceName: 'Location Attendance App',
-        },
-      });
-    }
-
     const formatPunchLocation = (loc: PunchLoc | undefined): string | null => {
       if (!loc) return null;
       return loc.address || null;
@@ -429,14 +407,6 @@ export class DashboardOverviewService {
       if (!row[parsed.dateKey]) row[parsed.dateKey] = [];
       row[parsed.dateKey].push(parsed.timeStr);
       row[parsed.dateKey] = dedupeSortedPunches(row[parsed.dateKey]);
-    }
-
-    // Mobile-attendance employees: use PWA CHECK_IN/CHECK_OUT times (not break punches).
-    for (const [empId, pwa] of pwaByEmp) {
-      const times = dedupeSortedPunches([...pwa.inTimes, ...pwa.outTimes]);
-      if (times.length === 0) continue;
-      if (!punchMap.has(empId)) punchMap.set(empId, {});
-      punchMap.get(empId)![today] = times;
     }
 
     const shiftById = new Map(
@@ -601,7 +571,11 @@ export class DashboardOverviewService {
         });
       }
 
-      const todayPunches = empPunches[today] || [];
+      const mobileEnabled = !!emp.mobileAttendanceEnabled;
+      const pwaToday = pwaByEmp.get(emp.id) || [];
+      const todayPunches = mobileEnabled
+        ? pwaAttendancePunchTimes(pwaToday)
+        : empPunches[today] || [];
       const nextDayPunches = empPunches[tomorrow] || [];
       const status = computeDayStatus({
         ...ctxBase,
@@ -621,7 +595,7 @@ export class DashboardOverviewService {
       // passed. Only after that window do we surface a missing check-out.
       let effStatus = status;
       if (status.type === 'SINGLE_PUNCH') {
-        const firstPunch = (empPunches[today] || [])[0] || null;
+        const firstPunch = todayPunches[0] || null;
         if (firstPunch) {
           const dow = WEEKDAYS[new Date(`${today}T12:00:00`).getDay()];
           const todayShiftDay = (workShift?.workShiftDay || []).find(
@@ -648,7 +622,9 @@ export class DashboardOverviewService {
 
       statusCounts[effStatus.type] = (statusCounts[effStatus.type] || 0) + 1;
 
-      const { inTime, outTime } = punchInOut(todayPunches);
+      const { inTime, outTime } = mobileEnabled
+        ? pwaPunchInOut(pwaToday)
+        : punchInOut(empPunches[today] || []);
 
       switch (effStatus.type) {
         case 'PRESENT':

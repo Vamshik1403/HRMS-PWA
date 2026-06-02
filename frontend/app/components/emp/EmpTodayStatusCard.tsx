@@ -185,11 +185,6 @@ export function EmpTodayStatusCard({ todayStatus, loading, onStatusUpdate }: Emp
             </>
           )}
           {(canCheckOut || canBreakIn || canBreakOut) && (
-            <>
-            <p className="text-[11px] text-center text-gray-500 px-1">
-              Use <span className="font-semibold text-gray-700">Mark OUT</span> when you leave for the day.
-              {canBreakOut ? " End Break only resumes work — it does not check you out." : null}
-            </p>
             <div className={`grid gap-2 ${canCheckOut && (canBreakIn || canBreakOut) ? "grid-cols-2" : "grid-cols-1"}`}>
               {canCheckOut && (
                 <button
@@ -225,7 +220,6 @@ export function EmpTodayStatusCard({ todayStatus, loading, onStatusUpdate }: Emp
                 </button>
               )}
             </div>
-            </>
           )}
         </div>
       )}
