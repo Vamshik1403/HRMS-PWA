@@ -5,7 +5,7 @@ import { Icon } from "@iconify/react";
 import type { TodayStatus } from "../../hooks/useEmpPunch";
 import {
   extractDayPunchTimes,
-  formatLocationLabel,
+  formatLocationLines,
   formatPunchTime,
 } from "../../utils/empAttendanceHistory";
 import { formatBreakDuration, formatWorkHoursDecimal } from "../../utils/attendanceDuration";
@@ -111,12 +111,12 @@ export function EmpAttendanceTodayPanel({
           <LocationRow
             icon="solar:login-2-bold-duotone"
             label="Mark IN location"
-            value={formatLocationLabel(punches.checkIn)}
+            location={punches.checkIn}
           />
           <LocationRow
             icon="solar:logout-2-bold-duotone"
             label="Mark OUT location"
-            value={formatLocationLabel(punches.checkOut)}
+            location={punches.checkOut}
           />
         </div>
 
@@ -157,18 +157,31 @@ function StatCell({
 function LocationRow({
   icon,
   label,
-  value,
+  location,
 }: {
   icon: string;
   label: string;
-  value: string;
+  location: { latitude?: number | null; longitude?: number | null; address?: string | null } | null;
 }) {
+  const { address, coordinates } = formatLocationLines(location);
+  const title = [address, coordinates].filter(Boolean).join(" · ") || "—";
   return (
     <div className="flex items-start gap-2">
       <Icon icon={icon} className="w-4 h-4 text-gray-400 shrink-0 mt-0.5" />
       <div className="min-w-0 flex-1">
         <p className="text-[9px] font-bold text-gray-400 uppercase">{label}</p>
-        <p className="text-[11px] text-gray-600 line-clamp-2" title={value}>{value}</p>
+        {address ? (
+          <p className="text-[11px] text-gray-600 line-clamp-2" title={title}>
+            {address}
+          </p>
+        ) : (
+          <p className="text-[11px] text-gray-400">—</p>
+        )}
+        {coordinates ? (
+          <p className="text-[10px] font-mono text-gray-500 mt-0.5" title={coordinates}>
+            {coordinates}
+          </p>
+        ) : null}
       </div>
     </div>
   );

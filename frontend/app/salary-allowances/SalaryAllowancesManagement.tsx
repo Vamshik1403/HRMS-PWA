@@ -498,16 +498,6 @@ const resolvedCompanyID =
             Add Allowance
           </Button>
         )}
-        {isDialogOpen && (
-          <Button
-            variant="outline"
-            onClick={() => { setIsDialogOpen(false); }}
-            className="flex-shrink-0 text-sm px-3 py-2"
-          >
-            <ArrowLeft className="w-4 h-4 mr-1" />
-            Back
-          </Button>
-        )}
       </div>
 
       <FormDrawer open={isDialogOpen} onOpenChange={(o) => { setIsDialogOpen(o); if (!o) resetForm(); }} title={editingAllowance ? "Edit Salary Allowance" : "Add New Salary Allowance"} description={editingAllowance ? "Update the salary allowance information below." : "Fill in the details to add a new salary allowance."}>

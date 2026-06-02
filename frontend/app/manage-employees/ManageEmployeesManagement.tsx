@@ -34,6 +34,25 @@ import {
 import { FormDrawer } from "../components/ui/form-drawer";
 import { toast } from "sonner";
 import { getSidebarContext } from "../utils/sidebarContext";
+import {
+  CollapsibleFormGroup,
+  EmployeeFormSectionNav,
+  EMPLOYEE_FORM_SECTIONS,
+  type EmpFormSectionId,
+} from "./ManageEmployeeFormUi";
+import { MultiValueField } from "../components/ui/multi-value-field";
+import { joinMultiValue, parseMultiValue, primaryMultiValue } from "../utils/multiValue";
+
+function parsePayGradeNames(shiftEligibility: string | null | undefined): string[] {
+  const s = (shiftEligibility ?? "").trim();
+  if (!s.startsWith("{")) return [];
+  try {
+    const o = JSON.parse(s) as { payGrades?: string[] };
+    return Array.isArray(o.payGrades) ? o.payGrades.filter(Boolean) : [];
+  } catch {
+    return [];
+  }
+}
 
 /* =========================
    Types aligned to backend
@@ -413,6 +432,15 @@ export function ManageEmployeesManagement() {
   // UI
   const [searchTerm, setSearchTerm] = useState("");
   const [isAddingNew, setIsAddingNew] = useState(false);
+  const [activeFormSection, setActiveFormSection] = useState<EmpFormSectionId>("basic");
+  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
+  const toggleFormGroup = (key: string) =>
+    setExpandedGroups((p) => ({ ...p, [key]: !(p[key] ?? false) }));
+  const isGroupExpanded = (key: string) => expandedGroups[key] ?? false;
+  const formSections = useMemo(
+    () => (isAdmin ? EMPLOYEE_FORM_SECTIONS.filter((s) => s.id !== "additional") : EMPLOYEE_FORM_SECTIONS),
+    [isAdmin],
+  );
   const [isViewing, setIsViewing] = useState(false);
   const [editingRow, setEditingRow] = useState<ManageEmpRead | null>(null);
   const [viewRow, setViewRow] = useState<ManageEmpRead | null>(null);
@@ -799,6 +827,7 @@ export function ManageEmployeesManagement() {
     allowRotatingShift: false,
     allowCreateTaskOnMobile: false,
     pwaShowLeaveBalance: true,
+    mobileAttendanceEnabled: false,
 
     typeOfEmployee: "employee",
 
@@ -813,6 +842,15 @@ export function ManageEmployeesManagement() {
     personalPhoneNo: "",
     personalEmail: "",
     emergancyContact: "",
+    personalPhones: [""] as string[],
+    personalEmails: [""] as string[],
+    emergencyContacts: [""] as string[],
+    uanNos: [""] as string[],
+    esiNos: [""] as string[],
+    businessPhones: [""] as string[],
+    businessEmails: [""] as string[],
+    salaryPayoutCycle: "",
+    monthlyPayGradeNames: [] as string[],
     presentAddress: "",
     permenantAddress: "",
     employeePhotoUrl: "",
@@ -1875,6 +1913,7 @@ const addCombinedDevMap = () => {
       allowRotatingShift: false,
       allowCreateTaskOnMobile: false,
       pwaShowLeaveBalance: true,
+      mobileAttendanceEnabled: false,
 
       typeOfEmployee: "employee",
 
@@ -1887,6 +1926,15 @@ const addCombinedDevMap = () => {
       personalPhoneNo: "",
       personalEmail: "",
       emergancyContact: "",
+      personalPhones: [""],
+      personalEmails: [""],
+      emergencyContacts: [""],
+      uanNos: [""],
+      esiNos: [""],
+      businessPhones: [""],
+      businessEmails: [""],
+      salaryPayoutCycle: "",
+      monthlyPayGradeNames: [],
       presentAddress: "",
       permenantAddress: "",
       employeePhotoUrl: "",
@@ -1970,6 +2018,8 @@ const addCombinedDevMap = () => {
     setActiveApLocalId(null);
     setActiveLpLocalId(null);
     setActiveContrLocalId(null);
+    setActiveFormSection("basic");
+    setExpandedGroups({});
     setOriginalDevMapIds([]);
     setOriginalTokenDevMapIds([]);
     setOriginalTokenVerifierDevMapIds([]);
@@ -2230,7 +2280,7 @@ const addCombinedDevMap = () => {
     if (!formData.employeeFirstName?.trim()) validationErrors.push("Employee First Name is mandatory");
     if (!formData.employeeLastName?.trim()) validationErrors.push("Employee Last Name is mandatory");
     if (!formData.employeeID?.trim()) validationErrors.push("Employee ID is mandatory");
-    if (!isAdmin && !formData.personalPhoneNo?.trim()) validationErrors.push("Mobile Number is mandatory");
+    if (!isAdmin && !primaryMultiValue(formData.personalPhones).trim()) validationErrors.push("Mobile Number is mandatory");
     if (!isAdmin && !formData.joiningDate?.trim()) validationErrors.push("Joining Date is mandatory");
 
     // Duplicate Employee ID check (within the same company)
@@ -2419,8 +2469,8 @@ const addCombinedDevMap = () => {
         pfNumber: formData.pfNumber || undefined,
         aadharNo: formData.aadharNo || undefined,
         panNo: formData.panNo || undefined,
-        uanNo: formData.uanNo || undefined,
-        esiNo: formData.esiNo || undefined,
+        uanNo: joinMultiValue(formData.uanNos) || undefined,
+        esiNo: joinMultiValue(formData.esiNos) || undefined,
 
         departmentNameID: formData.departmentNameID ?? undefined,
         designationID: formData.empDesignationForm.length > 0
@@ -2437,24 +2487,28 @@ const addCombinedDevMap = () => {
         monthlyPayGradeID: type === "Monthly" ? formData.promotion?.monthlyPayGradeID ?? undefined : undefined,
         hourlyPayGradeID: type === "Hourly" ? formData.promotion?.hourlyPayGradeID ?? undefined : undefined,
 
-        shiftEligibility: formData.shiftEligibility || undefined,
+        shiftEligibility:
+          formData.monthlyPayGradeNames.length > 0
+            ? JSON.stringify({ payGrades: formData.monthlyPayGradeNames })
+            : formData.shiftEligibility || undefined,
         nightShiftEligibility: formData.nightShiftEligibility || undefined,
         maxHoursPerDay: formData.maxHoursPerDay || undefined,
-        weeklyOffPattern: formData.weeklyOffPattern || undefined,
+        weeklyOffPattern: formData.salaryPayoutCycle || formData.weeklyOffPattern || undefined,
         noticePeriodDaysForResignation: formData.noticePeriodDaysForResignation || undefined,
         noticePeriodDaysForTermination: formData.noticePeriodDaysForTermination || undefined,
         allowRotatingShift: formData.allowRotatingShift,
         allowCreateTaskOnMobile: formData.allowCreateTaskOnMobile,
         pwaShowLeaveBalance: formData.pwaShowLeaveBalance,
+        mobileAttendanceEnabled: formData.mobileAttendanceEnabled,
 
         typeOfEmployee: formData.typeOfEmployee || undefined,
 
 
-        businessPhoneNo: formData.businessPhoneNo || undefined,
-        businessEmail: formData.businessEmail || undefined,
-        personalPhoneNo: formData.personalPhoneNo || undefined,
-        personalEmail: formData.personalEmail || undefined,
-        emergancyContact: formData.emergancyContact || undefined,
+        businessPhoneNo: joinMultiValue(formData.businessPhones) || undefined,
+        businessEmail: joinMultiValue(formData.businessEmails) || undefined,
+        personalPhoneNo: joinMultiValue(formData.personalPhones) || undefined,
+        personalEmail: joinMultiValue(formData.personalEmails) || undefined,
+        emergancyContact: joinMultiValue(formData.emergencyContacts) || undefined,
         presentAddress: formData.presentAddress || undefined,
         permenantAddress: formData.permenantAddress || undefined,
         employeePhotoUrl: uploadedPhotoUrl ?? (formData.employeePhotoUrl || undefined),
@@ -2689,17 +2743,22 @@ const addCombinedDevMap = () => {
       panNo: freshData.panNo ?? "",
       uanNo: freshData.uanNo ?? "",
       esiNo: freshData.esiNo ?? "",
+      uanNos: parseMultiValue(freshData.uanNo),
+      esiNos: parseMultiValue(freshData.esiNo),
       monthlyPGAutocomplete: "",
       hourlyPGAutocomplete: "",
       shiftEligibility: freshData.shiftEligibility ?? "",
       nightShiftEligibility: freshData.nightShiftEligibility ?? "",
       maxHoursPerDay: freshData.maxHoursPerDay ?? "",
       weeklyOffPattern: freshData.weeklyOffPattern ?? "",
+      salaryPayoutCycle: freshData.weeklyOffPattern ?? "",
+      monthlyPayGradeNames: parsePayGradeNames(freshData.shiftEligibility),
       noticePeriodDaysForResignation: freshData.noticePeriodDaysForResignation ?? "",
       noticePeriodDaysForTermination: freshData.noticePeriodDaysForTermination ?? "",
       allowRotatingShift: freshData.allowRotatingShift ?? false,
       allowCreateTaskOnMobile: freshData.allowCreateTaskOnMobile ?? false,
       pwaShowLeaveBalance: freshData.pwaShowLeaveBalance ?? true,
+      mobileAttendanceEnabled: freshData.mobileAttendanceEnabled ?? false,
       typeOfEmployee: freshData.typeOfEmployee ?? "",
       workShiftID: effectiveWorkShiftID,
       attendancePolicyID: effectiveAttendancePolicyID,
@@ -2709,6 +2768,11 @@ const addCombinedDevMap = () => {
       personalPhoneNo: freshData.personalPhoneNo ?? "",
       personalEmail: freshData.personalEmail ?? "",
       emergancyContact: freshData.emergancyContact ?? "",
+      personalPhones: parseMultiValue(freshData.personalPhoneNo),
+      personalEmails: parseMultiValue(freshData.personalEmail),
+      emergencyContacts: parseMultiValue(freshData.emergancyContact),
+      businessPhones: parseMultiValue(freshData.businessPhoneNo),
+      businessEmails: parseMultiValue(freshData.businessEmail),
       presentAddress: freshData.presentAddress ?? "",
       permenantAddress: freshData.permenantAddress ?? "",
       employeePhotoUrl: freshData.employeePhotoUrl ?? "",
@@ -2927,15 +2991,6 @@ const addCombinedDevMap = () => {
               <Plus className="w-4 h-4 mr-1" /> Add Employee
             </Button>
           )}
-          {(isAddingNew || isViewing) && (
-            <Button
-              variant="outline"
-              onClick={handleCancel}
-              className="text-sm"
-            >
-              <X className="w-4 h-4 mr-1" /> Cancel
-            </Button>
-          )}
         </div>
       </div>
 
@@ -2944,6 +2999,7 @@ const addCombinedDevMap = () => {
         open={isAddingNew}
         onOpenChange={(v) => { if (!v) handleCancel(); }}
         title={editingRow ? "Edit Employee" : "Add New Employee"}
+        showHeaderCancel
       >
         <div>
             {error && (
@@ -2953,6 +3009,12 @@ const addCombinedDevMap = () => {
             )}
 
             <form onSubmit={handleSubmit} className="space-y-6">
+              <EmployeeFormSectionNav
+                active={activeFormSection}
+                onChange={setActiveFormSection}
+                sections={formSections}
+              />
+
               {/* SP / Company / Branch (autocomplete) */}
               <div className="grid grid-cols-1 gap-6">
                 {/* SP/Company - auto-filled from sidebar */}
@@ -3044,12 +3106,8 @@ const addCombinedDevMap = () => {
 
               </div>
 
-              <div className="relative my-6">
-                <div className="absolute inset-0 flex items-center"><div className="w-full border-t-2 border-blue-200"></div></div>
-                <div className="relative flex justify-start"><span className="bg-white pr-3 text-sm font-semibold text-blue-700 uppercase tracking-wide">Basic Information</span></div>
-              </div>
-
-              {/* Basic info */}
+              {activeFormSection === "basic" && (
+              <div className="space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>First Name <span className="text-red-500">*</span></Label>
@@ -3077,66 +3135,131 @@ const addCombinedDevMap = () => {
                     required
                   />
                 </div>
-                {!isAdmin && (<div className="space-y-2">
-                  <Label>Mobile Number <span className="text-red-500">*</span></Label>
-                  <Input
-                    value={formData.personalPhoneNo}
-                    onChange={(e) => setFormData((p) => ({ ...p, personalPhoneNo: e.target.value }))}
+                {!isAdmin && (
+                  <MultiValueField
+                    label="Mobile No."
+                    values={formData.personalPhones}
+                    onChange={(personalPhones) =>
+                      setFormData((p) => ({
+                        ...p,
+                        personalPhones,
+                        personalPhoneNo: primaryMultiValue(personalPhones),
+                      }))
+                    }
                     placeholder="Used as employee login password"
                     required
                   />
-                </div>)}
+                )}
+                {(isCompanyAdmin || isBranchAdmin || isSuperAdmin || (!isCompanyAdmin && !isBranchAdmin && !isSuperAdmin && !isAdmin)) && (
+                  <MultiValueField
+                    label="Email ID"
+                    type="email"
+                    values={formData.personalEmails}
+                    onChange={(personalEmails) =>
+                      setFormData((p) => ({
+                        ...p,
+                        personalEmails,
+                        personalEmail: primaryMultiValue(personalEmails),
+                      }))
+                    }
+                    placeholder="employee@example.com"
+                  />
+                )}
               </div>
 
-              {/* Gender / Joining Date / Photo at top — shown for all roles except pure ADMIN */}
-              {(isAdmin || isCompanyAdmin || isBranchAdmin || isSuperAdmin) && (
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  <div className="space-y-2">
-                    <Label>Gender</Label>
-                    <Select
-                      value={formData.gender || ""}
-                      onValueChange={(val) => setFormData((p) => ({ ...p, gender: val }))}
-                    >
-                      <SelectTrigger className="w-full">
-                        <SelectValue placeholder="Select gender…" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="Male">Male</SelectItem>
-                        <SelectItem value="Female">Female</SelectItem>
-                        <SelectItem value="Transgender">Transgender</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  {(isCompanyAdmin || isBranchAdmin || isSuperAdmin) && (
-                    <>
-                      <div className="space-y-2">
-                        <Label>Joining Date <span className="text-red-500">*</span></Label>
-                        <Input
-                          type="date"
-                          value={formData.joiningDate}
-                          onChange={(e) => setFormData((p) => ({ ...p, joiningDate: e.target.value }))}
-                          required
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Photo</Label>
-                        <Input
-                          type="file"
-                          accept="image/*"
-                          onChange={(e) => onPickPhoto(e.target.files?.[0] ?? null)}
-                        />
-                        {photoPreview ? (
-                          <img src={photoPreview} className="h-20 w-20 rounded object-cover mt-2" alt="preview" />
-                        ) : formData.employeePhotoUrl ? (
-                          <img src={formData.employeePhotoUrl} className="h-20 w-20 rounded object-cover mt-2" alt="photo" />
-                        ) : null}
-                      </div>
-                    </>
-                  )}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Gender</Label>
+                  <Select
+                    value={formData.gender || ""}
+                    onValueChange={(val) => setFormData((p) => ({ ...p, gender: val }))}
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Select gender…" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Male">Male</SelectItem>
+                      <SelectItem value="Female">Female</SelectItem>
+                      <SelectItem value="Transgender">Transgender</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
-              )}
+                <div className="space-y-2">
+                  <Label>Photo</Label>
+                  <Input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => onPickPhoto(e.target.files?.[0] ?? null)}
+                  />
+                  {photoPreview ? (
+                    <img src={photoPreview} className="h-20 w-20 rounded object-cover mt-2" alt="preview" />
+                  ) : formData.employeePhotoUrl ? (
+                    <img src={formData.employeePhotoUrl} className="h-20 w-20 rounded object-cover mt-2" alt="photo" />
+                  ) : null}
+                </div>
+              </div>
 
-              {(isCompanyAdmin || isBranchAdmin || isSuperAdmin) && (
+              <CollapsibleFormGroup
+                title="Identity & address"
+                expanded={isGroupExpanded("basic-identity")}
+                onToggle={() => toggleFormGroup("basic-identity")}
+              >
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Aadhaar No.</Label>
+                    <Input
+                      value={formData.aadharNo}
+                      onChange={(e) => setFormData((p) => ({ ...p, aadharNo: e.target.value.replace(/\D/g, "").slice(0, 12) }))}
+                      placeholder="12-digit Aadhaar"
+                      inputMode="numeric"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>PAN No.</Label>
+                    <Input
+                      value={formData.panNo}
+                      onChange={(e) => setFormData((p) => ({ ...p, panNo: e.target.value.toUpperCase().slice(0, 10) }))}
+                      placeholder="ABCDE1234F"
+                      maxLength={10}
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Present Address</Label>
+                    <Textarea
+                      value={formData.presentAddress}
+                      onChange={(e) => setFormData((p) => ({ ...p, presentAddress: e.target.value }))}
+                      rows={3}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Permanent Address</Label>
+                    <Textarea
+                      value={formData.permenantAddress}
+                      onChange={(e) => setFormData((p) => ({ ...p, permenantAddress: e.target.value }))}
+                      rows={3}
+                    />
+                  </div>
+                </div>
+                <MultiValueField
+                  label="Emergency Contact No."
+                  values={formData.emergencyContacts}
+                  onChange={(emergencyContacts) =>
+                    setFormData((p) => ({
+                      ...p,
+                      emergencyContacts,
+                      emergancyContact: primaryMultiValue(emergencyContacts),
+                    }))
+                  }
+                />
+              </CollapsibleFormGroup>
+
+              <CollapsibleFormGroup
+                title="Family & personal"
+                expanded={isGroupExpanded("basic-family")}
+                onToggle={() => toggleFormGroup("basic-family")}
+              >
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label>Date of Birth</Label>
@@ -3147,32 +3270,95 @@ const addCombinedDevMap = () => {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label>Personal Email</Label>
+                    <Label>Blood Group</Label>
                     <Input
-                      type="email"
-                      value={formData.personalEmail}
-                      onChange={(e) => setFormData((p) => ({ ...p, personalEmail: e.target.value }))}
-                      placeholder="employee@example.com"
+                      value={formData.bloodGroup}
+                      onChange={(e) => setFormData((p) => ({ ...p, bloodGroup: e.target.value }))}
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Father Name</Label>
+                    <Input
+                      value={formData.employeeFatherName}
+                      onChange={(e) => setFormData((p) => ({ ...p, employeeFatherName: e.target.value }))}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Mother Name</Label>
+                    <Input
+                      value={formData.employeeMotherName}
+                      onChange={(e) => setFormData((p) => ({ ...p, employeeMotherName: e.target.value }))}
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div className="space-y-2">
+                    <Label>Marital Status</Label>
+                    <Select
+                      value={formData.maritalStatus || ""}
+                      onValueChange={(val) =>
+                        setFormData((p) => ({
+                          ...p,
+                          maritalStatus: val,
+                          ...(val !== "Married" ? { employeeSpouseName: "", numberOfChildren: "" } : {}),
+                        }))
+                      }
+                    >
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Select marital status…" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Single">Single</SelectItem>
+                        <SelectItem value="Married">Married</SelectItem>
+                        <SelectItem value="Divorcee">Divorcee</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {formData.maritalStatus === "Married" && (
+                    <>
+                      <div className="space-y-2">
+                        <Label>Spouse Name</Label>
+                        <Input
+                          value={formData.employeeSpouseName}
+                          onChange={(e) => setFormData((p) => ({ ...p, employeeSpouseName: e.target.value }))}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>No. of Children</Label>
+                        <Input
+                          type="number"
+                          min={0}
+                          value={formData.numberOfChildren}
+                          onChange={(e) => setFormData((p) => ({ ...p, numberOfChildren: e.target.value }))}
+                          placeholder="0"
+                        />
+                      </div>
+                    </>
+                  )}
+                </div>
+              </CollapsibleFormGroup>
+              </div>
+              )}
+
+              {activeFormSection === "employment" && (
+              <div className="space-y-4">
+              {!isAdmin && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Date of Joining <span className="text-red-500">*</span></Label>
+                    <Input
+                      type="date"
+                      value={formData.joiningDate}
+                      onChange={(e) => setFormData((p) => ({ ...p, joiningDate: e.target.value }))}
+                      required
                     />
                   </div>
                 </div>
               )}
 
-              {formData.pfMemberStatus === "Yes" && (
-              <div className="space-y-2">
-                <label>PF Number</label>
-                <Input
-                  value={formData.pfNumber}
-                  onChange={(e) => setFormData((p) => ({ ...p, pfNumber: e.target.value }))}
-                />
-              </div>
-              )}
-
               {/* Branch - Search & Add with History */}
-              <div className="relative my-6">
-                <div className="absolute inset-0 flex items-center"><div className="w-full border-t-2 border-blue-200"></div></div>
-                <div className="relative flex justify-start"><span className="bg-white pr-3 text-sm font-semibold text-blue-700 uppercase tracking-wide">Branch</span></div>
-              </div>
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <h3 className="text-lg font-semibold">Branch *</h3>
@@ -3240,37 +3426,9 @@ const addCombinedDevMap = () => {
                     ))
                   )}
                 </div>
-                <div className="space-y-2">
-                  <Label>Employee Type</Label>
-                  <select className="w-full rounded-md border px-3 py-2" value={formData.typeOfEmployee || "employee"} onChange={(e) => setFormData((p) => ({ ...p, typeOfEmployee: e.target.value }))}>
-                    <option value="employee">Employee</option>
-                  </select>
-                </div>
-                <label className="flex items-center gap-2 cursor-pointer pt-1">
-                  <input
-                    type="checkbox"
-                    checked={!!formData.allowCreateTaskOnMobile}
-                    onChange={(e) => setFormData((p) => ({ ...p, allowCreateTaskOnMobile: e.target.checked }))}
-                    className="rounded border-gray-300"
-                  />
-                  <span className="text-sm text-gray-700">Allow employee to create tasks from mobile app</span>
-                </label>
-                <label className="flex items-center gap-2 cursor-pointer pt-1">
-                  <input
-                    type="checkbox"
-                    checked={!!formData.pwaShowLeaveBalance}
-                    onChange={(e) => setFormData((p) => ({ ...p, pwaShowLeaveBalance: e.target.checked }))}
-                    className="rounded border-gray-300"
-                  />
-                  <span className="text-sm text-gray-700">Show leave balance in PWA app</span>
-                </label>
               </div>
 
               {/* Department - Search & Add with History (visible for all roles including COMPANY_ADMIN) */}
-              <div className="relative my-6">
-                <div className="absolute inset-0 flex items-center"><div className="w-full border-t-2 border-blue-200"></div></div>
-                <div className="relative flex justify-start"><span className="bg-white pr-3 text-sm font-semibold text-blue-700 uppercase tracking-wide">Department</span></div>
-              </div>
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <h3 className="text-lg font-semibold">Department</h3>
@@ -3342,10 +3500,6 @@ const addCombinedDevMap = () => {
               {/* Designation - for COMPANY_ADMIN and above (not ADMIN) */}
               {!isAdmin && (
               <div className="space-y-3">
-              <div className="relative my-6">
-                <div className="absolute inset-0 flex items-center"><div className="w-full border-t-2 border-blue-200"></div></div>
-                <div className="relative flex justify-start"><span className="bg-white pr-3 text-sm font-semibold text-blue-700 uppercase tracking-wide">Designation</span></div>
-              </div>
                 <div className="flex items-center justify-between">
                   <h3 className="text-lg font-semibold">Designation</h3>
                   {canManage && <Button type="button" variant="outline" size="sm" onClick={() => { setQuickAddOpen('designation'); setQuickAddValue(''); setQuickAddSuggestions([]); }}><Plus className="w-4 h-4 mr-1" /> Quick Add</Button>}
@@ -3412,11 +3566,6 @@ const addCombinedDevMap = () => {
                 </div>
               </div>
               )}
-
-              <div className="relative my-6">
-                <div className="absolute inset-0 flex items-center"><div className="w-full border-t-2 border-blue-200"></div></div>
-                <div className="relative flex justify-start"><span className="bg-white pr-3 text-sm font-semibold text-blue-700 uppercase tracking-wide">Manager</span></div>
-              </div>
 
               {/* Manager - Multi-entry repeater */}
               <div className="space-y-3">
@@ -3486,48 +3635,8 @@ const addCombinedDevMap = () => {
                 )}
               </div>
 
-              {/* Employment, contact, personal, education, bank — hidden for pure ADMIN only */}
-              {!isAdmin && (<><div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                {!isSuperAdmin && !isCompanyAdmin && !isBranchAdmin && (
-                  <div className="space-y-2">
-                    <Label>Joining Date <span className="text-red-500">*</span></Label>
-                    <Input
-                      type="date"
-                      value={formData.joiningDate}
-                      onChange={(e) => setFormData((p) => ({ ...p, joiningDate: e.target.value }))}
-                      required
-                    />
-                  </div>
-                )}
-
-                <div className="space-y-2 mt-3">
-                  <label>PF Member</label>
-                  <div className="flex items-center space-x-4">
-                    <label className="flex items-center space-x-2">
-                      <input
-                        type="checkbox"
-                        checked={formData.pfMemberStatus === "Yes"}
-                        onChange={(e) => setFormData((p) => ({ ...p, pfMemberStatus: e.target.checked ? "Yes" : "No" }))}
-                      />
-                      <span>Yes</span>
-                    </label>
-                    <label className="flex items-center space-x-2">
-                      <input
-                        type="checkbox"
-                        checked={formData.pfMemberStatus === "No"}
-                        onChange={(e) => setFormData((p) => ({ ...p, pfMemberStatus: e.target.checked ? "No" : "Yes" }))}
-                      />
-                      <span>No</span>
-                    </label>
-                  </div>
-                </div>
-              </div>
-
-              <div className="relative my-6">
-                <div className="absolute inset-0 flex items-center"><div className="w-full border-t-2 border-blue-200"></div></div>
-                <div className="relative flex justify-start"><span className="bg-white pr-3 text-sm font-semibold text-blue-700 uppercase tracking-wide">Employment Details</span></div>
-              </div>
-
+              {!isAdmin && (
+              <>
               {/* Employment Type - Search & Add with History */}
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
@@ -3680,7 +3789,12 @@ const addCombinedDevMap = () => {
                 </div>
               </div>
 
-{/* Leave Policy — visible for COMPANY_ADMIN / BRANCH_ADMIN / SERVICE_PROVIDER (hidden for ADMIN) */}
+              <CollapsibleFormGroup
+                title="Shift & policies"
+                expanded={isGroupExpanded("employment-policies")}
+                onToggle={() => toggleFormGroup("employment-policies")}
+              >
+              {/* Leave Policy — visible for COMPANY_ADMIN / BRANCH_ADMIN / SERVICE_PROVIDER (hidden for ADMIN) */}
               {!isAdmin && (
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
@@ -3945,17 +4059,24 @@ const addCombinedDevMap = () => {
                   </div>
                 )}
               </div>}
+              </CollapsibleFormGroup>
 
-          
-              <div className="relative my-6">
-                <div className="absolute inset-0 flex items-center"><div className="w-full border-t-2 border-blue-200"></div></div>
-                <div className="relative flex justify-start"><span className="bg-white pr-3 text-sm font-semibold text-blue-700 uppercase tracking-wide">Salary / Policy / Shift</span></div>
-              </div>
-
-              {/* Policy / Shift IDs */}
+              <CollapsibleFormGroup
+                title="Salary payout & pay grade"
+                expanded={isGroupExpanded("employment-salary")}
+                onToggle={() => toggleFormGroup("employment-salary")}
+              >
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-2 sm:col-span-2">
+                  <Label>Salary payout cycle</Label>
+                  <Input
+                    value={formData.salaryPayoutCycle}
+                    onChange={(e) => setFormData((p) => ({ ...p, salaryPayoutCycle: e.target.value }))}
+                    placeholder="e.g. Monthly, Weekly"
+                  />
+                </div>
                 {/* Salary Pay Grade Type + conditional autocompletes */}
-                <div className="space-y-3">
+                <div className="space-y-3 sm:col-span-2">
                   <div className="space-y-2">
                     <Label>Salary Pay Grade Type</Label>
                     <Select
@@ -4017,10 +4138,14 @@ const addCombinedDevMap = () => {
                             className="px-3 py-2 hover:bg-gray-100 cursor-pointer"
                             onMouseDown={(e) => e.preventDefault()}
                             onClick={() => {
+                              const name = g.monthlyPayGradeName ?? String(g.id);
                               setFormData((p) => ({
                                 ...p,
-                                monthlyPGAutocomplete: g.monthlyPayGradeName ?? String(g.id),
+                                monthlyPGAutocomplete: name,
                                 promotion: { ...p.promotion, monthlyPayGradeID: g.id },
+                                monthlyPayGradeNames: p.monthlyPayGradeNames.includes(name)
+                                  ? p.monthlyPayGradeNames
+                                  : [...p.monthlyPayGradeNames, name],
                               }));
                               setMonthlyPGList([]);
                             }}
@@ -4031,248 +4156,135 @@ const addCombinedDevMap = () => {
                       </div>
                     )}
                   </div>
+                  {formData.monthlyPayGradeNames.length > 0 && (
+                    <div className="flex flex-wrap gap-2 pt-1">
+                      {formData.monthlyPayGradeNames.map((name) => (
+                        <span
+                          key={name}
+                          className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-800"
+                        >
+                          {name}
+                          <button
+                            type="button"
+                            className="text-blue-600 hover:text-blue-900"
+                            onClick={() =>
+                              setFormData((p) => ({
+                                ...p,
+                                monthlyPayGradeNames: p.monthlyPayGradeNames.filter((n) => n !== name),
+                              }))
+                            }
+                            aria-label={`Remove ${name}`}
+                          >
+                            ×
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
+              </CollapsibleFormGroup>
 
-              <div className="relative my-6">
-                <div className="absolute inset-0 flex items-center"><div className="w-full border-t-2 border-blue-200"></div></div>
-                <div className="relative flex justify-start"><span className="bg-white pr-3 text-sm font-semibold text-blue-700 uppercase tracking-wide">Contact & Address</span></div>
-              </div>
-
-              {/* Contacts */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <CollapsibleFormGroup
+                title="EPF / UAN / ESI"
+                expanded={isGroupExpanded("employment-statutory")}
+                onToggle={() => toggleFormGroup("employment-statutory")}
+              >
                 <div className="space-y-2">
-                  <Label>Business Phone</Label>
-                  <Input
-                    value={formData.businessPhoneNo}
-                    onChange={(e) => setFormData((p) => ({ ...p, businessPhoneNo: e.target.value }))}
-                  />
+                  <Label>EPF Member</Label>
+                  <div className="flex items-center space-x-4">
+                    <label className="flex items-center space-x-2">
+                      <input
+                        type="checkbox"
+                        checked={formData.pfMemberStatus === "Yes"}
+                        onChange={(e) => setFormData((p) => ({ ...p, pfMemberStatus: e.target.checked ? "Yes" : "No" }))}
+                      />
+                      <span>Yes</span>
+                    </label>
+                    <label className="flex items-center space-x-2">
+                      <input
+                        type="checkbox"
+                        checked={formData.pfMemberStatus === "No"}
+                        onChange={(e) => setFormData((p) => ({ ...p, pfMemberStatus: e.target.checked ? "No" : "Yes" }))}
+                      />
+                      <span>No</span>
+                    </label>
+                  </div>
                 </div>
-                <div className="space-y-2">
-                  <Label>Business Email</Label>
-                  <Input
-                    type="email"
-                    value={formData.businessEmail}
-                    onChange={(e) => setFormData((p) => ({ ...p, businessEmail: e.target.value }))}
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {!isCompanyAdmin && !isBranchAdmin && (
+                {formData.pfMemberStatus === "Yes" && (
                   <div className="space-y-2">
-                    <Label>Personal Email</Label>
+                    <Label>PF Number</Label>
                     <Input
-                      type="email"
-                      value={formData.personalEmail}
-                      onChange={(e) => setFormData((p) => ({ ...p, personalEmail: e.target.value }))}
-                      placeholder="employee@example.com"
+                      value={formData.pfNumber}
+                      onChange={(e) => setFormData((p) => ({ ...p, pfNumber: e.target.value }))}
                     />
                   </div>
                 )}
-                <div className="space-y-2">
-                  <Label>Emergency Contact</Label>
-                  <Input
-                    value={formData.emergancyContact}
-                    onChange={(e) => setFormData((p) => ({ ...p, emergancyContact: e.target.value }))}
-                  />
-                </div>
-              </div>
-
-              {/* Addresses */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Present Address</Label>
-                  <Textarea
-                    value={formData.presentAddress}
-                    onChange={(e) => setFormData((p) => ({ ...p, presentAddress: e.target.value }))}
-                    rows={3}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Permanent Address</Label>
-                  <Textarea
-                    value={formData.permenantAddress}
-                    onChange={(e) => setFormData((p) => ({ ...p, permenantAddress: e.target.value }))}
-                    rows={3}
-                  />
-                </div>
-              </div>
-
-              <div className="relative my-6">
-                <div className="absolute inset-0 flex items-center"><div className="w-full border-t-2 border-blue-200"></div></div>
-                <div className="relative flex justify-start"><span className="bg-white pr-3 text-sm font-semibold text-blue-700 uppercase tracking-wide">Personal Details</span></div>
-              </div>
-
-              {/* Personal */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                {!isSuperAdmin && !isCompanyAdmin && !isBranchAdmin && (
-                  <div className="space-y-2">
-                    <Label>Gender</Label>
-                    <Select
-                      value={formData.gender || ""}
-                      onValueChange={(val) =>
-                        setFormData((p) => ({
-                          ...p,
-                          gender: val,
-                        }))
-                      }
-                    >
-                      <SelectTrigger className="w-full">
-                        <SelectValue placeholder="Select gender…" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="Male">Male</SelectItem>
-                        <SelectItem value="Female">Female</SelectItem>
-                        <SelectItem value="Transgender">Transgender</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                )}
-
-                {!isCompanyAdmin && !isBranchAdmin && (
-                  <div className="space-y-2">
-                    <Label>Date of Birth</Label>
-                    <Input
-                      type="date"
-                      value={formData.dateOfBirth}
-                      onChange={(e) => setFormData((p) => ({ ...p, dateOfBirth: e.target.value }))}
-                    />
-                  </div>
-                )}
-                <div className="space-y-2">
-                  <Label>Blood Group</Label>
-                  <Input
-                    value={formData.bloodGroup}
-                    onChange={(e) => setFormData((p) => ({ ...p, bloodGroup: e.target.value }))}
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div className="space-y-2">
-                  <Label>Marital Status</Label>
-                  <Select
-                    value={formData.maritalStatus || ""}
-                    onValueChange={(val) =>
-                      setFormData((p) => ({
-                        ...p,
-                        maritalStatus: val,
-                      }))
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <MultiValueField
+                    label="UAN No."
+                    values={formData.uanNos}
+                    onChange={(uanNos) =>
+                      setFormData((p) => ({ ...p, uanNos, uanNo: primaryMultiValue(uanNos) }))
                     }
-                  >
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Select marital status…" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Single">Single</SelectItem>
-                      <SelectItem value="Married">Married</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-2">
-                  <Label>Father's Name</Label>
-                  <Input
-                    value={formData.employeeFatherName}
-                    onChange={(e) => setFormData((p) => ({ ...p, employeeFatherName: e.target.value }))}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Mother's Name</Label>
-                  <Input
-                    value={formData.employeeMotherName}
-                    onChange={(e) => setFormData((p) => ({ ...p, employeeMotherName: e.target.value }))}
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label>Spouse Name</Label>
-                <Input
-                  value={formData.employeeSpouseName}
-                  onChange={(e) => setFormData((p) => ({ ...p, employeeSpouseName: e.target.value }))}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label>Number of Children</Label>
-                <Input
-                  type="number"
-                  min={0}
-                  value={formData.numberOfChildren}
-                  onChange={(e) => setFormData((p) => ({ ...p, numberOfChildren: e.target.value }))}
-                  placeholder="0"
-                />
-              </div>
-
-              <div className="relative my-6">
-                <div className="absolute inset-0 flex items-center"><div className="w-full border-t-2 border-blue-200"></div></div>
-                <div className="relative flex justify-start"><span className="bg-white pr-3 text-sm font-semibold text-blue-700 uppercase tracking-wide">Identity & Statutory</span></div>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Aadhaar Number</Label>
-                  <Input
-                    value={formData.aadharNo}
-                    onChange={(e) => setFormData((p) => ({ ...p, aadharNo: e.target.value.replace(/\D/g, "").slice(0, 12) }))}
-                    placeholder="12-digit Aadhaar"
-                    inputMode="numeric"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>PAN</Label>
-                  <Input
-                    value={formData.panNo}
-                    onChange={(e) => setFormData((p) => ({ ...p, panNo: e.target.value.toUpperCase().slice(0, 10) }))}
-                    placeholder="ABCDE1234F"
-                    maxLength={10}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>UAN (PF)</Label>
-                  <Input
-                    value={formData.uanNo}
-                    onChange={(e) => setFormData((p) => ({ ...p, uanNo: e.target.value.replace(/\D/g, "").slice(0, 12) }))}
                     placeholder="Universal Account Number"
                     inputMode="numeric"
+                    maxLength={12}
+                    transform={(v) => v.replace(/\D/g, "").slice(0, 12)}
                   />
-                </div>
-                <div className="space-y-2">
-                  <Label>ESI Number</Label>
-                  <Input
-                    value={formData.esiNo}
-                    onChange={(e) => setFormData((p) => ({ ...p, esiNo: e.target.value }))}
+                  <MultiValueField
+                    label="ESI No."
+                    values={formData.esiNos}
+                    onChange={(esiNos) =>
+                      setFormData((p) => ({ ...p, esiNos, esiNo: primaryMultiValue(esiNos) }))
+                    }
                     placeholder="ESI insurance number"
                   />
                 </div>
-              </div>
+              </CollapsibleFormGroup>
 
-              {!isSuperAdmin && !isCompanyAdmin && !isBranchAdmin && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label>Photo</Label>
-                    <Input
-                      type="file"
-                      accept="image/*"
-                      onChange={(e) => onPickPhoto(e.target.files?.[0] ?? null)}
-                    />
-                    {photoPreview ? (
-                      <img src={photoPreview} className="h-20 w-20 rounded object-cover mt-2" alt="preview" />
-                    ) : formData.employeePhotoUrl ? (
-                      <img src={formData.employeePhotoUrl} className="h-20 w-20 rounded object-cover mt-2" alt="photo" />
-                    ) : null}
-                  </div>
-                </div>
+              <CollapsibleFormGroup
+                title="Office contact"
+                expanded={isGroupExpanded("employment-office-contact")}
+                onToggle={() => toggleFormGroup("employment-office-contact")}
+              >
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <MultiValueField
+                  label="Office Mobile No."
+                  values={formData.businessPhones}
+                  onChange={(businessPhones) =>
+                    setFormData((p) => ({
+                      ...p,
+                      businessPhones,
+                      businessPhoneNo: primaryMultiValue(businessPhones),
+                    }))
+                  }
+                />
+                <MultiValueField
+                  label="Office Email ID"
+                  type="email"
+                  values={formData.businessEmails}
+                  onChange={(businessEmails) =>
+                    setFormData((p) => ({
+                      ...p,
+                      businessEmails,
+                      businessEmail: primaryMultiValue(businessEmails),
+                    }))
+                  }
+                />
+              </div>
+              </CollapsibleFormGroup>
+              </>
               )}
 
+              </div>
+              )}
+
+              {activeFormSection === "additional" && !isAdmin && (
+              <div className="space-y-4">
               {/* ==========================
                   EDUCATION (repeater)
                   ========================== */}
-              <div className="relative my-6">
-                <div className="absolute inset-0 flex items-center"><div className="w-full border-t-2 border-blue-200"></div></div>
-                <div className="relative flex justify-start"><span className="bg-white pr-3 text-sm font-semibold text-blue-700 uppercase tracking-wide">Education</span></div>
-              </div>
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <h3 className="text-lg font-semibold">Education</h3>
@@ -4343,10 +4355,6 @@ const addCombinedDevMap = () => {
               {/* ==========================
                   EXPERIENCE (repeater)
                   ========================== */}
-              <div className="relative my-6">
-                <div className="absolute inset-0 flex items-center"><div className="w-full border-t-2 border-blue-200"></div></div>
-                <div className="relative flex justify-start"><span className="bg-white pr-3 text-sm font-semibold text-blue-700 uppercase tracking-wide">Experience</span></div>
-              </div>
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <h3 className="text-lg font-semibold">Experience</h3>
@@ -4413,10 +4421,6 @@ const addCombinedDevMap = () => {
               {/* ==========================
                   BANK DETAILS (repeater)
                   ========================== */}
-              <div className="relative my-6">
-                <div className="absolute inset-0 flex items-center"><div className="w-full border-t-2 border-blue-200"></div></div>
-                <div className="relative flex justify-start"><span className="bg-white pr-3 text-sm font-semibold text-blue-700 uppercase tracking-wide">Bank Details</span></div>
-              </div>
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <h3 className="text-lg font-semibold">Bank Details</h3>
@@ -4472,15 +4476,52 @@ const addCombinedDevMap = () => {
                   ))
                 )}
               </div>
-              </>)}
-
-              {/* ==========================
-    ATTENDANCE DEVICE MAPPING 
-    ========================== */}
-              <div className="relative my-6">
-                <div className="absolute inset-0 flex items-center"><div className="w-full border-t-2 border-blue-200"></div></div>
-                <div className="relative flex justify-start"><span className="bg-white pr-3 text-sm font-semibold text-blue-700 uppercase tracking-wide">Device Mappings</span></div>
               </div>
+              )}
+
+              {activeFormSection === "attendance" && (
+              <div className="space-y-4">
+              <div className="space-y-3 rounded-lg border border-gray-200 p-4">
+                <h3 className="text-sm font-semibold text-gray-800">Mobile app & selfcare</h3>
+                <div className="space-y-2">
+                  <Label>Employee Type</Label>
+                  <select className="w-full rounded-md border px-3 py-2" value={formData.typeOfEmployee || "employee"} onChange={(e) => setFormData((p) => ({ ...p, typeOfEmployee: e.target.value }))}>
+                    <option value="employee">Employee</option>
+                  </select>
+                </div>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={!!formData.mobileAttendanceEnabled}
+                    disabled={!primaryMultiValue(formData.personalPhones).trim()}
+                    onChange={(e) => setFormData((p) => ({ ...p, mobileAttendanceEnabled: e.target.checked }))}
+                    className="rounded border-gray-300"
+                  />
+                  <span className="text-sm text-gray-700">Enable mobile app attendance (requires mobile number in Basic Information)</span>
+                </label>
+                <p className="text-xs text-gray-500 -mt-1 ml-6">
+                  When enabled, this employee punches in/out only via the mobile app and their device punches are ignored. When disabled, they punch in/out only via the assigned attendance device.
+                </p>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={!!formData.pwaShowLeaveBalance}
+                    onChange={(e) => setFormData((p) => ({ ...p, pwaShowLeaveBalance: e.target.checked }))}
+                    className="rounded border-gray-300"
+                  />
+                  <span className="text-sm text-gray-700">Show leave status bar in mobile app</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={!!formData.allowCreateTaskOnMobile}
+                    onChange={(e) => setFormData((p) => ({ ...p, allowCreateTaskOnMobile: e.target.checked }))}
+                    className="rounded border-gray-300"
+                  />
+                  <span className="text-sm text-gray-700">Allow employee to create tasks from mobile app</span>
+                </label>
+              </div>
+
 <div className="space-y-3">
   <div className="flex items-center justify-between">
     <h3 className="text-lg font-semibold">Attendance Device Mapping</h3>
@@ -4583,6 +4624,8 @@ const addCombinedDevMap = () => {
     ))
   )}
 </div>
+              </div>
+              )}
 
               <div className="flex justify-end gap-2 pt-4 border-t border-gray-200">
                 <Button type="button" variant="outline" onClick={handleCancel}>
@@ -4602,6 +4645,8 @@ const addCombinedDevMap = () => {
         open={!!(isViewing && viewRow)}
         onOpenChange={(v) => { if (!v) handleCancel(); }}
         title="Employee Details"
+        showHeaderCancel
+        cancelLabel="Close"
       >
         {viewRow && (
         <div>

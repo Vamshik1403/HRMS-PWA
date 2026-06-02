@@ -21,6 +21,7 @@ import { useRouter } from "next/navigation";
 import { FormDrawer } from "../components/ui/form-drawer";
 import { toast } from "sonner";
 import { getSidebarContext } from "../utils/sidebarContext";
+import { fetchGPSOnUserGesture } from "../utils/empGeolocation";
 
 // ---------------------------
 // Types aligned to backend
@@ -55,6 +56,9 @@ interface DeviceRead {
   serviceProviderName?: string | null;
   companyName?: string | null;
   branchName?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  address?: string | null;
 }
 
 interface ServiceProvider {
@@ -154,7 +158,12 @@ export function DeviceManagement() {
     deviceMake: "",
     deviceModel: "",
     deviceSN: "",
+    latitude: "",
+    longitude: "",
+    address: "",
   });
+
+  const [locationLoading, setLocationLoading] = useState(false);
 
   // ---------------------------
   // Load devices
@@ -396,6 +405,9 @@ export function DeviceManagement() {
       deviceMake: "",
       deviceModel: "",
       deviceSN: "",
+      latitude: "",
+      longitude: "",
+      address: "",
     };
 
     // Auto-set Service Provider, Company, and Branch for MANAGER (no UI display)
@@ -427,6 +439,64 @@ export function DeviceManagement() {
     setCoList([]);
     setBrList([]);
     setError(null);
+  };
+
+  const parseCoord = (v: string) => {
+    const n = parseFloat(v.trim());
+    return Number.isFinite(n) ? n : null;
+  };
+
+  const resolveDeviceAddress = async () => {
+    const lat = parseCoord(formData.latitude);
+    const lng = parseCoord(formData.longitude);
+    if (lat == null || lng == null) {
+      toast.error("Enter valid latitude and longitude first");
+      return;
+    }
+    setLocationLoading(true);
+    try {
+      const res = await fetch(
+        `${API.devices}/resolve-address?latitude=${encodeURIComponent(String(lat))}&longitude=${encodeURIComponent(String(lng))}`,
+      );
+      if (!res.ok) throw new Error(await res.text());
+      const data = await res.json();
+      setFormData((p) => ({ ...p, address: data.address || "" }));
+      if (!data.address) toast.message("Could not resolve an address for these coordinates");
+      else toast.success("Address resolved");
+    } catch (e: any) {
+      toast.error(e?.message || "Address lookup failed");
+    } finally {
+      setLocationLoading(false);
+    }
+  };
+
+  const useCurrentLocation = async () => {
+    setLocationLoading(true);
+    try {
+      const loc = await fetchGPSOnUserGesture();
+      setFormData((p) => ({
+        ...p,
+        latitude: String(loc.latitude),
+        longitude: String(loc.longitude),
+      }));
+      const res = await fetch(
+        `${API.devices}/resolve-address?latitude=${encodeURIComponent(String(loc.latitude))}&longitude=${encodeURIComponent(String(loc.longitude))}`,
+      );
+      if (res.ok) {
+        const data = await res.json();
+        setFormData((p) => ({
+          ...p,
+          latitude: String(loc.latitude),
+          longitude: String(loc.longitude),
+          address: data.address || "",
+        }));
+      }
+      toast.success("Location captured");
+    } catch (e: any) {
+      toast.error(e?.message || "Could not get location");
+    } finally {
+      setLocationLoading(false);
+    }
   };
 
   // ---------------------------
@@ -477,6 +547,19 @@ export function DeviceManagement() {
       companyID: finalCompanyID ?? undefined,
       branchesID: finalBranchesID ?? undefined,
     };
+    const lat = parseCoord(formData.latitude);
+    const lng = parseCoord(formData.longitude);
+    if (lat != null && lng != null) {
+      payload.latitude = lat;
+      payload.longitude = lng;
+    } else if (!formData.latitude.trim() && !formData.longitude.trim()) {
+      payload.latitude = null;
+      payload.longitude = null;
+    } else if (formData.latitude.trim() || formData.longitude.trim()) {
+      toast.error("Enter both latitude and longitude, or leave both empty");
+      setSaving(false);
+      return;
+    }
     if (formData.attendanceAuthType) {
       payload.authTypes = [`ATT:${formData.attendanceAuthType}`];
     }
@@ -562,6 +645,9 @@ export function DeviceManagement() {
       deviceMake: d.deviceMake ?? "",
       deviceModel: d.deviceModel ?? "",
       deviceSN: d.deviceSN ?? "",
+      latitude: d.latitude != null ? String(d.latitude) : "",
+      longitude: d.longitude != null ? String(d.longitude) : "",
+      address: d.address ?? "",
     });
   };
 
@@ -643,15 +729,6 @@ export function DeviceManagement() {
             >
               <Plus className="w-4 h-4 mr-1" />
               Add Device
-            </Button>
-          )}
-          {isAddingNew && (
-            <Button
-              variant="outline"
-              onClick={handleCancel}
-              className="text-sm"
-            >
-              <X className="w-4 h-4 mr-1" /> BACK
             </Button>
           )}
         </div>
@@ -877,6 +954,65 @@ export function DeviceManagement() {
                   placeholder="Enter device serial number"
                   required
                 />
+              </div>
+
+              <div className="space-y-3 rounded-lg border border-gray-200 bg-gray-50/60 p-4">
+                <div>
+                  <Label className="text-sm font-semibold text-gray-800">Device location</Label>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    Shown on the dashboard for employees who punch in through this device.
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={locationLoading}
+                    onClick={useCurrentLocation}
+                  >
+                    Use current location
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={locationLoading}
+                    onClick={resolveDeviceAddress}
+                  >
+                    {locationLoading ? "Looking up…" : "Look up address"}
+                  </Button>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Latitude</Label>
+                    <Input
+                      type="number"
+                      step="any"
+                      value={formData.latitude}
+                      onChange={(e) => setFormData((p) => ({ ...p, latitude: e.target.value }))}
+                      placeholder="e.g. 16.9944"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Longitude</Label>
+                    <Input
+                      type="number"
+                      step="any"
+                      value={formData.longitude}
+                      onChange={(e) => setFormData((p) => ({ ...p, longitude: e.target.value }))}
+                      placeholder="e.g. 73.3007"
+                    />
+                  </div>
+                </div>
+                {formData.address ? (
+                  <div className="space-y-1">
+                    <Label className="text-xs text-gray-500">Resolved address</Label>
+                    <p className="text-sm text-gray-800 bg-white border border-gray-200 rounded-md px-3 py-2">
+                      {formData.address}
+                    </p>
+                  </div>
+                ) : null}
               </div>
 
               <div className="flex justify-end gap-2 pt-4 border-t border-gray-200">

@@ -221,11 +221,6 @@ export function SystemUsersManagement() {
             <Plus className="w-4 h-4 mr-1" /> Add User
           </Button>
         )}
-        {(isAddingNew || isViewing) && (
-          <Button variant="outline" onClick={handleCancel} className="text-sm px-3 py-2">
-            <X className="w-4 h-4 mr-1" /> Cancel
-          </Button>
-        )}
       </div>
 
       {/* Add/Edit FormDrawer */}

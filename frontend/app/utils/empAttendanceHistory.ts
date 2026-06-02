@@ -119,6 +119,14 @@ export function formatPunchTime(iso: string | null | undefined) {
   return `${String(h12).padStart(2, "0")}:${String(m).padStart(2, "0")} ${ampm}`;
 }
 
+export function formatCoordinates(
+  rec: { latitude?: number | null; longitude?: number | null } | null | undefined,
+) {
+  if (!rec || rec.latitude == null || rec.longitude == null) return null;
+  return `${Number(rec.latitude).toFixed(5)}, ${Number(rec.longitude).toFixed(5)}`;
+}
+
+/** Single-line label (address + coordinates when both exist). */
 export function formatLocationLabel(
   rec:
     | { latitude?: number | null; longitude?: number | null; address?: string | null }
@@ -126,9 +134,24 @@ export function formatLocationLabel(
     | undefined,
 ) {
   if (!rec) return "—";
+  const coords = formatCoordinates(rec);
+  if (rec.address && coords) return `${rec.address} · ${coords}`;
   if (rec.address) return rec.address;
-  if (rec.latitude == null || rec.longitude == null) return "—";
-  return `${Number(rec.latitude).toFixed(5)}, ${Number(rec.longitude).toFixed(5)}`;
+  if (coords) return coords;
+  return "—";
+}
+
+export function formatLocationLines(
+  rec:
+    | { latitude?: number | null; longitude?: number | null; address?: string | null }
+    | null
+    | undefined,
+): { address: string | null; coordinates: string | null } {
+  if (!rec) return { address: null, coordinates: null };
+  return {
+    address: rec.address?.trim() || null,
+    coordinates: formatCoordinates(rec),
+  };
 }
 
 export function extractDayPunchTimes(records: AttendanceLocationRecord[]) {

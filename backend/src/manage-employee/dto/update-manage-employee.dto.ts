@@ -153,6 +153,9 @@ export class UpdateManageEmployeeDto {
   allowRotatingShift?: boolean;
   allowCreateTaskOnMobile?: boolean;
 
+  @IsOptional()
+  mobileAttendanceEnabled?: boolean;
+
   // Nested arrays (upsert)
   @IsOptional() @IsArray()
   @ValidateNested({ each: true })

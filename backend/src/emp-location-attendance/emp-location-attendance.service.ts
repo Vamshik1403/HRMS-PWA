@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
+import { Injectable, BadRequestException, Logger } from '@nestjs/common';
 import { wallClockInZoneToStorageDate } from '../common/device-punch-time';
 import { reverseGeocode } from '../common/reverse-geocode';
 import { PrismaService } from '../prisma/prisma.service';
@@ -10,6 +10,8 @@ type PunchType = (typeof VALID_TYPES)[number];
 
 @Injectable()
 export class EmpLocationAttendanceService {
+  private readonly logger = new Logger(EmpLocationAttendanceService.name);
+
   constructor(private prisma: PrismaService) {}
 
   /** Day bounds in app wall-clock storage (aligned with PWA punch times). */
@@ -154,6 +156,19 @@ export class EmpLocationAttendanceService {
       throw new BadRequestException('checkType must be CHECK_IN, CHECK_OUT, BREAK_IN, or BREAK_OUT');
     }
 
+    // Mobile attendance must be explicitly enabled for this employee. When it is
+    // disabled the employee is a device-only employee and may not punch via the
+    // PWA app at all.
+    const eligibility = await this.prisma.manageEmployee.findUnique({
+      where: { id: employeeId },
+      select: { mobileAttendanceEnabled: true },
+    });
+    if (!eligibility?.mobileAttendanceEnabled) {
+      throw new BadRequestException(
+        'Mobile app attendance is disabled for your account. Please punch using your assigned attendance device.',
+      );
+    }
+
     const now = wallClockInZoneToStorageDate();
     const { startOfDay, endOfDay } = this.dayWindow(now);
 
@@ -283,8 +298,12 @@ export class EmpLocationAttendanceService {
           }
         }
       }
-    } catch {
-      // Non-critical
+    } catch (err) {
+      // attendance_locations is the source of truth for PWA; mirror failures are logged
+      // so ops can investigate, but the employee punch must not fail after GPS capture.
+      this.logger.error(
+        `Failed to mirror ${dto.checkType} to process_att_logs for employee ${employeeId}: ${(err as Error)?.message || err}`,
+      );
     }
 
     return record;

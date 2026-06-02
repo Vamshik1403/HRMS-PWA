@@ -6,6 +6,7 @@ import { Button } from "../components/ui/button"
 import { Input } from "../components/ui/input"
 import { Label } from "../components/ui/label"
 import { FormDrawer } from "../components/ui/form-drawer";
+import { FormModal } from "../components/ui/form-modal";
 import {
   Table,
   TableBody,
@@ -1992,10 +1993,15 @@ export function LeaveApplicationsManagement() {
         
       </FormDrawer>
 
-      {/* Manager Approval Modal */}
-      <FormDrawer open={isViewDrawerOpen} onOpenChange={setIsViewDrawerOpen} title="View Leave Application" description="Leave application details (read-only).">
+      <FormModal
+        open={isViewDrawerOpen}
+        onOpenChange={setIsViewDrawerOpen}
+        title="View Leave Application"
+        description="Leave application details (read-only)."
+        size="lg"
+      >
         {viewingApplication && (
-          <div className="space-y-4 mt-2">
+          <div className="space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <Label>Employee</Label>
@@ -2106,15 +2112,19 @@ export function LeaveApplicationsManagement() {
                 </Button>
               </div>
             )}
-            <div className="flex justify-end pt-4">
-              <Button variant="outline" onClick={() => setIsViewDrawerOpen(false)}>Close</Button>
-            </div>
           </div>
         )}
-      </FormDrawer>
+      </FormModal>
 
-      <FormDrawer open={isManagerApprovalDialogOpen} onOpenChange={setIsManagerApprovalDialogOpen} title={"Manage Leave Approval"} description={`Assign leave types by date range (from–to). Unassigned days will not be approved. ${pendingDaysCount} day(s) not yet assigned.`}>
-          <div className="space-y-4 mt-4">
+      <FormModal
+        open={isManagerApprovalDialogOpen}
+        onOpenChange={setIsManagerApprovalDialogOpen}
+        title="Manage Leave Approval"
+        description={`Assign leave types by date range (from–to). Unassigned days will not be approved. ${pendingDaysCount} day(s) not yet assigned.`}
+        size="xl"
+        closeLabel="Cancel"
+      >
+          <div className="space-y-4">
             {managerApprovalApplication && (
               <>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
@@ -2334,7 +2344,7 @@ export function LeaveApplicationsManagement() {
               </div>
             )}
           </div>
-          <div className="flex justify-end gap-3 pt-4">
+          <div className="flex justify-end gap-3 border-t border-gray-100 pt-4 mt-2">
             <Button variant="outline" onClick={() => setIsManagerApprovalDialogOpen(false)}>
               Cancel
             </Button>
@@ -2346,8 +2356,7 @@ export function LeaveApplicationsManagement() {
               Submit approval{pendingDaysCount > 0 ? ` (${pendingDaysCount} day(s) not assigned)` : ""}
             </Button>
           </div>
-        
-      </FormDrawer>
+      </FormModal>
 
       {!isDialogOpen && (<>
       {/* Search and Filters */}

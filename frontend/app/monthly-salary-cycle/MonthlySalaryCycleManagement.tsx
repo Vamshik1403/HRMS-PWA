@@ -440,16 +440,6 @@ const runFetchBR = debounce(async (val: string) => {
             Add Salary Cycle
           </Button>
         )}
-        {isDialogOpen && (
-          <Button
-            variant="outline"
-            onClick={() => { setIsDialogOpen(false); }}
-            className="flex-shrink-0 text-sm px-3 py-2"
-          >
-            <ArrowLeft className="w-4 h-4 mr-1" />
-            Back
-          </Button>
-        )}
       </div>
 
       <FormDrawer open={isDialogOpen} onOpenChange={(o) => { setIsDialogOpen(o); if (!o) resetForm(); }} title={editingCycle ? "Edit Monthly Salary Cycle" : "Add New Monthly Salary Cycle"} description={editingCycle ? "Update the monthly salary cycle information below." : "Fill in the details to add a new monthly salary cycle."}>

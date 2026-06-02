@@ -1716,11 +1716,6 @@ const runFetchBR = (query: string) => {
             <Plus className="w-4 h-4 mr-1" /> Add Promotion & Transfers
           </Button>
         )}
-        {(isAddingNew || isViewing) && (
-          <Button variant="outline" onClick={() => { resetForm(); setIsAddingNew(false); setIsViewing(false); setViewRow(null); }} className="text-sm px-3 py-2">
-            <X className="w-4 h-4 mr-1" /> Cancel
-          </Button>
-        )}
       </div>
 
       {/* Add/Edit FormDrawer */}

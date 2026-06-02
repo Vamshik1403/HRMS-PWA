@@ -52,20 +52,24 @@ export class EmpLocationAttendanceController {
       const d = new Date(v);
       return Number.isNaN(d.getTime()) ? undefined : d;
     };
+    // Punch times are stored as wall-clock encoded in UTC, so the day bounds
+    // must be built in UTC too. Building them with local getters (as before)
+    // shifted the window by the server's timezone offset and could drop the
+    // current day's later check-ins from the history list.
+    let fromDate = parse(from);
+    if (fromDate) {
+      fromDate = new Date(
+        Date.UTC(fromDate.getUTCFullYear(), fromDate.getUTCMonth(), fromDate.getUTCDate(), 0, 0, 0, 0),
+      );
+    }
     let toDate = parse(to);
     if (toDate) {
       toDate = new Date(
-        toDate.getFullYear(),
-        toDate.getMonth(),
-        toDate.getDate(),
-        23,
-        59,
-        59,
-        999,
+        Date.UTC(toDate.getUTCFullYear(), toDate.getUTCMonth(), toDate.getUTCDate(), 23, 59, 59, 999),
       );
     }
     return this.svc.getMyRecords(this.getEmployeeId(req), {
-      from: parse(from),
+      from: fromDate,
       to: toDate,
     });
   }

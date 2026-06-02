@@ -733,15 +733,6 @@ export function DesignationManagement() {
               <Plus className="w-4 h-4 mr-1" /> Add Designation
             </Button>
           )}
-          {(isAddingNew || isViewing) && (
-            <Button
-              variant="outline"
-              onClick={handleCancel}
-              className="text-sm"
-            >
-              <X className="w-4 h-4 mr-1" /> Cancel
-            </Button>
-          )}
         </div>
       </div>
 

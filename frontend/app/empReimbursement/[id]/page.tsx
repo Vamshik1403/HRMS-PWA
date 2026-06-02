@@ -76,13 +76,30 @@ export default function EmpReimbursementDetailPage() {
 
         <p className="text-[11px] font-bold text-gray-400 uppercase mb-2">Expenses</p>
         <div className="space-y-2">
-          {(row.items || []).map((item, i) => (
-            <div key={i} className="bg-white rounded-xl border border-gray-100 px-3 py-2.5 text-[12px]">
-              <p className="font-semibold text-gray-900">{item.reimbursementType}</p>
-              <p className="text-gray-600 mt-0.5">{item.description || "—"}</p>
-              <p className="text-emerald-700 font-bold mt-1">₹{parseFloat(item.amount || "0").toFixed(2)}</p>
-            </div>
-          ))}
+          {(row.items || []).map((item, i) => {
+            const itemStatus = item.status || "Pending";
+            const statusClass =
+              itemStatus === "Approved"
+                ? "text-blue-700 bg-blue-50"
+                : itemStatus === "Rejected"
+                  ? "text-red-700 bg-red-50"
+                  : "text-amber-700 bg-amber-50";
+            return (
+              <div key={i} className="bg-white rounded-xl border border-gray-100 px-3 py-2.5 text-[12px]">
+                <div className="flex items-start justify-between gap-2">
+                  <p className="font-semibold text-gray-900">{item.reimbursementType}</p>
+                  <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${statusClass}`}>
+                    {itemStatus}
+                  </span>
+                </div>
+                <p className="text-gray-600 mt-0.5">{item.description || "—"}</p>
+                {item.paidStatus === "Paid" && (
+                  <p className="text-[11px] text-green-700 font-medium mt-0.5">Paid</p>
+                )}
+                <p className="text-emerald-700 font-bold mt-1">₹{parseFloat(item.amount || "0").toFixed(2)}</p>
+              </div>
+            );
+          })}
         </div>
 
         {row.status?.toLowerCase().includes("partly") && (

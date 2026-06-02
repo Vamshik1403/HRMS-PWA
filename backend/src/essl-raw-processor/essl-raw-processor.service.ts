@@ -18,6 +18,7 @@ type EmpMapping = {
   branchName: string | null;
   departmentName: string | null;
   deviceID: number;
+  mobileAttendanceEnabled: boolean;
 };
 
 type TokenMapping = {
@@ -130,6 +131,7 @@ export class EsslRawProcessorService {
             id: true,
             employeeFirstName: true,
             employeeLastName: true,
+            mobileAttendanceEnabled: true,
             company: { select: { companyName: true } },
             branches: { select: { branchName: true } },
             departments: { select: { departmentName: true } },
@@ -151,6 +153,7 @@ export class EsslRawProcessorService {
         branchName: row.manageEmployee.branches?.branchName ?? null,
         departmentName: row.manageEmployee.departments?.departmentName ?? null,
         deviceID: row.device.id,
+        mobileAttendanceEnabled: !!row.manageEmployee.mobileAttendanceEnabled,
       };
       for (const key of mappingKeys(row.device.deviceSN, row.deviceEmpCode)) {
         empMap.set(key, info);
@@ -283,6 +286,14 @@ export class EsslRawProcessorService {
         this.logger.warn(
           `No EmpDeviceMapping for deviceSN=${deviceSN} deviceEmpCode=${userId} (raw log id=${log.id})`,
         );
+        continue;
+      }
+
+      // Mobile-attendance employees punch only via the PWA. Mark the raw row as
+      // processed (archived) but do not mirror device punches into the
+      // attendance source of truth.
+      if (empInfo.mobileAttendanceEnabled) {
+        exportedIds.push(log.id);
         continue;
       }
 

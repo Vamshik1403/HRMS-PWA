@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { Icon } from "@iconify/react";
 import type { TodayStatus } from "../../hooks/useEmpPunch";
 import { useEmpPunch } from "../../hooks/useEmpPunch";
-import { formatLocationLabel } from "../../utils/empAttendanceHistory";
+import { formatLocationLines } from "../../utils/empAttendanceHistory";
 
 /** Punch times stored as wall-clock IST in UTC — use UTC getters for display. */
 function fmt(iso: string) {
@@ -128,28 +128,8 @@ export function EmpTodayStatusCard({ todayStatus, loading, onStatusUpdate }: Emp
 
       {(checkIn || checkOut) && (
         <div className="mx-4 mb-3 rounded-xl bg-gray-50/80 border border-gray-100 px-3 py-2 space-y-1.5">
-          {checkIn && (
-            <div className="flex items-start gap-2">
-              <Icon icon="solar:login-2-bold-duotone" className="w-4 h-4 text-gray-400 shrink-0 mt-0.5" />
-              <div className="min-w-0 flex-1">
-                <p className="text-[9px] font-bold text-gray-400 uppercase">Mark IN location</p>
-                <p className="text-[11px] text-gray-600 line-clamp-2" title={formatLocationLabel(checkIn)}>
-                  {formatLocationLabel(checkIn)}
-                </p>
-              </div>
-            </div>
-          )}
-          {checkOut && (
-            <div className="flex items-start gap-2">
-              <Icon icon="solar:logout-2-bold-duotone" className="w-4 h-4 text-gray-400 shrink-0 mt-0.5" />
-              <div className="min-w-0 flex-1">
-                <p className="text-[9px] font-bold text-gray-400 uppercase">Mark OUT location</p>
-                <p className="text-[11px] text-gray-600 line-clamp-2" title={formatLocationLabel(checkOut)}>
-                  {formatLocationLabel(checkOut)}
-                </p>
-              </div>
-            </div>
-          )}
+          {checkIn && <PunchLocationBlock label="Mark IN location" icon="solar:login-2-bold-duotone" punch={checkIn} />}
+          {checkOut && <PunchLocationBlock label="Mark OUT location" icon="solar:logout-2-bold-duotone" punch={checkOut} />}
         </div>
       )}
 
@@ -205,6 +185,11 @@ export function EmpTodayStatusCard({ todayStatus, loading, onStatusUpdate }: Emp
             </>
           )}
           {(canCheckOut || canBreakIn || canBreakOut) && (
+            <>
+            <p className="text-[11px] text-center text-gray-500 px-1">
+              Use <span className="font-semibold text-gray-700">Mark OUT</span> when you leave for the day.
+              {canBreakOut ? " End Break only resumes work — it does not check you out." : null}
+            </p>
             <div className={`grid gap-2 ${canCheckOut && (canBreakIn || canBreakOut) ? "grid-cols-2" : "grid-cols-1"}`}>
               {canCheckOut && (
                 <button
@@ -240,6 +225,7 @@ export function EmpTodayStatusCard({ todayStatus, loading, onStatusUpdate }: Emp
                 </button>
               )}
             </div>
+            </>
           )}
         </div>
       )}
@@ -288,6 +274,37 @@ export function EmpTodayStatusCard({ todayStatus, loading, onStatusUpdate }: Emp
           </div>
         </>
       )}
+    </div>
+  );
+}
+
+function PunchLocationBlock({
+  label,
+  icon,
+  punch,
+}: {
+  label: string;
+  icon: string;
+  punch: { latitude?: number | null; longitude?: number | null; address?: string | null };
+}) {
+  const { address, coordinates } = formatLocationLines(punch);
+  const title = [address, coordinates].filter(Boolean).join(" · ") || "—";
+  return (
+    <div className="flex items-start gap-2">
+      <Icon icon={icon} className="w-4 h-4 text-gray-400 shrink-0 mt-0.5" />
+      <div className="min-w-0 flex-1">
+        <p className="text-[9px] font-bold text-gray-400 uppercase">{label}</p>
+        {address ? (
+          <p className="text-[11px] text-gray-600 line-clamp-2" title={title}>
+            {address}
+          </p>
+        ) : (
+          <p className="text-[11px] text-gray-400">—</p>
+        )}
+        {coordinates ? (
+          <p className="text-[10px] font-mono text-gray-500 mt-0.5">{coordinates}</p>
+        ) : null}
+      </div>
     </div>
   );
 }

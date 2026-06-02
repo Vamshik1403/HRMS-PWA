@@ -1,11 +1,15 @@
 import { Injectable } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
+import { wallClockInZoneToStorageDate } from '../common/device-punch-time';
 import { PrismaService } from '../prisma/prisma.service';
 import {
+  collapsePunchBursts,
   computeDayStatus,
   type ComputeDayStatusInput,
   parsePunchTime,
   statusDisplayLabel,
   timeToMinutes,
+  WEEKDAYS,
 } from './attendance-status.engine';
 
 export type TodayOverviewQuery = {
@@ -45,14 +49,18 @@ function sortPunchTimes(times: string[]): string[] {
   return [...times].sort((a, b) => timeToMinutes(a) - timeToMinutes(b));
 }
 
-/** Drop consecutive duplicate punch times (same as report row building). */
+/**
+ * Drop exact duplicate punch times, then collapse accidental burst punches
+ * (rapid re-taps within MIN_PUNCH_GAP_MIN) so a stray punch a minute after
+ * check-in is never paired as the check-out.
+ */
 function dedupeSortedPunches(times: string[]): string[] {
   const sorted = sortPunchTimes(times);
-  const out: string[] = [];
+  const exact: string[] = [];
   for (const t of sorted) {
-    if (out.length === 0 || out[out.length - 1] !== t) out.push(t);
+    if (exact.length === 0 || exact[exact.length - 1] !== t) exact.push(t);
   }
-  return out;
+  return collapsePunchBursts(exact);
 }
 
 function punchInOut(times: string[]): { inTime: string | null; outTime: string | null } {
@@ -72,9 +80,11 @@ export class DashboardOverviewService {
   constructor(private readonly prisma: PrismaService) {}
 
   async getTodayOverview(query: TodayOverviewQuery) {
-    const today = dateKeyLocal(new Date());
+    const nowDate = new Date();
+    const today = dateKeyLocal(nowDate);
     const monthStart = `${today.slice(0, 7)}-01`;
     const tomorrow = nextDateKey(today);
+    const nowMin = nowDate.getHours() * 60 + nowDate.getMinutes();
 
     const employeeWhere: Record<string, unknown> = {};
     if (query.companyID != null) employeeWhere.companyID = query.companyID;
@@ -97,6 +107,8 @@ export class DashboardOverviewService {
         employeeLastName: true,
         workShiftID: true,
         attendancePolicyID: true,
+        mobileAttendanceEnabled: true,
+        maxHoursPerDay: true,
         workShift: { include: { workShiftDay: true } },
         attendancePolicy: true,
         empWorkShift: {
@@ -119,6 +131,30 @@ export class DashboardOverviewService {
     }
 
     const empIds = employees.map((e) => e.id);
+    const mobileEmpIds = employees.filter((e) => e.mobileAttendanceEnabled).map((e) => e.id);
+    const pwaDayAnchor = wallClockInZoneToStorageDate(nowDate);
+    const pwaDayStart = new Date(
+      Date.UTC(
+        pwaDayAnchor.getUTCFullYear(),
+        pwaDayAnchor.getUTCMonth(),
+        pwaDayAnchor.getUTCDate(),
+        0,
+        0,
+        0,
+        0,
+      ),
+    );
+    const pwaDayEnd = new Date(
+      Date.UTC(
+        pwaDayAnchor.getUTCFullYear(),
+        pwaDayAnchor.getUTCMonth(),
+        pwaDayAnchor.getUTCDate(),
+        23,
+        59,
+        59,
+        999,
+      ),
+    );
     const companyIds = [...new Set(employees.map((e) => e.companyID).filter(Boolean))] as number[];
     const branchIds = [...new Set(employees.map((e) => e.branchesID).filter(Boolean))] as number[];
     const policyIds = [
@@ -168,7 +204,7 @@ export class DashboardOverviewService {
             lte: new Date(`${tomorrow}T23:59:59`),
           },
         },
-        select: { manage_employee_id: true, punch_time: true },
+        select: { manage_employee_id: true, punch_time: true, device_sn: true },
         orderBy: { punch_time: 'asc' },
         take: 200000,
       }),
@@ -223,6 +259,53 @@ export class DashboardOverviewService {
       }),
     ]);
 
+    // PWA punches (CHECK_IN / CHECK_OUT only) — authoritative for mobile-attendance employees.
+    const mobilePwaRecords =
+      mobileEmpIds.length > 0
+        ? await this.prisma.attendanceLocation.findMany({
+            where: {
+              employeeId: { in: mobileEmpIds },
+              checkinTime: { gte: pwaDayStart, lte: pwaDayEnd },
+              checkType: { in: ['CHECK_IN', 'CHECK_OUT'] },
+            },
+            orderBy: { checkinTime: 'asc' },
+            select: {
+              employeeId: true,
+              checkType: true,
+              checkinTime: true,
+              address: true,
+            },
+          })
+        : [];
+
+    type PwaDayRollup = {
+      inTimes: string[];
+      outTimes: string[];
+      inAddr: string | null;
+      outAddr: string | null;
+    };
+    const pwaByEmp = new Map<number, PwaDayRollup>();
+    for (const rec of mobilePwaRecords) {
+      const parsed = parsePunchTime(String(rec.checkinTime));
+      if (!parsed || parsed.dateKey !== today) continue;
+      if (!pwaByEmp.has(rec.employeeId)) {
+        pwaByEmp.set(rec.employeeId, {
+          inTimes: [],
+          outTimes: [],
+          inAddr: null,
+          outAddr: null,
+        });
+      }
+      const row = pwaByEmp.get(rec.employeeId)!;
+      if (rec.checkType === 'CHECK_IN') {
+        row.inTimes.push(parsed.timeStr);
+        if (!row.inAddr && rec.address?.trim()) row.inAddr = rec.address.trim();
+      } else if (rec.checkType === 'CHECK_OUT') {
+        row.outTimes.push(parsed.timeStr);
+        if (rec.address?.trim()) row.outAddr = rec.address.trim();
+      }
+    }
+
     // Today's punch rows with location/source detail (small, today-only query).
     // Used to surface the exact punch address + whether it came from the mobile
     // app (GPS) or a biometric device on the admin dashboard.
@@ -238,11 +321,36 @@ export class DashboardOverviewService {
         manage_employee_id: true,
         punch_time: true,
         device_sn: true,
+        device_id: true,
         device_name: true,
         raw_body: true,
       },
       orderBy: { punch_time: 'asc' },
     });
+
+    const deviceSnSet = new Set<string>();
+    const deviceIdSet = new Set<number>();
+    for (const log of todayLocationLogs) {
+      if (log.device_sn && log.device_sn !== 'LOCATION_APP') deviceSnSet.add(log.device_sn);
+      if (log.device_id != null) deviceIdSet.add(log.device_id);
+    }
+    const deviceLocOr: Prisma.DevicesWhereInput[] = [];
+    if (deviceIdSet.size > 0) deviceLocOr.push({ id: { in: [...deviceIdSet] } });
+    if (deviceSnSet.size > 0) deviceLocOr.push({ deviceSN: { in: [...deviceSnSet] } });
+    const deviceRows =
+      deviceLocOr.length > 0
+        ? await this.prisma.devices.findMany({
+            where: { OR: deviceLocOr },
+            select: { id: true, deviceSN: true, address: true, latitude: true, longitude: true },
+          })
+        : [];
+    const addressByDeviceId = new Map<number, string | null>();
+    const addressByDeviceSn = new Map<string, string | null>();
+    for (const d of deviceRows) {
+      const addr = d.address?.trim() || null;
+      addressByDeviceId.set(d.id, addr);
+      addressByDeviceSn.set(d.deviceSN, addr);
+    }
 
     type PunchLoc = { source: 'app' | 'device'; address: string | null; deviceName: string | null };
     const locByEmp = new Map<number, { first: PunchLoc; last: PunchLoc }>();
@@ -259,6 +367,11 @@ export class DashboardOverviewService {
         } catch {
           address = null;
         }
+      } else if (!isApp) {
+        address =
+          (log.device_id != null ? addressByDeviceId.get(log.device_id) : null) ??
+          (log.device_sn ? addressByDeviceSn.get(log.device_sn) : null) ??
+          null;
       }
       const loc: PunchLoc = {
         source: isApp ? 'app' : 'device',
@@ -270,12 +383,33 @@ export class DashboardOverviewService {
       else existing.last = loc;
     }
 
+    for (const [empId, pwa] of pwaByEmp) {
+      if (pwa.inTimes.length === 0 && pwa.outTimes.length === 0) continue;
+      locByEmp.set(empId, {
+        first: {
+          source: 'app',
+          address: pwa.inAddr,
+          deviceName: 'Location Attendance App',
+        },
+        last: {
+          source: 'app',
+          address: pwa.outTimes.length > 0 ? pwa.outAddr : pwa.inAddr,
+          deviceName: 'Location Attendance App',
+        },
+      });
+    }
+
     const formatPunchLocation = (loc: PunchLoc | undefined): string | null => {
-      // Show the human-readable punch address only. Device (biometric) punches
-      // carry no GPS, so they have no address to display.
       if (!loc) return null;
       return loc.address || null;
     };
+
+    // Per-employee attendance channel: mobile-attendance employees count only
+    // PWA (LOCATION_APP) punches; everyone else counts only device punches.
+    // This enforces device/mobile exclusivity even for already-synced rows.
+    const mobileEnabledById = new Map<number, boolean>(
+      employees.map((e) => [e.id, !!e.mobileAttendanceEnabled]),
+    );
 
     const punchMap: PunchMap = new Map();
     for (const log of processLogs) {
@@ -285,11 +419,24 @@ export class DashboardOverviewService {
       if (parsed.dateKey < monthStart || parsed.dateKey > tomorrow) continue;
 
       const empId = log.manage_employee_id;
+      const isAppPunch = log.device_sn === 'LOCATION_APP';
+      const mobileEnabled = mobileEnabledById.get(empId) ?? false;
+      // Drop the channel that does not apply to this employee.
+      if (mobileEnabled ? !isAppPunch : isAppPunch) continue;
+
       if (!punchMap.has(empId)) punchMap.set(empId, {});
       const row = punchMap.get(empId)!;
       if (!row[parsed.dateKey]) row[parsed.dateKey] = [];
       row[parsed.dateKey].push(parsed.timeStr);
       row[parsed.dateKey] = dedupeSortedPunches(row[parsed.dateKey]);
+    }
+
+    // Mobile-attendance employees: use PWA CHECK_IN/CHECK_OUT times (not break punches).
+    for (const [empId, pwa] of pwaByEmp) {
+      const times = dedupeSortedPunches([...pwa.inTimes, ...pwa.outTimes]);
+      if (times.length === 0) continue;
+      if (!punchMap.has(empId)) punchMap.set(empId, {});
+      punchMap.get(empId)![today] = times;
     }
 
     const shiftById = new Map(
@@ -468,11 +615,42 @@ export class DashboardOverviewService {
         noCheckoutTracker,
       });
 
-      statusCounts[status.type] = (statusCounts[status.type] || 0) + 1;
+      // While an employee has checked in but not yet checked out, the day is
+      // still in progress — show "Present" instead of "No checkout" until the
+      // shift end (+ checkout buffer) and the employee's max working hours have
+      // passed. Only after that window do we surface a missing check-out.
+      let effStatus = status;
+      if (status.type === 'SINGLE_PUNCH') {
+        const firstPunch = (empPunches[today] || [])[0] || null;
+        if (firstPunch) {
+          const dow = WEEKDAYS[new Date(`${today}T12:00:00`).getDay()];
+          const todayShiftDay = (workShift?.workShiftDay || []).find(
+            (d) => d.weekDay === dow && d.shiftType === 'WORK',
+          );
+          const maxHours = parseFloat(String(emp.maxHoursPerDay || '')) || 0;
+          const firstMin = timeToMinutes(firstPunch);
+          let windowEnd = 0;
+          if (todayShiftDay) {
+            const startMin = timeToMinutes(todayShiftDay.startTime || '');
+            const endMin = timeToMinutes(todayShiftDay.endTime || '');
+            const spansMidnight = endMin < startMin;
+            const buffer = (policy?.checkout_end_after_min as number) || 0;
+            windowEnd = (spansMidnight ? endMin + 1440 : endMin) + buffer;
+          }
+          if (maxHours > 0) windowEnd = Math.max(windowEnd, firstMin + maxHours * 60);
+          if (windowEnd === 0) windowEnd = firstMin + (maxHours > 0 ? maxHours * 60 : 600);
+          const nowNightAware = nowMin < firstMin ? nowMin + 1440 : nowMin;
+          if (nowNightAware <= windowEnd) {
+            effStatus = { ...status, type: 'PRESENT', label: 'P' };
+          }
+        }
+      }
+
+      statusCounts[effStatus.type] = (statusCounts[effStatus.type] || 0) + 1;
 
       const { inTime, outTime } = punchInOut(todayPunches);
 
-      switch (status.type) {
+      switch (effStatus.type) {
         case 'PRESENT':
         case 'OT':
           summary.present++;
@@ -481,13 +659,9 @@ export class DashboardOverviewService {
           summary.present++;
           summary.lateMark++;
           break;
-        case 'OT':
-          summary.present++;
-          summary.ot++;
-          break;
         case 'HALF_DAY':
           summary.halfDay++;
-          if (!status.hasPunches) summary.absent++;
+          if (!effStatus.hasPunches) summary.absent++;
           break;
         case 'SINGLE_PUNCH':
           summary.noCheckout++;
@@ -507,10 +681,10 @@ export class DashboardOverviewService {
           break;
         case 'REGULARIZATION':
           summary.regularized++;
-          if (status.hasPunches) summary.present++;
+          if (effStatus.hasPunches) summary.present++;
           break;
         default:
-          if (status.hasPunches) summary.present++;
+          if (effStatus.hasPunches) summary.present++;
           else summary.absent++;
       }
 
@@ -523,10 +697,10 @@ export class DashboardOverviewService {
         departmentNameID: emp.departmentNameID,
         inTime,
         outTime,
-        statusType: status.type,
-        statusLabel: status.label,
-        statusDisplay: statusDisplayLabel(status.type, status.label),
-        hasPunches: status.hasPunches,
+        statusType: effStatus.type,
+        statusLabel: effStatus.label,
+        statusDisplay: statusDisplayLabel(effStatus.type, effStatus.label),
+        hasPunches: effStatus.hasPunches,
         inLocation: formatPunchLocation(empLoc?.first),
         outLocation: formatPunchLocation(empLoc?.last),
       });

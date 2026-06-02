@@ -1,4 +1,15 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, ParseIntPipe } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Patch,
+  Param,
+  Delete,
+  ParseIntPipe,
+  Query,
+  BadRequestException,
+} from '@nestjs/common';
 import { DevicesService } from './devices.service';
 import { CreateDeviceDto } from './dto/create-device.dto';
 import { UpdateDeviceDto } from './dto/update-device.dto';
@@ -15,6 +26,20 @@ export class DevicesController {
   @Get()
   findAll() {
     return this.devicesService.findAll();
+  }
+
+  @Get('resolve-address')
+  async resolveAddress(
+    @Query('latitude') latitude?: string,
+    @Query('longitude') longitude?: string,
+  ) {
+    const lat = Number(latitude);
+    const lng = Number(longitude);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+      throw new BadRequestException('Valid latitude and longitude are required');
+    }
+    const address = await this.devicesService.resolveAddress(lat, lng);
+    return { address };
   }
 
   @Get(':id')

@@ -18,7 +18,13 @@ export interface ReimbursementRow {
   taskProjectID?: number | null;
   amount: number;
   status: string;
-  items?: { reimbursementType?: string; amount?: string; description?: string }[];
+  items?: {
+    reimbursementType?: string;
+    amount?: string;
+    description?: string;
+    status?: string;
+    paidStatus?: string;
+  }[];
   serviceProviderID?: number;
   companyID?: number;
   branchesID?: number;
@@ -59,9 +65,20 @@ export function EmpReimbursementMobile() {
       const mapped = (Array.isArray(data) ? data : []).map((r: any) => {
         const items =
           Array.isArray(r.items) && r.items.length > 0
-            ? r.items
+            ? r.items.map((i: any) => ({
+                reimbursementType: i.reimbursementType,
+                amount: i.amount,
+                description: i.description,
+                status: i.status || "Pending",
+                paidStatus: i.paidStatus,
+              }))
             : r.reimbursementType
-              ? [{ reimbursementType: r.reimbursementType, amount: r.amount, description: r.description }]
+              ? [{
+                  reimbursementType: r.reimbursementType,
+                  amount: r.amount,
+                  description: r.description,
+                  status: r.status || "Pending",
+                }]
               : [];
         const amt = items.reduce((s: number, i: any) => s + parseFloat(i.amount || "0"), 0);
         return {

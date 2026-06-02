@@ -7,7 +7,7 @@ import EmpMobileLayout from "../../components/layout/EmpMobileLayout";
 import {
   decodeDateKey,
   extractDayPunchTimes,
-  formatLocationLabel,
+  formatLocationLines,
   formatPunchTime,
   punchTypeLabel,
   type AttendanceLocationRecord,
@@ -210,15 +210,9 @@ export default function EmpHistoryDayPage() {
             <p className="text-[12px] text-gray-500 pt-1 border-t border-gray-100">
               Work {summary.workLabel} · Break {summary.breakLabel}
             </p>
-            <div className="text-[11px] text-gray-500 space-y-1 pt-1 border-t border-gray-100">
-              <p>
-                <span className="font-semibold text-gray-600">Mark IN location: </span>
-                <span className="font-mono">{formatLocationLabel(dayPunches.checkIn)}</span>
-              </p>
-              <p>
-                <span className="font-semibold text-gray-600">Mark OUT location: </span>
-                <span className="font-mono">{formatLocationLabel(dayPunches.checkOut)}</span>
-              </p>
+            <div className="text-[11px] text-gray-500 space-y-2 pt-1 border-t border-gray-100">
+              <LocationDetail label="Mark IN location" punch={dayPunches.checkIn} />
+              <LocationDetail label="Mark OUT location" punch={dayPunches.checkOut} />
             </div>
           </div>
         )}
@@ -253,18 +247,23 @@ export default function EmpHistoryDayPage() {
                       {r.accuracy != null && (
                         <p className="text-[11px] text-gray-400 mt-1">GPS ±{Math.round(r.accuracy)}m</p>
                       )}
-                      {r.address ? (
-                        <p className="text-[11px] text-gray-500 mt-0.5 flex items-start gap-1">
-                          <Icon icon="solar:map-point-bold-duotone" className="w-3.5 h-3.5 text-gray-400 shrink-0 mt-px" />
-                          <span className="min-w-0">{r.address}</span>
-                        </p>
-                      ) : (
-                        r.latitude != null && r.longitude != null && (
-                          <p className="text-[11px] text-gray-400 mt-0.5 truncate">
-                            {Number(r.latitude).toFixed(5)}, {Number(r.longitude).toFixed(5)}
-                          </p>
-                        )
-                      )}
+                      {(() => {
+                        const { address, coordinates } = formatLocationLines(r);
+                        if (!address && !coordinates) return null;
+                        return (
+                          <div className="mt-0.5 space-y-0.5">
+                            {address ? (
+                              <p className="text-[11px] text-gray-500 flex items-start gap-1">
+                                <Icon icon="solar:map-point-bold-duotone" className="w-3.5 h-3.5 text-gray-400 shrink-0 mt-px" />
+                                <span className="min-w-0">{address}</span>
+                              </p>
+                            ) : null}
+                            {coordinates ? (
+                              <p className="text-[10px] font-mono text-gray-400 pl-5">{coordinates}</p>
+                            ) : null}
+                          </div>
+                        );
+                      })()}
                     </div>
                   ))}
                 </div>
@@ -332,5 +331,22 @@ export default function EmpHistoryDayPage() {
         )}
       </div>
     </EmpMobileLayout>
+  );
+}
+
+function LocationDetail({
+  label,
+  punch,
+}: {
+  label: string;
+  punch: { latitude?: number | null; longitude?: number | null; address?: string | null } | null;
+}) {
+  const { address, coordinates } = formatLocationLines(punch);
+  return (
+    <div>
+      <p className="font-semibold text-gray-600">{label}</p>
+      {address ? <p className="text-gray-600 mt-0.5">{address}</p> : <p className="text-gray-400 mt-0.5">—</p>}
+      {coordinates ? <p className="font-mono text-[10px] text-gray-500 mt-0.5">{coordinates}</p> : null}
+    </div>
   );
 }

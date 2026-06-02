@@ -208,6 +208,7 @@ for (const log of logs) {
     select: {
       employeeFirstName: true,
       employeeLastName: true,
+      mobileAttendanceEnabled: true,
       company: { select: { companyName: true } },
       branches: { select: { branchName: true } },
       departments: { select: { departmentName: true } },
@@ -215,7 +216,7 @@ for (const log of logs) {
   });
   const username = `${emp?.employeeFirstName || ''} ${emp?.employeeLastName || ''}`.trim();
 
-  // ✅ This log is valid → queue for EmpAttendanceLogs insertion
+  // ✅ This log is valid → queue for EmpAttendanceLogs insertion (raw archive)
   insertRows.push({
     serviceProviderID: dev.serviceProviderID ?? 0,
     companyID:         dev.companyID ?? 0,
@@ -232,24 +233,29 @@ for (const log of logs) {
     mobileDeviceInfo:  null,
   });
 
-  // ✅ Also queue for process_att_logs (used by Dashboard present & Canteen check-in)
-  processAttRows.push({
-    device_sn:          dev.deviceSN,
-    user_id:            log.userId,
-    username,
-    punch_time:         log.logTime ? devicePunchToStorageDate(log.logTime) : null,
-    company_name:       emp?.company?.companyName ?? null,
-    branch_name:        emp?.branches?.branchName ?? null,
-    department_name:    emp?.departments?.departmentName ?? null,
-    device_emp_code:    log.userId,
-    manage_employee_id: mapping.manageEmployeeID,
-    device_id:          dev.id,
-    device_name:        dev.deviceName,
-    device_type:        deviceType,
-    auth_type:          authType,
-    raw_body:           log.rawData,
-    status:             '0',
-  });
+  // ✅ Only mirror device punches into process_att_logs (the attendance source
+  // of truth used by the dashboard, reports & salary) for employees who punch
+  // via device. Mobile-attendance employees punch only through the PWA, so
+  // their device punches are archived (above) but excluded from attendance.
+  if (!emp?.mobileAttendanceEnabled) {
+    processAttRows.push({
+      device_sn:          dev.deviceSN,
+      user_id:            log.userId,
+      username,
+      punch_time:         log.logTime ? devicePunchToStorageDate(log.logTime) : null,
+      company_name:       emp?.company?.companyName ?? null,
+      branch_name:        emp?.branches?.branchName ?? null,
+      department_name:    emp?.departments?.departmentName ?? null,
+      device_emp_code:    log.userId,
+      manage_employee_id: mapping.manageEmployeeID,
+      device_id:          dev.id,
+      device_name:        dev.deviceName,
+      device_type:        deviceType,
+      auth_type:          authType,
+      raw_body:           log.rawData,
+      status:             '0',
+    });
+  }
 
   successIds.push(log.id);
 
@@ -261,6 +267,7 @@ for (const log of logs) {
     employeeId: mapping.manageEmployeeID,
     punchTimeStamp: log.logTime,
     authType,
+    mobileOnly: !!emp?.mobileAttendanceEnabled,
   });
 }
 

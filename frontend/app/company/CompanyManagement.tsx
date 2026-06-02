@@ -483,15 +483,6 @@ export function CompanyManagement() {
               <Plus className="w-4 h-4 mr-1" /> Add Company
             </Button>
           )}
-          {(isAddingNew || isViewing) && !isNonSuperAdmin && (
-            <Button
-              variant="outline"
-              onClick={handleCancel}
-              className="text-sm"
-            >
-              <X className="w-4 h-4 mr-1" /> BACK
-            </Button>
-          )}
         </div>
       </div>
 

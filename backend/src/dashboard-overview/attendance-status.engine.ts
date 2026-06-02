@@ -40,13 +40,42 @@ export function parsePunchTime(punchTime: string): { dateKey: string; timeStr: s
   return formatDevicePunchStorage(punchTime);
 }
 
-export function dedupeSortedPunchList(times: string[]): string[] {
-  const sorted = [...times].sort((a, b) => timeToMinutes(a) - timeToMinutes(b));
+/**
+ * Minimum gap (minutes) between two consecutive punches for the later one to be
+ * treated as a distinct attendance event. Punches closer than this are accidental
+ * re-taps (an employee punching twice/thrice in quick succession on the device)
+ * and are collapsed into a single punch so a stray morning punch is never paired
+ * as the check-out.
+ */
+export const MIN_PUNCH_GAP_MIN = 10;
+
+/**
+ * Collapse consecutive punches that fall within `gapMin` minutes of the previous
+ * kept punch. Input must be sorted ascending. Genuinely separated punches (a real
+ * check-out hours later) are preserved; rapid duplicate taps are merged.
+ */
+export function collapsePunchBursts(sortedTimes: string[], gapMin = MIN_PUNCH_GAP_MIN): string[] {
   const out: string[] = [];
-  for (const t of sorted) {
-    if (out.length === 0 || out[out.length - 1] !== t) out.push(t);
+  for (const t of sortedTimes) {
+    if (out.length === 0) {
+      out.push(t);
+      continue;
+    }
+    const prev = timeToMinutes(out[out.length - 1]);
+    if (timeToMinutes(t) - prev >= gapMin) out.push(t);
   }
   return out;
+}
+
+export function dedupeSortedPunchList(times: string[]): string[] {
+  const sorted = [...times].sort((a, b) => timeToMinutes(a) - timeToMinutes(b));
+  const exactDeduped: string[] = [];
+  for (const t of sorted) {
+    if (exactDeduped.length === 0 || exactDeduped[exactDeduped.length - 1] !== t) {
+      exactDeduped.push(t);
+    }
+  }
+  return collapsePunchBursts(exactDeduped);
 }
 
 export function timeToMinutes(timeStr: string): number {

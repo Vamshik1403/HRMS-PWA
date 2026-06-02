@@ -10,6 +10,7 @@ import {
   DialogHeader, DialogTitle,
 } from "../components/ui/dialog"  
 import { FormDrawer } from "../components/ui/form-drawer"
+import { FormModal } from "../components/ui/form-modal"
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "../components/ui/table"
@@ -42,6 +43,29 @@ interface EmployeeBankDetails {
   accNumber: string
   ifscCode: string
   upi: string
+}
+
+function reimbursementHasUnpaidApprovedItems(r: Reimbursement): boolean {
+  const items = r.items ?? []
+  if (items.length > 0) {
+    return items.some((i) => i.status === "Approved" && i.paidStatus !== "Paid")
+  }
+  return r.status === "Approved" && r.approvalType === "Voucher"
+}
+
+function canPayReimbursement(r: Reimbursement): boolean {
+  if (r.status !== "Approved" && r.status !== "Partly Approved") return false
+  return reimbursementHasUnpaidApprovedItems(r)
+}
+
+function getPayableAmount(r: Reimbursement): number {
+  const items = r.items ?? []
+  if (items.length > 0) {
+    return items
+      .filter((i) => i.status === "Approved" && i.paidStatus !== "Paid")
+      .reduce((sum, i) => sum + parseFloat(i.amount || "0"), 0)
+  }
+  return items.reduce((sum, i) => sum + parseFloat(i.amount || "0"), 0) || parseFloat(r.amount || "0")
 }
 
 interface Reimbursement {
@@ -371,6 +395,32 @@ const PDFTemplate = ({ reimbursement }: { reimbursement: Reimbursement }) => {
   );
 };
 
+function formatReimbursementTotal(items: ReimbursementItem[] | undefined, status?: string) {
+  const list = items ?? [];
+  const filtered = status
+    ? list.filter((i) => (status === "Pending" ? (i.status || "Pending") === "Pending" : i.status === status))
+    : list;
+  const sum = filtered.reduce((s, i) => s + parseFloat(i.amount || "0"), 0);
+  return `₹${sum.toFixed(2)}`;
+}
+
+function SummaryCell({
+  label,
+  value,
+  className = "",
+}: {
+  label: string;
+  value: string;
+  className?: string;
+}) {
+  return (
+    <div>
+      <p className="text-xs text-gray-500 uppercase tracking-wide">{label}</p>
+      <p className={`text-base font-semibold tabular-nums ${className}`}>{value}</p>
+    </div>
+  );
+}
+
 export function ReimbursementManagement() {
   const [reimbursements, setReimbursements] = useState<Reimbursement[]>([])
   const [searchTerm, setSearchTerm] = useState("")
@@ -378,8 +428,6 @@ export function ReimbursementManagement() {
   const [isSettingsDialogOpen, setIsSettingsDialogOpen] = useState(false)
   const [isViewDrawerOpen, setIsViewDrawerOpen] = useState(false)
   const [viewReimbursement, setViewReimbursement] = useState<Reimbursement | null>(null)
-  const [itemPaymentRemarks, setItemPaymentRemarks] = useState<Record<number, string>>({})
-  const [itemPaidDraft, setItemPaidDraft] = useState<Record<number, boolean>>({})
   const [isPaymentDialogOpen, setIsPaymentDialogOpen] = useState(false)
   const [editing, setEditing] = useState<Reimbursement | null>(null)
   const [settingsReimbursement, setSettingsReimbursement] = useState<Reimbursement | null>(null)
@@ -1100,20 +1148,59 @@ const handleSubmit = async (e: React.FormEvent) => {
     if (paymentMode === "Bank" && paymentType === "UPI" && !paymentProof) { toast.error("Please enter UTR Number"); return }
     if (paymentMode === "Bank" && paymentType === "Bank Transfer" && !paymentProof) { toast.error("Please enter Transaction Reference Number"); return }
 
-    const payload = {
-      paymentMode,
-      paymentType: paymentMode === "Bank" ? paymentType : "Cash",
-      paymentDate,
-      paymentRemark,
-      paymentProof: paymentMode === "Bank" ? paymentProof : null,
-      status: "Paid",
-    }
+    const unpaidApproved = (paymentReimbursement.items ?? []).filter(
+      (i) => i.status === "Approved" && i.paidStatus !== "Paid" && i.id,
+    )
 
-    await robustFetch(`${BACKEND_URL}/reimbursement/${paymentReimbursement.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    })
+    if (unpaidApproved.length > 0) {
+      const remark = [
+        paymentRemark,
+        paymentMode && `Mode: ${paymentMode}`,
+        paymentType && `Type: ${paymentType}`,
+        paymentDate && `Date: ${paymentDate}`,
+        paymentProof && `Ref: ${paymentProof}`,
+      ]
+        .filter(Boolean)
+        .join(" | ")
+
+      for (const item of unpaidApproved) {
+        await robustFetch(
+          `${BACKEND_URL}/reimbursement/${paymentReimbursement.id}/items/${item.id}/payment`,
+          {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ paidStatus: "Paid", paymentRemark: remark || undefined }),
+          },
+        )
+      }
+
+      await robustFetch(`${BACKEND_URL}/reimbursement/${paymentReimbursement.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          paymentMode,
+          paymentType: paymentMode === "Bank" ? paymentType : "Cash",
+          paymentDate,
+          paymentRemark,
+          paymentProof: paymentMode === "Bank" ? paymentProof : null,
+        }),
+      })
+    } else {
+      const payload = {
+        paymentMode,
+        paymentType: paymentMode === "Bank" ? paymentType : "Cash",
+        paymentDate,
+        paymentRemark,
+        paymentProof: paymentMode === "Bank" ? paymentProof : null,
+        status: "Paid",
+      }
+
+      await robustFetch(`${BACKEND_URL}/reimbursement/${paymentReimbursement.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      })
+    }
 
     await loadReimbursements()
     resetPaymentForm()
@@ -1252,8 +1339,6 @@ const handleSubmit = async (e: React.FormEvent) => {
     try {
       const fresh = await robustGet<any>(`${BACKEND_URL}/reimbursement/${r.id}`)
       setViewReimbursement(mapApiReimbursement(fresh))
-      setItemPaymentRemarks({})
-      setItemPaidDraft({})
       setIsViewDrawerOpen(true)
     } catch {
       setViewReimbursement(r)
@@ -1287,41 +1372,13 @@ const handleSubmit = async (e: React.FormEvent) => {
     toast.success("Item rejected")
   }
 
-  const handleItemPaymentUpdate = async (itemId: number, paidStatus: "Paid" | "Unpaid") => {
-    if (!viewReimbursement) return
-    if (paidStatus === "Paid") {
-      const remark = (itemPaymentRemarks[itemId] || "").trim()
-      if (!remark) {
-        toast.error("Please enter a payment remark.")
-        return
-      }
-      await robustFetch(`${BACKEND_URL}/reimbursement/${viewReimbursement.id}/items/${itemId}/payment`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ paidStatus: "Paid", paymentRemark: remark }),
-      })
-    } else {
-      await robustFetch(`${BACKEND_URL}/reimbursement/${viewReimbursement.id}/items/${itemId}/payment`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ paidStatus: "Unpaid" }),
-      })
-    }
-    setItemPaidDraft((p) => ({ ...p, [itemId]: false }))
-    await refreshViewReimbursement()
-    toast.success(paidStatus === "Paid" ? "Marked as paid" : "Marked as unpaid")
-  }
-
   const filteredReimbursements = reimbursements.filter((r) =>
     Object.values(r).some((val) =>
       String(val).toLowerCase().includes(searchTerm.toLowerCase())
     )
   )
 
-  // Calculate total amount for payment modal
-const getTotalAmount = (reimbursement: Reimbursement) => {
-  return reimbursement.items?.reduce((sum, item) => sum + parseFloat(item.amount || "0"), 0) || 0
-}
+const getTotalAmount = (reimbursement: Reimbursement) => getPayableAmount(reimbursement)
 
 return (
     <div className="space-y-6 p-6 bg-[#f8fafc] min-h-screen">
@@ -1493,13 +1550,13 @@ onClick={async () => {
         </Button>
       )}
 
-      {r.status === "Approved" && r.approvalType === "Voucher" && (
+      {canPayReimbursement(r) && (
         <Button
           variant="ghost"
           size="icon"
           onClick={() => handlePayment(r)}
           className="h-8 w-8 text-green-600 hover:text-green-800 hover:bg-green-50 rounded-lg"
-          title="Make Payment"
+          title="Pay approved amount"
         >
           <CreditCard className="h-4 w-4" />
         </Button>
@@ -1815,14 +1872,15 @@ fetchData={(q) => fetchBranches(q)}
       </FormDrawer>
 
       {/* View & per-item approval */}
-      <FormDrawer
+      <FormModal
         open={isViewDrawerOpen}
         onOpenChange={setIsViewDrawerOpen}
         title="View Reimbursement"
         description="Review details and approve or reject each item."
+        size="xl"
       >
         {viewReimbursement && (
-          <div className="space-y-6 mt-2">
+          <div className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-[#f8fafc] rounded-lg border border-[#d1d5db]">
               <div>
                 <Label className="text-sm text-gray-500">Employee</Label>
@@ -1849,8 +1907,6 @@ fetchData={(q) => fetchBranches(q)}
                 const isPending = (item.status || "Pending") === "Pending"
                 const isApproved = item.status === "Approved"
                 const isRejected = item.status === "Rejected"
-                const showPaidForm = itemId != null && Boolean(itemPaidDraft[itemId])
-
                 return (
                   <div key={itemId ?? `item-${idx}`} className="border rounded-lg p-4 space-y-3 bg-white shadow-sm">
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
@@ -1923,78 +1979,51 @@ fetchData={(q) => fetchBranches(q)}
                       </div>
                     )}
 
-                    {isApproved && canManage && itemId && (
-                      <div className="space-y-2 border-t pt-3">
-                        <Label className="text-sm font-medium">Payment status</Label>
-                        <div className="flex gap-2">
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant={item.paidStatus === "Paid" ? "default" : "outline"}
-                            onClick={() => setItemPaidDraft((p) => ({ ...p, [itemId]: true }))}
-                          >
-                            Paid
-                          </Button>
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant={item.paidStatus === "Unpaid" || !item.paidStatus ? "default" : "outline"}
-                            onClick={() => handleItemPaymentUpdate(itemId, "Unpaid")}
-                          >
-                            Unpaid
-                          </Button>
-                        </div>
-                        {(showPaidForm || item.paidStatus === "Paid") && (
-                          <div className="space-y-2">
-                            <Label htmlFor={`remark-${itemId}`}>Payment remark *</Label>
-                            <Input
-                              id={`remark-${itemId}`}
-                              value={itemPaymentRemarks[itemId] ?? item.paymentRemark ?? ""}
-                              onChange={(e) =>
-                                setItemPaymentRemarks((p) => ({ ...p, [itemId]: e.target.value }))
-                              }
-                              placeholder="How was this item paid?"
-                            />
-                            {showPaidForm && (
-                              <Button
-                                type="button"
-                                size="sm"
-                                className="bg-green-600 hover:bg-green-700"
-                                onClick={() => handleItemPaymentUpdate(itemId, "Paid")}
-                              >
-                                Save as paid
-                              </Button>
-                            )}
-                          </div>
-                        )}
-                        {item.paymentRemark && !showPaidForm && (
-                          <p className="text-sm text-gray-600">Remark: {item.paymentRemark}</p>
-                        )}
-                      </div>
+                    {isApproved && item.paymentRemark && (
+                      <p className="text-sm text-gray-600 border-t pt-2">
+                        Payment remark: {item.paymentRemark}
+                      </p>
                     )}
                   </div>
                 )
               })}
             </div>
 
-            <div className="flex justify-end pt-2">
-              <Button variant="outline" onClick={() => setIsViewDrawerOpen(false)}>
-                Close
-              </Button>
-            </div>
+            {(viewReimbursement.items?.length ?? 0) > 1 && (
+              <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
+                <SummaryCell
+                  label="Total claimed"
+                  value={formatReimbursementTotal(viewReimbursement.items)}
+                />
+                <SummaryCell
+                  label="Approved"
+                  value={formatReimbursementTotal(viewReimbursement.items, "Approved")}
+                  className="text-green-700"
+                />
+                <SummaryCell
+                  label="Rejected"
+                  value={formatReimbursementTotal(viewReimbursement.items, "Rejected")}
+                  className="text-red-700"
+                />
+                <SummaryCell
+                  label="Pending"
+                  value={formatReimbursementTotal(viewReimbursement.items, "Pending")}
+                  className="text-amber-700"
+                />
+              </div>
+            )}
           </div>
         )}
-      </FormDrawer>
+      </FormModal>
 
-      {/* Settings/Approve Dialog */}
-      <Dialog open={isSettingsDialogOpen} onOpenChange={setIsSettingsDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle className="text-xl font-semibold text-green-800">
-              Approve Reimbursement
-            </DialogTitle>
-          </DialogHeader>
-          <div>
+      <FormModal
+        open={isSettingsDialogOpen}
+        onOpenChange={setIsSettingsDialogOpen}
+        title="Approve Reimbursement"
+        description="Choose approval type and confirm reimbursement items."
+        size="xl"
+        closeLabel="Cancel"
+      >
             <form onSubmit={handleSettingsSubmit} className="space-y-6">
               {settingsReimbursement && (
                 <>
@@ -2159,39 +2188,34 @@ fetchData={(q) => fetchBranches(q)}
                 </>
               )}
             </form>
-          </div>
-          <DialogFooter className="px-6 py-4 border-t bg-gray-50 sticky bottom-0">
-            <div className="flex gap-3 w-full">
+          <div className="flex gap-3 border-t border-gray-100 pt-4 mt-2">
               <Button 
                 type="button" 
                 variant="outline" 
                 onClick={() => setIsSettingsDialogOpen(false)}
-                className="flex-1 border-gray-300 hover:bg-gray-50 rounded-lg"
+                className="flex-1"
               >
                 Cancel
               </Button>
               <Button 
                 type="submit" 
                 onClick={handleSettingsSubmit}
-                className="flex-1 bg-green-600 hover:bg-green-700 rounded-lg"
+                className="flex-1 bg-green-600 hover:bg-green-700"
               >
                 <Check className="w-4 h-4 mr-2" />
                 Approve Reimbursement
               </Button>
             </div>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      </FormModal>
 
-      {/* Payment Dialog - UPDATED with Bank Transfer */}
-      <Dialog open={isPaymentDialogOpen} onOpenChange={setIsPaymentDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle className="text-xl font-semibold text-green-800">
-              Make Payment
-            </DialogTitle>
-          </DialogHeader>
-          <div>
+      <FormModal
+        open={isPaymentDialogOpen}
+        onOpenChange={setIsPaymentDialogOpen}
+        title="Make Payment"
+        description="Record payment for this approved reimbursement voucher."
+        size="lg"
+        closeLabel="Cancel"
+      >
             <form onSubmit={handlePaymentSubmit} className="space-y-6">
               {paymentReimbursement && (
                 <>
@@ -2389,14 +2413,12 @@ fetchData={(q) => fetchBranches(q)}
                 </>
               )}
             </form>
-          </div>
-          <DialogFooter className="px-6 py-4 border-t bg-gray-50 sticky bottom-0">
-            <div className="flex gap-3 w-full">
+          <div className="flex gap-3 border-t border-gray-100 pt-4 mt-2">
               <Button 
                 type="button" 
                 variant="outline" 
                 onClick={() => setIsPaymentDialogOpen(false)}
-                className="flex-1 border-gray-300 hover:bg-gray-50 rounded-lg"
+                className="flex-1"
               >
                 Cancel
               </Button>
@@ -2404,15 +2426,13 @@ fetchData={(q) => fetchBranches(q)}
                 type="submit" 
                 onClick={handlePaymentSubmit}
                 disabled={paymentMode === "Bank" && !employeeBankDetails}
-                className="flex-1 bg-green-600 hover:bg-green-700 rounded-lg disabled:bg-gray-400 disabled:cursor-not-allowed"
+                className="flex-1 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
               >
                 <CreditCard className="w-4 h-4 mr-2" />
                 Mark as Paid
               </Button>
             </div>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      </FormModal>
 
       {/* Hidden PDF Template */}
       <div style={{ position: 'absolute', left: '-9999px', top: 0 }}>

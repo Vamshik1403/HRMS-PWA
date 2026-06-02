@@ -297,6 +297,9 @@ export class CreateManageEmployeeDto {
   allowCreateTaskOnMobile?: boolean;
   pwaShowLeaveBalance?: boolean;
 
+  @IsOptional() @IsBoolean()
+  mobileAttendanceEnabled?: boolean;
+
   // Nested arrays
   @IsOptional() @IsArray()
   @ValidateNested({ each: true })

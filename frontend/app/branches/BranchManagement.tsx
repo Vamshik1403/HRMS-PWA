@@ -721,15 +721,6 @@ export function BranchManagement() {
               <Plus className="w-4 h-4 mr-1" /> Add Branch
             </Button>
           )}
-          {(isAddingNew || isViewing) && (
-            <Button
-              variant="outline"
-              onClick={handleCancel}
-              className="text-sm"
-            >
-              <X className="w-4 h-4 mr-1" /> BACK
-            </Button>
-          )}
         </div>
       </div>
 
