@@ -153,6 +153,16 @@
     }
   },
   {
+    "employeeID": 45,
+    "subscription": {
+      "endpoint": "https://web.push.apple.com/QAAMD0v28mdxF9mcrJ-pObCEJonVG3gzoJAFUcC7UJJrjUp3EP608W69vv1N7g4lITeLPsTu-WlIKwNkBzvm1NTiX4zEjkl8lZ7uBbEJWBMExrHlFeOBWfJwYy3orsH7fPosBuRPt_cdmckLOo4DlyamFsenj9IRanh1A-Z7dYQ",
+      "keys": {
+        "p256dh": "BAhsYnAwE1O2aEuoti2F01-QVHKAgpS_dZk9CDPyPVctWRlMNrP9LCy6nYkDqbnCDLqRDnMf27IxJjwaeTdV4yw",
+        "auth": "UFmN5lW3cxxNI8nAugWe9w"
+      }
+    }
+  },
+  {
     "employeeID": 41,
     "subscription": {
       "endpoint": "https://fcm.googleapis.com/fcm/send/fKy14Qu-Hiw:APA91bH6Lw5wz4Tm8j2IsPJbrBjqaSQucvPXyM9QhiVmjuukzEik07PZmZ9rhjO-iER5_1FLoMrVj2B_r1cLQ72Ih3zkh2U2fHvhY6fJ5YKv7gEIXeeDcSicYvzSPQPnW47d9b5uGq-s",
@@ -171,16 +181,6 @@
       "keys": {
         "p256dh": "BHWB1jhc1BHfBFQrgzP0j4aSmnBtkqLrRG5zaYAGMTAyuSz9YOmFNDZlyOvbfdxIDz94r23QJr75Y2s4lj-uYm8",
         "auth": "F-MYiri8ZMJ7flc51FAq8w"
-      }
-    }
-  },
-  {
-    "employeeID": 45,
-    "subscription": {
-      "endpoint": "https://web.push.apple.com/QAAMD0v28mdxF9mcrJ-pObCEJonVG3gzoJAFUcC7UJJrjUp3EP608W69vv1N7g4lITeLPsTu-WlIKwNkBzvm1NTiX4zEjkl8lZ7uBbEJWBMExrHlFeOBWfJwYy3orsH7fPosBuRPt_cdmckLOo4DlyamFsenj9IRanh1A-Z7dYQ",
-      "keys": {
-        "p256dh": "BAhsYnAwE1O2aEuoti2F01-QVHKAgpS_dZk9CDPyPVctWRlMNrP9LCy6nYkDqbnCDLqRDnMf27IxJjwaeTdV4yw",
-        "auth": "UFmN5lW3cxxNI8nAugWe9w"
       }
     }
   }
