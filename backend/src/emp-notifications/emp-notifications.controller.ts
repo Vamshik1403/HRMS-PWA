@@ -13,6 +13,12 @@ export class EmpNotificationsController {
     return Number(id);
   }
 
+  @Get('holidays')
+  getHolidays(@Req() req: { user?: { employeeId?: number; sub?: number } }) {
+    const employeeId = this.getEmployeeId(req);
+    return this.service.getHolidayList(employeeId);
+  }
+
   @Get('feed')
   getFeed(
     @Req() req: { user?: { employeeId?: number; sub?: number } },

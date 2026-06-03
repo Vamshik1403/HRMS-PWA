@@ -1,14 +1,18 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateManageEmployeeDto } from './dto/create-manage-employee.dto';
 import { UpdateManageEmployeeDto } from './dto/update-manage-employee.dto';
+import { JoiningFormService } from './joining-form.service';
 import * as bcrypt from 'bcrypt';
 
 @Injectable()
 export class ManageEmployeeService {
   private readonly SALT_ROUNDS = 12;
 
-  constructor(private prisma: PrismaService) { }
+  constructor(
+    private prisma: PrismaService,
+    private readonly joiningFormService: JoiningFormService,
+  ) { }
 
   // Helper method to hash password
   private async hashPassword(password: string): Promise<string> {
@@ -676,6 +680,22 @@ async findAll(status?: string) {
     orderBy: { id: 'desc' },
   });
 }
+
+  async generateJoiningFormPdf(
+    id: number,
+  ): Promise<{ pdf: Buffer; filenameCode: string }> {
+    const employee = await this.findOne(id);
+    if (!employee) {
+      throw new NotFoundException('Employee not found');
+    }
+    const pdf = await this.joiningFormService.generatePdf(
+      employee as Parameters<JoiningFormService['generatePdf']>[0],
+    );
+    return {
+      pdf,
+      filenameCode: employee.employeeID?.trim() || String(id),
+    };
+  }
 
 async findOne(id: number) {
   return this.prisma.manageEmployee.findFirst({

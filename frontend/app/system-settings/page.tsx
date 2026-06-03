@@ -11,7 +11,7 @@ export default function SystemSettingsPage() {
 
   useEffect(() => {
     if (user && (user.role === "SUPERADMIN" || user.role === "COMPANY_ADMIN")) {
-      router.replace("/system-settings/compliance")
+      router.replace("/system-settings/general")
     }
   }, [router, user])
 

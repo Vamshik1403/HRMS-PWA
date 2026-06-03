@@ -8,7 +8,9 @@ import {
   Patch,
   Post,
   Query,
+  Res,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import { ManageEmployeeService } from './manage-employee.service';
 import { CreateManageEmployeeDto, EmployeeCredentialsUpdateDto, EmployeeLoginDto } from './dto/create-manage-employee.dto';
 import { UpdateManageEmployeeDto } from './dto/update-manage-employee.dto';
@@ -113,6 +115,26 @@ findAll(@Query('status') status?: string) {
 }
 
 
+
+  @Get(':id/joining-form')
+  async downloadJoiningForm(
+    @Param('id', ParseIntPipe) id: number,
+    @Res() res: Response,
+  ) {
+    try {
+      const { pdf, filenameCode } = await this.service.generateJoiningFormPdf(id);
+      res.set({
+        'Content-Type': 'application/pdf',
+        'Content-Disposition': `attachment; filename="JoiningForm-${filenameCode}.pdf"`,
+        'Content-Length': pdf.length,
+      });
+      res.send(pdf);
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : 'Failed to generate joining form PDF';
+      res.status(500).json({ message });
+    }
+  }
 
   @Get(':id')
   findOne(@Param('id', ParseIntPipe) id: number) {

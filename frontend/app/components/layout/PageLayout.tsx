@@ -76,7 +76,7 @@ const ATTENDANCE_PATHS = ["/field-attendance-schedule"];
 const LEAVE_MANAGEMENT_PATHS = ["/leave-applications", "/privileged-leave"];
 const REPORTS_PATHS = ["/attendance-reports", "/payroll-reports"];
 const CANTEEN_PATHS = ["/canteen", "/canteen/setup", "/canteen/reports"];
-const SETTINGS_PATHS = ["/import-attendance", "/hrms-integrations", "/system-settings", "/system-settings/compliance", "/system-settings/email-templates"];
+const SETTINGS_PATHS = ["/import-attendance", "/hrms-integrations", "/system-settings", "/system-settings/general", "/system-settings/compliance", "/system-settings/email-templates"];
 const ADMIN_PATHS = ["/system-users", "/backup-restore"];
 const ALL_SECTION_PATHS = [...SETUP_PATHS, ...CONTRACTOR_MANAGEMENT_PATHS, ...EMPLOYEE_PATHS, ...TASK_MANAGEMENT_PATHS, ...PAYROLL_PATHS, ...SALARY_PATHS, ...PAYROLL_POLICY_PATHS, ...LEAVE_PATHS, ...LEAVE_MANAGEMENT_PATHS, ...ATTENDANCE_PATHS, ...REPORTS_PATHS, ...CANTEEN_PATHS, ...SETTINGS_PATHS];
 
@@ -645,7 +645,8 @@ export function PageLayout({ children }: PageLayoutProps) {
               <SidebarMenuSub className="ml-5 mt-1 space-y-0.5 border-l border-[#f0f0f0] pl-3">
                 {!isAdmin && (<SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/import-attendance" className={cn(sbSubRow, isActiveLink('/import-attendance', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Import Attendance</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>)}
                 {isAdmin && (<SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/hrms-integrations" className={cn(sbSubRow, isActiveLink('/hrms-integrations', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>HRMS Integrations</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>)}
-                {(isSuperAdmin || isCompanyAdmin) && (<SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/system-settings/compliance" className={cn(sbSubRow, isActiveLink('/system-settings', companyId) || isActiveLink('/system-settings/compliance', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Compliance</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>)}
+                {(isSuperAdmin || isCompanyAdmin) && (<SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/system-settings/general" className={cn(sbSubRow, isActiveLink('/system-settings/general', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>General</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>)}
+                {(isSuperAdmin || isCompanyAdmin) && (<SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/system-settings/compliance" className={cn(sbSubRow, isActiveLink('/system-settings/compliance', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Compliance</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>)}
                 {(isSuperAdmin || isCompanyAdmin) && (<SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/system-settings/email-templates" className={cn(sbSubRow, isActiveLink('/system-settings/email-templates', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Email templates</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>)}
               </SidebarMenuSub>
             </CollapsibleContent>

@@ -23,7 +23,7 @@ import {
 } from "../components/ui/table";
 import { Badge } from "../components/ui/badge";
 import { Icon } from "@iconify/react";
-import { Plus, Search, Edit, Trash2, Eye, X, Save, History } from "lucide-react";
+import { Plus, Search, Edit, Trash2, Eye, X, Save, History, Download } from "lucide-react";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import {
   Dialog,
@@ -2923,6 +2923,39 @@ const addCombinedDevMap = () => {
 };
 
 
+  const downloadJoiningForm = async (r: ManageEmpRead) => {
+    try {
+      const res = await fetch(`${API.manageEmp}/${r.id}/joining-form`, { cache: "no-store" });
+      if (!res.ok) {
+        const errText = await res.text();
+        let msg = errText;
+        try {
+          const j = JSON.parse(errText) as { message?: string };
+          if (j.message) msg = j.message;
+        } catch {
+          /* plain text */
+        }
+        throw new Error(msg);
+      }
+      const contentType = res.headers.get("content-type") ?? "";
+      if (!contentType.includes("application/pdf")) {
+        throw new Error("Server did not return a PDF");
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `JoiningForm-${r.employeeID ?? r.id}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      toast.success("Joining form downloaded");
+    } catch {
+      toast.error("Could not download joining form");
+    }
+  };
+
   const handleView = (r: ManageEmpRead) => {
     setViewRow(r);
     setIsViewing(true);
@@ -4627,7 +4660,18 @@ const addCombinedDevMap = () => {
               </div>
               )}
 
-              <div className="flex justify-end gap-2 pt-4 border-t border-gray-200">
+              <div className="flex flex-wrap justify-end gap-2 pt-4 border-t border-gray-200">
+                {editingRow && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="mr-auto gap-1.5"
+                    onClick={() => void downloadJoiningForm(editingRow)}
+                  >
+                    <Download className="w-4 h-4" />
+                    Download joining form
+                  </Button>
+                )}
                 <Button type="button" variant="outline" onClick={handleCancel}>
                   Cancel
                 </Button>
@@ -4650,6 +4694,18 @@ const addCombinedDevMap = () => {
       >
         {viewRow && (
         <div>
+            <div className="mb-4 flex justify-end">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="gap-1.5"
+                onClick={() => void downloadJoiningForm(viewRow)}
+              >
+                <Download className="w-4 h-4" />
+                Download joining form
+              </Button>
+            </div>
             <div className="space-y-3">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="p-3 bg-gray-50 rounded-lg"><strong>Name:</strong> {viewRow.employeeFirstName} {viewRow.employeeLastName}</div>

@@ -2,6 +2,15 @@ import { Injectable } from '@nestjs/common';
 import { empPayoutHrefForPeriod } from '../common/payslip-period.util';
 import { PrismaService } from '../prisma/prisma.service';
 
+export type EmpHolidayListItem = {
+  id: number;
+  name: string;
+  financialYear: string | null;
+  startDate: string;
+  endDate: string;
+  isUpcoming: boolean;
+};
+
 export type EmpNotificationFeedItem = {
   id: string;
   kind:
@@ -22,6 +31,62 @@ export type EmpNotificationFeedItem = {
 @Injectable()
 export class EmpNotificationsService {
   constructor(private readonly prisma: PrismaService) {}
+
+  /** Public holidays for the employee's company/branch and leave policy. */
+  async getHolidayList(employeeId: number): Promise<EmpHolidayListItem[]> {
+    const emp = await this.prisma.manageEmployee.findUnique({
+      where: { id: employeeId },
+      select: { companyID: true, branchesID: true, leavePolicyID: true },
+    });
+    if (!emp?.companyID) return [];
+
+    let policyPublicHolidayIds: number[] = [];
+    if (emp.leavePolicyID) {
+      const links = await this.prisma.leavePolicyHoliday.findMany({
+        where: { leavePolicyID: emp.leavePolicyID },
+        select: { publicHolidayID: true },
+      });
+      policyPublicHolidayIds = links
+        .map((l) => l.publicHolidayID)
+        .filter((id): id is number => id != null);
+    }
+
+    const where: {
+      companyID: number;
+      OR: Array<{ branchesID: null } | { branchesID: number }>;
+      id?: { in: number[] };
+    } = {
+      companyID: emp.companyID,
+      OR: [{ branchesID: null }],
+    };
+    if (emp.branchesID != null) {
+      where.OR.push({ branchesID: emp.branchesID });
+    }
+    if (policyPublicHolidayIds.length > 0) {
+      where.id = { in: policyPublicHolidayIds };
+    }
+
+    const rows = await this.prisma.publicHoliday.findMany({
+      where,
+      include: { manageHoliday: { select: { holidayName: true } } },
+      orderBy: [{ startDate: 'asc' }, { id: 'asc' }],
+      take: 500,
+    });
+
+    const today = this.localDay(new Date());
+    return rows.map((h) => {
+      const start = h.startDate ? this.localDay(new Date(h.startDate)) : today;
+      const end = h.endDate ? this.localDay(new Date(h.endDate)) : start;
+      return {
+        id: h.id,
+        name: h.manageHoliday?.holidayName?.trim() || 'Public holiday',
+        financialYear: h.financialYear,
+        startDate: start.toISOString().slice(0, 10),
+        endDate: end.toISOString().slice(0, 10),
+        isUpcoming: end.getTime() >= today.getTime(),
+      };
+    });
+  }
 
   async getFeed(
     employeeId: number,
@@ -155,6 +220,15 @@ export class EmpNotificationsService {
     now: Date,
     horizonDays: number,
   ): Promise<EmpNotificationFeedItem[]> {
+    const company = emp.companyID
+      ? await this.prisma.company.findUnique({
+          where: { id: emp.companyID },
+          select: { companyName: true },
+        })
+      : null;
+    const companyLabel =
+      company?.companyName?.trim() || 'your company';
+
     const colleagues = await this.prisma.manageEmployee.findMany({
       where: {
         companyID: emp.companyID ?? undefined,
@@ -201,7 +275,7 @@ export class EmpNotificationsService {
             ? 'Happy Birthday!'
             : `${name}'s birthday today`,
           body: person.isSelf
-            ? 'Wishing you a wonderful birthday from your OpenHRM family.'
+            ? `Wishing you a wonderful birthday from your ${companyLabel} family.`
             : `Don't forget to wish ${name} a happy birthday.`,
           emoji: '🎂',
           at: eventAt.toISOString(),
