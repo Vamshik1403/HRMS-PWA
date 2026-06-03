@@ -90,9 +90,13 @@ export default function EmpProfilePage() {
     .map((w: string) => w[0].toUpperCase())
     .join("") || "E";
 
-  const designation = emp?.designations?.designationName || emp?.designation || null;
-  const department = emp?.departments?.departmentName || emp?.department || null;
-  const designationLine = [designation, department].filter(Boolean).join(" · ");
+  const designation =
+    emp?.designations?.designation ||
+    emp?.designations?.designationName ||
+    emp?.designation ||
+    null;
+  const department =
+    emp?.departments?.departmentName || emp?.department || null;
 
   const employeeCode = emp?.employeeID || emp?.employeeId || empUser?.username || null;
   const email = emp?.businessEmail || emp?.personalEmail || empUser?.email || empUser?.username || "—";
@@ -218,10 +222,13 @@ export default function EmpProfilePage() {
           </div>
           {uploadError && <p className="text-[11px] text-red-500 mb-2">{uploadError}</p>}
 
-          {/* Name & designation */}
+          {/* Name, department & designation */}
           <h2 className="text-[18px] font-bold text-gray-900">{displayName}</h2>
-          {designationLine && (
-            <p className="text-[13px] text-gray-500 mt-0.5">{designationLine}</p>
+          {department && (
+            <p className="text-[13px] text-gray-500 mt-0.5">{department}</p>
+          )}
+          {designation && (
+            <p className="text-[13px] text-gray-500 mt-0.5">{designation}</p>
           )}
           {employeeCode && (
             <div className="mt-2 flex items-center gap-1.5 border border-gray-200 rounded-full px-3 py-1">

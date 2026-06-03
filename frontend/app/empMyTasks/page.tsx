@@ -7,6 +7,10 @@ import { taskFetch } from "../utils/taskApi";
 import { MobileTaskChatView } from "../components/task/mobile/MobileTaskChatView";
 import { MobileTaskListView } from "../components/task/mobile/MobileTaskListView";
 import type { MobileTaskListItem } from "../components/task/mobile/MobileTaskListCard";
+import {
+  MobileTaskCreateSheet,
+  type CreatorEmp,
+} from "../components/task/mobile/MobileTaskCreateSheet";
 import { toast } from "sonner";
 import { getNextSitePunchKind, sitePunchLabel } from "../utils/taskSitePunch";
 import { nextTaskStatus } from "../utils/taskStatusFlow";
@@ -32,9 +36,8 @@ export default function EmpMyTasksPage() {
   const [chatMsg, setChatMsg] = useState("");
   const [sending, setSending] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
-  const [newTaskName, setNewTaskName] = useState("");
-  const [creating, setCreating] = useState(false);
   const [canCreateTask, setCanCreateTask] = useState(false);
+  const [creatorEmp, setCreatorEmp] = useState<CreatorEmp | null>(null);
 
   const load = useCallback(async () => {
     if (!user) return;
@@ -60,8 +63,23 @@ export default function EmpMyTasksPage() {
         if (!empId) return;
         return fetch(`${BACKEND}/manage-emp/${empId}`).then((r) => (r.ok ? r.json() : null));
       })
-      .then((emp) => setCanCreateTask(!!emp?.allowCreateTaskOnMobile))
-      .catch(() => setCanCreateTask(false));
+      .then((emp) => {
+        if (!emp) {
+          setCanCreateTask(false);
+          setCreatorEmp(null);
+          return;
+        }
+        setCanCreateTask(!!emp.allowCreateTaskOnMobile);
+        setCreatorEmp({
+          id: emp.id,
+          companyID: emp.companyID,
+          departmentNameID: emp.departmentNameID,
+        });
+      })
+      .catch(() => {
+        setCanCreateTask(false);
+        setCreatorEmp(null);
+      });
   }, [user, load]);
 
   const openTask = async (t: Task) => {
@@ -163,29 +181,6 @@ export default function EmpMyTasksPage() {
     }
   };
 
-  const createTask = async () => {
-    if (!newTaskName.trim() || !user) return;
-    setCreating(true);
-    try {
-      await taskFetch("/task-projects", user, {
-        method: "POST",
-        body: JSON.stringify({
-          taskName: newTaskName.trim(),
-          taskType: "Work task",
-          priority: "Medium",
-        }),
-      });
-      toast.success("Task created");
-      setCreateOpen(false);
-      setNewTaskName("");
-      load();
-    } catch (e: any) {
-      toast.error(e.message || "Could not create task");
-    } finally {
-      setCreating(false);
-    }
-  };
-
   if (detail) {
     return (
       <EmpMobileLayout hideBottomNav>
@@ -213,7 +208,7 @@ export default function EmpMyTasksPage() {
   }
 
   return (
-    <EmpMobileLayout>
+    <EmpMobileLayout hideBottomNav={createOpen}>
       <MobileTaskListView
         tasks={tasks}
         loading={loading}
@@ -254,28 +249,13 @@ export default function EmpMyTasksPage() {
         </>
       )}
 
-      {createOpen && (
-        <>
-          <div className="fixed inset-0 z-50 bg-black/40" onClick={() => setCreateOpen(false)} />
-          <div className="fixed inset-x-0 bottom-0 z-50 bg-white rounded-t-2xl px-5 pt-3 pb-6" style={{ paddingBottom: "max(24px, env(safe-area-inset-bottom))" }}>
-            <h3 className="text-[17px] font-semibold text-gray-900 mb-3">New task</h3>
-            <input
-              type="text"
-              value={newTaskName}
-              onChange={(e) => setNewTaskName(e.target.value)}
-              placeholder="Task name"
-              className="w-full h-11 px-4 rounded-xl border border-gray-200 text-[15px]"
-              autoFocus
-            />
-            <div className="flex gap-2 mt-4">
-              <button type="button" onClick={() => setCreateOpen(false)} className="flex-1 h-11 rounded-xl border border-gray-200 text-[14px]">Cancel</button>
-              <button type="button" onClick={createTask} disabled={creating || !newTaskName.trim()} className="flex-1 h-11 rounded-xl bg-[#4f46e5] text-white text-[14px] font-semibold disabled:opacity-50">
-                {creating ? "Creating…" : "Create"}
-              </button>
-            </div>
-          </div>
-        </>
-      )}
+      <MobileTaskCreateSheet
+        open={createOpen}
+        onClose={() => setCreateOpen(false)}
+        user={user}
+        creatorEmp={creatorEmp}
+        onCreated={() => load()}
+      />
     </EmpMobileLayout>
   );
 }

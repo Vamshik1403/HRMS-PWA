@@ -161,6 +161,81 @@ export class TaskProjectsService {
     }
   }
 
+  /** Push to assignees (or targeted recipient) when someone posts in task chat. */
+  private async notifyTaskChatMessage(
+    taskID: number,
+    viewer: TaskViewerContext,
+    opts: {
+      chatId: number;
+      senderEmployeeId: number | null;
+      senderUserId: number | null;
+      recipientEmployeeID: number | null;
+      senderName?: string | null;
+      messagePreview: string;
+    },
+  ): Promise<void> {
+    const task = await this.prisma.taskProject.findUnique({
+      where: { id: taskID },
+      select: {
+        taskName: true,
+        taskCode: true,
+        createdByEmployeeID: true,
+        assignments: { select: { manageEmployeeID: true } },
+      },
+    });
+    if (!task) return;
+
+    const assigneeIds = task.assignments.map((a) => Number(a.manageEmployeeID));
+    const targets = new Set<number>();
+    const senderIsAdmin = canManageTaskModule(viewer) || (!!opts.senderUserId && !opts.senderEmployeeId);
+
+    if (opts.recipientEmployeeID) {
+      targets.add(Number(opts.recipientEmployeeID));
+    } else if (senderIsAdmin) {
+      for (const id of assigneeIds) targets.add(id);
+    } else if (opts.senderEmployeeId) {
+      for (const id of assigneeIds) {
+        if (id !== opts.senderEmployeeId) targets.add(id);
+      }
+      if (
+        task.createdByEmployeeID &&
+        task.createdByEmployeeID !== opts.senderEmployeeId
+      ) {
+        targets.add(task.createdByEmployeeID);
+      }
+    }
+
+    if (opts.senderEmployeeId) {
+      targets.delete(opts.senderEmployeeId);
+    }
+
+    if (targets.size === 0) return;
+
+    const taskLabel = task.taskName || task.taskCode || 'Task';
+    const from = (opts.senderName || '').trim() || (senderIsAdmin ? 'Manager' : 'Colleague');
+    const preview = opts.messagePreview.trim() || 'New message';
+    const body =
+      preview.length > 100 ? `${from}: ${preview.slice(0, 97)}…` : `${from}: ${preview}`;
+
+    for (const manageEmployeeID of targets) {
+      this.pushService
+        .sendToEmployee(
+          manageEmployeeID,
+          `Task message — ${taskLabel}`,
+          body,
+          {
+            url: '/empMyTasks',
+            tag: `task-chat-${taskID}-${manageEmployeeID}`,
+            kind: 'task',
+            event: 'chat',
+            taskId: taskID,
+            chatId: opts.chatId,
+          },
+        )
+        .catch(() => null);
+    }
+  }
+
   /**
    * @param notify 'added' = only new assignees (task create/update).
    *             'all' = everyone in the saved list (assign modal — iOS users expect this).
@@ -316,7 +391,7 @@ export class TaskProjectsService {
       },
     });
     if (dto.assignedEmployeeIds?.length) {
-      await this.syncAssignments(task.id, dto.assignedEmployeeIds);
+      await this.syncAssignments(task.id, dto.assignedEmployeeIds, { notify: 'added' });
     }
     await this.logActivity(task.id, 'CREATED', {
       userID: viewer.userId,
@@ -494,6 +569,16 @@ export class TaskProjectsService {
     } else if (dto.remark?.trim() && !dto.status) {
       await this.addRemark(id, { remark: dto.remark, authorName: dto.senderName, userID: dto.userID, employeeID: dto.employeeID }, query);
     }
+
+    await this.notifyTaskChatMessage(id, viewer, {
+      chatId: chat.id,
+      senderEmployeeId: employeeID,
+      senderUserId: userID,
+      recipientEmployeeID,
+      senderName: dto.senderName,
+      messagePreview: activityRemark,
+    });
+
     return chat;
   }
 
