@@ -26,6 +26,7 @@ import {
 import { downloadTaskReportForId } from "../utils/taskReportPdf";
 import { dispatchAppRefresh } from "../utils/appRefresh";
 import { useAppRefresh } from "../hooks/useAppRefresh";
+import { useTaskChatPolling } from "../hooks/useTaskChatPolling";
 
 const STATUSES = TASK_STATUSES;
 const PRIORITIES = ["Urgent", "Medium", "Low"];
@@ -296,6 +297,27 @@ export default function TaskManagement() {
     } catch (err: any) { toast.error(err.message); }
   };
 
+  const applyChatStatus = async (next: string) => {
+    if (!chatTask) return;
+    setChatStatus(next);
+    if (next === chatTask.status) return;
+    try {
+      await taskFetch(`/task-projects/${chatTask.id}/status`, user, {
+        method: "PATCH",
+        body: JSON.stringify({ status: next, actorName: user?.username }),
+      });
+      const full = await taskFetch<Task>(`/task-projects/${chatTask.id}`, user);
+      setChatTask(full);
+      setChatStatus(full.status);
+      loadTasks();
+      dispatchAppRefresh();
+      toast.success(`Status updated to ${next === "WIP" ? "Work In Progress" : next}`);
+    } catch (err: any) {
+      setChatStatus(chatTask.status);
+      toast.error(err.message || "Could not update status");
+    }
+  };
+
   const sendChat = async (payload: { message: string; attachmentUrl?: string }) => {
     if (!chatTask) return;
     if (!payload.message.trim() && !payload.attachmentUrl) return;
@@ -318,6 +340,26 @@ export default function TaskManagement() {
     } catch (err: any) { toast.error(err.message); }
     finally { setChatSending(false); }
   };
+
+  useTaskChatPolling<Task>(
+    chatTask?.id,
+    user,
+    (full) => {
+      setChatTask((prev) => {
+        if (!prev || prev.id !== full.id) {
+          setChatStatus(full.status);
+          return full;
+        }
+        setChatStatus((sel) => {
+          const pendingLocalStatus = sel !== prev.status;
+          if (pendingLocalStatus && full.status === prev.status) return sel;
+          return full.status;
+        });
+        return full;
+      });
+    },
+    chatOpen && !!chatTask,
+  );
 
   if (!user) return <div className="p-6"><TaskBoardSkeleton /></div>;
   if (!canManage) return <div className="p-6 text-gray-500">Access denied. Use My Tasks on mobile for assigned tasks.</div>;
@@ -569,7 +611,7 @@ export default function TaskManagement() {
           taskCode={chatTask.taskCode} status={chatTask.status}
           chats={chatTask.chats || []} activities={chatTask.activities || []}
           message={chatMsg} onMessageChange={setChatMsg}
-          statusValue={chatStatus} onStatusChange={setChatStatus}
+          statusValue={chatStatus} onStatusChange={applyChatStatus}
           statusOptions={NEXT_TASK_STATUS[chatTask.status as TaskStatus] ? [NEXT_TASK_STATUS[chatTask.status as TaskStatus]] : []}
           onSend={sendChat} sending={chatSending} />
       )}

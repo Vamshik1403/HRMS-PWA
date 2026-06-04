@@ -38,6 +38,8 @@ function taskListInclude(viewer: TaskViewerContext) {
         employeeID: true,
         userID: true,
         recipientEmployeeID: true,
+        senderName: true,
+        attachmentUrl: true,
       },
     },
     _count: { select: { remarks: true, chats: true, activities: true } },
@@ -50,7 +52,7 @@ type TaskChatRow = {
   recipientEmployeeID?: number | null;
 };
 
-/** Employees only see their own messages and admin messages addressed to them. */
+/** Employees see their own messages and admin messages (broadcast or addressed to them). */
 function filterChatsForEmployeeViewer(
   chats: TaskChatRow[],
   viewer: TaskViewerContext,
@@ -60,7 +62,10 @@ function filterChatsForEmployeeViewer(
   return chats.filter((c) => {
     if (c.employeeID != null && c.employeeID === me) return true;
     if (c.employeeID != null && c.employeeID !== me) return false;
-    if (c.userID != null && c.recipientEmployeeID === me) return true;
+    // Admin / manager message (userID set, no employeeID)
+    if (c.userID != null) {
+      return c.recipientEmployeeID == null || c.recipientEmployeeID === me;
+    }
     return false;
   });
 }
@@ -244,15 +249,6 @@ export class TaskProjectsService {
           },
         )
         .catch(() => null);
-      void this.mailService
-        .sendNotificationEmail({
-          employeeId: manageEmployeeID,
-          eventType: 'TASK_MESSAGE',
-          subject: `New message on task: ${taskLabel}`,
-          bodyText: body,
-          extraVars: { taskName: taskLabel },
-        })
-        .catch(() => false);
     }
   }
 
@@ -560,6 +556,15 @@ export class TaskProjectsService {
       });
       if (lastEmployeeChat?.employeeID) {
         recipientEmployeeID = lastEmployeeChat.employeeID;
+      } else {
+        const assignees = await this.prisma.taskAssignment.findMany({
+          where: { taskID: id },
+          select: { manageEmployeeID: true },
+        });
+        if (assignees.length === 1) {
+          recipientEmployeeID = assignees[0].manageEmployeeID;
+        }
+        // Multiple assignees: leave null so all assignees see the message
       }
     }
 
@@ -674,11 +679,13 @@ export class TaskProjectsService {
       chats = filterChatsForEmployeeViewer(chats, viewer) as typeof task.chats;
     }
 
-    const sitePunchPattern =
-      /\b(mark(?:ed)?\s*(in|out)|check(?:ed)?\s*(in|out)|site\s*(?:mark\s*)?(?:in|out))\b/i;
+    const isSitePunch = (text?: string | null) =>
+      /\b(mark(?:ed)?\s*(in|out)|check(?:ed)?\s*(in|out)|site\s*(?:mark\s*)?(?:in|out))\b/i.test(
+        (text || '').trim(),
+      );
 
     const siteCheckEvents = chats
-      .filter((c) => sitePunchPattern.test(c.message || ''))
+      .filter((c) => isSitePunch(c.message))
       .map((c) => {
         const emp = task.assignments.find((a) => a.manageEmployeeID === c.employeeID)
           ?.manageEmployee;
@@ -702,10 +709,19 @@ export class TaskProjectsService {
       const empName = e
         ? `${e.employeeFirstName || ''} ${e.employeeLastName || ''}`.trim()
         : '—';
-      const empChats = chats.filter((c) => c.employeeID === a.manageEmployeeID);
+      const empTaskMessages = chats.filter(
+        (c) =>
+          c.employeeID === a.manageEmployeeID && !isSitePunch(c.message),
+      );
       const empSiteEvents = siteCheckEvents.filter(
         (ev) => ev.employeeId === a.manageEmployeeID,
       );
+      const siteIn = empSiteEvents.filter((ev) =>
+        /mark\s*in|check\s*in/i.test(ev.message || ''),
+      ).length;
+      const siteOut = empSiteEvents.filter((ev) =>
+        /mark\s*out|check\s*out/i.test(ev.message || ''),
+      ).length;
       return {
         employeeId: a.manageEmployeeID,
         employeeCode: e?.employeeID || null,
@@ -715,10 +731,21 @@ export class TaskProjectsService {
         phone: e?.personalPhoneNo || null,
         email: e?.businessEmail || null,
         assignedAt: a.assignedAt,
-        messageCount: empChats.length,
+        messageCount: empTaskMessages.length,
         siteCheckInOutCount: empSiteEvents.length,
+        siteCheckInCount: siteIn,
+        siteCheckOutCount: siteOut,
         siteEvents: empSiteEvents,
       };
+    });
+
+    const taskMessages = chats.filter((c) => !isSitePunch(c.message));
+    const userRemarks = task.remarks.filter((r) => !isSitePunch(r.remark));
+    const keyActivities = task.activities.filter((act) => {
+      if (act.action === 'CHAT' || act.action === 'REMARK') {
+        return !isSitePunch(act.remark);
+      }
+      return true;
     });
 
     return {
@@ -745,8 +772,8 @@ export class TaskProjectsService {
         totalEvents: siteCheckEvents.length,
         events: siteCheckEvents,
       },
-      remarks: task.remarks,
-      messages: chats.map((c) => ({
+      remarks: userRemarks,
+      messages: taskMessages.map((c) => ({
         id: c.id,
         at: c.createdAt,
         message: c.message,
@@ -756,12 +783,12 @@ export class TaskProjectsService {
         userID: c.userID,
         recipientEmployeeID: c.recipientEmployeeID,
       })),
-      activities: task.activities,
+      activities: keyActivities,
       stats: {
         assigneeCount: task.assignments.length,
-        remarkCount: task.remarks.length,
-        messageCount: chats.length,
-        activityCount: task.activities.length,
+        remarkCount: userRemarks.length,
+        messageCount: taskMessages.length,
+        activityCount: keyActivities.length,
         siteCheckEventCount: siteCheckEvents.length,
       },
     };

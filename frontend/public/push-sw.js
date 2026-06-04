@@ -96,6 +96,8 @@ self.addEventListener("push", function (event) {
             url: options.data.url,
             kind: inner.kind || "general",
             event: inner.event || "",
+            taskId: inner.taskId != null ? inner.taskId : undefined,
+            tag: inner.tag || options.tag || "",
           });
         });
       }),

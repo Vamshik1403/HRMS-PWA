@@ -15,6 +15,8 @@ export interface MobileChatMessage {
   id: number;
   message: string;
   senderName?: string;
+  employeeID?: number | null;
+  userID?: number | null;
   attachmentUrl?: string | null;
   createdAt: string;
 }
@@ -65,6 +67,7 @@ function isSameSender(a?: string, b?: string) {
 export function MobileTaskChatView({
   task,
   currentUserName,
+  currentEmployeeId,
   message,
   onMessageChange,
   onSend,
@@ -77,6 +80,8 @@ export function MobileTaskChatView({
 }: {
   task: MobileTaskChatDetail;
   currentUserName?: string;
+  /** Prefer employee DB id for own-message detection (senderName can differ from login username). */
+  currentEmployeeId?: number;
   message: string;
   onMessageChange: (v: string) => void;
   onSend: (payload: { message: string; attachmentUrl?: string }) => void | Promise<void>;
@@ -105,7 +110,7 @@ export function MobileTaskChatView({
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [chats.length, sending]);
+  }, [chats.length, chats[chats.length - 1]?.id, sending]);
 
   const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -214,7 +219,10 @@ export function MobileTaskChatView({
           </div>
         ) : (
           chats.map((c, idx) => {
-            const own = isSameSender(c.senderName, currentUserName) || (me && (c.senderName || "").trim().toLowerCase() === me);
+            const own =
+              (currentEmployeeId != null && c.employeeID != null && c.employeeID === currentEmployeeId) ||
+              isSameSender(c.senderName, currentUserName) ||
+              (me && (c.senderName || "").trim().toLowerCase() === me);
             const day = formatDayLabel(c.createdAt);
             const showDay = day !== lastDay;
             if (showDay) lastDay = day;

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Icon } from "@iconify/react";
 import {
+  consolidateStoredTaskChatNotifications,
   loadInAppNotifications,
   type StoredInAppNotification,
 } from "../../utils/empInAppNotifications";
@@ -137,6 +138,7 @@ export function EmpNotificationsPanel() {
         setHasMore(more);
         setPageCache(FEED_CACHE_KEY, { recent: recentList, older: olderList, hasMore: more });
       }
+      consolidateStoredTaskChatNotifications();
       setStored(loadInAppNotifications());
     } catch {
       setError("Could not load notifications.");
@@ -148,6 +150,7 @@ export function EmpNotificationsPanel() {
   useEffect(() => {
     void load();
     const onChange = () => {
+      consolidateStoredTaskChatNotifications();
       setStored(loadInAppNotifications());
       void load();
     };

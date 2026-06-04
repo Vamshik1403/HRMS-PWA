@@ -1107,89 +1107,18 @@ function downloadSalarySlipPDF(payload: {
   }
 }
 
-/** Download payslip PDF for a payroll row (shared by PWA Pay Slips and Payout). */
+/** Download payslip PDF — uses the same calculation as the admin Generate Salary page. */
 export async function downloadPayslipForSalaryRow(row: GenerateSalaryRow) {
-  const employeeId = Number(row.employeeID);
-  const companyId = Number(row.companyID);
-  const branchId = Number(row.branchesID);
-  const monthLabel = row.monthPeriod;
-
-  const { start, end } = parseCycle(monthLabel);
-  const totalDaysInCycle = Math.floor((end.getTime() - start.getTime()) / 86400000) + 1;
-
-  const [emp, { companyName, branchName }, holidays, { nonLoPDays, lopDays }] =
-    await Promise.all([
-      robustGet(`/backend/manage-emp/${employeeId}`),
-      getCompanyAndBranch(companyId, branchId),
-      getHolidayCount(branchId, start, end),
-      getLeaveBreakdown(employeeId, start, end),
-    ]);
-
-  if (!emp) throw new Error("Employee not found");
-
-  const [counts, shiftDays, grade] = await Promise.all([
-    calculateSalaryCounts(employeeId, monthLabel, companyId, branchId),
-    getShiftDays(emp),
-    getMonthlyPayGrade(companyId, branchId, emp),
-  ]);
-
-  if (!counts) throw new Error("Could not compute attendance counts");
-
-  const weeklyOffDays = countWeeklyOffOccurrences(shiftDays, start, end);
-  const fullDays = Number(counts.flex_fullDayPresent || 0);
-  const halfDays = Number(counts.flex_halfDayPresent || 0);
-  const absentDays = Number(counts.flex_absent || 0);
-  const workingDaysInCycle = totalDaysInCycle - weeklyOffDays - holidays;
-  const totalPaidDays = fullDays + halfDays * 0.5;
-  const totalLopDays = absentDays + halfDays * 0.5 + (lopDays ?? 0);
-
-  const gross = getGrossFromEmp(emp, grade);
-  if (!gross || isNaN(gross)) throw new Error("Gross salary not found on employee record");
-
-  const basicForDeductions = Math.round(gross * 0.5);
-  const [earningsResult, deductionsResult] = await Promise.all([
-    computeEarnings(gross, grade, employeeId, monthLabel),
-    computeDeductions(gross, basicForDeductions, grade, employeeId, monthLabel),
-  ]);
-  const { basic, allowances, earningsTotal } = earningsResult;
-  const { deductions, deductionsTotal } = deductionsResult;
-
-  let totalForLOP = basic;
-  allowances.forEach((allowance) => {
-    if (allowance.name.toLowerCase() !== "reimbursement") {
-      totalForLOP += allowance.amount;
-    }
-  });
-
-  const daysForLOPCalculation = totalDaysInCycle;
-  const perDaySalary = totalForLOP / daysForLOPCalculation;
-  const fullDayLOP = absentDays + (lopDays ?? 0);
-  const lopAmount = perDaySalary * fullDayLOP + perDaySalary * 0.5 * halfDays;
-  const netPayBeforeRounding = Math.max(0, earningsTotal - (deductionsTotal + lopAmount));
-  const netPay = roundToNearestRupee(netPayBeforeRounding);
-
+  const { computeSalarySlipForRow, downloadSalarySlipPDF } = await import(
+    "../generate-salary/GenerateSalaryManagement"
+  );
+  const computed = await computeSalarySlipForRow(row as Parameters<typeof computeSalarySlipForRow>[0]);
   downloadSalarySlipPDF({
-    companyName,
-    branchName,
-    employee: emp,
-    monthLabel,
-    start,
-    end,
-    cycleDays: totalDaysInCycle,
-    paidUnits: Number(totalPaidDays.toFixed(2)),
-    lopDays: Number(totalLopDays.toFixed(2)),
-    nonLoPLeaveDays: Number(nonLoPDays.toFixed(2)),
-    weeklyOffDays,
-    holidays,
-    halfDaysUnits: Number((halfDays * 0.5).toFixed(2)),
-    gross,
-    basic,
-    earnings: allowances,
-    deductions,
-    lopAmount,
-    earningsTotal,
-    deductionsTotal,
-    netPay,
+    ...computed,
+    perDayGross: computed.perDayGross || 0,
+    perDayBasic: computed.perDayBasic || 0,
+    proRatedGross: computed.proRatedGross || 0,
+    totalWorkingDaysInCycle: computed.totalWorkingDaysInCycle || 0,
   });
 }
 

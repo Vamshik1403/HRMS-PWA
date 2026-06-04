@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { MessageSquare, Paperclip, Send, X } from "lucide-react";
 import { Button } from "../ui/button";
 import { Textarea } from "../ui/textarea";
@@ -58,8 +58,14 @@ export function TaskRemarksChatbox({
   sending,
 }: TaskRemarksChatboxProps) {
   const fileRef = useRef<HTMLInputElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
   const [pendingAttachment, setPendingAttachment] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+
+  useEffect(() => {
+    if (!open || !scrollRef.current) return;
+    scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+  }, [open, chats.length, chats[chats.length - 1]?.id]);
 
   if (!open) return null;
 
@@ -97,7 +103,7 @@ export function TaskRemarksChatbox({
         <TaskStatusBadge status={status} size="xs" className="!bg-white/20 !text-white !border-white/30" />
         <button type="button" onClick={onClose} className="p-1 rounded hover:bg-white/20" aria-label="Close"><X className="w-4 h-4" /></button>
       </div>
-      <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-white min-h-[180px]">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-3 bg-white min-h-[180px]">
         {chats.length === 0 ? (
           <p className="text-sm text-gray-400 text-center py-6">No remarks yet.</p>
         ) : chats.map((c) => {

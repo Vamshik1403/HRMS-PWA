@@ -6,6 +6,7 @@ import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 import { FormDrawer } from "../components/ui/form-drawer";
+import { FormModal } from "../components/ui/form-modal";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../components/ui/table";
 import { Badge } from "../components/ui/badge";
 import { Icon } from "@iconify/react";
@@ -1022,7 +1023,7 @@ async function calculateSalaryCounts(
   }
 }
 
-type SalarySlipComputed = {
+export type SalarySlipComputed = {
   companyName: string
   branchName: string
   employee: any
@@ -1054,7 +1055,7 @@ type SalarySlipComputed = {
    PDF generation
    ======================= */
 
-function downloadSalarySlipPDF(payload: {
+export function downloadSalarySlipPDF(payload: {
   companyName: string;
   branchName: string;
   employee: any;
@@ -1318,7 +1319,7 @@ function downloadSalarySlipPDF(payload: {
    Salary slip computation (CORRECTED - SIMPLE PRO-RATION)
    ======================= */
 
-async function computeSalarySlipForRow(
+export async function computeSalarySlipForRow(
   row: GenerateSalaryRow
 ): Promise<SalarySlipComputed> {
 
@@ -2496,222 +2497,220 @@ export function GenerateSalaryManagement() {
         
       </FormDrawer>
 
-      <FormDrawer open={isPaymentDialogOpen} onOpenChange={setIsPaymentDialogOpen} title={"Make Payment"} description={""}>
+      <FormModal
+        open={isPaymentDialogOpen}
+        onOpenChange={setIsPaymentDialogOpen}
+        title="Make Payment"
+        description="Record payment for this generated salary."
+        size="lg"
+        closeLabel="Cancel"
+      >
+        {selectedSalaryRow && (
+          <form onSubmit={handlePaymentSubmit} className="space-y-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
+              <div>
+                <Label>Employee</Label>
+                <p className="font-semibold">{empName(selectedSalaryRow.manageEmployee)}</p>
+              </div>
+              <div>
+                <Label>Month</Label>
+                <p className="font-semibold">{selectedSalaryRow.monthPeriod}</p>
+              </div>
+            </div>
 
-          <div className="flex-1 overflow-y-auto px-6 py-4">
-            {selectedSalaryRow && (
-              <form onSubmit={handlePaymentSubmit} className="space-y-6">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
-                  <div>
-                    <Label>Employee</Label>
-                    <p className="font-semibold">{empName(selectedSalaryRow.manageEmployee)}</p>
-                  </div>
-                  <div>
-                    <Label>Month</Label>
-                    <p className="font-semibold">{selectedSalaryRow.monthPeriod}</p>
-                  </div>
-                </div>
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Payment Mode *</Label>
+              <div className="flex gap-3">
+                <Button
+                  type="button"
+                  variant={paymentMode === "Cash" ? "default" : "outline"}
+                  onClick={() => {
+                    setPaymentMode("Cash");
+                    setPaymentType("Cash");
+                  }}
+                  className="flex-1"
+                >
+                  Cash
+                </Button>
+                <Button
+                  type="button"
+                  variant={paymentMode === "Bank" ? "default" : "outline"}
+                  onClick={async () => {
+                    setPaymentMode("Bank");
+                    setPaymentType("Bank Transfer");
 
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium">Payment Mode *</Label>
-                  <div className="flex gap-3">
-                    <Button
-                      type="button"
-                      variant={paymentMode === "Cash" ? "default" : "outline"}
-                      onClick={() => {
-                        setPaymentMode("Cash");
-                        setPaymentType("Cash");
-                      }}
-                      className="flex-1"
-                    >
-                      Cash
-                    </Button>
-                    <Button
-                      type="button"
-                      variant={paymentMode === "Bank" ? "default" : "outline"}
-                      onClick={async () => {
-                        setPaymentMode("Bank");
-                        setPaymentType("Bank Transfer");
+                    if (selectedSalaryRow.manageEmployee?.id) {
+                      try {
+                        setIsLoadingBankDetails(true);
+                        const allEmployees = await robustGet(API.emp);
+                        const employee = allEmployees.find(
+                          (e: any) => e.id === selectedSalaryRow.manageEmployee?.id,
+                        );
 
-                        if (selectedSalaryRow.manageEmployee?.id) {
-                          try {
-                            setIsLoadingBankDetails(true);
-                            const allEmployees = await robustGet(API.emp);
-                            const employee = allEmployees.find(
-                              (e: any) => e.id === selectedSalaryRow.manageEmployee?.id
-                            );
+                        if (employee && employee.employeeBankDetails?.length > 0) {
+                          const bankDetails = employee.employeeBankDetails[0];
+                          setEmployeeBankDetails(bankDetails);
 
-                            if (employee && employee.employeeBankDetails?.length > 0) {
-                              const bankDetails = employee.employeeBankDetails[0];
-                              setEmployeeBankDetails(bankDetails);
-
-                              if (bankDetails.upi) {
-                                setPaymentType("UPI");
-                              }
-                            } else {
-                              setEmployeeBankDetails(null);
-                            }
-                          } catch (err) {
-                            console.error("Error fetching employee bank details:", err);
-                            toast.error("Failed to load data.");
-                          } finally {
-                            setIsLoadingBankDetails(false);
+                          if (bankDetails.upi) {
+                            setPaymentType("UPI");
                           }
+                        } else {
+                          setEmployeeBankDetails(null);
                         }
-                      }}
-                      className="flex-1"
+                      } catch (err) {
+                        console.error("Error fetching employee bank details:", err);
+                        toast.error("Failed to load data.");
+                      } finally {
+                        setIsLoadingBankDetails(false);
+                      }
+                    }
+                  }}
+                  className="flex-1"
+                >
+                  Bank
+                </Button>
+              </div>
+            </div>
+
+            {paymentMode === "Bank" && (
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Payment Type *</Label>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  {["Cheque", "UPI", "Bank Transfer"].map((type) => (
+                    <Button
+                      key={type}
+                      type="button"
+                      variant={paymentType === type ? "default" : "outline"}
+                      onClick={() => setPaymentType(type)}
+                      className="py-2"
                     >
-                      Bank
+                      {type}
                     </Button>
-                  </div>
+                  ))}
                 </div>
+              </div>
+            )}
 
-                {paymentMode === "Bank" && (
-                  <div className="space-y-2">
-                    <Label className="text-sm font-medium">Payment Type *</Label>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                      {["Cheque", "UPI", "Bank Transfer"].map((type) => (
-                        <Button
-                          key={type}
-                          type="button"
-                          variant={paymentType === type ? "default" : "outline"}
-                          onClick={() => setPaymentType(type)}
-                          className="py-2"
-                        >
-                          {type}
-                        </Button>
-                      ))}
-                    </div>
-                  </div>
-                )}
+            {paymentMode === "Bank" && isLoadingBankDetails && (
+              <div className="p-4 bg-gray-50 rounded-lg border border-gray-200 text-center">
+                <Icon icon="mdi:loading" className="w-5 h-5 animate-spin mx-auto text-blue-600" />
+                <p className="text-sm text-gray-600 mt-2">Loading employee bank details...</p>
+              </div>
+            )}
 
-                {paymentMode === "Bank" && isLoadingBankDetails && (
-                  <div className="p-4 bg-gray-50 rounded-lg border border-gray-200 text-center">
-                    <Icon icon="mdi:loading" className="w-5 h-5 animate-spin mx-auto text-blue-600" />
-                    <p className="text-sm text-gray-600 mt-2">Loading employee bank details...</p>
-                  </div>
-                )}
+            {paymentMode === "Bank" && !isLoadingBankDetails && !employeeBankDetails && (
+              <div className="p-4 bg-yellow-50 rounded-lg border border-yellow-200 text-sm text-yellow-800">
+                No bank details found for this employee. Please contact HR to update.
+              </div>
+            )}
 
-                {paymentMode === "Bank" &&
-                  !isLoadingBankDetails &&
-                  !employeeBankDetails && (
-                    <div className="p-4 bg-yellow-50 rounded-lg border border-yellow-200 text-sm text-yellow-800">
-                      No bank details found for this employee. Please contact HR to update.
-                    </div>
-                  )}
-
-                {paymentMode === "Bank" && employeeBankDetails && (
-                  <>
-                    {paymentType === "Bank Transfer" && (
-                      <div className="p-4 bg-green-50 rounded-lg border border-green-200">
-                        <h4 className="font-semibold text-green-800 mb-3">
-                          Employee Bank Details
-                        </h4>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                          <div>
-                            <Label>Bank Name</Label>
-                            <p className="font-semibold text-green-900">
-                              {employeeBankDetails.bankName || "N/A"}
-                            </p>
-                          </div>
-                          <div>
-                            <Label>Branch Name</Label>
-                            <p className="font-semibold text-green-900">
-                              {employeeBankDetails.bankBranchName || "N/A"}
-                            </p>
-                          </div>
-                          <div>
-                            <Label>Account Number</Label>
-                            <p className="font-semibold text-green-900">
-                              {employeeBankDetails.accNumber || "N/A"}
-                            </p>
-                          </div>
-                          <div>
-                            <Label>IFSC Code</Label>
-                            <p className="font-semibold text-green-900">
-                              {employeeBankDetails.ifscCode || "N/A"}
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
-                    {paymentType === "UPI" && (
-                      <div className="p-4 bg-purple-50 rounded-lg border border-purple-200">
-                        <h4 className="font-semibold text-purple-800 mb-3">
-                          Employee UPI Details
-                        </h4>
-                        <Label>UPI ID</Label>
-                        <p className="text-lg font-semibold text-purple-900">
-                          {employeeBankDetails.upi || "N/A"}
+            {paymentMode === "Bank" && employeeBankDetails && (
+              <>
+                {paymentType === "Bank Transfer" && (
+                  <div className="p-4 bg-green-50 rounded-lg border border-green-200">
+                    <h4 className="font-semibold text-green-800 mb-3">Employee Bank Details</h4>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <Label>Bank Name</Label>
+                        <p className="font-semibold text-green-900">
+                          {employeeBankDetails.bankName || "N/A"}
                         </p>
                       </div>
-                    )}
-                  </>
-                )}
-
-                {paymentMode === "Bank" && (
-                  <div>
-                    <Label>
-                      {paymentType === "Cheque"
-                        ? "Cheque Number *"
-                        : paymentType === "UPI"
-                          ? "UTR Number *"
-                          : "Transaction Reference *"}
-                    </Label>
-                    <Input
-                      value={paymentProof}
-                      onChange={(e) => setPaymentProof(e.target.value)}
-                      required={paymentMode === "Bank"}
-                      placeholder="Enter reference / cheque / UTR number"
-                      className="border-gray-300 focus:border-blue-500"
-                    />
+                      <div>
+                        <Label>Branch Name</Label>
+                        <p className="font-semibold text-green-900">
+                          {employeeBankDetails.bankBranchName || "N/A"}
+                        </p>
+                      </div>
+                      <div>
+                        <Label>Account Number</Label>
+                        <p className="font-semibold text-green-900">
+                          {employeeBankDetails.accNumber || "N/A"}
+                        </p>
+                      </div>
+                      <div>
+                        <Label>IFSC Code</Label>
+                        <p className="font-semibold text-green-900">
+                          {employeeBankDetails.ifscCode || "N/A"}
+                        </p>
+                      </div>
+                    </div>
                   </div>
                 )}
 
-                <div>
-                  <Label>Payment Date *</Label>
-                  <Input
-                    type="date"
-                    value={paymentDate}
-                    onChange={(e) => setPaymentDate(e.target.value)}
-                    required
-                    className="border-gray-300 focus:border-blue-500"
-                  />
-                </div>
-
-                <div>
-                  <Label>Remark</Label>
-                  <Input
-                    value={paymentRemark}
-                    onChange={(e) => setPaymentRemark(e.target.value)}
-                    placeholder="Optional remark"
-                    className="border-gray-300 focus:border-blue-500"
-                  />
-                </div>
-              </form>
+                {paymentType === "UPI" && (
+                  <div className="p-4 bg-purple-50 rounded-lg border border-purple-200">
+                    <h4 className="font-semibold text-purple-800 mb-3">Employee UPI Details</h4>
+                    <Label>UPI ID</Label>
+                    <p className="text-lg font-semibold text-purple-900">
+                      {employeeBankDetails.upi || "N/A"}
+                    </p>
+                  </div>
+                )}
+              </>
             )}
-          </div>
 
-          <div className="flex justify-end gap-3 pt-4">
-            <Button
-              variant="outline"
-              onClick={() => setIsPaymentDialogOpen(false)}
-              className="border-gray-300 hover:bg-gray-50"
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={handlePaymentSubmit}
-              className="bg-green-600 hover:bg-green-700"
-              disabled={paymentMode === "Bank" && !employeeBankDetails}
-            >
-              <Icon icon="mdi:check-circle" className="w-4 h-4 mr-2" />
-              Mark as Paid
-            </Button>
-          </div>
-        
-      </FormDrawer>
+            {paymentMode === "Bank" && (
+              <div>
+                <Label>
+                  {paymentType === "Cheque"
+                    ? "Cheque Number *"
+                    : paymentType === "UPI"
+                      ? "UTR Number *"
+                      : "Transaction Reference *"}
+                </Label>
+                <Input
+                  value={paymentProof}
+                  onChange={(e) => setPaymentProof(e.target.value)}
+                  required={paymentMode === "Bank"}
+                  placeholder="Enter reference / cheque / UTR number"
+                  className="border-gray-300 focus:border-blue-500"
+                />
+              </div>
+            )}
+
+            <div>
+              <Label>Payment Date *</Label>
+              <Input
+                type="date"
+                value={paymentDate}
+                onChange={(e) => setPaymentDate(e.target.value)}
+                required
+                className="border-gray-300 focus:border-blue-500"
+              />
+            </div>
+
+            <div>
+              <Label>Remark</Label>
+              <Input
+                value={paymentRemark}
+                onChange={(e) => setPaymentRemark(e.target.value)}
+                placeholder="Optional remark"
+                className="border-gray-300 focus:border-blue-500"
+              />
+            </div>
+          </form>
+        )}
+        <div className="flex gap-3 border-t border-gray-100 pt-4 mt-2">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => setIsPaymentDialogOpen(false)}
+            className="flex-1"
+          >
+            Cancel
+          </Button>
+          <Button
+            type="button"
+            onClick={handlePaymentSubmit}
+            className="flex-1 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+            disabled={paymentMode === "Bank" && !employeeBankDetails}
+          >
+            <Icon icon="mdi:check-circle" className="w-4 h-4 mr-2" />
+            Mark as Paid
+          </Button>
+        </div>
+      </FormModal>
 
       <div className="space-y-6 w-full max-w-7xl mx-auto px-4">
         <FormDrawer open={isDialogOpen} onOpenChange={(o) => { setIsDialogOpen(o); if (!o) resetForm(); }} title={editing ? "Edit Salary Generation" : "Add New Salary Generation"} description={editing ? "Update the salary generation information below." : "Fill in the details to add a new salary generation."}>

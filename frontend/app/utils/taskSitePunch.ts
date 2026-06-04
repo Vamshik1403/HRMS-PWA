@@ -3,6 +3,14 @@
 const SITE_MARK_IN = /site\s*mark\s*in\b/i;
 const SITE_MARK_OUT = /site\s*mark\s*out\b/i;
 
+/** Automated site visit check-in/out posts (not regular task chat). */
+export const SITE_PUNCH_MESSAGE_RE =
+  /\b(mark(?:ed)?\s*(in|out)|check(?:ed)?\s*(in|out)|site\s*(?:mark\s*)?(?:in|out))\b/i;
+
+export function isSitePunchMessage(message?: string | null): boolean {
+  return SITE_PUNCH_MESSAGE_RE.test((message || "").trim());
+}
+
 export type SitePunchKind = "in" | "out";
 
 export function parseSitePunchKind(message?: string | null): SitePunchKind | null {

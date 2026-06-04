@@ -9,7 +9,10 @@ import {
   resetPushClientStateIfNeeded,
 } from "@/lib/pushSubscribe";
 import { refreshHomeScreenBadge } from "@/lib/empNotificationBadge";
-import { appendInAppNotification } from "../../utils/empInAppNotifications";
+import {
+  appendInAppNotification,
+  upsertInAppNotification,
+} from "../../utils/empInAppNotifications";
 import { empPayoutHrefForPeriod } from "../../utils/empPayslipApi";
 import PushNotificationPrompt from "../PushNotificationPrompt";
 import { toast } from "sonner";
@@ -176,14 +179,28 @@ export default function EmpMobileLayout({ children, hideBottomNav = false }: Emp
           href = empPayoutHrefForPeriod(periodMatch[1].trim());
         }
       }
-      appendInAppNotification({
-        kind: data.kind === "payslip" ? "payslip" : "general",
-        title,
-        body,
-        emoji: isPaid ? "💰" : title.toLowerCase().includes("payslip") ? "🧾" : "🔔",
-        at: new Date().toISOString(),
-        href,
-      });
+      const at = new Date().toISOString();
+      const emoji = isPaid ? "💰" : title.toLowerCase().includes("payslip") ? "🧾" : "🔔";
+      if (data.kind === "task" && data.event === "chat" && data.taskId != null) {
+        upsertInAppNotification({
+          id: `task-chat-${data.taskId}`,
+          kind: "task",
+          title,
+          body,
+          emoji: "💬",
+          at,
+          href: "/empMyTasks",
+        });
+      } else {
+        appendInAppNotification({
+          kind: data.kind === "payslip" ? "payslip" : "general",
+          title,
+          body,
+          emoji,
+          at,
+          href,
+        });
+      }
       void refreshHomeScreenBadge();
     };
     navigator.serviceWorker.addEventListener("message", onMessage);

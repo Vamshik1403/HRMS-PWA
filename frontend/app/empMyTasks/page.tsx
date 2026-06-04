@@ -15,6 +15,7 @@ import { toast } from "sonner";
 import { getNextSitePunchKind, sitePunchLabel } from "../utils/taskSitePunch";
 import { nextTaskStatus } from "../utils/taskStatusFlow";
 import { downloadTaskReportForId } from "../utils/taskReportPdf";
+import { useTaskChatPolling } from "../hooks/useTaskChatPolling";
 
 const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL || "/backend";
 
@@ -103,6 +104,13 @@ export default function EmpMyTasksPage() {
     }
   };
 
+  useTaskChatPolling<Task>(
+    detail?.id,
+    user,
+    (full) => setDetail((prev) => (prev?.id === full.id ? full : prev)),
+    !!detail,
+  );
+
   const sendMsg = async (payload: { message: string; attachmentUrl?: string }) => {
     if (!detail || !user) return;
     if (!payload.message.trim() && !payload.attachmentUrl) return;
@@ -188,6 +196,10 @@ export default function EmpMyTasksPage() {
         <MobileTaskChatView
           task={detail}
           currentUserName={user?.username}
+          currentEmployeeId={
+            (user as { employee?: { id?: number } })?.employee?.id ??
+            (typeof user?.id === "number" ? user.id : undefined)
+          }
           message={chatMsg}
           onMessageChange={setChatMsg}
           onSend={sendMsg}
