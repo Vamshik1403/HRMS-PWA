@@ -7,7 +7,7 @@ import { Label } from "../components/ui/label";
 import { Textarea } from "../components/ui/textarea";
 import { FormDrawer } from "../components/ui/form-drawer";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../components/ui/table";
-import { Filter, MessageCircle, Pencil, Plus, Search, Trash2, Eye, AlertTriangle, UserPlus } from "lucide-react";
+import { Filter, MessageCircle, Pencil, Plus, Search, Trash2, Eye, AlertTriangle, UserPlus, FileDown } from "lucide-react";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import { toast } from "sonner";
 import { taskFetch } from "../utils/taskApi";
@@ -23,6 +23,9 @@ import {
   formatTaskDate,
   type TaskStatus,
 } from "../components/task/task-ui";
+import { downloadTaskReportForId } from "../utils/taskReportPdf";
+import { dispatchAppRefresh } from "../utils/appRefresh";
+import { useAppRefresh } from "../hooks/useAppRefresh";
 
 const STATUSES = TASK_STATUSES;
 const PRIORITIES = ["Urgent", "Medium", "Low"];
@@ -163,6 +166,18 @@ export default function TaskManagement() {
   }, [user, search, statusFilter, priorityFilter, taskTypeFilter]);
 
   useEffect(() => { if (user) loadTasks(); }, [user, loadTasks]);
+  useAppRefresh(() => { if (user) loadTasks(); }, [user, loadTasks]);
+
+  const downloadReport = async (t: Task) => {
+    try {
+      const tid = toast.loading("Generating report…");
+      await downloadTaskReportForId(t.id, user, t.taskCode);
+      toast.dismiss(tid);
+      toast.success("Report downloaded");
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "Failed to download report");
+    }
+  };
 
   // Load employees for assign modal based on task's department
   useEffect(() => {
@@ -205,6 +220,7 @@ export default function TaskManagement() {
       toast.success("Employees assigned");
       setAssignTask(null);
       loadTasks();
+      dispatchAppRefresh();
     } catch (e: any) { toast.error(e.message); }
     finally { setAssignSaving(false); }
   };
@@ -264,6 +280,7 @@ export default function TaskManagement() {
         toast.success("Task created");
       }
       setFormOpen(false); resetForm(); loadTasks();
+      dispatchAppRefresh();
     } catch (err: any) { toast.error(err.message); }
     finally { setSaving(false); }
   };
@@ -275,6 +292,7 @@ export default function TaskManagement() {
       toast.success("Task deleted");
       if (chatTask?.id === id) { setChatOpen(false); setChatTask(null); }
       loadTasks();
+      dispatchAppRefresh();
     } catch (err: any) { toast.error(err.message); }
   };
 
@@ -439,6 +457,7 @@ export default function TaskManagement() {
                             <Button variant="ghost" size="icon" className="h-8 w-8 text-blue-600" onClick={() => openEdit(t)} title="Edit"><Pencil className="w-4 h-4" /></Button>
                             <Button variant="ghost" size="icon" className="h-8 w-8 text-violet-600" onClick={() => openAssign(t)} title="Assign Employees"><UserPlus className="w-4 h-4" /></Button>
                             <Button variant="ghost" size="icon" className="h-8 w-8 text-emerald-600" onClick={() => openChat(t)} title="Remarks"><MessageCircle className="w-4 h-4" /></Button>
+                            <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-600" onClick={() => downloadReport(t)} title="Download report"><FileDown className="w-4 h-4" /></Button>
                             <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500" onClick={() => removeTask(t.id)} title="Delete"><Trash2 className="w-4 h-4" /></Button>
                           </div>
                         </TableCell>

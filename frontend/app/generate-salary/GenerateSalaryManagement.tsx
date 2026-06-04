@@ -15,6 +15,9 @@ import autoTable from "jspdf-autotable";
 import { useCurrentUser } from "../hooks/useCurrentUser"
 import { toast } from "sonner";
 import { getSidebarContext } from "../utils/sidebarContext";
+import { formatPayslipPeriodLabel } from "../utils/payslipPeriodLabel";
+import { dispatchAppRefresh, registerDataCacheClearer } from "../utils/appRefresh";
+import { useListAutoRefresh } from "../hooks/useListAutoRefresh";
 
 /* =======================
    Types (aligned to API)
@@ -282,14 +285,20 @@ const _refCache = new Map<string, { ts: number; data: any }>();
 const _refInflight = new Map<string, Promise<any>>();
 const REF_TTL = 60_000;
 
-async function robustGet(url: string) {
+function clearRefCache(url?: string) {
+  if (url) _refCache.delete(url);
+  else _refCache.clear();
+}
+
+async function robustGet(url: string, opts?: { fresh?: boolean }) {
+  if (opts?.fresh) clearRefCache(url);
   const hit = _refCache.get(url);
   if (hit && Date.now() - hit.ts < REF_TTL) return hit.data;
   const inflight = _refInflight.get(url);
   if (inflight) return inflight;
 
   const p = (async () => {
-    const res = await fetch(url);
+    const res = await fetch(url, { cache: "no-store" });
     if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
     const data = await res.json();
     _refCache.set(url, { ts: Date.now(), data });
@@ -1126,12 +1135,12 @@ function downloadSalarySlipPDF(payload: {
     doc.setFont("helvetica", "normal");
     doc.setFontSize(9);
     doc.text(`Branch: ${payload.branchName}`, 15, 45);
-    doc.text(
-      `Period: ${payload.start.toDateString()} - ${payload.end.toDateString()}`,
-      pageWidth - 15,
-      45,
-      { align: "right" }
+    const periodLabel = formatPayslipPeriodLabel(
+      payload.monthLabel,
+      payload.start,
+      payload.end,
     );
+    doc.text(`Period: ${periodLabel}`, pageWidth - 15, 45, { align: "right" });
 
     const empName = `${payload.employee.employeeFirstName || ""} ${payload.employee.employeeLastName || ""}`.trim();
     const dept = payload.employee.departments?.departmentName || "N/A";
@@ -1169,7 +1178,7 @@ function downloadSalarySlipPDF(payload: {
       theme: "plain",
       styles: { fontSize: 8, cellPadding: 1 },
       body: [
-        ["📊 Calculation Summary:", ""],
+        ["Calculation Summary:", ""],
         ["Monthly Gross:", `₹ ${payload.gross.toLocaleString()}`],
         ["Working Days in Month:", `${payload.totalWorkingDaysInCycle}`],
         ["Paid Days:", `${payload.paidUnits.toFixed(2)}`],
@@ -1271,12 +1280,19 @@ function downloadSalarySlipPDF(payload: {
 
     y += 15;
     doc.setDrawColor(0);
+    const empSigLineStart = pageWidth - 80;
+    const empSigLineEnd = pageWidth - 30;
     doc.line(30, y, 80, y);
-    doc.line(pageWidth - 80, y, pageWidth - 30, y);
+    doc.line(empSigLineStart, y, empSigLineEnd, y);
     doc.setFont("helvetica", "bold");
     doc.setFontSize(9);
-    doc.text("Employer's Signature", 35, y + 5);
-    doc.text("Employee's Signature", pageWidth - 85, y + 5);
+    doc.text("Employer's Signature", 55, y + 5, { align: "center" });
+    doc.text(
+      "Employee's Signature",
+      (empSigLineStart + empSigLineEnd) / 2,
+      y + 5,
+      { align: "center" },
+    );
 
     y += 15;
     doc.setFont("helvetica", "normal");
@@ -1705,7 +1721,7 @@ export function GenerateSalaryManagement() {
   // Fetch all salary records
   async function fetchAll() {
     try {
-      const raw = await robustGet(API.generateSalary)
+      const raw = await robustGet(API.generateSalary, { fresh: true })
       const allItems: GenerateSalaryRow[] = Array.isArray(raw) ? raw : (raw?.data ?? [])
 
       if (user?.role === "SUPERADMIN") {
@@ -1769,14 +1785,10 @@ export function GenerateSalaryManagement() {
     }
   }
 
-  useEffect(() => {
-    if (user) fetchAll()
-  }, [user])
+  useEffect(() => registerDataCacheClearer(() => clearRefCache()), []);
 
-  useEffect(() => {
-    const handler = () => { if (user) fetchAll(); };
-    window.addEventListener("sidebar-context-changed", handler);
-    return () => window.removeEventListener("sidebar-context-changed", handler);
+  useListAutoRefresh(() => {
+    if (user) void fetchAll();
   }, [user]);
 
   // Payment dialog functions
@@ -1844,7 +1856,8 @@ export function GenerateSalaryManagement() {
       if (!res.ok) throw new Error(await res.text());
       toast.success("Payment marked successfully!");
       setIsPaymentDialogOpen(false);
-      fetchAll();
+      await fetchAll();
+      dispatchAppRefresh();
     } catch (error) {
       console.error("Payment update failed:", error);
       toast.error("Payment update failed: " + (error as any).message);
@@ -1877,6 +1890,7 @@ export function GenerateSalaryManagement() {
       resetForm();
       setIsDialogOpen(false);
       toast.success(editing ? "Updated successfully" : "Created successfully");
+      dispatchAppRefresh();
     } catch (err) {
       console.error("Save failed:", err);
       toast.error("Failed to save. Please try again.");
@@ -1890,6 +1904,7 @@ export function GenerateSalaryManagement() {
       if (!res.ok) throw new Error(await res.text());
       await fetchAll();
       toast.success("Deleted successfully");
+      dispatchAppRefresh();
     } catch (e) {
       console.error("Delete failed:", e);
       toast.error("Failed to delete. Please try again.");

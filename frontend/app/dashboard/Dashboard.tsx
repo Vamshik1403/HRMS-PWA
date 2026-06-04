@@ -18,6 +18,7 @@ import EmployeeStatusCharts, {
   type StatusBreakdownItem,
 } from "./components/EmployeeStatusCharts";
 import { formatDevicePunchForDisplay } from "../utils/devicePunchTime";
+import { useAppRefresh } from "../hooks/useAppRefresh";
 
 interface Branch {
   id: number;
@@ -405,6 +406,12 @@ export default function DashboardPage() {
       setLoading(false);
     }
   };
+
+  useAppRefresh(() => {
+    loadTodayOverview();
+    loadProbationAlerts();
+    loadDashboard();
+  }, [user, currentUserMapping, overviewQueryParams.toString()]);
 
   const getAttendance = (empId: number) => {
     const logs = attendanceLogs

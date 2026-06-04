@@ -25,6 +25,7 @@ import { Badge } from "../components/ui/badge";
 import { Icon } from "@iconify/react";
 import { Plus, Search, Edit, Trash2, Eye, X, Save, History, Download } from "lucide-react";
 import { useCurrentUser } from "../hooks/useCurrentUser";
+import { dispatchAppRefresh, registerDataCacheClearer } from "../utils/appRefresh";
 import {
   Dialog,
   DialogContent,
@@ -1047,6 +1048,8 @@ export function ManageEmployeesManagement() {
   }
 };
 
+  useEffect(() => registerDataCacheClearer(() => clearRefCache()), []);
+
   useEffect(() => {
     if (user) fetchRows();
   }, [user]);
@@ -1054,7 +1057,11 @@ export function ManageEmployeesManagement() {
   useEffect(() => {
     const handler = () => { if (user) fetchRows(); };
     window.addEventListener("sidebar-context-changed", handler);
-    return () => window.removeEventListener("sidebar-context-changed", handler);
+    window.addEventListener("app-data-refresh", handler);
+    return () => {
+      window.removeEventListener("sidebar-context-changed", handler);
+      window.removeEventListener("app-data-refresh", handler);
+    };
   }, [user]);
 
 
@@ -2598,6 +2605,7 @@ const addCombinedDevMap = () => {
       setIsAddingNew(false);
       setEditingRow(null);
       toast.success("Employee saved successfully");
+      dispatchAppRefresh();
     } catch (e: any) {
       setError(e?.message || "Save failed");
     } finally {
@@ -2969,6 +2977,7 @@ const addCombinedDevMap = () => {
       if (!res.ok) throw new Error(await res.text());
       await fetchRows();
       toast.success("Employee deleted successfully");
+      dispatchAppRefresh();
     } catch (e: any) {
       toast.error(e?.message || "Delete failed");
     }

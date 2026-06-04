@@ -14,6 +14,7 @@ import { useCurrentUser } from "../hooks/useCurrentUser";
 import { toast } from "sonner";
 import { LocationFields } from "../components/ui/location-fields";
 import { taskFetch } from "../utils/taskApi";
+import { useListAutoRefresh } from "../hooks/useListAutoRefresh";
 import { SearchSuggestInput } from "../components/SearchSuggestInput";
 import { TaskContactsRepeater, sanitizeContacts, type TaskContactRow } from "../components/task/TaskContactsRepeater";
 
@@ -73,7 +74,7 @@ export default function SiteManagement() {
   }, [canManage, user, page, search, filterCustomer]);
 
   useEffect(() => { loadCustomers(); }, [loadCustomers]);
-  useEffect(() => { load(); }, [load]);
+  useListAutoRefresh(() => { void load(); }, [load]);
 
   const applyCustomerAddress = (c: CustomerOpt) => {
     setForm((p) => ({ ...p, address: c.address || "", city: c.city || "", state: c.state || "", pincode: c.pincode || "", country: c.country || "" }));

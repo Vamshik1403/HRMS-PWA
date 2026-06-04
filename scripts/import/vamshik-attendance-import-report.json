@@ -1,0 +1,17 @@
+{
+  "runAt": "2026-06-04T05:39:15.761Z",
+  "sourceFile": "/var/www/openhrm/scripts/8_logs.sql",
+  "employeeId": "ENPL_123",
+  "manageEmployeeId": 45,
+  "dateFrom": "2026-04-20",
+  "dateTo": "2026-05-20",
+  "dryRun": false,
+  "parsedFromFile": 1735,
+  "matchedEmployee": 203,
+  "inDateRange": 36,
+  "skippedDuplicate": 36,
+  "esslInserted": 0,
+  "processInserted": 0,
+  "skippedOutOfRange": 167,
+  "skippedWrongEmployee": 1532
+}

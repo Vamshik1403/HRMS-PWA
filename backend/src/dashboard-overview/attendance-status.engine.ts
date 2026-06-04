@@ -197,6 +197,8 @@ export type ComputeDayStatusInput = {
   noCheckoutTracker: Map<string, number>;
   /** Matches web Attendance Marking Logs in actual mode (not factual). */
   actualMode?: boolean;
+  /** Today still in progress — do not penalize missing checkout yet. */
+  dayInProgress?: boolean;
 };
 
 export function computeDayStatus(input: ComputeDayStatusInput): DayStatusResult {
@@ -217,6 +219,7 @@ export function computeDayStatus(input: ComputeDayStatusInput): DayStatusResult 
     lateMarkTracker,
     noCheckoutTracker,
     actualMode = true,
+    dayInProgress = false,
   } = input;
 
   if (absentDeclared && punches.length === 0) {
@@ -332,6 +335,9 @@ export function computeDayStatus(input: ComputeDayStatusInput): DayStatusResult 
   }
 
   if (effectivePunches.length === 1) {
+    if (dayInProgress) {
+      return { type: 'SINGLE_PUNCH', label: 'no checkout', hasPunches: true };
+    }
     const monthKey = `${employeeId}-${date.substring(0, 7)}`;
     const maxNoCheckoutCount = parseRuleCount(policy.lateMarkCount, 3);
     if (incrementTrackerAndShouldApply(noCheckoutTracker, monthKey, maxNoCheckoutCount)) {

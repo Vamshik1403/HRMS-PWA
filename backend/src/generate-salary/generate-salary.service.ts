@@ -4,6 +4,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CreateGenerateSalaryDto } from './dto/create-generate-salary.dto';
 import { UpdateGenerateSalaryDto } from './dto/update-generate-salary.dto';
 import { empPayoutHrefForPeriod } from '../common/payslip-period.util';
+import { MailService } from '../mail/mail.service';
 import { PushNotificationsService } from '../push-notifications/push-notifications.service';
 
 @Injectable()
@@ -11,6 +12,7 @@ export class GenerateSalaryService {
   constructor(
     private prisma: PrismaService,
     private readonly pushService: PushNotificationsService,
+    private readonly mailService: MailService,
   ) {}
 
   private async notifyPayslipGenerated(record: {
@@ -29,6 +31,36 @@ export class GenerateSalaryService {
         },
       )
       .catch(() => null);
+  }
+
+  private async notifyPayslipEmail(record: {
+    employeeID: number;
+    monthPeriod: string;
+    companyID?: number | null;
+  }) {
+    await this.mailService.sendNotificationEmail({
+      employeeId: record.employeeID,
+      companyID: record.companyID,
+      eventType: 'PAYSLIP',
+      subject: `Payslip ready — ${record.monthPeriod}`,
+      bodyText: `Your payslip for ${record.monthPeriod} has been generated. Please review it in the Payout section.`,
+      extraVars: { status: 'Generated', amount: record.monthPeriod },
+    });
+  }
+
+  private async notifyPayslipPaidEmail(record: {
+    employeeID: number;
+    monthPeriod: string;
+    companyID?: number | null;
+  }) {
+    await this.mailService.sendNotificationEmail({
+      employeeId: record.employeeID,
+      companyID: record.companyID,
+      eventType: 'PAYSLIP',
+      subject: `Salary paid — ${record.monthPeriod}`,
+      bodyText: `Your salary for ${record.monthPeriod} has been marked as paid.`,
+      extraVars: { status: 'Paid' },
+    });
   }
 
   private async notifyPayslipPaid(record: {
@@ -85,8 +117,8 @@ export class GenerateSalaryService {
       },
     });
 
-    // Fire-and-forget: never block the API response on push delivery.
     void this.notifyPayslipGenerated(created).catch(() => null);
+    void this.notifyPayslipEmail(created).catch(() => null);
     return created;
   }
 
@@ -165,8 +197,8 @@ export class GenerateSalaryService {
     });
 
     if (existing?.status !== 'Paid' && updated.status === 'Paid') {
-      // Fire-and-forget: never block the API response on push delivery.
       void this.notifyPayslipPaid(updated).catch(() => null);
+      void this.notifyPayslipPaidEmail(updated).catch(() => null);
     }
 
     return updated;

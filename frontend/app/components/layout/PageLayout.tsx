@@ -37,6 +37,8 @@ import { Label } from "../ui/label";
 import { toast } from "sonner";
 import { Eye, EyeOff } from "lucide-react";
 import { TASK_MANAGEMENT_ENABLED } from "@/app/config/featureFlags";
+import { dispatchAppRefresh } from "@/app/utils/appRefresh";
+import { ensureFetchRefreshPatch } from "@/app/utils/patchFetchForRefresh";
 
 interface PageLayoutProps {
   children: React.ReactNode;
@@ -91,11 +93,19 @@ export function PageLayout({ children }: PageLayoutProps) {
   const [sidebarRefreshKey, setSidebarRefreshKey] = useState(0)
   const [sidebarCtx, setSidebarCtxState] = useState<{ serviceProviderID: number; serviceProviderName: string; companyID: number; companyName: string } | null>(getSidebarContext())
 
+  useEffect(() => {
+    ensureFetchRefreshPatch();
+  }, []);
+
   // Keep sidebarCtx in sync with localStorage changes
   useEffect(() => {
     const handleCtxChange = () => setSidebarCtxState(getSidebarContext())
     window.addEventListener("sidebar-context-changed", handleCtxChange)
-    return () => window.removeEventListener("sidebar-context-changed", handleCtxChange)
+    window.addEventListener("app-data-refresh", handleCtxChange)
+    return () => {
+      window.removeEventListener("sidebar-context-changed", handleCtxChange)
+      window.removeEventListener("app-data-refresh", handleCtxChange)
+    }
   }, [])
 
   const isSuperAdmin = currentUser?.role === 'SUPERADMIN'
@@ -671,9 +681,13 @@ export function PageLayout({ children }: PageLayoutProps) {
               </Link>
               <button
                 type="button"
-                onClick={() => setSidebarRefreshKey(k => k + 1)}
+                onClick={() => {
+                  setSidebarRefreshKey((k) => k + 1);
+                  dispatchAppRefresh();
+                  router.refresh();
+                }}
                 className="p-2.5 rounded-md text-gray-400 hover:text-[#4f46e5] hover:bg-[#eef2ff] transition-colors shrink-0"
-                title="Refresh sidebar"
+                title="Refresh data"
               >
                 <Icon icon="mdi:refresh" className="w-6 h-6" />
               </button>

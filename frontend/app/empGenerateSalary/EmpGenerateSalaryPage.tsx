@@ -17,6 +17,7 @@ import autoTable from "jspdf-autotable";
 import { useCurrentUser } from "../hooks/useCurrentUser"
 import { getSidebarContext } from "../utils/sidebarContext";
 import { getPageCache, setPageCache } from "../utils/pageCache";
+import { formatPayslipPeriodLabel } from "../utils/payslipPeriodLabel";
 
 
 /* =======================
@@ -946,12 +947,12 @@ function downloadSalarySlipPDF(payload: {
     doc.setFont("helvetica", "normal");
     doc.setFontSize(9);
     doc.text(`Branch: ${payload.branchName}`, 15, 45);
-    doc.text(
-      `Period: ${payload.start.toDateString()} - ${payload.end.toDateString()}`,
-      pageWidth - 15,
-      45,
-      { align: "right" }
+    const periodLabel = formatPayslipPeriodLabel(
+      payload.monthLabel,
+      payload.start,
+      payload.end,
     );
+    doc.text(`Period: ${periodLabel}`, pageWidth - 15, 45, { align: "right" });
 
     // ========== EMPLOYEE DETAILS ==========
     const empName = `${payload.employee.employeeFirstName || ""} ${payload.employee.employeeLastName || ""}`.trim();
@@ -1070,12 +1071,19 @@ function downloadSalarySlipPDF(payload: {
     // ========== SIGNATURES ==========
     y += 20;
     doc.setDrawColor(0);
+    const empSigLineStart = pageWidth - 80;
+    const empSigLineEnd = pageWidth - 30;
     doc.line(30, y, 80, y);
-    doc.line(pageWidth - 80, y, pageWidth - 30, y);
+    doc.line(empSigLineStart, y, empSigLineEnd, y);
     doc.setFont("helvetica", "bold");
     doc.setFontSize(9);
-    doc.text("Employer's Signature", 35, y + 5);
-    doc.text("Employee's Signature", pageWidth - 85, y + 5);
+    doc.text("Employer's Signature", 55, y + 5, { align: "center" });
+    doc.text(
+      "Employee's Signature",
+      (empSigLineStart + empSigLineEnd) / 2,
+      y + 5,
+      { align: "center" },
+    );
 
     // ========== FOOTER ==========
     y += 15;

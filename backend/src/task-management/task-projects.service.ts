@@ -1,5 +1,6 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { MailService } from '../mail/mail.service';
 import { PushNotificationsService } from '../push-notifications/push-notifications.service';
 import {
   CreateTaskProjectDto,
@@ -69,6 +70,7 @@ export class TaskProjectsService {
   constructor(
     private prisma: PrismaService,
     private pushService: PushNotificationsService,
+    private mailService: MailService,
   ) {}
 
   private visibilityWhere(viewer: TaskViewerContext, companyID?: number) {
@@ -158,6 +160,15 @@ export class TaskProjectsService {
           },
         )
         .catch(() => null);
+      void this.mailService
+        .sendNotificationEmail({
+          employeeId: manageEmployeeID,
+          eventType: 'TASK_ASSIGNED',
+          subject: `Task assigned: ${taskLabel}`,
+          bodyText: `You have been assigned to task "${taskLabel}". Open the mobile app or HR portal to view details.`,
+          extraVars: { taskName: taskLabel },
+        })
+        .catch(() => false);
     }
   }
 
@@ -233,6 +244,15 @@ export class TaskProjectsService {
           },
         )
         .catch(() => null);
+      void this.mailService
+        .sendNotificationEmail({
+          employeeId: manageEmployeeID,
+          eventType: 'TASK_MESSAGE',
+          subject: `New message on task: ${taskLabel}`,
+          bodyText: body,
+          extraVars: { taskName: taskLabel },
+        })
+        .catch(() => false);
     }
   }
 
@@ -596,6 +616,155 @@ export class TaskProjectsService {
     const viewer = parseViewer(query);
     await this.assertTaskAccess(id, viewer);
     return this.prisma.taskActivityLog.findMany({ where: { taskID: id }, orderBy: { createdAt: 'desc' } });
+  }
+
+  async getTaskReport(id: number, query: Record<string, string | undefined>) {
+    const viewer = parseViewer(query);
+    await this.assertTaskAccess(id, viewer);
+    const task = await this.prisma.taskProject.findFirst({
+      where: { id, isDeleted: false },
+      include: {
+        department: { select: { id: true, departmentName: true } },
+        customer: { select: { id: true, customerCode: true, customerName: true } },
+        site: {
+          select: {
+            id: true,
+            branchName: true,
+            city: true,
+            address: true,
+            state: true,
+            pincode: true,
+          },
+        },
+        createdByEmployee: {
+          select: {
+            id: true,
+            employeeID: true,
+            employeeFirstName: true,
+            employeeLastName: true,
+            personalPhoneNo: true,
+            businessEmail: true,
+          },
+        },
+        assignments: {
+          include: {
+            manageEmployee: {
+              select: {
+                id: true,
+                employeeID: true,
+                employeeFirstName: true,
+                employeeLastName: true,
+                personalPhoneNo: true,
+                businessEmail: true,
+                departments: { select: { departmentName: true } },
+                designations: { select: { designation: true } },
+              },
+            },
+          },
+        },
+        remarks: { orderBy: { createdAt: 'asc' } },
+        chats: { orderBy: { createdAt: 'asc' } },
+        activities: { orderBy: { createdAt: 'asc' } },
+      },
+    });
+    if (!task) throw new NotFoundException('Task not found');
+
+    let chats = task.chats;
+    if (!canManageTaskModule(viewer) && viewer.employeeId) {
+      chats = filterChatsForEmployeeViewer(chats, viewer) as typeof task.chats;
+    }
+
+    const sitePunchPattern =
+      /\b(mark(?:ed)?\s*(in|out)|check(?:ed)?\s*(in|out)|site\s*(?:mark\s*)?(?:in|out))\b/i;
+
+    const siteCheckEvents = chats
+      .filter((c) => sitePunchPattern.test(c.message || ''))
+      .map((c) => {
+        const emp = task.assignments.find((a) => a.manageEmployeeID === c.employeeID)
+          ?.manageEmployee;
+        const name =
+          c.senderName ||
+          (emp
+            ? `${emp.employeeFirstName || ''} ${emp.employeeLastName || ''}`.trim()
+            : 'Unknown');
+        return {
+          id: c.id,
+          at: c.createdAt,
+          message: c.message,
+          employeeId: c.employeeID,
+          employeeName: name,
+          employeeCode: emp?.employeeID || null,
+        };
+      });
+
+    const assigneeSummaries = task.assignments.map((a) => {
+      const e = a.manageEmployee;
+      const empName = e
+        ? `${e.employeeFirstName || ''} ${e.employeeLastName || ''}`.trim()
+        : '—';
+      const empChats = chats.filter((c) => c.employeeID === a.manageEmployeeID);
+      const empSiteEvents = siteCheckEvents.filter(
+        (ev) => ev.employeeId === a.manageEmployeeID,
+      );
+      return {
+        employeeId: a.manageEmployeeID,
+        employeeCode: e?.employeeID || null,
+        name: empName,
+        department: e?.departments?.departmentName || null,
+        designation: e?.designations?.designation || null,
+        phone: e?.personalPhoneNo || null,
+        email: e?.businessEmail || null,
+        assignedAt: a.assignedAt,
+        messageCount: empChats.length,
+        siteCheckInOutCount: empSiteEvents.length,
+        siteEvents: empSiteEvents,
+      };
+    });
+
+    return {
+      generatedAt: new Date().toISOString(),
+      task: {
+        id: task.id,
+        taskCode: task.taskCode,
+        taskName: task.taskName,
+        taskType: task.taskType,
+        status: task.status,
+        priority: task.priority,
+        description: task.description,
+        scheduleDateTime: task.scheduleDateTime,
+        dueDateTime: task.dueDateTime,
+        createdAt: task.createdAt,
+        updatedAt: task.updatedAt,
+        department: task.department,
+        customer: task.customer,
+        site: task.site,
+        createdBy: task.createdByEmployee,
+      },
+      assignees: assigneeSummaries,
+      siteCheckSummary: {
+        totalEvents: siteCheckEvents.length,
+        events: siteCheckEvents,
+      },
+      remarks: task.remarks,
+      messages: chats.map((c) => ({
+        id: c.id,
+        at: c.createdAt,
+        message: c.message,
+        attachmentUrl: c.attachmentUrl,
+        senderName: c.senderName,
+        employeeID: c.employeeID,
+        userID: c.userID,
+        recipientEmployeeID: c.recipientEmployeeID,
+      })),
+      activities: task.activities,
+      stats: {
+        assigneeCount: task.assignments.length,
+        remarkCount: task.remarks.length,
+        messageCount: chats.length,
+        activityCount: task.activities.length,
+        siteCheckEventCount: siteCheckEvents.length,
+      },
+    };
   }
 
   async getEmployeesByDepartment(departmentID: number, query: Record<string, string | undefined>) {

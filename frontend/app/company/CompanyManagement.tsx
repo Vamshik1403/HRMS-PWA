@@ -142,7 +142,11 @@ export function CompanyManagement() {
   useEffect(() => {
     const handler = () => { if (user) fetchCompanies() }
     window.addEventListener("sidebar-context-changed", handler)
-    return () => window.removeEventListener("sidebar-context-changed", handler)
+    window.addEventListener("app-data-refresh", handler)
+    return () => {
+      window.removeEventListener("sidebar-context-changed", handler)
+      window.removeEventListener("app-data-refresh", handler)
+    }
   }, [user])
 
   // For non-SUPERADMIN users, auto-open edit form with their company

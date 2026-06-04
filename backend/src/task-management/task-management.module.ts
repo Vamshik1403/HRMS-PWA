@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { MailModule } from '../mail/mail.module';
 import { PushNotificationsModule } from '../push-notifications/push-notifications.module';
 import { TaskCustomersController } from './task-customers.controller';
 import { TaskCustomersService } from './task-customers.service';
@@ -8,7 +9,7 @@ import { TaskProjectsController } from './task-projects.controller';
 import { TaskProjectsService } from './task-projects.service';
 
 @Module({
-  imports: [PushNotificationsModule],
+  imports: [PushNotificationsModule, MailModule],
   controllers: [TaskCustomersController, TaskCustomerSitesController, TaskProjectsController],
   providers: [TaskCustomersService, TaskCustomerSitesService, TaskProjectsService],
 })

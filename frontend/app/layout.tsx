@@ -3,6 +3,7 @@ import { Inter } from 'next/font/google'
 import './globals.css'
 import { Toaster } from 'sonner'
 import ServiceWorkerBootstrap from './components/ServiceWorkerBootstrap'
+import FetchRefreshBootstrap from './components/FetchRefreshBootstrap'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -113,6 +114,7 @@ export default function RootLayout({
       </head>
       <body className={inter.className}>
         <ServiceWorkerBootstrap />
+        <FetchRefreshBootstrap />
         {children}
         <Toaster position="top-right" richColors closeButton />
       </body>

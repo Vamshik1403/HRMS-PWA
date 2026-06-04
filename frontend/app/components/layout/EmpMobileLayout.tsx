@@ -14,6 +14,7 @@ import { empPayoutHrefForPeriod } from "../../utils/empPayslipApi";
 import PushNotificationPrompt from "../PushNotificationPrompt";
 import { toast } from "sonner";
 import { TASK_MANAGEMENT_ENABLED } from "@/app/config/featureFlags";
+import { ensureFetchRefreshPatch } from "@/app/utils/patchFetchForRefresh";
 
 interface EmpMobileLayoutProps {
   children: React.ReactNode;
@@ -54,6 +55,10 @@ export default function EmpMobileLayout({ children, hideBottomNav = false }: Emp
   const [pushModalOpen, setPushModalOpen] = useState(false);
   const [theme, setTheme] = useState<"light" | "dark">("light");
   const syncInFlight = useRef(false);
+
+  useEffect(() => {
+    ensureFetchRefreshPatch();
+  }, []);
 
   useEffect(() => {
     const applyStoredTheme = () => {

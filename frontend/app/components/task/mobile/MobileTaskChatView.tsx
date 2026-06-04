@@ -73,6 +73,7 @@ export function MobileTaskChatView({
   onAdvanceStatus,
   onSitePunch,
   sitePunchNextKind = "in",
+  onDownloadReport,
 }: {
   task: MobileTaskChatDetail;
   currentUserName?: string;
@@ -84,6 +85,7 @@ export function MobileTaskChatView({
   onAdvanceStatus?: () => void | Promise<void>;
   onSitePunch?: () => void | Promise<void>;
   sitePunchNextKind?: SitePunchKind;
+  onDownloadReport?: () => void | Promise<void>;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [infoOpen, setInfoOpen] = useState(false);
@@ -167,6 +169,15 @@ export function MobileTaskChatView({
                   >
                     View Task info
                   </button>
+                  {onDownloadReport && (
+                    <button
+                      type="button"
+                      className="w-full text-left px-4 py-2.5 text-[13px] text-gray-700 active:bg-gray-50"
+                      onClick={() => { setMenuOpen(false); void onDownloadReport(); }}
+                    >
+                      Download report (PDF)
+                    </button>
+                  )}
                   {(task.taskType || "").toLowerCase().includes("site visit") && onSitePunch && (
                     <button
                       type="button"

@@ -14,6 +14,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "../components/ui/select";
 import { useCurrentUser } from "../hooks/useCurrentUser";
+import { useListAutoRefresh } from "../hooks/useListAutoRefresh";
 import { toast } from "sonner";
 import { FormDrawer } from "../components/ui/form-drawer";
 
@@ -109,7 +110,10 @@ export function SystemUsersManagement() {
     } catch { /* silent */ }
   };
 
-  useEffect(() => { fetchRows(); fetchDropdowns(); }, []);
+  useListAutoRefresh(() => {
+    void fetchRows();
+    void fetchDropdowns();
+  }, []);
 
   const resetForm = () => {
     setForm({ username: "", password: "", role: "", serviceProviderID: "", companyID: "", branchesID: "", isActive: true });

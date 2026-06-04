@@ -14,6 +14,7 @@ import {
 import { toast } from "sonner";
 import { getNextSitePunchKind, sitePunchLabel } from "../utils/taskSitePunch";
 import { nextTaskStatus } from "../utils/taskStatusFlow";
+import { downloadTaskReportForId } from "../utils/taskReportPdf";
 
 const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL || "/backend";
 
@@ -202,6 +203,14 @@ export default function EmpMyTasksPage() {
           }}
           onSitePunch={sitePunch}
           sitePunchNextKind={detail ? getNextSitePunchKind(detail.chats) : "in"}
+          onDownloadReport={async () => {
+            try {
+              await downloadTaskReportForId(detail.id, user, detail.taskCode);
+              toast.success("Report downloaded");
+            } catch (e: unknown) {
+              toast.error(e instanceof Error ? e.message : "Failed to download report");
+            }
+          }}
         />
       </EmpMobileLayout>
     );

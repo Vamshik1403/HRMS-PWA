@@ -589,6 +589,7 @@ export class DashboardOverviewService {
         absentDeclared: absentByEmpDate.has(`${emp.id}-${today}`),
         lateMarkTracker,
         noCheckoutTracker,
+        dayInProgress: true,
       });
 
       // While an employee has checked in but not yet checked out, the day is

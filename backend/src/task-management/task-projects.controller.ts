@@ -26,6 +26,11 @@ export class TaskProjectsController {
     return this.service.getEmployeesByDepartment(departmentId, query);
   }
 
+  @Get(':id/report')
+  getReport(@Param('id', ParseIntPipe) id: number, @Query() query: Record<string, string>) {
+    return this.service.getTaskReport(id, query);
+  }
+
   @Get(':id')
   findOne(@Param('id', ParseIntPipe) id: number, @Query() query: Record<string, string>) {
     return this.service.findOne(id, query);

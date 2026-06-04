@@ -286,7 +286,11 @@ useEffect(() => {
       }
     };
     window.addEventListener("sidebar-context-changed", handler);
-    return () => window.removeEventListener("sidebar-context-changed", handler);
+    window.addEventListener("app-data-refresh", handler);
+    return () => {
+      window.removeEventListener("sidebar-context-changed", handler);
+      window.removeEventListener("app-data-refresh", handler);
+    };
   }, [user]);
 
       

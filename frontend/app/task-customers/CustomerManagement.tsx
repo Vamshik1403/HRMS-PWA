@@ -58,7 +58,11 @@ export default function CustomerManagement() {
   useEffect(() => {
     const h = () => load();
     window.addEventListener("sidebar-context-changed", h);
-    return () => window.removeEventListener("sidebar-context-changed", h);
+    window.addEventListener("app-data-refresh", h);
+    return () => {
+      window.removeEventListener("sidebar-context-changed", h);
+      window.removeEventListener("app-data-refresh", h);
+    };
   }, [load]);
 
   const openCreate = () => { setEditing(null); setForm(emptyForm); setContacts([]); setFormOpen(true); };
