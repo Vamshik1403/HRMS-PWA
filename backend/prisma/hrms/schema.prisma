@@ -710,6 +710,7 @@ model ManageEmployee {
   allowCreateTaskOnMobile        Boolean                   @default(false)
   pwaShowLeaveBalance            Boolean                   @default(true)
   mobileAttendanceEnabled        Boolean                   @default(false)
+  mobileBreakEnabled             Boolean                   @default(true)
   bonusAllocation                BonusAllocation[]
   empAttendanceRegularise        EmpAttendanceRegularise[]
   empCurrentPosition             EmpCurrentPosition[]

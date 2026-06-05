@@ -5,6 +5,16 @@
 
 const PUSH_SW_URL = "/push-sw.js";
 
+function registrationScriptUrl(reg: ServiceWorkerRegistration): string {
+  const w = reg.active ?? reg.waiting ?? reg.installing;
+  return w?.scriptURL ?? "";
+}
+
+/** Push must use push-sw.js — Workbox + worker-push.js alone breaks in-app notification sync. */
+export function isPushSwRegistration(reg: ServiceWorkerRegistration): boolean {
+  return registrationScriptUrl(reg).includes("push-sw.js");
+}
+
 function delay(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
 }
@@ -77,8 +87,8 @@ export async function ensureServiceWorkerReady(options?: {
 
   let reg = await navigator.serviceWorker.getRegistration("/");
 
-  // Drop heavy/broken Workbox registration if it never activated
-  if (reg && !reg.active) {
+  // Drop Workbox (or any non-push SW) so push + postMessage use push-sw.js
+  if (reg && (!reg.active || !isPushSwRegistration(reg))) {
     await reg.unregister().catch(() => undefined);
     reg = undefined;
   }
@@ -123,11 +133,12 @@ export function bootstrapServiceWorker(): void {
 
   void (async () => {
     try {
-      const reg = await navigator.serviceWorker.getRegistration("/");
-      if (reg && !reg.active) {
-        await clearServiceWorkerRegistrations();
+      let reg = await navigator.serviceWorker.getRegistration("/");
+      if (reg && (!reg.active || !isPushSwRegistration(reg))) {
+        await reg.unregister().catch(() => undefined);
+        reg = undefined;
       }
-      if (!(await navigator.serviceWorker.getRegistration("/"))) {
+      if (!reg) {
         await registerPushServiceWorker();
       }
     } catch (e) {
@@ -140,5 +151,5 @@ export function bootstrapServiceWorker(): void {
 export async function isServiceWorkerReadyForPush(): Promise<boolean> {
   if (!("serviceWorker" in navigator)) return false;
   const reg = await navigator.serviceWorker.getRegistration("/");
-  return !!reg?.active;
+  return !!reg?.active && isPushSwRegistration(reg);
 }

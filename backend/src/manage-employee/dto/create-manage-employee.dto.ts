@@ -300,6 +300,9 @@ export class CreateManageEmployeeDto {
   @IsOptional() @IsBoolean()
   mobileAttendanceEnabled?: boolean;
 
+  @IsOptional() @IsBoolean()
+  mobileBreakEnabled?: boolean;
+
   // Nested arrays
   @IsOptional() @IsArray()
   @ValidateNested({ each: true })

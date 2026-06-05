@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { empPayoutHrefForPeriod } from '../common/payslip-period.util';
+import { EmpManagerScopeService } from '../common/emp-manager-scope.service';
 import { PrismaService } from '../prisma/prisma.service';
 
 export type EmpHolidayListItem = {
@@ -26,11 +27,18 @@ export type EmpNotificationFeedItem = {
   emoji: string;
   at: string;
   href?: string;
+  /** When set, this notification is about a linked reportee (manager PWA view). */
+  subjectEmployeeId?: number;
+  subjectEmployeeName?: string;
+  isTeamItem?: boolean;
 };
 
 @Injectable()
 export class EmpNotificationsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly managerScope: EmpManagerScopeService,
+  ) {}
 
   /** Public holidays for the employee's company/branch and leave policy. */
   async getHolidayList(employeeId: number): Promise<EmpHolidayListItem[]> {
@@ -115,13 +123,25 @@ export class EmpNotificationsService {
     const olderStart = this.addDays(now, -olderDays);
 
     const items: EmpNotificationFeedItem[] = [];
+    const hasReportees = await this.managerScope.hasReportees(employeeId);
 
-    items.push(...(await this.birthdayItems(emp, now, recentDays)));
-    items.push(...(await this.holidayItems(emp, now, olderStart)));
-    items.push(...(await this.personalLeaveItems(employeeId, olderStart, now)));
-    items.push(...(await this.personalReimbItems(employeeId, olderStart, now)));
-    items.push(...(await this.personalPayslipItems(employeeId, olderStart, now)));
-    items.push(...(await this.personalMemoItems(employeeId, olderStart, now)));
+    if (hasReportees) {
+      const directReporteeIds = await this.managerScope.getDirectReporteeIds(employeeId);
+      for (const reporteeId of directReporteeIds) {
+        items.push(...(await this.pendingLeaveItems(reporteeId, olderStart)));
+        items.push(...(await this.personalLeaveItems(reporteeId, olderStart, now, true)));
+        items.push(...(await this.personalReimbItems(reporteeId, olderStart, now, true)));
+        items.push(...(await this.personalMemoItems(reporteeId, olderStart, now, true)));
+      }
+      items.push(...(await this.personalMemoItems(employeeId, olderStart, now, false)));
+    } else {
+      items.push(...(await this.birthdayItems(emp, now, recentDays)));
+      items.push(...(await this.holidayItems(emp, now, olderStart)));
+      items.push(...(await this.personalLeaveItems(employeeId, olderStart, now, false)));
+      items.push(...(await this.personalReimbItems(employeeId, olderStart, now, false)));
+      items.push(...(await this.personalPayslipItems(employeeId, olderStart, now, false)));
+      items.push(...(await this.personalMemoItems(employeeId, olderStart, now, false)));
+    }
 
     const sorted = items
       .filter((i) => {
@@ -130,18 +150,14 @@ export class EmpNotificationsService {
       })
       .sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime());
 
-    const personalKinds = new Set([
-      'leave',
-      'reimbursement',
-      'payslip',
-      'memo',
-    ]);
+    /** Birthday day-of only; leave/reimbursement/memo use created/status time in item.at */
+    const eventTodayKinds = new Set(['birthday']);
     const recentCut = recentStart.getTime();
     const recent = sorted.filter((i) => {
       const t = new Date(i.at).getTime();
       if (t < recentCut) return false;
       if (i.kind === 'payslip') return true;
-      if (personalKinds.has(i.kind) && !this.isEventToday(now, i.at)) {
+      if (eventTodayKinds.has(i.kind) && !this.isEventToday(now, i.at)) {
         return false;
       }
       if (i.kind === 'holiday' && t < this.localDay(now).getTime()) {
@@ -152,7 +168,7 @@ export class EmpNotificationsService {
     const older = sorted.filter((i) => {
       const t = new Date(i.at).getTime();
       if (t < recentCut) return true;
-      if (personalKinds.has(i.kind) && !this.isEventToday(now, i.at)) {
+      if (eventTodayKinds.has(i.kind) && !this.isEventToday(now, i.at)) {
         return true;
       }
       if (i.kind === 'holiday' && t < this.localDay(now).getTime()) {
@@ -357,19 +373,64 @@ export class EmpNotificationsService {
     return out;
   }
 
+  private async reporteeName(employeeId: number): Promise<string> {
+    const e = await this.prisma.manageEmployee.findUnique({
+      where: { id: employeeId },
+      select: { employeeFirstName: true, employeeLastName: true, employeeID: true },
+    });
+    const name = [e?.employeeFirstName, e?.employeeLastName].filter(Boolean).join(' ').trim();
+    return name || e?.employeeID || `Employee #${employeeId}`;
+  }
+
+  private async pendingLeaveItems(
+    employeeId: number,
+    since: Date,
+  ): Promise<EmpNotificationFeedItem[]> {
+    const who = await this.reporteeName(employeeId);
+    const leaves = await this.prisma.leaveApplication.findMany({
+      where: { manageEmployeeID: employeeId, status: 'Pending' },
+      orderBy: { id: 'desc' },
+      take: 20,
+    });
+    return leaves
+      .map((l) => {
+        const from = l.fromDate ? new Date(l.fromDate) : new Date();
+        const to = l.toDate ? new Date(l.toDate) : from;
+        const range = `${from.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })} – ${to.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}`;
+        const at = l.fromDate ?? new Date();
+        return {
+          id: `leave-pending-${l.id}`,
+          kind: 'leave' as const,
+          title: `${who}: Leave approval pending`,
+          body: `Leave request (${range}) from ${who} needs your approval.`,
+          emoji: '📋',
+          at: new Date(at as Date).toISOString(),
+          href: '/empLeaveApplication',
+          isTeamItem: true,
+          subjectEmployeeId: employeeId,
+          subjectEmployeeName: who,
+        };
+      })
+      .filter((i) => new Date(i.at).getTime() >= since.getTime());
+  }
+
   private async personalLeaveItems(
     employeeId: number,
     since: Date,
     now: Date,
+    forReportee = false,
   ): Promise<EmpNotificationFeedItem[]> {
     const leaves = await this.prisma.leaveApplication.findMany({
       where: {
         manageEmployeeID: employeeId,
-        status: { in: ['Approved', 'Accepted', 'Partly Approved', 'Rejected', 'Revoked'] },
+        status: { in: ['Approved', 'Accepted', 'Partially Approved', 'Rejected', 'Revoked'] },
+        OR: [{ fromDate: { gte: since } }, { toDate: { gte: since } }],
       },
       orderBy: { id: 'desc' },
       take: 50,
     });
+
+    const who = forReportee ? await this.reporteeName(employeeId) : null;
 
     return leaves
       .map((l) => {
@@ -378,29 +439,52 @@ export class EmpNotificationsService {
         const to = l.toDate ? new Date(l.toDate) : from;
         const range = `${from.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })} – ${to.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}`;
 
-        let title = 'Leave update';
+        let title = who ? `${who}: Leave update` : 'Leave update';
         let body = l.purpose || range;
         let emoji = '📅';
 
         if (status === 'Approved' || status === 'Accepted') {
-          title = 'Leave approved';
-          body = `Your leave (${range}) has been approved.`;
+          title = who ? `${who}: Leave approved` : 'Leave approved';
+          body = who
+            ? `Leave (${range}) for ${who} has been approved.`
+            : `Your leave (${range}) has been approved.`;
           emoji = '✅';
-        } else if (status === 'Partly Approved') {
-          title = 'Leave partly approved';
-          body = `Your leave (${range}) was partly approved. Check details in the app.`;
+        } else if (status === 'Partially Approved') {
+          title = who ? `${who}: Leave partially approved` : 'Leave partially approved';
+          body = who
+            ? `Leave (${range}) for ${who} was partially approved.`
+            : `Your leave (${range}) was partially approved. Check details in the app.`;
           emoji = '🟡';
         } else if (status === 'Rejected') {
-          title = 'Leave rejected';
-          body = `Your leave request (${range}) was rejected.`;
+          title = who ? `${who}: Leave rejected` : 'Leave rejected';
+          body = who
+            ? `Leave request (${range}) for ${who} was rejected.`
+            : `Your leave request (${range}) was rejected.`;
           emoji = '❌';
         } else if (status === 'Revoked') {
-          title = 'Leave cancelled';
-          body = `Your approved leave (${range}) was cancelled.`;
+          title = who ? `${who}: Leave cancelled` : 'Leave cancelled';
+          body = who
+            ? `Approved leave (${range}) for ${who} was cancelled.`
+            : `Your approved leave (${range}) was cancelled.`;
           emoji = '🔄';
         }
 
-        const at = l.toDate ?? l.fromDate ?? new Date();
+        const periodAt = l.toDate ?? l.fromDate ?? now;
+        const statusUpdate = ['Approved', 'Accepted', 'Partially Approved', 'Rejected', 'Revoked'].includes(
+          status,
+        );
+        let at: Date;
+        if (statusUpdate) {
+          if (l.revokedAt) {
+            at = new Date(l.revokedAt);
+          } else {
+            const p = new Date(periodAt);
+            // Future-dated leave must not sort above today's notifications
+            at = p.getTime() > now.getTime() ? now : p;
+          }
+        } else {
+          at = new Date(periodAt);
+        }
 
         return {
           id: `leave-${l.id}-${status}`,
@@ -408,8 +492,15 @@ export class EmpNotificationsService {
           title,
           body,
           emoji,
-          at: new Date(at as Date).toISOString(),
+          at: at.toISOString(),
           href: '/empLeaveApplication',
+          ...(forReportee
+            ? {
+                isTeamItem: true,
+                subjectEmployeeId: employeeId,
+                subjectEmployeeName: who ?? undefined,
+              }
+            : {}),
         };
       })
       .filter((i) => new Date(i.at).getTime() >= since.getTime());
@@ -419,6 +510,7 @@ export class EmpNotificationsService {
     employeeId: number,
     since: Date,
     now: Date,
+    forReportee = false,
   ): Promise<EmpNotificationFeedItem[]> {
     const rows = await this.prisma.reimbursement.findMany({
       where: { manageEmployeeID: employeeId },
@@ -426,31 +518,37 @@ export class EmpNotificationsService {
       take: 40,
     });
 
+    const who = forReportee ? await this.reporteeName(employeeId) : null;
+
     return rows.flatMap((r) => {
       const status = r.status || 'Pending';
       if (status === 'Pending') return [];
 
-      let title = 'Reimbursement update';
-      let body = r.description || 'Your reimbursement claim was updated.';
+      let title = who ? `${who}: Reimbursement update` : 'Reimbursement update';
+      let body = r.description || (who ? `Reimbursement claim for ${who} was updated.` : 'Your reimbursement claim was updated.');
       let emoji = '💰';
 
-      if (status === 'Approved' || status === 'Partly Approved') {
-        title = 'Reimbursement approved';
-        body = 'Your reimbursement claim has been approved.';
+      if (status === 'Approved' || status === 'Partially Approved') {
+        title = who ? `${who}: Reimbursement approved` : 'Reimbursement approved';
+        body = who ? `Reimbursement for ${who} has been approved.` : 'Your reimbursement claim has been approved.';
         emoji = '✅';
       } else if (status === 'Paid') {
-        title = 'Reimbursement paid';
+        title = who ? `${who}: Reimbursement paid` : 'Reimbursement paid';
         body = r.paymentRemark
-          ? `Reimbursement paid. ${r.paymentRemark}`
-          : 'Your reimbursement has been marked as paid.';
+          ? `Reimbursement paid${who ? ` (${who})` : ''}. ${r.paymentRemark}`
+          : who
+            ? `Reimbursement for ${who} has been marked as paid.`
+            : 'Your reimbursement has been marked as paid.';
         emoji = '💸';
       } else if (status === 'Rejected') {
-        title = 'Reimbursement rejected';
-        body = 'Your reimbursement claim was rejected.';
+        title = who ? `${who}: Reimbursement rejected` : 'Reimbursement rejected';
+        body = who ? `Reimbursement claim for ${who} was rejected.` : 'Your reimbursement claim was rejected.';
         emoji = '❌';
       }
 
-      const at = r.paymentDate || r.voucherDate || r.date || new Date().toISOString();
+      const periodAt = r.paymentDate || r.voucherDate || r.date || now.toISOString();
+      const at =
+        status === 'Rejected' ? now.toISOString() : periodAt;
       if (new Date(at).getTime() < since.getTime()) return [];
 
       return [
@@ -462,6 +560,13 @@ export class EmpNotificationsService {
           emoji,
           at: new Date(at).toISOString(),
           href: '/empReimbursement',
+          ...(forReportee
+            ? {
+                isTeamItem: true,
+                subjectEmployeeId: employeeId,
+                subjectEmployeeName: who ?? undefined,
+              }
+            : {}),
         },
       ];
     });
@@ -471,6 +576,7 @@ export class EmpNotificationsService {
     employeeId: number,
     since: Date,
     now: Date,
+    forReportee = false,
   ): Promise<EmpNotificationFeedItem[]> {
     const slips = await this.prisma.generateSalary.findMany({
       where: {
@@ -480,6 +586,8 @@ export class EmpNotificationsService {
       orderBy: { id: 'desc' },
       take: 24,
     });
+
+    const who = forReportee ? await this.reporteeName(employeeId) : null;
 
     return slips.flatMap((s) => {
       const items: EmpNotificationFeedItem[] = [];
@@ -492,11 +600,20 @@ export class EmpNotificationsService {
           items.push({
             id: `payslip-${s.id}-generated`,
             kind: 'payslip',
-            title: 'Salary slip available',
-            body: `Your payslip for ${s.monthPeriod} is ready to view.`,
+            title: who ? `${who}: Salary slip available` : 'Salary slip available',
+            body: who
+              ? `Payslip for ${s.monthPeriod} (${who}) is ready to view.`
+              : `Your payslip for ${s.monthPeriod} is ready to view.`,
             emoji: '🧾',
             at,
             href: empPayoutHrefForPeriod(s.monthPeriod),
+            ...(forReportee
+              ? {
+                  isTeamItem: true,
+                  subjectEmployeeId: employeeId,
+                  subjectEmployeeName: who ?? undefined,
+                }
+              : {}),
           });
         }
       }
@@ -510,11 +627,20 @@ export class EmpNotificationsService {
           items.push({
             id: `payslip-${s.id}-paid`,
             kind: 'payslip',
-            title: 'Salary paid',
-            body: `Your salary for ${s.monthPeriod} has been paid.`,
+            title: who ? `${who}: Salary paid` : 'Salary paid',
+            body: who
+              ? `Salary for ${s.monthPeriod} (${who}) has been paid.`
+              : `Your salary for ${s.monthPeriod} has been paid.`,
             emoji: '💰',
             at,
             href: empPayoutHrefForPeriod(s.monthPeriod),
+            ...(forReportee
+              ? {
+                  isTeamItem: true,
+                  subjectEmployeeId: employeeId,
+                  subjectEmployeeName: who ?? undefined,
+                }
+              : {}),
           });
         }
       } else if (!createdAt) {
@@ -522,11 +648,20 @@ export class EmpNotificationsService {
         items.push({
           id: `payslip-${s.id}-pending`,
           kind: 'payslip',
-          title: 'Salary slip available',
-          body: `Your payslip for ${s.monthPeriod} is ready to view.`,
+          title: who ? `${who}: Salary slip available` : 'Salary slip available',
+          body: who
+            ? `Payslip for ${s.monthPeriod} (${who}) is ready to view.`
+            : `Your payslip for ${s.monthPeriod} is ready to view.`,
           emoji: '🧾',
           at,
           href: empPayoutHrefForPeriod(s.monthPeriod),
+          ...(forReportee
+            ? {
+                isTeamItem: true,
+                subjectEmployeeId: employeeId,
+                subjectEmployeeName: who ?? undefined,
+              }
+            : {}),
         });
       }
 
@@ -538,30 +673,54 @@ export class EmpNotificationsService {
     employeeId: number,
     since: Date,
     now: Date,
+    forReportee = false,
   ): Promise<EmpNotificationFeedItem[]> {
     const memos = await this.prisma.employeeMemo.findMany({
-      where: { employeeID: employeeId },
-      orderBy: { id: 'desc' },
+      where: {
+        employeeID: employeeId,
+        createdAt: { gte: since },
+      },
+      orderBy: { createdAt: 'desc' },
       take: 30,
     });
 
+    const who = forReportee ? await this.reporteeName(employeeId) : null;
+
     return memos.flatMap((m) => {
-      const at = m.createdAt ?? m.issuedDate ?? new Date();
-      if (new Date(at).getTime() < since.getTime()) return [];
+      const at = m.createdAt ?? now;
       const type = m.memoType || 'General';
+      const typeLc = type.toLowerCase();
       let emoji = '📢';
-      if (type === 'Warning') emoji = '⚠️';
-      if (type === 'Appreciation') emoji = '🏅';
-      if (type === 'Policy') emoji = '📋';
+      if (typeLc.includes('warn')) emoji = '⚠️';
+      else if (type === 'Appreciation') emoji = '🏅';
+      else if (type === 'Policy') emoji = '📋';
+      const baseTitle =
+        typeLc.includes('warn')
+          ? m.subject || 'Warning'
+          : m.subject || 'New notice';
+      const issuer = m.issuedBy?.trim();
+      const preview = (m.description || '').trim().slice(0, 160);
+      const body =
+        preview ||
+        (issuer
+          ? `${issuer} sent you a ${typeLc.includes('warn') ? 'warning' : 'notice'}.`
+          : 'You have a new notice on the board.');
       return [
         {
           id: `memo-${m.id}`,
           kind: 'memo' as const,
-          title: m.subject || `${type} memo`,
-          body: (m.description || '').slice(0, 160) || 'New notice from HR.',
+          title: who ? `${who}: ${baseTitle}` : baseTitle,
+          body,
           emoji,
           at: new Date(at).toISOString(),
           href: '/empNoticeboard',
+          ...(forReportee
+            ? {
+                isTeamItem: true,
+                subjectEmployeeId: employeeId,
+                subjectEmployeeName: who ?? undefined,
+              }
+            : {}),
         },
       ];
     });

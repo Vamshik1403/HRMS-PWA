@@ -4,6 +4,8 @@ import { useState } from "react";
 import { Icon } from "@iconify/react";
 import { PriorityBadge, TaskStatusBadge } from "../task-ui";
 import { getNextSitePunchKind } from "../../../utils/taskSitePunch";
+import { taskAssigneeTeamLabel } from "../../../utils/empManagerDisplay";
+import type { EmpManagerScope } from "../../../utils/empManagerDisplay";
 
 export interface MobileTaskListItem {
   id: number;
@@ -17,6 +19,10 @@ export interface MobileTaskListItem {
   customer?: { customerName?: string };
   site?: { branchName?: string; city?: string };
   chats?: { message?: string | null; createdAt?: string }[];
+  assignments?: {
+    manageEmployeeID?: number;
+    manageEmployee?: { employeeFirstName?: string; employeeLastName?: string; employeeID?: string };
+  }[];
 }
 
 function fmtSchedule(iso?: string | null) {
@@ -37,11 +43,13 @@ export function MobileTaskListCard({
   onOpenChat,
   onCheckInOut,
   onViewInfo,
+  managerScope,
 }: {
   task: MobileTaskListItem;
   onOpenChat: () => void;
   onCheckInOut?: () => void;
   onViewInfo?: () => void;
+  managerScope?: EmpManagerScope | null;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const siteLine = isSiteVisit(task.taskType)
@@ -54,11 +62,18 @@ export function MobileTaskListCard({
         : "Check-Out"
       : null;
 
+  const teamLabel = taskAssigneeTeamLabel(managerScope ?? null, task.assignments);
+
   return (
     <div className="mobile-task-card w-full rounded-[16px] bg-white border border-gray-100 shadow-sm overflow-hidden">
       <button type="button" onClick={onOpenChat} className="w-full text-left px-3 py-3 active:bg-gray-50">
         <div className="flex gap-2">
           <div className="flex-1 min-w-0 space-y-1">
+            {teamLabel && (
+              <p className="text-[10px] font-bold uppercase tracking-wide text-[#2563eb]">
+                Team · {teamLabel}
+              </p>
+            )}
             <p className="text-[14px] font-bold text-gray-900 leading-tight line-clamp-2">{task.taskName}</p>
             <p className="text-[11px] text-gray-500">
               <span className="text-gray-400">Task ID:</span> {task.id}

@@ -156,6 +156,9 @@ export class UpdateManageEmployeeDto {
   @IsOptional()
   mobileAttendanceEnabled?: boolean;
 
+  @IsOptional()
+  mobileBreakEnabled?: boolean;
+
   // Nested arrays (upsert)
   @IsOptional() @IsArray()
   @ValidateNested({ each: true })

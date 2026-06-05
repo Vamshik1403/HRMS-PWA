@@ -349,6 +349,12 @@ export class EmpLocationAttendanceService {
   }
 
   async getTodayStatus(employeeId: number) {
+    const empFlags = await this.prisma.manageEmployee.findUnique({
+      where: { id: employeeId },
+      select: { mobileBreakEnabled: true },
+    });
+    const breakEnabled = empFlags?.mobileBreakEnabled !== false;
+
     const now = wallClockInZoneToStorageDate();
     const { startOfDay, endOfDay } = this.dayWindow(now);
 
@@ -400,8 +406,9 @@ export class EmpLocationAttendanceService {
       punchState,
       canCheckIn: punchState === 'OUT' && !isAbsentToday,
       canCheckOut: punchState === 'IN',
-      canBreakIn: punchState === 'IN',
-      canBreakOut: punchState === 'ON_BREAK',
+      mobileBreakEnabled: breakEnabled,
+      canBreakIn: breakEnabled && punchState === 'IN',
+      canBreakOut: breakEnabled && punchState === 'ON_BREAK',
       canMarkAbsent: !hasPunches && !isAbsentToday && punchState === 'OUT',
       checkIn,
       checkOut,

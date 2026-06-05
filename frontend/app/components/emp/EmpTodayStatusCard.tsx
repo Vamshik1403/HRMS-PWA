@@ -57,8 +57,9 @@ export function EmpTodayStatusCard({ todayStatus, loading, onStatusUpdate }: Emp
   const punchState = todayStatus?.punchState ?? (todayStatus?.isCheckedIn ? "IN" : "OUT");
   const canCheckIn = todayStatus?.canCheckIn ?? punchState === "OUT";
   const canCheckOut = todayStatus?.canCheckOut ?? punchState === "IN";
-  const canBreakIn = todayStatus?.canBreakIn ?? punchState === "IN";
-  const canBreakOut = todayStatus?.canBreakOut ?? punchState === "ON_BREAK";
+  const breakEnabled = todayStatus?.mobileBreakEnabled !== false;
+  const canBreakIn = breakEnabled && (todayStatus?.canBreakIn ?? punchState === "IN");
+  const canBreakOut = breakEnabled && (todayStatus?.canBreakOut ?? punchState === "ON_BREAK");
   const isOnBreak = punchState === "ON_BREAK";
   const isAbsent = todayStatus?.isAbsentToday;
   const canMarkAbsent = todayStatus?.canMarkAbsent ?? false;

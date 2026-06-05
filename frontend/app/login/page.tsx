@@ -4,7 +4,8 @@ import axios from 'axios'
 import { useRouter } from 'next/navigation'
 import { Eye, EyeOff, Lock, User, LogIn } from 'lucide-react'
 import { clearLegacyEmpPhoto } from '../utils/empPhotoCache'
-import { clearPageCache } from '../utils/pageCache'
+import { clearInAppNotifications } from '../utils/empInAppNotifications'
+import { clearPageCache, clearPageCachesByPrefix } from '../utils/pageCache'
 import { registerPushSubscription } from '@/lib/pushSubscribe'
 
 const TERMS_AND_CONDITIONS = `TERMS AND CONDITIONS & END USER LICENSE AGREEMENT
@@ -181,6 +182,8 @@ export default function LoginPage() {
 
       clearLegacyEmpPhoto()
       clearPageCache('empProfileData')
+      clearPageCachesByPrefix('empNotifFeed')
+      clearInAppNotifications()
 
       // Save token in localStorage and cookie (middleware reads the cookie)
       localStorage.setItem('accessToken', accessToken)

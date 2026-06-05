@@ -1,0 +1,1 @@
+ALTER TABLE "ManageEmployee" ADD COLUMN IF NOT EXISTS "mobileBreakEnabled" BOOLEAN NOT NULL DEFAULT true;

@@ -4,6 +4,13 @@ import { useMemo, useState } from "react";
 import { Icon } from "@iconify/react";
 import { Plus, Search, X } from "lucide-react";
 import { MobileTaskListCard, MobileTaskListItem, MobileTaskListSkeleton } from "./MobileTaskListCard";
+import type { EmpManagerScope } from "../../../utils/empManagerDisplay";
+import { splitPreviewRecords } from "../../../utils/empListLimit";
+import { EmpRecordHistorySheet } from "../../emp/EmpRecordHistorySheet";
+import { EmpListViewMoreButton } from "../../emp/EmpListViewMoreButton";
+
+const STATUS_TABS = ["Open", "WIP", "Closed", "Reopen"] as const;
+type StatusTab = (typeof STATUS_TABS)[number];
 
 export function MobileTaskListView({
   tasks,
@@ -15,6 +22,8 @@ export function MobileTaskListView({
   onViewInfo,
   onCreateClick,
   showCreateFab = true,
+  managerScope,
+  isManagerView = false,
 }: {
   tasks: MobileTaskListItem[];
   loading: boolean;
@@ -25,13 +34,18 @@ export function MobileTaskListView({
   onViewInfo?: (task: MobileTaskListItem) => void;
   onCreateClick?: () => void;
   showCreateFab?: boolean;
+  managerScope?: EmpManagerScope | null;
+  isManagerView?: boolean;
 }) {
   const [searchOpen, setSearchOpen] = useState(false);
+  const [statusTab, setStatusTab] = useState<StatusTab>("Open");
+  const [historyOpen, setHistoryOpen] = useState(false);
 
   const filtered = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
-    if (!q) return tasks;
-    return tasks.filter(
+    let list = tasks.filter((t) => (t.status || "Open") === statusTab);
+    if (!q) return list;
+    return list.filter(
       (t) =>
         t.taskName.toLowerCase().includes(q) ||
         String(t.id).includes(q) ||
@@ -39,7 +53,9 @@ export function MobileTaskListView({
         (t.customer?.customerName || "").toLowerCase().includes(q) ||
         (t.site?.branchName || "").toLowerCase().includes(q),
     );
-  }, [tasks, searchQuery]);
+  }, [tasks, searchQuery, statusTab]);
+
+  const { preview, history, hasHistory } = splitPreviewRecords(filtered);
 
   return (
     <div className="flex flex-col min-h-full bg-[#f8f9fb]">
@@ -47,7 +63,9 @@ export function MobileTaskListView({
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0">
             <h1 className="text-[22px] font-bold text-gray-900 tracking-tight leading-none">Tasks</h1>
-            <p className="text-[12px] text-gray-500 mt-1">Assigned tasks</p>
+            <p className="text-[12px] text-gray-500 mt-1">
+              {isManagerView ? "Team member tasks" : "Assigned tasks"}
+            </p>
           </div>
           <button
             type="button"
@@ -72,6 +90,22 @@ export function MobileTaskListView({
             />
           </div>
         </div>
+        <div className="flex gap-1.5 mt-3 overflow-x-auto pb-1 -mx-1 px-1">
+          {STATUS_TABS.map((tab) => (
+            <button
+              key={tab}
+              type="button"
+              onClick={() => setStatusTab(tab)}
+              className={`shrink-0 px-3 py-1.5 rounded-full text-[12px] font-semibold transition-colors ${
+                statusTab === tab
+                  ? "bg-[#4f46e5] text-white"
+                  : "bg-white text-gray-600 border border-gray-100"
+              }`}
+            >
+              {tab}
+            </button>
+          ))}
+        </div>
       </header>
 
       <div className="flex-1 px-3 pt-2 pb-28">
@@ -80,22 +114,48 @@ export function MobileTaskListView({
         ) : filtered.length === 0 ? (
           <div className="flex flex-col items-center py-20 text-center px-6">
             <Icon icon="solar:clipboard-list-linear" className="w-10 h-10 text-gray-300 mb-3" />
-            <p className="text-[15px] font-semibold text-gray-800">No tasks</p>
+            <p className="text-[15px] font-semibold text-gray-800">No {statusTab.toLowerCase()} tasks</p>
           </div>
         ) : (
-          <div className="space-y-2">
-            {filtered.map((t) => (
-              <MobileTaskListCard
-                key={t.id}
-                task={t}
-                onOpenChat={() => onTaskClick(t)}
-                onCheckInOut={onCheckInOut ? () => onCheckInOut(t) : undefined}
-                onViewInfo={onViewInfo ? () => onViewInfo(t) : undefined}
-              />
-            ))}
-          </div>
+          <>
+            <div className="space-y-2">
+              {preview.map((t) => (
+                <MobileTaskListCard
+                  key={t.id}
+                  task={t}
+                  managerScope={managerScope}
+                  onOpenChat={() => onTaskClick(t)}
+                  onCheckInOut={onCheckInOut ? () => onCheckInOut(t) : undefined}
+                  onViewInfo={onViewInfo ? () => onViewInfo(t) : undefined}
+                />
+              ))}
+            </div>
+            {hasHistory && (
+              <EmpListViewMoreButton count={history.length} onClick={() => setHistoryOpen(true)} />
+            )}
+          </>
         )}
       </div>
+
+      <EmpRecordHistorySheet
+        open={historyOpen}
+        onClose={() => setHistoryOpen(false)}
+        title={`${statusTab} task history`}
+        subtitle={`${history.length} older task(s)`}
+      >
+        <div className="space-y-2">
+          {history.map((t) => (
+            <MobileTaskListCard
+              key={t.id}
+              task={t}
+              managerScope={managerScope}
+              onOpenChat={() => onTaskClick(t)}
+              onCheckInOut={onCheckInOut ? () => onCheckInOut(t) : undefined}
+              onViewInfo={onViewInfo ? () => onViewInfo(t) : undefined}
+            />
+          ))}
+        </div>
+      </EmpRecordHistorySheet>
 
       {showCreateFab && onCreateClick && (
         <button

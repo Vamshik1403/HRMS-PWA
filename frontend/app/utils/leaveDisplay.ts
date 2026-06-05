@@ -1,3 +1,5 @@
+import { displayStatusLabel, isPartiallyApprovedStatus } from "./statusDisplay";
+
 export type DayStatusRow = { date: string; status: string };
 
 export function parseDayStatuses(raw: unknown): DayStatusRow[] {
@@ -62,7 +64,7 @@ export function getApprovedDateRange(app: {
 export function getDisplayLeaveStatus(status?: string | null, dayStatuses?: unknown): string {
   const s = status || "Pending";
   if (s === "Pending") return "Approval Pending";
-  if (s === "Partly Approved") return "Partly Approved";
+  if (isPartiallyApprovedStatus(s)) return "Partially Approved";
   if (s === "Rejected") return "Rejected";
   if (s === "RevokePending") return "Cancel Pending";
   if (s === "Revoked") return "Cancelled";
@@ -71,7 +73,7 @@ export function getDisplayLeaveStatus(status?: string | null, dayStatuses?: unkn
     const types = new Set(
       ds.map((d) => d.status).filter((x) => x && !["Pending", "Rejected"].includes(x)),
     );
-    if (types.size > 1) return "Partly Approved";
+    if (types.size > 1) return "Partially Approved";
     return "Approved";
   }
   return s;

@@ -66,13 +66,32 @@ export async function fetchEmployeePayslips(): Promise<EmpPayslipRow[]> {
 
   if (!emp?.employeeID) return [];
 
+  let scopeIds = [emp.employeeID];
+  try {
+    const scopeRes = await fetch(`${BACKEND}/emp-manager-scope/reportees`, {
+      headers: authHeaders(),
+      cache: "no-store",
+    });
+    if (scopeRes.ok) {
+      const scope = await scopeRes.json();
+      if (Array.isArray(scope.reporteeIds) && scope.reporteeIds.length) {
+        scopeIds = scope.reporteeIds;
+      }
+    }
+  } catch {
+    /* use self only */
+  }
+
   return allItems.filter(
     (r) =>
       r.companyID === emp!.companyID &&
       r.branchesID === emp!.branchesID &&
-      (r.manageEmployeeID === emp!.employeeID ||
-        r.manageEmployee?.id === emp!.employeeID ||
-        r.employeeID === emp!.employeeID) &&
+      scopeIds.some(
+        (id) =>
+          r.manageEmployeeID === id ||
+          r.manageEmployee?.id === id ||
+          r.employeeID === id,
+      ) &&
       isPayslipVisibleToEmployee(r.status),
   );
 }

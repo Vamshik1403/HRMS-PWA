@@ -9,9 +9,19 @@ import {
   type StoredInAppNotification,
 } from "../../utils/empInAppNotifications";
 import { empPayoutHrefForPeriod } from "../../utils/empPayslipApi";
-import { getPageCache, setPageCache } from "../../utils/pageCache";
+import { getEmployeeIdFromStorage } from "@/lib/pushSubscribe";
+import {
+  empNotifFeedCacheKey,
+  getPageCache,
+  setPageCache,
+} from "../../utils/pageCache";
+import { useEmpManagerScope } from "../../hooks/useEmpManagerScope";
+import { formatManagerNotificationCopy } from "../../utils/empManagerDisplay";
+import { filterNotificationsForViewer } from "../../utils/empNotificationFilter";
+import { EMP_MOBILE_PREVIEW_LIMIT } from "../../utils/empListLimit";
+import { EmpNotificationsHistoryModal } from "./EmpNotificationsHistoryModal";
+import { EmpListViewMoreButton } from "./EmpListViewMoreButton";
 
-const FEED_CACHE_KEY = "empNotifFeed";
 type CachedFeed = { recent: FeedNotification[]; older: FeedNotification[]; hasMore: boolean };
 
 const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL || "/backend";
@@ -24,6 +34,9 @@ export type FeedNotification = {
   emoji: string;
   at: string;
   href?: string;
+  subjectEmployeeId?: number;
+  subjectEmployeeName?: string;
+  isTeamItem?: boolean;
 };
 
 function authHeaders(): Record<string, string> {
@@ -79,7 +92,6 @@ function mergeFeeds(
   apiRecent: FeedNotification[],
   apiOlder: FeedNotification[],
   stored: StoredInAppNotification[],
-  showOlder: boolean,
 ): FeedNotification[] {
   const fromStored: FeedNotification[] = stored.map((s) => ({
     id: s.id,
@@ -89,8 +101,11 @@ function mergeFeeds(
     emoji: s.emoji,
     at: s.at,
     href: s.href,
+    subjectEmployeeId: s.subjectEmployeeId,
+    subjectEmployeeName: s.subjectEmployeeName,
+    isTeamItem: s.isTeamItem,
   }));
-  const combined = [...fromStored, ...apiRecent, ...(showOlder ? apiOlder : [])];
+  const combined = [...fromStored, ...apiRecent, ...apiOlder];
   const seen = new Set<string>();
   const unique: FeedNotification[] = [];
   for (const item of combined.sort(
@@ -104,15 +119,18 @@ function mergeFeeds(
 }
 
 export function EmpNotificationsPanel() {
-  // Stale-while-revalidate: render the last-known feed instantly from cache,
-  // then refresh in the background — no spinner on repeat visits.
-  const cached = typeof window !== "undefined" ? getPageCache<CachedFeed>(FEED_CACHE_KEY) : null;
+  const { scope, isManagerView } = useEmpManagerScope();
+  const feedCacheKey =
+    typeof window !== "undefined"
+      ? empNotifFeedCacheKey(getEmployeeIdFromStorage())
+      : "empNotifFeed";
+  const cached =
+    typeof window !== "undefined" ? getPageCache<CachedFeed>(feedCacheKey) : null;
   const [recent, setRecent] = useState<FeedNotification[]>(cached?.recent ?? []);
   const [older, setOlder] = useState<FeedNotification[]>(cached?.older ?? []);
   const [stored, setStored] = useState<StoredInAppNotification[]>([]);
   const [loading, setLoading] = useState(!cached);
-  const [showOlder, setShowOlder] = useState(false);
-  const [hasMore, setHasMore] = useState(cached?.hasMore ?? false);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -126,17 +144,18 @@ export function EmpNotificationsPanel() {
       if (!res.ok) {
         setRecent([]);
         setOlder([]);
-        setHasMore(false);
         setError("Could not load notifications.");
       } else {
         const data = await res.json();
         const olderList = Array.isArray(data.older) ? data.older : [];
         const recentList = Array.isArray(data.recent) ? data.recent : [];
-        const more = Boolean(data.hasMore) || olderList.length > 0;
         setRecent(recentList);
         setOlder(olderList);
-        setHasMore(more);
-        setPageCache(FEED_CACHE_KEY, { recent: recentList, older: olderList, hasMore: more });
+        setPageCache(feedCacheKey, {
+          recent: recentList,
+          older: olderList,
+          hasMore: Boolean(data.hasMore) || olderList.length > 0,
+        });
       }
       consolidateStoredTaskChatNotifications();
       setStored(loadInAppNotifications());
@@ -145,7 +164,7 @@ export function EmpNotificationsPanel() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [feedCacheKey]);
 
   useEffect(() => {
     void load();
@@ -154,34 +173,37 @@ export function EmpNotificationsPanel() {
       setStored(loadInAppNotifications());
       void load();
     };
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void load();
+    };
     window.addEventListener("emp-notifications-changed", onChange);
-    return () => window.removeEventListener("emp-notifications-changed", onChange);
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      window.removeEventListener("emp-notifications-changed", onChange);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
   }, [load]);
 
-  const list = useMemo(
-    () => mergeFeeds(recent, older, stored, showOlder),
-    [recent, older, stored, showOlder],
+  const fullList = useMemo(() => {
+    const merged = mergeFeeds(recent, older, stored);
+    return filterNotificationsForViewer(merged, isManagerView).sort(
+      (a, b) => new Date(b.at).getTime() - new Date(a.at).getTime(),
+    );
+  }, [recent, older, stored, isManagerView]);
+
+  const panelList = useMemo(
+    () => fullList.slice(0, EMP_MOBILE_PREVIEW_LIMIT),
+    [fullList],
   );
 
-  const recentOnly = useMemo(
-    () => mergeFeeds(recent, [], stored, false),
-    [recent, stored],
-  );
-
-  const display = showOlder ? list : recentOnly;
-
-  const fullList = useMemo(
-    () => mergeFeeds(recent, older, stored, true),
-    [recent, older, stored],
-  );
-
-  const hasOlder =
-    hasMore || older.length > 0 || fullList.length > recentOnly.length;
+  const olderCount = Math.max(0, fullList.length - EMP_MOBILE_PREVIEW_LIMIT);
 
   return (
     <div className="mb-2">
       <div className="flex items-center justify-between mb-3">
-        <h2 className="text-[15px] font-bold text-gray-900">Notifications</h2>
+        <h2 className="text-[15px] font-bold text-gray-900">
+          {isManagerView ? "Team notifications" : "Notifications"}
+        </h2>
         <span className="text-[11px] text-gray-400">Last 7 days</span>
       </div>
 
@@ -193,16 +215,19 @@ export function EmpNotificationsPanel() {
         <div className="bg-white rounded-2xl border border-gray-100 p-6 text-center text-[13px] text-gray-500">
           {error}
         </div>
-      ) : display.length === 0 && !hasOlder ? (
+      ) : fullList.length === 0 ? (
         <div className="bg-white rounded-2xl border border-gray-100 p-6 flex flex-col items-center gap-2">
           <span className="text-2xl" aria-hidden>
             🔔
           </span>
           <p className="text-[12px] text-gray-400">No notifications in the last 7 days</p>
         </div>
-      ) : display.length === 0 ? null : (
+      ) : (
         <div className="space-y-2">
-          {display.map((n) => {
+          {panelList.map((n) => {
+            const copy = isManagerView
+              ? formatManagerNotificationCopy(n, scope)
+              : { title: n.title, body: n.body };
             const inner = (
               <div className="bg-white rounded-2xl border border-gray-100 shadow-[0_1px_8px_rgba(15,23,42,0.04)] px-3.5 py-3 flex gap-3 active:scale-[0.99] transition-transform">
                 <div className="w-10 h-10 rounded-xl bg-gray-50 flex items-center justify-center flex-shrink-0 overflow-hidden">
@@ -221,10 +246,10 @@ export function EmpNotificationsPanel() {
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-start justify-between gap-2">
-                    <p className="text-[13px] font-bold text-gray-900 leading-snug">{n.title}</p>
+                    <p className="text-[13px] font-bold text-gray-900 leading-snug">{copy.title}</p>
                     <span className="text-[10px] text-gray-400 flex-shrink-0">{fmtWhen(n.at, n.kind)}</span>
                   </div>
-                  <p className="text-[12px] text-gray-600 mt-0.5 leading-relaxed">{n.body}</p>
+                  <p className="text-[12px] text-gray-600 mt-0.5 leading-relaxed">{copy.body}</p>
                 </div>
               </div>
             );
@@ -240,18 +265,21 @@ export function EmpNotificationsPanel() {
         </div>
       )}
 
-      {!loading && !error && !showOlder && hasOlder && (
-        <button
-          type="button"
-          onClick={() => setShowOlder(true)}
-          className="mt-3 w-full py-2.5 text-[13px] font-bold text-[#2563eb] bg-white border border-gray-100 rounded-xl shadow-sm active:scale-[0.99]"
-        >
-          View more
-        </button>
+      {!loading && !error && olderCount > 0 && (
+        <EmpListViewMoreButton
+          count={olderCount}
+          onClick={() => setHistoryOpen(true)}
+          label="View more"
+        />
       )}
-      {showOlder && (
-        <p className="mt-2 text-center text-[11px] text-gray-400">Showing older notifications (up to 90 days)</p>
-      )}
+
+      <EmpNotificationsHistoryModal
+        open={historyOpen}
+        onClose={() => setHistoryOpen(false)}
+        items={fullList}
+        isManagerView={isManagerView}
+        scope={scope}
+      />
     </div>
   );
 }

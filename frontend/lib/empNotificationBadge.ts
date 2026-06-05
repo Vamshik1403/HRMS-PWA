@@ -27,17 +27,32 @@ export async function fetchEmpNotificationTotal(
     10,
   );
 
+  const scopeIdsPromise = fetch(`${BACKEND}/emp-manager-scope/reportees`, { headers })
+    .then((r) => (r.ok ? r.json() : null))
+    .then((scope: { reporteeIds?: number[] } | null) =>
+      Array.isArray(scope?.reporteeIds) && scope!.reporteeIds!.length
+        ? scope!.reporteeIds!
+        : [employeeId],
+    )
+    .catch(() => [employeeId]);
+
   await Promise.all([
-    fetch(`${BACKEND}/employee-memo?employeeID=${employeeId}`, { headers })
-      .then((r) => r.json())
-      .then((memos: unknown) => {
-        if (!Array.isArray(memos)) return;
-        notice = memos.filter((m: { createdAt?: string; employeeID?: number }) => {
+    scopeIdsPromise.then((scopeIds) =>
+      Promise.all(
+        scopeIds.map((id) =>
+          fetch(`${BACKEND}/employee-memo?employeeID=${id}`, { headers })
+            .then((r) => r.json())
+            .catch(() => []),
+        ),
+      ).then((lists) => {
+        const merged = lists.flat();
+        if (!Array.isArray(merged)) return;
+        notice = merged.filter((m: { createdAt?: string }) => {
           const ts = m.createdAt ? new Date(m.createdAt).getTime() : 0;
-          return ts > lastViewed && m.employeeID === employeeId;
+          return ts > lastViewed;
         }).length;
-      })
-      .catch(() => {}),
+      }),
+    ),
     ...(TASK_MANAGEMENT_ENABLED
       ? [
           (() => {

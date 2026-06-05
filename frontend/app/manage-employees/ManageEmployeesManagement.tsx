@@ -829,6 +829,7 @@ export function ManageEmployeesManagement() {
     allowCreateTaskOnMobile: false,
     pwaShowLeaveBalance: true,
     mobileAttendanceEnabled: false,
+    mobileBreakEnabled: true,
 
     typeOfEmployee: "employee",
 
@@ -1921,6 +1922,7 @@ const addCombinedDevMap = () => {
       allowCreateTaskOnMobile: false,
       pwaShowLeaveBalance: true,
       mobileAttendanceEnabled: false,
+    mobileBreakEnabled: true,
 
       typeOfEmployee: "employee",
 
@@ -2507,6 +2509,7 @@ const addCombinedDevMap = () => {
         allowCreateTaskOnMobile: formData.allowCreateTaskOnMobile,
         pwaShowLeaveBalance: formData.pwaShowLeaveBalance,
         mobileAttendanceEnabled: formData.mobileAttendanceEnabled,
+        mobileBreakEnabled: formData.mobileBreakEnabled,
 
         typeOfEmployee: formData.typeOfEmployee || undefined,
 
@@ -2767,6 +2770,7 @@ const addCombinedDevMap = () => {
       allowCreateTaskOnMobile: freshData.allowCreateTaskOnMobile ?? false,
       pwaShowLeaveBalance: freshData.pwaShowLeaveBalance ?? true,
       mobileAttendanceEnabled: freshData.mobileAttendanceEnabled ?? false,
+      mobileBreakEnabled: freshData.mobileBreakEnabled !== false,
       typeOfEmployee: freshData.typeOfEmployee ?? "",
       workShiftID: effectiveWorkShiftID,
       attendancePolicyID: effectiveAttendancePolicyID,
@@ -4543,6 +4547,19 @@ const addCombinedDevMap = () => {
                 </label>
                 <p className="text-xs text-gray-500 -mt-1 ml-6">
                   When enabled, this employee punches in/out only via the mobile app and their device punches are ignored. When disabled, they punch in/out only via the assigned attendance device.
+                </p>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={formData.mobileBreakEnabled !== false}
+                    disabled={!formData.mobileAttendanceEnabled}
+                    onChange={(e) => setFormData((p) => ({ ...p, mobileBreakEnabled: e.target.checked }))}
+                    className="rounded border-gray-300"
+                  />
+                  <span className="text-sm text-gray-700">Enable break-in / break-out on mobile app</span>
+                </label>
+                <p className="text-xs text-gray-500 -mt-1 ml-6">
+                  When enabled, break-in and break-out buttons appear in the employee selfcare app during an active work session. Requires mobile attendance to be enabled.
                 </p>
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input

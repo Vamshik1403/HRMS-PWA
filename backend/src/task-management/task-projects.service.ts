@@ -1,5 +1,6 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { EmpManagerScopeService } from '../common/emp-manager-scope.service';
 import { MailService } from '../mail/mail.service';
 import { PushNotificationsService } from '../push-notifications/push-notifications.service';
 import {
@@ -76,19 +77,21 @@ export class TaskProjectsService {
     private prisma: PrismaService,
     private pushService: PushNotificationsService,
     private mailService: MailService,
+    private managerScope: EmpManagerScopeService,
   ) {}
 
-  private visibilityWhere(viewer: TaskViewerContext, companyID?: number) {
-    const base: any = { isDeleted: false };
+  private async visibilityWhere(viewer: TaskViewerContext, companyID?: number) {
+    const base: Record<string, unknown> = { isDeleted: false };
     if (companyID) base.companyID = companyID;
     else if (viewer.companyID && viewer.role !== 'SUPERADMIN') base.companyID = viewer.companyID;
 
     if (canManageTaskModule(viewer)) return base;
 
-    const or: any[] = [];
+    const or: Record<string, unknown>[] = [];
     if (viewer.employeeId) {
-      or.push({ createdByEmployeeID: viewer.employeeId });
-      or.push({ assignments: { some: { manageEmployeeID: viewer.employeeId } } });
+      const scopeIds = await this.managerScope.getReporteeIds(viewer.employeeId);
+      or.push({ createdByEmployeeID: { in: scopeIds } });
+      or.push({ assignments: { some: { manageEmployeeID: { in: scopeIds } } } });
     }
     if (viewer.userId) {
       or.push({ createdByUserID: viewer.userId });
@@ -111,14 +114,95 @@ export class TaskProjectsService {
       return task;
     }
 
+    const scopeIds = viewer.employeeId
+      ? await this.managerScope.getReporteeIds(viewer.employeeId)
+      : [];
     const isCreator =
-      (viewer.employeeId && task.createdByEmployeeID === viewer.employeeId) ||
+      (viewer.employeeId && task.createdByEmployeeID != null && scopeIds.includes(task.createdByEmployeeID)) ||
       (viewer.userId && task.createdByUserID === viewer.userId);
     const isAssigned = viewer.employeeId
-      ? task.assignments.some((a) => a.manageEmployeeID === viewer.employeeId)
+      ? task.assignments.some((a) => scopeIds.includes(a.manageEmployeeID))
       : false;
     if (!isCreator && !isAssigned) throw new ForbiddenException('Access denied');
     return task;
+  }
+
+  private formatTaskDetailsMessage(task: {
+    taskCode: string;
+    taskName: string;
+    taskType: string;
+    status: string;
+    priority: string;
+    description?: string | null;
+    scheduleDateTime?: Date | null;
+    dueDateTime?: Date | null;
+    department?: { departmentName?: string | null } | null;
+    customer?: { customerName?: string } | null;
+    site?: { branchName?: string } | null;
+    assignments?: {
+      manageEmployee?: { employeeFirstName?: string | null; employeeLastName?: string | null } | null;
+    }[];
+  }): string {
+    const assignees = (task.assignments || [])
+      .map((a) => [a.manageEmployee?.employeeFirstName, a.manageEmployee?.employeeLastName].filter(Boolean).join(' '))
+      .filter(Boolean)
+      .join(', ');
+    const lines = [
+      '📋 Task created',
+      '',
+      `Code: ${task.taskCode}`,
+      `Name: ${task.taskName}`,
+      `Type: ${task.taskType}`,
+      `Status: ${task.status}`,
+      `Priority: ${task.priority}`,
+    ];
+    if (task.department?.departmentName) lines.push(`Department: ${task.department.departmentName}`);
+    if (task.customer?.customerName) lines.push(`Customer: ${task.customer.customerName}`);
+    if (task.site?.branchName) lines.push(`Site: ${task.site.branchName}`);
+    if (assignees) lines.push(`Assignees: ${assignees}`);
+    if (task.scheduleDateTime) {
+      lines.push(`Schedule: ${task.scheduleDateTime.toLocaleString('en-IN')}`);
+    }
+    if (task.dueDateTime) lines.push(`Due: ${task.dueDateTime.toLocaleString('en-IN')}`);
+    if (task.description?.trim()) lines.push('', `Description: ${task.description.trim()}`);
+    return lines.join('\n');
+  }
+
+  private formatStatusChangeMessage(
+    oldStatus: string,
+    newStatus: string,
+    actorName?: string | null,
+    remark?: string | null,
+  ): string {
+    const lines = [
+      `Status changed: ${oldStatus} → ${newStatus}`,
+      `Updated by: ${actorName?.trim() || 'System'}`,
+    ];
+    if (remark?.trim()) lines.push(`Remark: ${remark.trim()}`);
+    return lines.join('\n');
+  }
+
+  private async postSystemChat(
+    taskID: number,
+    message: string,
+    viewer: TaskViewerContext,
+    actorName?: string | null,
+  ) {
+    await this.prisma.taskChat.create({
+      data: {
+        taskID,
+        message,
+        userID: viewer.userId ?? null,
+        employeeID: null,
+        senderName: actorName?.trim() || 'System',
+      },
+    });
+    await this.logActivity(taskID, 'CHAT', {
+      userID: viewer.userId,
+      employeeID: viewer.employeeId,
+      actorName: actorName?.trim() || 'System',
+      remark: message.slice(0, 500),
+    });
   }
 
   private async logActivity(
@@ -155,7 +239,7 @@ export class TaskProjectsService {
   ): void {
     for (const manageEmployeeID of manageEmployeeIDs) {
       this.pushService
-        .sendToEmployee(
+        .sendToEmployeeAndManagers(
           manageEmployeeID,
           'Task Assigned',
           `You have been assigned: ${taskLabel}`,
@@ -235,7 +319,7 @@ export class TaskProjectsService {
 
     for (const manageEmployeeID of targets) {
       this.pushService
-        .sendToEmployee(
+        .sendToEmployeeAndManagers(
           manageEmployeeID,
           `Task message — ${taskLabel}`,
           body,
@@ -313,7 +397,7 @@ export class TaskProjectsService {
     const status = query.status?.trim();
     const priority = query.priority?.trim();
     const taskType = query.taskType?.trim();
-    const where = this.visibilityWhere(viewer, query.companyID ? Number(query.companyID) : undefined);
+    const where = await this.visibilityWhere(viewer, query.companyID ? Number(query.companyID) : undefined);
     if (status) where.status = status;
     if (priority) where.priority = priority;
     if (taskType) where.taskType = taskType;
@@ -415,7 +499,16 @@ export class TaskProjectsService {
       actorName: query.actorName,
       newValue: task.status,
     });
-    return this.findOne(task.id, query);
+    const createdFull = await this.findOne(task.id, query);
+    if (createdFull) {
+      await this.postSystemChat(
+        task.id,
+        this.formatTaskDetailsMessage(createdFull),
+        viewer,
+        (query.actorName as string) || undefined,
+      );
+    }
+    return createdFull;
   }
 
   async update(id: number, dto: UpdateTaskProjectDto, query: Record<string, string | undefined>) {
@@ -455,22 +548,31 @@ export class TaskProjectsService {
 
   async changeStatus(id: number, dto: TaskStatusChangeDto, query: Record<string, string | undefined>) {
     const viewer = parseViewer(query);
-    if (!canManageTaskModule(viewer)) {
-      throw new ForbiddenException('Only administrators can change task status');
-    }
     const task = await this.assertTaskAccess(id, viewer);
+    if (!canManageTaskModule(viewer)) {
+      if (!viewer.employeeId || task.createdByEmployeeID !== viewer.employeeId) {
+        throw new ForbiddenException('Only task creator or admin can change task status');
+      }
+    }
     const updated = await this.prisma.taskProject.update({
       where: { id },
       data: { status: dto.status },
     });
+    const actorName = dto.actorName ?? (query.actorName as string) ?? undefined;
     await this.logActivity(id, 'STATUS_CHANGE', {
       userID: dto.userID ?? viewer.userId,
       employeeID: dto.employeeID ?? viewer.employeeId,
-      actorName: dto.actorName,
+      actorName,
       oldValue: task.status,
       newValue: dto.status,
       remark: dto.remark,
     });
+    await this.postSystemChat(
+      id,
+      this.formatStatusChangeMessage(task.status, dto.status, actorName, dto.remark),
+      viewer,
+      actorName,
+    );
     if (dto.remark?.trim()) {
       await this.addRemark(id, { remark: dto.remark, userID: dto.userID, employeeID: dto.employeeID, authorName: dto.actorName }, query);
     }

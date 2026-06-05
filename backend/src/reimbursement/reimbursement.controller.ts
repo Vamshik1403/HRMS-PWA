@@ -50,16 +50,18 @@ export class ReimbursementController {
   approveItem(
     @Param('id', ParseIntPipe) id: number,
     @Param('itemId', ParseIntPipe) itemId: number,
+    @Body() body?: { actorRole?: string },
   ) {
-    return this.service.approveItem(id, itemId);
+    return this.service.approveItem(id, itemId, body?.actorRole);
   }
 
   @Patch(':id/items/:itemId/reject')
   rejectItem(
     @Param('id', ParseIntPipe) id: number,
     @Param('itemId', ParseIntPipe) itemId: number,
+    @Body() body?: { actorRole?: string },
   ) {
-    return this.service.rejectItem(id, itemId);
+    return this.service.rejectItem(id, itemId, body?.actorRole);
   }
 
   @Patch(':id/items/:itemId/payment')

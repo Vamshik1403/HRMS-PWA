@@ -96,8 +96,12 @@ self.addEventListener("push", function (event) {
             url: options.data.url,
             kind: inner.kind || "general",
             event: inner.event || "",
+            memoId: inner.memoId != null ? inner.memoId : undefined,
             taskId: inner.taskId != null ? inner.taskId : undefined,
             tag: inner.tag || options.tag || "",
+            subjectEmployeeId:
+              inner.subjectEmployeeId != null ? inner.subjectEmployeeId : undefined,
+            isTeamNotification: !!inner.isTeamNotification,
           });
         });
       }),

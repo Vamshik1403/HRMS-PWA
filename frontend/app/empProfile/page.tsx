@@ -4,7 +4,13 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Icon } from "@iconify/react";
 import EmpMobileLayout from "../components/layout/EmpMobileLayout";
-import { getPageCache, setPageCache, clearPageCache } from "../utils/pageCache";
+import { clearInAppNotifications } from "../utils/empInAppNotifications";
+import {
+  getPageCache,
+  setPageCache,
+  clearPageCache,
+  clearPageCachesByPrefix,
+} from "../utils/pageCache";
 import { clearLegacyEmpPhoto, getEmpPhoto, setEmpPhoto } from "../utils/empPhotoCache";
 
 const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL || "/backend";
@@ -176,6 +182,8 @@ export default function EmpProfilePage() {
     setEmpPhoto(empId, null);
     clearLegacyEmpPhoto();
     clearPageCache("empProfileData");
+    clearPageCachesByPrefix("empNotifFeed");
+    clearInAppNotifications();
     localStorage.removeItem("token");
     localStorage.removeItem("accessToken");
     localStorage.removeItem("user");

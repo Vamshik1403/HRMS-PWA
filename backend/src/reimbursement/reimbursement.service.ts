@@ -4,6 +4,11 @@ import { CreateReimbursementDto } from './dto/create-reimbursement.dto';
 import { UpdateReimbursementDto } from './dto/update-reimbursement.dto';
 import { PushNotificationsService } from '../push-notifications/push-notifications.service';
 import { MailService } from '../mail/mail.service';
+import { EmpManagerScopeService } from '../common/emp-manager-scope.service';
+import {
+  reimbursementPushTitle,
+  senderLabelFromRole,
+} from '../common/notification-sender.util';
 
 @Injectable()
 export class ReimbursementService {
@@ -11,6 +16,7 @@ export class ReimbursementService {
     private readonly prisma: PrismaService,
     private readonly pushService: PushNotificationsService,
     private readonly mailService: MailService,
+    private readonly managerScope: EmpManagerScopeService,
   ) {}
 
   /** Include all necessary relations in queries */
@@ -107,8 +113,9 @@ export class ReimbursementService {
   }
 
   async findByEmployee(empId: number) {
+    const scopeIds = await this.managerScope.getReporteeIds(empId);
     return this.prisma.reimbursement.findMany({
-      where: { manageEmployeeID: empId },
+      where: { manageEmployeeID: { in: scopeIds } },
       include: this.includeRels(),
       orderBy: { id: 'desc' },
     });
@@ -142,7 +149,13 @@ export class ReimbursementService {
 
   /** ─────────────── UPDATE ─────────────── */
   async update(id: number, dto: UpdateReimbursementDto) {
-    const { items, ...parent } = dto;
+    const { items, actorRole, ...parent } = dto;
+    const actorLabel = actorRole ? senderLabelFromRole(actorRole) : undefined;
+
+    const before = await this.prisma.reimbursement.findUnique({
+      where: { id },
+      select: { status: true, manageEmployeeID: true },
+    });
 
     await this.ensureExists(id);
 
@@ -182,7 +195,22 @@ export class ReimbursementService {
       }
     });
 
-    return this.findOne(id);
+    const updated = await this.findOne(id);
+    if (
+      parent.status === 'Rejected' &&
+      before?.status !== 'Rejected' &&
+      (updated as any).manageEmployeeID
+    ) {
+      this.pushService
+        .sendToEmployeeAndManagers(
+          (updated as any).manageEmployeeID,
+          reimbursementPushTitle('Rejected', actorLabel),
+          'Your reimbursement claim has been rejected.',
+          { url: '/empReimbursement', kind: 'reimbursement' },
+        )
+        .catch(() => null);
+    }
+    return updated;
   }
 
   // NEW: Update payment details specifically
@@ -226,11 +254,11 @@ export class ReimbursementService {
     });
 
     if ((updated as any).manageEmployeeID) {
-      this.pushService.sendToEmployee(
+      this.pushService.sendToEmployeeAndManagers(
         (updated as any).manageEmployeeID,
-        'Reimbursement Approved',
+        reimbursementPushTitle('Approved'),
         'Your reimbursement request has been approved.',
-        { url: '/empReimbursement' },
+        { url: '/empReimbursement', kind: 'reimbursement' },
       ).catch(() => null);
     }
 
@@ -253,7 +281,8 @@ export class ReimbursementService {
   }
 
   /** Approve a single reimbursement line (voucher only for now). */
-  async approveItem(reimbursementID: number, itemId: number) {
+  async approveItem(reimbursementID: number, itemId: number, actorRole?: string) {
+    const actorLabel = actorRole ? senderLabelFromRole(actorRole) : undefined;
     await this.ensureExists(reimbursementID);
     const item = await this.prisma.reimbursementItem.findFirst({
       where: { id: itemId, reimbursementID },
@@ -272,11 +301,11 @@ export class ReimbursementService {
     const rec = await this.syncParentStatus(reimbursementID);
     if ((rec as any).manageEmployeeID) {
       this.pushService
-        .sendToEmployee(
+        .sendToEmployeeAndManagers(
           (rec as any).manageEmployeeID,
-          'Reimbursement Approved',
+          reimbursementPushTitle('Approved', actorLabel),
           'An item on your reimbursement request has been approved.',
-          { url: '/empReimbursement' },
+          { url: '/empReimbursement', kind: 'reimbursement' },
         )
         .catch(() => null);
     }
@@ -284,7 +313,8 @@ export class ReimbursementService {
   }
 
   /** Reject a single reimbursement line. */
-  async rejectItem(reimbursementID: number, itemId: number) {
+  async rejectItem(reimbursementID: number, itemId: number, actorRole?: string) {
+    const actorLabel = actorRole ? senderLabelFromRole(actorRole) : undefined;
     await this.ensureExists(reimbursementID);
     const item = await this.prisma.reimbursementItem.findFirst({
       where: { id: itemId, reimbursementID },
@@ -299,11 +329,11 @@ export class ReimbursementService {
     const rec = await this.syncParentStatus(reimbursementID);
     if ((rec as any).manageEmployeeID) {
       this.pushService
-        .sendToEmployee(
+        .sendToEmployeeAndManagers(
           (rec as any).manageEmployeeID,
-          'Reimbursement Rejected',
+          reimbursementPushTitle('Rejected', actorLabel),
           'An item on your reimbursement request has been rejected.',
-          { url: '/empReimbursement' },
+          { url: '/empReimbursement', kind: 'reimbursement' },
         )
         .catch(() => null);
     }
@@ -338,13 +368,13 @@ export class ReimbursementService {
     const rec = await this.syncParentStatus(reimbursementID);
     if (paidStatus === 'Paid' && (rec as any).manageEmployeeID) {
       this.pushService
-        .sendToEmployee(
+        .sendToEmployeeAndManagers(
           (rec as any).manageEmployeeID,
           'Reimbursement Paid',
           body.paymentRemark?.trim()
             ? `Reimbursement paid: ${body.paymentRemark.trim()}`
             : 'Your reimbursement has been marked as paid.',
-          { url: '/empReimbursement' },
+          { url: '/empReimbursement', kind: 'reimbursement' },
         )
         .catch(() => null);
     }
@@ -366,7 +396,7 @@ export class ReimbursementService {
       status = 'Rejected';
     } else if (statuses.every((s) => s === 'Approved' || s === 'Rejected')) {
       status = statuses.some((s) => s === 'Rejected')
-        ? 'Partly Approved'
+        ? 'Partially Approved'
         : 'Approved';
       if (statuses.some((s) => s === 'Approved')) {
         approvalType = 'Voucher';
@@ -374,7 +404,7 @@ export class ReimbursementService {
     } else if (
       statuses.some((s) => s === 'Approved' || s === 'Rejected')
     ) {
-      status = 'Partly Approved';
+      status = 'Partially Approved';
       if (statuses.some((s) => s === 'Approved')) {
         approvalType = 'Voucher';
       }

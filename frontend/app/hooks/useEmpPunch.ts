@@ -15,6 +15,7 @@ export interface TodayStatus {
   canCheckOut?: boolean;
   canBreakIn?: boolean;
   canBreakOut?: boolean;
+  mobileBreakEnabled?: boolean;
   canMarkAbsent?: boolean;
   checkIn: any;
   checkOut: any;

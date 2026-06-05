@@ -11,4 +11,6 @@ export class CreateEmployeeMemoDto {
   @IsOptional() @IsString() description?: string;
   @IsOptional() @IsDateString() issuedDate?: string;
   @IsOptional() @IsString() issuedBy?: string;
+  /** SUPERADMIN, COMPANY_ADMIN, MANAGER, etc. — used for push notification sender label. */
+  @IsOptional() @IsString() issuedByRole?: string;
 }

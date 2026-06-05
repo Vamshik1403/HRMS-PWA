@@ -10,16 +10,18 @@ import type { TodayStatus } from "../hooks/useEmpPunch";
 import { getPageCache, setPageCache } from "../utils/pageCache";
 import {
   encodeDateKey,
-  filterDaysByCount,
   filterDaysByRange,
   groupAttendanceByDay,
   lastNDaysRange,
   type AttendanceDaySummary,
   type AttendanceLocationRecord,
 } from "../utils/empAttendanceHistory";
+import { splitPreviewRecords } from "../utils/empListLimit";
+import { EmpRecordHistorySheet } from "../components/emp/EmpRecordHistorySheet";
+import { EmpListViewMoreButton } from "../components/emp/EmpListViewMoreButton";
 
 const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL || "/backend";
-const HISTORY_DAYS = 7;
+const HISTORY_PREVIEW = 5;
 
 export default function EmpAttendancePage() {
   const [todayStatus, setTodayStatus] = useState<TodayStatus | null>(() =>
@@ -29,6 +31,7 @@ export default function EmpAttendancePage() {
   const [historyLoading, setHistoryLoading] = useState(true);
   const [allDays, setAllDays] = useState<AttendanceDaySummary[]>([]);
   const [searchDate, setSearchDate] = useState("");
+  const [historyOpen, setHistoryOpen] = useState(false);
 
   const getToken = () =>
     typeof window !== "undefined"
@@ -98,8 +101,14 @@ export default function EmpAttendancePage() {
 
   const listDays = useMemo(() => {
     if (searchDate) return filterDaysByRange(allDays, searchDate, searchDate);
-    return filterDaysByCount(allDays, HISTORY_DAYS);
+    return allDays;
   }, [allDays, searchDate]);
+
+  const { preview: previewDays, history: historyDays, hasHistory } = splitPreviewRecords(
+    listDays,
+    HISTORY_PREVIEW,
+  );
+  const displayDays = searchDate ? listDays : previewDays;
 
   return (
     <EmpMobileLayout>
@@ -112,7 +121,7 @@ export default function EmpAttendancePage() {
       >
         <h1 className="text-[20px] font-bold text-gray-900 mb-0.5 shrink-0">Attendance</h1>
         <p className="text-[11px] text-gray-500 mb-3 shrink-0">
-          Today&apos;s status · last {HISTORY_DAYS} days below
+          Today&apos;s status · latest {HISTORY_PREVIEW} days below
         </p>
 
         <div className="shrink-0 mb-3 flex-[0_0_48%] min-h-[240px] max-h-[48%]">
@@ -140,7 +149,7 @@ export default function EmpAttendancePage() {
                 onClick={() => setSearchDate("")}
                 className="text-[11px] font-semibold text-[#2563eb] mt-1.5"
               >
-                Clear · show last {HISTORY_DAYS} days
+                Clear · show latest {HISTORY_PREVIEW} days
               </button>
             ) : (
               <p className="text-[10px] text-gray-400 mt-1">Tap a date for full details</p>
@@ -153,26 +162,49 @@ export default function EmpAttendancePage() {
                 <Icon icon="solar:refresh-bold-duotone" className="w-7 h-7 text-blue-400 animate-spin" />
                 <p className="text-[12px] text-gray-400">Loading…</p>
               </div>
-            ) : listDays.length === 0 ? (
+            ) : displayDays.length === 0 ? (
               <div className="flex flex-col items-center py-8 gap-2">
                 <Icon icon="solar:calendar-bold-duotone" className="w-9 h-9 text-gray-200" />
                 <p className="text-[12px] text-gray-400">No records</p>
               </div>
             ) : (
-              <div className="space-y-1.5">
-                {listDays.map((day) => (
-                  <EmpAttendanceDayRow
-                    key={day.dateKey}
-                    day={day}
-                    compact
-                    href={`/empHistory/${encodeDateKey(day.dateKey)}`}
-                  />
-                ))}
-              </div>
+              <>
+                <div className="space-y-1.5">
+                  {displayDays.map((day) => (
+                    <EmpAttendanceDayRow
+                      key={day.dateKey}
+                      day={day}
+                      compact
+                      href={`/empHistory/${encodeDateKey(day.dateKey)}`}
+                    />
+                  ))}
+                </div>
+                {!searchDate && hasHistory && (
+                  <EmpListViewMoreButton count={historyDays.length} onClick={() => setHistoryOpen(true)} />
+                )}
+              </>
             )}
           </div>
         </div>
       </div>
+
+      <EmpRecordHistorySheet
+        open={historyOpen}
+        onClose={() => setHistoryOpen(false)}
+        title="Attendance history"
+        subtitle={`${historyDays.length} older day(s)`}
+      >
+        <div className="space-y-1.5">
+          {historyDays.map((day) => (
+            <EmpAttendanceDayRow
+              key={day.dateKey}
+              day={day}
+              compact
+              href={`/empHistory/${encodeDateKey(day.dateKey)}`}
+            />
+          ))}
+        </div>
+      </EmpRecordHistorySheet>
     </EmpMobileLayout>
   );
 }

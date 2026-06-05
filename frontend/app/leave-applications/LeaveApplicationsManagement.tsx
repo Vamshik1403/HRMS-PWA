@@ -43,7 +43,7 @@ interface LeaveApplication {
   fromDate: string
   toDate: string
   purpose?: string
-  status?: "Pending" | "Approved" | "Rejected" | "RevokePending" | "Revoked" | "Accepted" | "Partly Approved"
+  status?: "Pending" | "Approved" | "Rejected" | "RevokePending" | "Revoked" | "Accepted" | "Partially Approved"
   dayStatuses?: DayStatus[]
   createdAt: string
 }
@@ -549,7 +549,7 @@ export function LeaveApplicationsManagement() {
 
       const unassignedCount = balancedDays.filter((day) => !day.status).length;
       const finalStatus =
-        unassignedCount > 0 ? ("Partly Approved" as const) : ("Approved" as const);
+        unassignedCount > 0 ? ("Partially Approved" as const) : ("Approved" as const);
 
       // Calculate the main leave type (most frequent type used)
       const leaveTypeCounts: Record<string, number> = {};
@@ -582,6 +582,7 @@ export function LeaveApplicationsManagement() {
         dayStatuses: balancedDays,
         remainingSickLeave: Math.max(managerLeaveBalance.sick.total - (managerLeaveBalance.sick.used + countType("Sick")), 0),
         remainingCasualLeave: Math.max(managerLeaveBalance.casual.total - (managerLeaveBalance.casual.used + countType("Casual")), 0),
+        actorRole: user?.role ?? undefined,
       };
 
       console.log("Sending update data:", updateData);
@@ -607,8 +608,8 @@ export function LeaveApplicationsManagement() {
       await loadLeaveApplications()
       setIsManagerApprovalDialogOpen(false)
       toast.success(
-        finalStatus === "Partly Approved"
-          ? `Leave partly approved (${assignedDays.length} of ${balancedDays.length} day(s)).`
+        finalStatus === "Partially Approved"
+          ? `Leave partially approved (${assignedDays.length} of ${balancedDays.length} day(s)).`
           : "Leave application approved successfully.",
       )
     } catch (error) {
@@ -625,11 +626,11 @@ export function LeaveApplicationsManagement() {
       if (isRevokeRequest) {
         // For revoke requests, set status to "Accepted" to allow re-assignment
         endpoint = `${BACKEND_URL}/leave-application/${id}`;
-        body = JSON.stringify({ status: "Accepted" });
+        body = JSON.stringify({ status: "Accepted", actorRole: user?.role ?? undefined });
       } else {
         // For regular pending leaves, set to "Accepted"
         endpoint = `${BACKEND_URL}/leave-application/${id}`;
-        body = JSON.stringify({ status: "Accepted" });
+        body = JSON.stringify({ status: "Accepted", actorRole: user?.role ?? undefined });
       }
 
       const res = await fetch(endpoint, {
@@ -657,11 +658,11 @@ export function LeaveApplicationsManagement() {
       if (isRevokeRequest) {
         // For revoke requests, reject means keep it as "Approved"
         endpoint = `${BACKEND_URL}/leave-application/${id}`;
-        body = JSON.stringify({ status: "Approved" });
+        body = JSON.stringify({ status: "Approved", actorRole: user?.role ?? undefined });
       } else {
         // For regular pending leaves, set to "Rejected"
         endpoint = `${BACKEND_URL}/leave-application/${id}`;
-        body = JSON.stringify({ status: "Rejected" });
+        body = JSON.stringify({ status: "Rejected", actorRole: user?.role ?? undefined });
       }
 
       const res = await fetch(endpoint, {

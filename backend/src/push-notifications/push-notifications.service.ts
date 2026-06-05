@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { PrismaService } from '../prisma/prisma.service';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as https from 'https';
@@ -53,7 +54,7 @@ export function isValidPushSubscription(
 export class PushNotificationsService {
   private readonly logger = new Logger(PushNotificationsService.name);
 
-  constructor() {
+  constructor(private readonly prisma: PrismaService) {
     const vapidPublicKey = process.env.VAPID_PUBLIC_KEY;
     const vapidPrivateKey = process.env.VAPID_PRIVATE_KEY;
     const vapidEmail = process.env.VAPID_EMAIL || 'mailto:admin@openhrm.com';
@@ -127,6 +128,47 @@ export class PushNotificationsService {
     this.logger.log(
       `Saved push subscription for employee ${empId} → ${SUBSCRIPTIONS_FILE}`,
     );
+  }
+
+  /** Notify employee and their linked managers (manager copy uses team-member wording). */
+  async sendToEmployeeAndManagers(
+    employeeID: number,
+    title: string,
+    body: string,
+    data?: Record<string, any>,
+  ): Promise<void> {
+    const empId = this.normalizeEmployeeId(employeeID);
+    const baseData = { ...(data || {}), subjectEmployeeId: empId };
+    await this.sendToEmployee(empId, title, body, baseData);
+
+    const emp = await this.prisma.manageEmployee.findUnique({
+      where: { id: empId },
+      select: { employeeFirstName: true, employeeLastName: true, employeeID: true },
+    });
+    const name =
+      [emp?.employeeFirstName, emp?.employeeLastName].filter(Boolean).join(' ').trim() ||
+      emp?.employeeID ||
+      `Employee #${empId}`;
+
+    const managerBody = body
+      .replace(/^Your /i, `${name}'s `)
+      .replace(/^You have been /i, `${name} has been `)
+      .replace(/^You have /i, `${name} has `)
+      .replace(/^You were /i, `${name} was `);
+
+    const links = await this.prisma.employeeLink.findMany({
+      where: { employeeId: empId },
+      select: { linkedEmployeeId: true },
+    });
+
+    for (const link of links) {
+      await this.sendToEmployee(
+        link.linkedEmployeeId,
+        `${name}: ${title}`,
+        managerBody,
+        { ...baseData, isTeamNotification: true },
+      );
+    }
   }
 
   async sendToEmployee(

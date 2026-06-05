@@ -24,7 +24,10 @@ export function getPageCache<T>(key: string): T | null {
     const raw = sessionStorage.getItem(`_pc_${key}`);
     if (!raw) return null;
     const { data, ts } = JSON.parse(raw) as { data: T; ts: number };
-    const ttl = TTLs[key] ?? DEFAULT_TTL;
+    const ttl =
+      TTLs[key] ??
+      (key.startsWith("empNotifFeed") ? TTLs.empNotifFeed : undefined) ??
+      DEFAULT_TTL;
     if (Date.now() - ts < ttl) return data;
     sessionStorage.removeItem(`_pc_${key}`);
   } catch {}
@@ -43,4 +46,20 @@ export function clearPageCache(key: string): void {
   try {
     sessionStorage.removeItem(`_pc_${key}`);
   } catch {}
+}
+
+/** Remove all cached pages whose storage key starts with `prefix` (e.g. empNotifFeed). */
+export function clearPageCachesByPrefix(prefix: string): void {
+  if (typeof window === "undefined") return;
+  const needle = `_pc_${prefix}`;
+  try {
+    for (let i = sessionStorage.length - 1; i >= 0; i--) {
+      const key = sessionStorage.key(i);
+      if (key?.startsWith(needle)) sessionStorage.removeItem(key);
+    }
+  } catch {}
+}
+
+export function empNotifFeedCacheKey(employeeId?: number | null): string {
+  return employeeId ? `empNotifFeed_${employeeId}` : "empNotifFeed";
 }

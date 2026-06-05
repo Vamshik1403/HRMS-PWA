@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Patch, Delete, Param, Body, ParseIntPipe } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Param, Body, ParseIntPipe, Query } from '@nestjs/common';
 import { EmployeeMemoService } from './employee-memo.service';
 import { CreateEmployeeMemoDto } from './dto/create-employee-memo.dto';
 import { UpdateEmployeeMemoDto } from './dto/update-employee-memo.dto';
@@ -8,8 +8,9 @@ export class EmployeeMemoController {
   constructor(private readonly service: EmployeeMemoService) {}
 
   @Get()
-  findAll() {
-    return this.service.findAll();
+  findAll(@Query('employeeID') employeeID?: string) {
+    const id = employeeID != null && employeeID !== '' ? Number(employeeID) : undefined;
+    return this.service.findAll(Number.isFinite(id) && id! > 0 ? id : undefined);
   }
 
   @Get(':id')

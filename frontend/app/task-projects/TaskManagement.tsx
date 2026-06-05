@@ -95,6 +95,8 @@ export default function TaskManagement() {
   const [chatMsg, setChatMsg] = useState("");
   const [chatStatus, setChatStatus] = useState("");
   const [chatSending, setChatSending] = useState(false);
+  const [detailChatMsg, setDetailChatMsg] = useState("");
+  const [detailChatSending, setDetailChatSending] = useState(false);
   // Assign employees modal
   const [assignTask, setAssignTask] = useState<Task | null>(null);
   const [assignEmployees, setAssignEmployees] = useState<Employee[]>([]);
@@ -227,8 +229,12 @@ export default function TaskManagement() {
   };
 
   const openDetail = async (t: Task) => {
-    try { const full = await taskFetch<Task>(`/task-projects/${t.id}`, user); setDetail(full); setDetailOpen(true); }
-    catch (e: any) { toast.error(e.message); }
+    try {
+      const full = await taskFetch<Task>(`/task-projects/${t.id}`, user);
+      setDetail(full);
+      setDetailChatMsg("");
+      setDetailOpen(true);
+    } catch (e: any) { toast.error(e.message); }
   };
 
   const openEdit = async (t: Task) => {
@@ -340,6 +346,38 @@ export default function TaskManagement() {
     } catch (err: any) { toast.error(err.message); }
     finally { setChatSending(false); }
   };
+
+  const sendDetailChat = async () => {
+    if (!detail || !detailChatMsg.trim()) return;
+    setDetailChatSending(true);
+    try {
+      await taskFetch(`/task-projects/${detail.id}/chats`, user, {
+        method: "POST",
+        body: JSON.stringify({
+          message: detailChatMsg,
+          senderName: user?.username,
+          remark: detailChatMsg,
+        }),
+      });
+      setDetailChatMsg("");
+      const full = await taskFetch<Task>(`/task-projects/${detail.id}`, user);
+      setDetail(full);
+      loadTasks();
+    } catch (err: any) {
+      toast.error(err.message);
+    } finally {
+      setDetailChatSending(false);
+    }
+  };
+
+  useTaskChatPolling<Task>(
+    detail?.id,
+    user,
+    (full) => {
+      if (detailOpen) setDetail(full);
+    },
+    detailOpen && !!detail,
+  );
 
   useTaskChatPolling<Task>(
     chatTask?.id,
@@ -593,8 +631,17 @@ export default function TaskManagement() {
                   <p className="text-[13px] text-gray-700 leading-relaxed whitespace-pre-wrap">{detail.description}</p>
                 </div>
               )}
-              <TaskDetailTabs key={detail.id} chats={detail.chats || []} activities={detail.activities || []}
-                currentUserName={user?.username} message="" onMessageChange={() => {}} onSend={() => {}} showComposer={false} />
+              <TaskDetailTabs
+                key={detail.id}
+                chats={detail.chats || []}
+                activities={detail.activities || []}
+                currentUserName={user?.username}
+                message={detailChatMsg}
+                onMessageChange={setDetailChatMsg}
+                onSend={sendDetailChat}
+                sending={detailChatSending}
+                showComposer
+              />
             </div>
             <div className="lg:col-span-1">
               <TaskDetailSidebar status={detail.status} priority={detail.priority} taskType={detail.taskType}

@@ -72,11 +72,13 @@ import { EmpNotificationsModule } from './emp-notifications/emp-notifications.mo
 import { DashboardOverviewModule } from './dashboard-overview/dashboard-overview.module';
 import { MailModule } from './mail/mail.module';
 import { EmailTemplateModule } from './email-template/email-template.module';
+import { EmpManagerScopeModule } from './common/emp-manager-scope.module';
 
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
+    EmpManagerScopeModule,
     MailModule,
     PrismaModule,
     ServeStaticModule.forRoot({

@@ -44,7 +44,9 @@ export function countUnseenReimbursementBadge(
   const map = loadMap("reimb");
   return rows.filter((r) => {
     const status = r.status || "Pending";
-    if (status !== "Pending" && status !== "Partly Approved") return false;
+    if (status !== "Pending" && status !== "Partially Approved" && status !== "Partly Approved") {
+      return false;
+    }
     const seenStatus = map[String(r.id)];
     return seenStatus === undefined;
   }).length;

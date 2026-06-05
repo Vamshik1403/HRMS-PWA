@@ -13,6 +13,9 @@ import {
   parseMonthYearFromPeriod,
   type EmpPayslipRow,
 } from "../utils/empPayslipApi";
+import { splitPreviewRecords } from "../utils/empListLimit";
+import { EmpRecordHistorySheet } from "../components/emp/EmpRecordHistorySheet";
+import { EmpListViewMoreButton } from "../components/emp/EmpListViewMoreButton";
 
 const MONTHS = [
   "January", "February", "March", "April", "May", "June",
@@ -41,6 +44,7 @@ function EmpPayoutContent() {
   const [month, setMonth] = useState(initial.month);
   const [year, setYear] = useState(initial.year);
   const [downloadingId, setDownloadingId] = useState<number | null>(null);
+  const [historyOpen, setHistoryOpen] = useState(false);
 
   useEffect(() => {
     const next = readFilterFromSearchParams(searchParams);
@@ -62,12 +66,65 @@ function EmpPayoutContent() {
   }, [rows, year, now]);
 
   const filtered = useMemo(() => {
-    return rows.filter((r) => {
-      const p = parseMonthYearFromPeriod(r.monthPeriod);
-      if (!p) return true;
-      return p.month === month && p.year === year;
-    });
+    return rows
+      .filter((r) => {
+        const p = parseMonthYearFromPeriod(r.monthPeriod);
+        if (!p) return true;
+        return p.month === month && p.year === year;
+      })
+      .sort((a, b) => {
+        const pa = parseMonthYearFromPeriod(a.monthPeriod);
+        const pb = parseMonthYearFromPeriod(b.monthPeriod);
+        if (!pa || !pb) return 0;
+        return pb.year - pa.year || pb.month - pa.month;
+      });
   }, [rows, month, year]);
+
+  const { preview, history, hasHistory } = splitPreviewRecords(filtered);
+
+  const renderPayslipRow = (row: EmpPayslipRow) => (
+    <div
+      key={row.id}
+      className="grid grid-cols-[1fr_auto] gap-2 items-center px-4 py-3 border-b border-gray-50 last:border-0"
+    >
+      <p className="text-[14px] font-bold text-gray-900">
+        {formatPayslipMonthYear(row.monthPeriod)}
+      </p>
+      <div className="flex flex-wrap justify-end gap-1">
+        <Link
+          href={`/empPayout/${row.id}/view`}
+          className="text-[10px] font-bold text-[#2563eb] bg-blue-50 border border-blue-100 px-2 py-1 rounded-lg"
+        >
+          View
+        </Link>
+        <button
+          type="button"
+          disabled={downloadingId === row.id}
+          onClick={async () => {
+            setDownloadingId(row.id);
+            try {
+              await downloadPayslipForSalaryRow(row as Parameters<typeof downloadPayslipForSalaryRow>[0]);
+              toast.success("Payslip downloaded");
+            } catch (err) {
+              console.error("Payslip download failed:", err);
+              toast.error("Download failed. Check attendance/shift setup and try again.");
+            } finally {
+              setDownloadingId(null);
+            }
+          }}
+          className="text-[10px] font-bold text-gray-700 bg-gray-50 border border-gray-100 px-2 py-1 rounded-lg disabled:opacity-50"
+        >
+          {downloadingId === row.id ? "…" : "Download"}
+        </button>
+        <Link
+          href={`/empPayout/${row.id}/query`}
+          className="text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-100 px-2 py-1 rounded-lg"
+        >
+          Raise Query
+        </Link>
+      </div>
+    </div>
+  );
 
   return (
     <div className="px-4 pt-6 pb-8">
@@ -117,55 +174,28 @@ function EmpPayoutContent() {
           <p className="text-[13px] text-gray-400">No payslips for this month</p>
         </div>
       ) : (
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-          <div className="grid grid-cols-[1fr_auto] gap-2 px-4 py-2.5 bg-gray-50 border-b border-gray-100 text-[10px] font-bold text-gray-400 uppercase tracking-wider">
-            <span>Month / Year</span>
-            <span>Action</span>
-          </div>
-          {filtered.map((row) => (
-            <div
-              key={row.id}
-              className="grid grid-cols-[1fr_auto] gap-2 items-center px-4 py-3 border-b border-gray-50 last:border-0"
-            >
-              <p className="text-[14px] font-bold text-gray-900">
-                {formatPayslipMonthYear(row.monthPeriod)}
-              </p>
-              <div className="flex flex-wrap justify-end gap-1">
-                <Link
-                  href={`/empPayout/${row.id}/view`}
-                  className="text-[10px] font-bold text-[#2563eb] bg-blue-50 border border-blue-100 px-2 py-1 rounded-lg"
-                >
-                  View
-                </Link>
-                <button
-                  type="button"
-                  disabled={downloadingId === row.id}
-                  onClick={async () => {
-                    setDownloadingId(row.id);
-                    try {
-                      await downloadPayslipForSalaryRow(row as Parameters<typeof downloadPayslipForSalaryRow>[0]);
-                      toast.success("Payslip downloaded");
-                    } catch (err) {
-                      console.error("Payslip download failed:", err);
-                      toast.error("Download failed. Check attendance/shift setup and try again.");
-                    } finally {
-                      setDownloadingId(null);
-                    }
-                  }}
-                  className="text-[10px] font-bold text-gray-700 bg-gray-50 border border-gray-100 px-2 py-1 rounded-lg disabled:opacity-50"
-                >
-                  {downloadingId === row.id ? "…" : "Download"}
-                </button>
-                <Link
-                  href={`/empPayout/${row.id}/query`}
-                  className="text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-100 px-2 py-1 rounded-lg"
-                >
-                  Raise Query
-                </Link>
-              </div>
+        <>
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+            <div className="grid grid-cols-[1fr_auto] gap-2 px-4 py-2.5 bg-gray-50 border-b border-gray-100 text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+              <span>Month / Year</span>
+              <span>Action</span>
             </div>
-          ))}
-        </div>
+            {preview.map(renderPayslipRow)}
+          </div>
+          {hasHistory && (
+            <EmpListViewMoreButton count={history.length} onClick={() => setHistoryOpen(true)} />
+          )}
+          <EmpRecordHistorySheet
+            open={historyOpen}
+            onClose={() => setHistoryOpen(false)}
+            title="Payslip history"
+            subtitle={`${history.length} older payslip(s)`}
+          >
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+              {history.map(renderPayslipRow)}
+            </div>
+          </EmpRecordHistorySheet>
+        </>
       )}
     </div>
   );

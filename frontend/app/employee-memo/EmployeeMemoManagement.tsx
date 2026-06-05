@@ -190,6 +190,7 @@ export function EmployeeMemoManagement() {
           description: form.description || null,
           issuedDate: form.issuedDate || null,
           issuedBy: form.issuedBy || null,
+          issuedByRole: user?.role ?? undefined,
         };
         const res = await fetch(`${API}/${editingRow.id}`, {
           method: "PATCH",
@@ -222,6 +223,7 @@ export function EmployeeMemoManagement() {
         description: form.description || null,
         issuedDate: form.issuedDate || null,
         issuedBy: form.issuedBy || null,
+        issuedByRole: user?.role ?? undefined,
       };
       const results = await Promise.allSettled(
         selectedEmployees.map((emp) =>

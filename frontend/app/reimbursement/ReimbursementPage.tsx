@@ -22,6 +22,7 @@ import html2canvas from "html2canvas"
 import { useCurrentUser } from "../hooks/useCurrentUser"
 import { toast } from "sonner"
 import { getSidebarContext } from "../utils/sidebarContext"
+import { displayStatusLabel, isPartiallyApprovedStatus } from "../utils/statusDisplay"
 
 
 interface ReimbursementItem {
@@ -54,7 +55,7 @@ function reimbursementHasUnpaidApprovedItems(r: Reimbursement): boolean {
 }
 
 function canPayReimbursement(r: Reimbursement): boolean {
-  if (r.status !== "Approved" && r.status !== "Partly Approved") return false
+  if (r.status !== "Approved" && r.status !== "Partially Approved") return false
   return reimbursementHasUnpaidApprovedItems(r)
 }
 
@@ -1357,6 +1358,8 @@ const handleSubmit = async (e: React.FormEvent) => {
     if (!viewReimbursement) return
     await robustFetch(`${BACKEND_URL}/reimbursement/${viewReimbursement.id}/items/${itemId}/approve`, {
       method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ actorRole: user?.role ?? undefined }),
     })
     await refreshViewReimbursement()
     toast.success("Item approved (Voucher)")
@@ -1367,6 +1370,8 @@ const handleSubmit = async (e: React.FormEvent) => {
     if (!confirm("Reject this reimbursement item?")) return
     await robustFetch(`${BACKEND_URL}/reimbursement/${viewReimbursement.id}/items/${itemId}/reject`, {
       method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ actorRole: user?.role ?? undefined }),
     })
     await refreshViewReimbursement()
     toast.success("Item rejected")
@@ -1523,14 +1528,14 @@ onClick={async () => {
                               ? "bg-green-100 text-green-800 border-green-200"
                               : r.status === "Approved"
                               ? "bg-blue-100 text-blue-800 border-blue-200"
-                              : r.status === "Partly Approved"
+                              : isPartiallyApprovedStatus(r.status)
                               ? "bg-amber-100 text-amber-800 border-amber-200"
                               : r.status === "Rejected"
                               ? "bg-red-100 text-red-800 border-red-200"
                               : "bg-yellow-100 text-yellow-800 border-yellow-200"
                           }
                         >
-                          {r.status}
+                          {displayStatusLabel(r.status)}
                         </Badge>
                       </TableCell>
                       <TableCell className="text-right">
@@ -1538,7 +1543,7 @@ onClick={async () => {
   {/* ✅ SUPERADMIN / MANAGER actions */}
       {canManage && (
     <>
-      {(r.status === "Pending" || r.status === "Partly Approved" || r.status === "Approved") && (
+      {(r.status === "Pending" || isPartiallyApprovedStatus(r.status) || r.status === "Approved") && (
         <Button
           variant="ghost"
           size="icon"

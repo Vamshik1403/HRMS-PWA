@@ -5,25 +5,39 @@ import { useParams, useRouter } from "next/navigation";
 import { Icon } from "@iconify/react";
 import EmpMobileLayout from "../../components/layout/EmpMobileLayout";
 import { markEmpRecordSeen } from "../../utils/empHomeSeen";
+import { useEmpManagerScope } from "../../hooks/useEmpManagerScope";
+import { isTeamMemberId, nameForEmployeeId } from "../../utils/empManagerDisplay";
 import {
+  formatDateShort,
   getAppliedDateRange,
   getApprovedDateRange,
   getDisplayLeaveStatus,
   getDisplayLeaveType,
   parseDayStatuses,
 } from "../../utils/leaveDisplay";
+import { EmpLeaveApprovalSheet } from "../../components/emp/EmpLeaveApprovalSheet";
 
 const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL || "/backend";
+
+function authHeaders(): Record<string, string> {
+  const token =
+    typeof window !== "undefined"
+      ? localStorage.getItem("token") || localStorage.getItem("accessToken") || ""
+      : "";
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
 
 export default function EmpLeaveDetailPage() {
   const params = useParams();
   const router = useRouter();
   const id = String(params.id || "");
+  const { scope, isManagerView } = useEmpManagerScope();
   const [app, setApp] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [approvalOpen, setApprovalOpen] = useState(false);
 
-  useEffect(() => {
-    fetch(`${BACKEND}/leave-application/${id}`, { cache: "no-store" })
+  const reload = () =>
+    fetch(`${BACKEND}/leave-application/${id}`, { cache: "no-store", headers: authHeaders() })
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
         if (data) {
@@ -35,8 +49,10 @@ export default function EmpLeaveDetailPage() {
             createdAt: data.createdAt || "",
           });
         }
-      })
-      .finally(() => setLoading(false));
+      });
+
+  useEffect(() => {
+    reload().finally(() => setLoading(false));
   }, [id]);
 
   if (loading) {
@@ -59,6 +75,15 @@ export default function EmpLeaveDetailPage() {
 
   const displayStatus = getDisplayLeaveStatus(app.status, app.dayStatuses);
   const dayRows = parseDayStatuses(app.dayStatuses);
+  const teamLeave = isTeamMemberId(scope, app.manageEmployeeID);
+  const canManagerApprove =
+    isManagerView && teamLeave && displayStatus === "Approval Pending";
+  const teamName =
+    nameForEmployeeId(scope, app.manageEmployeeID) ||
+    [app.manageEmployee?.employeeFirstName, app.manageEmployee?.employeeLastName]
+      .filter(Boolean)
+      .join(" ") ||
+    "Team member";
 
   return (
     <EmpMobileLayout>
@@ -72,11 +97,14 @@ export default function EmpLeaveDetailPage() {
           Back
         </button>
 
-        <h1 className="text-[20px] font-bold text-gray-900 mb-4">Leave details</h1>
+        <h1 className="text-[20px] font-bold text-gray-900 mb-1">Leave details</h1>
+        {teamLeave && (
+          <p className="text-[12px] font-semibold text-[#2563eb] mb-3">Team member · {teamName}</p>
+        )}
 
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 space-y-3 text-[13px]">
           <Row label="Status" value={displayStatus} />
-          <Row label="Request date" value={new Date(app.createdAt).toLocaleDateString("en-IN")} />
+          <Row label="Request date" value={formatDateShort(app.createdAt)} />
           <Row label="Applied period" value={getAppliedDateRange(app)} />
           <Row label="Approved period" value={getApprovedDateRange(app)} />
           <Row label="Leave type" value={getDisplayLeaveType(app)} />
@@ -92,14 +120,33 @@ export default function EmpLeaveDetailPage() {
                   key={d.date}
                   className="bg-white rounded-xl border border-gray-100 px-3 py-2 flex justify-between text-[12px]"
                 >
-                  <span>{d.date}</span>
-                  <span className="font-semibold text-gray-700">{d.status}</span>
+                  <span>{formatDateShort(d.date)}</span>
+                  <span className={`font-semibold ${d.status ? "text-gray-700" : "text-gray-400"}`}>
+                    {d.status ? d.status : "Not approved"}
+                  </span>
                 </div>
               ))}
             </div>
           </div>
         )}
+
+        {canManagerApprove && (
+          <button
+            type="button"
+            onClick={() => setApprovalOpen(true)}
+            className="mt-5 w-full py-3 rounded-xl bg-emerald-600 text-white font-semibold text-sm"
+          >
+            Review & approve
+          </button>
+        )}
       </div>
+
+      <EmpLeaveApprovalSheet
+        open={approvalOpen}
+        onClose={() => setApprovalOpen(false)}
+        application={app}
+        onDone={() => void reload()}
+      />
     </EmpMobileLayout>
   );
 }

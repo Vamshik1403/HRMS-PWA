@@ -12,10 +12,11 @@ import {
   type CreatorEmp,
 } from "../components/task/mobile/MobileTaskCreateSheet";
 import { toast } from "sonner";
+import { fetchGPSOnUserGesture } from "../utils/empGeolocation";
 import { getNextSitePunchKind, sitePunchLabel } from "../utils/taskSitePunch";
-import { nextTaskStatus } from "../utils/taskStatusFlow";
 import { downloadTaskReportForId } from "../utils/taskReportPdf";
 import { useTaskChatPolling } from "../hooks/useTaskChatPolling";
+import { useEmpManagerScope } from "../hooks/useEmpManagerScope";
 
 const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL || "/backend";
 
@@ -25,11 +26,12 @@ interface Task extends MobileTaskListItem {
   scheduleDateTime?: string | null;
   department?: { departmentName?: string };
   chats?: { id: number; message: string; senderName?: string; createdAt: string }[];
-  assignments?: { manageEmployee?: { employeeFirstName?: string; employeeLastName?: string } }[];
+  assignments?: { manageEmployeeID?: number; manageEmployee?: { employeeFirstName?: string; employeeLastName?: string } }[];
 }
 
 export default function EmpMyTasksPage() {
   const user = useCurrentUser();
+  const { scope, isManagerView } = useEmpManagerScope();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
@@ -141,7 +143,20 @@ export default function EmpMyTasksPage() {
     if (!user) return;
     const kind = getNextSitePunchKind(chats);
     const label = sitePunchLabel(kind);
-    const msg = `${label} at ${new Date().toLocaleString("en-IN")}`;
+    let locationBlock = "";
+    try {
+      const coords = await fetchGPSOnUserGesture();
+      const addrRes = await fetch(
+        `${BACKEND}/devices/resolve-address?latitude=${encodeURIComponent(String(coords.latitude))}&longitude=${encodeURIComponent(String(coords.longitude))}`,
+        { cache: "no-store" },
+      );
+      const addrJson = addrRes.ok ? await addrRes.json() : {};
+      const address = typeof addrJson.address === "string" ? addrJson.address : "";
+      locationBlock = `\nLocation: ${address || "—"}\nCoordinates: ${coords.latitude}, ${coords.longitude}`;
+    } catch {
+      locationBlock = "\nLocation: unavailable";
+    }
+    const msg = `${label} at ${new Date().toLocaleString("en-IN")}${locationBlock}`;
     const employeeId = (user as { employee?: { id?: number } }).employee?.id ?? user.id;
     setSending(true);
     try {
@@ -169,27 +184,6 @@ export default function EmpMyTasksPage() {
     await postSitePunch(detail.id, detail.chats);
   };
 
-  const updateStatus = async (status: string) => {
-    if (!detail || !user) return;
-    try {
-      await taskFetch(`/task-projects/${detail.id}`, user, {
-        method: "PATCH",
-        body: JSON.stringify({ status }),
-      });
-      const labels: Record<string, string> = {
-        Closed: "Task closed",
-        Reopen: "Task reopened",
-        Open: "Task set to Open",
-        WIP: "Task in progress",
-      };
-      toast.success(labels[status] || "Status updated");
-      await refreshDetail();
-      load();
-    } catch (e: any) {
-      toast.error(e.message || "Could not update status");
-    }
-  };
-
   if (detail) {
     return (
       <EmpMobileLayout hideBottomNav>
@@ -208,10 +202,6 @@ export default function EmpMyTasksPage() {
             setDetail(null);
             setChatMsg("");
             load();
-          }}
-          onAdvanceStatus={() => {
-            const next = nextTaskStatus(detail.status);
-            if (next) void updateStatus(next);
           }}
           onSitePunch={sitePunch}
           sitePunchNextKind={detail ? getNextSitePunchKind(detail.chats) : "in"}
@@ -247,6 +237,8 @@ export default function EmpMyTasksPage() {
         onViewInfo={(t) => setInfoTask(t as Task)}
         onCreateClick={canCreateTask ? () => setCreateOpen(true) : undefined}
         showCreateFab={canCreateTask}
+        managerScope={scope}
+        isManagerView={isManagerView}
       />
 
       {infoTask && (

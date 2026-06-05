@@ -5,6 +5,11 @@ import { UpdateLeaveApplicationDto } from './dto/update-leave-application.dto';
 import { PushNotificationsService } from '../push-notifications/push-notifications.service';
 import { EmpLeaveBalanceService } from '../emp-leave-balance/emp-leave-balance.service';
 import { MailService } from '../mail/mail.service';
+import { EmpManagerScopeService } from '../common/emp-manager-scope.service';
+import {
+  leavePushTitle,
+  senderLabelFromRole,
+} from '../common/notification-sender.util';
 
 @Injectable()
 export class LeaveApplicationService {
@@ -13,6 +18,7 @@ export class LeaveApplicationService {
     private pushService: PushNotificationsService,
     private leaveBalanceService: EmpLeaveBalanceService,
     private mailService: MailService,
+    private managerScope: EmpManagerScopeService,
   ) {}
 
   async create(createLeaveApplicationDto: CreateLeaveApplicationDto) {
@@ -42,17 +48,18 @@ export class LeaveApplicationService {
   }
 
   async findByEmployee(empId: number) {
-  return this.prisma.leaveApplication.findMany({
-    where: { manageEmployeeID: empId },
-    include: {
-      serviceProvider: true,
-      company: true,
-      branches: true,
-      manageEmployee: true,
-    },
-    orderBy: { id: 'desc' },
-  });
-}
+    const scopeIds = await this.managerScope.getReporteeIds(empId);
+    return this.prisma.leaveApplication.findMany({
+      where: { manageEmployeeID: { in: scopeIds } },
+      include: {
+        serviceProvider: true,
+        company: true,
+        branches: true,
+        manageEmployee: true,
+      },
+      orderBy: { id: 'desc' },
+    });
+  }
 
 
   findAll() {
@@ -124,6 +131,22 @@ export class LeaveApplicationService {
     'PtL',
   ] as const;
 
+  private normalizeDayStatusesInput(
+    raw: unknown,
+  ): { date: string; status: string; dayType?: string }[] | undefined {
+    if (!Array.isArray(raw)) return undefined;
+    return raw
+      .map((d: { date?: string; status?: string; dayType?: string }) => {
+        const date = d?.date ? String(d.date).slice(0, 10) : '';
+        if (!date) return null;
+        const status = d?.status ? String(d.status).trim() : '';
+        const row: { date: string; status: string; dayType?: string } = { date, status };
+        if (d?.dayType) row.dayType = String(d.dayType);
+        return row;
+      })
+      .filter((d): d is { date: string; status: string; dayType?: string } => d != null);
+  }
+
   private async countUsedLeaveDaysByType(
     manageEmployeeID: number,
     excludeApplicationId?: number,
@@ -132,7 +155,7 @@ export class LeaveApplicationService {
     const leaves = await this.prisma.leaveApplication.findMany({
       where: {
         manageEmployeeID,
-        status: { in: ['Approved', 'Accepted', 'Partly Approved'] },
+        status: { in: ['Approved', 'Accepted', 'Partially Approved'] as string[] },
         ...(excludeApplicationId ? { id: { not: excludeApplicationId } } : {}),
       },
     });
@@ -141,8 +164,9 @@ export class LeaveApplicationService {
       const ds = leave.dayStatuses as { status?: string }[] | null;
       if (Array.isArray(ds) && ds.length > 0) {
         for (const day of ds) {
-          const t = day?.status;
-          if (t) used[t] = (used[t] || 0) + 1;
+          const t = day?.status?.trim();
+          if (!t || t === 'LoP' || t === 'ShortLeave') continue;
+          used[t] = (used[t] || 0) + 1;
         }
         continue;
       }
@@ -220,14 +244,30 @@ export class LeaveApplicationService {
   }
 
   async update(id: number, updateLeaveApplicationDto: UpdateLeaveApplicationDto) {
+    const { actorRole, ...leaveData } = updateLeaveApplicationDto;
+    const actorLabel = actorRole ? senderLabelFromRole(actorRole) : undefined;
+
     // Fetch the current leave record so we know the previous status
     const current = await this.prisma.leaveApplication.findUnique({ where: { id } });
 
-    const APPROVED_STATUSES = ['Approved', 'Accepted', 'Partly Approved'];
-    const nextStatus = updateLeaveApplicationDto.status ?? current?.status ?? '';
-    const ds = updateLeaveApplicationDto.dayStatuses as
-      | { status?: string }[]
-      | undefined;
+    const APPROVED_STATUSES = ['Approved', 'Accepted', 'Partially Approved'];
+    let nextStatus = leaveData.status ?? current?.status ?? '';
+    const ds = this.normalizeDayStatusesInput(leaveData.dayStatuses);
+
+    if (Array.isArray(ds) && ds.length > 0) {
+      const assigned = ds.filter((d) => d?.status).length;
+      const unassigned = ds.length - assigned;
+      if (assigned > 0 && unassigned > 0) {
+        nextStatus = 'Partially Approved';
+        leaveData.status = 'Partially Approved';
+      } else if (assigned > 0 && unassigned === 0 && nextStatus === 'Partially Approved') {
+        leaveData.status = 'Approved';
+        nextStatus = 'Approved';
+      } else if (assigned > 0 && unassigned === 0 && !['Rejected', 'Pending'].includes(nextStatus)) {
+        leaveData.status = leaveData.status || 'Approved';
+        nextStatus = leaveData.status;
+      }
+    }
 
     if (
       APPROVED_STATUSES.includes(nextStatus) &&
@@ -242,9 +282,14 @@ export class LeaveApplicationService {
       );
     }
 
+    const prismaData: Record<string, unknown> = { ...leaveData };
+    if (Array.isArray(ds) && ds.length > 0) {
+      prismaData.dayStatuses = ds;
+    }
+
     const updated = await this.prisma.leaveApplication.update({
       where: { id },
-      data: updateLeaveApplicationDto,
+      data: prismaData as typeof leaveData,
       include: {
         serviceProvider: true,
         company: true,
@@ -256,7 +301,7 @@ export class LeaveApplicationService {
     const isNowApproved = APPROVED_STATUSES.includes(updated.status ?? '');
     const wasNotApproved = !APPROVED_STATUSES.includes(current?.status ?? '');
 
-    // Deduct leave balance when status changes to Approved/Partly Approved for the first time
+    // Deduct leave balance when status changes to Approved/Partially Approved for the first time
     if (isNowApproved && wasNotApproved && updated.manageEmployeeID) {
       try {
         const ds = updated.dayStatuses as { status?: string }[] | null;
@@ -290,26 +335,26 @@ export class LeaveApplicationService {
       const prevStatus = current?.status ?? '';
       if (newStatus === 'Rejected' && prevStatus !== 'Rejected') {
         this.pushService
-          .sendToEmployee(
+          .sendToEmployeeAndManagers(
             empId,
-            'Leave Rejected',
+            leavePushTitle('Rejected', actorLabel),
             'Your leave application has been rejected.',
-            { url: '/empLeaveApplication' },
+            { url: '/empLeaveApplication', kind: 'leave' },
           )
           .catch(() => null);
       } else if (
-        newStatus === 'Partly Approved' &&
-        prevStatus !== 'Partly Approved'
+        newStatus === 'Partially Approved' &&
+        prevStatus !== 'Partially Approved'
       ) {
         const ds = (updated.dayStatuses as { status?: string }[]) || [];
         const approved = ds.filter((d) => d?.status).length;
         const total = ds.length;
         this.pushService
-          .sendToEmployee(
+          .sendToEmployeeAndManagers(
             empId,
-            'Leave Partly Approved',
-            `Your leave was partly approved: ${approved} of ${total} day(s) approved.`,
-            { url: '/empLeaveApplication' },
+            leavePushTitle('Partially Approved', actorLabel),
+            `Your leave was partially approved: ${approved} of ${total} day(s) approved.`,
+            { url: '/empLeaveApplication', kind: 'leave' },
           )
           .catch(() => null);
       } else if (
@@ -317,11 +362,11 @@ export class LeaveApplicationService {
         !['Approved', 'Accepted'].includes(prevStatus)
       ) {
         this.pushService
-          .sendToEmployee(
+          .sendToEmployeeAndManagers(
             empId,
-            'Leave Approved',
+            leavePushTitle(newStatus, actorLabel),
             'Your leave application has been approved.',
-            { url: '/empLeaveApplication' },
+            { url: '/empLeaveApplication', kind: 'leave' },
           )
           .catch(() => null);
       }

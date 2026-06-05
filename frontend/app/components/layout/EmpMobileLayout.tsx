@@ -11,6 +11,7 @@ import {
 import { refreshHomeScreenBadge } from "@/lib/empNotificationBadge";
 import {
   appendInAppNotification,
+  pushPayloadToInAppNotification,
   upsertInAppNotification,
 } from "../../utils/empInAppNotifications";
 import { empPayoutHrefForPeriod } from "../../utils/empPayslipApi";
@@ -166,21 +167,6 @@ export default function EmpMobileLayout({ children, hideBottomNav = false }: Emp
       if (!data || data.type !== "PUSH_NOTIFICATION") return;
       const title = String(data.title || "OpenHRM");
       const body = String(data.body || "");
-      const isPaid =
-        data.event === "paid" || /salary paid|marked as paid/i.test(title);
-      let href = typeof data.url === "string" ? data.url : "/empPayout";
-      if (
-        data.kind === "payslip" &&
-        href === "/empPayout" &&
-        typeof body === "string"
-      ) {
-        const periodMatch = body.match(/for (.+?) is ready/i);
-        if (periodMatch?.[1]) {
-          href = empPayoutHrefForPeriod(periodMatch[1].trim());
-        }
-      }
-      const at = new Date().toISOString();
-      const emoji = isPaid ? "💰" : title.toLowerCase().includes("payslip") ? "🧾" : "🔔";
       if (data.kind === "task" && data.event === "chat" && data.taskId != null) {
         upsertInAppNotification({
           id: `task-chat-${data.taskId}`,
@@ -188,18 +174,40 @@ export default function EmpMobileLayout({ children, hideBottomNav = false }: Emp
           title,
           body,
           emoji: "💬",
-          at,
+          at: new Date().toISOString(),
           href: "/empMyTasks",
+          ...(data.isTeamNotification
+            ? { isTeamItem: true, subjectEmployeeId: data.subjectEmployeeId }
+            : {}),
         });
       } else {
-        appendInAppNotification({
-          kind: data.kind === "payslip" ? "payslip" : "general",
+        const row = pushPayloadToInAppNotification({
           title,
           body,
-          emoji,
-          at,
-          href,
+          url: data.url,
+          kind: data.kind,
+          memoId: data.memoId != null ? Number(data.memoId) : undefined,
+          isTeamNotification: data.isTeamNotification,
+          subjectEmployeeId: data.subjectEmployeeId,
         });
+        if (row.kind === "payslip" && data.isTeamNotification) {
+          void refreshHomeScreenBadge();
+          return;
+        }
+        if (
+          row.kind === "payslip" &&
+          row.href === "/empPayout" &&
+          typeof body === "string"
+        ) {
+          const periodMatch = body.match(/for (.+?) is ready/i);
+          if (periodMatch?.[1]) {
+            row.href = empPayoutHrefForPeriod(periodMatch[1].trim());
+          }
+        }
+        const isPaid =
+          data.event === "paid" || /salary paid|marked as paid/i.test(title);
+        if (isPaid) row.emoji = "💰";
+        appendInAppNotification(row);
       }
       void refreshHomeScreenBadge();
     };

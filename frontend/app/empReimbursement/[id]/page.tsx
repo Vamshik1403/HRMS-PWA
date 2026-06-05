@@ -7,23 +7,39 @@ import EmpMobileLayout from "../../components/layout/EmpMobileLayout";
 import { totalAmount, type ReimbursementRow } from "../../components/emp/EmpReimbursementMobile";
 import { markEmpRecordSeen } from "../../utils/empHomeSeen";
 import { useCurrentUser } from "../../hooks/useCurrentUser";
+import { useEmpManagerScope } from "../../hooks/useEmpManagerScope";
+import { isTeamMemberId, nameForEmployeeId } from "../../utils/empManagerDisplay";
 import { taskFetch } from "../../utils/taskApi";
+import { EmpReimbursementApprovalSheet } from "../../components/emp/EmpReimbursementApprovalSheet";
+import { isPartiallyApprovedStatus } from "../../utils/statusDisplay";
 
 const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL || "/backend";
+
+function authHeaders(): Record<string, string> {
+  const token =
+    typeof window !== "undefined"
+      ? localStorage.getItem("token") || localStorage.getItem("accessToken") || ""
+      : "";
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
 
 export default function EmpReimbursementDetailPage() {
   const params = useParams();
   const router = useRouter();
   const user = useCurrentUser();
+  const { scope, isManagerView } = useEmpManagerScope();
   const id = String(params.id || "");
   const [row, setRow] = useState<ReimbursementRow | null>(null);
+  const [raw, setRaw] = useState<any>(null);
   const [taskInfo, setTaskInfo] = useState<string | null>(null);
+  const [approvalOpen, setApprovalOpen] = useState(false);
 
-  useEffect(() => {
-    fetch(`${BACKEND}/reimbursement/${id}`, { cache: "no-store" })
+  const reload = () =>
+    fetch(`${BACKEND}/reimbursement/${id}`, { cache: "no-store", headers: authHeaders() })
       .then((r) => (r.ok ? r.json() : null))
       .then((r) => {
         if (!r) return;
+        setRaw(r);
         const items = Array.isArray(r.items) ? r.items : [];
         const status = r.status || "Pending";
         markEmpRecordSeen("reimb", r.id, status);
@@ -34,6 +50,8 @@ export default function EmpReimbursementDetailPage() {
           amount: 0,
           status,
           items,
+          manageEmployeeID: r.manageEmployeeID,
+          manageEmployee: r.manageEmployee,
         });
         if (r.taskProjectID && user) {
           taskFetch<any>(`/task-projects/${r.taskProjectID}`, user)
@@ -45,7 +63,23 @@ export default function EmpReimbursementDetailPage() {
             .catch(() => setTaskInfo(null));
         }
       });
+
+  useEffect(() => {
+    void reload();
   }, [id, user]);
+
+  const teamClaim = isTeamMemberId(scope, raw?.manageEmployeeID);
+  const hasPendingItems = (row?.items || []).some((i) => (i.status || "Pending") === "Pending");
+  const canManagerApprove =
+    isManagerView &&
+    teamClaim &&
+    (row?.status === "Pending" || (isPartiallyApprovedStatus(row?.status) && hasPendingItems));
+  const teamName =
+    nameForEmployeeId(scope, raw?.manageEmployeeID) ||
+    [raw?.manageEmployee?.employeeFirstName, raw?.manageEmployee?.employeeLastName]
+      .filter(Boolean)
+      .join(" ") ||
+    "Team member";
 
   if (!row) {
     return (
@@ -64,7 +98,10 @@ export default function EmpReimbursementDetailPage() {
           <Icon icon="solar:arrow-left-linear" className="w-5 h-5" />
           Back
         </button>
-        <h1 className="text-[20px] font-bold text-gray-900 mb-4">Reimbursement details</h1>
+        <h1 className="text-[20px] font-bold text-gray-900 mb-1">Reimbursement details</h1>
+        {teamClaim && (
+          <p className="text-[12px] font-semibold text-[#2563eb] mb-3">Team member · {teamName}</p>
+        )}
 
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 space-y-2 text-[13px] mb-4">
           <p><span className="text-gray-500">Date:</span> {row.date}</p>
@@ -102,12 +139,29 @@ export default function EmpReimbursementDetailPage() {
           })}
         </div>
 
-        {row.status?.toLowerCase().includes("partly") && (
+        {isPartiallyApprovedStatus(row.status) && (
           <p className="text-[12px] text-amber-700 mt-4 bg-amber-50 border border-amber-100 rounded-xl p-3">
             Some expense lines may have been rejected during partial approval. Contact your manager for details.
           </p>
         )}
+
+        {canManagerApprove && (
+          <button
+            type="button"
+            onClick={() => setApprovalOpen(true)}
+            className="mt-5 w-full py-3 rounded-xl bg-emerald-600 text-white font-semibold text-sm"
+          >
+            Review & approve
+          </button>
+        )}
       </div>
+
+      <EmpReimbursementApprovalSheet
+        open={approvalOpen}
+        onClose={() => setApprovalOpen(false)}
+        reimbursementId={id}
+        onDone={() => void reload()}
+      />
     </EmpMobileLayout>
   );
 }
