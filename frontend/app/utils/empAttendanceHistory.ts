@@ -1,4 +1,4 @@
-import { buildDaySummary, type PunchRecord } from "./attendanceDuration";
+import { buildDaySummary, todayPunchDateKey, type PunchRecord } from "./attendanceDuration";
 
 export interface AttendanceLocationRecord extends PunchRecord {
   id: number;
@@ -40,7 +40,10 @@ export function groupAttendanceByDay(records: AttendanceLocationRecord[]): Atten
   return Object.entries(byDate)
     .sort(([a], [b]) => new Date(b + "T12:00:00Z").getTime() - new Date(a + "T12:00:00Z").getTime())
     .map(([dateKey, recs]) => {
-      const summary = buildDaySummary(recs);
+      const summary = buildDaySummary(recs, {
+        dateKey,
+        live: dateKey === todayPunchDateKey(),
+      });
       const ci = recs.find((r) => r.checkType === "CHECK_IN") || null;
       const co = [...recs].reverse().find((r) => r.checkType === "CHECK_OUT") || null;
       return {

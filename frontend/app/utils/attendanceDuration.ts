@@ -3,7 +3,64 @@ export interface PunchRecord {
   checkinTime: string;
 }
 
-export function computeDayDurations(records: PunchRecord[], now = new Date()) {
+/** Wall-clock date key from stored punch ISO (UTC getters = app wall clock). */
+export function punchDateKeyFromIso(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`;
+}
+
+const APP_PUNCH_TIMEZONE =
+  typeof process !== "undefined" && process.env.NEXT_PUBLIC_APP_PUNCH_TIMEZONE
+    ? process.env.NEXT_PUBLIC_APP_PUNCH_TIMEZONE
+    : "Asia/Kolkata";
+
+/** Current calendar day in app punch timezone (matches backend dayWindow). */
+export function todayPunchDateKey(now = new Date()): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: APP_PUNCH_TIMEZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(now);
+}
+
+/** End of calendar day for punch date keys (wall clock encoded as UTC). */
+export function endOfPunchDayUtc(dateKey: string): Date {
+  const [y, m, d] = dateKey.split("-").map(Number);
+  if (!y || !m || !d) return new Date();
+  return new Date(Date.UTC(y, m - 1, d, 23, 59, 59, 999));
+}
+
+export type ComputeDayDurationsOptions = {
+  /** When false, open work/break segments stop at end of day (midnight reset). */
+  live?: boolean;
+  dateKey?: string;
+  now?: Date;
+};
+
+function resolveDurationContext(
+  records: PunchRecord[],
+  options: ComputeDayDurationsOptions | Date,
+): { asOf: Date; dateKey: string } {
+  const opts: ComputeDayDurationsOptions =
+    options instanceof Date ? { now: options, live: true } : options;
+  const now = opts.now ?? new Date();
+  const dateKey =
+    opts.dateKey ??
+    (records.length > 0
+      ? punchDateKeyFromIso(records[0]!.checkinTime)
+      : todayPunchDateKey(now));
+  const live = opts.live ?? dateKey === todayPunchDateKey(now);
+  const asOf = live ? now : endOfPunchDayUtc(dateKey);
+  return { asOf, dateKey };
+}
+
+export function computeDayDurations(
+  records: PunchRecord[],
+  options: ComputeDayDurationsOptions | Date = {},
+) {
+  const { asOf } = resolveDurationContext(records, options);
   const sorted = [...records].sort(
     (a, b) => new Date(a.checkinTime).getTime() - new Date(b.checkinTime).getTime(),
   );
@@ -38,10 +95,10 @@ export function computeDayDurations(records: PunchRecord[], now = new Date()) {
   const inWork = lastType === "CHECK_IN" || lastType === "BREAK_OUT";
 
   if (inWork && workStart) {
-    workMs += now.getTime() - workStart.getTime();
+    workMs += Math.max(0, asOf.getTime() - workStart.getTime());
   }
   if (onBreak && breakStart) {
-    breakMs += now.getTime() - breakStart.getTime();
+    breakMs += Math.max(0, asOf.getTime() - breakStart.getTime());
   }
 
   return {
@@ -78,13 +135,16 @@ export function formatWorkedDuration(totalMinutes: number): string {
   return m > 0 ? `${h}h ${m}m` : `${h}h`;
 }
 
-export function buildDaySummary(records: PunchRecord[], now = new Date()) {
+export function buildDaySummary(
+  records: PunchRecord[],
+  options: ComputeDayDurationsOptions | Date = {},
+) {
   const sorted = [...records].sort(
     (a, b) => new Date(a.checkinTime).getTime() - new Date(b.checkinTime).getTime(),
   );
   const checkIns = sorted.filter((r) => r.checkType === "CHECK_IN");
   const checkOuts = sorted.filter((r) => r.checkType === "CHECK_OUT");
-  const { workSeconds, breakSeconds } = computeDayDurations(records, now);
+  const { workSeconds, breakSeconds } = computeDayDurations(records, options);
 
   return {
     date: checkIns[0]?.checkinTime || checkOuts.at(-1)?.checkinTime || sorted[0]?.checkinTime || "",

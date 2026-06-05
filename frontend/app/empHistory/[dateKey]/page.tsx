@@ -12,7 +12,7 @@ import {
   punchTypeLabel,
   type AttendanceLocationRecord,
 } from "../../utils/empAttendanceHistory";
-import { buildDaySummary } from "../../utils/attendanceDuration";
+import { buildDaySummary, todayPunchDateKey } from "../../utils/attendanceDuration";
 import { extractSiteVisitPunchesFromChats } from "../../utils/siteVisitPunches";
 import { taskFetch } from "../../utils/taskApi";
 import { useCurrentUser } from "../../hooks/useCurrentUser";
@@ -163,7 +163,13 @@ export default function EmpHistoryDayPage() {
       .catch(() => setSiteVisits([]));
   }, [user, dateKey]);
 
-  const summary = records.length ? buildDaySummary(records) : null;
+  const summary = useMemo(
+    () =>
+      records.length
+        ? buildDaySummary(records, { dateKey, live: dateKey === todayPunchDateKey() })
+        : null,
+    [records, dateKey],
+  );
   const dayPunches = extractDayPunchTimes(records);
 
   return (

@@ -25,12 +25,15 @@ interface EmpAttendanceTodayPanelProps {
   todayStatus: TodayStatus | null;
   loading: boolean;
   onStatusUpdate: (status: TodayStatus) => void;
+  /** Shorter scrollable card when history date filter is active. */
+  compact?: boolean;
 }
 
 export function EmpAttendanceTodayPanel({
   todayStatus,
   loading,
   onStatusUpdate,
+  compact = false,
 }: EmpAttendanceTodayPanelProps) {
   const punchState = todayStatus?.punchState ?? (todayStatus?.isCheckedIn ? "IN" : "OUT");
   const isOnBreak = punchState === "ON_BREAK";
@@ -49,7 +52,13 @@ export function EmpAttendanceTodayPanel({
   });
 
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden flex flex-col min-h-0 h-full max-h-full">
+    <div
+      className={
+        compact
+          ? "bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden flex flex-col max-h-[min(240px,38dvh)] min-h-0"
+          : "bg-white rounded-2xl border border-gray-100 shadow-sm"
+      }
+    >
       <div className="px-4 pt-3 pb-2 flex items-start justify-between gap-2 shrink-0">
         <div>
           <p className="text-[11px] font-bold tracking-widest text-gray-400 uppercase">
@@ -78,7 +87,13 @@ export function EmpAttendanceTodayPanel({
         )}
       </div>
 
-      <div className="px-4 pb-2 overflow-y-auto min-h-0 flex-1">
+      <div
+        className={
+          compact
+            ? "px-4 pb-3 overflow-y-auto min-h-0 flex-1 overscroll-contain"
+            : "px-4 pb-3"
+        }
+      >
         <div className="grid grid-cols-2 gap-2 mb-2">
           <StatCell label="Mark IN" value={formatPunchTime(punches.checkIn?.checkinTime)} />
           <StatCell label="Mark OUT" value={formatPunchTime(punches.checkOut?.checkinTime)} />
@@ -107,7 +122,7 @@ export function EmpAttendanceTodayPanel({
           />
         </div>
 
-        <div className="rounded-xl bg-gray-50/80 border border-gray-100 px-3 py-2 mb-2 space-y-1.5">
+        <div className="rounded-xl bg-gray-50/80 border border-gray-100 px-3 py-2 space-y-1.5">
           <LocationRow
             icon="solar:login-2-bold-duotone"
             label="Mark IN location"
