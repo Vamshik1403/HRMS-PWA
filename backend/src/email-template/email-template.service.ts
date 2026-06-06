@@ -5,7 +5,7 @@ import { PrismaService } from '../prisma/prisma.service';
 export const SINGLE_TEMPLATE_EVENT = 'ALL';
 export const DEFAULT_SINGLE_TEMPLATE = {
   eventType: SINGLE_TEMPLATE_EVENT,
-  subject: 'OpenHRM – {{eventLabel}} – {{employeeName}}',
+  subject: '{{companyName}} – {{eventLabel}} – {{employeeName}}',
   bodyHtml:
     '<p>Dear {{employeeName}},</p>' +
     '<p>This is an update regarding your <strong>{{eventLabel}}</strong>.</p>' +

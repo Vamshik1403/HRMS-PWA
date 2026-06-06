@@ -66,6 +66,29 @@ export class MailService {
     return template.replace(/\{\{(\w+)\}\}/g, (_, key: string) => vars[key] ?? '');
   }
 
+  /** Legacy templates may still contain the static product name — swap at send time. */
+  private applyCompanyBranding(template: string, companyName: string): string {
+    if (!companyName.trim()) return template;
+    return template.replace(/\bOpenHRM\b/g, companyName.trim());
+  }
+
+  private formatFromAddress(companyName: string, smtpFrom: string): string {
+    const raw = smtpFrom.trim();
+    const match = raw.match(/^(.+?)\s*<([^>]+)>$/);
+    const email = (match ? match[2] : raw).trim();
+    const display = companyName.trim() || (match ? match[1].replace(/^["']|["']$/g, '').trim() : 'HR');
+    return `"${display.replace(/"/g, '')}" <${email}>`;
+  }
+
+  private async resolveCompanyName(companyID?: number | null): Promise<string> {
+    if (companyID == null) return '';
+    const company = await this.prisma.company.findUnique({
+      where: { id: companyID },
+      select: { companyName: true },
+    });
+    return company?.companyName?.trim() || '';
+  }
+
   /** Simple notification email (same delivery path as leave/reimbursement). */
   async sendNotificationEmail(params: {
     employeeId: number;
@@ -107,6 +130,7 @@ export class MailService {
     const emp = await this.prisma.manageEmployee.findUnique({
       where: { id: params.employeeId },
       include: {
+        company: { select: { companyName: true } },
         employeeLinks: {
           include: {
             linkedEmployee: {
@@ -150,9 +174,15 @@ export class MailService {
       ),
     ];
 
+    const companyID = params.companyID ?? emp.companyID;
+    const companyName =
+      emp.company?.companyName?.trim() ||
+      (await this.resolveCompanyName(companyID)) ||
+      'HR';
+
     const tpl = await this.emailTemplateService.getTemplateForSend(
       params.eventType,
-      params.companyID ?? emp.companyID,
+      companyID,
     );
     const employeeName =
       `${emp.employeeFirstName ?? ''} ${emp.employeeLastName ?? ''}`.trim() ||
@@ -173,20 +203,22 @@ export class MailService {
 
     const vars: Record<string, string> = {
       employeeName,
+      companyName,
       eventLabel: EVENT_LABELS[params.eventType] || params.eventType.replace(/_/g, ' ').toLowerCase(),
       ...params.vars,
     };
 
     const subject = tpl
-      ? this.render(tpl.subject, vars)
+      ? this.render(this.applyCompanyBranding(tpl.subject, companyName), vars)
       : params.fallbackSubject ||
-        `[OpenHRM] ${params.eventType.replace(/_/g, ' ')}`;
+        `[${companyName}] ${params.eventType.replace(/_/g, ' ')}`;
     const html = tpl
-      ? this.render(tpl.bodyHtml, vars)
+      ? this.render(this.applyCompanyBranding(tpl.bodyHtml, companyName), vars)
       : params.fallbackHtml ||
         `<p>${Object.entries(vars).map(([k, v]) => `<strong>${k}</strong>: ${v}`).join('<br/>')}</p>`;
 
-    const { from } = this.smtpConfig();
+    const { from: smtpFrom } = this.smtpConfig();
+    const from = this.formatFromAddress(companyName, smtpFrom);
 
     try {
       await transporter.sendMail({

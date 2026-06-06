@@ -17,7 +17,7 @@ const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "/backend";
 const SINGLE_EVENT = "ALL";
 
 const DEFAULT_TEMPLATE = {
-  subject: "OpenHRM – {{eventLabel}} – {{employeeName}}",
+  subject: "{{companyName}} – {{eventLabel}} – {{employeeName}}",
   bodyHtml:
     "<p>Dear {{employeeName}},</p>" +
     "<p>This is an update regarding your <strong>{{eventLabel}}</strong>.</p>" +
@@ -116,6 +116,7 @@ export default function EmailTemplatesSettingsPage() {
 
   const placeholders = useMemo(
     () => [
+      "companyName",
       "employeeName",
       "eventLabel",
       "status",
