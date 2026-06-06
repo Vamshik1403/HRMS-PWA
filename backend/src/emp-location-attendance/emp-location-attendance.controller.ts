@@ -9,6 +9,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { EmpLocationAttendanceService } from './emp-location-attendance.service';
+import { EmpMarkoutReminderService } from './emp-markout-reminder.service';
 import { CreateAttendanceLocationDto } from './dto/create-attendance-location.dto';
 import { MarkAbsentDto } from './dto/mark-absent.dto';
 import { AuthGuard } from '@nestjs/passport';
@@ -16,7 +17,10 @@ import { AuthGuard } from '@nestjs/passport';
 @Controller('emp-location-attendance')
 @UseGuards(AuthGuard('jwt'))
 export class EmpLocationAttendanceController {
-  constructor(private readonly svc: EmpLocationAttendanceService) {}
+  constructor(
+    private readonly svc: EmpLocationAttendanceService,
+    private readonly markoutReminder: EmpMarkoutReminderService,
+  ) {}
 
   private getEmployeeId(req: any): number {
     const payload = req.user;
@@ -77,6 +81,11 @@ export class EmpLocationAttendanceController {
   @Get('today')
   getTodayStatus(@Req() req: any) {
     return this.svc.getTodayStatus(this.getEmployeeId(req));
+  }
+
+  @Get('markout-reminder')
+  getMarkoutReminder(@Req() req: any) {
+    return this.markoutReminder.evaluateMarkoutReminder(this.getEmployeeId(req));
   }
 
   @Post('mark-absent')

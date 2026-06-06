@@ -4,6 +4,10 @@ import { reverseGeocode } from '../common/reverse-geocode';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateAttendanceLocationDto } from './dto/create-attendance-location.dto';
 import { MarkAbsentDto } from './dto/mark-absent.dto';
+import {
+  computePwaDayDurations,
+  getEffectiveDisplayPunches,
+} from './pwa-punch-metrics.util';
 
 const VALID_TYPES = ['CHECK_IN', 'CHECK_OUT', 'BREAK_IN', 'BREAK_OUT'] as const;
 type PunchType = (typeof VALID_TYPES)[number];
@@ -92,53 +96,7 @@ export class EmpLocationAttendanceService {
   }
 
   private computeMinutes(records: { checkType: string; checkinTime: Date }[], now = new Date()) {
-    const sorted = [...records].sort((a, b) => a.checkinTime.getTime() - b.checkinTime.getTime());
-    let workMs = 0;
-    let breakMs = 0;
-    let workStart: Date | null = null;
-    let breakStart: Date | null = null;
-
-    for (const rec of sorted) {
-      const t = rec.checkinTime;
-
-      if (rec.checkType === 'CHECK_IN') {
-        // Ignore duplicate CHECK_IN while a work segment is already open (bad data / race).
-        if (!workStart) workStart = t;
-      } else if (rec.checkType === 'BREAK_IN') {
-        if (workStart) {
-          workMs += t.getTime() - workStart.getTime();
-        }
-        workStart = null;
-        breakStart = t;
-      } else if (rec.checkType === 'BREAK_OUT') {
-        if (breakStart) {
-          breakMs += t.getTime() - breakStart.getTime();
-        }
-        breakStart = null;
-        workStart = t;
-      } else if (rec.checkType === 'CHECK_OUT') {
-        if (workStart) {
-          workMs += t.getTime() - workStart.getTime();
-        }
-        workStart = null;
-        breakStart = null;
-      }
-    }
-
-    const state = this.getPunchState(sorted.at(-1)?.checkType ?? null);
-    if (state === 'IN' && workStart) {
-      workMs += now.getTime() - workStart.getTime();
-    }
-    if (state === 'ON_BREAK' && breakStart) {
-      breakMs += now.getTime() - breakStart.getTime();
-    }
-
-    return {
-      workMinutes: Math.max(0, Math.round(workMs / 60000)),
-      breakMinutes: Math.max(0, Math.round(breakMs / 60000)),
-      workSeconds: Math.max(0, Math.round(workMs / 1000)),
-      breakSeconds: Math.max(0, Math.round(breakMs / 1000)),
-    };
+    return computePwaDayDurations(records, now);
   }
 
   /**
@@ -368,6 +326,7 @@ export class EmpLocationAttendanceService {
 
     const checkIns = records.filter((r) => r.checkType === 'CHECK_IN');
     const checkOuts = records.filter((r) => r.checkType === 'CHECK_OUT');
+    const { firstIn, lastOut } = getEffectiveDisplayPunches(records);
 
     // Merge device-punch state when no PWA punches exist yet today
     let deviceCheckIn: { checkinTime: Date } | null = null;
@@ -380,8 +339,8 @@ export class EmpLocationAttendanceService {
       }
     }
 
-    const checkIn = checkIns[0] ?? (deviceCheckIn as typeof checkIns[0] | null);
-    const checkOut = checkOuts.at(-1) ?? null;
+    const checkIn = firstIn ?? (deviceCheckIn as typeof checkIns[0] | null);
+    const checkOut = lastOut;
     const lastPunch = this.getLastPunch(records);
     const punchState = records.length > 0
       ? this.getPunchState(lastPunch?.checkType ?? null)

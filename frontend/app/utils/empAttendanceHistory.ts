@@ -165,9 +165,12 @@ export function extractDayPunchTimes(records: AttendanceLocationRecord[]) {
   const checkOuts = sorted.filter((r) => r.checkType === "CHECK_OUT");
   const breakIns = sorted.filter((r) => r.checkType === "BREAK_IN");
   const breakOuts = sorted.filter((r) => r.checkType === "BREAK_OUT");
+  const lastPunch = sorted.at(-1) ?? null;
+  const lastOut =
+    lastPunch?.checkType === "CHECK_OUT" ? (checkOuts.at(-1) ?? null) : null;
   return {
     checkIn: checkIns[0] ?? null,
-    checkOut: checkOuts.at(-1) ?? null,
+    checkOut: lastOut,
     breakIn: breakIns[0] ?? null,
     breakOut: breakOuts.at(-1) ?? null,
     allBreakIns: breakIns,

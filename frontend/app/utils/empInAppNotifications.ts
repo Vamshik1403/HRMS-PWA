@@ -67,13 +67,15 @@ export function pushPayloadToInAppNotification(data: {
   let href =
     typeof data.url === "string" && data.url
       ? data.url
-      : kind === "leave"
-        ? "/empLeaveApplication"
-        : kind === "reimbursement"
-          ? "/empReimbursement"
-          : kind === "payslip"
-            ? "/empPayout"
-            : "/empdashboard";
+      : kind === "attendance"
+        ? "/empAttendance"
+        : kind === "leave"
+          ? "/empLeaveApplication"
+          : kind === "reimbursement"
+            ? "/empReimbursement"
+            : kind === "payslip"
+              ? "/empPayout"
+              : "/empdashboard";
 
   let emoji = "🔔";
   if (kind === "leave") {
@@ -87,6 +89,8 @@ export function pushPayloadToInAppNotification(data: {
       titleLc.includes("warning") || body.toLowerCase().includes("warning")
         ? "⚠️"
         : "📋";
+  } else if (kind === "attendance") {
+    emoji = "⏰";
   }
 
   return {

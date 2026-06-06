@@ -15,6 +15,7 @@
     "import:attendance-logs": "ts-node scripts/import-attendance-logs.ts",
     "import:vamshik-attendance": "ts-node -r dotenv/config scripts/import-vamshik-attendance.ts",
     "reset:vamshik-reimb": "ts-node -r dotenv/config scripts/reset-vamshik-reimb-and-leave-balance.ts",
+    "markout-reminders": "ts-node -r dotenv/config scripts/send-markout-reminders.ts",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "start": "nest start",
     "start:dev": "nest start --watch",

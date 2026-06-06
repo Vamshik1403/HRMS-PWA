@@ -16,6 +16,7 @@ import {
 } from "../../utils/empInAppNotifications";
 import { empPayoutHrefForPeriod } from "../../utils/empPayslipApi";
 import PushNotificationPrompt from "../PushNotificationPrompt";
+import { EmpMarkoutReminderBanner } from "../emp/EmpMarkoutReminderBanner";
 import { toast } from "sonner";
 import { TASK_MANAGEMENT_ENABLED } from "@/app/config/featureFlags";
 import { ensureFetchRefreshPatch } from "@/app/utils/patchFetchForRefresh";
@@ -262,6 +263,7 @@ export default function EmpMobileLayout({ children, hideBottomNav = false }: Emp
           overscrollBehavior: 'none',
         }}
       >
+        {!hideBottomNav && <EmpMarkoutReminderBanner />}
         {children}
       </main>
 

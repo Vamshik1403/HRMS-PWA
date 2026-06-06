@@ -56,50 +56,64 @@ function resolveDurationContext(
   return { asOf, dateKey };
 }
 
+function computeBreakMs(sorted: PunchRecord[], asOf: Date): number {
+  let breakMs = 0;
+  let breakStart: Date | null = null;
+
+  for (const rec of sorted) {
+    const t = new Date(rec.checkinTime);
+    if (rec.checkType === "BREAK_IN") {
+      breakStart = t;
+    } else if (rec.checkType === "BREAK_OUT") {
+      if (breakStart) breakMs += t.getTime() - breakStart.getTime();
+      breakStart = null;
+    }
+  }
+
+  if (sorted.at(-1)?.checkType === "BREAK_IN" && breakStart) {
+    breakMs += Math.max(0, asOf.getTime() - breakStart.getTime());
+  }
+
+  return Math.max(0, breakMs);
+}
+
+/** First mark-in and last mark-out (only when the day ends with a checkout). */
+export function getEffectiveDisplayPunches(records: PunchRecord[]) {
+  const sorted = [...records].sort(
+    (a, b) => new Date(a.checkinTime).getTime() - new Date(b.checkinTime).getTime(),
+  );
+  const checkIns = sorted.filter((r) => r.checkType === "CHECK_IN");
+  const checkOuts = sorted.filter((r) => r.checkType === "CHECK_OUT");
+  const lastPunch = sorted.at(-1) ?? null;
+  const firstIn = checkIns[0] ?? null;
+  const lastOut =
+    lastPunch?.checkType === "CHECK_OUT" ? (checkOuts.at(-1) ?? null) : null;
+  return { sorted, firstIn, lastOut };
+}
+
 export function computeDayDurations(
   records: PunchRecord[],
   options: ComputeDayDurationsOptions | Date = {},
 ) {
   const { asOf } = resolveDurationContext(records, options);
-  const sorted = [...records].sort(
-    (a, b) => new Date(a.checkinTime).getTime() - new Date(b.checkinTime).getTime(),
+  const { sorted, firstIn, lastOut } = getEffectiveDisplayPunches(records);
+  const breakMs = computeBreakMs(sorted, asOf);
+
+  if (!firstIn) {
+    return {
+      workSeconds: 0,
+      breakSeconds: Math.max(0, Math.round(breakMs / 1000)),
+    };
+  }
+
+  const endMs =
+    lastOut != null
+      ? new Date(lastOut.checkinTime).getTime()
+      : asOf.getTime();
+  const workMs = Math.max(
+    0,
+    endMs - new Date(firstIn.checkinTime).getTime() - breakMs,
   );
-
-  let workMs = 0;
-  let breakMs = 0;
-  let workStart: Date | null = null;
-  let breakStart: Date | null = null;
-
-  for (const rec of sorted) {
-    const t = new Date(rec.checkinTime);
-
-    if (rec.checkType === "CHECK_IN") {
-      if (!workStart) workStart = t;
-    } else if (rec.checkType === "BREAK_IN") {
-      if (workStart) workMs += t.getTime() - workStart.getTime();
-      workStart = null;
-      breakStart = t;
-    } else if (rec.checkType === "BREAK_OUT") {
-      if (breakStart) breakMs += t.getTime() - breakStart.getTime();
-      breakStart = null;
-      workStart = t;
-    } else if (rec.checkType === "CHECK_OUT") {
-      if (workStart) workMs += t.getTime() - workStart.getTime();
-      workStart = null;
-      breakStart = null;
-    }
-  }
-
-  const lastType = sorted.at(-1)?.checkType ?? null;
-  const onBreak = lastType === "BREAK_IN";
-  const inWork = lastType === "CHECK_IN" || lastType === "BREAK_OUT";
-
-  if (inWork && workStart) {
-    workMs += Math.max(0, asOf.getTime() - workStart.getTime());
-  }
-  if (onBreak && breakStart) {
-    breakMs += Math.max(0, asOf.getTime() - breakStart.getTime());
-  }
 
   return {
     workSeconds: Math.max(0, Math.round(workMs / 1000)),
@@ -139,17 +153,15 @@ export function buildDaySummary(
   records: PunchRecord[],
   options: ComputeDayDurationsOptions | Date = {},
 ) {
-  const sorted = [...records].sort(
-    (a, b) => new Date(a.checkinTime).getTime() - new Date(b.checkinTime).getTime(),
-  );
+  const { sorted, firstIn, lastOut } = getEffectiveDisplayPunches(records);
   const checkIns = sorted.filter((r) => r.checkType === "CHECK_IN");
   const checkOuts = sorted.filter((r) => r.checkType === "CHECK_OUT");
   const { workSeconds, breakSeconds } = computeDayDurations(records, options);
 
   return {
-    date: checkIns[0]?.checkinTime || checkOuts.at(-1)?.checkinTime || sorted[0]?.checkinTime || "",
-    checkIn: checkIns[0]?.checkinTime ?? null,
-    checkOut: checkOuts.at(-1)?.checkinTime ?? null,
+    date: firstIn?.checkinTime || lastOut?.checkinTime || sorted[0]?.checkinTime || "",
+    checkIn: firstIn?.checkinTime ?? null,
+    checkOut: lastOut?.checkinTime ?? null,
     workSeconds,
     breakSeconds,
     workLabel: formatWorkHoursDecimal(workSeconds),
