@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, OnModuleInit } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 
 /** Single template used for ALL email types (leave, reimbursement, etc.). */
@@ -48,8 +48,30 @@ export const DEFAULT_EMAIL_TEMPLATES = [
 ] as const;
 
 @Injectable()
-export class EmailTemplateService {
+export class EmailTemplateService implements OnModuleInit {
+  private readonly logger = new Logger(EmailTemplateService.name);
+
   constructor(private readonly prisma: PrismaService) {}
+
+  async onModuleInit() {
+    await this.migrateLegacyProductNameInTemplates();
+  }
+
+  /** Replace static OpenHRM branding in stored templates with {{companyName}}. */
+  private async migrateLegacyProductNameInTemplates() {
+    const rows = await this.prisma.emailTemplate.findMany();
+    for (const row of rows) {
+      const subject = row.subject.replace(/\bOpenHRM\b/gi, '{{companyName}}');
+      const bodyHtml = row.bodyHtml.replace(/\bOpenHRM\b/gi, '{{companyName}}');
+      if (subject !== row.subject || bodyHtml !== row.bodyHtml) {
+        await this.prisma.emailTemplate.update({
+          where: { id: row.id },
+          data: { subject, bodyHtml },
+        });
+        this.logger.log(`Updated email template #${row.id} to use {{companyName}}`);
+      }
+    }
+  }
 
   findAll(companyID?: number) {
     if (companyID != null) {

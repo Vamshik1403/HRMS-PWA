@@ -66,18 +66,19 @@ export class MailService {
     return template.replace(/\{\{(\w+)\}\}/g, (_, key: string) => vars[key] ?? '');
   }
 
-  /** Legacy templates may still contain the static product name — swap at send time. */
-  private applyCompanyBranding(template: string, companyName: string): string {
-    if (!companyName.trim()) return template;
-    return template.replace(/\bOpenHRM\b/g, companyName.trim());
+  private static readonly PRODUCT_NAME_RE = /\bopenhrm\b/gi;
+
+  /** Legacy templates / SMTP defaults may still say OpenHRM — always use company name. */
+  private applyCompanyBranding(text: string, companyName: string): string {
+    const name = companyName.trim();
+    if (!name) return text;
+    return text.replace(MailService.PRODUCT_NAME_RE, name);
   }
 
-  private formatFromAddress(companyName: string, smtpFrom: string): string {
+  private extractSmtpEmail(smtpFrom: string): string {
     const raw = smtpFrom.trim();
-    const match = raw.match(/^(.+?)\s*<([^>]+)>$/);
-    const email = (match ? match[2] : raw).trim();
-    const display = companyName.trim() || (match ? match[1].replace(/^["']|["']$/g, '').trim() : 'HR');
-    return `"${display.replace(/"/g, '')}" <${email}>`;
+    const match = raw.match(/<([^>]+)>/);
+    return (match ? match[1] : raw).trim();
   }
 
   private async resolveCompanyName(companyID?: number | null): Promise<string> {
@@ -87,6 +88,33 @@ export class MailService {
       select: { companyName: true },
     });
     return company?.companyName?.trim() || '';
+  }
+
+  private async resolveCompanyNameForEmployee(
+    emp: {
+      companyID: number | null;
+      company?: { companyName: string | null } | null;
+      branchesID?: number | null;
+    },
+    explicitCompanyID?: number | null,
+  ): Promise<string> {
+    const fromEmp = emp.company?.companyName?.trim();
+    if (fromEmp) return fromEmp;
+
+    const companyID = explicitCompanyID ?? emp.companyID;
+    const fromId = await this.resolveCompanyName(companyID);
+    if (fromId) return fromId;
+
+    if (emp.branchesID != null) {
+      const branch = await this.prisma.branches.findUnique({
+        where: { id: emp.branchesID },
+        include: { company: { select: { companyName: true } } },
+      });
+      const fromBranch = branch?.company?.companyName?.trim();
+      if (fromBranch) return fromBranch;
+    }
+
+    return '';
   }
 
   /** Simple notification email (same delivery path as leave/reimbursement). */
@@ -131,6 +159,7 @@ export class MailService {
       where: { id: params.employeeId },
       include: {
         company: { select: { companyName: true } },
+        branches: { include: { company: { select: { companyName: true } } } },
         employeeLinks: {
           include: {
             linkedEmployee: {
@@ -176,8 +205,8 @@ export class MailService {
 
     const companyID = params.companyID ?? emp.companyID;
     const companyName =
-      emp.company?.companyName?.trim() ||
-      (await this.resolveCompanyName(companyID)) ||
+      (await this.resolveCompanyNameForEmployee(emp, companyID)) ||
+      emp.branches?.company?.companyName?.trim() ||
       'HR';
 
     const tpl = await this.emailTemplateService.getTemplateForSend(
@@ -202,27 +231,35 @@ export class MailService {
     };
 
     const vars: Record<string, string> = {
-      employeeName,
-      companyName,
-      eventLabel: EVENT_LABELS[params.eventType] || params.eventType.replace(/_/g, ' ').toLowerCase(),
       ...params.vars,
+      employeeName,
+      eventLabel:
+        EVENT_LABELS[params.eventType] ||
+        params.eventType.replace(/_/g, ' ').toLowerCase(),
+      companyName,
     };
 
-    const subject = tpl
-      ? this.render(this.applyCompanyBranding(tpl.subject, companyName), vars)
-      : params.fallbackSubject ||
-        `[${companyName}] ${params.eventType.replace(/_/g, ' ')}`;
-    const html = tpl
-      ? this.render(this.applyCompanyBranding(tpl.bodyHtml, companyName), vars)
-      : params.fallbackHtml ||
-        `<p>${Object.entries(vars).map(([k, v]) => `<strong>${k}</strong>: ${v}`).join('<br/>')}</p>`;
+    const subject = this.applyCompanyBranding(
+      tpl
+        ? this.render(this.applyCompanyBranding(tpl.subject, companyName), vars)
+        : params.fallbackSubject ||
+          `[${companyName}] ${params.eventType.replace(/_/g, ' ')}`,
+      companyName,
+    );
+    const html = this.applyCompanyBranding(
+      tpl
+        ? this.render(this.applyCompanyBranding(tpl.bodyHtml, companyName), vars)
+        : params.fallbackHtml ||
+          `<p>${Object.entries(vars).map(([k, v]) => `<strong>${k}</strong>: ${v}`).join('<br/>')}</p>`,
+      companyName,
+    );
 
     const { from: smtpFrom } = this.smtpConfig();
-    const from = this.formatFromAddress(companyName, smtpFrom);
+    const fromAddress = this.extractSmtpEmail(smtpFrom);
 
     try {
       await transporter.sendMail({
-        from,
+        from: { name: companyName, address: fromAddress },
         to,
         cc: cc.length ? cc : undefined,
         subject,

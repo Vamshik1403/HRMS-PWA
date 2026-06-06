@@ -16,6 +16,7 @@
     "import:vamshik-attendance": "ts-node -r dotenv/config scripts/import-vamshik-attendance.ts",
     "reset:vamshik-reimb": "ts-node -r dotenv/config scripts/reset-vamshik-reimb-and-leave-balance.ts",
     "markout-reminders": "ts-node -r dotenv/config scripts/send-markout-reminders.ts",
+    "fix:email-template-company": "ts-node -r dotenv/config scripts/fix-email-template-company-name.ts",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "start": "nest start",
     "start:dev": "nest start --watch",
