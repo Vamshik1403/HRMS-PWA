@@ -1,6 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import * as fs from 'fs';
 import * as nodemailer from 'nodemailer';
+import * as path from 'path';
 import { PrismaService } from '../prisma/prisma.service';
 import { EmailTemplateService } from '../email-template/email-template.service';
 
@@ -271,6 +273,93 @@ export class MailService {
       this.logger.error(
         `Failed to send ${params.eventType} email to ${to}: ${String(err)}`,
       );
+      return false;
+    }
+  }
+
+  /** Email daily backup ZIP (all sectional SQL files) to the configured admin address. */
+  async sendDailyBackupEmail(params: {
+    dateLabel: string;
+    dayDir: string;
+    zipPath?: string;
+    zipFileName?: string;
+    files: Array<{ key: string; label: string; fileName: string; sizeBytes: number }>;
+  }): Promise<boolean> {
+    const transporter = this.getTransporter();
+    if (!transporter) {
+      this.logger.warn('SMTP not configured; skipping backup email');
+      return false;
+    }
+
+    const to =
+      this.config.get<string>('BACKUP_EMAIL') ||
+      process.env.BACKUP_EMAIL ||
+      this.smtpConfig().user;
+    if (!to) {
+      this.logger.warn('BACKUP_EMAIL / SMTP_USER not set; skipping backup email');
+      return false;
+    }
+
+    const { from: smtpFrom } = this.smtpConfig();
+    const fromAddress = this.extractSmtpEmail(smtpFrom);
+    const maxAttachBytes = Number(process.env.BACKUP_EMAIL_MAX_BYTES || 20 * 1024 * 1024);
+    const fileList = params.files
+      .map(
+        (f) =>
+          `• ${f.label}: ${f.fileName} (${(f.sizeBytes / 1024).toFixed(1)} KB)`,
+      )
+      .join('\n');
+
+    let attachPath: string;
+    let attachName: string;
+    let note = '';
+
+    if (params.zipPath && params.zipFileName && fs.existsSync(params.zipPath)) {
+      const zipSize = fs.statSync(params.zipPath).size;
+      attachPath = params.zipPath;
+      attachName = params.zipFileName;
+      if (zipSize > maxAttachBytes) {
+        const attendance = params.files.find((f) => f.key === 'attendance');
+        if (!attendance) {
+          this.logger.warn('Backup ZIP too large for email and no fallback file');
+          return false;
+        }
+        attachPath = path.join(params.dayDir, attendance.fileName);
+        attachName = attendance.fileName;
+        note = `ZIP (${(zipSize / (1024 * 1024)).toFixed(1)} MB) stored on server. Attached attendance SQL only.\n\n`;
+      }
+    } else {
+      const attendance = params.files.find((f) => f.key === 'attendance');
+      const fallback = attendance || [...params.files].sort((a, b) => a.sizeBytes - b.sizeBytes)[0];
+      if (!fallback) return false;
+      attachPath = path.join(params.dayDir, fallback.fileName);
+      attachName = fallback.fileName;
+    }
+
+    const subject = `OpenHRM daily backup — ${params.dateLabel}`;
+    const text =
+      `${note}` +
+      `Automated backup completed for ${params.dateLabel}.\n\n` +
+      `Files on server:\n${fileList}\n\n` +
+      `Attached: ${attachName}\n`;
+
+    try {
+      await transporter.sendMail({
+        from: { name: 'OpenHRM Backup', address: fromAddress },
+        to,
+        subject,
+        text,
+        attachments: [
+          {
+            filename: `${params.dateLabel}-${attachName}`,
+            path: attachPath,
+          },
+        ],
+      });
+      this.logger.log(`Backup email sent to ${to} (${attachName})`);
+      return true;
+    } catch (err) {
+      this.logger.error(`Failed to send backup email: ${String(err)}`);
       return false;
     }
   }

@@ -73,6 +73,8 @@ import { DashboardOverviewModule } from './dashboard-overview/dashboard-overview
 import { MailModule } from './mail/mail.module';
 import { EmailTemplateModule } from './email-template/email-template.module';
 import { EmpManagerScopeModule } from './common/emp-manager-scope.module';
+import { BackupModule } from './backup/backup.module';
+import { AuditLogModule } from './audit-log/audit-log.module';
 
 
 @Module({
@@ -151,6 +153,8 @@ import { EmpManagerScopeModule } from './common/emp-manager-scope.module';
     EmpNotificationsModule,
     DashboardOverviewModule,
     EmailTemplateModule,
+    BackupModule,
+    AuditLogModule,
   ],
   providers: [AuthService],
   controllers: [AuthController],

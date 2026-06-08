@@ -8,9 +8,12 @@ import {
   Patch,
   Post,
   Query,
+  Req,
   Res,
+  UseGuards,
 } from '@nestjs/common';
-import type { Response } from 'express';
+import { AuthGuard } from '@nestjs/passport';
+import type { Request, Response } from 'express';
 import { ManageEmployeeService } from './manage-employee.service';
 import { CreateManageEmployeeDto, EmployeeCredentialsUpdateDto, EmployeeLoginDto } from './dto/create-manage-employee.dto';
 import { UpdateManageEmployeeDto } from './dto/update-manage-employee.dto';
@@ -22,8 +25,9 @@ export class ManageEmployeeController {
 
 
   @Post()
-  create(@Body() dto: CreateManageEmployeeDto) {
-    return this.service.create(dto);
+  @UseGuards(AuthGuard('jwt'))
+  create(@Body() dto: CreateManageEmployeeDto, @Req() req: Request) {
+    return this.service.create(dto, req);
   }
 
   @Get('credentials/all')
@@ -147,13 +151,19 @@ findAll(@Query('status') status?: string) {
   }
 
   @Patch(':id')
-  update(@Param('id', ParseIntPipe) id: number, @Body() dto: UpdateManageEmployeeDto) {
-    return this.service.update(id, dto);
+  @UseGuards(AuthGuard('jwt'))
+  update(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: UpdateManageEmployeeDto,
+    @Req() req: Request,
+  ) {
+    return this.service.update(id, dto, req);
   }
 
   @Delete(':id')
-  remove(@Param('id', ParseIntPipe) id: number) {
-    return this.service.remove(id);
+  @UseGuards(AuthGuard('jwt'))
+  remove(@Param('id', ParseIntPipe) id: number, @Req() req: Request) {
+    return this.service.remove(id, req);
   }
 
   // --- Linked Employees ---

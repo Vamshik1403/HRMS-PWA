@@ -2176,3 +2176,49 @@ model EmailTemplate {
 
   @@unique([companyID, eventType])
 }
+
+/// Immutable audit trail — append-only (no update/delete APIs).
+model AuditLog {
+  id            Int      @id @default(autoincrement())
+  userId        Int?
+  username      String?  @db.VarChar(255)
+  employeeName  String?  @db.VarChar(255)
+  userRole      String?  @db.VarChar(64)
+  action        String   @db.VarChar(64)
+  module        String   @db.VarChar(64)
+  entityId      String?  @db.VarChar(64)
+  entityName    String?  @db.VarChar(255)
+  oldData       String?  @db.Text
+  newData       String?  @db.Text
+  success       Boolean  @default(true)
+  failureReason String?  @db.VarChar(512)
+  ipAddress     String?  @db.VarChar(64)
+  browser       String?  @db.VarChar(128)
+  os            String?  @db.VarChar(128)
+  deviceType    String?  @db.VarChar(64)
+  location      String?  @db.VarChar(255)
+  userAgent     String?  @db.Text
+  createdAt     DateTime @default(now())
+
+  @@index([module, createdAt])
+  @@index([userId, createdAt])
+  @@index([action, createdAt])
+  @@index([username, createdAt])
+  @@index([createdAt])
+}
+
+model BackupRestoreLog {
+  id           Int      @id @default(autoincrement())
+  userId       Int?
+  username     String?  @db.VarChar(255)
+  backupDate   String   @db.VarChar(16)
+  fileName     String   @db.VarChar(255)
+  fileLabel    String?  @db.VarChar(255)
+  success      Boolean
+  errorMessage String?  @db.Text
+  ipAddress    String?  @db.VarChar(64)
+  createdAt    DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([username])
+}

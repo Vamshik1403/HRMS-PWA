@@ -6,7 +6,8 @@
   "private": true,
   "license": "UNLICENSED",
   "scripts": {
-    "build": "nest build",
+    "build": "node --max-old-space-size=2048 ./node_modules/typescript/bin/tsc -p tsconfig.build.json",
+    "build:nest": "nest build",
     "migrate:dev": "prisma migrate dev --schema=prisma/hrms/schema.prisma",
     "generate": "prisma generate --schema=prisma/hrms/schema.prisma",
     "studio": "prisma studio --schema=prisma/hrms/schema.prisma --port 5556",
@@ -16,6 +17,7 @@
     "import:vamshik-attendance": "ts-node -r dotenv/config scripts/import-vamshik-attendance.ts",
     "reset:vamshik-reimb": "ts-node -r dotenv/config scripts/reset-vamshik-reimb-and-leave-balance.ts",
     "markout-reminders": "ts-node -r dotenv/config scripts/send-markout-reminders.ts",
+    "backup:daily": "ts-node -r dotenv/config scripts/daily-backup.ts",
     "fix:email-template-company": "ts-node -r dotenv/config scripts/fix-email-template-company-name.ts",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "start": "nest start",
@@ -30,6 +32,7 @@
     "test:e2e": "jest --config ./test/jest-e2e.json"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1063.0",
     "@nestjs/common": "^11.0.1",
     "@nestjs/config": "^4.0.2",
     "@nestjs/core": "^11.0.1",
@@ -43,6 +46,7 @@
     "class-validator": "^0.14.2",
     "country-state-city": "^3.2.1",
     "dayjs": "^1.11.20",
+    "googleapis": "^173.0.0",
     "multer": "^2.0.2",
     "nodemailer": "^8.0.10",
     "passport": "^0.7.0",
@@ -50,6 +54,7 @@
     "pdf-lib": "^1.17.1",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
+    "ua-parser-js": "^2.0.10",
     "web-push": "^3.6.7",
     "xlsx": "^0.18.5"
   },

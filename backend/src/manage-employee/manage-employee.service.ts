@@ -1,5 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import type { Request } from 'express';
 import { PrismaService } from '../prisma/prisma.service';
+import { AuditLogService } from '../audit-log/audit-log.service';
 import { CreateManageEmployeeDto } from './dto/create-manage-employee.dto';
 import { UpdateManageEmployeeDto } from './dto/update-manage-employee.dto';
 import { JoiningFormService } from './joining-form.service';
@@ -12,7 +14,17 @@ export class ManageEmployeeService {
   constructor(
     private prisma: PrismaService,
     private readonly joiningFormService: JoiningFormService,
+    private readonly auditLog: AuditLogService,
   ) { }
+
+  private employeeDisplayName(emp: {
+    employeeFirstName?: string | null;
+    employeeLastName?: string | null;
+    employeeID?: string | null;
+  }) {
+    const name = `${emp.employeeFirstName || ''} ${emp.employeeLastName || ''}`.trim();
+    return name || emp.employeeID || 'Employee';
+  }
 
   // Helper method to hash password
   private async hashPassword(password: string): Promise<string> {
@@ -25,7 +37,7 @@ export class ManageEmployeeService {
   }
 
   // CREATE employee with nested rows AND credentials with hashed password
-  async create(dto: CreateManageEmployeeDto) {
+  async create(dto: CreateManageEmployeeDto, req?: Request) {
     const {
       serviceProviderID,
       companyID,
@@ -63,7 +75,7 @@ export class ManageEmployeeService {
       ...scalars
     } = dto;
 
-    return this.prisma.$transaction(async (tx) => {
+    const created = await this.prisma.$transaction(async (tx) => {
       // Check for duplicate employeeID within the same company
       if (scalars.employeeID && companyID) {
         const existing = await tx.manageEmployee.findFirst({
@@ -303,6 +315,22 @@ export class ManageEmployeeService {
         },
       });
     });
+
+    await this.auditLog.logFromRequest(req, {
+      action: 'CREATE',
+      module: 'EMPLOYEE',
+      entityId: created?.id,
+      entityName: created ? this.employeeDisplayName(created) : undefined,
+      newData: created
+        ? {
+            employeeID: created.employeeID,
+            employeeFirstName: created.employeeFirstName,
+            employeeLastName: created.employeeLastName,
+          }
+        : undefined,
+    });
+
+    return created;
   }
 
 
@@ -757,7 +785,7 @@ async findOne(id: number) {
   });
 }
 
-  async update(id: number, dto: UpdateManageEmployeeDto) {
+  async update(id: number, dto: UpdateManageEmployeeDto, req?: Request) {
     const {
       serviceProviderID,
       companyID,
@@ -812,7 +840,10 @@ async findOne(id: number) {
       ...scalars
     } = dto;
 
-    return this.prisma.$transaction(async (tx) => {
+    const beforeUpdate = await this.prisma.manageEmployee.findUnique({ where: { id } });
+    if (!beforeUpdate) throw new NotFoundException(`Employee ${id} not found`);
+
+    const updated = await this.prisma.$transaction(async (tx) => {
 
       delete (scalars as any).bankDetailsIdsToDelete;
       delete (scalars as any).bankDetailIdsToDelete;
@@ -1410,12 +1441,30 @@ async findOne(id: number) {
         },
       });
     });
+
+    await this.auditLog.logFromRequest(req, {
+      action: 'UPDATE',
+      module: 'EMPLOYEE',
+      entityId: id,
+      entityName: this.employeeDisplayName(beforeUpdate),
+      oldData: {
+        employeeID: beforeUpdate.employeeID,
+        employeeFirstName: beforeUpdate.employeeFirstName,
+        employeeLastName: beforeUpdate.employeeLastName,
+      },
+      newData: dto,
+    });
+
+    return updated;
   }
 
 
 
-async remove(id: number) {
+async remove(id: number, req?: Request) {
   try {
+    const existing = await this.prisma.manageEmployee.findUnique({ where: { id } });
+    if (!existing) throw new NotFoundException(`Employee ${id} not found`);
+
     await this.prisma.$transaction([
       // Delete employee credentials
       this.prisma.employeeCredentials.deleteMany({
@@ -1502,6 +1551,19 @@ async remove(id: number) {
       // Finally delete the ManageEmployee record
       this.prisma.manageEmployee.delete({ where: { id } }),
     ]);
+
+    await this.auditLog.logFromRequest(req, {
+      action: 'DELETE',
+      module: 'EMPLOYEE',
+      entityId: id,
+      entityName: this.employeeDisplayName(existing),
+      oldData: {
+        employeeID: existing.employeeID,
+        employeeFirstName: existing.employeeFirstName,
+        employeeLastName: existing.employeeLastName,
+      },
+    });
+
     return { success: true };
   } catch (e: any) {
     if (e?.code === 'P2003') {

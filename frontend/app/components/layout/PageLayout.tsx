@@ -79,7 +79,7 @@ const LEAVE_MANAGEMENT_PATHS = ["/leave-applications", "/privileged-leave"];
 const REPORTS_PATHS = ["/attendance-reports", "/payroll-reports"];
 const CANTEEN_PATHS = ["/canteen", "/canteen/setup", "/canteen/reports"];
 const SETTINGS_PATHS = ["/import-attendance", "/hrms-integrations", "/system-settings", "/system-settings/general", "/system-settings/compliance", "/system-settings/email-templates"];
-const ADMIN_PATHS = ["/system-users", "/backup-restore"];
+const ADMIN_PATHS = ["/system-users", "/backup-restore", "/audit-logs"];
 const ALL_SECTION_PATHS = [...SETUP_PATHS, ...CONTRACTOR_MANAGEMENT_PATHS, ...EMPLOYEE_PATHS, ...TASK_MANAGEMENT_PATHS, ...PAYROLL_PATHS, ...SALARY_PATHS, ...PAYROLL_POLICY_PATHS, ...LEAVE_PATHS, ...LEAVE_MANAGEMENT_PATHS, ...ATTENDANCE_PATHS, ...REPORTS_PATHS, ...CANTEEN_PATHS, ...SETTINGS_PATHS];
 
 export function PageLayout({ children }: PageLayoutProps) {
@@ -835,6 +835,7 @@ export function PageLayout({ children }: PageLayoutProps) {
                       <SidebarMenuSub className="ml-5 mt-1 space-y-0.5 border-l border-[#f0f0f0] pl-3">
                         <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link href="/system-users" className={cn(sbSubRow, isActiveLink('/system-users') ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>System Users</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
                         <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link href="/backup-restore" className={cn(sbSubRow, isActiveLink('/backup-restore') ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Backup & Restore</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
+                        <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link href="/audit-logs" className={cn(sbSubRow, isActiveLink('/audit-logs') ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Audit Logs</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
                       </SidebarMenuSub>
                     </CollapsibleContent>
                   </Collapsible>
@@ -892,7 +893,15 @@ export function PageLayout({ children }: PageLayoutProps) {
                         User Profile
                       </DropdownMenuItem>
                       <DropdownMenuItem className="cursor-pointer text-red-600 focus:text-red-600 rounded-xl m-1" onClick={() => {
+                        const token = localStorage.getItem("token") || localStorage.getItem("accessToken") || "";
+                        if (token) {
+                          void fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL || "/backend"}/auth/logout`, {
+                            method: "POST",
+                            headers: { Authorization: `Bearer ${token}` },
+                          }).catch(() => undefined);
+                        }
                         localStorage.removeItem("accessToken");
+                        localStorage.removeItem("token");
                         localStorage.removeItem("user");
                         document.cookie = "accessToken=; path=/; max-age=0; expires=Thu, 01 Jan 1970 00:00:00 UTC; samesite=lax";
                         router.push("/login");

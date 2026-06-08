@@ -1,7 +1,9 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
+import type { Request } from 'express';
 import { UsersService } from '../users/users.service';
-import { PrismaService } from '../prisma/prisma.service'; // Add this import
+import { PrismaService } from '../prisma/prisma.service';
+import { AuditLogService } from '../audit-log/audit-log.service';
 import * as bcrypt from 'bcrypt';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
@@ -11,7 +13,8 @@ export class AuthService {
   constructor(
     private usersService: UsersService,
     private jwt: JwtService,
-    private prisma: PrismaService // Inject PrismaService
+    private prisma: PrismaService,
+    private auditLog: AuditLogService,
   ) {}
 
   // REGISTER (only for regular users, not employees)
@@ -20,9 +23,20 @@ export class AuthService {
   }
 
   // LOGIN - Check both Users and EmployeeCredentials tables
-  async login(dto: LoginDto) {
+  async login(dto: LoginDto, req?: Request) {
     let user: any = null;
     let userType: 'user' | 'employee' = 'user';
+
+    const logFailed = async (reason: string) => {
+      await this.auditLog.logFromRequest(req, {
+        action: 'LOGIN_FAILED',
+        module: 'AUTH',
+        entityName: dto.username,
+        success: false,
+        failureReason: reason,
+        newData: { username: dto.username },
+      });
+    };
 
     // First, check in Users table
     user = await this.usersService.findOneByUsername(dto.username);
@@ -78,6 +92,7 @@ export class AuthService {
     }
 
     if (!user) {
+      await logFailed('Invalid credentials');
       throw new UnauthorizedException('Invalid credentials');
     }
 
@@ -93,6 +108,7 @@ export class AuthService {
     }
 
     if (!isValidPassword) {
+      await logFailed('Wrong password');
       throw new UnauthorizedException('Invalid credentials');
     }
 
@@ -170,10 +186,35 @@ export class AuthService {
       expiresIn: '1d',
     });
 
+    await this.auditLog.logFromRequest(req, {
+      action: 'LOGIN',
+      module: 'AUTH',
+      entityId: userData.id,
+      entityName: userData.username,
+      newData: { role: userData.role, type: userData.type },
+      actor: {
+        userId: userType === 'user' ? user.id : user.employeeID,
+        username: userData.username,
+        userRole: userData.role,
+        employeeName:
+          userType === 'employee'
+            ? `${user.employee?.employeeFirstName || ''} ${user.employee?.employeeLastName || ''}`.trim()
+            : undefined,
+      },
+    });
+
     return {
       accessToken,
       user: userData,
     };
+  }
+
+  async logout(req: Request) {
+    await this.auditLog.logFromRequest(req, {
+      action: 'LOGOUT',
+      module: 'AUTH',
+    });
+    return { ok: true };
   }
 
   // Optional: Method to get user profile from token
