@@ -15,6 +15,7 @@ import {
   TableHeader,
   TableRow,
 } from "../components/ui/table";
+import { authHeaders } from "@/lib/auth";
 
 const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL || "/backend";
 
@@ -53,14 +54,6 @@ type RestoreLog = {
   ipAddress: string | null;
   createdAt: string;
 };
-
-function authHeaders(): Record<string, string> {
-  const token =
-    typeof window !== "undefined"
-      ? localStorage.getItem("token") || localStorage.getItem("accessToken") || ""
-      : "";
-  return token ? { Authorization: `Bearer ${token}` } : {};
-}
 
 function fmtSize(bytes: number) {
   if (bytes < 1024) return `${bytes} B`;

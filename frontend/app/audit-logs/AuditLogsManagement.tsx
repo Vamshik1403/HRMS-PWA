@@ -15,6 +15,7 @@ import {
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import { toast } from "sonner";
 import { Download, Loader2, ScrollText } from "lucide-react";
+import { authHeaders, getAccessToken } from "@/lib/auth";
 
 const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL || "/backend";
 
@@ -34,14 +35,6 @@ type AuditRow = {
   deviceType: string | null;
   createdAt: string;
 };
-
-function authHeaders(): Record<string, string> {
-  const token =
-    typeof window !== "undefined"
-      ? localStorage.getItem("token") || localStorage.getItem("accessToken") || ""
-      : "";
-  return token ? { Authorization: `Bearer ${token}` } : {};
-}
 
 function fmtWhen(iso: string) {
   try {
@@ -64,6 +57,12 @@ export function AuditLogsManagement() {
   const [toDate, setToDate] = useState("");
 
   const load = useCallback(async () => {
+    if (!getAccessToken()) {
+      toast.error("Session expired. Please log in again.");
+      setItems([]);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     try {
       const params = new URLSearchParams({ page: String(page), limit: "50" });
@@ -77,6 +76,11 @@ export function AuditLogsManagement() {
         headers: authHeaders(),
         cache: "no-store",
       });
+      if (res.status === 401) {
+        toast.error("Session expired. Please log out and log in again.");
+        setItems([]);
+        return;
+      }
       if (!res.ok) throw new Error(await res.text());
       const data = await res.json();
       setItems(Array.isArray(data.items) ? data.items : []);

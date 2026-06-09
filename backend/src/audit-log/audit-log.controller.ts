@@ -17,7 +17,8 @@ export class AuditLogController {
   constructor(private readonly service: AuditLogService) {}
 
   private assertSuperAdmin(req: { user?: { role?: string } }) {
-    if (req.user?.role !== 'SUPERADMIN') {
+    const role = String(req.user?.role || '').toUpperCase();
+    if (role !== 'SUPERADMIN') {
       throw new ForbiddenException('Only Super Admin can view audit logs');
     }
   }

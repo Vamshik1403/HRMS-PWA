@@ -26,6 +26,9 @@ import { Icon } from "@iconify/react";
 import { Plus, Search, Edit, Trash2, Eye, X, Save, History, Download } from "lucide-react";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import { dispatchAppRefresh, registerDataCacheClearer } from "../utils/appRefresh";
+import { authHeaders } from "@/lib/auth";
+
+const jsonAuthHeaders = () => authHeaders({ "Content-Type": "application/json" });
 import {
   Dialog,
   DialogContent,
@@ -1667,7 +1670,7 @@ const runFetchCombinedDev = (q: string) => {
     if (!photoFile) return undefined;
     const fd = new FormData();
     fd.append("file", photoFile);
-    const res = await fetch(API.upload, { method: "POST", body: fd });
+    const res = await fetch(API.upload, { method: "POST", headers: authHeaders(), body: fd });
     if (!res.ok) throw new Error(await res.text());
     const data = await res.json();
     const full = data?.url?.startsWith("http") ? data.url : `/backend${data?.url ?? ""}`;
@@ -2190,7 +2193,7 @@ const addCombinedDevMap = () => {
 
       const res = await fetch(url, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: jsonAuthHeaders(),
         body: JSON.stringify(payload),
       });
       if (!res.ok) throw new Error(await res.text());
@@ -2572,7 +2575,7 @@ const addCombinedDevMap = () => {
       if (editingRow) {
         const res = await fetch(`${API.manageEmp}/${editingRow.id}`, {
           method: "PATCH",
-          headers: { "Content-Type": "application/json" },
+          headers: jsonAuthHeaders(),
           body: JSON.stringify(payload),
         });
         if (!res.ok) throw new Error(await res.text());
@@ -2580,13 +2583,13 @@ const addCombinedDevMap = () => {
         // Save linked employees
         await fetch(`${API.manageEmp}/${editingRow.id}/linked-employees`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: jsonAuthHeaders(),
           body: JSON.stringify({ linkedEmployeeIds: linkedEmployees.map(le => le.id) }),
         });
       } else {
         const res = await fetch(API.manageEmp, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: jsonAuthHeaders(),
           body: JSON.stringify(payload),
         });
         if (!res.ok) throw new Error(await res.text());
@@ -2597,7 +2600,7 @@ const addCombinedDevMap = () => {
         if (newId && linkedEmployees.length > 0) {
           await fetch(`${API.manageEmp}/${newId}/linked-employees`, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: jsonAuthHeaders(),
             body: JSON.stringify({ linkedEmployeeIds: linkedEmployees.map(le => le.id) }),
           });
         }
@@ -2977,7 +2980,10 @@ const addCombinedDevMap = () => {
   const handleDelete = async (id: ID) => {
     if (!confirm("Delete this employee?")) return;
     try {
-      const res = await fetch(`${API.manageEmp}/${id}`, { method: "DELETE" });
+      const res = await fetch(`${API.manageEmp}/${id}`, {
+        method: "DELETE",
+        headers: authHeaders(),
+      });
       if (!res.ok) throw new Error(await res.text());
       await fetchRows();
       toast.success("Employee deleted successfully");
@@ -4965,7 +4971,10 @@ const addCombinedDevMap = () => {
                                   onClick={async () => {
                                     if (!confirm(`Reset password for ${r.employeeFirstName} ${r.employeeLastName} (${r.employeeID})?\nPassword will be reset to their mobile number.`)) return;
                                     try {
-                                      const res = await fetch(`/backend/manage-emp/${r.id}/reset-password`, { method: "POST" });
+                                      const res = await fetch(`/backend/manage-emp/${r.id}/reset-password`, {
+                                        method: "POST",
+                                        headers: authHeaders(),
+                                      });
                                       if (!res.ok) throw new Error(`Failed: ${res.status}`);
                                       toast.success(`Password reset for ${r.employeeID}`);
                                     } catch (err) {
