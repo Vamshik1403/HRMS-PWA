@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import type { Request } from 'express';
 import { PrismaService } from '../prisma/prisma.service';
+import { desktopAuditWhere } from './audit-log.filters';
 import {
   actorFromJwtUser,
   parseUserAgent,
@@ -104,14 +105,15 @@ export class AuditLogService {
       if (filters.from) (where.createdAt as Record<string, Date>).gte = new Date(filters.from);
       if (filters.to) (where.createdAt as Record<string, Date>).lte = new Date(filters.to);
     }
+    const whereDesktop = desktopAuditWhere(where);
     const [items, total] = await Promise.all([
       this.prisma.auditLog.findMany({
-        where,
+        where: whereDesktop,
         orderBy: { createdAt: 'desc' },
         skip: (page - 1) * limit,
         take: limit,
       }),
-      this.prisma.auditLog.count({ where }),
+      this.prisma.auditLog.count({ where: whereDesktop }),
     ]);
     return { items, total, page, limit, totalPages: Math.ceil(total / limit) };
   }
