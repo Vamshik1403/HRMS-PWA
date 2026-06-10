@@ -15,9 +15,19 @@ import {
   TableHeader,
   TableRow,
 } from "../components/ui/table";
-import { authHeaders } from "@/lib/auth";
+import { authHeaders, getAccessToken } from "@/lib/auth";
 
 const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL || "/backend";
+
+const backupFetchInit = (
+  init: RequestInit = {},
+): RequestInit => ({
+  credentials: "include",
+  ...init,
+  headers: authHeaders(
+    (init.headers as Record<string, string> | undefined) ?? {},
+  ),
+});
 
 type BackupFile = {
   key: string;
@@ -85,12 +95,23 @@ export function BackupRestoreManagement() {
   const [restoring, setRestoring] = useState(false);
 
   const load = useCallback(async () => {
+    if (!getAccessToken()) {
+      toast.error("Session expired. Please log in again.");
+      setItems([]);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     try {
-      const res = await fetch(`${BACKEND}/backup`, {
-        headers: authHeaders(),
-        cache: "no-store",
-      });
+      const res = await fetch(
+        `${BACKEND}/backup`,
+        backupFetchInit({ cache: "no-store" }),
+      );
+      if (res.status === 401) {
+        toast.error("Session expired. Please log out and log in again.");
+        setItems([]);
+        return;
+      }
       if (!res.ok) throw new Error(await res.text());
       const data = await res.json();
       setItems(Array.isArray(data.items) ? data.items : []);
@@ -109,12 +130,23 @@ export function BackupRestoreManagement() {
   }, [user, load]);
 
   const runBackup = async () => {
+    if (!getAccessToken()) {
+      toast.error("Session expired. Please log in again.");
+      return;
+    }
     setRunning(true);
     try {
-      const res = await fetch(`${BACKEND}/backup/run`, {
-        method: "POST",
-        headers: { ...authHeaders(), "Content-Type": "application/json" },
-      });
+      const res = await fetch(
+        `${BACKEND}/backup/run`,
+        backupFetchInit({
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+        }),
+      );
+      if (res.status === 401) {
+        toast.error("Session expired. Please log out and log in again.");
+        return;
+      }
       if (!res.ok) throw new Error(await res.text());
       const manifest = await res.json();
       toast.success(`Backup completed for ${manifest.date}`);
@@ -127,12 +159,23 @@ export function BackupRestoreManagement() {
   };
 
   const runWeeklyCloud = async () => {
+    if (!getAccessToken()) {
+      toast.error("Session expired. Please log in again.");
+      return;
+    }
     setCloudRunning(true);
     try {
-      const res = await fetch(`${BACKEND}/backup/cloud/weekly`, {
-        method: "POST",
-        headers: { ...authHeaders(), "Content-Type": "application/json" },
-      });
+      const res = await fetch(
+        `${BACKEND}/backup/cloud/weekly`,
+        backupFetchInit({
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+        }),
+      );
+      if (res.status === 401) {
+        toast.error("Session expired. Please log out and log in again.");
+        return;
+      }
       if (!res.ok) throw new Error(await res.text());
       toast.success("Weekly cloud backup uploaded");
       await load();
@@ -145,9 +188,10 @@ export function BackupRestoreManagement() {
 
   const handleDownload = async (date: string, fileName: string) => {
     try {
-      const res = await fetch(`${BACKEND}/backup/download/${date}/${fileName}`, {
-        headers: authHeaders(),
-      });
+      const res = await fetch(
+        `${BACKEND}/backup/download/${date}/${fileName}`,
+        backupFetchInit(),
+      );
       if (!res.ok) throw new Error("Download failed");
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
@@ -165,16 +209,23 @@ export function BackupRestoreManagement() {
     if (!restoreTarget) return;
     setRestoring(true);
     try {
-      const res = await fetch(`${BACKEND}/backup/restore`, {
-        method: "POST",
-        headers: { ...authHeaders(), "Content-Type": "application/json" },
-        body: JSON.stringify({
+      const res = await fetch(
+        `${BACKEND}/backup/restore`,
+        backupFetchInit({
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
           date: restoreTarget.date,
           fileName: restoreTarget.fileName,
           fileLabel: restoreTarget.label,
           confirm: true,
         }),
-      });
+        }),
+      );
+      if (res.status === 401) {
+        toast.error("Session expired. Please log out and log in again.");
+        return;
+      }
       if (!res.ok) throw new Error(await res.text());
       toast.success("Database restore completed");
       setRestoreTarget(null);
