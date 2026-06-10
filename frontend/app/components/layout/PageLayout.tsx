@@ -31,6 +31,7 @@ import { useCurrentUser } from "../../hooks/useCurrentUser";
 import { Input } from "../ui/input";
 import { cn } from "@/app/utils/cn";
 import { setSidebarContext, getSidebarContext } from "@/app/utils/sidebarContext";
+import { isDesktopManagerFlagSet } from "@/lib/desktopManager";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../ui/dialog";
 import { Button } from "../ui/button";
 import { Label } from "../ui/label";
@@ -108,13 +109,32 @@ export function PageLayout({ children }: PageLayoutProps) {
     }
   }, [])
 
+  const [desktopManager, setDesktopManager] = useState(false)
+  useEffect(() => {
+    setDesktopManager(isDesktopManagerFlagSet())
+  }, [currentUser?.id])
+
   const isSuperAdmin = currentUser?.role === 'SUPERADMIN'
   const isServiceProvider = currentUser?.role === 'SERVICE_PROVIDER'
   const isCompanyAdmin = currentUser?.role === 'COMPANY_ADMIN'
   const isAdmin = currentUser?.role === 'ADMIN'
   const isBranchAdmin = currentUser?.role === 'BRANCH_ADMIN'
-  const isRegularUser = !isSuperAdmin && !isServiceProvider && !isCompanyAdmin && !isAdmin && !isBranchAdmin
-  const canAccessFullHrSections = (isSuperAdmin || isCompanyAdmin || isServiceProvider || isBranchAdmin) && !isAdmin
+  const isDesktopManager =
+    desktopManager && currentUser?.role === 'EMPLOYEE'
+  const isRegularUser =
+    !isSuperAdmin &&
+    !isServiceProvider &&
+    !isCompanyAdmin &&
+    !isAdmin &&
+    !isBranchAdmin &&
+    !isDesktopManager
+  const canAccessFullHrSections =
+    (isSuperAdmin ||
+      isCompanyAdmin ||
+      isServiceProvider ||
+      isBranchAdmin ||
+      isDesktopManager) &&
+    !isAdmin
 
   // Profile modal state
   const [profileOpen, setProfileOpen] = useState(false)
@@ -334,7 +354,7 @@ export function PageLayout({ children }: PageLayoutProps) {
 
   const pageTitle = (() => {
     if (pathname === "/dashboard") return "Dashboard";
-    if (pathname === "/employee-memo") return "Employee Warnings";
+    if (pathname === "/employee-memo") return "Internal Messaging (IM)";
     const parts = pathname.split("/").filter(Boolean);
     if (parts.length === 0) return "Dashboard";
     const raw = parts[parts.length - 1];
@@ -440,7 +460,7 @@ export function PageLayout({ children }: PageLayoutProps) {
                 <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/designations" className={cn(sbSubRow, isActiveLink('/designations', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Designations</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
                 <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/manage-employees" className={cn(sbSubRow, isActiveLink('/manage-employees', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Manage Employees</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
                 {/* Promotions & Transfers - temporarily hidden */}
-                <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/employee-memo" className={cn(sbSubRow, isActiveLink('/employee-memo', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Notice Board</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
+                <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/employee-memo" className={cn(sbSubRow, isActiveLink('/employee-memo', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Internal Messaging (IM)</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
                 <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={onNav} href="/termination" className={cn(sbSubRow, isActiveLink('/termination', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Off Boarding</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
               </SidebarMenuSub>
             </CollapsibleContent>

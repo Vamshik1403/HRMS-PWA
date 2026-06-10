@@ -14,6 +14,7 @@ import {
 } from "../components/ui/table";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import { getSidebarContext } from "../utils/sidebarContext";
+import { isDesktopManagerFlagSet } from "@/lib/desktopManager";
 
 const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL || "/backend";
 
@@ -21,12 +22,31 @@ interface OverviewEmployee {
   id: number;
   employeeFirstName: string;
   employeeLastName: string;
+  branchesID: number;
+  departmentNameID: number | null;
+  departmentName?: string | null;
+  designationName?: string | null;
   inTime: string | null;
   outTime: string | null;
   statusType: string;
   statusLabel: string;
   statusDisplay: string;
   hasPunches: boolean;
+  inLocation: string | null;
+  outLocation: string | null;
+}
+
+interface Branch {
+  id: number;
+  branchName?: string | null;
+  companyID?: number;
+}
+
+interface Department {
+  id: number;
+  departmentName?: string | null;
+  branchesID?: number;
+  companyID?: number;
 }
 
 function isPresentToday(e: OverviewEmployee): boolean {
@@ -53,6 +73,8 @@ function statusBadgeClass(statusType: string): string {
       return "bg-amber-50 text-amber-700";
     case "HALF_DAY":
       return "bg-violet-50 text-violet-700";
+    case "ABSENT":
+      return "bg-orange-50 text-orange-600";
     case "SINGLE_PUNCH":
       return "bg-indigo-50 text-indigo-700";
     case "OT":
@@ -66,18 +88,28 @@ function statusBadgeClass(statusType: string): string {
 
 export default function AttendanceLogsPage() {
   const user = useCurrentUser();
-  const [rows, setRows] = useState<OverviewEmployee[]>([]);
+  const [allRows, setAllRows] = useState<OverviewEmployee[]>([]);
+  const [branches, setBranches] = useState<Branch[]>([]);
+  const [departments, setDepartments] = useState<Department[]>([]);
   const [loading, setLoading] = useState(true);
   const [todayDate, setTodayDate] = useState("");
+  const [presenceFilter, setPresenceFilter] = useState<"present" | "absent" | "all">("present");
+  const [branchFilter, setBranchFilter] = useState("");
+  const [departmentFilter, setDepartmentFilter] = useState("");
   const [currentUserMapping, setCurrentUserMapping] = useState<{
     serviceProviderID?: number;
     companyID?: number;
     branchesID?: number;
   } | null>(null);
 
+  const desktopManager =
+    typeof window !== "undefined" &&
+    isDesktopManagerFlagSet() &&
+    user?.role === "EMPLOYEE";
+
   useEffect(() => {
     if (!user) return;
-    if (user.role === "BRANCH_ADMIN") {
+    if (user.role === "BRANCH_ADMIN" || desktopManager) {
       setCurrentUserMapping({
         companyID: user.companyID,
         branchesID: user.branchesID,
@@ -98,7 +130,7 @@ export default function AttendanceLogsPage() {
         })
         .catch(() => setCurrentUserMapping(null));
     }
-  }, [user]);
+  }, [user, desktopManager]);
 
   useEffect(() => {
     if (!user) return;
@@ -122,47 +154,133 @@ export default function AttendanceLogsPage() {
       currentUserMapping?.companyID
     ) {
       params.set("companyID", String(currentUserMapping.companyID));
-    } else if (user.role === "BRANCH_ADMIN") {
+    } else if (user.role === "BRANCH_ADMIN" || desktopManager) {
       if (user.companyID) params.set("companyID", String(user.companyID));
-      if (user.branchesID) params.set("branchId", String(user.branchesID));
+      if (user.role === "BRANCH_ADMIN" && user.branchesID) {
+        params.set("branchId", String(user.branchesID));
+      }
     }
 
-    const qs = params.toString();
     setLoading(true);
-    fetch(`${BACKEND}/dashboard-overview/today-overview${qs ? `?${qs}` : ""}`, {
-      cache: "no-store",
-    })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((data) => {
-        const employees: OverviewEmployee[] = Array.isArray(data?.employees)
-          ? data.employees
-          : [];
-        setRows(employees.filter(isPresentToday));
+    Promise.all([
+      fetch(`${BACKEND}/dashboard-overview/today-overview${params.toString() ? `?${params}` : ""}`, {
+        cache: "no-store",
+      }),
+      fetch(`${BACKEND}/branches`, { cache: "no-store" }),
+      fetch(`${BACKEND}/departments`, { cache: "no-store" }),
+    ])
+      .then(async ([overviewRes, branchRes, deptRes]) => {
+        const data = overviewRes.ok ? await overviewRes.json() : null;
+        const branchJson = branchRes.ok ? await branchRes.json() : [];
+        const deptJson = deptRes.ok ? await deptRes.json() : [];
+        setAllRows(Array.isArray(data?.employees) ? data.employees : []);
         setTodayDate(data?.date || new Date().toISOString().slice(0, 10));
-      })
-      .catch(() => setRows([]))
-      .finally(() => setLoading(false));
-  }, [user, currentUserMapping]);
 
-  const countLabel = useMemo(() => `${rows.length} present today`, [rows.length]);
+        const companyId =
+          user.role === "BRANCH_ADMIN" || desktopManager
+            ? user.companyID
+            : currentUserMapping?.companyID ?? ctx?.companyID;
+
+        const scopedBranches = (Array.isArray(branchJson) ? branchJson : []).filter(
+          (b: Branch) => !companyId || b.companyID === companyId,
+        );
+        const scopedDepts = (Array.isArray(deptJson) ? deptJson : []).filter(
+          (d: Department) => !companyId || d.companyID === companyId,
+        );
+        setBranches(scopedBranches);
+        setDepartments(scopedDepts);
+      })
+      .catch(() => {
+        setAllRows([]);
+        setBranches([]);
+        setDepartments([]);
+      })
+      .finally(() => setLoading(false));
+  }, [user, currentUserMapping, desktopManager]);
+
+  const filterDepartments = useMemo(() => {
+    if (!branchFilter) return departments;
+    return departments.filter((d) => String(d.branchesID) === branchFilter);
+  }, [departments, branchFilter]);
+
+  const rows = useMemo(() => {
+    return allRows.filter((e) => {
+      if (presenceFilter === "present" && !isPresentToday(e)) return false;
+      if (presenceFilter === "absent" && isPresentToday(e)) return false;
+      if (branchFilter && String(e.branchesID) !== branchFilter) return false;
+      if (departmentFilter && String(e.departmentNameID) !== departmentFilter) return false;
+      return true;
+    });
+  }, [allRows, presenceFilter, branchFilter, departmentFilter]);
+
+  const countLabel = useMemo(() => {
+    if (presenceFilter === "absent") return `${rows.length} absent today`;
+    if (presenceFilter === "all") return `${rows.length} employees today`;
+    return `${rows.length} present today`;
+  }, [rows.length, presenceFilter]);
 
   return (
     <PageLayout>
-      <div className="p-4 sm:p-6 max-w-6xl mx-auto">
-        <div className="flex items-center gap-3 mb-6">
-          <Link
-            href="/dashboard"
-            className="w-10 h-10 rounded-full border border-gray-200 flex items-center justify-center text-gray-500 hover:bg-gray-50"
-            aria-label="Back to dashboard"
-          >
-            <Icon icon="mdi:arrow-left" className="w-5 h-5" />
-          </Link>
-          <div>
-            <h1 className="text-xl font-bold text-gray-900">Present today</h1>
-            <p className="text-sm text-gray-500">
-              Employees checked in today
-              {todayDate ? ` · ${todayDate}` : ""}
-            </p>
+      <div className="p-4 sm:p-6 max-w-7xl mx-auto">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+          <div className="flex items-center gap-3">
+            <Link
+              href="/dashboard"
+              className="w-10 h-10 rounded-full border border-gray-200 flex items-center justify-center text-gray-500 hover:bg-gray-50"
+              aria-label="Back to dashboard"
+            >
+              <Icon icon="mdi:arrow-left" className="w-5 h-5" />
+            </Link>
+            <div>
+              <h1 className="text-xl font-bold text-gray-900">Today&apos;s attendance</h1>
+              <p className="text-sm text-gray-500">
+                Employee punch logs
+                {todayDate ? ` · ${todayDate}` : ""}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <select
+              value={presenceFilter}
+              onChange={(e) =>
+                setPresenceFilter(e.target.value as "present" | "absent" | "all")
+              }
+              className="rounded-full border border-[#e5e7eb] bg-white px-3 py-1.5 text-xs font-medium text-gray-700 min-w-[120px]"
+            >
+              <option value="present">Present</option>
+              <option value="absent">Absent</option>
+              <option value="all">All</option>
+            </select>
+            {user?.role !== "BRANCH_ADMIN" && (
+              <select
+                value={branchFilter}
+                onChange={(e) => {
+                  setBranchFilter(e.target.value);
+                  setDepartmentFilter("");
+                }}
+                className="rounded-full border border-[#e5e7eb] bg-white px-3 py-1.5 text-xs font-medium text-gray-700 min-w-[140px]"
+              >
+                <option value="">All branches</option>
+                {branches.map((b) => (
+                  <option key={b.id} value={String(b.id)}>
+                    {b.branchName || `Branch ${b.id}`}
+                  </option>
+                ))}
+              </select>
+            )}
+            <select
+              value={departmentFilter}
+              onChange={(e) => setDepartmentFilter(e.target.value)}
+              className="rounded-full border border-[#e5e7eb] bg-white px-3 py-1.5 text-xs font-medium text-gray-700 min-w-[140px]"
+            >
+              <option value="">All departments</option>
+              {filterDepartments.map((d) => (
+                <option key={d.id} value={String(d.id)}>
+                  {d.departmentName || `Department ${d.id}`}
+                </option>
+              ))}
+            </select>
           </div>
         </div>
 
@@ -178,13 +296,19 @@ export default function AttendanceLogsPage() {
                     #
                   </TableHead>
                   <TableHead className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">
-                    Employee
+                    Name
                   </TableHead>
                   <TableHead className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">
-                    In
+                    Department
                   </TableHead>
                   <TableHead className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">
-                    Out
+                    Designation
+                  </TableHead>
+                  <TableHead className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">
+                    In time &amp; Location
+                  </TableHead>
+                  <TableHead className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">
+                    Out time &amp; Location
                   </TableHead>
                   <TableHead className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">
                     Status
@@ -194,14 +318,14 @@ export default function AttendanceLogsPage() {
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={5} className="text-center py-12 text-sm text-gray-400">
+                    <TableCell colSpan={7} className="text-center py-12 text-sm text-gray-400">
                       Loading…
                     </TableCell>
                   </TableRow>
                 ) : rows.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={5} className="text-center py-12 text-sm text-gray-400">
-                      No present employees today
+                    <TableCell colSpan={7} className="text-center py-12 text-sm text-gray-400">
+                      No employees match the selected filters
                     </TableCell>
                   </TableRow>
                 ) : (
@@ -218,11 +342,27 @@ export default function AttendanceLogsPage() {
                           </span>
                         </div>
                       </TableCell>
-                      <TableCell className="text-sm text-gray-600 font-mono tabular-nums">
-                        {e.inTime || "—"}
+                      <TableCell className="text-sm text-gray-600">
+                        {e.departmentName || "—"}
                       </TableCell>
-                      <TableCell className="text-sm text-gray-600 font-mono tabular-nums">
-                        {e.outTime || "—"}
+                      <TableCell className="text-sm text-gray-600">
+                        {e.designationName || "—"}
+                      </TableCell>
+                      <TableCell className="text-sm text-gray-600">
+                        <div className="font-mono tabular-nums">{e.inTime || "—"}</div>
+                        {e.inLocation && (
+                          <div className="text-[11px] text-gray-500 mt-0.5 line-clamp-2" title={e.inLocation}>
+                            {e.inLocation}
+                          </div>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-sm text-gray-600">
+                        <div className="font-mono tabular-nums">{e.outTime || "—"}</div>
+                        {e.outLocation && (
+                          <div className="text-[11px] text-gray-500 mt-0.5 line-clamp-2" title={e.outLocation}>
+                            {e.outLocation}
+                          </div>
+                        )}
                       </TableCell>
                       <TableCell>
                         <span

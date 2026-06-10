@@ -19,6 +19,7 @@ import EmployeeStatusCharts, {
 } from "./components/EmployeeStatusCharts";
 import { formatDevicePunchForDisplay } from "../utils/devicePunchTime";
 import { useAppRefresh } from "../hooks/useAppRefresh";
+import { isDesktopManagerFlagSet } from "@/lib/desktopManager";
 
 interface Branch {
   id: number;
@@ -33,6 +34,8 @@ interface OverviewEmployee {
   employeeLastName: string;
   branchesID: number;
   departmentNameID: number | null;
+  departmentName?: string | null;
+  designationName?: string | null;
   inTime: string | null;
   outTime: string | null;
   statusType: string;
@@ -171,6 +174,7 @@ export default function DashboardPage() {
     return `${y}-${m}-${dd}`;
   });
   const [currentUserMapping, setCurrentUserMapping] = useState<any>(null);
+  const [desktopManager, setDesktopManager] = useState(false);
   const [probationAlerts, setProbationAlerts] = useState<
     {
       employeeId: number;
@@ -181,6 +185,15 @@ export default function DashboardPage() {
       isOverdue: boolean;
     }[]
   >([]);
+
+  useEffect(() => {
+    setDesktopManager(isDesktopManagerFlagSet());
+  }, [user?.id]);
+
+  const isDesktopManagerEmployee =
+    desktopManager && user?.role === "EMPLOYEE";
+  const isHrDesktopView =
+    user?.role === "COMPANY_ADMIN" || isDesktopManagerEmployee;
 
   useEffect(() => {
     if (user?.role !== "SERVICE_PROVIDER" && user?.role !== "COMPANY_ADMIN" && user?.role !== "ADMIN") return;
@@ -195,10 +208,18 @@ export default function DashboardPage() {
 
   useEffect(() => {
     if (!user) return;
-    if ((user.role === "SERVICE_PROVIDER" || user.role === "COMPANY_ADMIN" || user.role === "ADMIN") && !currentUserMapping) return;
+    if (
+      (user.role === "SERVICE_PROVIDER" ||
+        user.role === "COMPANY_ADMIN" ||
+        user.role === "ADMIN") &&
+      !currentUserMapping &&
+      !isDesktopManagerEmployee
+    ) {
+      return;
+    }
 
     loadDashboard();
-  }, [user, currentUserMapping]);
+  }, [user, currentUserMapping, isDesktopManagerEmployee]);
 
   const overviewQueryParams = useMemo(() => {
     const params = new URLSearchParams();
@@ -214,6 +235,8 @@ export default function DashboardPage() {
       currentUserMapping?.companyID
     ) {
       params.set("companyID", String(currentUserMapping.companyID));
+    } else if (isDesktopManagerEmployee) {
+      if (user?.companyID) params.set("companyID", String(user.companyID));
     } else if (user?.role === "EMPLOYEE" || user?.role === "BRANCH_ADMIN") {
       if (user.companyID) params.set("companyID", String(user.companyID));
       if (user.branchesID) params.set("branchId", String(user.branchesID));
@@ -229,7 +252,8 @@ export default function DashboardPage() {
       (user.role === "SERVICE_PROVIDER" ||
         user.role === "COMPANY_ADMIN" ||
         user.role === "ADMIN") &&
-      !currentUserMapping
+      !currentUserMapping &&
+      !isDesktopManagerEmployee
     ) {
       return;
     }
@@ -346,6 +370,16 @@ export default function DashboardPage() {
         );
         scopedBranches = allBranches.filter(
           (b) => b.companyID === currentUserMapping.companyID
+        );
+      } else if (isDesktopManagerEmployee) {
+        scopedEmployees = allEmployees.filter(
+          (e) => e.companyID === user!.companyID,
+        );
+        scopedDepartments = allDepartments.filter(
+          (d) => d.companyID === user!.companyID,
+        );
+        scopedBranches = allBranches.filter(
+          (b) => b.companyID === user!.companyID,
         );
       } else if (user!.role === "EMPLOYEE") {
         scopedEmployees = allEmployees.filter(
@@ -800,17 +834,19 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            <div className="rounded-xl border border-[#e5e7eb] bg-[#fafafa]/60 p-4 sm:p-5 mb-6">
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-4">
-                Workforce mix
-              </p>
-              <EmployeeStatusCharts
-                total={overviewTotal}
-                present={overviewPresent}
-                absent={absentCount}
-                statusBreakdown={statusBreakdown}
-              />
-            </div>
+            {!isHrDesktopView && (
+              <div className="rounded-xl border border-[#e5e7eb] bg-[#fafafa]/60 p-4 sm:p-5 mb-6">
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-4">
+                  Workforce mix
+                </p>
+                <EmployeeStatusCharts
+                  total={overviewTotal}
+                  present={overviewPresent}
+                  absent={absentCount}
+                  statusBreakdown={statusBreakdown}
+                />
+              </div>
+            )}
 
             <p className="text-sm font-semibold text-gray-800 mb-4">
               {overviewPresent} checked in today
@@ -854,6 +890,43 @@ export default function DashboardPage() {
             </div>
           </section>
 
+          {isHrDesktopView && (
+            <section className={`${cardShell} p-6 sm:p-7 shrink-0`}>
+              <h2 className="text-lg font-bold text-gray-900 tracking-tight mb-4">
+                Pending requests
+              </h2>
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
+                {[
+                  { href: "/employee-memo", label: "Internal Messages (IM)" },
+                  { href: "/task-projects", label: "Tasks" },
+                  { href: "/reimbursement", label: "Reimbursement Applications" },
+                  { href: "/leave-applications", label: "Leave Applications" },
+                  { href: "/salary-advance", label: "Salary Advance Applications" },
+                ].map((item) => (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className="rounded-lg border border-[#ebebeb] px-3 py-2.5 text-xs font-semibold text-gray-800 hover:bg-[#fafafa] text-center"
+                  >
+                    {item.label}
+                  </Link>
+                ))}
+              </div>
+            </section>
+          )}
+
+          {isHrDesktopView && (
+            <section className={`${cardShell} p-6 sm:p-7 shrink-0`}>
+              <h2 className="text-lg font-bold text-gray-900 tracking-tight mb-2">
+                News feed
+              </h2>
+              <p className="text-sm text-gray-500">
+                Show notifications for all important updates
+              </p>
+            </section>
+          )}
+
+          {!isHrDesktopView && (
           <section className={`${cardShell} p-6 sm:p-7 flex flex-col flex-1 min-h-[240px]`}>
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-2 shrink-0">
               <h2 className="text-lg font-bold text-gray-900 tracking-tight">
@@ -868,6 +941,7 @@ export default function DashboardPage() {
               <SoftBarChart data={barData} className="h-full min-h-[200px]" />
             </div>
           </section>
+          )}
         </div>
 
         <div className="flex flex-col gap-5 min-h-0 h-full lg:min-h-full">
@@ -878,7 +952,7 @@ export default function DashboardPage() {
             <div className="grid grid-cols-2 gap-2">
               {[
                 { href: "/manage-employees", label: "Manage employee", icon: "mdi:account-group" },
-                { href: "/employee-memo", label: "Notice board", icon: "mdi:bullhorn" },
+                { href: "/employee-memo", label: "Internal Messaging (IM)", icon: "mdi:message-text" },
                 { href: "/termination", label: "Off boarding", icon: "mdi:account-off" },
                 { href: "/attendance-regularisation", label: "Attendance regularization", icon: "mdi:calendar-check" },
                 { href: "/roster", label: "Workshift roster", icon: "mdi:calendar-sync" },
@@ -900,6 +974,7 @@ export default function DashboardPage() {
             </div>
           </section>
 
+          {!isHrDesktopView && (
           <section className={`${cardShell} p-6 flex flex-col min-h-0 flex-1 overflow-hidden`}>
             <h2 className="text-lg font-bold text-gray-900 tracking-tight mb-3 shrink-0">
               Comments
@@ -935,7 +1010,27 @@ export default function DashboardPage() {
               </div>
             )}
           </section>
+          )}
 
+          {isHrDesktopView && (
+            <section className={`${cardShell} p-6 shrink-0`}>
+              <h2 className="text-lg font-bold text-gray-900 tracking-tight mb-3">
+                Task list
+              </h2>
+              <p className="text-sm text-gray-400">No open tasks to show</p>
+            </section>
+          )}
+
+          {isHrDesktopView && (
+            <section className={`${cardShell} p-6 shrink-0`}>
+              <h2 className="text-lg font-bold text-gray-900 tracking-tight mb-3">
+                Upcoming birthdays &amp; anniversary
+              </h2>
+              <p className="text-sm text-gray-400">No upcoming events</p>
+            </section>
+          )}
+
+          {!isHrDesktopView && (
           <section className={`${cardShell} p-5 shrink-0`}>
             <h2 className="text-sm font-bold text-gray-900 tracking-tight mb-3">
               Today&apos;s summary
@@ -982,17 +1077,51 @@ export default function DashboardPage() {
               </div>
             </div>
           </section>
+          )}
         </div>
       </div>
 
       <section className={`${cardShell} overflow-hidden`}>
-        <div className="px-6 py-4 border-b border-[#f0f0f0] flex items-center justify-between">
+        <div className="px-6 py-4 border-b border-[#f0f0f0] flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <h2 className="text-sm font-bold text-gray-900">
             Today&apos;s attendance
           </h2>
-          <span className="text-xs text-gray-500 font-medium bg-[#f6f6f6] border border-[#ebebeb] px-3 py-1.5 rounded-full">
-            {todayDate}
-          </span>
+          <div className="flex flex-wrap items-center gap-2">
+            {isHrDesktopView && user.role !== "BRANCH_ADMIN" && (
+              <select
+                value={selectedBranchId}
+                onChange={(e) => {
+                  setSelectedBranchId(e.target.value);
+                  setSelectedDepartmentId("");
+                }}
+                className="rounded-full border border-[#e5e7eb] bg-white px-3 py-1.5 text-xs font-medium text-gray-700"
+              >
+                <option value="">All branches</option>
+                {branches.map((b) => (
+                  <option key={b.id} value={String(b.id)}>
+                    {b.branchName || `Branch ${b.id}`}
+                  </option>
+                ))}
+              </select>
+            )}
+            {isHrDesktopView && (
+              <select
+                value={selectedDepartmentId}
+                onChange={(e) => setSelectedDepartmentId(e.target.value)}
+                className="rounded-full border border-[#e5e7eb] bg-white px-3 py-1.5 text-xs font-medium text-gray-700"
+              >
+                <option value="">All departments</option>
+                {filterDepartments.map((d) => (
+                  <option key={d.id} value={String(d.id)}>
+                    {d.departmentName || `Department ${d.id}`}
+                  </option>
+                ))}
+              </select>
+            )}
+            <span className="text-xs text-gray-500 font-medium bg-[#f6f6f6] border border-[#ebebeb] px-3 py-1.5 rounded-full">
+              {todayDate}
+            </span>
+          </div>
         </div>
         <div className="overflow-x-auto">
           <Table>
@@ -1002,17 +1131,29 @@ export default function DashboardPage() {
                   #
                 </TableHead>
                 <TableHead className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">
-                  Employee
+                  Name
+                </TableHead>
+                {isHrDesktopView && (
+                  <>
+                    <TableHead className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">
+                      Department
+                    </TableHead>
+                    <TableHead className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">
+                      Designation
+                    </TableHead>
+                  </>
+                )}
+                <TableHead className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">
+                  {isHrDesktopView ? "In time & Location" : "In"}
                 </TableHead>
                 <TableHead className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">
-                  In
+                  {isHrDesktopView ? "Out time & Location" : "Out"}
                 </TableHead>
-                <TableHead className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">
-                  Out
-                </TableHead>
+                {!isHrDesktopView && (
                 <TableHead className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">
                   Location
                 </TableHead>
+                )}
                 <TableHead className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">
                   Status
                 </TableHead>
@@ -1022,7 +1163,7 @@ export default function DashboardPage() {
               {overviewEmployees.length === 0 ? (
                 <TableRow>
                   <TableCell
-                    colSpan={6}
+                    colSpan={isHrDesktopView ? 7 : 6}
                     className="text-center py-10 text-sm text-gray-400"
                   >
                     {overviewLoading ? "Loading attendance…" : "No employees found"}
@@ -1048,12 +1189,33 @@ export default function DashboardPage() {
                           </span>
                         </div>
                       </TableCell>
-                      <TableCell className="text-sm text-gray-600 font-mono tabular-nums">
-                        {e.inTime || "—"}
+                      {isHrDesktopView && (
+                        <>
+                          <TableCell className="text-sm text-gray-600">
+                            {e.departmentName || "—"}
+                          </TableCell>
+                          <TableCell className="text-sm text-gray-600">
+                            {e.designationName || "—"}
+                          </TableCell>
+                        </>
+                      )}
+                      <TableCell className="text-sm text-gray-600">
+                        <div className="font-mono tabular-nums">{e.inTime || "—"}</div>
+                        {isHrDesktopView && e.inLocation && (
+                          <div className="text-[11px] text-gray-500 mt-0.5 line-clamp-2" title={e.inLocation}>
+                            {e.inLocation}
+                          </div>
+                        )}
                       </TableCell>
-                      <TableCell className="text-sm text-gray-600 font-mono tabular-nums">
-                        {e.outTime || "—"}
+                      <TableCell className="text-sm text-gray-600">
+                        <div className="font-mono tabular-nums">{e.outTime || "—"}</div>
+                        {isHrDesktopView && e.outLocation && (
+                          <div className="text-[11px] text-gray-500 mt-0.5 line-clamp-2" title={e.outLocation}>
+                            {e.outLocation}
+                          </div>
+                        )}
                       </TableCell>
+                      {!isHrDesktopView && (
                       <TableCell className="max-w-[260px]">
                         {e.inLocation || e.outLocation ? (
                           <div className="space-y-0.5">
@@ -1074,6 +1236,7 @@ export default function DashboardPage() {
                           <span className="text-sm text-gray-400">—</span>
                         )}
                       </TableCell>
+                      )}
                       <TableCell>
                         <span
                           className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold ${statusBadgeClass(e.statusType)}`}

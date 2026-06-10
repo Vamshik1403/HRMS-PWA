@@ -147,8 +147,11 @@ export class DashboardOverviewService {
         companyID: true,
         branchesID: true,
         departmentNameID: true,
+        designationID: true,
         employeeFirstName: true,
         employeeLastName: true,
+        departments: { select: { departmentName: true } },
+        designations: { select: { designation: true } },
         workShiftID: true,
         attendancePolicyID: true,
         mobileAttendanceEnabled: true,
@@ -479,6 +482,8 @@ export class DashboardOverviewService {
       employeeLastName: string;
       branchesID: number;
       departmentNameID: number | null;
+      departmentName: string | null;
+      designationName: string | null;
       inTime: string | null;
       outTime: string | null;
       statusType: string;
@@ -676,6 +681,8 @@ export class DashboardOverviewService {
         employeeLastName: emp.employeeLastName || '',
         branchesID: emp.branchesID!,
         departmentNameID: emp.departmentNameID,
+        departmentName: emp.departments?.departmentName ?? null,
+        designationName: emp.designations?.designation ?? null,
         inTime,
         outTime,
         statusType: effStatus.type,

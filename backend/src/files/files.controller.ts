@@ -17,12 +17,12 @@ export class FilesController {
         destination: 'uploads',      // folder relative to project root
         filename: filenameBuilder,
       }),
-      limits: { fileSize: 5 * 1024 * 1024 }, // 5MB (tweak as needed)
+      limits: { fileSize: 10 * 1024 * 1024 },
     }),
   )
   upload(@UploadedFile() file: Express.Multer.File) {
     // Return a publicly accessible URL for the saved file
     // will be something like localhost:8000/uploads/<filename>
-    return { url: `/backend/uploads/${file.filename}` };
+    return { url: `/uploads/${file.filename}` };
   }
 }

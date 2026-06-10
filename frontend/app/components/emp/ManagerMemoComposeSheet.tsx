@@ -6,6 +6,7 @@ import { Icon } from "@iconify/react";
 import { toast } from "sonner";
 import type { EmpManagerReportee } from "../../utils/empManagerDisplay";
 import { reporteeDisplayName } from "../../utils/empManagerDisplay";
+import { uploadAttachmentFile } from "../../utils/uploadFile";
 
 const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL || "/backend";
 
@@ -36,6 +37,7 @@ export function ManagerMemoComposeSheet({
   const [description, setDescription] = useState("");
   const [sending, setSending] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [attachmentFile, setAttachmentFile] = useState<File | null>(null);
 
   useEffect(() => {
     setMounted(true);
@@ -54,6 +56,10 @@ export function ManagerMemoComposeSheet({
     }
     setSending(true);
     try {
+      let attachmentPath: string | undefined;
+      if (attachmentFile) {
+        attachmentPath = await uploadAttachmentFile(attachmentFile);
+      }
       const res = await fetch(`${BACKEND}/employee-memo`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...authHeaders() },
@@ -65,6 +71,7 @@ export function ManagerMemoComposeSheet({
           issuedDate: new Date().toISOString().slice(0, 10),
           issuedBy: managerName || "Manager",
           issuedByRole: "MANAGER",
+          attachmentPath,
         }),
       });
       if (!res.ok) throw new Error("Send failed");
@@ -75,6 +82,7 @@ export function ManagerMemoComposeSheet({
       setSubject("");
       setDescription("");
       setEmployeeId("");
+      setAttachmentFile(null);
       onSent();
       onClose();
     } catch {
@@ -138,6 +146,15 @@ export function ManagerMemoComposeSheet({
               className="app-form-control w-full min-w-0 mt-1 px-3 py-2.5 rounded-xl border border-gray-200 bg-white text-[14px] min-h-[100px]"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
+            />
+          </label>
+          <label className="block text-[12px] text-gray-600 min-w-0">
+            Attachment
+            <input
+              type="file"
+              accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt"
+              className="app-form-control w-full min-w-0 mt-1 text-[13px]"
+              onChange={(e) => setAttachmentFile(e.target.files?.[0] ?? null)}
             />
           </label>
         </div>

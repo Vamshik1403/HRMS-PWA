@@ -216,8 +216,8 @@ html[data-emp-theme="dark"] .emp-pwa-shell select:-webkit-autofill {
   display: none !important;
 }
 
-/* Hide chevron arrows on section triggers (direct SVG children of button triggers) */
-[data-collapsible="icon"] button[data-sidebar="menu-button"] > svg {
+/* Hide chevron only (sibling after label span), keep section/dashboard icons */
+[data-collapsible="icon"] [data-sidebar="menu-button"] > span + svg {
   display: none !important;
 }
 
@@ -247,17 +247,31 @@ html[data-emp-theme="dark"] .emp-pwa-shell select:-webkit-autofill {
   display: none !important;
 }
 
-/* Header: centre logo, hide brand text */
+/* Header: centre logo, hide brand text & refresh */
 [data-collapsible="icon"] [data-sidebar="header"] {
-  padding: 1.25rem 0.5rem !important;
+  padding: 0.75rem 0.25rem !important;
+}
+
+[data-collapsible="icon"] [data-sidebar="header"] > div {
+  justify-content: center !important;
 }
 
 [data-collapsible="icon"] [data-sidebar="header"] a {
   justify-content: center !important;
   gap: 0 !important;
+  margin: 0 auto !important;
+}
+
+[data-collapsible="icon"] [data-sidebar="header"] img {
+  width: 2.25rem !important;
+  height: 2.25rem !important;
 }
 
 [data-collapsible="icon"] [data-sidebar="header"] .min-w-0 {
+  display: none !important;
+}
+
+[data-collapsible="icon"] [data-sidebar="header"] button[title="Refresh data"] {
   display: none !important;
 }
 
@@ -278,6 +292,33 @@ html[data-emp-theme="dark"] .emp-pwa-shell select:-webkit-autofill {
 /* Hide version footer */
 [data-collapsible="icon"] [data-sidebar="sidebar"] > .mt-auto {
   display: none !important;
+}
+
+/* Collapsed: hide nested sub-menus (show top-level icons only) */
+[data-collapsible="icon"] [data-sidebar="menu-sub"],
+[data-collapsible="icon"] [data-sidebar="menu-sub-button"],
+[data-collapsible="icon"] [data-sidebar="group"] [data-state="open"] > *:not([data-sidebar="menu-button"]) {
+  display: none !important;
+}
+
+[data-collapsible="icon"] [data-sidebar="menu-button"][data-state="open"] {
+  background: transparent !important;
+}
+
+[data-collapsible="icon"] [data-sidebar="sidebar"] [data-sidebar="menu-item"] {
+  display: flex;
+  justify-content: center;
+}
+
+/* Keep section icons visible inside collapsed triggers */
+[data-collapsible="icon"] [data-sidebar="menu-button"] > span.flex svg {
+  display: block !important;
+  flex-shrink: 0;
+}
+
+[data-collapsible="icon"] a[data-sidebar="menu-button"] > svg:first-child {
+  display: block !important;
+  flex-shrink: 0;
 }
 
 /* Smooth sidebar width transition */

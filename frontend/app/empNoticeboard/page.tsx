@@ -12,6 +12,7 @@ import { splitPreviewRecords } from "../utils/empListLimit";
 import { EmpRecordHistorySheet } from "../components/emp/EmpRecordHistorySheet";
 import { EmpListViewMoreButton } from "../components/emp/EmpListViewMoreButton";
 import { ManagerMemoComposeSheet } from "../components/emp/ManagerMemoComposeSheet";
+import { resolveAttachmentUrl } from "../utils/uploadFile";
 
 const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL || "/backend";
 
@@ -23,6 +24,7 @@ interface Memo {
   issuedDate: string | null;
   issuedBy: string | null;
   createdAt: string | null;
+  attachmentPath?: string | null;
 }
 
 function fmt(iso: string | null) {
@@ -76,7 +78,12 @@ export default function EmpNoticeboardPage() {
         setMemos([]);
         return;
       }
-      const filtered = data.filter((m: { employeeID?: number }) => m.employeeID === empId);
+      const filtered = data.filter(
+        (m: { employeeID?: number; employeeIDs?: number[]; undoneAt?: string | null }) =>
+          !m.undoneAt &&
+          (m.employeeID === empId ||
+            (Array.isArray(m.employeeIDs) && m.employeeIDs.includes(empId))),
+      );
       filtered.sort(
         (a: Memo, b: Memo) =>
           new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime(),
@@ -178,6 +185,19 @@ export default function EmpNoticeboardPage() {
                 <p className="text-[13px] text-gray-700 leading-relaxed whitespace-pre-line">{memo.description}</p>
               </div>
             )}
+            {memo.attachmentPath && (
+              <div className="pt-2">
+                <a
+                  href={resolveAttachmentUrl(memo.attachmentPath)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-[#eef2ff] text-[#2563eb] text-[13px] font-semibold active:scale-[0.98]"
+                >
+                  <Icon icon="solar:paperclip-2-bold-duotone" className="w-4 h-4" />
+                  Open attachment
+                </a>
+              </div>
+            )}
             <div className="flex flex-wrap gap-3 pt-1">
               {memo.issuedDate && (
                 <div>
@@ -208,7 +228,7 @@ export default function EmpNoticeboardPage() {
           >
             <Icon icon="solar:arrow-left-linear" className="w-5 h-5 text-gray-600" />
           </button>
-          <h1 className="text-[22px] font-bold text-gray-900">Notice Board</h1>
+          <h1 className="text-[22px] font-bold text-gray-900">Internal Messaging (IM)</h1>
         </div>
 
         {loading ? (

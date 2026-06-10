@@ -1,4 +1,10 @@
-import { BadRequestException, Injectable, Logger } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateEmployeeMemoDto } from './dto/create-employee-memo.dto';
 import { UpdateEmployeeMemoDto } from './dto/update-employee-memo.dto';
@@ -20,18 +26,43 @@ export class EmployeeMemoService {
   ) {}
 
   findAll(employeeID?: number) {
+    const where =
+      employeeID != null
+        ? {
+            OR: [
+              { employeeID },
+              { employeeIDs: { has: employeeID } },
+              { senderEmployeeId: employeeID },
+            ],
+            parentMemoId: null,
+            undoneAt: null,
+          }
+        : { parentMemoId: null, undoneAt: null };
+
     return this.prisma.employeeMemo.findMany({
-      where: employeeID != null ? { employeeID } : undefined,
-      include: { manageEmployee: true },
+      where,
+      include: {
+        manageEmployee: true,
+      },
       orderBy: { createdAt: 'desc' },
     });
   }
 
-  findOne(id: number) {
-    return this.prisma.employeeMemo.findUnique({
+  async findOne(id: number) {
+    const memo = await this.prisma.employeeMemo.findUnique({
       where: { id },
-      include: { manageEmployee: true },
+      include: {
+        manageEmployee: true,
+      },
     });
+    if (!memo) throw new NotFoundException('Message not found');
+
+    const replies = await this.prisma.employeeMemo.findMany({
+      where: { parentMemoId: id, undoneAt: null },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    return { ...memo, replies };
   }
 
   async create(dto: CreateEmployeeMemoDto) {
@@ -60,6 +91,8 @@ export class EmployeeMemoService {
             description: dto.description,
             issuedDate: dto.issuedDate ? new Date(dto.issuedDate) : null,
             issuedBy: dto.issuedBy,
+            senderEmployeeId: dto.senderEmployeeId ?? null,
+            attachmentPath: dto.attachmentPath ?? null,
           },
         }),
       ),
@@ -123,7 +156,75 @@ export class EmployeeMemoService {
     });
   }
 
-  remove(id: number) {
+  async undo(id: number, actorEmployeeId?: number) {
+    const memo = await this.prisma.employeeMemo.findUnique({ where: { id } });
+    if (!memo) throw new NotFoundException('Message not found');
+    if (memo.undoneAt) throw new BadRequestException('Already undone');
+
+    const ageMs = Date.now() - new Date(memo.createdAt).getTime();
+    if (ageMs > 30 * 60 * 1000) {
+      throw new BadRequestException('Undo is only available within 30 minutes');
+    }
+
+    if (
+      actorEmployeeId != null &&
+      memo.senderEmployeeId != null &&
+      memo.senderEmployeeId !== actorEmployeeId
+    ) {
+      throw new ForbiddenException('Only the sender can undo this message');
+    }
+
+    return this.prisma.employeeMemo.update({
+      where: { id },
+      data: { undoneAt: new Date() },
+    });
+  }
+
+  async reply(
+    parentId: number,
+    dto: {
+      message: string;
+      issuedBy?: string;
+      issuedByRole?: string;
+      senderEmployeeId?: number;
+    },
+  ) {
+    const parent = await this.prisma.employeeMemo.findUnique({
+      where: { id: parentId },
+    });
+    if (!parent || parent.undoneAt) {
+      throw new NotFoundException('Parent message not found');
+    }
+
+    return this.prisma.employeeMemo.create({
+      data: {
+        serviceProviderID: parent.serviceProviderID,
+        companyID: parent.companyID,
+        branchesID: parent.branchesID,
+        employeeID: parent.employeeID,
+        employeeIDs: parent.employeeIDs,
+        memoType: parent.memoType,
+        subject: parent.subject ? `Re: ${parent.subject}` : 'Re:',
+        description: dto.message,
+        issuedDate: new Date(),
+        issuedBy: dto.issuedBy,
+        senderEmployeeId: dto.senderEmployeeId ?? null,
+        parentMemoId: parentId,
+      },
+    });
+  }
+
+  async remove(id: number, actorEmployeeId?: number) {
+    const memo = await this.prisma.employeeMemo.findUnique({ where: { id } });
+    if (!memo) throw new NotFoundException('Message not found');
+    if (
+      actorEmployeeId != null &&
+      memo.senderEmployeeId != null &&
+      memo.senderEmployeeId !== actorEmployeeId
+    ) {
+      throw new ForbiddenException('Only the owner can delete this message');
+    }
+    await this.prisma.employeeMemo.deleteMany({ where: { parentMemoId: id } });
     return this.prisma.employeeMemo.delete({ where: { id } });
   }
 }

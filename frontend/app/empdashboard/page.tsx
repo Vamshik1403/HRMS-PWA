@@ -17,6 +17,7 @@ import type { TodayStatus } from "../hooks/useEmpPunch";
 import { taskFetch } from "../utils/taskApi";
 import { syncAppBadge } from "@/lib/appBadge";
 import { TASK_MANAGEMENT_ENABLED } from "../config/featureFlags";
+import { isDesktopBrowser, isDesktopManagerFlagSet } from "@/lib/desktopManager";
 
 // ─── Ambient Greeting Accent ───────────────────────────────────────────────────
 const _ambientCss = `
@@ -197,7 +198,7 @@ const menuCards = [
   ...(TASK_MANAGEMENT_ENABLED
     ? [{ key: "tasks", label: "Tasks", sub: "Open & WIP", icon: "solar:checklist-bold-duotone", color: "bg-violet-50", iconColor: "text-violet-600", href: "/empMyTasks" }]
     : []),
-  { key: "notice", label: "Notice", sub: "Unread memos", icon: "solar:bell-bold-duotone", color: "bg-amber-50", iconColor: "text-amber-600", href: "/empNoticeboard" },
+  { key: "notice", label: "IM", sub: "Internal messages", icon: "solar:bell-bold-duotone", color: "bg-amber-50", iconColor: "text-amber-600", href: "/empNoticeboard" },
   { key: "reimb", label: "Reimbursement", sub: "Pending approval", icon: "solar:wallet-bold-duotone", color: "bg-emerald-50", iconColor: "text-emerald-600", href: "/empReimbursement" },
   { key: "holidays", label: "Holiday list", sub: "Company public holidays", icon: "solar:calendar-mark-bold-duotone", color: "bg-rose-50", iconColor: "text-rose-600", href: "/empHolidays" },
   { key: "leave", label: "Leaves", sub: "Pending approval", icon: "solar:calendar-bold-duotone", color: "bg-blue-50", iconColor: "text-blue-600", href: "/empLeaveApplication" },
@@ -205,6 +206,13 @@ const menuCards = [
 
 export default function EmpDashboardPage() {
   const router = useRouter();
+
+  useEffect(() => {
+    if (isDesktopManagerFlagSet() && isDesktopBrowser()) {
+      router.replace("/dashboard");
+    }
+  }, [router]);
+
   const [empUser, setEmpUser] = useState<any>(null);
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   const [todayStatus, setTodayStatus] = useState<TodayStatus | null>(() => getPageCache<TodayStatus>("todayAttendance"));
