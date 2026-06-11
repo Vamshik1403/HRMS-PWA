@@ -10,7 +10,9 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "../components/ui/table";
 import { Badge } from "../components/ui/badge";
-import { Plus, Search, Edit, Trash2, Eye, X } from "lucide-react";
+import { Plus, Search, Edit, Trash2, Eye, X, MessageSquare } from "lucide-react";
+import { MemoChatbox, type MemoChatMessage } from "../components/employee-memo/MemoChatbox";
+import { useMemoChatPolling } from "../hooks/useMemoChatPolling";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "../components/ui/select";
@@ -24,9 +26,17 @@ import { resolveAttachmentUrl, uploadAttachmentFile } from "../utils/uploadFile"
 const API = "/backend/employee-memo";
 const EMP_API = "/backend/manage-emp";
 
+interface MemoRecipient {
+  id: number;
+  employeeFirstName?: string | null;
+  employeeLastName?: string | null;
+  employeeID?: string | null;
+}
+
 interface MemoRow {
   id: number;
   employeeID: number;
+  employeeIDs?: number[];
   companyID?: number;
   memoType?: string;
   subject?: string;
@@ -35,6 +45,8 @@ interface MemoRow {
   issuedBy?: string;
   createdAt?: string;
   attachmentPath?: string | null;
+  parentMemoId?: number | null;
+  senderEmployeeId?: number | null;
   manageEmployee?: {
     id: number;
     companyID?: number;
@@ -42,6 +54,8 @@ interface MemoRow {
     employeeLastName?: string;
     employeeID?: string;
   };
+  recipients?: MemoRecipient[];
+  replies?: MemoRow[];
 }
 
 interface SelectedEmp { id: number; label: string; }
@@ -57,7 +71,8 @@ export function EmployeeMemoManagement() {
 
   const [replyText, setReplyText] = useState("");
   const [replySaving, setReplySaving] = useState(false);
-  const [viewReplies, setViewReplies] = useState<MemoRow[]>([]);
+  const [chatOpen, setChatOpen] = useState(false);
+  const [chatMemo, setChatMemo] = useState<MemoRow | null>(null);
   const [attachmentFile, setAttachmentFile] = useState<File | null>(null);
   const [uploadingAttachment, setUploadingAttachment] = useState(false);
 
@@ -251,25 +266,21 @@ export function EmployeeMemoManagement() {
         issuedByRole: user?.role ?? undefined,
         attachmentPath,
       };
-      const results = await Promise.allSettled(
-        selectedEmployees.map((emp) =>
-          fetch(API, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ ...basePayload, employeeID: emp.id }),
-          })
-        )
+      const ctx = getSidebarContext();
+      const res = await fetch(API, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...basePayload,
+          employeeIDs: selectedEmployees.map((e) => e.id),
+          companyID: ctx?.companyID ?? user?.companyID,
+          serviceProviderID: user?.serviceProviderID,
+        }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      toast.success(
+        `Memo sent to ${selectedEmployees.length} employee${selectedEmployees.length > 1 ? "s" : ""}`
       );
-      const failed = results.filter(
-        (r) => r.status === "rejected" || (r.status === "fulfilled" && !r.value.ok)
-      ).length;
-      if (failed === 0) {
-        toast.success(
-          `Memo sent to ${selectedEmployees.length} employee${selectedEmployees.length > 1 ? "s" : ""}`
-        );
-      } else {
-        toast.warning(`Sent to ${selectedEmployees.length - failed} employees, ${failed} failed`);
-      }
       resetForm();
       setIsAddingNew(false);
       fetchRows();
@@ -303,35 +314,93 @@ export function EmployeeMemoManagement() {
     setViewRow(null);
   };
 
-  const openView = async (row: MemoRow) => {
+  const openView = (row: MemoRow) => {
     setViewRow(row);
     setIsViewing(true);
+  };
+
+  const refreshChatMemo = async (id: number) => {
+    const res = await fetch(`${API}/${id}`, { cache: "no-store" });
+    if (!res.ok) throw new Error(await res.text());
+    const data = await res.json();
+    setChatMemo(data);
+    return data as MemoRow;
+  };
+
+  const openChat = async (row: MemoRow) => {
+    setChatMemo(row);
+    setChatOpen(true);
     setReplyText("");
     try {
-      const res = await fetch(`${API}/${row.id}`);
-      const data = await res.json();
-      setViewReplies(Array.isArray(data?.replies) ? data.replies : []);
+      await refreshChatMemo(row.id);
     } catch {
-      setViewReplies([]);
+      toast.error("Failed to load conversation");
     }
   };
 
-  const handleUndo = async (id: number) => {
+  useMemoChatPolling<MemoRow>(
+    chatMemo?.id,
+    (data) => setChatMemo(data),
+    chatOpen && !!chatMemo,
+    2000,
+  );
+
+  const chatMessages = useMemo((): MemoChatMessage[] => {
+    if (!chatMemo) return [];
+    const original: MemoChatMessage = {
+      id: chatMemo.id,
+      description: chatMemo.description,
+      issuedBy: chatMemo.issuedBy,
+      createdAt: chatMemo.createdAt,
+      attachmentPath: chatMemo.attachmentPath,
+      isOriginal: true,
+    };
+    const replies = (chatMemo.replies ?? []).map((r) => ({
+      id: r.id,
+      description: r.description,
+      issuedBy: r.issuedBy,
+      createdAt: r.createdAt,
+      isOriginal: false,
+    }));
+    return [original, ...replies];
+  }, [chatMemo]);
+
+  const canUndoChatMessage = (msg: MemoChatMessage) => {
+    if (msg.isOriginal || !msg.createdAt) return false;
+    return Date.now() - new Date(msg.createdAt).getTime() < 30 * 60 * 1000;
+  };
+
+  const handleUndoReply = async (id: number) => {
     try {
       const res = await fetch(`${API}/${id}/undo`, { method: "POST" });
       if (!res.ok) throw new Error(await res.text());
       toast.success("Message undone");
-      fetchRows();
+      if (chatMemo) await refreshChatMemo(chatMemo.id);
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : "Undo failed");
     }
   };
 
+  const formatRecipientNames = (row: MemoRow) => {
+    const list =
+      row.recipients && row.recipients.length > 0
+        ? row.recipients
+        : row.manageEmployee
+          ? [row.manageEmployee]
+          : [];
+    if (list.length === 0) return "—";
+    if (list.length === 1) {
+      const e = list[0];
+      return `${e.employeeFirstName ?? ""} ${e.employeeLastName ?? ""}`.trim();
+    }
+    return `${list.length} employees`;
+  };
+
   const handleReply = async () => {
-    if (!viewRow || !replyText.trim()) return;
+    if (!chatMemo || !replyText.trim()) return;
     setReplySaving(true);
     try {
-      const res = await fetch(`${API}/${viewRow.id}/reply`, {
+      const res = await fetch(`${API}/${chatMemo.id}/reply`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -343,7 +412,7 @@ export function EmployeeMemoManagement() {
       if (!res.ok) throw new Error(await res.text());
       toast.success("Reply sent");
       setReplyText("");
-      await openView(viewRow);
+      await refreshChatMemo(chatMemo.id);
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : "Reply failed");
     } finally {
@@ -379,7 +448,7 @@ export function EmployeeMemoManagement() {
     <div className="space-y-6 w-full max-w-7xl mx-auto px-4">
       <div className="flex items-center justify-between w-full">
         <p className="text-gray-600 text-sm">Internal Messaging (IM) — official messages to colleagues</p>
-        {!isAddingNew && !isViewing && canManage && (
+        {!isAddingNew && canManage && (
           <Button onClick={() => { resetForm(); setIsAddingNew(true); }} className="text-sm px-3 py-2">
             <Plus className="w-4 h-4 mr-1" /> Create IM
           </Button>
@@ -591,9 +660,17 @@ export function EmployeeMemoManagement() {
             <div className="space-y-2">
               <p>
                 <strong>To:</strong>{" "}
-                {viewRow.manageEmployee?.employeeFirstName ?? ""}{" "}
-                {viewRow.manageEmployee?.employeeLastName ?? ""}{" "}
-                ({viewRow.manageEmployee?.employeeID ?? ""})
+                {(viewRow.recipients && viewRow.recipients.length > 0
+                  ? viewRow.recipients
+                  : viewRow.manageEmployee
+                    ? [viewRow.manageEmployee]
+                    : []
+                )
+                  .map(
+                    (e) =>
+                      `${e.employeeFirstName ?? ""} ${e.employeeLastName ?? ""} (${e.employeeID ?? ""})`.trim()
+                  )
+                  .join(", ") || "—"}
               </p>
               <p><strong>IM Type:</strong> {viewRow.memoType ?? "—"}</p>
               <p><strong>Sub:</strong> {viewRow.subject ?? "—"}</p>
@@ -618,36 +695,28 @@ export function EmployeeMemoManagement() {
               )}
             </div>
 
-            {viewReplies.length > 0 && (
-              <div className="border-t pt-3 space-y-2">
-                <p className="font-semibold text-gray-800">Replies</p>
-                {viewReplies.map((rep) => (
-                  <div key={rep.id} className="rounded-lg bg-gray-50 p-3 text-xs">
-                    <p className="font-medium">{rep.issuedBy || "—"}</p>
-                    <p className="text-gray-600 mt-1">{rep.description}</p>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            <div className="border-t pt-3 space-y-2">
-              <Label>Reply</Label>
-              <Textarea
-                value={replyText}
-                onChange={(e) => setReplyText(e.target.value)}
-                rows={3}
-                placeholder="Write a reply…"
-              />
-              <Button type="button" size="sm" onClick={() => void handleReply()} disabled={replySaving}>
-                {replySaving ? "Sending…" : "Send reply"}
-              </Button>
-            </div>
           </div>
         )}
       </FormDrawer>
 
+      {chatMemo && (
+        <MemoChatbox
+          open={chatOpen}
+          onClose={() => { setChatOpen(false); setChatMemo(null); setReplyText(""); }}
+          subject={chatMemo.subject || "Message"}
+          memoType={chatMemo.memoType}
+          messages={chatMessages}
+          message={replyText}
+          onMessageChange={setReplyText}
+          onSend={handleReply}
+          sending={replySaving}
+          onUndo={(id) => void handleUndoReply(id)}
+          canUndoMessage={canUndoChatMessage}
+        />
+      )}
+
       {/* ── Table listing ─────────────────────────────────────────────────── */}
-      {!isAddingNew && !isViewing && (
+      {!isAddingNew && (
         <>
           <div className="flex items-center gap-2 bg-white rounded-lg border px-3 py-2 max-w-sm">
             <Search className="w-4 h-4 text-gray-400" />
@@ -689,13 +758,12 @@ export function EmployeeMemoManagement() {
                     filteredRows.map((r) => (
                       <TableRow key={r.id}>
                         <TableCell>
-                          <div className="font-medium">
-                            {r.manageEmployee?.employeeFirstName ?? ""}{" "}
-                            {r.manageEmployee?.employeeLastName ?? ""}
-                          </div>
-                          <div className="text-xs text-gray-500">
-                            {r.manageEmployee?.employeeID ?? ""}
-                          </div>
+                          <div className="font-medium">{formatRecipientNames(r)}</div>
+                          {(r.recipients?.length === 1 || (!r.recipients?.length && r.manageEmployee)) && (
+                            <div className="text-xs text-gray-500">
+                              {r.recipients?.[0]?.employeeID ?? r.manageEmployee?.employeeID ?? ""}
+                            </div>
+                          )}
                         </TableCell>
                         <TableCell>
                           <Badge variant={r.memoType === "Warning" ? "destructive" : "secondary"}>
@@ -714,20 +782,18 @@ export function EmployeeMemoManagement() {
                                 variant="ghost"
                                 size="sm"
                                 onClick={() => void openView(r)}
+                                title="View details"
                               >
                                 <Eye className="w-4 h-4" />
                               </Button>
-                              {r.createdAt &&
-                                Date.now() - new Date(r.createdAt).getTime() < 30 * 60 * 1000 && (
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => void handleUndo(r.id)}
-                                  title="Undo (30 min)"
-                                >
-                                  Undo
-                                </Button>
-                              )}
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => void openChat(r)}
+                                title="Open chat"
+                              >
+                                <MessageSquare className="w-4 h-4" />
+                              </Button>
                               <Button variant="ghost" size="sm" onClick={() => handleEdit(r)}>
                                 <Edit className="w-4 h-4" />
                               </Button>

@@ -25,7 +25,7 @@ export class EmployeeMemoService {
     private mailService: MailService,
   ) {}
 
-  findAll(employeeID?: number) {
+  async findAll(employeeID?: number) {
     const where =
       employeeID != null
         ? {
@@ -39,12 +39,52 @@ export class EmployeeMemoService {
           }
         : { parentMemoId: null, undoneAt: null };
 
-    return this.prisma.employeeMemo.findMany({
+    const rows = await this.prisma.employeeMemo.findMany({
       where,
       include: {
         manageEmployee: true,
       },
       orderBy: { createdAt: 'desc' },
+    });
+
+    return this.attachRecipients(rows);
+  }
+
+  private async attachRecipients<T extends { employeeID?: number | null; employeeIDs?: number[] }>(
+    rows: T[],
+  ): Promise<(T & { recipients?: { id: number; employeeFirstName: string | null; employeeLastName: string | null; employeeID: string | null }[] })[]> {
+    const idSet = new Set<number>();
+    for (const row of rows) {
+      if (row.employeeIDs?.length) {
+        row.employeeIDs.forEach((id) => idSet.add(id));
+      } else if (row.employeeID) {
+        idSet.add(row.employeeID);
+      }
+    }
+    if (idSet.size === 0) return rows;
+
+    const employees = await this.prisma.manageEmployee.findMany({
+      where: { id: { in: [...idSet] } },
+      select: {
+        id: true,
+        employeeFirstName: true,
+        employeeLastName: true,
+        employeeID: true,
+      },
+    });
+    const byId = new Map(employees.map((e) => [e.id, e]));
+
+    return rows.map((row) => {
+      const ids =
+        row.employeeIDs && row.employeeIDs.length > 0
+          ? row.employeeIDs
+          : row.employeeID
+            ? [row.employeeID]
+            : [];
+      const recipients = ids
+        .map((id) => byId.get(id))
+        .filter((e): e is NonNullable<typeof e> => e != null);
+      return { ...row, recipients };
     });
   }
 
@@ -77,26 +117,23 @@ export class EmployeeMemoService {
       throw new BadRequestException('At least one employee is required');
     }
 
-    const memos = await Promise.all(
-      employeeIDs.map((empId) =>
-        this.prisma.employeeMemo.create({
-          data: {
-            serviceProviderID: dto.serviceProviderID,
-            companyID: dto.companyID,
-            branchesID: dto.branchesID,
-            employeeID: empId,
-            employeeIDs: employeeIDs,
-            memoType: dto.memoType,
-            subject: dto.subject,
-            description: dto.description,
-            issuedDate: dto.issuedDate ? new Date(dto.issuedDate) : null,
-            issuedBy: dto.issuedBy,
-            senderEmployeeId: dto.senderEmployeeId ?? null,
-            attachmentPath: dto.attachmentPath ?? null,
-          },
-        }),
-      ),
-    );
+    const memo = await this.prisma.employeeMemo.create({
+      data: {
+        serviceProviderID: dto.serviceProviderID,
+        companyID: dto.companyID,
+        branchesID: dto.branchesID,
+        employeeID: employeeIDs[0],
+        employeeIDs: employeeIDs,
+        memoType: dto.memoType,
+        subject: dto.subject,
+        description: dto.description,
+        issuedDate: dto.issuedDate ? new Date(dto.issuedDate) : null,
+        issuedBy: dto.issuedBy,
+        senderEmployeeId: dto.senderEmployeeId ?? null,
+        attachmentPath: dto.attachmentPath ?? null,
+      },
+    });
+    const memos = [memo];
 
     const memoTypeLc = (dto.memoType ?? '').toLowerCase();
     const isWarning =
@@ -109,11 +146,9 @@ export class EmployeeMemoService {
       dto.description?.trim()?.slice(0, 180) ||
       `${issuer}: ${subject}`;
 
+    const notifyEmployeeIds = [...new Set(employeeIDs)];
     await Promise.all(
-      memos.map(async (memo) => {
-        const empId = memo.employeeID;
-        if (!empId) return;
-
+      notifyEmployeeIds.map(async (empId) => {
         void this.mailService
           .sendToEmployeeWithManagerCc({
             employeeId: empId,
@@ -143,7 +178,8 @@ export class EmployeeMemoService {
       }),
     );
 
-    return memos.length === 1 ? memos[0] : memos;
+    const [withRecipients] = await this.attachRecipients(memos);
+    return withRecipients ?? memo;
   }
 
   update(id: number, dto: UpdateEmployeeMemoDto) {
@@ -159,6 +195,9 @@ export class EmployeeMemoService {
   async undo(id: number, actorEmployeeId?: number) {
     const memo = await this.prisma.employeeMemo.findUnique({ where: { id } });
     if (!memo) throw new NotFoundException('Message not found');
+    if (!memo.parentMemoId) {
+      throw new BadRequestException('Only chat messages can be undone');
+    }
     if (memo.undoneAt) throw new BadRequestException('Already undone');
 
     const ageMs = Date.now() - new Date(memo.createdAt).getTime();
@@ -196,12 +235,12 @@ export class EmployeeMemoService {
       throw new NotFoundException('Parent message not found');
     }
 
-    return this.prisma.employeeMemo.create({
+    const reply = await this.prisma.employeeMemo.create({
       data: {
         serviceProviderID: parent.serviceProviderID,
         companyID: parent.companyID,
         branchesID: parent.branchesID,
-        employeeID: parent.employeeID,
+        employeeID: dto.senderEmployeeId ?? parent.employeeID,
         employeeIDs: parent.employeeIDs,
         memoType: parent.memoType,
         subject: parent.subject ? `Re: ${parent.subject}` : 'Re:',
@@ -212,6 +251,40 @@ export class EmployeeMemoService {
         parentMemoId: parentId,
       },
     });
+
+    const recipientIds =
+      parent.employeeIDs && parent.employeeIDs.length > 0
+        ? parent.employeeIDs
+        : parent.employeeID
+          ? [parent.employeeID]
+          : [];
+
+    const senderName = dto.issuedBy?.trim() || 'Someone';
+    const threadSubject = parent.subject?.trim() || 'Internal Message';
+    const pushTitle = `IM: ${threadSubject}`;
+    const pushBody =
+      dto.message.trim().slice(0, 180) ||
+      `${senderName} sent a new message`;
+    const isEmployeeReply = dto.senderEmployeeId != null;
+    const pushTargets = new Set(recipientIds);
+
+    for (const empId of pushTargets) {
+      if (isEmployeeReply && empId === dto.senderEmployeeId) continue;
+      try {
+        await this.pushService.sendToEmployee(empId, pushTitle, pushBody, {
+          url: '/empNoticeboard',
+          kind: 'memo',
+          memoId: parentId,
+          tag: `memo-reply-${reply.id}`,
+        });
+      } catch (err: unknown) {
+        this.logger.warn(
+          `Memo reply push failed for employee ${empId}: ${err instanceof Error ? err.message : err}`,
+        );
+      }
+    }
+
+    return reply;
   }
 
   async remove(id: number, actorEmployeeId?: number) {

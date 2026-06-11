@@ -715,7 +715,85 @@ export function PageLayout({ children }: PageLayoutProps) {
           </SidebarHeader>
 
           <SidebarContent className="px-2.5 py-2 flex-1 overflow-y-auto">
-            <SidebarGroup>
+            {canAccessFullHrSections && (
+              <SidebarGroup className="hidden group-data-[collapsible=icon]:flex">
+                <SidebarMenu className="gap-1.5 flex flex-col">
+                  <SidebarMenuItem className="mx-0">
+                    <SidebarMenuButton asChild size="lg" className={sbMenuBtnReset}>
+                      <Link href="/dashboard" title="Dashboard" className={cn(sbRow, isActiveLink("/dashboard") ? sbActive : sbIdle)}>
+                        <Icon icon="mdi:view-dashboard-outline" className={cn("w-5 h-5 shrink-0", isActiveLink("/dashboard") ? "text-[#4f46e5]" : "text-gray-400")} />
+                        <span className="sr-only">Dashboard</span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                  {isSuperAdmin && (
+                    <SidebarMenuItem className="mx-0">
+                      <SidebarMenuButton asChild size="lg" className={sbMenuBtnReset}>
+                        <Link href="/service-providers" title="Service Providers" className={cn(sbRow, isActiveLink("/service-providers") ? sbActive : sbIdle)}>
+                          <Icon icon="mdi:account-supervisor-outline" className={cn("w-5 h-5 shrink-0", isActiveLink("/service-providers") ? "text-[#4f46e5]" : "text-gray-400")} />
+                          <span className="sr-only">Service Providers</span>
+                        </Link>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  )}
+                  {[
+                    { href: "/company", icon: "mdi:domain", label: "Company Management", paths: SETUP_PATHS },
+                    { href: "/contractors", icon: "mdi:briefcase-account", label: "Contractor Management", paths: CONTRACTOR_MANAGEMENT_PATHS },
+                    { href: "/manage-employees", icon: "mdi:account-group", label: "Employee Management", paths: EMPLOYEE_PATHS },
+                    ...(TASK_MANAGEMENT_ENABLED
+                      ? [{ href: "/task-projects", icon: "mdi:clipboard-check-outline", label: "Task Management", paths: TASK_MANAGEMENT_PATHS }]
+                      : []),
+                    { href: "/roster", icon: "mdi:calendar-clock", label: "Shift & Attendance", paths: PAYROLL_PATHS },
+                    { href: "/leave-policy", icon: "mdi:calendar-star", label: "Leave Policy", paths: LEAVE_PATHS },
+                    { href: "/monthly-salary-cycle", icon: "mdi:file-document-outline", label: "Payroll Policy", paths: PAYROLL_POLICY_PATHS },
+                    { href: "/generate-salary", icon: "mdi:cash-multiple", label: "Payroll Management", paths: SALARY_PATHS },
+                    { href: "/leave-applications", icon: "mdi:calendar-remove", label: "Leave Management", paths: LEAVE_MANAGEMENT_PATHS },
+                    { href: "/attendance-reports", icon: "mdi:chart-line", label: "Reports", paths: REPORTS_PATHS },
+                    { href: "/import-attendance", icon: "mdi:cog-outline", label: "Settings", paths: SETTINGS_PATHS },
+                  ].map((item) => (
+                    <SidebarMenuItem key={item.href} className="mx-0">
+                      <SidebarMenuButton
+                        asChild
+                        size="lg"
+                        className={sbMenuBtnReset}
+                      >
+                        <Link
+                          href={item.href}
+                          title={item.label}
+                          onClick={() => {
+                            const companyId = activeCompanyID ?? fetchedCompanies[0]?.id;
+                            const spId = sidebarCtx?.serviceProviderID ?? fetchedServiceProviders[0]?.id;
+                            if (companyId && spId) {
+                              const comp = fetchedCompanies.find((c: { id: number }) => c.id === companyId);
+                              const sp = fetchedServiceProviders.find((s: { id: number }) => s.id === spId);
+                              setSidebarContext(spId, sp?.companyName ?? "", companyId, comp?.companyName ?? "");
+                            }
+                          }}
+                          className={cn(
+                            sbRow,
+                            item.paths.includes(pathname) ? sbActive : sbIdle,
+                            "group-data-[collapsible=icon]:!justify-center group-data-[collapsible=icon]:!px-0",
+                          )}
+                        >
+                          <Icon
+                            icon={item.icon}
+                            className={cn(
+                              "w-5 h-5 shrink-0",
+                              item.paths.includes(pathname) ? "text-[#4f46e5]" : "text-gray-400",
+                            )}
+                          />
+                          <span className="truncate font-semibold text-sm group-data-[collapsible=icon]:sr-only">
+                            {item.label}
+                          </span>
+                        </Link>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  ))}
+                </SidebarMenu>
+              </SidebarGroup>
+            )}
+
+            <SidebarGroup className="group-data-[collapsible=icon]:hidden">
               <SidebarMenu className="gap-1.5 flex flex-col">
 
                 {/* ── Dashboard ── */}
@@ -878,13 +956,7 @@ export function PageLayout({ children }: PageLayoutProps) {
                   <SidebarTrigger className="text-gray-500 hover:text-[#4f46e5] hover:bg-[#eef2ff] rounded-full h-10 w-10 shrink-0 border border-[#d1d5db] shadow-sm" />
                   <h1 className="text-2xl sm:text-[1.65rem] font-bold text-gray-900 tracking-tight truncate">{pageTitle}</h1>
                 </div>
-                <div className="order-3 basis-full lg:order-2 lg:basis-auto flex flex-1 flex-col sm:flex-row items-stretch sm:items-center gap-3 lg:max-w-2xl lg:mx-6">
-                  <div className="flex flex-1 items-center gap-2.5 bg-white rounded-full border border-[#e8e8e8] shadow-[0_2px_12px_rgba(0,0,0,0.04)] px-4 py-2.5 min-w-0">
-                    <Icon icon="mdi:magnify" className="w-5 h-5 text-gray-400 shrink-0" />
-                    <Input type="search" placeholder="Search anything..." className="border-0 bg-transparent shadow-none focus-visible:ring-0 h-8 px-0 text-sm placeholder:text-gray-400" />
-                  </div>
-                </div>
-                <div className="order-2 lg:order-3 flex items-center justify-end gap-2 sm:gap-2 shrink-0">
+                <div className="order-2 lg:order-3 flex items-center justify-end gap-2 sm:gap-2 shrink-0 ml-auto">
                   <DropdownMenu modal={false}>
                     <DropdownMenuTrigger asChild>
                       <button type="button" className="flex items-center gap-2 cursor-pointer focus:outline-none rounded-full pl-1 pr-1 py-1 hover:bg-white/80 transition-colors">

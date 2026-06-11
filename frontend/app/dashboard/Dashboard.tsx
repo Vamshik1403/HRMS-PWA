@@ -185,6 +185,38 @@ export default function DashboardPage() {
       isOverdue: boolean;
     }[]
   >([]);
+  const [hrWidgets, setHrWidgets] = useState<{
+    pendingCounts: {
+      im: number;
+      tasks: number;
+      reimbursement: number;
+      leave: number;
+      salaryAdvance: number;
+    };
+    latestTasks: {
+      id: number;
+      taskCode: string;
+      taskName: string;
+      status: string;
+      priority: string;
+      dueDateTime: string | null;
+      createdAt: string;
+    }[];
+    upcomingEvents: {
+      id: string;
+      kind: "birthday" | "anniversary";
+      label: string;
+      date: string;
+      when: string;
+    }[];
+    newsFeed: {
+      id: string;
+      kind: "onboarding" | "holiday";
+      title: string;
+      subtitle: string;
+      date: string;
+    }[];
+  } | null>(null);
 
   useEffect(() => {
     setDesktopManager(isDesktopManagerFlagSet());
@@ -259,7 +291,21 @@ export default function DashboardPage() {
     }
     loadTodayOverview();
     loadProbationAlerts();
-  }, [user, currentUserMapping, overviewQueryParams.toString()]);
+    if (isHrDesktopView) loadHrWidgets();
+  }, [user, currentUserMapping, overviewQueryParams.toString(), isHrDesktopView]);
+
+  const loadHrWidgets = async () => {
+    try {
+      const qs = overviewQueryParams.toString();
+      const url = `${BACKEND_URL}/dashboard-overview/hr-widgets${qs ? `?${qs}` : ""}`;
+      const res = await fetch(url, { cache: "no-store" });
+      if (!res.ok) return;
+      const data = await res.json();
+      setHrWidgets(data);
+    } catch {
+      setHrWidgets(null);
+    }
+  };
 
   const loadProbationAlerts = async () => {
     try {
@@ -444,6 +490,7 @@ export default function DashboardPage() {
   useAppRefresh(() => {
     loadTodayOverview();
     loadProbationAlerts();
+    if (isHrDesktopView) loadHrWidgets();
     loadDashboard();
   }, [user, currentUserMapping, overviewQueryParams.toString()]);
 
@@ -897,18 +944,23 @@ export default function DashboardPage() {
               </h2>
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
                 {[
-                  { href: "/employee-memo", label: "Internal Messages (IM)" },
-                  { href: "/task-projects", label: "Tasks" },
-                  { href: "/reimbursement", label: "Reimbursement Applications" },
-                  { href: "/leave-applications", label: "Leave Applications" },
-                  { href: "/salary-advance", label: "Salary Advance Applications" },
+                  { href: "/employee-memo", label: "Internal Messages (IM)", count: hrWidgets?.pendingCounts?.im },
+                  { href: "/task-projects", label: "Tasks", count: hrWidgets?.pendingCounts?.tasks },
+                  { href: "/reimbursement", label: "Reimbursement Applications", count: hrWidgets?.pendingCounts?.reimbursement },
+                  { href: "/leave-applications", label: "Leave Applications", count: hrWidgets?.pendingCounts?.leave },
+                  { href: "/salary-advance", label: "Salary Advance Applications", count: hrWidgets?.pendingCounts?.salaryAdvance },
                 ].map((item) => (
                   <Link
                     key={item.href}
                     href={item.href}
-                    className="rounded-lg border border-[#ebebeb] px-3 py-2.5 text-xs font-semibold text-gray-800 hover:bg-[#fafafa] text-center"
+                    className="rounded-lg border border-[#ebebeb] px-3 py-2.5 text-xs font-semibold text-gray-800 hover:bg-[#fafafa] text-center relative"
                   >
-                    {item.label}
+                    <span>{item.label}</span>
+                    {typeof item.count === "number" && item.count > 0 && (
+                      <span className="ml-1.5 inline-flex min-w-[1.25rem] h-5 items-center justify-center rounded-full bg-[#4f46e5] text-white text-[10px] font-bold px-1.5 tabular-nums">
+                        {item.count > 99 ? "99+" : item.count}
+                      </span>
+                    )}
                   </Link>
                 ))}
               </div>
@@ -920,9 +972,26 @@ export default function DashboardPage() {
               <h2 className="text-lg font-bold text-gray-900 tracking-tight mb-2">
                 News feed
               </h2>
-              <p className="text-sm text-gray-500">
-                Show notifications for all important updates
-              </p>
+              {hrWidgets?.newsFeed?.length ? (
+                <ul className="space-y-3">
+                  {hrWidgets.newsFeed.map((item) => (
+                    <li key={item.id} className="flex gap-3 text-sm">
+                      <div className="w-8 h-8 rounded-lg bg-[#eef2ff] flex items-center justify-center shrink-0">
+                        <Icon
+                          icon={item.kind === "holiday" ? "mdi:calendar-star" : "mdi:account-plus"}
+                          className="w-4 h-4 text-[#4f46e5]"
+                        />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="font-semibold text-gray-900">{item.title}</p>
+                        <p className="text-xs text-gray-500 mt-0.5">{item.subtitle}</p>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-sm text-gray-400">No news updates right now</p>
+              )}
             </section>
           )}
 
@@ -1017,7 +1086,27 @@ export default function DashboardPage() {
               <h2 className="text-lg font-bold text-gray-900 tracking-tight mb-3">
                 Task list
               </h2>
-              <p className="text-sm text-gray-400">No open tasks to show</p>
+              {hrWidgets?.latestTasks?.length ? (
+                <ul className="space-y-2">
+                  {hrWidgets.latestTasks.map((t) => (
+                    <li key={t.id}>
+                      <Link
+                        href="/task-projects"
+                        className="block rounded-lg border border-[#ebebeb] px-3 py-2 hover:bg-[#fafafa]"
+                      >
+                        <p className="text-xs font-semibold text-gray-900 truncate">
+                          {t.taskCode} — {t.taskName}
+                        </p>
+                        <p className="text-[11px] text-gray-500 mt-0.5">
+                          {t.status} · {t.priority}
+                        </p>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-sm text-gray-400">No tasks to show</p>
+              )}
             </section>
           )}
 
@@ -1026,7 +1115,27 @@ export default function DashboardPage() {
               <h2 className="text-lg font-bold text-gray-900 tracking-tight mb-3">
                 Upcoming birthdays &amp; anniversary
               </h2>
-              <p className="text-sm text-gray-400">No upcoming events</p>
+              {hrWidgets?.upcomingEvents?.length ? (
+                <ul className="space-y-2">
+                  {hrWidgets.upcomingEvents.map((ev) => (
+                    <li
+                      key={ev.id}
+                      className="flex items-center justify-between gap-2 rounded-lg border border-[#ebebeb] px-3 py-2"
+                    >
+                      <div className="min-w-0">
+                        <p className="text-xs font-semibold text-gray-900 truncate">{ev.label}</p>
+                        <p className="text-[11px] text-gray-500 capitalize">{ev.kind} · {ev.when}</p>
+                      </div>
+                      <Icon
+                        icon={ev.kind === "birthday" ? "mdi:cake-variant" : "mdi:medal"}
+                        className="w-4 h-4 text-[#4f46e5] shrink-0"
+                      />
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-sm text-gray-400">No upcoming events</p>
+              )}
             </section>
           )}
 

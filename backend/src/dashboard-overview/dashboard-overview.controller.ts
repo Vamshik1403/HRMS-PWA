@@ -18,6 +18,21 @@ export class DashboardOverviewController {
     });
   }
 
+  @Get('hr-widgets')
+  getHrWidgets(
+    @Query('companyID') companyID?: string,
+    @Query('branchId') branchId?: string,
+    @Query('serviceProviderID') serviceProviderID?: string,
+  ) {
+    return this.service.getHrWidgets({
+      companyID: companyID ? Number(companyID) : undefined,
+      branchId: branchId ? Number(branchId) : undefined,
+      serviceProviderID: serviceProviderID
+        ? Number(serviceProviderID)
+        : undefined,
+    });
+  }
+
   @Get('today-overview')
   getTodayOverview(
     @Query('companyID') companyID?: string,

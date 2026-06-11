@@ -811,6 +811,278 @@ export class DashboardOverviewService {
     return { today, daysAhead, alerts };
   }
 
+  async getHrWidgets(query: TodayOverviewQuery) {
+    const today = new Date();
+    const companyWhere: Prisma.ManageEmployeeWhereInput = {};
+    if (query.companyID) companyWhere.companyID = query.companyID;
+    if (query.branchId) companyWhere.branchesID = query.branchId;
+    if (query.serviceProviderID) companyWhere.serviceProviderID = query.serviceProviderID;
+
+    const taskWhere: Prisma.TaskProjectWhereInput = {
+      isDeleted: false,
+      ...(query.companyID ? { companyID: query.companyID } : {}),
+      ...(query.serviceProviderID ? { serviceProviderID: query.serviceProviderID } : {}),
+    };
+
+    const leaveWhere: Prisma.leaveApplicationWhereInput = {
+      status: { in: ['Pending', 'Partially Approved'] },
+      ...(query.companyID ? { companyID: query.companyID } : {}),
+      ...(query.branchId ? { branchesID: query.branchId } : {}),
+      ...(query.serviceProviderID ? { serviceProviderID: query.serviceProviderID } : {}),
+    };
+
+    const reimbWhere: Prisma.ReimbursementWhereInput = {
+      status: 'Pending',
+      ...(query.companyID ? { companyID: query.companyID } : {}),
+      ...(query.branchId ? { branchesID: query.branchId } : {}),
+      ...(query.serviceProviderID ? { serviceProviderID: query.serviceProviderID } : {}),
+    };
+
+    const advanceWhere: Prisma.SalaryAdvanceWhereInput = {
+      status: 'Pending',
+      ...(query.companyID ? { companyID: query.companyID } : {}),
+      ...(query.branchId ? { branchesID: query.branchId } : {}),
+      ...(query.serviceProviderID ? { serviceProviderID: query.serviceProviderID } : {}),
+    };
+
+    const memoWhere: Prisma.EmployeeMemoWhereInput = {
+      parentMemoId: null,
+      undoneAt: null,
+      ...(query.companyID ? { companyID: query.companyID } : {}),
+      ...(query.branchId ? { branchesID: query.branchId } : {}),
+      ...(query.serviceProviderID ? { serviceProviderID: query.serviceProviderID } : {}),
+    };
+
+    const [
+      imCount,
+      taskCount,
+      reimbursementCount,
+      leaveCount,
+      salaryAdvanceCount,
+      latestTasks,
+      employees,
+      holidays,
+      company,
+    ] = await Promise.all([
+      this.prisma.employeeMemo.count({ where: memoWhere }),
+      this.prisma.taskProject.count({
+        where: { ...taskWhere, status: { in: ['Open', 'In Progress', 'Pending'] } },
+      }),
+      this.prisma.reimbursement.count({ where: reimbWhere }),
+      this.prisma.leaveApplication.count({ where: leaveWhere }),
+      this.prisma.salaryAdvance.count({ where: advanceWhere }),
+      this.prisma.taskProject.findMany({
+        where: taskWhere,
+        orderBy: { createdAt: 'desc' },
+        take: 5,
+        select: {
+          id: true,
+          taskCode: true,
+          taskName: true,
+          status: true,
+          priority: true,
+          dueDateTime: true,
+          createdAt: true,
+        },
+      }),
+      this.prisma.manageEmployee.findMany({
+        where: {
+          ...companyWhere,
+          NOT: { employmentStatus: 'Terminated' },
+        },
+        select: {
+          id: true,
+          employeeFirstName: true,
+          employeeLastName: true,
+          dateOfBirth: true,
+          joiningDate: true,
+        },
+        take: 2000,
+      }),
+      this.prisma.publicHoliday.findMany({
+        where: {
+          ...(query.companyID ? { companyID: query.companyID } : {}),
+          ...(query.branchId
+            ? { OR: [{ branchesID: null }, { branchesID: query.branchId }] }
+            : {}),
+          ...(query.serviceProviderID ? { serviceProviderID: query.serviceProviderID } : {}),
+        },
+        include: { manageHoliday: { select: { holidayName: true } } },
+        take: 500,
+      }),
+      query.companyID
+        ? this.prisma.company.findUnique({
+            where: { id: query.companyID },
+            select: { companyName: true },
+          })
+        : Promise.resolve(null),
+    ]);
+
+    const upcomingEvents = this.buildUpcomingEvents(employees, today);
+    const newsFeed = this.buildNewsFeed(employees, holidays, company?.companyName ?? 'Company', today);
+
+    return {
+      pendingCounts: {
+        im: imCount,
+        tasks: taskCount,
+        reimbursement: reimbursementCount,
+        leave: leaveCount,
+        salaryAdvance: salaryAdvanceCount,
+      },
+      latestTasks,
+      upcomingEvents,
+      newsFeed,
+    };
+  }
+
+  private parseMonthDay(value: string | null | undefined): { month: number; day: number } | null {
+    if (!value) return null;
+    const s = String(value).trim();
+    const iso = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (iso) return { month: Number(iso[2]), day: Number(iso[3]) };
+    const slash = s.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})/);
+    if (slash) return { month: Number(slash[2]), day: Number(slash[1]) };
+    return null;
+  }
+
+  /** Full calendar date (year included) — used for onboarding news, not anniversaries. */
+  private parseFullDate(value: string | null | undefined): Date | null {
+    if (!value) return null;
+    const s = String(value).trim();
+    const iso = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (iso) {
+      return new Date(Number(iso[1]), Number(iso[2]) - 1, Number(iso[3]), 12, 0, 0, 0);
+    }
+    const slash = s.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/);
+    if (slash) {
+      return new Date(Number(slash[3]), Number(slash[2]) - 1, Number(slash[1]), 12, 0, 0, 0);
+    }
+    return null;
+  }
+
+  private daysFromToday(today: Date, target: Date): number {
+    const a = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 12, 0, 0, 0);
+    const b = new Date(target.getFullYear(), target.getMonth(), target.getDate(), 12, 0, 0, 0);
+    return Math.round((b.getTime() - a.getTime()) / 86400000);
+  }
+
+  private eventDateThisYear(today: Date, month: number, day: number): Date {
+    return new Date(today.getFullYear(), month - 1, day, 12, 0, 0, 0);
+  }
+
+  private buildUpcomingEvents(
+    employees: {
+      id: number;
+      employeeFirstName: string | null;
+      employeeLastName: string | null;
+      dateOfBirth: string | null;
+      joiningDate: string | null;
+    }[],
+    today: Date,
+  ) {
+    const events: { id: string; kind: 'birthday' | 'anniversary'; label: string; date: string; when: string }[] = [];
+
+    for (const emp of employees) {
+      const name =
+        `${emp.employeeFirstName ?? ''} ${emp.employeeLastName ?? ''}`.trim() || 'Employee';
+
+      const dob = this.parseMonthDay(emp.dateOfBirth);
+      if (dob) {
+        const eventAt = this.eventDateThisYear(today, dob.month, dob.day);
+        const diff = this.daysFromToday(today, eventAt);
+        if (diff >= -1 && diff <= 1) {
+          events.push({
+            id: `bday-${emp.id}`,
+            kind: 'birthday',
+            label: `${name}'s birthday`,
+            date: dateKeyLocal(eventAt),
+            when: diff === -1 ? 'Yesterday' : diff === 0 ? 'Today' : 'Tomorrow',
+          });
+        }
+      }
+
+      const join = this.parseMonthDay(emp.joiningDate);
+      if (join) {
+        const eventAt = this.eventDateThisYear(today, join.month, join.day);
+        const diff = this.daysFromToday(today, eventAt);
+        if (diff >= -1 && diff <= 1) {
+          const years = today.getFullYear() - (Number(String(emp.joiningDate).slice(0, 4)) || today.getFullYear());
+          events.push({
+            id: `anniv-${emp.id}`,
+            kind: 'anniversary',
+            label: years > 0 ? `${name} — ${years} yr work anniversary` : `${name} joined the company`,
+            date: dateKeyLocal(eventAt),
+            when: diff === -1 ? 'Yesterday' : diff === 0 ? 'Today' : 'Tomorrow',
+          });
+        }
+      }
+    }
+
+    events.sort((a, b) => a.date.localeCompare(b.date));
+    return events;
+  }
+
+  private buildNewsFeed(
+    employees: {
+      id: number;
+      employeeFirstName: string | null;
+      employeeLastName: string | null;
+      joiningDate: string | null;
+    }[],
+    holidays: {
+      id: number;
+      startDate: Date | null;
+      manageHoliday: { holidayName: string | null } | null;
+    }[],
+    companyName: string,
+    today: Date,
+  ) {
+    const items: { id: string; kind: 'onboarding' | 'holiday'; title: string; subtitle: string; date: string }[] = [];
+
+    for (const emp of employees) {
+      const joinDate = this.parseFullDate(emp.joiningDate);
+      if (!joinDate) continue;
+      const diff = this.daysFromToday(today, joinDate);
+      // Only actual new joinings (full date), not yearly work anniversaries.
+      if (diff === -1 || diff === 0 || diff === 1) {
+        const name =
+          `${emp.employeeFirstName ?? ''} ${emp.employeeLastName ?? ''}`.trim() || 'New employee';
+        const title =
+          diff === 0
+            ? `${name} onboarded today`
+            : diff === 1
+              ? `${name} joins tomorrow`
+              : `${name} onboarded yesterday`;
+        items.push({
+          id: `onboard-${emp.id}-${dateKeyLocal(joinDate)}`,
+          kind: 'onboarding',
+          title,
+          subtitle: `Welcome to ${companyName}`,
+          date: dateKeyLocal(joinDate),
+        });
+      }
+    }
+
+    for (const h of holidays) {
+      if (!h.startDate) continue;
+      const eventAt = new Date(h.startDate);
+      const diff = this.daysFromToday(today, eventAt);
+      if (diff === 0 || diff === 1) {
+        const holidayName = h.manageHoliday?.holidayName?.trim() || 'Public holiday';
+        items.push({
+          id: `holiday-${h.id}`,
+          kind: 'holiday',
+          title: diff === 0 ? `${holidayName} today` : `${holidayName} tomorrow`,
+          subtitle: companyName,
+          date: dateKeyLocal(eventAt),
+        });
+      }
+    }
+
+    items.sort((a, b) => b.date.localeCompare(a.date));
+    return items;
+  }
+
   private emptyResponse(date: string, query: TodayOverviewQuery) {
     return {
       date,

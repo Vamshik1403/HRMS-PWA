@@ -13,8 +13,17 @@ import { EmpRecordHistorySheet } from "../components/emp/EmpRecordHistorySheet";
 import { EmpListViewMoreButton } from "../components/emp/EmpListViewMoreButton";
 import { ManagerMemoComposeSheet } from "../components/emp/ManagerMemoComposeSheet";
 import { resolveAttachmentUrl } from "../utils/uploadFile";
+import { useMemoChatPolling } from "../hooks/useMemoChatPolling";
 
 const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL || "/backend";
+
+interface MemoReply {
+  id: number;
+  description: string | null;
+  issuedBy: string | null;
+  createdAt: string | null;
+  senderEmployeeId?: number | null;
+}
 
 interface Memo {
   id: number;
@@ -25,6 +34,7 @@ interface Memo {
   issuedBy: string | null;
   createdAt: string | null;
   attachmentPath?: string | null;
+  replies?: MemoReply[];
 }
 
 function fmt(iso: string | null) {
@@ -65,6 +75,9 @@ export default function EmpNoticeboardPage() {
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [composeOpen, setComposeOpen] = useState(false);
+  const [replyText, setReplyText] = useState("");
+  const [replySaving, setReplySaving] = useState(false);
+  const [threadLoading, setThreadLoading] = useState(false);
   const employeeIDRef = useRef<number | null>(null);
 
   const loadMemos = useCallback(async (empId: number) => {
@@ -123,7 +136,7 @@ export default function EmpNoticeboardPage() {
 
     const interval = setInterval(() => {
       if (document.visibilityState === "visible") loadMemos(employeeID!);
-    }, 20000);
+    }, 10000);
     const onVisible = () => {
       if (document.visibilityState === "visible") loadMemos(employeeID!);
     };
@@ -140,6 +153,104 @@ export default function EmpNoticeboardPage() {
     scope?.reportees.filter((r) => r.id !== scope.employeeId) ?? [];
   const managerName = user?.username || "Manager";
 
+  const memoAuthHeaders = useCallback((): Record<string, string> => {
+    const token = localStorage.getItem("token");
+    if (!token) return {};
+    return { Authorization: `Bearer ${token}` };
+  }, []);
+
+  const loadThread = useCallback(async (memoId: number) => {
+    setThreadLoading(true);
+    try {
+      const r = await fetch(`${BACKEND}/employee-memo/${memoId}`, {
+        headers: memoAuthHeaders(),
+      });
+      const data = await r.json();
+      const replies = Array.isArray(data?.replies) ? data.replies : [];
+      setMemos((prev) =>
+        prev.map((m) => (m.id === memoId ? { ...m, replies } : m)),
+      );
+    } catch {
+      /* ignore */
+    } finally {
+      setThreadLoading(false);
+    }
+  }, [memoAuthHeaders]);
+
+  useMemoChatPolling<{ replies?: MemoReply[] }>(
+    expandedId,
+    (data) => {
+      const replies = Array.isArray(data?.replies) ? data.replies : [];
+      setMemos((prev) =>
+        prev.map((m) => (m.id === expandedId ? { ...m, replies } : m)),
+      );
+    },
+    expandedId != null,
+    2000,
+    memoAuthHeaders,
+  );
+
+  const toggleExpanded = (memoId: number) => {
+    setExpandedId((cur) => {
+      const next = cur === memoId ? null : memoId;
+      if (next != null) void loadThread(next);
+      return next;
+    });
+    setReplyText("");
+  };
+
+  const sendReply = async (memoId: number) => {
+    if (!replyText.trim() || !employeeIDRef.current) return;
+    setReplySaving(true);
+    try {
+      const token = localStorage.getItem("token");
+      const r = await fetch(`${BACKEND}/employee-memo/${memoId}/reply`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          message: replyText.trim(),
+          issuedBy: user?.username || "Employee",
+          senderEmployeeId: employeeIDRef.current,
+        }),
+      });
+      if (!r.ok) throw new Error(await r.text());
+      setReplyText("");
+      await loadThread(memoId);
+    } catch (e: unknown) {
+      console.error(e);
+    } finally {
+      setReplySaving(false);
+    }
+  };
+
+  const undoReply = async (memoId: number, replyId: number) => {
+    try {
+      const token = localStorage.getItem("token");
+      const qs = employeeIDRef.current
+        ? `?senderEmployeeId=${employeeIDRef.current}`
+        : "";
+      const r = await fetch(`${BACKEND}/employee-memo/${replyId}/undo${qs}`, {
+        method: "POST",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!r.ok) throw new Error(await r.text());
+      await loadThread(memoId);
+    } catch (e: unknown) {
+      console.error(e);
+    }
+  };
+
+  const canUndoReply = (rep: MemoReply) => {
+    if (!rep.createdAt || !employeeIDRef.current) return false;
+    if (rep.senderEmployeeId != null && rep.senderEmployeeId !== employeeIDRef.current) {
+      return false;
+    }
+    return Date.now() - new Date(rep.createdAt).getTime() < 30 * 60 * 1000;
+  };
+
   const renderMemo = (memo: Memo) => {
     const isExpanded = expandedId === memo.id;
     const colorClass = memoColor(memo.memoType);
@@ -151,7 +262,7 @@ export default function EmpNoticeboardPage() {
       >
         <button
           className="w-full text-left p-4 flex items-start gap-3 active:bg-gray-50"
-          onClick={() => setExpandedId(isExpanded ? null : memo.id)}
+          onClick={() => toggleExpanded(memo.id)}
         >
           <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${colorClass}`}>
             <Icon icon={icon} className="w-5 h-5" />
@@ -211,6 +322,50 @@ export default function EmpNoticeboardPage() {
                   <p className="text-[13px] font-semibold text-gray-700">{memo.issuedBy}</p>
                 </div>
               )}
+            </div>
+
+            <div className="pt-3 space-y-2 border-t border-gray-100">
+              <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Conversation</p>
+              {threadLoading && expandedId === memo.id ? (
+                <p className="text-[12px] text-gray-400">Loading messages…</p>
+              ) : (
+                <>
+                  {(memo.replies ?? []).map((rep) => (
+                    <div key={rep.id} className="rounded-xl bg-gray-50 px-3 py-2">
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="text-[12px] font-semibold text-gray-800">{rep.issuedBy || "User"}</p>
+                        {canUndoReply(rep) && (
+                          <button
+                            type="button"
+                            className="text-[10px] font-semibold text-[#2563eb]"
+                            onClick={() => void undoReply(memo.id, rep.id)}
+                          >
+                            Undo
+                          </button>
+                        )}
+                      </div>
+                      <p className="text-[13px] text-gray-700 mt-1 whitespace-pre-line">{rep.description}</p>
+                    </div>
+                  ))}
+                </>
+              )}
+              <div className="flex gap-2 pt-1">
+                <input
+                  type="text"
+                  value={expandedId === memo.id ? replyText : ""}
+                  onChange={(e) => setReplyText(e.target.value)}
+                  placeholder="Reply to admin…"
+                  className="flex-1 rounded-xl border border-gray-200 px-3 py-2 text-[13px]"
+                />
+                <button
+                  type="button"
+                  disabled={replySaving || !replyText.trim()}
+                  onClick={() => void sendReply(memo.id)}
+                  className="shrink-0 rounded-xl bg-[#2563eb] text-white px-4 py-2 text-[13px] font-semibold disabled:opacity-40"
+                >
+                  Send
+                </button>
+              </div>
             </div>
           </div>
         )}

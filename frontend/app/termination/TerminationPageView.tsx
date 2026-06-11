@@ -25,7 +25,6 @@ import {
   Search,
   X,
   Save,
-  CalendarDays,
   CheckCircle2,
   AlertTriangle,
 } from "lucide-react";
@@ -295,28 +294,14 @@ export default function TerminationManagement() {
   return (
     <div className="space-y-6 w-full max-w-6xl mx-auto px-4">
 
-      {/* Gradient Header */}
-      <div className="flex justify-between items-center bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-6 rounded-xl shadow">
-        <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
-            <CalendarDays className="w-6 h-6" />
-            Employee Exit Management
-          </h1>
-          <p className="text-sm opacity-80">
-            Manage resignation, termination & settlement workflow
-          </p>
-        </div>
-
-        {canManage && !isAdding && (
-          <Button
-            className="bg-white text-blue-600 hover:bg-gray-100"
-            onClick={() => setIsAdding(true)}
-          >
+      {canManage && !isAdding && (
+        <div className="flex justify-end">
+          <Button onClick={() => setIsAdding(true)}>
             <Plus className="w-4 h-4 mr-1" />
             Initiate Off Boarding
           </Button>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Create Form */}
       {isAdding && (
