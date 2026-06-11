@@ -953,13 +953,15 @@ export default function DashboardPage() {
                   <Link
                     key={item.href}
                     href={item.href}
-                    className="rounded-lg border border-[#ebebeb] px-3 py-2.5 text-xs font-semibold text-gray-800 hover:bg-[#fafafa] text-center relative"
+                    className="flex flex-col items-center justify-center gap-1.5 rounded-lg border border-[#ebebeb] px-3 py-2.5 text-xs font-semibold text-gray-800 hover:bg-[#fafafa] text-center min-h-[4.5rem]"
                   >
-                    <span>{item.label}</span>
-                    {typeof item.count === "number" && item.count > 0 && (
-                      <span className="ml-1.5 inline-flex min-w-[1.25rem] h-5 items-center justify-center rounded-full bg-[#4f46e5] text-white text-[10px] font-bold px-1.5 tabular-nums">
+                    <span className="leading-snug">{item.label}</span>
+                    {typeof item.count === "number" && item.count > 0 ? (
+                      <span className="inline-flex min-w-[1.25rem] h-5 items-center justify-center rounded-full bg-[#4f46e5] text-white text-[10px] font-bold px-1.5 tabular-nums">
                         {item.count > 99 ? "99+" : item.count}
                       </span>
+                    ) : (
+                      <span className="h-5" aria-hidden />
                     )}
                   </Link>
                 ))}
@@ -1094,7 +1096,7 @@ export default function DashboardPage() {
                         href="/task-projects"
                         className="block rounded-lg border border-[#ebebeb] px-3 py-2 hover:bg-[#fafafa]"
                       >
-                        <p className="text-xs font-semibold text-gray-900 truncate">
+                        <p className="text-xs font-semibold text-gray-900 leading-snug whitespace-normal break-words">
                           {t.taskCode} — {t.taskName}
                         </p>
                         <p className="text-[11px] text-gray-500 mt-0.5">
@@ -1120,16 +1122,18 @@ export default function DashboardPage() {
                   {hrWidgets.upcomingEvents.map((ev) => (
                     <li
                       key={ev.id}
-                      className="flex items-center justify-between gap-2 rounded-lg border border-[#ebebeb] px-3 py-2"
+                      className="flex items-start gap-2.5 rounded-lg border border-[#ebebeb] px-3 py-2.5"
                     >
-                      <div className="min-w-0">
-                        <p className="text-xs font-semibold text-gray-900 truncate">{ev.label}</p>
-                        <p className="text-[11px] text-gray-500 capitalize">{ev.kind} · {ev.when}</p>
-                      </div>
                       <Icon
                         icon={ev.kind === "birthday" ? "mdi:cake-variant" : "mdi:medal"}
-                        className="w-4 h-4 text-[#4f46e5] shrink-0"
+                        className="w-4 h-4 text-[#4f46e5] shrink-0 mt-0.5"
                       />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-xs font-semibold text-gray-900 leading-snug whitespace-normal break-words">
+                          {ev.label}
+                        </p>
+                        <p className="text-[11px] text-gray-500 capitalize mt-0.5">{ev.kind} · {ev.when}</p>
+                      </div>
                     </li>
                   ))}
                 </ul>

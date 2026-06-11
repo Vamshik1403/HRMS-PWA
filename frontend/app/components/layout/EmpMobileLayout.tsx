@@ -219,13 +219,13 @@ export default function EmpMobileLayout({ children, hideBottomNav = false }: Emp
   const isActive = (href: string) => pathname === href || pathname.startsWith(href + "/");
 
   return (
-    <div className="emp-pwa-shell bg-[#f2f4f7]" data-theme={theme} style={{ position: 'fixed', inset: 0, display: 'flex', flexDirection: 'column', overscrollBehavior: 'none' }}>
+    <div className="emp-pwa-shell emp-pwa-page-bg" data-theme={theme} style={{ position: 'fixed', inset: 0, display: 'flex', flexDirection: 'column', overscrollBehavior: 'none' }}>
       <PushNotificationPrompt
         onSubscribed={() => setShowNotifButton(false)}
         onModalOpenChange={setPushModalOpen}
       />
       {/* Top safe-area spacer — prevents content going under notch/status bar */}
-      <div className="emp-pwa-safe-top" style={{ height: 'env(safe-area-inset-top)', background: '#f2f4f7', flexShrink: 0 }} />
+      <div className="emp-pwa-safe-top shrink-0" style={{ height: 'env(safe-area-inset-top)' }} />
 
       {/* iOS install-to-homescreen banner */}
       {showInstallBanner && (

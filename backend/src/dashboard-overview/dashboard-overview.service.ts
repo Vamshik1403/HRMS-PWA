@@ -130,7 +130,13 @@ export class DashboardOverviewService {
     const wallNow = wallClockInZoneToStorageDate(nowDate);
     const nowMin = wallNow.getUTCHours() * 60 + wallNow.getUTCMinutes();
 
-    const employeeWhere: Record<string, unknown> = {};
+    const employeeWhere: Record<string, unknown> = {
+      lifecycleStatus: 'ACTIVE',
+      OR: [
+        { employmentStatus: null },
+        { employmentStatus: { not: 'Terminated' } },
+      ],
+    };
     if (query.companyID != null) employeeWhere.companyID = query.companyID;
     if (query.serviceProviderID != null) {
       employeeWhere.serviceProviderID = query.serviceProviderID;
@@ -140,7 +146,7 @@ export class DashboardOverviewService {
       employeeWhere.departmentNameID = query.departmentId;
     }
 
-    const employees = await this.prisma.manageEmployee.findMany({
+    let employees = await this.prisma.manageEmployee.findMany({
       where: employeeWhere,
       select: {
         id: true,
@@ -172,6 +178,29 @@ export class DashboardOverviewService {
         },
       },
     });
+
+    if (employees.length > 0) {
+      const approvedTerminations = await this.prisma.employeeTermination.findMany({
+        where: {
+          employeeId: { in: employees.map((e) => e.id) },
+          exitStatus: 'APPROVED',
+          lastWorkingDay: { not: null },
+        },
+        select: { employeeId: true, lastWorkingDay: true },
+      });
+      const inactiveAfterOffboarding = new Set<number>();
+      for (const t of approvedTerminations) {
+        if (
+          t.lastWorkingDay &&
+          dateKeyLocal(new Date(t.lastWorkingDay)) <= today
+        ) {
+          inactiveAfterOffboarding.add(t.employeeId);
+        }
+      }
+      if (inactiveAfterOffboarding.size > 0) {
+        employees = employees.filter((e) => !inactiveAfterOffboarding.has(e.id));
+      }
+    }
 
     if (employees.length === 0) {
       return this.emptyResponse(today, query);
@@ -866,7 +895,7 @@ export class DashboardOverviewService {
     ] = await Promise.all([
       this.prisma.employeeMemo.count({ where: memoWhere }),
       this.prisma.taskProject.count({
-        where: { ...taskWhere, status: { in: ['Open', 'In Progress', 'Pending'] } },
+        where: { ...taskWhere, status: { not: 'Closed' } },
       }),
       this.prisma.reimbursement.count({ where: reimbWhere }),
       this.prisma.leaveApplication.count({ where: leaveWhere }),

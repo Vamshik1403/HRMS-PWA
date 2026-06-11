@@ -66,6 +66,12 @@ const API = {
   terminations: "/backend/termination",
 };
 
+const EXIT_TYPES_WITHOUT_NOTICE = new Set(["TERMINATION", "DEATH", "ABSCONDING"]);
+
+function exitTypeRequiresNotice(exitType: string) {
+  return Boolean(exitType) && !EXIT_TYPES_WITHOUT_NOTICE.has(exitType);
+}
+
 export default function TerminationManagement() {
   const user = useCurrentUser();
   const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN" || user?.role === "BRANCH_ADMIN" || user?.role === "ADMIN";
@@ -176,6 +182,7 @@ export default function TerminationManagement() {
     setSaving(true);
 
     try {
+      const requiresNotice = exitTypeRequiresNotice(form.exitType);
       const createRes = await fetch(API.terminations, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -185,7 +192,10 @@ export default function TerminationManagement() {
           reasonCategory: form.reasonCategory,
           resignationDate: form.resignationDate || undefined,
           noticeStartDate: form.initiatedOn || undefined,
-          noticeDays: form.noticePeriod ? Number(form.noticePeriod) : undefined,
+          noticeDays:
+            requiresNotice && form.noticePeriod
+              ? Number(form.noticePeriod)
+              : undefined,
         }),
       });
 
@@ -193,12 +203,18 @@ export default function TerminationManagement() {
 
       // For admin roles, auto-approve immediately — no separate approval step needed
       if (canManage && created?.id) {
-        const noticeDays = form.noticePeriod ? Number(form.noticePeriod) : 0;
-        const startDate = form.initiatedOn
-          ? new Date(form.initiatedOn)
-          : new Date();
-        startDate.setDate(startDate.getDate() + noticeDays);
-        const lastWorkingDay = startDate.toISOString().split("T")[0];
+        let lastWorkingDay: string;
+        if (requiresNotice && form.noticePeriod) {
+          const noticeDays = Number(form.noticePeriod);
+          const startDate = form.initiatedOn
+            ? new Date(form.initiatedOn)
+            : new Date();
+          startDate.setDate(startDate.getDate() + noticeDays);
+          lastWorkingDay = startDate.toISOString().split("T")[0];
+        } else {
+          lastWorkingDay =
+            form.initiatedOn || new Date().toISOString().split("T")[0];
+        }
 
         await fetch(`${API.terminations}/${created.id}/approve`, {
           method: "PUT",
@@ -349,9 +365,16 @@ export default function TerminationManagement() {
                 <Label>Exit Type *</Label>
                 <select
                   value={form.exitType}
-                  onChange={(e) =>
-                    setForm({ ...form, exitType: e.target.value })
-                  }
+                  onChange={(e) => {
+                    const exitType = e.target.value;
+                    setForm((prev) => ({
+                      ...prev,
+                      exitType,
+                      noticePeriod: EXIT_TYPES_WITHOUT_NOTICE.has(exitType)
+                        ? ""
+                        : prev.noticePeriod,
+                    }));
+                  }}
                   className="w-full border rounded p-2"
                   required
                 >
@@ -388,18 +411,20 @@ export default function TerminationManagement() {
                 />
               </div>
 
-              <div>
-                <Label>Notice Period (Days)</Label>
-                <Input
-                  type="number"
-                  min="0"
-                  value={form.noticePeriod}
-                  onChange={(e) =>
-                    setForm({ ...form, noticePeriod: e.target.value })
-                  }
-                  placeholder="e.g. 30"
-                />
-              </div>
+              {exitTypeRequiresNotice(form.exitType) && (
+                <div>
+                  <Label>Notice Period (Days)</Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    value={form.noticePeriod}
+                    onChange={(e) =>
+                      setForm({ ...form, noticePeriod: e.target.value })
+                    }
+                    placeholder="e.g. 30"
+                  />
+                </div>
+              )}
 
               <div className="flex gap-2">
                 <Button type="submit" disabled={saving}>

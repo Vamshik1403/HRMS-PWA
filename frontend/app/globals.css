@@ -462,22 +462,42 @@ input[type="time"]::-webkit-calendar-picker-indicator:hover {
 }
 
 /* Employee PWA appearance theme (scoped) */
+.emp-pwa-page-bg {
+  background-color: #f2f4f7;
+}
+
 html[data-emp-theme="dark"] .emp-pwa-shell,
-html[data-emp-theme="dark"] .emp-pwa-safe-top {
+html[data-emp-theme="dark"] .emp-pwa-safe-top,
+html[data-emp-theme="dark"] .emp-pwa-page-bg {
   background: #0b1220 !important;
   color: #e5e7eb !important;
+}
+
+html[data-emp-theme="dark"] .emp-pwa-shell {
+  color-scheme: dark;
 }
 
 html[data-emp-theme="dark"] .emp-pwa-shell .bg-white {
   background-color: #111827 !important;
 }
 
-html[data-emp-theme="dark"] .emp-pwa-shell .bg-gray-50 {
-  background-color: #0f172a !important;
+html[data-emp-theme="dark"] .emp-pwa-shell .bg-gray-50,
+html[data-emp-theme="dark"] .emp-pwa-shell [class*="bg-gray-50"] {
+  background-color: #1e293b !important;
 }
 
-html[data-emp-theme="dark"] .emp-pwa-shell .bg-gray-100 {
+html[data-emp-theme="dark"] .emp-pwa-shell .bg-gray-100,
+html[data-emp-theme="dark"] .emp-pwa-shell [class*="bg-gray-100"] {
   background-color: #1f2937 !important;
+}
+
+html[data-emp-theme="dark"] .emp-pwa-shell [class*="bg-[#f8f9fb]"],
+html[data-emp-theme="dark"] .emp-pwa-shell [class*="bg-[#f2f4f7]"] {
+  background-color: #0b1220 !important;
+}
+
+html[data-emp-theme="dark"] .emp-pwa-shell .shadow-sm {
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35) !important;
 }
 
 html[data-emp-theme="dark"] .emp-pwa-shell .text-gray-900 {
@@ -499,6 +519,44 @@ html[data-emp-theme="dark"] .emp-pwa-shell .text-gray-600 {
 html[data-emp-theme="dark"] .emp-pwa-shell .text-gray-500,
 html[data-emp-theme="dark"] .emp-pwa-shell .text-gray-400 {
   color: #94a3b8 !important;
+}
+
+html[data-emp-theme="dark"] .emp-pwa-shell .text-gray-300 {
+  color: #64748b !important;
+}
+
+html[data-emp-theme="dark"] .emp-pwa-shell .text-amber-600,
+html[data-emp-theme="dark"] .emp-pwa-shell .text-amber-700 {
+  color: #fbbf24 !important;
+}
+
+html[data-emp-theme="dark"] .emp-pwa-shell .text-blue-700 {
+  color: #93c5fd !important;
+}
+
+html[data-emp-theme="dark"] .emp-pwa-shell .text-red-700 {
+  color: #fca5a5 !important;
+}
+
+html[data-emp-theme="dark"] .emp-pwa-shell .text-emerald-700 {
+  color: #6ee7b7 !important;
+}
+
+html[data-emp-theme="dark"] .emp-pwa-shell .border-red-100,
+html[data-emp-theme="dark"] .emp-pwa-shell .border-red-200 {
+  border-color: #7f1d1d !important;
+}
+
+html[data-emp-theme="dark"] .emp-pwa-shell .border-amber-100 {
+  border-color: #78350f !important;
+}
+
+html[data-emp-theme="dark"] .emp-pwa-shell .border-blue-100 {
+  border-color: #1e3a8a !important;
+}
+
+html[data-emp-theme="dark"] .emp-pwa-shell .border-emerald-100 {
+  border-color: #065f46 !important;
 }
 
 html[data-emp-theme="dark"] .emp-pwa-shell .border-gray-50,
@@ -526,6 +584,33 @@ html[data-emp-theme="dark"] .emp-pwa-shell .bg-emerald-50 {
 
 html[data-emp-theme="dark"] .emp-pwa-shell .bg-red-50 {
   background-color: #7f1d1d55 !important;
+}
+
+html[data-emp-theme="dark"] .emp-pwa-shell .bg-amber-50 {
+  background-color: #78350f44 !important;
+}
+
+html[data-emp-theme="dark"] .emp-pwa-shell .bg-rose-50 {
+  background-color: #88133744 !important;
+}
+
+html[data-emp-theme="dark"] .emp-pwa-shell .text-amber-600,
+html[data-emp-theme="dark"] .emp-pwa-shell .text-emerald-600,
+html[data-emp-theme="dark"] .emp-pwa-shell .text-rose-600 {
+  filter: brightness(1.15);
+}
+
+html[data-emp-theme="dark"] .emp-pwa-shell .active\:bg-gray-50:active {
+  background-color: #1e293b !important;
+}
+
+html[data-emp-theme="dark"] .emp-pwa-bottom-nav .text-gray-400 {
+  color: #94a3b8 !important;
+}
+
+html[data-emp-theme="dark"] .emp-pwa-bottom-nav .group-active\:text-gray-500:active,
+html[data-emp-theme="dark"] .emp-pwa-bottom-nav .group-active\:text-gray-600:active {
+  color: #cbd5e1 !important;
 }
 
 /* PWA date fields — force light native picker, separate white cells */
