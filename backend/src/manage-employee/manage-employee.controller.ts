@@ -113,6 +113,11 @@ searchCredentials(
   }
 
 
+@Get('list')
+findAllForList(@Query('status') status?: string) {
+  return this.service.findAllForList(status);
+}
+
 @Get()
 findAll(@Query('status') status?: string) {
   return this.service.findAll(status);

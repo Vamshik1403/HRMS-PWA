@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { TableBodySkeleton } from "../components/ui/TableBodySkeleton"
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card"
 import { Button } from "../components/ui/button"
 import { Input } from "../components/ui/input"
@@ -94,6 +95,7 @@ function plExpiryToParts(iso?: string | null): { month: number; day: number } {
 
 export function LeavePolicyManagement() {
   const [policies, setPolicies] = useState<LeavePolicy[]>([])
+  const [listLoading, setListLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editingPolicy, setEditingPolicy] = useState<LeavePolicy | null>(null)
@@ -375,6 +377,7 @@ const fetchBranches = async (query: string) => {
 
   const loadLeavePolicies = async () => {
     try {
+      setListLoading(true)
       const [response, branchesRes] = await Promise.all([
         fetch(`${BACKEND_URL}/leave-policy`),
         fetch(`${BACKEND_URL}/branches`),
@@ -461,6 +464,8 @@ const fetchBranches = async (query: string) => {
       console.error("Error loading leave policies:", error);
       toast.error("Failed to load data.");
       setPolicies([]);
+    } finally {
+      setListLoading(false)
     }
   };
 
@@ -1124,7 +1129,9 @@ const handleCompanySelect = (selected: SelectedItem) => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredPolicies.length === 0 ? (
+                {listLoading ? (
+                  <TableBodySkeleton cols={9} />
+                ) : filteredPolicies.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={9} className="text-center py-8 text-gray-500">
                       <div className="flex flex-col items-center gap-2">

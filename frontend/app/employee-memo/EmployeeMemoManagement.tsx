@@ -1,4 +1,5 @@
 "use client";
+import { TableBodySkeleton } from "../components/ui/TableBodySkeleton";
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Card, CardContent } from "../components/ui/card";
@@ -743,11 +744,7 @@ export function EmployeeMemoManagement() {
                 </TableHeader>
                 <TableBody>
                   {loading ? (
-                    <TableRow>
-                      <TableCell colSpan={6} className="text-center py-8 text-gray-400">
-                        Loading…
-                      </TableCell>
-                    </TableRow>
+                    <TableBodySkeleton cols={canManage ? 6 : 5} />
                   ) : filteredRows.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={6} className="text-center py-8 text-gray-400">

@@ -245,6 +245,7 @@ export class TaskProjectsService {
           `You have been assigned: ${taskLabel}`,
           {
             url: '/empMyTasks',
+            kind: 'task',
             tag: `task-assign-${taskID}-${manageEmployeeID}`,
           },
         )

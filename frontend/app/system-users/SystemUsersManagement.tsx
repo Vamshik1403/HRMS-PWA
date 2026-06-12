@@ -15,6 +15,7 @@ import {
 } from "../components/ui/select";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import { useListAutoRefresh } from "../hooks/useListAutoRefresh";
+import { TableBodySkeleton } from "../components/ui/TableBodySkeleton";
 import { toast } from "sonner";
 import { FormDrawer } from "../components/ui/form-drawer";
 
@@ -353,7 +354,7 @@ export function SystemUsersManagement() {
                 </TableHeader>
                 <TableBody>
                   {loading ? (
-                    <TableRow><TableCell colSpan={6} className="text-center py-8 text-gray-400">Loading…</TableCell></TableRow>
+                    <TableBodySkeleton cols={6} />
                   ) : filteredRows.length === 0 ? (
                     <TableRow><TableCell colSpan={6} className="text-center py-8 text-gray-400">No users found</TableCell></TableRow>
                   ) : (

@@ -1,4 +1,5 @@
 "use client";
+import { TableBodySkeleton } from "../components/ui/TableBodySkeleton";
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
@@ -73,6 +74,7 @@ const API = {
 const MIN_CHARS = 0;
 
 export function SalaryDeductionsManagement() {
+  const [listLoading, setListLoading] = useState(true);
   const [deductions, setDeductions] = useState<SalaryDeduction[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -182,6 +184,7 @@ useEffect(() => {
 
 
 const loadDeductions = async () => {
+  setListLoading(true);
   try {
     const res = await fetch(API.deduction);
     const data: ApiSalaryDeduction[] = await res.json();
@@ -241,6 +244,8 @@ const loadDeductions = async () => {
     console.error("Failed to load salary deductions", e);
     toast.error("Failed to load data.");
     setDeductions([]);
+  } finally {
+    setListLoading(false);
   }
 };
 
@@ -871,7 +876,9 @@ const loadDeductions = async () => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredDeductions.length === 0 ? (
+                {listLoading ? (
+                      <TableBodySkeleton cols={5} />
+                    ) : filteredDeductions.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={7} className="text-center py-8 text-gray-500">
                       <div className="flex flex-col items-center gap-2">

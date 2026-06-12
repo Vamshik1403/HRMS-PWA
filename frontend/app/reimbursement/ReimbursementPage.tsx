@@ -22,6 +22,7 @@ import html2canvas from "html2canvas"
 import { useCurrentUser } from "../hooks/useCurrentUser"
 import { toast } from "sonner"
 import { getSidebarContext } from "../utils/sidebarContext"
+import { TableBodySkeleton } from "../components/ui/TableBodySkeleton"
 import { displayStatusLabel, isPartiallyApprovedStatus } from "../utils/statusDisplay"
 
 
@@ -424,6 +425,7 @@ function SummaryCell({
 
 export function ReimbursementManagement() {
   const [reimbursements, setReimbursements] = useState<Reimbursement[]>([])
+  const [listLoading, setListLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [isSettingsDialogOpen, setIsSettingsDialogOpen] = useState(false)
@@ -835,6 +837,8 @@ useEffect(() => {
 }, [user])
   
  const loadReimbursements = async () => {
+  setListLoading(true)
+  try {
   const reimbursements = await robustGet<any[]>(`${BACKEND_URL}/reimbursement`)
 
   const mapped = reimbursements.map((r) => ({
@@ -929,6 +933,9 @@ useEffect(() => {
   } catch (err) {
     console.error("Error fetching credentials/all for EMPLOYEE", err)
     setReimbursements([])
+  }
+  } finally {
+    setListLoading(false)
   }
 }
 
@@ -1495,7 +1502,15 @@ onClick={async () => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredReimbursements.map((r) => {
+                {listLoading ? (
+                  <TableBodySkeleton cols={6} />
+                ) : filteredReimbursements.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-center py-8 text-gray-500">
+                      No reimbursements found
+                    </TableCell>
+                  </TableRow>
+                ) : filteredReimbursements.map((r) => {
                   const totalAmount = getTotalAmount(r)
                   return (
                     <TableRow key={r.id} className="hover:bg-[#eef2ff]/40 border-b border-[#e5e7eb]">

@@ -36,6 +36,7 @@ import {
   DialogFooter,
 } from "../components/ui/dialog";
 import { useCurrentUser } from "../hooks/useCurrentUser";
+import { TableBodySkeleton } from "../components/ui/TableBodySkeleton";
 
 type ID = number;
 
@@ -62,7 +63,7 @@ interface Termination {
 }
 
 const API = {
-  employees: "/backend/manage-emp",
+  employees: "/backend/manage-emp/list",
   terminations: "/backend/termination",
 };
 
@@ -78,7 +79,7 @@ export default function TerminationManagement() {
 
   const [terminations, setTerminations] = useState<Termination[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [isAdding, setIsAdding] = useState(false);
   const [search, setSearch] = useState("");
@@ -463,7 +464,16 @@ export default function TerminationManagement() {
               </TableHeader>
 
               <TableBody>
-                {filtered.map((t) => (
+                {loading ? (
+                  <TableBodySkeleton cols={8} />
+                ) : filtered.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={8} className="text-center py-8 text-gray-500">
+                      No termination records found
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                filtered.map((t) => (
                   <TableRow key={t.id}>
                     <TableCell>
                       {t.employee?.employeeFirstName}{" "}
@@ -562,7 +572,8 @@ export default function TerminationManagement() {
                       )}
                     </TableCell>
                   </TableRow>
-                ))}
+                ))
+                )}
               </TableBody>
             </Table>
           </CardContent>

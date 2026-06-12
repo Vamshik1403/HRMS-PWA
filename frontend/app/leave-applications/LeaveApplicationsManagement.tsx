@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { TableBodySkeleton } from "../components/ui/TableBodySkeleton"
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card"
 import { Button } from "../components/ui/button"
 import { Input } from "../components/ui/input"
@@ -88,6 +89,7 @@ const BALANCE_LIMITED_LEAVE_TYPES: Record<string, keyof LeaveBalance> = {
 
 export function LeaveApplicationsManagement() {
   const [leaveApplications, setLeaveApplications] = useState<LeaveApplication[]>([])
+  const [listLoading, setListLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editingApplication, setEditingApplication] = useState<LeaveApplication | null>(null)
@@ -1022,6 +1024,7 @@ export function LeaveApplicationsManagement() {
 
   const loadLeaveApplications = async () => {
     try {
+      setListLoading(true)
       const res = await fetch(`${BACKEND_URL}/leave-application`, { cache: "no-store" })
       const data = await res.json()
       
@@ -1149,6 +1152,8 @@ export function LeaveApplicationsManagement() {
     } catch (error) {
       console.error("Error loading leave applications:", error)
       toast.error("Failed to load data.");
+    } finally {
+      setListLoading(false)
     }
   }
 
@@ -2407,7 +2412,9 @@ export function LeaveApplicationsManagement() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredApplications.length === 0 ? (
+                {listLoading ? (
+                  <TableBodySkeleton cols={7} />
+                ) : filteredApplications.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={7} className="text-center py-8 text-gray-500">
                       <div className="flex flex-col items-center gap-2">

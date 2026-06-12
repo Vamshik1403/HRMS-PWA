@@ -19,6 +19,7 @@ import { getSidebarContext } from "../utils/sidebarContext";
 import { formatPayslipPeriodLabel } from "../utils/payslipPeriodLabel";
 import { dispatchAppRefresh, registerDataCacheClearer } from "../utils/appRefresh";
 import { useListAutoRefresh } from "../hooks/useListAutoRefresh";
+import { TableBodySkeleton } from "../components/ui/TableBodySkeleton";
 
 /* =======================
    Types (aligned to API)
@@ -1565,6 +1566,7 @@ export function GenerateSalaryManagement() {
 
   const user = useCurrentUser()
   const [items, setItems] = useState<GenerateSalaryRow[]>([])
+  const [listLoading, setListLoading] = useState(true)
   const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN" || user?.role === "BRANCH_ADMIN"
 
   const [spList, setSpList] = useState<SP[]>([]);
@@ -1721,6 +1723,7 @@ export function GenerateSalaryManagement() {
 
   // Fetch all salary records
   async function fetchAll() {
+    setListLoading(true);
     try {
       const raw = await robustGet(API.generateSalary, { fresh: true })
       const allItems: GenerateSalaryRow[] = Array.isArray(raw) ? raw : (raw?.data ?? [])
@@ -1783,6 +1786,8 @@ export function GenerateSalaryManagement() {
     } catch (e) {
       console.error("Failed to load GenerateSalary:", e)
       toast.error("Failed to load data.");
+    } finally {
+      setListLoading(false);
     }
   }
 
@@ -3036,7 +3041,9 @@ export function GenerateSalaryManagement() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filtered.length === 0 ? (
+                  {listLoading ? (
+                    <TableBodySkeleton cols={5} />
+                  ) : filtered.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={5} className="text-center py-8 text-gray-500">
                         <div className="flex flex-col items-center gap-2">

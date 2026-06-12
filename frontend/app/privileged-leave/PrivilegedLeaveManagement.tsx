@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { TableBodySkeleton } from "../components/ui/TableBodySkeleton"
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card"
 import { Button } from "../components/ui/button"
 import { Input } from "../components/ui/input"
@@ -60,6 +61,7 @@ export function PrivilegedLeaveManagement() {
   const [activeTab, setActiveTab] = useState<"ledger" | "lapse">("ledger")
   const [employees, setEmployees] = useState<any[]>([])
   const [policies, setPolicies] = useState<any[]>([])
+  const [listLoading, setListLoading] = useState(true)
 
   const [formData, setFormData] = useState({
     employeeID: 0,
@@ -84,12 +86,16 @@ export function PrivilegedLeaveManagement() {
   const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN" || user?.role === "BRANCH_ADMIN"
 
   useEffect(() => {
-    if (user) {
-      loadLedger()
-      loadLapses()
-      loadEmployees()
-      loadPolicies()
+    if (!user) return
+    const loadInitial = async () => {
+      setListLoading(true)
+      try {
+        await Promise.all([loadLedger(), loadLapses(), loadEmployees(), loadPolicies()])
+      } finally {
+        setListLoading(false)
+      }
     }
+    loadInitial()
   }, [user])
 
   const loadLedger = async () => {
@@ -116,7 +122,7 @@ export function PrivilegedLeaveManagement() {
 
   const loadEmployees = async () => {
     try {
-      const res = await fetch(`${BACKEND_URL}/manage-emp`)
+      const res = await fetch(`${BACKEND_URL}/manage-emp/list`)
       const data = await res.json()
       setEmployees(Array.isArray(data) ? data : [])
     } catch (err) {
@@ -727,7 +733,9 @@ export function PrivilegedLeaveManagement() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {aggregatedData.length === 0 ? (
+                  {listLoading ? (
+                    <TableBodySkeleton cols={12} />
+                  ) : aggregatedData.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={12} className="text-center py-10 text-gray-500">
                         <div className="flex flex-col items-center gap-2">

@@ -18,6 +18,7 @@ import { LocationFields } from "../components/ui/location-fields"
 import { SearchSuggestInput } from "../components/SearchSuggestInput"
 import { fetchCurrencies } from "../utils/geoApi"
 import { PdfUploadField } from "../components/PdfUploadField"
+import { ListAreaSkeleton } from "../components/ui/TableBodySkeleton"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -740,7 +741,7 @@ export function CompanyManagement() {
       </FormDrawer>
 
       {isCompanyProfileOnly && !isAddingNew && companies.length === 0 && (
-        <div className="text-center py-16 text-gray-500">Loading company profile…</div>
+        <ListAreaSkeleton rows={6} />
       )}
 
       {!isAddingNew && !isViewing && !isCompanyProfileOnly && (<>

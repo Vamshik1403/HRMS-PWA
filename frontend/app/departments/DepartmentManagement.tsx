@@ -1,4 +1,5 @@
 "use client";
+import { TableBodySkeleton } from "../components/ui/TableBodySkeleton";
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
@@ -567,7 +568,7 @@ export function DepartmentManagement() {
     ?? (r.branchesID != null ? (brMap[r.branchesID] ?? "—") : "—");
 
   return (
-    <div className="space-y-6 w-full max-w-7xl mx-auto px-4">
+    <div className="space-y-6 w-full max-w-7xl mx-auto px-4 page-content-enter">
       {/* Header */}
       <div className="flex items-center justify-between w-full">
         <div className="min-w-0 flex-1">
@@ -799,9 +800,6 @@ export function DepartmentManagement() {
               </CardTitle>
             </CardHeader>
             <CardContent className="p-0 w-full overflow-x-auto">
-              {loading ? (
-                <div className="p-6 text-sm text-gray-500">Loading…</div>
-              ) : (
                 <Table className="w-full">
                   <TableHeader>
                     <TableRow>
@@ -811,7 +809,9 @@ export function DepartmentManagement() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filtered.length === 0 ? (
+                    {loading ? (
+                      <TableBodySkeleton cols={3} />
+                    ) : filtered.length === 0 ? (
                       <TableRow>
                         <TableCell colSpan={3} className="text-center py-8 text-gray-500">
                           <div className="flex flex-col items-center gap-2">
@@ -871,7 +871,6 @@ export function DepartmentManagement() {
                     )}
                   </TableBody>
                 </Table>
-              )}
             </CardContent>
           </Card>
       </>)}

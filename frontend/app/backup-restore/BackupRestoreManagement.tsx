@@ -16,6 +16,7 @@ import {
   TableRow,
 } from "../components/ui/table";
 import { authHeaders, getAccessToken } from "@/lib/auth";
+import { ListAreaSkeleton } from "../components/ui/TableBodySkeleton";
 
 const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL || "/backend";
 
@@ -282,9 +283,7 @@ export function BackupRestoreManagement() {
         </CardHeader>
         <CardContent>
           {loading ? (
-            <div className="py-10 flex justify-center">
-              <Loader2 className="w-6 h-6 animate-spin text-blue-500" />
-            </div>
+            <ListAreaSkeleton rows={5} />
           ) : items.length === 0 ? (
             <p className="text-sm text-gray-500 py-6 text-center">No backups yet. Run a backup to create the first archive.</p>
           ) : (

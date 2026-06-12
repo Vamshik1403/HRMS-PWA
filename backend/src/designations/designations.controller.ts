@@ -21,6 +21,11 @@ export class DesignationsController {
     return this.designationsService.create(dto);
   }
 
+  @Get('list')
+  findAllForList() {
+    return this.designationsService.findAllForList();
+  }
+
   @Get()
   findAll() {
     return this.designationsService.findAll();

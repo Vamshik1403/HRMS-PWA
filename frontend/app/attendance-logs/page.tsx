@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { Icon } from "@iconify/react";
-import { PageLayout } from "../components/layout/PageLayout";
 import {
   Table,
   TableBody,
@@ -15,6 +14,7 @@ import {
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import { getSidebarContext } from "../utils/sidebarContext";
 import { isDesktopManagerFlagSet } from "@/lib/desktopManager";
+import { TableBodySkeleton } from "@/app/components/ui/TableBodySkeleton";
 
 const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL || "/backend";
 
@@ -220,8 +220,7 @@ export default function AttendanceLogsPage() {
   }, [rows.length, presenceFilter]);
 
   return (
-    <PageLayout>
-      <div className="p-4 sm:p-6 max-w-7xl mx-auto">
+    <div className="p-4 sm:p-6 max-w-7xl mx-auto">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
           <div className="flex items-center gap-3">
             <Link
@@ -317,11 +316,7 @@ export default function AttendanceLogsPage() {
               </TableHeader>
               <TableBody>
                 {loading ? (
-                  <TableRow>
-                    <TableCell colSpan={7} className="text-center py-12 text-sm text-gray-400">
-                      Loading…
-                    </TableCell>
-                  </TableRow>
+                  <TableBodySkeleton cols={7} />
                 ) : rows.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={7} className="text-center py-12 text-sm text-gray-400">
@@ -380,6 +375,5 @@ export default function AttendanceLogsPage() {
           </div>
         </div>
       </div>
-    </PageLayout>
   );
 }

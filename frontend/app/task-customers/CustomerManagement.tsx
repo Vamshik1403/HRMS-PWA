@@ -1,4 +1,5 @@
 "use client";
+import { TableBodySkeleton } from "../components/ui/TableBodySkeleton";
 
 import { useCallback, useEffect, useState } from "react";
 import { Card, CardContent } from "../components/ui/card";
@@ -145,7 +146,7 @@ export default function CustomerManagement() {
                 </TableHeader>
                 <TableBody>
                   {loading ? (
-                    <TableRow><TableCell colSpan={6} className="text-center py-8 text-gray-500">Loading…</TableCell></TableRow>
+                    <TableBodySkeleton cols={6} />
                   ) : rows.length === 0 ? (
                     <TableRow><TableCell colSpan={6} className="text-center py-8 text-gray-500">No customers found</TableCell></TableRow>
                   ) : rows.map((r) => (

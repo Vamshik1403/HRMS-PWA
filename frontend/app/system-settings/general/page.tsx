@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { PageLayout } from "../../components/layout/PageLayout";
 import { useCurrentUser } from "../../hooks/useCurrentUser";
 import { getSidebarContext } from "../../utils/sidebarContext";
 import { toast } from "sonner";
@@ -84,15 +83,12 @@ export default function GeneralSettingsPage() {
 
   if (user && user.role !== "SUPERADMIN" && user.role !== "COMPANY_ADMIN") {
     return (
-      <PageLayout>
-        <div className="p-8 text-center text-gray-500">Access restricted.</div>
-      </PageLayout>
+      <div className="p-8 text-center text-gray-500">Access restricted.</div>
     );
   }
 
   return (
-    <PageLayout>
-      <div className="max-w-xl p-6 sm:p-8">
+    <div className="max-w-xl p-6 sm:p-8">
         <h1 className="text-2xl font-bold text-gray-900 mb-1">General settings</h1>
         <p className="text-sm text-gray-500 mb-6">
           Company name is used in employee birthday notifications, joining forms, and other
@@ -135,6 +131,5 @@ export default function GeneralSettingsPage() {
           </div>
         )}
       </div>
-    </PageLayout>
   );
 }

@@ -187,6 +187,15 @@ const nextConfig = {
         ]
       },
       {
+        source: '/push-notification-routing.js',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'no-store, no-cache, must-revalidate'
+          }
+        ]
+      },
+      {
         source: '/manifest.json',
         headers: [
           {

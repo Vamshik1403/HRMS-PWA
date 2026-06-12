@@ -6,6 +6,7 @@ import { Icon } from "@iconify/react";
 import {
   consolidateStoredTaskChatNotifications,
   loadInAppNotifications,
+  pruneStoredMemoNotifications,
   type StoredInAppNotification,
 } from "../../utils/empInAppNotifications";
 import { empPayoutHrefForPeriod } from "../../utils/empPayslipApi";
@@ -88,6 +89,16 @@ function resolveNotificationHref(n: FeedNotification): string | undefined {
   return n.href;
 }
 
+function collectMemoIds(items: FeedNotification[]): Set<number> {
+  const ids = new Set<number>();
+  for (const item of items) {
+    if (item.kind !== "memo" || !item.id.startsWith("memo-")) continue;
+    const id = Number(item.id.slice(5));
+    if (Number.isFinite(id)) ids.add(id);
+  }
+  return ids;
+}
+
 function mergeFeeds(
   apiRecent: FeedNotification[],
   apiOlder: FeedNotification[],
@@ -149,6 +160,8 @@ export function EmpNotificationsPanel() {
         const data = await res.json();
         const olderList = Array.isArray(data.older) ? data.older : [];
         const recentList = Array.isArray(data.recent) ? data.recent : [];
+        const apiMemoIds = collectMemoIds([...recentList, ...olderList]);
+        pruneStoredMemoNotifications(apiMemoIds);
         setRecent(recentList);
         setOlder(olderList);
         setPageCache(feedCacheKey, {

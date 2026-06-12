@@ -16,6 +16,7 @@ import { Badge } from "../components/ui/badge";
 import { Search, Trash2, IndianRupee, X } from "lucide-react";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import { toast } from "sonner";
+import { TableBodySkeleton } from "../components/ui/TableBodySkeleton";
 import { getSidebarContext } from "../utils/sidebarContext";
 
 // ─── Types ──────────────────────────────────────────────────
@@ -941,9 +942,7 @@ export function ContractorPayoutsManagement() {
           </CardTitle>
         </CardHeader>
         <CardContent className="p-0">
-          {loading ? (
-            <div className="p-8 text-center text-sm text-gray-500">Loading…</div>
-          ) : payoutRecords.length === 0 ? (
+          {payoutRecords.length === 0 && !loading ? (
             <div className="p-8 text-center text-sm text-gray-400">No payout configurations saved yet.</div>
           ) : (
             <div className="overflow-x-auto">
@@ -962,7 +961,9 @@ export function ContractorPayoutsManagement() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {payoutRecords.map((record, idx) => (
+                  {loading ? (
+                    <TableBodySkeleton cols={canManage ? 9 : 8} />
+                  ) : payoutRecords.map((record, idx) => (
                     <TableRow key={record.id}>
                       <TableCell className="text-xs text-gray-400">{idx + 1}</TableCell>
                       <TableCell className="font-medium text-sm">

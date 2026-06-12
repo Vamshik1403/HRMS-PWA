@@ -717,7 +717,7 @@ export function DeviceManagement() {
     d.branches?.branchName ?? d.branchName ?? "—";
 
   return (
-    <div className="space-y-6 w-full max-w-6xl mx-auto px-4">
+    <div className="space-y-6 w-full max-w-6xl mx-auto px-4 page-content-enter">
 
       {/* Header */}
       <div className="flex items-center justify-between w-full">
@@ -1077,11 +1077,15 @@ export function DeviceManagement() {
                 </TableHeader>
                 <TableBody>
                   {loading ? (
-                    <TableRow>
-                      <TableCell colSpan={7} className="text-center py-8 text-gray-500">
-                        Loading...
-                      </TableCell>
-                    </TableRow>
+                    Array.from({ length: 8 }).map((_, i) => (
+                      <TableRow key={i}>
+                        {Array.from({ length: 7 }).map((__, c) => (
+                          <TableCell key={c}>
+                            <div className={`h-3.5 rounded-full skeleton-shimmer ${c === 1 ? "w-32" : "w-20"}`} />
+                          </TableCell>
+                        ))}
+                      </TableRow>
+                    ))
                   ) : filteredDevices.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={7} className="text-center py-8 text-gray-500">

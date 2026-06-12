@@ -260,6 +260,7 @@ interface ManageEmpRead {
    ========================= */
 const API = {
   manageEmp: "/backend/manage-emp",
+  manageEmpList: "/backend/manage-emp/list",
   serviceProviders: "/backend/service-provider",
   companies: "/backend/company",
   branches: "/backend/branches",
@@ -421,7 +422,7 @@ function upsertHistoryEntry<T extends { _localId: string; id?: ID; effectFrom?: 
 export function ManageEmployeesManagement() {
   // Data
   const [rows, setRows] = useState<ManageEmpRead[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [terminationMap, setTerminationMap] = useState<Record<number, { daysLeft: number; lastWorkingDay: string }>>({});
@@ -939,10 +940,7 @@ export function ManageEmployeesManagement() {
  const fetchRows = async () => {
   try {
     setLoading(true);
-    // Refresh reference-data cache on each list reload (e.g. after a save) so
-    // dropdowns pick up any newly created branches/departments/policies.
-    clearRefCache();
-    const all = await fetchJSONSafe<ManageEmpRead[]>(API.manageEmp);
+    const all = await fetchJSONSafe<ManageEmpRead[]>(API.manageEmpList);
     
     // Fetch active terminations to show offboarding countdown
     try {
@@ -2606,6 +2604,7 @@ const addCombinedDevMap = () => {
         }
       }
 
+      clearRefCache();
       await fetchRows();
       resetForm();
       setIsAddingNew(false);
@@ -2985,6 +2984,7 @@ const addCombinedDevMap = () => {
         headers: authHeaders(),
       });
       if (!res.ok) throw new Error(await res.text());
+      clearRefCache();
       await fetchRows();
       toast.success("Employee deleted successfully");
       dispatchAppRefresh();
@@ -3027,7 +3027,7 @@ const addCombinedDevMap = () => {
      UI Render
      ========== */
   return (
-    <div className="space-y-6 w-full max-w-7xl mx-auto px-4">
+    <div className="space-y-6 w-full max-w-7xl mx-auto px-4 page-content-enter">
       {/* Header */}
       <div className="flex items-center justify-between w-full">
         <div className="min-w-0 flex-1">
@@ -4882,11 +4882,15 @@ const addCombinedDevMap = () => {
                   </TableHeader>
                   <TableBody>
                     {loading ? (
-                      <TableRow>
-                        <TableCell colSpan={7} className="text-center py-8 text-gray-500">
-                          Loading...
-                        </TableCell>
-                      </TableRow>
+                      Array.from({ length: 8 }).map((_, i) => (
+                        <TableRow key={i}>
+                          {Array.from({ length: 7 }).map((__, c) => (
+                            <TableCell key={c}>
+                              <div className={`h-3.5 rounded-full skeleton-shimmer ${c === 0 ? "w-32" : c === 1 ? "w-24" : "w-20"}`} />
+                            </TableCell>
+                          ))}
+                        </TableRow>
+                      ))
                     ) : filteredRows.length === 0 ? (
                       <TableRow>
                         <TableCell colSpan={7} className="text-center py-8 text-gray-500">

@@ -227,7 +227,7 @@ export class EmpMarkoutReminderService implements OnModuleInit {
           emp.id,
           "Don't forget to mark out",
           `Your shift ended at ${shiftEndLabel}. Please mark OUT before leaving.`,
-          { kind: 'attendance', url: '/empAttendance' },
+          { kind: 'attendance', url: '/empdashboard' },
         );
         this.markSent(dateKey, emp.id);
         sent += 1;

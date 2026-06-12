@@ -4,6 +4,7 @@ import './globals.css'
 import { Toaster } from 'sonner'
 import ServiceWorkerBootstrap from './components/ServiceWorkerBootstrap'
 import FetchRefreshBootstrap from './components/FetchRefreshBootstrap'
+import { AdminShellProvider } from './components/layout/AdminShellProvider'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -115,7 +116,7 @@ export default function RootLayout({
       <body className={inter.className}>
         <ServiceWorkerBootstrap />
         <FetchRefreshBootstrap />
-        {children}
+        <AdminShellProvider>{children}</AdminShellProvider>
         <Toaster position="top-right" richColors closeButton />
       </body>
     </html>

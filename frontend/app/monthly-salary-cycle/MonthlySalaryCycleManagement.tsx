@@ -1,4 +1,5 @@
 "use client";
+import { TableBodySkeleton } from "../components/ui/TableBodySkeleton";
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
@@ -68,6 +69,7 @@ function pad2(n: number) {
 }
 
 export function MonthlySalaryCycleManagement() {
+  const [listLoading, setListLoading] = useState(true);
   const [cycles, setCycles] = useState<MonthlySalaryCycle[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -160,6 +162,7 @@ const resolvedCompanyID =
   }, [user]);
 
   const loadSalaryCycles = async () => {
+    setListLoading(true);
     try {
       const res = await fetch(API.salaryCycle);
       const data: ApiSalaryCycle[] = await res.json();
@@ -215,6 +218,8 @@ const resolvedCompanyID =
       console.error("Failed to load salary cycles", e);
       toast.error("Failed to load data.");
       setCycles([]);
+    } finally {
+      setListLoading(false);
     }
   };
 
@@ -683,7 +688,9 @@ const runFetchBR = debounce(async (val: string) => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredCycles.length === 0 ? (
+                {listLoading ? (
+                      <TableBodySkeleton cols={5} />
+                    ) : filteredCycles.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={4} className="text-center py-8 text-gray-500">
                       <div className="flex flex-col items-center gap-2">

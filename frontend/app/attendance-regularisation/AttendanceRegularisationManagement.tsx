@@ -1,4 +1,5 @@
 "use client"
+import { TableBodySkeleton } from "../components/ui/TableBodySkeleton";
 
 import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card"
@@ -56,6 +57,7 @@ interface SelectedItem {
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "/backend"
 
 export function AttendanceRegularisationManagement() {
+  const [listLoading, setListLoading] = useState(true);
   const [regularisations, setRegularisations] = useState<AttendanceRegularisation[]>([])
   const [searchTerm, setSearchTerm] = useState("")
   const [isDialogOpen, setIsDialogOpen] = useState(false)
@@ -311,6 +313,7 @@ export function AttendanceRegularisationManagement() {
   }, [user, managerData, empCreds]);
 
   const loadAttendanceRegularisations = async () => {
+    setListLoading(true);
     try {
       const res = await fetch(`${BACKEND_URL}/emp-attendance-regularise`, {
         cache: "no-store",
@@ -405,6 +408,8 @@ export function AttendanceRegularisationManagement() {
       }
     } catch (error) {
       console.error("Error loading attendance regularisations:", error)
+    } finally {
+      setListLoading(false);
     }
   }
 
@@ -1092,7 +1097,9 @@ export function AttendanceRegularisationManagement() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredRegularisations.length === 0 ? (
+                {listLoading ? (
+                    <TableBodySkeleton cols={10} />
+                  ) : filteredRegularisations.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={10} className="text-center py-8 text-gray-500">
                       <div className="flex flex-col items-center gap-2">

@@ -68,7 +68,7 @@ export function pushPayloadToInAppNotification(data: {
     typeof data.url === "string" && data.url
       ? data.url
       : kind === "attendance"
-        ? "/empAttendance"
+        ? "/empdashboard"
         : kind === "leave"
           ? "/empLeaveApplication"
           : kind === "reimbursement"
@@ -141,6 +141,19 @@ export function loadInAppNotifications(): StoredInAppNotification[] {
   } catch {
     return [];
   }
+}
+
+/** Drop stored memo push rows when the memo no longer exists (e.g. deleted from admin IM). */
+export function pruneStoredMemoNotifications(validMemoIds: ReadonlySet<number>): void {
+  if (typeof window === "undefined") return;
+  const list = loadInAppNotifications();
+  const next = list.filter((row) => {
+    if (row.kind !== "memo" || row.memoId == null) return true;
+    return validMemoIds.has(row.memoId);
+  });
+  if (next.length === list.length) return;
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+  window.dispatchEvent(new Event("emp-notifications-changed"));
 }
 
 /** Collapse many per-message task rows into one per task title (legacy localStorage). */

@@ -5,8 +5,6 @@ import { HRMSIntegrationsManagement } from "./HRMSIntegrationsManagement"
 
 export default function HRMSIntegrationsPage() {
   return (
-    <PageLayout>
-      <HRMSIntegrationsManagement />
-    </PageLayout>
+    <HRMSIntegrationsManagement />
   )
 }

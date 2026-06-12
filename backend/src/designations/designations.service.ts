@@ -11,6 +11,30 @@ export class DesignationsService {
     return this.prisma.designations.create({ data });
   }
 
+  findAllForList() {
+    return this.prisma.designations.findMany({
+      select: {
+        id: true,
+        designation: true,
+        serviceProviderID: true,
+        companyID: true,
+        branchesID: true,
+        departmentID: true,
+        shiftEligibility: true,
+        nightShiftEligibility: true,
+        maxHoursPerDay: true,
+        weeklyOffPattern: true,
+        noticePeriodDaysForResignation: true,
+        noticePeriodDaysForTermination: true,
+        branches: { select: { id: true, branchName: true } },
+        departments: { select: { id: true, departmentName: true } },
+        company: { select: { id: true, companyName: true } },
+        serviceProvider: { select: { id: true, companyName: true } },
+      },
+      orderBy: { id: 'desc' },
+    });
+  }
+
   findAll() {
     return this.prisma.designations.findMany({
       include: {

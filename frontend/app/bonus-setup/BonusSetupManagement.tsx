@@ -1,4 +1,5 @@
 "use client";
+import { TableBodySkeleton } from "../components/ui/TableBodySkeleton";
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
@@ -68,6 +69,7 @@ type BR = { id: number; branchName?: string | null; companyID: number | null; br
 
 /* ---------------- Component ---------------- */
 export function BonusSetupManagement() {
+  const [listLoading, setListLoading] = useState(true);
   const [bonuses, setBonuses] = useState<BonusSetupUI[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -173,6 +175,7 @@ const resolvedCompanyID =
   }, [user]);
 
   const loadBonuses = async () => {
+    setListLoading(true);
     try {
       // Build URL with filters for MANAGER role
       let bonusUrl = API.bonus;
@@ -263,6 +266,8 @@ const resolvedCompanyID =
     } catch (e) {
       console.error("Failed to load bonuses", e);
       setBonuses([]);
+    } finally {
+      setListLoading(false);
     }
   };
 
@@ -867,7 +872,9 @@ const runFetchBR = debounce(async (val: string) => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredBonuses.length === 0 ? (
+                {listLoading ? (
+                      <TableBodySkeleton cols={7} />
+                    ) : filteredBonuses.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={7} className="text-center py-8 text-gray-500">
                       <div className="flex flex-col items-center gap-2">

@@ -1,4 +1,5 @@
 "use client";
+import { TableBodySkeleton } from "../components/ui/TableBodySkeleton";
 
 import { useCallback, useEffect, useState } from "react";
 import { Card, CardContent } from "../components/ui/card";
@@ -163,7 +164,7 @@ export default function SiteManagement() {
                 </TableHeader>
                 <TableBody>
                   {loading ? (
-                    <TableRow><TableCell colSpan={5} className="text-center py-8">Loading…</TableCell></TableRow>
+                    <TableBodySkeleton cols={5} />
                   ) : rows.length === 0 ? (
                     <TableRow><TableCell colSpan={5} className="text-center py-8">No sites found</TableCell></TableRow>
                   ) : rows.map((r) => (

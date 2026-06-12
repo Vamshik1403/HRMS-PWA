@@ -15,6 +15,7 @@ import {
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import { toast } from "sonner";
 import { Download, Loader2, ScrollText } from "lucide-react";
+import { TableBodySkeleton } from "../components/ui/TableBodySkeleton";
 import { authHeaders, getAccessToken } from "@/lib/auth";
 
 const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL || "/backend";
@@ -182,11 +183,7 @@ export function AuditLogsManagement() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          {loading ? (
-            <div className="py-10 flex justify-center">
-              <Loader2 className="w-6 h-6 animate-spin text-blue-500" />
-            </div>
-          ) : items.length === 0 ? (
+          {items.length === 0 && !loading ? (
             <p className="text-sm text-gray-500 py-6 text-center">No audit entries found.</p>
           ) : (
             <div className="overflow-x-auto">
@@ -203,7 +200,9 @@ export function AuditLogsManagement() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {items.map((row) => (
+                  {loading ? (
+                    <TableBodySkeleton cols={7} />
+                  ) : items.map((row) => (
                     <TableRow key={row.id}>
                       <TableCell className="whitespace-nowrap text-xs">
                         {fmtWhen(row.createdAt)}

@@ -1,4 +1,5 @@
 "use client";
+import { TableBodySkeleton } from "../components/ui/TableBodySkeleton";
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
@@ -27,7 +28,6 @@ import { useCurrentUser } from "../hooks/useCurrentUser";
 import { FormDrawer } from "../components/ui/form-drawer";
 import { toast } from "sonner";
 import { getSidebarContext } from "../utils/sidebarContext";
-
 // ---------------------------
 // Types aligned to backend
 // ---------------------------
@@ -86,6 +86,7 @@ interface Department {
 // ---------------------------
 const API = {
   designations: "/backend/designations",
+  designationsList: "/backend/designations/list",
   serviceProviders: "/backend/service-provider",
   companies: "/backend/company",
   branches: "/backend/branches",
@@ -108,7 +109,7 @@ async function fetchJSONSafe<T>(url: string, signal?: AbortSignal): Promise<T> {
 export function DesignationManagement() {
   // Data
   const [rows, setRows] = useState<DesignationRead[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [currentUserMapping, setCurrentUserMapping] = useState<any>(null);
@@ -197,10 +198,14 @@ export function DesignationManagement() {
   const deptTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const spTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // ---------------------------
-  // Load all master data
-  // ---------------------------
+  const masterDataLoadedRef = useRef(false);
+
+  // Load master data only when opening add/edit/view forms (not on list mount).
   useEffect(() => {
+    if (!isAddingNew && !isViewing) return;
+    if (masterDataLoadedRef.current) return;
+    masterDataLoadedRef.current = true;
+
     const loadAllData = async () => {
       try {
         const [sps, cos, brs, depts] = await Promise.all([
@@ -210,12 +215,10 @@ export function DesignationManagement() {
           fetchJSONSafe<Department[]>(API.departments),
         ]);
 
-        // Store master lists
         setAllCompanies(cos || []);
         setAllBranches(brs || []);
         setAllDepartments(depts || []);
 
-        // Create lookup maps
         setSpMap(Object.fromEntries((sps || []).map(s => [s.id, s.companyName ?? ""])));
         setCoMap(Object.fromEntries((cos || []).map(c => [c.id, c.companyName ?? ""])));
         setBrMap(Object.fromEntries((brs || []).map(b => [b.id, b.branchName ?? ""])));
@@ -226,7 +229,7 @@ export function DesignationManagement() {
     };
 
     loadAllData();
-  }, []);
+  }, [isAddingNew, isViewing]);
 
   // Clear dependent fields when parent changes (only for add mode, skip during reset)
   useEffect(() => {
@@ -283,7 +286,7 @@ export function DesignationManagement() {
   const fetchRows = async () => {
     try {
       setLoading(true);
-      const all = await fetchJSONSafe<DesignationRead[]>(API.designations);
+      const all = await fetchJSONSafe<DesignationRead[]>(API.designationsList);
 
       // 🟢 SUPERADMIN → filter by sidebar context
       if (user?.role === "SUPERADMIN") {
@@ -1068,9 +1071,6 @@ export function DesignationManagement() {
               </CardTitle>
             </CardHeader>
             <CardContent className="p-0">
-              {loading ? (
-                <div className="p-6 text-sm text-gray-500">Loading…</div>
-              ) : (
                 <div className="overflow-x-auto">
                   <Table className="w-full">
                     <TableHeader>
@@ -1083,7 +1083,9 @@ export function DesignationManagement() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {filtered.length === 0 ? (
+                      {loading ? (
+                        <TableBodySkeleton cols={4} />
+                      ) : filtered.length === 0 ? (
                         <TableRow>
                           <TableCell colSpan={4} className="text-center py-8 text-gray-500">
                             <div className="flex flex-col items-center gap-2">
@@ -1142,7 +1144,6 @@ export function DesignationManagement() {
                     </TableBody>
                   </Table>
                 </div>
-              )}
             </CardContent>
           </Card>
       </>)}

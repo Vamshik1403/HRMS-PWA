@@ -616,7 +616,7 @@ export function ManageHolidaysManagement() {
   };
 
   return (
-    <div className="space-y-6 w-full max-w-6xl mx-auto px-4">
+    <div className="space-y-6 w-full max-w-6xl mx-auto px-4 page-content-enter">
       {/* FormDrawer for Add/Edit */}
       <FormDrawer
         open={isDialogOpen}
@@ -777,14 +777,15 @@ export function ManageHolidaysManagement() {
               </TableHeader>
               <TableBody>
                 {isLoading ? (
-                  <TableRow>
-                    <TableCell colSpan={4} className="text-center py-8 text-gray-500">
-                      <div className="flex flex-col items-center gap-2">
-                        <Icon icon="mdi:loading" className="w-8 h-8 animate-spin text-gray-400" />
-                        <p>Loading holidays...</p>
-                      </div>
-                    </TableCell>
-                  </TableRow>
+                  Array.from({ length: 8 }).map((_, i) => (
+                    <TableRow key={i}>
+                      {[0, 1, 2].map((c) => (
+                        <TableCell key={c}>
+                          <div className={`h-3.5 rounded-full skeleton-shimmer ${c === 1 ? "w-40" : "w-24"}`} />
+                        </TableCell>
+                      ))}
+                    </TableRow>
+                  ))
                 ) : filteredHolidays.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={4} className="text-center py-8 text-gray-500">

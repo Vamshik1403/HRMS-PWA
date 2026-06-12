@@ -660,7 +660,7 @@ export function PublicHolidayManagement() {
   )
 
   return (
-    <div className="space-y-6 w-full max-w-6xl mx-auto px-4">
+    <div className="space-y-6 w-full max-w-6xl mx-auto px-4 page-content-enter">
       {/* FormDrawer for Add/Edit */}
       <FormDrawer
         open={isDialogOpen}
@@ -864,14 +864,15 @@ export function PublicHolidayManagement() {
 
               <TableBody>
                 {isLoading ? (
-                  <TableRow>
-                    <TableCell colSpan={canManage ? 7 : 6} className="text-center py-8 text-gray-500">
-                      <div className="flex flex-col items-center gap-2">
-                        <Icon icon="mdi:loading" className="w-8 h-8 animate-spin text-gray-400" />
-                        <p>Loading holidays...</p>
-                      </div>
-                    </TableCell>
-                  </TableRow>
+                  Array.from({ length: 8 }).map((_, i) => (
+                    <TableRow key={i}>
+                      {Array.from({ length: canManage ? 6 : 5 }).map((__, c) => (
+                        <TableCell key={c}>
+                          <div className={`h-3.5 rounded-full skeleton-shimmer ${c === 1 ? "w-36" : "w-24"}`} />
+                        </TableCell>
+                      ))}
+                    </TableRow>
+                  ))
                 ) : filtered.length > 0 ? (
                   filtered.map(h => (
                     <TableRow key={h.id}>

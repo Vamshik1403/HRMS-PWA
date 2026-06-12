@@ -1,4 +1,5 @@
 "use client";
+import { TableBodySkeleton } from "../components/ui/TableBodySkeleton";
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
@@ -71,6 +72,7 @@ const API = {
 const MIN_CHARS = 0;
 
 export function SalaryAllowancesManagement() {
+  const [listLoading, setListLoading] = useState(true);
   const [allowances, setAllowances] = useState<SalaryAllowance[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -165,6 +167,7 @@ const resolvedCompanyID =
   }, [user]);
 
   const loadAllowances = async () => {
+    setListLoading(true);
     try {
       const res = await fetch(API.allowance);
       const data: ApiSalaryAllowance[] = await res.json();
@@ -224,6 +227,8 @@ const resolvedCompanyID =
       console.error("Failed to load allowances", e);
       toast.error("Failed to load data.");
       setAllowances([]);
+    } finally {
+      setListLoading(false);
     }
   };
 
@@ -862,7 +867,9 @@ const resolvedCompanyID =
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredAllowances.length === 0 ? (
+                {listLoading ? (
+                      <TableBodySkeleton cols={5} />
+                    ) : filteredAllowances.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={7} className="text-center py-8 text-gray-500">
                       <div className="flex flex-col items-center gap-2">

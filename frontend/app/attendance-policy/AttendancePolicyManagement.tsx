@@ -1,4 +1,5 @@
 "use client";
+import { TableBodySkeleton } from "../components/ui/TableBodySkeleton";
 
 import { useState, useEffect } from "react";
 import {
@@ -74,6 +75,7 @@ interface SelectedItem {
 }
 
 export function AttendancePolicyManagement() {
+  const [listLoading, setListLoading] = useState(true);
   const [policies, setPolicies] = useState<AttendancePolicy[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -251,6 +253,7 @@ export function AttendancePolicyManagement() {
   }, [user]);
 
   const loadAttendancePolicies = async () => {
+    setListLoading(true);
     try {
       const res = await fetch(`${BACKEND_URL}/attendance-policy`, { cache: "no-store" });
       const data = await res.json();
@@ -344,6 +347,8 @@ export function AttendancePolicyManagement() {
       console.error("Error loading attendance policies:", err);
       toast.error("Failed to load data.");
       setPolicies([]);
+    } finally {
+      setListLoading(false);
     }
   };
 
@@ -1270,7 +1275,9 @@ export function AttendancePolicyManagement() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredPolicies.length === 0 ? (
+                {listLoading ? (
+                      <TableBodySkeleton cols={5} />
+                    ) : filteredPolicies.length === 0 ? (
                   <TableRow>
                     <TableCell
                       colSpan={2}

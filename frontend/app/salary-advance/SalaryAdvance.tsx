@@ -19,6 +19,7 @@ import { SearchSuggestInput } from "../components/SearchSuggestInput"
 import { useCurrentUser } from "../hooks/useCurrentUser"
 import { toast } from "sonner"
 import { getSidebarContext } from "../utils/sidebarContext"
+import { TableBodySkeleton } from "../components/ui/TableBodySkeleton"
 
 // ============ Type Definitions ============
 type AdvanceStatus = "Pending" | "Approved" | "Rejected" | "Paid"
@@ -1042,12 +1043,6 @@ const fetchCompanies = useCallback(
             </Badge>
           </div>
           
-          {loading ? (
-            <div className="flex justify-center items-center py-8">
-              <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
-              <span className="ml-2">Loading advances...</span>
-            </div>
-          ) : (
             <Table>
               <TableHeader>
                 <TableRow>
@@ -1060,7 +1055,9 @@ const fetchCompanies = useCallback(
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredAdvances.length === 0 ? (
+                {loading ? (
+                  <TableBodySkeleton cols={6} />
+                ) : filteredAdvances.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={6} className="text-center py-8 text-gray-500">
                       No salary advances found
@@ -1168,7 +1165,6 @@ const fetchCompanies = useCallback(
                 )}
               </TableBody>
             </Table>
-          )}
         </CardContent>
       </Card>
       </>

@@ -638,6 +638,48 @@ export class ManageEmployeeService {
     return credentialsWithoutPassword;
   }
 
+async findAllForList(status?: string) {
+  const whereCondition: any = {};
+
+  if (!status || status === 'ACTIVE') {
+    whereCondition.lifecycleStatus = 'ACTIVE';
+  }
+
+  if (status === 'EXITED') {
+    whereCondition.lifecycleStatus = 'EXITED';
+  }
+
+  return this.prisma.manageEmployee.findMany({
+    where: whereCondition,
+    select: {
+      id: true,
+      employeeFirstName: true,
+      employeeLastName: true,
+      employeeID: true,
+      businessEmail: true,
+      companyID: true,
+      branchesID: true,
+      serviceProviderID: true,
+      departmentNameID: true,
+      designationID: true,
+      employmentType: true,
+      employmentStatus: true,
+      typeOfEmployee: true,
+      lifecycleStatus: true,
+      joiningDate: true,
+      departments: { select: { id: true, departmentName: true } },
+      designations: { select: { id: true, designation: true } },
+      branches: { select: { id: true, branchName: true } },
+      empDesignation: {
+        orderBy: { id: 'desc' },
+        take: 1,
+        include: { designation: { select: { designation: true } } },
+      },
+    },
+    orderBy: { id: 'desc' },
+  });
+}
+
 async findAll(status?: string) {
   const whereCondition: any = {};
 

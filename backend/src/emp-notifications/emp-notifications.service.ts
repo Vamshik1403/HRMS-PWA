@@ -677,7 +677,12 @@ export class EmpNotificationsService {
   ): Promise<EmpNotificationFeedItem[]> {
     const memos = await this.prisma.employeeMemo.findMany({
       where: {
-        employeeID: employeeId,
+        OR: [
+          { employeeID: employeeId },
+          { employeeIDs: { has: employeeId } },
+        ],
+        parentMemoId: null,
+        undoneAt: null,
         createdAt: { gte: since },
       },
       orderBy: { createdAt: 'desc' },

@@ -10,7 +10,8 @@ import {
   TableBody,
   TableCell,
 } from "@/app/components/ui/table";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { fetchWithTimeout } from "../utils/fetchWithTimeout";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import SoftBarChart from "./components/SoftBarChart";
 import type { SoftBarPoint } from "./components/SoftBarChart";
@@ -20,6 +21,53 @@ import EmployeeStatusCharts, {
 import { formatDevicePunchForDisplay } from "../utils/devicePunchTime";
 import { useAppRefresh } from "../hooks/useAppRefresh";
 import { isDesktopManagerFlagSet } from "@/lib/desktopManager";
+import { getSidebarContext } from "../utils/sidebarContext";
+
+function resolveDashboardCompanyId(
+  user: ReturnType<typeof useCurrentUser>,
+  currentUserMapping: { companyID?: number } | null,
+): number | undefined {
+  const fromMapping = currentUserMapping?.companyID;
+  if (fromMapping != null) return fromMapping;
+  if (user?.companyID != null) return user.companyID;
+  const ctx = getSidebarContext();
+  if (ctx?.companyID != null) return ctx.companyID;
+  return undefined;
+}
+
+function resolveDashboardServiceProviderId(
+  user: ReturnType<typeof useCurrentUser>,
+  currentUserMapping: { serviceProviderID?: number } | null,
+): number | undefined {
+  const fromMapping = currentUserMapping?.serviceProviderID;
+  if (fromMapping != null) return fromMapping;
+  if (user?.serviceProviderID != null) return user.serviceProviderID;
+  const ctx = getSidebarContext();
+  if (ctx?.serviceProviderID != null) return ctx.serviceProviderID;
+  return undefined;
+}
+
+function canLoadScopedDashboard(
+  user: NonNullable<ReturnType<typeof useCurrentUser>>,
+  currentUserMapping: { companyID?: number; serviceProviderID?: number } | null,
+  isDesktopManagerEmployee: boolean,
+): boolean {
+  if (isDesktopManagerEmployee) return true;
+  if (
+    user.role === "EMPLOYEE" ||
+    user.role === "BRANCH_ADMIN" ||
+    user.role === "SUPERADMIN"
+  ) {
+    return true;
+  }
+  if (user.role === "COMPANY_ADMIN" || user.role === "ADMIN") {
+    return resolveDashboardCompanyId(user, currentUserMapping) != null;
+  }
+  if (user.role === "SERVICE_PROVIDER") {
+    return resolveDashboardServiceProviderId(user, currentUserMapping) != null;
+  }
+  return true;
+}
 
 interface Branch {
   id: number;
@@ -140,7 +188,9 @@ export default function DashboardPage() {
   const BACKEND_URL =
     process.env.NEXT_PUBLIC_BACKEND_URL || "/backend";
 
-  const [loading, setLoading] = useState(true);
+  const [bootstrapReady, setBootstrapReady] = useState(false);
+  const [dashboardLoading, setDashboardLoading] = useState(true);
+  const dashboardLoadGen = useRef(0);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [attendanceLogs, setAttendanceLogs] = useState<AttendanceLog[]>([]);
   const [allAttendanceLogs, setAllAttendanceLogs] = useState<AttendanceLog[]>(
@@ -228,77 +278,108 @@ export default function DashboardPage() {
     user?.role === "COMPANY_ADMIN" || isDesktopManagerEmployee;
 
   useEffect(() => {
-    if (user?.role !== "SERVICE_PROVIDER" && user?.role !== "COMPANY_ADMIN" && user?.role !== "ADMIN") return;
-
-    (async () => {
-      const res = await fetch(`${BACKEND_URL}/users`, { cache: "no-store" });
-      const users = await res.json();
-      const me = users.find((u: any) => u.username === user.username);
-      setCurrentUserMapping(me || null);
-    })();
-  }, [user, BACKEND_URL]);
-
-  useEffect(() => {
-    if (!user) return;
-    if (
-      (user.role === "SERVICE_PROVIDER" ||
-        user.role === "COMPANY_ADMIN" ||
-        user.role === "ADMIN") &&
-      !currentUserMapping &&
-      !isDesktopManagerEmployee
-    ) {
+    if (!user) {
+      setBootstrapReady(false);
       return;
     }
 
+    const needsMapping =
+      (user.role === "SERVICE_PROVIDER" ||
+        user.role === "COMPANY_ADMIN" ||
+        user.role === "ADMIN") &&
+      !isDesktopManagerEmployee;
+
+    if (!needsMapping) {
+      setBootstrapReady(true);
+      return;
+    }
+
+    setBootstrapReady(false);
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const res = await fetchWithTimeout(`${BACKEND_URL}/users`);
+        if (cancelled) return;
+        const users = res.ok ? await res.json() : [];
+        const me = Array.isArray(users)
+          ? users.find((u: any) => u.username === user.username)
+          : null;
+        setCurrentUserMapping(me || null);
+      } catch {
+        if (!cancelled) setCurrentUserMapping(null);
+      } finally {
+        if (!cancelled) setBootstrapReady(true);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user, BACKEND_URL, isDesktopManagerEmployee]);
+
+  const resolvedCompanyId = useMemo(
+    () => resolveDashboardCompanyId(user, currentUserMapping),
+    [user, currentUserMapping],
+  );
+  const resolvedServiceProviderId = useMemo(
+    () => resolveDashboardServiceProviderId(user, currentUserMapping),
+    [user, currentUserMapping],
+  );
+  const canLoadDashboard = useMemo(
+    () =>
+      user != null &&
+      canLoadScopedDashboard(user, currentUserMapping, isDesktopManagerEmployee),
+    [user, currentUserMapping, isDesktopManagerEmployee],
+  );
+
+  useEffect(() => {
+    if (!user || !canLoadDashboard) {
+      setDashboardLoading(false);
+      return;
+    }
     loadDashboard();
-  }, [user, currentUserMapping, isDesktopManagerEmployee]);
+  }, [user, currentUserMapping, resolvedCompanyId, resolvedServiceProviderId, canLoadDashboard, isDesktopManagerEmployee]);
 
   const overviewQueryParams = useMemo(() => {
     const params = new URLSearchParams();
     if (user?.role === "SUPERADMIN") {
-      // no company filter
-    } else if (user?.role === "SERVICE_PROVIDER" && currentUserMapping?.serviceProviderID) {
-      params.set("serviceProviderID", String(currentUserMapping.serviceProviderID));
-      if (currentUserMapping.companyID) {
-        params.set("companyID", String(currentUserMapping.companyID));
+      if (resolvedCompanyId != null) {
+        params.set("companyID", String(resolvedCompanyId));
+      }
+    } else if (user?.role === "SERVICE_PROVIDER" && resolvedServiceProviderId != null) {
+      params.set("serviceProviderID", String(resolvedServiceProviderId));
+      if (resolvedCompanyId != null) {
+        params.set("companyID", String(resolvedCompanyId));
       }
     } else if (
       (user?.role === "COMPANY_ADMIN" || user?.role === "ADMIN") &&
-      currentUserMapping?.companyID
+      resolvedCompanyId != null
     ) {
-      params.set("companyID", String(currentUserMapping.companyID));
+      params.set("companyID", String(resolvedCompanyId));
     } else if (isDesktopManagerEmployee) {
-      if (user?.companyID) params.set("companyID", String(user.companyID));
+      if (resolvedCompanyId != null) params.set("companyID", String(resolvedCompanyId));
     } else if (user?.role === "EMPLOYEE" || user?.role === "BRANCH_ADMIN") {
-      if (user.companyID) params.set("companyID", String(user.companyID));
+      if (resolvedCompanyId != null) params.set("companyID", String(resolvedCompanyId));
       if (user.branchesID) params.set("branchId", String(user.branchesID));
     }
     if (selectedBranchId) params.set("branchId", selectedBranchId);
     if (selectedDepartmentId) params.set("departmentId", selectedDepartmentId);
     return params;
-  }, [user, currentUserMapping, selectedBranchId, selectedDepartmentId]);
+  }, [user, resolvedCompanyId, resolvedServiceProviderId, selectedBranchId, selectedDepartmentId, isDesktopManagerEmployee]);
 
   useEffect(() => {
-    if (!user) return;
-    if (
-      (user.role === "SERVICE_PROVIDER" ||
-        user.role === "COMPANY_ADMIN" ||
-        user.role === "ADMIN") &&
-      !currentUserMapping &&
-      !isDesktopManagerEmployee
-    ) {
-      return;
-    }
+    if (!user || !canLoadDashboard) return;
     loadTodayOverview();
     loadProbationAlerts();
     if (isHrDesktopView) loadHrWidgets();
-  }, [user, currentUserMapping, overviewQueryParams.toString(), isHrDesktopView]);
+  }, [user, canLoadDashboard, overviewQueryParams.toString(), isHrDesktopView]);
 
   const loadHrWidgets = async () => {
     try {
       const qs = overviewQueryParams.toString();
       const url = `${BACKEND_URL}/dashboard-overview/hr-widgets${qs ? `?${qs}` : ""}`;
-      const res = await fetch(url, { cache: "no-store" });
+      const res = await fetchWithTimeout(url);
       if (!res.ok) return;
       const data = await res.json();
       setHrWidgets(data);
@@ -311,7 +392,7 @@ export default function DashboardPage() {
     try {
       const qs = overviewQueryParams.toString();
       const url = `${BACKEND_URL}/dashboard-overview/probation-alerts${qs ? `?${qs}&daysAhead=60` : "?daysAhead=60"}`;
-      const res = await fetch(url, { cache: "no-store" });
+      const res = await fetchWithTimeout(url);
       if (!res.ok) return;
       const data = await res.json();
       setProbationAlerts(Array.isArray(data.alerts) ? data.alerts : []);
@@ -325,7 +406,7 @@ export default function DashboardPage() {
       setOverviewLoading(true);
       const qs = overviewQueryParams.toString();
       const url = `${BACKEND_URL}/dashboard-overview/today-overview${qs ? `?${qs}` : ""}`;
-      const res = await fetch(url, { cache: "no-store" });
+      const res = await fetchWithTimeout(url);
       if (!res.ok) throw new Error("overview failed");
       const data = await res.json();
       setOverviewEmployees(Array.isArray(data.employees) ? data.employees : []);
@@ -342,34 +423,46 @@ export default function DashboardPage() {
   };
 
   const loadDashboard = async () => {
+    const gen = ++dashboardLoadGen.current;
+    setDashboardLoading(true);
     try {
-      setLoading(true);
-
-      const [empRes, deptRes, hcRes, processAttRes, branchesRes] = await Promise.all([
-        fetch(`${BACKEND_URL}/manage-emp`, { cache: "no-store" }),
-        fetch(`${BACKEND_URL}/departments`, { cache: "no-store" }),
-        fetch(`${BACKEND_URL}/departments/with-headcount`, {
-          cache: "no-store",
-        }),
-        fetch(`${BACKEND_URL}/process-att-logs?dateFrom=${weekAgoDate}&dateTo=${todayDate}&limit=10000`, { cache: "no-store" }),
-        fetch(`${BACKEND_URL}/branches`, { cache: "no-store" }),
+      const attLogsUrl = `${BACKEND_URL}/process-att-logs?dateFrom=${weekAgoDate}&dateTo=${todayDate}&limit=10000`;
+      const [empRes, deptRes, hcRes, processAttRes, branchesRes] = await Promise.allSettled([
+        fetchWithTimeout(`${BACKEND_URL}/manage-emp/list`),
+        fetchWithTimeout(`${BACKEND_URL}/departments`),
+        fetchWithTimeout(`${BACKEND_URL}/departments/with-headcount`),
+        fetchWithTimeout(attLogsUrl),
+        fetchWithTimeout(`${BACKEND_URL}/branches`),
       ]);
 
-      const empJson = await empRes.json();
+      if (gen !== dashboardLoadGen.current) return;
+
+      const empJson =
+        empRes.status === "fulfilled" && empRes.value.ok
+          ? await empRes.value.json()
+          : [];
       const allEmployees: Employee[] = Array.isArray(empJson) ? empJson : [];
-      const deptJson = await deptRes.json();
+      const deptJson =
+        deptRes.status === "fulfilled" && deptRes.value.ok
+          ? await deptRes.value.json()
+          : [];
       const allDepartments: Department[] = Array.isArray(deptJson) ? deptJson : [];
-      const allHeadcounts: DepartmentHeadcount[] = hcRes.ok
-        ? await hcRes.json()
-        : [];
-      const allBranches: Branch[] = branchesRes.ok
-        ? await branchesRes.json()
-        : [];
+      const allHeadcounts: DepartmentHeadcount[] =
+        hcRes.status === "fulfilled" && hcRes.value.ok
+          ? await hcRes.value.json()
+          : [];
+      const allBranches: Branch[] =
+        branchesRes.status === "fulfilled" && branchesRes.value.ok
+          ? await branchesRes.value.json()
+          : [];
 
       // Parse process_att_logs and convert to AttendanceLog format
       let processAttJson: any = null;
       try {
-        processAttJson = processAttRes.ok ? await processAttRes.json() : null;
+        processAttJson =
+          processAttRes.status === "fulfilled" && processAttRes.value.ok
+            ? await processAttRes.value.json()
+            : null;
       } catch { /* ignore */ }
       const processAttData: any[] = processAttJson?.data && Array.isArray(processAttJson.data)
         ? processAttJson.data
@@ -395,27 +488,28 @@ export default function DashboardPage() {
         scopedEmployees = allEmployees;
         scopedDepartments = allDepartments;
         scopedBranches = allBranches;
-      } else if (user!.role === "SERVICE_PROVIDER" && currentUserMapping) {
-        if (currentUserMapping.serviceProviderID) {
-          scopedEmployees = allEmployees.filter(
-            (e) => e.serviceProviderID === currentUserMapping.serviceProviderID
-          );
-          scopedDepartments = allDepartments.filter(
-            (d) => d.serviceProviderID === currentUserMapping.serviceProviderID
-          );
-          scopedBranches = allBranches.filter(
-            (b) => b.serviceProviderID === currentUserMapping.serviceProviderID
-          );
-        }
-      } else if ((user!.role === "COMPANY_ADMIN" || user!.role === "ADMIN") && currentUserMapping) {
+      } else if (user!.role === "SERVICE_PROVIDER" && resolvedServiceProviderId != null) {
         scopedEmployees = allEmployees.filter(
-          (e) => e.companyID === currentUserMapping.companyID
+          (e) => e.serviceProviderID === resolvedServiceProviderId
         );
         scopedDepartments = allDepartments.filter(
-          (d) => d.companyID === currentUserMapping.companyID
+          (d) => d.serviceProviderID === resolvedServiceProviderId
         );
         scopedBranches = allBranches.filter(
-          (b) => b.companyID === currentUserMapping.companyID
+          (b) => b.serviceProviderID === resolvedServiceProviderId
+        );
+      } else if (
+        (user!.role === "COMPANY_ADMIN" || user!.role === "ADMIN") &&
+        resolvedCompanyId != null
+      ) {
+        scopedEmployees = allEmployees.filter(
+          (e) => e.companyID === resolvedCompanyId
+        );
+        scopedDepartments = allDepartments.filter(
+          (d) => d.companyID === resolvedCompanyId
+        );
+        scopedBranches = allBranches.filter(
+          (b) => b.companyID === resolvedCompanyId
         );
       } else if (isDesktopManagerEmployee) {
         scopedEmployees = allEmployees.filter(
@@ -483,7 +577,9 @@ export default function DashboardPage() {
     } catch (err) {
       console.error("Dashboard load error:", err);
     } finally {
-      setLoading(false);
+      if (gen === dashboardLoadGen.current) {
+        setDashboardLoading(false);
+      }
     }
   };
 
@@ -698,9 +794,14 @@ export default function DashboardPage() {
     return items.sort((a, b) => b.sortAt - a.sortAt).slice(0, 20);
   }, [attendanceLogs, employees]);
 
-  if (!user || loading) {
+  if (!user || !bootstrapReady || dashboardLoading) {
     return (
       <div className="space-y-5 animate-pulse">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          {[1, 2, 3, 4].map((i) => (
+            <div key={i} className={`${cardShell} p-5 h-24`} />
+          ))}
+        </div>
         <div className={`${cardShell} p-6 h-48`} />
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
           <div className="lg:col-span-2 space-y-5">

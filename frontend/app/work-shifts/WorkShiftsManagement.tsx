@@ -1,4 +1,5 @@
 "use client";
+import { TableBodySkeleton } from "../components/ui/TableBodySkeleton";
 
 import { useState, useEffect } from "react";
 import {
@@ -76,6 +77,7 @@ const DAYS_OF_WEEK = [
 ];
 
 export function WorkShiftsManagement() {
+  const [listLoading, setListLoading] = useState(true);
   const [workShifts, setWorkShifts] = useState<WorkShift[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -256,6 +258,7 @@ export function WorkShiftsManagement() {
 
 
   const loadWorkShifts = async () => {
+    setListLoading(true);
     try {
       const res = await fetch(`${BACKEND_URL}/work-shift`, { cache: "no-store" });
       const data = await res.json();
@@ -359,6 +362,8 @@ export function WorkShiftsManagement() {
       console.error("Error loading work shifts:", error);
       toast.error("Failed to load data.");
       setWorkShifts([]);
+    } finally {
+      setListLoading(false);
     }
   };
 
@@ -993,7 +998,9 @@ export function WorkShiftsManagement() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredWorkShifts.length === 0 ? (
+                {listLoading ? (
+                      <TableBodySkeleton cols={4} />
+                    ) : filteredWorkShifts.length === 0 ? (
                   <TableRow>
                     <TableCell
                       colSpan={4}

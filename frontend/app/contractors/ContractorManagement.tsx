@@ -1,4 +1,5 @@
 "use client";
+import { TableBodySkeleton } from "../components/ui/TableBodySkeleton";
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
@@ -1109,9 +1110,6 @@ export function ContractorManagement() {
           </CardTitle>
         </CardHeader>
         <CardContent className="p-0 w-full overflow-x-auto">
-          {loading ? (
-            <div className="p-6 text-sm text-gray-500">Loading…</div>
-          ) : (
             <Table className="w-full">
               <TableHeader>
                 <TableRow>
@@ -1124,7 +1122,9 @@ export function ContractorManagement() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filtered.length === 0 ? (
+                {loading ? (
+                  <TableBodySkeleton cols={6} />
+                ) : filtered.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={6} className="text-center py-8 text-gray-500">
                       <div className="flex flex-col items-center gap-2">
@@ -1193,7 +1193,6 @@ export function ContractorManagement() {
                 )}
               </TableBody>
             </Table>
-          )}
         </CardContent>
       </Card>
       </>)}

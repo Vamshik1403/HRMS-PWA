@@ -13,6 +13,7 @@ import { Plus, Search, Edit, Trash2, Info, ArrowLeft } from "lucide-react";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import { toast } from "sonner";
 import { getSidebarContext } from "../utils/sidebarContext";
+import { TableBodySkeleton } from "../components/ui/TableBodySkeleton";
 
 
 /* ---------- Types ---------- */
@@ -133,6 +134,7 @@ const EPS = 0.5;
 /* ---------- Component ---------- */
 export function MonthlyPayGradeManagement() {
   const [payGrades, setPayGrades] = useState<MonthlyPayGradeUI[]>([]);
+  const [listLoading, setListLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingPayGrade, setEditingPayGrade] = useState<MonthlyPayGradeUI | null>(null);
@@ -231,6 +233,7 @@ export function MonthlyPayGradeManagement() {
 /* ---------- Initial load (TABLE DATA ONLY) ---------- */
 useEffect(() => {
   (async () => {
+    setListLoading(true);
     try {
       const res = await fetch(API.mpg);
       const data: ApiMPG[] = await res.json();
@@ -260,6 +263,8 @@ useEffect(() => {
       console.error("Monthly pay grade fetch failed", e);
       toast.error("Failed to load data.");
       setPayGrades([]);
+    } finally {
+      setListLoading(false);
     }
   })();
 }, [user, currentUserMapping]);
@@ -1403,7 +1408,9 @@ miniOTTime: x.miniOTTime ?? 0,
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredPayGrades.length === 0 ? (
+                {listLoading ? (
+                  <TableBodySkeleton cols={8} />
+                ) : filteredPayGrades.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={8} className="text-center py-8 text-gray-500">
                       <div className="flex flex-col items-center gap-2">

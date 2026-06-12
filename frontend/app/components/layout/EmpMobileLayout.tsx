@@ -165,7 +165,13 @@ export default function EmpMobileLayout({ children, hideBottomNav = false }: Emp
     if (!("serviceWorker" in navigator)) return;
     const onMessage = (event: MessageEvent) => {
       const data = event.data;
-      if (!data || data.type !== "PUSH_NOTIFICATION") return;
+      if (!data) return;
+      if (data.type === "NOTIFICATION_CLICK" && typeof data.url === "string") {
+        const path = data.url.startsWith("/") ? data.url : `/${data.url}`;
+        router.push(path);
+        return;
+      }
+      if (data.type !== "PUSH_NOTIFICATION") return;
       const title = String(data.title || "OpenHRM");
       const body = String(data.body || "");
       if (data.kind === "task" && data.event === "chat" && data.taskId != null) {
@@ -214,7 +220,7 @@ export default function EmpMobileLayout({ children, hideBottomNav = false }: Emp
     };
     navigator.serviceWorker.addEventListener("message", onMessage);
     return () => navigator.serviceWorker.removeEventListener("message", onMessage);
-  }, []);
+  }, [router]);
 
   const isActive = (href: string) => pathname === href || pathname.startsWith(href + "/");
 

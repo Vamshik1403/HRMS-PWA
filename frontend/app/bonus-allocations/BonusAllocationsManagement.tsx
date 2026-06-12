@@ -1,4 +1,5 @@
 "use client";
+import { TableBodySkeleton } from "../components/ui/TableBodySkeleton";
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
@@ -195,6 +196,7 @@ function parseSalaryPeriodLabelToMonth(label: string): number | null {
 
 /* ---------------- Component ---------------- */
 export function BonusAllocationsManagement() {
+  const [listLoading, setListLoading] = useState(true);
   const [allocations, setAllocations] = useState<BonusAllocationUI[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -269,6 +271,7 @@ export function BonusAllocationsManagement() {
   }, [user]);
 
   const loadAllocations = async () => {
+    setListLoading(true);
     try {
       // Build URL with filters for MANAGER role
       let allocationsUrl = API.allocations;
@@ -385,6 +388,8 @@ export function BonusAllocationsManagement() {
     } catch (e) {
       console.error("Failed to load data", e);
       setAllocations([]);
+    } finally {
+      setListLoading(false);
     }
   };
 
@@ -829,7 +834,9 @@ export function BonusAllocationsManagement() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredAllocations.length === 0 ? (
+                {listLoading ? (
+                      <TableBodySkeleton cols={7} />
+                    ) : filteredAllocations.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={7} className="text-center py-8 text-gray-500">
                       <div className="flex flex-col items-center gap-2">

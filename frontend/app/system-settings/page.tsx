@@ -2,7 +2,6 @@
 
 import { useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { PageLayout } from "../components/layout/PageLayout"
 import { useCurrentUser } from "../hooks/useCurrentUser"
 
 export default function SystemSettingsPage() {
@@ -17,15 +16,11 @@ export default function SystemSettingsPage() {
 
   if (user && user.role !== "SUPERADMIN" && user.role !== "COMPANY_ADMIN") {
     return (
-      <PageLayout>
-        <div className="p-8 text-center text-gray-500">Access restricted.</div>
-      </PageLayout>
+      <div className="p-8 text-center text-gray-500">Access restricted.</div>
     )
   }
 
   return (
-    <PageLayout>
-      <div className="p-8 text-center text-gray-500">Redirecting...</div>
-    </PageLayout>
+    <div className="p-8 text-center text-gray-500">Redirecting...</div>
   )
 }

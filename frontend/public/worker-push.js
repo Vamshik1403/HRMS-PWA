@@ -1,1 +1,31 @@
-self.addEventListener("push",function(t){var n={};try{n=t.data?t.data.json():{}}catch(i){n={title:"OpenHRM",body:t.data?t.data.text():""}}var i=n.title||"OpenHRM",a={body:n.body||"You have a new notification",icon:"/icons/icon-192.png",badge:"/icons/icon-192.png",data:{url:n.data&&n.data.url||"/"},requireInteraction:!1};t.waitUntil(self.registration.showNotification(i,a))}),self.addEventListener("notificationclick",function(t){t.notification.close();var n=t.notification.data&&t.notification.data.url||"/";t.waitUntil(clients.matchAll({type:"window",includeUncontrolled:!0}).then(function(t){for(var i=0;i<t.length;i++){var a=t[i];if(a.url===n&&"focus"in a)return a.focus()}if(clients.openWindow)return clients.openWindow(n)}))});
+importScripts('/push-notification-routing.js');
+
+self.addEventListener('push', function (event) {
+  var data = {};
+  try {
+    data = event.data ? event.data.json() : {};
+  } catch (e) {
+    data = { title: 'OpenHRM', body: event.data ? event.data.text() : '' };
+  }
+  var title = data.title || 'OpenHRM';
+  var inner = data.data || {};
+  var clickData = buildNotificationClickData(inner);
+  var options = {
+    body: data.body || 'You have a new notification',
+    icon: '/icons/icon-192.png',
+    badge: '/icons/icon-192.png',
+    data: clickData,
+    requireInteraction: false,
+  };
+  if (inner.tag) {
+    options.tag = String(inner.tag);
+  }
+  event.waitUntil(self.registration.showNotification(title, options));
+});
+
+self.addEventListener('notificationclick', function (event) {
+  event.notification.close();
+  var inner = event.notification.data || {};
+  var path = resolveNotificationPath(inner);
+  event.waitUntil(navigateToNotificationPath(path));
+});

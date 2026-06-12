@@ -1705,7 +1705,7 @@ const runFetchBR = (query: string) => {
   };
 
   return (
-    <div className="space-y-6 w-full max-w-7xl mx-auto px-4">
+    <div className="space-y-6 w-full max-w-7xl mx-auto px-4 page-content-enter">
       {/* Header */}
       <div className="flex items-center justify-between w-full">
         <div className="min-w-0 flex-1">

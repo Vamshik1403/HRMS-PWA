@@ -1,16 +1,10 @@
 /* Push + home-screen icon badge (Badging API — required on iOS PWA) */
 "use strict";
 
+importScripts("/push-notification-routing.js");
+
 var BADGE_CACHE = "openhrm-badge-v1";
 var BADGE_CACHE_KEY = "https://openhrm.internal/badge-count";
-
-function absoluteUrl(path) {
-  try {
-    return new URL(path || "/", self.location.origin).href;
-  } catch (e) {
-    return self.location.origin + "/";
-  }
-}
 
 function readBadgeCount() {
   return caches.open(BADGE_CACHE).then(function (cache) {
@@ -63,11 +57,12 @@ self.addEventListener("push", function (event) {
   }
   var title = data.title || "OpenHRM";
   var inner = data.data || {};
+  var clickData = buildNotificationClickData(inner);
   var options = {
     body: data.body || "You have a new notification",
     icon: "/icons/icon-192.png",
     badge: "/icons/icon-192.png",
-    data: { url: inner.url || "/" },
+    data: clickData,
     renotify: true,
   };
   if (inner.tag) {
@@ -93,7 +88,7 @@ self.addEventListener("push", function (event) {
             type: "PUSH_NOTIFICATION",
             title: title,
             body: options.body,
-            url: options.data.url,
+            url: clickData.url,
             kind: inner.kind || "general",
             event: inner.event || "",
             memoId: inner.memoId != null ? inner.memoId : undefined,
@@ -123,19 +118,7 @@ self.addEventListener("message", function (event) {
 
 self.addEventListener("notificationclick", function (event) {
   event.notification.close();
-  var path = (event.notification.data && event.notification.data.url) || "/";
-  var target = absoluteUrl(path);
-  event.waitUntil(
-    clients.matchAll({ type: "window", includeUncontrolled: true }).then(function (list) {
-      for (var i = 0; i < list.length; i++) {
-        var client = list[i];
-        if (client.url.indexOf(path) >= 0 && "focus" in client) {
-          return client.focus();
-        }
-      }
-      if (clients.openWindow) {
-        return clients.openWindow(target);
-      }
-    }),
-  );
+  var inner = event.notification.data || {};
+  var path = resolveNotificationPath(inner);
+  event.waitUntil(navigateToNotificationPath(path));
 });

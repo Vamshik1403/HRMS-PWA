@@ -26,23 +26,29 @@ export interface CurrentUser {
   type?: string
 }
 
+function readStoredUser(): CurrentUser | null {
+  if (typeof window === 'undefined') return null
+  const data = localStorage.getItem('user')
+  if (!data) return null
+  try {
+    const parsed = JSON.parse(data)
+    if (parsed.role) {
+      parsed.role = parsed.role.toUpperCase()
+    }
+    return parsed
+  } catch {
+    return null
+  }
+}
+
 export function useCurrentUser() {
-  const [user, setUser] = useState<CurrentUser | null>(null)
+  const [user, setUser] = useState<CurrentUser | null>(readStoredUser)
 
   useEffect(() => {
-    const data = localStorage.getItem('user')
-    if (data) {
-      try {
-        const parsed = JSON.parse(data)
-        // Normalize role to uppercase for consistent checks
-        if (parsed.role) {
-          parsed.role = parsed.role.toUpperCase()
-        }
-        setUser(parsed)
-        return
-      } catch {
-        // fall through to token-based recovery
-      }
+    const stored = readStoredUser()
+    if (stored) {
+      setUser(stored)
+      return
     }
 
     // No valid user in localStorage — try to recover from JWT token

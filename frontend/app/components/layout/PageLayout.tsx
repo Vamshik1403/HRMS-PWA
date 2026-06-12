@@ -31,6 +31,7 @@ import { useCurrentUser } from "../../hooks/useCurrentUser";
 import { Input } from "../ui/input";
 import { cn } from "@/app/utils/cn";
 import { setSidebarContext, getSidebarContext } from "@/app/utils/sidebarContext";
+import { getPageCache, setPageCache } from "@/app/utils/pageCache";
 import { isDesktopManagerFlagSet } from "@/lib/desktopManager";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../ui/dialog";
 import { Button } from "../ui/button";
@@ -40,6 +41,25 @@ import { Eye, EyeOff } from "lucide-react";
 import { TASK_MANAGEMENT_ENABLED } from "@/app/config/featureFlags";
 import { dispatchAppRefresh } from "@/app/utils/appRefresh";
 import { ensureFetchRefreshPatch } from "@/app/utils/patchFetchForRefresh";
+import { Skeleton } from "../ui/skeleton";
+
+const SIDEBAR_OPEN_SECTIONS_KEY = "sidebarOpenSections";
+
+function readOpenSections(): Record<string, boolean> {
+  if (typeof window === "undefined") return {};
+  try {
+    const raw = sessionStorage.getItem(SIDEBAR_OPEN_SECTIONS_KEY);
+    return raw ? (JSON.parse(raw) as Record<string, boolean>) : {};
+  } catch {
+    return {};
+  }
+}
+
+function persistOpenSections(sections: Record<string, boolean>) {
+  try {
+    sessionStorage.setItem(SIDEBAR_OPEN_SECTIONS_KEY, JSON.stringify(sections));
+  } catch { /* ignore */ }
+}
 
 interface PageLayoutProps {
   children: React.ReactNode;
@@ -88,9 +108,13 @@ export function PageLayout({ children }: PageLayoutProps) {
   const router = useRouter()
   const currentUser = useCurrentUser()
   const [sidebarOpen, setSidebarOpen] = useState(true)
-  const [fetchedServiceProviders, setFetchedServiceProviders] = useState<any[]>([])
-  const [fetchedCompanies, setFetchedCompanies] = useState<any[]>([])
-  const [openSections, setOpenSections] = useState<Record<string, boolean>>({})
+  const [fetchedServiceProviders, setFetchedServiceProviders] = useState<any[]>(
+    () => getPageCache<any[]>("sidebarSPs") ?? []
+  )
+  const [fetchedCompanies, setFetchedCompanies] = useState<any[]>(
+    () => getPageCache<any[]>("sidebarCompanies") ?? []
+  )
+  const [openSections, setOpenSections] = useState<Record<string, boolean>>(readOpenSections)
   const [sidebarRefreshKey, setSidebarRefreshKey] = useState(0)
   const [sidebarCtx, setSidebarCtxState] = useState<{ serviceProviderID: number; serviceProviderName: string; companyID: number; companyName: string } | null>(getSidebarContext())
 
@@ -227,7 +251,7 @@ export function PageLayout({ children }: PageLayoutProps) {
     }
   }
 
-  // Fetch service providers and companies for sidebar
+  // Fetch service providers and companies for sidebar (cache-first, background refresh)
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -237,11 +261,16 @@ export function PageLayout({ children }: PageLayoutProps) {
         ])
         if (spRes.ok) {
           const data = await spRes.json()
-          if (Array.isArray(data)) setFetchedServiceProviders(data)
+          if (Array.isArray(data)) {
+            setFetchedServiceProviders(data)
+            setPageCache("sidebarSPs", data)
+          }
         }
         if (compRes.ok) {
           const data = await compRes.json()
-          setFetchedCompanies(Array.isArray(data) ? data : data?.data ?? [])
+          const companies = Array.isArray(data) ? data : data?.data ?? []
+          setFetchedCompanies(companies)
+          setPageCache("sidebarCompanies", companies)
         }
       } catch { /* ignore */ }
     }
@@ -296,7 +325,11 @@ export function PageLayout({ children }: PageLayoutProps) {
   }, [isCompanyAdmin, isAdmin, isBranchAdmin, currentUser?.companyID, displaySPs, companiesBySP])
 
   const toggleSection = useCallback((key: string, open: boolean) => {
-    setOpenSections(prev => ({ ...prev, [key]: open }))
+    setOpenSections(prev => {
+      const next = { ...prev, [key]: open };
+      persistOpenSections(next);
+      return next;
+    });
   }, [])
 
   // Auto-expand sections based on current path
@@ -349,8 +382,16 @@ export function PageLayout({ children }: PageLayoutProps) {
         }
       }
     }
-    setOpenSections(newOpen)
-  }, [pathname, displaySPs, companiesBySP, sidebarCtx])
+    setOpenSections(prev => {
+      const merged = { ...prev, ...newOpen };
+      const changed =
+        Object.keys(newOpen).some(k => merged[k] !== prev[k]) ||
+        Object.keys(prev).length !== Object.keys(merged).length;
+      if (!changed) return prev;
+      persistOpenSections(merged);
+      return merged;
+    });
+  }, [pathname, displaySPs, companiesBySP, sidebarCtx, isBranchAdmin, currentUser?.branchesID])
 
   const pageTitle = (() => {
     if (pathname === "/dashboard") return "Dashboard";
@@ -375,6 +416,50 @@ export function PageLayout({ children }: PageLayoutProps) {
   };
 
   const adminSectionActive = ADMIN_PATHS.includes(pathname);
+
+  const sidebarHierarchyLoading = useMemo(() => {
+    if (!currentUser) return false;
+    const hasCachedSp = (getPageCache<any[]>("sidebarSPs")?.length ?? 0) > 0;
+    const hasCachedCo = (getPageCache<any[]>("sidebarCompanies")?.length ?? 0) > 0;
+    if (isSuperAdmin || (isServiceProvider && !currentUser.serviceProviderID)) {
+      return displaySPs.length === 0 && !hasCachedSp;
+    }
+    if (isCompanyAdmin || isAdmin || isBranchAdmin) {
+      const comps = displaySPs.flatMap((sp) => companiesBySP[sp.id] || []);
+      return comps.length === 0 && !hasCachedCo;
+    }
+    return false;
+  }, [
+    currentUser,
+    isSuperAdmin,
+    isServiceProvider,
+    isCompanyAdmin,
+    isAdmin,
+    isBranchAdmin,
+    displaySPs,
+    companiesBySP,
+  ]);
+
+  const renderSidebarHierarchySkeleton = () => (
+    <div className="space-y-2 px-1 py-1" aria-hidden="true">
+      {Array.from({ length: 3 }).map((_, i) => (
+        <div key={i} className="space-y-1.5">
+          <div className={cn(sbRow, "pointer-events-none")}>
+            <Skeleton className="h-5 w-5 shrink-0 rounded-md" />
+            <Skeleton className="h-4 flex-1 max-w-[72%] rounded-full" />
+            <Skeleton className="h-4 w-4 shrink-0 rounded-md" />
+          </div>
+          {i === 0 && (
+            <div className="ml-5 space-y-1.5 border-l border-[#f0f0f0] pl-3">
+              {Array.from({ length: 4 }).map((__, j) => (
+                <Skeleton key={j} className="h-9 w-full max-w-[88%] rounded-md" />
+              ))}
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
 
   /* ── helper: render all management sections under a company ── */
   const renderCompanySections = (companyId: number, spId: number, spName: string, companyName: string) => {
@@ -819,7 +904,9 @@ export function PageLayout({ children }: PageLayoutProps) {
                 )}
 
                 {/* ── SP → Company → Sections hierarchy ── */}
-                {displaySPs.map(sp => {
+                {sidebarHierarchyLoading ? (
+                  renderSidebarHierarchySkeleton()
+                ) : displaySPs.map(sp => {
                   const spCompanies = companiesBySP[sp.id] || []
                   const hasCompanies = spCompanies.length > 0
 
