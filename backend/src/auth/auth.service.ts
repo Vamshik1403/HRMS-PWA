@@ -183,7 +183,7 @@ export class AuthService {
 
     const accessToken = this.jwt.sign(payload, {
       secret: process.env.JWT_SECRET || 'secret123',
-      expiresIn: '1d',
+      expiresIn: '12h',
     });
 
     await this.auditLog.logFromRequest(req, {

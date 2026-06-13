@@ -21,6 +21,11 @@ import { useCurrentUser } from "../hooks/useCurrentUser";
 import { FormDrawer } from "../components/ui/form-drawer";
 import { toast } from "sonner";
 import { getSidebarContext } from "../utils/sidebarContext";
+import {
+  canDesktopManagerManage,
+  filterCompanyScopedRecords,
+  resolveScopeUserMapping,
+} from "../utils/scopeContext";
 
 // ---------------------------
 // Types aligned to backend
@@ -137,60 +142,10 @@ export function DepartmentManagement() {
       setLoading(true);
       const all = await fetchJSONSafe<DepartmentRead[]>(API.departments);
 
-      // 🟢 SUPERADMIN → filter by sidebar context
-      if (user?.role === "SUPERADMIN") {
-        const ctx = getSidebarContext();
-        if (ctx?.companyID) {
-          setRows(all.filter((r: any) => r.companyID === ctx.companyID));
-        } else {
-          setRows(all);
-        }
-        return;
-      }
+      const mapping = await resolveScopeUserMapping(user);
+      if (mapping) setCurrentUserMapping(mapping);
+      setRows(await filterCompanyScopedRecords(all, user));
 
-      // 🟡 MANAGER & EMPLOYEE → Get user mapping first
-      const usersRes = await fetch("/backend/users");
-      const users = await usersRes.json();
-      const currentUser = users.find((u: any) => u.username === user?.username);
-
-      if (currentUser) {
-        // Store the user mapping for form auto-fill
-        setCurrentUserMapping(currentUser);
-
-        if (user?.role === "SERVICE_PROVIDER") {
-          const ctx = getSidebarContext();
-          if (ctx?.companyID) {
-            setRows(all.filter((r: any) => r.companyID === ctx.companyID));
-          } else if (currentUser.serviceProviderID) {
-            setRows(all.filter((r: any) => r.serviceProviderID === currentUser.serviceProviderID));
-          } else {
-            setRows([]);
-          }
-        } else if (user?.role === "COMPANY_ADMIN" || user?.role === "ADMIN") {
-          const filtered = all.filter(
-            (r: any) => r.companyID === currentUser.companyID
-          );
-          setRows(filtered);
-        } else if (user?.role === "BRANCH_ADMIN") {
-          const filtered = all.filter(
-            (r: any) =>
-              r.companyID === currentUser.companyID &&
-              r.branchesID === currentUser.branchesID
-          );
-          setRows(filtered);
-        } else if (user?.role === "EMPLOYEE") {
-          // For EMPLOYEE, filter by both companyID and branchesID
-          const filtered = all.filter(
-            (r: any) =>
-              r.companyID === currentUser.companyID &&
-              r.branchesID === currentUser.branchesID
-          );
-          setRows(filtered);
-        }
-      } else {
-        console.warn("User not found in /users mapping.");
-        setRows([]);
-      }
     } catch (e: any) {
       console.error("Failed to load departments:", e);
       setRows([]);

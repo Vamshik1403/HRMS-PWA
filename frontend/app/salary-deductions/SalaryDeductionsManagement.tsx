@@ -21,6 +21,10 @@ import { Plus, Search, Edit, Trash2, Info, ArrowLeft } from "lucide-react";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import { toast } from "sonner";
 import { getSidebarContext } from "../utils/sidebarContext";
+import {
+  canDesktopManagerManage,
+  filterCompanyScopedRecords,
+} from "../utils/scopeContext";
 
 
 interface SalaryDeduction {
@@ -80,7 +84,7 @@ export function SalaryDeductionsManagement() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingDeduction, setEditingDeduction] = useState<SalaryDeduction | null>(null);
   const user = useCurrentUser();
-const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN" || user?.role === "BRANCH_ADMIN";
+const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN" || user?.role === "BRANCH_ADMIN" || canDesktopManagerManage(user);
 const isEmployee = user?.role === "EMPLOYEE";
 const [currentUserMapping, setCurrentUserMapping] = useState<any>(null);
 
@@ -189,57 +193,8 @@ const loadDeductions = async () => {
     const res = await fetch(API.deduction);
     const data: ApiSalaryDeduction[] = await res.json();
     const all = data.map(mapApiToUi);
+    setDeductions(await filterCompanyScopedRecords(all, user));
 
-    // 🟢 SUPERADMIN → filter by sidebar context
-    if (user?.role === "SUPERADMIN") {
-      const ctx = getSidebarContext();
-      if (ctx?.companyID) {
-        setDeductions(all.filter((r: any) => r.companyID === ctx.companyID));
-      } else {
-        setDeductions(all);
-      }
-      return;
-    }
-
-    // 🟡 MANAGER — filter via /users
-    if (user?.role === "SERVICE_PROVIDER") {
-      const ctx = getSidebarContext();
-      if (ctx?.companyID) {
-        setDeductions(all.filter((d: any) => d.companyID === ctx.companyID));
-        return;
-      }
-    }
-
-    // 🔴 COMPANY_ADMIN / BRANCH_ADMIN → filter by company (+ branch for BRANCH_ADMIN)
-    if (user?.role === "COMPANY_ADMIN" || user?.role === "BRANCH_ADMIN") {
-      const ctx = getSidebarContext();
-      const companyID = ctx?.companyID ?? user?.companyID;
-      if (companyID) {
-        setDeductions(all.filter((d: any) =>
-          d.companyID === companyID &&
-          (user?.role !== "BRANCH_ADMIN" || !d.branchesID || Number(d.branchesID) === Number(user?.branchesID))
-        ));
-      } else {
-        setDeductions([]);
-      }
-      return;
-    }
-
-    // �🔵 EMPLOYEE — filter via /manage-emp/credentials/all
-    const credsRes = await fetch("/backend/manage-emp/credentials/all");
-    const creds = await credsRes.json();
-    const emp = creds.find((c: any) => c.username === user?.username);
-
-    if (emp) {
-      const filtered = all.filter(
-        (d) =>
-          d.companyID === emp.companyID &&
-          d.branchesID === emp.branchesID
-      );
-      setDeductions(filtered);
-    } else {
-      setDeductions([]);
-    }
   } catch (e) {
     console.error("Failed to load salary deductions", e);
     toast.error("Failed to load data.");

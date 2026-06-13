@@ -31,6 +31,11 @@ import { SelectTrigger, SelectValue, SelectContent, SelectItem } from "@radix-ui
 import { Select } from "react-day-picker"
 import { toast } from "sonner"
 import { getSidebarContext } from "../utils/sidebarContext"
+import { isDesktopManagerFlagSet } from "@/lib/desktopManager"
+import {
+  canDesktopManagerManage,
+  filterCompaniesForUser,
+} from "../utils/scopeContext"
 
 interface Company {
   id: number
@@ -73,18 +78,27 @@ interface ServiceProvider {
 export function CompanyManagement() {
   const router = useRouter()
   const [companies, setCompanies] = useState<Company[]>([])
+  const [listLoading, setListLoading] = useState(true)
+  const [desktopManager, setDesktopManager] = useState(false)
   const [searchTerm, setSearchTerm] = useState("")
   const [editingCompany, setEditingCompany] = useState<Company | null>(null)
   const [viewCompany, setViewCompany] = useState<Company | null>(null)
   const [serviceProviders, setServiceProviders] = useState<ServiceProvider[]>([])
+  const [spDropdownOpen, setSpDropdownOpen] = useState(false)
   const [logoFile, setLogoFile] = useState<File | null>(null)
   const [signatureFile, setSignatureFile] = useState<File | null>(null)
   const [isAddingNew, setIsAddingNew] = useState(false)
   const [isViewing, setIsViewing] = useState(false)
   const user = useCurrentUser()
-  const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN" || user?.role === "ADMIN"
-  const isNonSuperAdmin = user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN" || user?.role === "ADMIN" || user?.role === "BRANCH_ADMIN"
-  const isCompanyProfileOnly = user?.role === "COMPANY_ADMIN" || user?.role === "ADMIN"
+
+  useEffect(() => {
+    setDesktopManager(isDesktopManagerFlagSet())
+  }, [user?.id])
+
+  const isDesktopManager = desktopManager && user?.role === "EMPLOYEE"
+  const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN" || user?.role === "ADMIN" || canDesktopManagerManage(user)
+  const isNonSuperAdmin = user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN" || user?.role === "ADMIN" || user?.role === "BRANCH_ADMIN" || isDesktopManager
+  const isCompanyProfileOnly = user?.role === "COMPANY_ADMIN" || user?.role === "ADMIN" || isDesktopManager
 
   interface CompanyFormData extends Partial<Company> {
     autocompleteName?: string
@@ -154,6 +168,8 @@ export function CompanyManagement() {
   useEffect(() => {
     if (isNonSuperAdmin && companies.length > 0 && !isAddingNew && !editingCompany) {
       const company = companies[0] as any
+      setServiceProviders([])
+      setSpDropdownOpen(false)
       setFormData({
         ...company,
         serviceProviderID: company.serviceProviderID,
@@ -165,93 +181,17 @@ export function CompanyManagement() {
   }, [companies, isNonSuperAdmin])
 
   const fetchCompanies = async () => {
+    setListLoading(true)
     try {
       const res = await fetch("/backend/company")
       const json = await res.json()
       const all = Array.isArray(json) ? json : json.data ?? []
-
-      if (user?.role === "SUPERADMIN") {
-        const ctx = getSidebarContext()
-        if (ctx?.serviceProviderID) {
-          setCompanies(all.filter((c: any) => c.serviceProviderID === ctx.serviceProviderID))
-        } else {
-          setCompanies(all)
-        }
-        return
-      }
-
-      if (user?.role === "SERVICE_PROVIDER") {
-        const ctx = getSidebarContext()
-
-        if (ctx?.companyID) {
-          // Show only the selected company from sidebar
-          const filtered = all.filter((c: any) => c.id === ctx.companyID)
-          setCompanies(filtered)
-          return
-        }
-
-        if (user.serviceProviderID) {
-          const filtered = all.filter(
-            (c: any) => c.serviceProviderID === user.serviceProviderID
-          )
-          setCompanies(filtered)
-          return
-        }
-      }
-
-      if (user?.role === "COMPANY_ADMIN") {
-        if (user.companyID) {
-          const filtered = all.filter(
-            (c: any) => c.id === user.companyID
-          )
-          setCompanies(filtered)
-          return
-        } else if (user.serviceProviderID) {
-          const filtered = all.filter(
-            (c: any) => c.serviceProviderID === user.serviceProviderID
-          )
-          setCompanies(filtered)
-          return
-        }
-      }
-
-      if (user?.role === "ADMIN") {
-        if (user.companyID) {
-          const filtered = all.filter(
-            (c: any) => c.id === user.companyID
-          )
-          setCompanies(filtered)
-          return
-        }
-      }
-
-      if (user?.role === "BRANCH_ADMIN") {
-        if (user.companyID) {
-          const filtered = all.filter(
-            (c: any) => c.id === user.companyID
-          )
-          setCompanies(filtered)
-          return
-        }
-      }
-
-      const credsRes = await fetch("/backend/manage-emp/credentials/all")
-      const creds = await credsRes.json()
-      const emp = creds.find((c: any) => c.username === user?.username)
-
-      if (emp) {
-        const filtered = all.filter(
-          (c: any) =>
-            c.id === emp.companyID ||
-            c.branchesID === emp.branchesID
-        )
-        setCompanies(filtered)
-      } else {
-        setCompanies([])
-      }
+      setCompanies(await filterCompaniesForUser(all, user))
     } catch (error) {
       console.error("Failed to load companies:", error)
       setCompanies([])
+    } finally {
+      setListLoading(false)
     }
   }
 
@@ -269,11 +209,6 @@ export function CompanyManagement() {
     }
   }
 
-  useEffect(() => {
-    if (formData.companyName && formData.companyName.length > 1) {
-      fetchServiceProviders(formData.companyName)
-    }
-  }, [formData.companyName])
 
   const UPLOAD_URL = "/backend/files/upload";
 
@@ -365,6 +300,8 @@ export function CompanyManagement() {
   };
 
   const handleEdit = (company: Company & { serviceProvider?: ServiceProvider }) => {
+    setServiceProviders([])
+    setSpDropdownOpen(false)
     setFormData({
       ...company,
       serviceProviderID: company.serviceProviderID,
@@ -425,6 +362,8 @@ export function CompanyManagement() {
     setLogoFile(null)
     setSignatureFile(null)
     setEditingCompany(null)
+    setServiceProviders([])
+    setSpDropdownOpen(false)
   }
 
   const handleCancel = () => {
@@ -508,13 +447,19 @@ export function CompanyManagement() {
                   onChange={(e) => {
                     const val = e.target.value
                     setFormData((p) => ({ ...p, autocompleteName: val }))
-                    if (val.length > 1) fetchServiceProviders(val)
-                    else setServiceProviders([])
+                    if (val.length > 1) {
+                      fetchServiceProviders(val)
+                      setSpDropdownOpen(true)
+                    } else {
+                      setServiceProviders([])
+                      setSpDropdownOpen(false)
+                    }
                   }}
+                  onFocus={() => setSpDropdownOpen(false)}
                   placeholder="Start typing service provider..."
                   autoComplete="off"
                 />
-                {serviceProviders.length > 0 && (
+                {spDropdownOpen && serviceProviders.length > 0 && (
                   <div className="absolute z-10 bg-white border rounded w-full shadow max-h-40 overflow-y-auto">
                     {serviceProviders.map((sp) => (
                       <div
@@ -528,6 +473,7 @@ export function CompanyManagement() {
                             autocompleteName: sp.companyName,
                           }))
                           setServiceProviders([])
+                          setSpDropdownOpen(false)
                         }}
                       >
                         {sp.companyName}
@@ -740,7 +686,7 @@ export function CompanyManagement() {
         )}
       </FormDrawer>
 
-      {isCompanyProfileOnly && !isAddingNew && companies.length === 0 && (
+      {isCompanyProfileOnly && !isAddingNew && listLoading && (
         <ListAreaSkeleton rows={6} />
       )}
 

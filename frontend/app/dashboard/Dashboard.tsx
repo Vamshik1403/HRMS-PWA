@@ -13,6 +13,7 @@ import {
 import { useEffect, useMemo, useRef, useState } from "react";
 import { fetchWithTimeout } from "../utils/fetchWithTimeout";
 import { useCurrentUser } from "../hooks/useCurrentUser";
+import { authHeaders } from "@/lib/auth";
 import SoftBarChart from "./components/SoftBarChart";
 import type { SoftBarPoint } from "./components/SoftBarChart";
 import EmployeeStatusCharts, {
@@ -207,7 +208,10 @@ export default function DashboardPage() {
   const [overviewEmployees, setOverviewEmployees] = useState<OverviewEmployee[]>([]);
   const [overviewSummary, setOverviewSummary] = useState<OverviewSummary | null>(null);
   const [overviewStatusCounts, setOverviewStatusCounts] = useState<Record<string, number>>({});
-  const [overviewLoading, setOverviewLoading] = useState(false);
+  const [overviewLoading, setOverviewLoading] = useState(true);
+  const [overviewLoadError, setOverviewLoadError] = useState(false);
+  const overviewLoadGen = useRef(0);
+  const hasShownDashboardContent = useRef(false);
   const [todayDate] = useState(() => {
     const now = new Date();
     const y = now.getFullYear();
@@ -299,7 +303,9 @@ export default function DashboardPage() {
 
     (async () => {
       try {
-        const res = await fetchWithTimeout(`${BACKEND_URL}/users`);
+        const res = await fetchWithTimeout(`${BACKEND_URL}/users`, {
+          headers: authHeaders(),
+        });
         if (cancelled) return;
         const users = res.ok ? await res.json() : [];
         const me = Array.isArray(users)
@@ -369,17 +375,53 @@ export default function DashboardPage() {
   }, [user, resolvedCompanyId, resolvedServiceProviderId, selectedBranchId, selectedDepartmentId, isDesktopManagerEmployee]);
 
   useEffect(() => {
-    if (!user || !canLoadDashboard) return;
+    if (!user || !canLoadDashboard) {
+      setOverviewLoading(false);
+      return;
+    }
     loadTodayOverview();
     loadProbationAlerts();
     if (isHrDesktopView) loadHrWidgets();
   }, [user, canLoadDashboard, overviewQueryParams.toString(), isHrDesktopView]);
 
+  useEffect(() => {
+    const onContextChange = () => {
+      if (user && canLoadDashboard) {
+        loadTodayOverview();
+        loadProbationAlerts();
+        if (isHrDesktopView) loadHrWidgets();
+      }
+    };
+    window.addEventListener("sidebar-context-changed", onContextChange);
+    return () => window.removeEventListener("sidebar-context-changed", onContextChange);
+  }, [user, canLoadDashboard, isHrDesktopView, overviewQueryParams.toString()]);
+
+  const fetchOverviewWithRetry = async (url: string, attempts = 3) => {
+    let lastError: unknown;
+    for (let attempt = 0; attempt < attempts; attempt++) {
+      try {
+        const res = await fetchWithTimeout(
+          url,
+          { headers: authHeaders() },
+          attempt === 0 ? 25_000 : 35_000,
+        );
+        if (res.ok) return res;
+        lastError = new Error(`overview HTTP ${res.status}`);
+      } catch (err) {
+        lastError = err;
+      }
+      if (attempt < attempts - 1) {
+        await new Promise((r) => setTimeout(r, 600 * (attempt + 1)));
+      }
+    }
+    throw lastError;
+  };
+
   const loadHrWidgets = async () => {
     try {
       const qs = overviewQueryParams.toString();
       const url = `${BACKEND_URL}/dashboard-overview/hr-widgets${qs ? `?${qs}` : ""}`;
-      const res = await fetchWithTimeout(url);
+      const res = await fetchWithTimeout(url, { headers: authHeaders() });
       if (!res.ok) return;
       const data = await res.json();
       setHrWidgets(data);
@@ -392,7 +434,7 @@ export default function DashboardPage() {
     try {
       const qs = overviewQueryParams.toString();
       const url = `${BACKEND_URL}/dashboard-overview/probation-alerts${qs ? `?${qs}&daysAhead=60` : "?daysAhead=60"}`;
-      const res = await fetchWithTimeout(url);
+      const res = await fetchWithTimeout(url, { headers: authHeaders() });
       if (!res.ok) return;
       const data = await res.json();
       setProbationAlerts(Array.isArray(data.alerts) ? data.alerts : []);
@@ -402,23 +444,86 @@ export default function DashboardPage() {
   };
 
   const loadTodayOverview = async () => {
+    const gen = ++overviewLoadGen.current;
+    setOverviewLoading(true);
+    setOverviewLoadError(false);
     try {
-      setOverviewLoading(true);
       const qs = overviewQueryParams.toString();
       const url = `${BACKEND_URL}/dashboard-overview/today-overview${qs ? `?${qs}` : ""}`;
-      const res = await fetchWithTimeout(url);
-      if (!res.ok) throw new Error("overview failed");
+      const res = await fetchOverviewWithRetry(url);
+      if (gen !== overviewLoadGen.current) return;
       const data = await res.json();
       setOverviewEmployees(Array.isArray(data.employees) ? data.employees : []);
       setOverviewSummary(data.summary || null);
       setOverviewStatusCounts(data.statusCounts || {});
       setPresentCount(data.summary?.present ?? 0);
     } catch (err) {
+      if (gen !== overviewLoadGen.current) return;
       console.error("Today overview load error:", err);
-      setOverviewEmployees([]);
-      setOverviewSummary(null);
+      setOverviewLoadError(true);
     } finally {
-      setOverviewLoading(false);
+      if (gen === overviewLoadGen.current) {
+        setOverviewLoading(false);
+      }
+    }
+  };
+
+  const loadAttendanceLogsInBackground = async (
+    gen: number,
+    scopedEmployees: Employee[],
+  ) => {
+    try {
+      const attLogsUrl = `${BACKEND_URL}/process-att-logs?dateFrom=${weekAgoDate}&dateTo=${todayDate}&limit=10000`;
+      const processAttRes = await fetchWithTimeout(attLogsUrl, {
+        headers: authHeaders(),
+      });
+      if (gen !== dashboardLoadGen.current) return;
+
+      let processAttJson: { data?: unknown[] } | null = null;
+      try {
+        processAttJson = processAttRes.ok ? await processAttRes.json() : null;
+      } catch {
+        /* ignore */
+      }
+      const processAttData: unknown[] =
+        processAttJson?.data && Array.isArray(processAttJson.data)
+          ? processAttJson.data
+          : [];
+      const allAttendanceMerged: AttendanceLog[] = processAttData
+        .filter(
+          (p): p is { id?: number; manage_employee_id: number; punch_time: string } =>
+            typeof p === "object" &&
+            p != null &&
+            (p as { manage_employee_id?: number }).manage_employee_id != null &&
+            (p as { punch_time?: string }).punch_time != null,
+        )
+        .map((p) => {
+          const formatted = formatDevicePunchForDisplay(p.punch_time);
+          if (!formatted) return null;
+          return {
+            id: p.id || 0,
+            employeeID: p.manage_employee_id,
+            punchTimeStamp: formatted.punchTimeStamp,
+          };
+        })
+        .filter((x): x is AttendanceLog => x != null);
+
+      const todayLogs = allAttendanceMerged.filter((log) => {
+        const date = log.punchTimeStamp.split(" ")[0];
+        return (
+          date === todayDate &&
+          scopedEmployees.some((e) => e.id === log.employeeID)
+        );
+      });
+
+      setAttendanceLogs(todayLogs);
+
+      const scopedEmpIds = new Set(scopedEmployees.map((e) => e.id));
+      setAllAttendanceLogs(
+        allAttendanceMerged.filter((l) => scopedEmpIds.has(l.employeeID)),
+      );
+    } catch (err) {
+      console.error("Attendance logs load error:", err);
     }
   };
 
@@ -426,13 +531,19 @@ export default function DashboardPage() {
     const gen = ++dashboardLoadGen.current;
     setDashboardLoading(true);
     try {
-      const attLogsUrl = `${BACKEND_URL}/process-att-logs?dateFrom=${weekAgoDate}&dateTo=${todayDate}&limit=10000`;
-      const [empRes, deptRes, hcRes, processAttRes, branchesRes] = await Promise.allSettled([
-        fetchWithTimeout(`${BACKEND_URL}/manage-emp/list`),
-        fetchWithTimeout(`${BACKEND_URL}/departments`),
-        fetchWithTimeout(`${BACKEND_URL}/departments/with-headcount`),
-        fetchWithTimeout(attLogsUrl),
-        fetchWithTimeout(`${BACKEND_URL}/branches`),
+      const [empRes, deptRes, hcRes, branchesRes] = await Promise.allSettled([
+        fetchWithTimeout(`${BACKEND_URL}/manage-emp/list`, {
+          headers: authHeaders(),
+        }),
+        fetchWithTimeout(`${BACKEND_URL}/departments`, {
+          headers: authHeaders(),
+        }),
+        fetchWithTimeout(`${BACKEND_URL}/departments/with-headcount`, {
+          headers: authHeaders(),
+        }),
+        fetchWithTimeout(`${BACKEND_URL}/branches`, {
+          headers: authHeaders(),
+        }),
       ]);
 
       if (gen !== dashboardLoadGen.current) return;
@@ -455,30 +566,6 @@ export default function DashboardPage() {
         branchesRes.status === "fulfilled" && branchesRes.value.ok
           ? await branchesRes.value.json()
           : [];
-
-      // Parse process_att_logs and convert to AttendanceLog format
-      let processAttJson: any = null;
-      try {
-        processAttJson =
-          processAttRes.status === "fulfilled" && processAttRes.value.ok
-            ? await processAttRes.value.json()
-            : null;
-      } catch { /* ignore */ }
-      const processAttData: any[] = processAttJson?.data && Array.isArray(processAttJson.data)
-        ? processAttJson.data
-        : [];
-      const allAttendanceMerged: AttendanceLog[] = processAttData
-        .filter((p: any) => p.manage_employee_id != null && p.punch_time != null)
-        .map((p: any) => {
-          const formatted = formatDevicePunchForDisplay(p.punch_time);
-          if (!formatted) return null;
-          return {
-            id: p.id || 0,
-            employeeID: p.manage_employee_id,
-            punchTimeStamp: formatted.punchTimeStamp,
-          };
-        })
-        .filter((x): x is AttendanceLog => x != null);
 
       let scopedEmployees: Employee[] = [];
       let scopedDepartments: Department[] = [];
@@ -560,20 +647,7 @@ export default function DashboardPage() {
       const scopedHc = allHeadcounts.filter((h) => scopedDeptIds.has(h.id));
       setDepartmentHeadcounts(scopedHc);
 
-      const todayLogs = allAttendanceMerged.filter((log) => {
-        const date = log.punchTimeStamp.split(" ")[0];
-        return (
-          date === todayDate &&
-          scopedEmployees.some((e) => e.id === log.employeeID)
-        );
-      });
-
-      setAttendanceLogs(todayLogs);
-
-      const scopedEmpIds = new Set(scopedEmployees.map((e) => e.id));
-      setAllAttendanceLogs(
-        allAttendanceMerged.filter((l) => scopedEmpIds.has(l.employeeID))
-      );
+      void loadAttendanceLogsInBackground(gen, scopedEmployees);
     } catch (err) {
       console.error("Dashboard load error:", err);
     } finally {
@@ -698,6 +772,13 @@ export default function DashboardPage() {
   const overviewTotal = overviewSummary?.total ?? overviewEmployees.length;
   const overviewPresent = overviewSummary?.present ?? presentCount;
   const overviewAbsent = overviewSummary?.absent ?? Math.max(0, overviewTotal - overviewPresent);
+  const overviewStatsReady = overviewSummary != null;
+  const formatOverviewStat = (value: number) =>
+    overviewStatsReady
+      ? value.toLocaleString()
+      : overviewLoading
+        ? "…"
+        : "—";
 
   const statusBreakdown: StatusBreakdownItem[] = useMemo(() => {
     const labels: Record<string, { name: string; fill: string }> = {
@@ -794,7 +875,17 @@ export default function DashboardPage() {
     return items.sort((a, b) => b.sortAt - a.sortAt).slice(0, 20);
   }, [attendanceLogs, employees]);
 
-  if (!user || !bootstrapReady || dashboardLoading) {
+  if (!dashboardLoading && !overviewLoading && bootstrapReady && user) {
+    hasShownDashboardContent.current = true;
+  }
+
+  const showFullPageSkeleton =
+    !user ||
+    !bootstrapReady ||
+    dashboardLoading ||
+    (overviewLoading && !hasShownDashboardContent.current);
+
+  if (showFullPageSkeleton) {
     return (
       <div className="space-y-5 animate-pulse">
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
@@ -912,6 +1003,21 @@ export default function DashboardPage() {
               </div>
             </div>
 
+            {overviewLoadError && !overviewStatsReady && (
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
+                <p className="text-sm text-amber-900">
+                  Overview data could not be loaded. This is usually temporary.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => loadTodayOverview()}
+                  className="text-sm font-semibold text-[#4f46e5] hover:underline"
+                >
+                  Retry
+                </button>
+              </div>
+            )}
+
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
               {/* All Employees */}
               <div className="rounded-xl border border-[#e5e7eb] bg-white p-5">
@@ -923,7 +1029,7 @@ export default function DashboardPage() {
                     <span className="text-[11px] font-medium text-[#4338ca] bg-[#eef2ff] px-2.5 py-1 rounded-full">Total</span>
                   </div>
                   <p className="text-3xl font-bold tracking-tight tabular-nums text-[#111827]">
-                    {overviewTotal.toLocaleString()}
+                    {formatOverviewStat(overviewTotal)}
                   </p>
                   <p className="text-[13px] font-medium text-gray-500 mt-1">
                     All employees
@@ -941,10 +1047,10 @@ export default function DashboardPage() {
                     <div className="w-10 h-10 rounded-lg bg-[#eef2ff] flex items-center justify-center">
                       <Icon icon="mdi:account-check" className="w-5 h-5 text-[#4f46e5]" />
                     </div>
-                    <span className="text-[11px] font-medium text-[#4338ca] bg-[#eef2ff] px-2.5 py-1 rounded-full">{attRate}%</span>
+                    <span className="text-[11px] font-medium text-[#4338ca] bg-[#eef2ff] px-2.5 py-1 rounded-full">{overviewStatsReady ? `${attRate}%` : "—"}</span>
                   </div>
                   <p className="text-3xl font-bold tracking-tight tabular-nums text-[#111827]">
-                    {overviewPresent.toLocaleString()}
+                    {formatOverviewStat(overviewPresent)}
                   </p>
                   <p className="text-[13px] font-medium text-gray-500 mt-1">
                     Present today
@@ -967,10 +1073,10 @@ export default function DashboardPage() {
                     <div className="w-10 h-10 rounded-lg bg-[#eef2ff] flex items-center justify-center">
                       <Icon icon="mdi:account-remove" className="w-5 h-5 text-[#4f46e5]" />
                     </div>
-                    <span className="text-[11px] font-medium text-[#4338ca] bg-[#eef2ff] px-2.5 py-1 rounded-full">{overviewTotal > 0 ? Math.round((absentCount / overviewTotal) * 100) : 0}%</span>
+                    <span className="text-[11px] font-medium text-[#4338ca] bg-[#eef2ff] px-2.5 py-1 rounded-full">{overviewStatsReady && overviewTotal > 0 ? Math.round((absentCount / overviewTotal) * 100) : 0}%</span>
                   </div>
                   <p className="text-3xl font-bold tracking-tight tabular-nums text-[#111827]">
-                    {absentCount.toLocaleString()}
+                    {formatOverviewStat(absentCount)}
                   </p>
                   <p className="text-[13px] font-medium text-gray-500 mt-1">
                     Absent today

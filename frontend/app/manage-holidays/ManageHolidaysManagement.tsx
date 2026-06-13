@@ -30,6 +30,12 @@ import { SearchSuggestInput } from "../components/SearchSuggestInput"
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import { toast } from "sonner";
 import { getSidebarContext } from "../utils/sidebarContext";
+import {
+  canDesktopManagerManage,
+  filterCompanyScopedRecords,
+  isDesktopManagerEmployee,
+  resolveScopeUserMapping,
+} from "../utils/scopeContext";
 
 interface Holiday {
   id: string
@@ -125,7 +131,7 @@ export function ManageHolidaysManagement() {
   })
   
   const user = useCurrentUser();
-  const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN" || user?.role === "BRANCH_ADMIN";
+  const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN" || user?.role === "BRANCH_ADMIN" || canDesktopManagerManage(user);
 
   const [managerData, setManagerData] = useState<any>(null);
   const [empCreds, setEmpCreds] = useState<any>(null);
@@ -167,6 +173,16 @@ export function ManageHolidaysManagement() {
               companyName: me.companyName || "",
             }));
           }
+        }
+
+        // --- DESKTOP MANAGER (employee with reportees) ---
+        if (isDesktopManagerEmployee(user)) {
+          setManagerData({
+            companyID: user.companyID,
+            serviceProviderID: user.serviceProviderID,
+            branchesID: user.branchesID,
+          });
+          return;
         }
 
         // --- EMPLOYEE ---
@@ -250,62 +266,8 @@ export function ManageHolidaysManagement() {
 
       console.log("Mapped holidays data:", holidaysData);
 
-      // 🟢 SUPERADMIN → filter by sidebar context
-      if (user?.role === "SUPERADMIN") {
-        const ctx = getSidebarContext();
-        if (ctx?.companyID) {
-          setHolidays(holidaysData.filter((r: any) => r.companyID === ctx.companyID));
-        } else {
-          setHolidays(holidaysData);
-        }
-        return;
-      }
+      setHolidays(await filterCompanyScopedRecords<Holiday>(holidaysData, user));
 
-      // 🟡 MANAGER → filter by assigned company and branch
-      if (user?.role === "SERVICE_PROVIDER") {
-        const ctx = getSidebarContext();
-        if (ctx?.companyID) {
-          setHolidays(holidaysData.filter((r: any) => r.companyID === ctx.companyID));
-          return;
-        }
-        if (managerData?.serviceProviderID) {
-          setHolidays(holidaysData.filter((r: any) => r.serviceProviderID === managerData.serviceProviderID));
-          return;
-        }
-        setHolidays([]);
-        return;
-      }
-
-      // 🔵 EMPLOYEE → filter by assigned company and branch
-      if (user?.role === "EMPLOYEE" && empCreds) {
-        console.log("Filtering for EMPLOYEE:", empCreds);
-        const filtered = holidaysData.filter(
-          (r: any) =>
-            r.companyID === empCreds.companyID &&
-            r.branchesID === empCreds.branchesID
-        );
-        console.log("Employee filtered holidays:", filtered);
-        setHolidays(filtered);
-        return;
-      }
-
-      // 🟠 COMPANY_ADMIN / BRANCH_ADMIN → filter by company (branch admin also by branch)
-      {
-        const ctx = getSidebarContext();
-        const companyID = ctx?.companyID ?? user?.companyID;
-        if (companyID) {
-          if (user?.role === "BRANCH_ADMIN" && user?.branchesID) {
-            setHolidays(holidaysData.filter((r: any) => r.companyID === companyID && r.branchesID === user.branchesID));
-          } else {
-            setHolidays(holidaysData.filter((r: any) => r.companyID === companyID));
-          }
-          return;
-        }
-      }
-
-      // If no specific filtering applied, show empty
-      setHolidays([]);
-      
     } catch (error) {
       console.error("Error loading holidays:", error);
       setHolidays([]);

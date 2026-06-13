@@ -12,6 +12,7 @@ import {
   isDesktopManagerFlagSet,
   resolveDesktopManagerAfterLogin,
 } from '@/lib/desktopManager'
+import { isJwtExpired } from '@/lib/jwtUtils'
 
 const TERMS_AND_CONDITIONS = `TERMS AND CONDITIONS & END USER LICENSE AGREEMENT
 
@@ -130,11 +131,19 @@ export default function LoginPage() {
 
   const setAccessTokenCookie = (token: string) => {
     const secure = window.location.protocol === 'https:' ? '; secure' : ''
-    document.cookie = `accessToken=${token}; path=/; max-age=${60 * 60 * 24 * 30}; samesite=lax${secure}`
+    // Session cookie — cleared when the browser session ends (browser/tab closed).
+    document.cookie = `accessToken=${token}; path=/; samesite=lax${secure}`
   }
 
   useEffect(() => {
     const token = localStorage.getItem('accessToken')
+    if (token && isJwtExpired(token)) {
+      localStorage.removeItem('accessToken')
+      localStorage.removeItem('token')
+      document.cookie = 'accessToken=; path=/; max-age=0'
+      setAuthChecked(true)
+      return
+    }
     if (!token) {
       setAuthChecked(true)
       return

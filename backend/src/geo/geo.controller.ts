@@ -28,4 +28,12 @@ export class GeoController {
   searchCurrencies(@Query('q') q = '') {
     return this.geoService.searchCurrencies(q);
   }
+
+  @Get('pincode')
+  lookupPincode(
+    @Query('code') code = '',
+    @Query('country') country = '',
+  ) {
+    return this.geoService.lookupByPincode(code, country);
+  }
 }

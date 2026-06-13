@@ -13,6 +13,10 @@ import { Plus, Search, Edit, Trash2, Info, ArrowLeft } from "lucide-react";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import { toast } from "sonner";
 import { getSidebarContext } from "../utils/sidebarContext";
+import {
+  canDesktopManagerManage,
+  filterCompanyScopedRecords,
+} from "../utils/scopeContext";
 import { TableBodySkeleton } from "../components/ui/TableBodySkeleton";
 
 
@@ -140,7 +144,7 @@ export function MonthlyPayGradeManagement() {
   const [editingPayGrade, setEditingPayGrade] = useState<MonthlyPayGradeUI | null>(null);
 
   const user = useCurrentUser();
-  const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN" || user?.role === "BRANCH_ADMIN";
+  const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN" || user?.role === "BRANCH_ADMIN" || canDesktopManagerManage(user);
   const isEmployee = user?.role === "EMPLOYEE";
 
   const [currentUserMapping, setCurrentUserMapping] = useState<any>(null);
@@ -239,26 +243,7 @@ useEffect(() => {
       const data: ApiMPG[] = await res.json();
 
       const uiRows = data.map(mapApiToUi);
-
-      // 🔐 ROLE-BASED TABLE FILTERING
-      if (user?.role === "SERVICE_PROVIDER") {
-        const ctx = getSidebarContext();
-        if (ctx?.companyID) {
-          setPayGrades(uiRows.filter((pg: any) => pg.companyID === ctx.companyID));
-        } else if (currentUserMapping?.serviceProviderID) {
-          setPayGrades(uiRows.filter((pg: any) => pg.serviceProviderID === currentUserMapping.serviceProviderID));
-        } else {
-          setPayGrades([]);
-        }
-      } else {
-        // SUPERADMIN → filter by sidebar context
-        const ctx = getSidebarContext();
-        if (ctx?.companyID) {
-          setPayGrades(uiRows.filter((r: any) => r.companyID === ctx.companyID));
-        } else {
-          setPayGrades(uiRows);
-        }
-      }
+      setPayGrades(await filterCompanyScopedRecords<MonthlyPayGradeUI>(uiRows, user));
     } catch (e) {
       console.error("Monthly pay grade fetch failed", e);
       toast.error("Failed to load data.");

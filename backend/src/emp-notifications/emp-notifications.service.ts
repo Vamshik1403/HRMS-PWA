@@ -134,6 +134,7 @@ export class EmpNotificationsService {
         items.push(...(await this.personalMemoItems(reporteeId, olderStart, now, true)));
       }
       items.push(...(await this.personalMemoItems(employeeId, olderStart, now, false)));
+      items.push(...(await this.holidayItems(emp, now, olderStart)));
     } else {
       items.push(...(await this.birthdayItems(emp, now, recentDays)));
       items.push(...(await this.holidayItems(emp, now, olderStart)));

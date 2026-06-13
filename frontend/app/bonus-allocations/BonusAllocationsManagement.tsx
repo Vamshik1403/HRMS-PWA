@@ -19,6 +19,11 @@ import { Plus, Search, Edit, Trash2, Play } from "lucide-react";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import { toast } from "sonner";
 import { getSidebarContext } from "../utils/sidebarContext";
+import {
+  canDesktopManagerManage,
+  filterCompanyScopedRecords,
+  resolveScopeUserMapping,
+} from "../utils/scopeContext";
 
 /* ---------------- API endpoints ---------------- */
 const API = {
@@ -203,25 +208,21 @@ export function BonusAllocationsManagement() {
   const [editingAllocation, setEditingAllocation] = useState<BonusAllocationUI | null>(null);
 
   const user = useCurrentUser();
-  const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN" || user?.role === "BRANCH_ADMIN";
+  const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN" || user?.role === "BRANCH_ADMIN" || canDesktopManagerManage(user);
   const isEmployee = user?.role === "EMPLOYEE";
 
   const [currentUserMapping, setCurrentUserMapping] = useState<any>(null);
 
-  // Fetch mapping for MANAGER
   useEffect(() => {
-    if (user?.role !== "SERVICE_PROVIDER") return;
-
+    if (!user) return;
+    let cancelled = false;
     (async () => {
-      try {
-        const res = await fetch("/backend/users");
-        const list = await res.json();
-        const me = list.find((u: any) => u.username === user.username);
-        setCurrentUserMapping(me || null);
-      } catch (e) {
-        console.error("Mapping fetch failed", e);
-      }
+      const mapping = await resolveScopeUserMapping(user);
+      if (!cancelled && mapping) setCurrentUserMapping(mapping);
     })();
+    return () => {
+      cancelled = true;
+    };
   }, [user]);
 
   const [empList, setEmpList] = useState<EmployeeApi[]>([]);
@@ -258,7 +259,7 @@ export function BonusAllocationsManagement() {
 
   useEffect(() => {
     if (user) loadAllocations();
-  }, [user, currentUserMapping]);
+  }, [user]);
 
   useEffect(() => {
     const handler = () => { if (user) loadAllocations(); };
@@ -288,7 +289,9 @@ export function BonusAllocationsManagement() {
       }
 
       const res = await fetch(allocationsUrl);
-      const data: ApiAllocation[] = await res.json();
+      if (!res.ok) throw new Error(`allocations HTTP ${res.status}`);
+      const raw = await res.json();
+      const data: ApiAllocation[] = Array.isArray(raw) ? raw : raw?.data ?? [];
 
       const cRes = await fetch(API.companies);
       const companies: CompanyApi[] = await cRes.json();
@@ -339,52 +342,8 @@ export function BonusAllocationsManagement() {
         branchesID: x.bonusSetup?.branchesID ?? null,
       }));
 
-      // 🟢 SUPERADMIN — filter by sidebar context
-      if (user?.role === "SUPERADMIN") {
-        const ctx = getSidebarContext();
-        if (ctx?.companyID) {
-          setAllocations(all.filter((r: any) => r.companyID === ctx.companyID));
-        } else {
-          setAllocations(all);
-        }
-        return;
-      }
+      setAllocations(await filterCompanyScopedRecords(all, user));
 
-      // 🟡 MANAGER — filter from /users
-      if (user?.role === "SERVICE_PROVIDER") {
-        const ctx = getSidebarContext();
-        if (ctx?.companyID) {
-          setAllocations(all.filter((a: any) => a.companyID === ctx.companyID));
-          return;
-        }
-      }
-
-      // � COMPANY_ADMIN / BRANCH_ADMIN → filter by company
-      if (user?.role === "COMPANY_ADMIN" || user?.role === "BRANCH_ADMIN") {
-        const ctx = getSidebarContext();
-        const companyID = ctx?.companyID ?? user?.companyID;
-        if (companyID) {
-          setAllocations(all.filter((a: any) => a.companyID === companyID));
-        } else {
-          setAllocations([]);
-        }
-        return;
-      }
-
-      // �🔵 EMPLOYEE — filter from /manage-emp/credentials/all
-      const credsRes = await fetch("/backend/manage-emp/credentials/all");
-      const creds = await credsRes.json();
-      const emp = creds.find((c: any) => c.username === user?.username);
-      if (emp) {
-        const filtered = all.filter(
-          (a) =>
-            a.companyID === emp.companyID &&
-            a.branchesID === emp.branchesID
-        );
-        setAllocations(filtered);
-      } else {
-        setAllocations([]);
-      }
     } catch (e) {
       console.error("Failed to load data", e);
       setAllocations([]);

@@ -1,7 +1,10 @@
 "use client";
 
-import { usePathname } from "next/navigation";
+import { useEffect } from "react";
+import { usePathname, useRouter } from "next/navigation";
 import { PageLayout } from "@/app/components/layout/PageLayout";
+import { getAccessToken } from "@/lib/auth";
+import { isJwtExpired } from "@/lib/jwtUtils";
 
 /** PWA employee app routes — camelCase after /emp (not /employee-* admin routes). */
 const PWA_ROUTE = /^\/emp(dashboard|[A-Z])/;
@@ -19,6 +22,18 @@ export function AdminShellProvider({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (!shouldUseAdminShell(pathname)) return;
+    const token = getAccessToken();
+    if (!token || isJwtExpired(token)) {
+      localStorage.removeItem("accessToken");
+      localStorage.removeItem("token");
+      document.cookie = "accessToken=; path=/; max-age=0";
+      router.replace("/login");
+    }
+  }, [pathname, router]);
 
   if (!shouldUseAdminShell(pathname)) {
     return <>{children}</>;

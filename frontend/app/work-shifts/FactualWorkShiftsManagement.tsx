@@ -27,6 +27,11 @@ import { useCurrentUser } from "../hooks/useCurrentUser";
 import { toast } from "sonner";
 import { getWorkShiftTypeLabel } from "../utils/workShiftLabels";
 import { getSidebarContext } from "../utils/sidebarContext";
+import {
+  canDesktopManagerManage,
+  filterCompanyScopedRecords,
+  resolveScopeUserMapping,
+} from "../utils/scopeContext";
 
 interface ShiftRow {
   startTime: string;
@@ -84,7 +89,7 @@ export function FactualWorkShiftsManagement() {
   );
   const user = useCurrentUser();
   if (user && user.role !== "SUPERADMIN" && user.role !== "COMPANY_ADMIN") return null;
-  const canManage = user?.role === "SUPERADMIN" || user?.role === "COMPANY_ADMIN";
+  const canManage = user?.role === "SUPERADMIN" || user?.role === "COMPANY_ADMIN" || canDesktopManagerManage(user)
   const [currentUserMapping, setCurrentUserMapping] = useState<any>(null);
 
 
@@ -312,50 +317,10 @@ export function FactualWorkShiftsManagement() {
         };
       });
 
-      // Role-based filtering
-      if (user?.role === "SUPERADMIN") {
-        const ctx = getSidebarContext();
-        if (ctx?.companyID) {
-          setWorkShifts(mapped.filter((r: any) => r.companyID === ctx.companyID));
-        } else {
-          setWorkShifts(mapped);
-        }
-        return;
-      }
+      const mapping = await resolveScopeUserMapping(user!);
+      if (mapping) setCurrentUserMapping(mapping);
+      setWorkShifts(await filterCompanyScopedRecords(mapped, user!));
 
-      // Non-SUPERADMIN: get user mapping
-      const usersRes = await fetch(`${BACKEND_URL}/users`);
-      const users = await usersRes.json();
-      const currentUser = users.find((u: any) => u.username === user?.username);
-
-      if (currentUser) {
-        let filtered: typeof mapped = [];
-        if (user?.role === "SERVICE_PROVIDER") {
-          const ctx = getSidebarContext();
-          if (ctx?.companyID) {
-            filtered = mapped.filter((s: any) => s.companyID === ctx.companyID);
-          } else {
-            filtered = mapped.filter((s) => s.serviceProviderID === currentUser.serviceProviderID);
-          }
-        } else if (user?.role === "COMPANY_ADMIN") {
-          filtered = mapped.filter((s) => s.companyID === currentUser.companyID);
-        } else if (user?.role === "BRANCH_ADMIN") {
-          filtered = mapped.filter((s) => s.companyID === currentUser.companyID && s.branchesID === currentUser.branchesID);
-        } else {
-          // EMPLOYEE fallback
-          const credsRes = await fetch(`${BACKEND_URL}/manage-emp/credentials/all`);
-          const creds = await credsRes.json();
-          const emp = creds.find((c: any) => c.username === user?.username);
-          if (emp) {
-            filtered = mapped.filter((s) => s.companyID === emp.companyID && s.branchesID === emp.branchesID);
-          } else {
-            filtered = [];
-          }
-        }
-        setWorkShifts(filtered);
-      } else {
-        setWorkShifts([]);
-      }
     } catch (error) {
       console.error("Error loading work shifts:", error);
       toast.error("Failed to load data.");

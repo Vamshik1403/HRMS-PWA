@@ -1,4 +1,5 @@
 import { getSidebarContext } from "./sidebarContext";
+import { isDesktopManagerFlagSet } from "@/lib/desktopManager";
 
 export type CurrentUserLike = {
   id?: number;
@@ -49,6 +50,9 @@ export function buildTaskViewerQuery(user: CurrentUserLike | null | undefined) {
   const spID = isEmployee ? u?.serviceProviderID : (ctx?.serviceProviderID ?? u?.serviceProviderID);
   if (companyID) params.set("companyID", String(companyID));
   if (spID) params.set("serviceProviderID", String(spID));
+  if (isEmployee && isDesktopManagerFlagSet()) {
+    params.set("viewerDesktopManager", "1");
+  }
   return params;
 }
 

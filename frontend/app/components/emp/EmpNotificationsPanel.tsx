@@ -99,6 +99,13 @@ function collectMemoIds(items: FeedNotification[]): Set<number> {
   return ids;
 }
 
+function isWithinLastDays(iso: string, days: number): boolean {
+  const t = new Date(iso).getTime();
+  if (Number.isNaN(t)) return false;
+  const cutoff = Date.now() - days * 86400000;
+  return t >= cutoff;
+}
+
 function mergeFeeds(
   apiRecent: FeedNotification[],
   apiOlder: FeedNotification[],
@@ -204,12 +211,21 @@ export function EmpNotificationsPanel() {
     );
   }, [recent, older, stored, isManagerView]);
 
-  const panelList = useMemo(
-    () => fullList.slice(0, EMP_MOBILE_PREVIEW_LIMIT),
-    [fullList],
-  );
+  const panelList = useMemo(() => {
+    const merged = mergeFeeds(recent, [], stored);
+    return filterNotificationsForViewer(merged, isManagerView)
+      .filter((n) => isWithinLastDays(n.at, 7))
+      .sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime())
+      .slice(0, EMP_MOBILE_PREVIEW_LIMIT);
+  }, [recent, stored, isManagerView]);
 
-  const olderCount = Math.max(0, fullList.length - EMP_MOBILE_PREVIEW_LIMIT);
+  const olderCount = useMemo(() => {
+    const merged = mergeFeeds(recent, [], stored);
+    const within7 = filterNotificationsForViewer(merged, isManagerView).filter((n) =>
+      isWithinLastDays(n.at, 7),
+    );
+    return Math.max(0, within7.length - EMP_MOBILE_PREVIEW_LIMIT);
+  }, [recent, stored, isManagerView]);
 
   return (
     <div className="mb-2">
@@ -228,7 +244,7 @@ export function EmpNotificationsPanel() {
         <div className="bg-white rounded-2xl border border-gray-100 p-6 text-center text-[13px] text-gray-500">
           {error}
         </div>
-      ) : fullList.length === 0 ? (
+      ) : panelList.length === 0 ? (
         <div className="bg-white rounded-2xl border border-gray-100 p-6 flex flex-col items-center gap-2">
           <span className="text-2xl" aria-hidden>
             🔔

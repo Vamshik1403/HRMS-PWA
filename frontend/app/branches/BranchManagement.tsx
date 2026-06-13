@@ -28,6 +28,11 @@ import { SearchSuggestInput } from "../components/SearchSuggestInput";
 import { fetchCurrencies } from "../utils/geoApi";
 import { toast } from "sonner";
 import { getSidebarContext } from "../utils/sidebarContext";
+import {
+  canDesktopManagerManage,
+  filterBranchesForUser,
+  resolveScopeUserMapping,
+} from "../utils/scopeContext";
 import { PdfUploadField } from "../components/PdfUploadField";
 
 // ---------------------------
@@ -205,80 +210,9 @@ export function BranchManagement() {
     try {
       setLoading(true);
       const all = await fetchJSONSafe<BranchRead[]>(API.branches);
-
-      // 🟢 SUPERADMIN → filter by sidebar context
-      if (user?.role === "SUPERADMIN") {
-        const ctx = getSidebarContext();
-        if (ctx?.companyID) {
-          setBranches(all.filter((r: any) => r.companyID === ctx.companyID));
-        } else {
-          setBranches(all);
-        }
-        return;
-      }
-
-      // 🟡 Non-SUPERADMIN → Get user mapping first
-      const usersRes = await fetch("/backend/users");
-      const users = await usersRes.json();
-      const currentUser = users.find((u: any) => u.username === user?.username);
-
-      if (currentUser) {
-        // Store the user mapping for form auto-fill
-        setCurrentUserMapping(currentUser);
-
-        if (user?.role === "SERVICE_PROVIDER") {
-          // Service provider sees branches for selected company from sidebar
-          const ctx = getSidebarContext();
-          if (ctx?.companyID) {
-            setBranches(all.filter((b: any) => b.companyID === ctx.companyID));
-          } else {
-            setBranches(all.filter((b: any) => b.serviceProviderID === currentUser.serviceProviderID));
-          }
-        } else if (user?.role === "COMPANY_ADMIN" || user?.role === "ADMIN") {
-          // Company admin / Admin sees all branches in their company
-          let filtered: any[];
-          if (currentUser.companyID) {
-            filtered = all.filter(
-              (b: any) => b.companyID === currentUser.companyID
-            );
-          } else if (currentUser.serviceProviderID) {
-            filtered = all.filter(
-              (b: any) => b.serviceProviderID === currentUser.serviceProviderID
-            );
-          } else {
-            filtered = [];
-          }
-          setBranches(filtered);
-        } else if (user?.role === "BRANCH_ADMIN") {
-          // Branch admin sees only their branch
-          const filtered = all.filter(
-            (b: any) =>
-              b.companyID === currentUser.companyID &&
-              b.id === currentUser.branchesID
-          );
-          setBranches(filtered);
-        } else if (user?.role === "EMPLOYEE") {
-          // For EMPLOYEE, still use credentials but store user mapping
-          const credsRes = await fetch("/backend/manage-emp/credentials/all");
-          const creds = await credsRes.json();
-          const emp = creds.find((c: any) => c.username === user?.username);
-
-          if (emp) {
-            const filtered = all.filter(
-              (b: any) =>
-                b.companyID === emp.companyID &&
-                b.id === emp.branchesID
-            );
-            setBranches(filtered);
-          } else {
-            console.warn("Employee mapping not found in credentials.");
-            setBranches([]);
-          }
-        }
-      } else {
-        console.warn("User not found in /users mapping.");
-        setBranches([]);
-      }
+      const mapping = await resolveScopeUserMapping(user);
+      if (mapping) setCurrentUserMapping(mapping);
+      setBranches(await filterBranchesForUser(all, user));
     } catch (e: any) {
       console.error("Failed to load branches:", e);
       setBranches([]);

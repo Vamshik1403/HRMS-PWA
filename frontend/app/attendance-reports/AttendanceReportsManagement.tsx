@@ -1309,7 +1309,13 @@ const employeeOptions = filteredEmployees.map((e: Employee) => ({
     const isRotating = workShift?.isRotating || false;
     const isFlexible = workShift?.isFlexible || false;
     const dayOfWeek = WEEKDAYS[new Date(date).getDay()];
-    const shiftDay = workShift?.workShiftDay?.find(d => d.weekDay === dayOfWeek && d.shiftType === "WORK");
+    const dayConfig = workShift?.workShiftDay?.find((d) => d.weekDay === dayOfWeek);
+    const shiftDay =
+      dayConfig?.shiftType === "WORK"
+        ? dayConfig
+        : workShift?.workShiftDay?.find(
+            (d) => d.weekDay === dayOfWeek && d.shiftType === "WORK",
+          );
     const otDay = workShift?.workShiftDay?.find(d => d.weekDay === dayOfWeek && d.shiftType === "OT");
     const defaultWorkedMinutes = shiftDay?.totalMinutes || 480;
 
@@ -1364,6 +1370,7 @@ const employeeOptions = filteredEmployees.map((e: Employee) => ({
         const rosterDay = roster?.days?.find(d => new Date(d.workDate).toISOString().split('T')[0] === date);
         return rosterDay?.dayType === "WEEKLY_OFF";
       }
+      if (dayConfig?.weeklyOff) return true;
       return shiftDay?.weeklyOff || false;
     };
 
@@ -1389,10 +1396,7 @@ const employeeOptions = filteredEmployees.map((e: Employee) => ({
 
     // PRIORITY 2: Week Off
     if (isWeekOff()) {
-      if (isFactualMode) {
-        return { type: "WEEK_OFF", label: "WO", hasPunches: false, workedMinutes: defaultWorkedMinutes };
-      }
-      // Actual reports should not apply week-off logic.
+      return { type: "WEEK_OFF", label: "WO", hasPunches: false, workedMinutes: defaultWorkedMinutes };
     }
 
     // PRIORITY 3: Public Holiday (factual mode only)

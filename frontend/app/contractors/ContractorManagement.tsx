@@ -23,6 +23,11 @@ import { useCurrentUser } from "../hooks/useCurrentUser";
 import { toast } from "sonner";
 import { PdfUploadField } from "../components/PdfUploadField";
 import { getSidebarContext } from "../utils/sidebarContext";
+import {
+  canDesktopManagerManage,
+  filterCompanyScopedRecords,
+  resolveScopeUserMapping,
+} from "../utils/scopeContext";
 import { LocationFields } from "../components/ui/location-fields";
 import { TimezoneSelect } from "../components/ui/timezone-select";
 import { SearchSuggestInput } from "../components/SearchSuggestInput";
@@ -135,7 +140,7 @@ export function ContractorManagement() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const user = useCurrentUser();
-  const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN" || user?.role === "BRANCH_ADMIN";
+  const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN" || user?.role === "BRANCH_ADMIN" || canDesktopManagerManage(user)
   const isEmployee = user?.role === "EMPLOYEE";
   // Add this with your other state declarations
   const [currentUserMapping, setCurrentUserMapping] = useState<any>(null);
@@ -283,66 +288,10 @@ export function ContractorManagement() {
       setLoading(true);
       const all = await fetchJSONSafe<ContractorRead[]>(API.contractors);
 
-      // 🟢 SUPERADMIN → filter by sidebar context
-      if (user?.role === "SUPERADMIN") {
-        const ctx = getSidebarContext();
-        if (ctx?.companyID) {
-          setRows(all.filter((r: any) =>
-            r.companyID === ctx.companyID ||
-            (r.companyID == null && r.serviceProviderID === ctx.serviceProviderID)
-          ));
-        } else {
-          setRows(all);
-        }
-        return;
-      }
+      const mapping = await resolveScopeUserMapping(user);
+      if (mapping) setCurrentUserMapping(mapping);
+      setRows(await filterCompanyScopedRecords(all, user));
 
-      // 🟡 MANAGER & EMPLOYEE → Get user mapping first
-      const usersRes = await fetch("/backend/users");
-      const users = await usersRes.json();
-      const currentUser = users.find((u: any) => u.username === user?.username);
-
-      if (currentUser) {
-        // Store the user mapping for form auto-fill
-        setCurrentUserMapping(currentUser);
-
-        if (user?.role === "SERVICE_PROVIDER") {
-          const ctx = getSidebarContext();
-          if (ctx?.companyID) {
-            setRows(all.filter((c: any) =>
-              c.companyID === ctx.companyID ||
-              (c.companyID == null && c.serviceProviderID === ctx.serviceProviderID)
-            ));
-          } else if (currentUser.serviceProviderID) {
-            setRows(all.filter((c: any) => c.serviceProviderID === currentUser.serviceProviderID));
-          } else {
-            setRows([]);
-          }
-        } else if (user?.role === "COMPANY_ADMIN" || user?.role === "BRANCH_ADMIN") {
-          const ctx = getSidebarContext();
-          const companyID = ctx?.companyID ?? currentUser.companyID ?? user?.companyID;
-          const spID = ctx?.serviceProviderID ?? currentUser.serviceProviderID ?? user?.serviceProviderID;
-          if (companyID) {
-            setRows(all.filter((c: any) =>
-              c.companyID === companyID ||
-              (c.companyID == null && c.serviceProviderID === spID)
-            ));
-          } else {
-            setRows([]);
-          }
-        } else if (user?.role === "EMPLOYEE") {
-          const filtered = all.filter(
-            (c: any) =>
-              c.companyID === currentUser.companyID
-          );
-          setRows(filtered);
-        } else {
-          setRows(all);
-        }
-      } else {
-        console.warn("User not found in /users mapping.");
-        setRows([]);
-      }
     } catch (e: any) {
       console.error("Failed to load contractors:", e);
       toast.error("Failed to load data.");

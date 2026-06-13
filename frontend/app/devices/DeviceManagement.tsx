@@ -21,6 +21,11 @@ import { useRouter } from "next/navigation";
 import { FormDrawer } from "../components/ui/form-drawer";
 import { toast } from "sonner";
 import { getSidebarContext } from "../utils/sidebarContext";
+import {
+  canDesktopManagerManage,
+  filterCompanyScopedRecords,
+  resolveScopeUserMapping,
+} from "../utils/scopeContext";
 import { fetchGPSOnUserGesture } from "../utils/empGeolocation";
 
 // ---------------------------
@@ -109,8 +114,8 @@ export function DeviceManagement() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const user = useCurrentUser();
-  const canManage = user?.role === "SUPERADMIN" || user?.role === "COMPANY_ADMIN" || user?.role === "ADMIN" || user?.role === "SERVICE_PROVIDER";
-  const canAdd = user?.role === "SUPERADMIN" || user?.role === "COMPANY_ADMIN" || user?.role === "ADMIN";
+  const canManage = user?.role === "SUPERADMIN" || user?.role === "COMPANY_ADMIN" || user?.role === "ADMIN" || user?.role === "SERVICE_PROVIDER" || canDesktopManagerManage(user);
+  const canAdd = user?.role === "SUPERADMIN" || user?.role === "COMPANY_ADMIN" || user?.role === "ADMIN" || canDesktopManagerManage(user);
   const canDelete = user?.role === "SUPERADMIN";
   
   // UI
@@ -172,66 +177,9 @@ export function DeviceManagement() {
     try {
       setLoading(true);
       const all = await fetchJSONSafe<DeviceRead[]>(API.devices);
-
-      // 🟢 SUPERADMIN → filter by sidebar context
-      if (user?.role === "SUPERADMIN") {
-        const ctx = getSidebarContext();
-        if (ctx?.companyID) {
-          setDevices(all.filter((r: any) => r.companyID === ctx.companyID));
-        } else {
-          setDevices(all);
-        }
-        return;
-      }
-
-      // 🟡 COMPANY_ADMIN / ADMIN → filter by companyID from sidebar context / user object
-      if (user?.role === "COMPANY_ADMIN" || user?.role === "ADMIN") {
-        const ctx = getSidebarContext();
-        const companyID = ctx?.companyID ?? user?.companyID;
-        if (companyID) {
-          setDevices(all.filter((d: any) => d.companyID === companyID));
-        } else {
-          setDevices([]);
-        }
-        return;
-      }
-
-      // �🟡 Non-SUPERADMIN → Get user mapping first
-      const usersRes = await fetch("/backend/users");
-      const users = await usersRes.json();
-      const currentUser = users.find((u: any) => u.username === user?.username);
-
-      if (currentUser) {
-        // Store the user mapping for form auto-fill
-        setCurrentUserMapping(currentUser);
-
-        if (user?.role === "SERVICE_PROVIDER") {
-          const ctx = getSidebarContext();
-          if (ctx?.companyID) {
-            setDevices(all.filter((d: any) => d.companyID === ctx.companyID));
-          } else {
-            setDevices(all.filter((d: any) => d.serviceProviderID === currentUser.serviceProviderID));
-          }
-        } else if (user?.role === "BRANCH_ADMIN") {
-          // Branch admin sees devices in their branch
-          const filtered = all.filter(
-            (d: any) =>
-              d.companyID === currentUser.companyID &&
-              d.branchesID === currentUser.branchesID
-          );
-          setDevices(filtered);
-        } else if (user?.role === "EMPLOYEE") {
-          const filtered = all.filter(
-            (d: any) =>
-              d.companyID === currentUser.companyID &&
-              d.branchesID === currentUser.branchesID
-          );
-          setDevices(filtered);
-        }
-      } else {
-        console.warn("User not found in /users mapping.");
-        setDevices([]);
-      }
+      const mapping = await resolveScopeUserMapping(user);
+      if (mapping) setCurrentUserMapping(mapping);
+      setDevices(await filterCompanyScopedRecords(all, user));
     } catch (e: any) {
       console.error("Failed to load devices:", e);
       setDevices([]);

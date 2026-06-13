@@ -22,6 +22,11 @@ import { SearchSuggestInput } from "../components/SearchSuggestInput"
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import { toast } from "sonner";
 import { getSidebarContext } from "../utils/sidebarContext";
+import {
+  canDesktopManagerManage,
+  filterCompanyScopedRecords,
+  resolveScopeUserMapping,
+} from "../utils/scopeContext";
 
 interface Holiday {
   id: string
@@ -416,50 +421,10 @@ const fetchBranches = async (query: string) => {
         };
       });
 
-      // 🟢 SUPERADMIN → filter by sidebar context
-      if (user?.role === "SUPERADMIN") {
-        const ctx = getSidebarContext();
-        if (ctx?.companyID) {
-          setPolicies(mapped.filter((r: any) => r.companyID === ctx.companyID));
-        } else {
-          setPolicies(mapped);
-        }
-        return;
-      }
+      const mapping = await resolveScopeUserMapping(user!);
+      if (mapping) setCurrentUserMapping(mapping);
+      setPolicies(await filterCompanyScopedRecords(mapped, user!));
 
-      // Non-SUPERADMIN: get user mapping
-      const usersRes = await fetch(`${BACKEND_URL}/users`);
-      const users = await usersRes.json();
-      const currentUser = users.find((u: any) => u.username === user?.username);
-
-      if (currentUser) {
-        let filtered: any[];
-        if (user?.role === "SERVICE_PROVIDER") {
-          const ctx = getSidebarContext();
-          if (ctx?.companyID) {
-            filtered = mapped.filter((r: any) => r.companyID === ctx.companyID);
-          } else {
-            filtered = mapped.filter((r: any) => r.serviceProviderID === currentUser.serviceProviderID);
-          }
-        } else if (user?.role === "COMPANY_ADMIN") {
-          filtered = mapped.filter((r: any) => r.companyID === currentUser.companyID);
-        } else if (user?.role === "BRANCH_ADMIN") {
-          filtered = mapped.filter((r: any) => r.companyID === currentUser.companyID && r.branchesID === currentUser.branchesID);
-        } else {
-          // EMPLOYEE fallback
-          const credsRes = await fetch(`${BACKEND_URL}/manage-emp/credentials/all`);
-          const creds = await credsRes.json();
-          const emp = creds.find((c: any) => c.username === user?.username);
-          if (emp) {
-            filtered = mapped.filter((r: any) => r.companyID === emp.companyID && r.branchesID === emp.branchesID);
-          } else {
-            filtered = [];
-          }
-        }
-        setPolicies(filtered);
-      } else {
-        setPolicies([]);
-      }
     } catch (error) {
       console.error("Error loading leave policies:", error);
       toast.error("Failed to load data.");

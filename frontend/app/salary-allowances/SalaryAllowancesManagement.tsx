@@ -21,6 +21,11 @@ import { Plus, Search, Edit, Trash2, Info, ArrowLeft } from "lucide-react";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import { toast } from "sonner";
 import { getSidebarContext } from "../utils/sidebarContext";
+import {
+  canDesktopManagerManage,
+  filterCompanyScopedRecords,
+  resolveScopeUserMapping,
+} from "../utils/scopeContext";
 
 
 interface SalaryAllowance {
@@ -78,7 +83,7 @@ export function SalaryAllowancesManagement() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingAllowance, setEditingAllowance] = useState<SalaryAllowance | null>(null);
   const user = useCurrentUser();
-  const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN" || user?.role === "BRANCH_ADMIN";
+  const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN" || user?.role === "BRANCH_ADMIN" || canDesktopManagerManage(user);
   const isEmployee = user?.role === "EMPLOYEE";
   const [currentUserMapping, setCurrentUserMapping] = useState<any>(null);
 
@@ -173,56 +178,10 @@ const resolvedCompanyID =
       const data: ApiSalaryAllowance[] = await res.json();
       const all = data.map(mapApiToUi);
 
-      // 🟢 SUPERADMIN → filter by sidebar context
-      if (user?.role === "SUPERADMIN") {
-        const ctx = getSidebarContext();
-        if (ctx?.companyID) {
-          setAllowances(all.filter((r: any) => r.companyID === ctx.companyID));
-        } else {
-          setAllowances(all);
-        }
-        return;
-      }
+      const mapping = await resolveScopeUserMapping(user);
+      if (mapping) setCurrentUserMapping(mapping);
+      setAllowances(await filterCompanyScopedRecords(all, user));
 
-      // 🟡 MANAGER → filter via /users
-      if (user?.role === "SERVICE_PROVIDER") {
-        const ctx = getSidebarContext();
-        if (ctx?.companyID) {
-          setAllowances(all.filter((a: any) => a.companyID === ctx.companyID));
-          return;
-        }
-      }
-
-      // 🔴 COMPANY_ADMIN / BRANCH_ADMIN → filter by company (+ branch for BRANCH_ADMIN)
-      if (user?.role === "COMPANY_ADMIN" || user?.role === "BRANCH_ADMIN") {
-        const ctx = getSidebarContext();
-        const companyID = ctx?.companyID ?? user?.companyID;
-        if (companyID) {
-          setAllowances(all.filter((a: any) =>
-            a.companyID === companyID &&
-            (user?.role !== "BRANCH_ADMIN" || !a.branchesID || Number(a.branchesID) === Number(user?.branchesID))
-          ));
-        } else {
-          setAllowances([]);
-        }
-        return;
-      }
-
-      // �🔵 EMPLOYEE → filter via /manage-emp/credentials/all
-      const credsRes = await fetch("/backend/manage-emp/credentials/all");
-      const creds = await credsRes.json();
-      const emp = creds.find((c: any) => c.username === user?.username);
-
-      if (emp) {
-        const filtered = all.filter(
-          (a: any) =>
-            a.companyID === emp.companyID &&
-            a.branchesID === emp.branchesID
-        );
-        setAllowances(filtered);
-      } else {
-        setAllowances([]);
-      }
     } catch (e) {
       console.error("Failed to load allowances", e);
       toast.error("Failed to load data.");

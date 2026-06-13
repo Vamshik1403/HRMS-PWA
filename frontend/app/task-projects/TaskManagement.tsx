@@ -9,6 +9,7 @@ import { FormDrawer } from "../components/ui/form-drawer";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../components/ui/table";
 import { Filter, MessageCircle, Pencil, Plus, Search, Trash2, Eye, AlertTriangle, UserPlus, FileDown } from "lucide-react";
 import { useCurrentUser } from "../hooks/useCurrentUser";
+import { isDesktopManagerFlagSet } from "@/lib/desktopManager";
 import { toast } from "sonner";
 import { taskFetch } from "../utils/taskApi";
 import { NEXT_TASK_STATUS } from "../utils/taskStatusFlow";
@@ -75,7 +76,12 @@ function isOverdue24h(task: Task) {
 
 export default function TaskManagement() {
   const user = useCurrentUser();
-  const canManage = user?.role === "SUPERADMIN" || user?.role === "COMPANY_ADMIN";
+  const desktopManager =
+    user?.role === "EMPLOYEE" && isDesktopManagerFlagSet();
+  const canManage =
+    user?.role === "SUPERADMIN" ||
+    user?.role === "COMPANY_ADMIN" ||
+    desktopManager;
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");

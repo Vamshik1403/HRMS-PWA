@@ -15,6 +15,11 @@ import { Plus, Search, Edit, Trash2 } from "lucide-react";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import { toast } from "sonner";
 import { getSidebarContext } from "../utils/sidebarContext";
+import {
+  canDesktopManagerManage,
+  filterCompanyScopedRecords,
+  resolveScopeUserMapping,
+} from "../utils/scopeContext";
 
 
 /* ---------------- API endpoints ---------------- */
@@ -76,7 +81,7 @@ export function BonusSetupManagement() {
   const [editingBonus, setEditingBonus] = useState<BonusSetupUI | null>(null);
 
   const user = useCurrentUser();
-  const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN" || user?.role === "BRANCH_ADMIN";
+  const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN" || user?.role === "BRANCH_ADMIN" || canDesktopManagerManage(user);
   const isEmployee = user?.role === "EMPLOYEE";
 
   const [currentUserMapping, setCurrentUserMapping] = useState<any>(null);
@@ -213,56 +218,10 @@ const resolvedCompanyID =
       }
 
       const all = filteredData.map(mapApiToUi);
+      const mapping = await resolveScopeUserMapping(user);
+      if (mapping) setCurrentUserMapping(mapping);
+      setBonuses(await filterCompanyScopedRecords(all as BonusSetupUI[], user));
 
-      // SUPERADMIN → filter by sidebar context
-      if (user?.role === "SUPERADMIN") {
-        const ctx = getSidebarContext();
-        if (ctx?.companyID) {
-          setBonuses(all.filter((r: any) => r.companyID === ctx.companyID));
-        } else {
-          setBonuses(all);
-        }
-        return;
-      }
-
-      // MANAGER → filter from /users
-      if (user?.role === "SERVICE_PROVIDER") {
-        const ctx = getSidebarContext();
-        if (ctx?.companyID) {
-          setBonuses(all.filter((b: any) => b.companyID === ctx.companyID));
-          return;
-        }
-      }
-
-      // COMPANY_ADMIN / BRANCH_ADMIN → filter by company (+ branch for BRANCH_ADMIN)
-      if (user?.role === "COMPANY_ADMIN" || user?.role === "BRANCH_ADMIN") {
-        const ctx = getSidebarContext();
-        const companyID = ctx?.companyID ?? user?.companyID;
-        if (companyID) {
-          setBonuses(all.filter((b: any) =>
-            b.companyID === companyID &&
-            (user?.role !== "BRANCH_ADMIN" || !b.branchesID || Number(b.branchesID) === Number(user?.branchesID))
-          ));
-        } else {
-          setBonuses([]);
-        }
-        return;
-      }
-
-      // EMPLOYEE → filter from /manage-emp/credentials/all
-      const credsRes = await fetch("/backend/manage-emp/credentials/all");
-      const creds = await credsRes.json();
-      const emp = creds.find((c: any) => c.username === user?.username);
-      if (emp) {
-        const filtered = all.filter(
-          (b) =>
-            b.companyID === emp.companyID &&
-            b.branchesID === emp.branchesID
-        );
-        setBonuses(filtered);
-      } else {
-        setBonuses([]);
-      }
     } catch (e) {
       console.error("Failed to load bonuses", e);
       setBonuses([]);

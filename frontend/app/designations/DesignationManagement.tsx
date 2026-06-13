@@ -28,6 +28,11 @@ import { useCurrentUser } from "../hooks/useCurrentUser";
 import { FormDrawer } from "../components/ui/form-drawer";
 import { toast } from "sonner";
 import { getSidebarContext } from "../utils/sidebarContext";
+import {
+  canDesktopManagerManage,
+  filterCompanyScopedRecords,
+  resolveScopeUserMapping,
+} from "../utils/scopeContext";
 // ---------------------------
 // Types aligned to backend
 // ---------------------------
@@ -288,65 +293,10 @@ export function DesignationManagement() {
       setLoading(true);
       const all = await fetchJSONSafe<DesignationRead[]>(API.designationsList);
 
-      // 🟢 SUPERADMIN → filter by sidebar context
-      if (user?.role === "SUPERADMIN") {
-        const ctx = getSidebarContext();
-        if (ctx?.companyID) {
-          setRows(all.filter((r: any) => r.companyID === ctx.companyID));
-        } else {
-          setRows(all);
-        }
-        return;
-      }
+      const mapping = await resolveScopeUserMapping(user);
+      if (mapping) setCurrentUserMapping(mapping);
+      setRows(await filterCompanyScopedRecords(all, user));
 
-      // Non-SUPERADMIN: get user mapping
-      const usersRes = await fetch("/backend/users");
-      const users = await usersRes.json();
-      const currentUser = users.find((u: any) => u.username === user?.username);
-
-      if (currentUser) {
-        let filtered: any[];
-        if (user?.role === "SERVICE_PROVIDER") {
-          const ctx = getSidebarContext();
-          if (ctx?.companyID) {
-            filtered = all.filter((r: any) => r.companyID === ctx.companyID);
-          } else {
-            filtered = all.filter((r: any) => r.serviceProviderID === currentUser.serviceProviderID);
-          }
-        } else if (user?.role === "COMPANY_ADMIN" || user?.role === "ADMIN") {
-          filtered = all.filter((r: any) => r.companyID === currentUser.companyID);
-        } else if (user?.role === "BRANCH_ADMIN") {
-          filtered = all.filter((r: any) => r.companyID === currentUser.companyID && r.branchesID === currentUser.branchesID);
-        } else {
-          // EMPLOYEE fallback
-          const credsRes = await fetch("/backend/manage-emp/credentials/all");
-          const creds = await credsRes.json();
-          const emp = creds.find((c: any) => c.username === user?.username);
-          if (emp) {
-            filtered = all.filter((r: any) => r.companyID === emp.companyID && r.branchesID === emp.branchesID);
-          } else {
-            filtered = [];
-          }
-        }
-        setRows(filtered);
-        return;
-      }
-
-      // Fallback: try credentials
-      const credsRes = await fetch("/backend/manage-emp/credentials/all");
-      const creds = await credsRes.json();
-      const emp = creds.find((c: any) => c.username === user?.username);
-
-      if (emp) {
-        const filtered = all.filter(
-          (r: any) =>
-            r.companyID === emp.companyID &&
-            r.branchesID === emp.branchesID
-        );
-        setRows(filtered);
-      } else {
-        setRows([]);
-      }
     } catch (e: any) {
       console.error("Failed to load designations:", e);
       setRows([]);

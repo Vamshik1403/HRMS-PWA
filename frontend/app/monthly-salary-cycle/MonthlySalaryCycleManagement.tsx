@@ -21,6 +21,11 @@ import { Plus, Search, Edit, Trash2, ArrowLeft } from "lucide-react";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import { toast } from "sonner";
 import { getSidebarContext } from "../utils/sidebarContext";
+import {
+  canDesktopManagerManage,
+  filterCompanyScopedRecords,
+  resolveScopeUserMapping,
+} from "../utils/scopeContext";
 
 
 interface MonthlySalaryCycle {
@@ -75,7 +80,7 @@ export function MonthlySalaryCycleManagement() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingCycle, setEditingCycle] = useState<MonthlySalaryCycle | null>(null);
   const user = useCurrentUser();
-  const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN" || user?.role === "BRANCH_ADMIN";
+  const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN" || user?.role === "BRANCH_ADMIN" || canDesktopManagerManage(user);
   const isEmployee = user?.role === "EMPLOYEE";
 
   const [currentUserMapping, setCurrentUserMapping] = useState<any>(null);
@@ -168,52 +173,10 @@ const resolvedCompanyID =
       const data: ApiSalaryCycle[] = await res.json();
       const all = data.map(mapApiToUi);
 
-      // 🟢 SUPERADMIN → filter by sidebar context
-      if (user?.role === "SUPERADMIN") {
-        const ctx = getSidebarContext();
-        if (ctx?.companyID) {
-          setCycles(all.filter((r: any) => r.companyID === ctx.companyID));
-        } else {
-          setCycles(all);
-        }
-        return;
-      }
+      const mapping = await resolveScopeUserMapping(user);
+      if (mapping) setCurrentUserMapping(mapping);
+      setCycles(await filterCompanyScopedRecords(all, user));
 
-      // 🟡 MANAGER → filter using /users
-      if (user?.role === "SERVICE_PROVIDER") {
-        const ctx = getSidebarContext();
-        if (ctx?.companyID) {
-          setCycles(all.filter((c: any) => c.companyID === ctx.companyID));
-          return;
-        }
-      }
-
-      // � COMPANY_ADMIN / BRANCH_ADMIN → filter by company
-      if (user?.role === "COMPANY_ADMIN" || user?.role === "BRANCH_ADMIN") {
-        const ctx = getSidebarContext();
-        const companyID = ctx?.companyID ?? user?.companyID;
-        if (companyID) {
-          setCycles(all.filter((c: any) => c.companyID === companyID));
-        } else {
-          setCycles([]);
-        }
-        return;
-      }
-
-      // �🔵 EMPLOYEE → filter using /manage-emp/credentials/all
-      const credsRes = await fetch("/backend/manage-emp/credentials/all");
-      const creds = await credsRes.json();
-      const emp = creds.find((c: any) => c.username === user?.username);
-      if (emp) {
-        const filtered = all.filter(
-          (c) =>
-            c.companyID === emp.companyID &&
-            c.branchesID === emp.branchesID
-        );
-        setCycles(filtered);
-      } else {
-        setCycles([]);
-      }
     } catch (e) {
       console.error("Failed to load salary cycles", e);
       toast.error("Failed to load data.");

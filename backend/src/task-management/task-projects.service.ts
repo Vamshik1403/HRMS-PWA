@@ -108,7 +108,11 @@ export class TaskProjectsService {
     if (!task) throw new NotFoundException('Task not found');
 
     if (canManageTaskModule(viewer)) {
-      if (viewer.role === 'COMPANY_ADMIN' && viewer.companyID && task.companyID !== viewer.companyID) {
+      if (
+        (viewer.role === 'COMPANY_ADMIN' || (viewer.role === 'EMPLOYEE' && viewer.isDesktopManager)) &&
+        viewer.companyID &&
+        task.companyID !== viewer.companyID
+      ) {
         throw new NotFoundException('Task not found');
       }
       return task;

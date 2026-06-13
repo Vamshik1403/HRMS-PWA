@@ -842,10 +842,16 @@ export class DashboardOverviewService {
 
   async getHrWidgets(query: TodayOverviewQuery) {
     const today = new Date();
-    const companyWhere: Prisma.ManageEmployeeWhereInput = {};
-    if (query.companyID) companyWhere.companyID = query.companyID;
-    if (query.branchId) companyWhere.branchesID = query.branchId;
-    if (query.serviceProviderID) companyWhere.serviceProviderID = query.serviceProviderID;
+    const employeeWhere: Prisma.ManageEmployeeWhereInput = {
+      isDeleted: false,
+      OR: [
+        { employmentStatus: null },
+        { employmentStatus: { not: 'Terminated' } },
+      ],
+    };
+    if (query.companyID) employeeWhere.companyID = query.companyID;
+    if (query.branchId) employeeWhere.branchesID = query.branchId;
+    if (query.serviceProviderID) employeeWhere.serviceProviderID = query.serviceProviderID;
 
     const taskWhere: Prisma.TaskProjectWhereInput = {
       isDeleted: false,
@@ -915,10 +921,7 @@ export class DashboardOverviewService {
         },
       }),
       this.prisma.manageEmployee.findMany({
-        where: {
-          ...companyWhere,
-          NOT: { employmentStatus: 'Terminated' },
-        },
+        where: employeeWhere,
         select: {
           id: true,
           employeeFirstName: true,

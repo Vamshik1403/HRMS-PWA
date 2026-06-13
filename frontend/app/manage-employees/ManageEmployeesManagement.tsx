@@ -38,6 +38,7 @@ import {
 import { FormDrawer } from "../components/ui/form-drawer";
 import { toast } from "sonner";
 import { getSidebarContext } from "../utils/sidebarContext";
+import { isDesktopManagerEmployee, resolveScopedCompanyId } from "../utils/scopeContext";
 import {
   CollapsibleFormGroup,
   EmployeeFormSectionNav,
@@ -629,6 +630,7 @@ export function ManageEmployeesManagement() {
 
   // Staging state for multi-entry search-and-add pattern
   const today = new Date().toISOString().split('T')[0];
+  const defaultEffectFrom = () => formData.joiningDate?.trim() || today;
   const [stagingBranch, setStagingBranch] = useState<{ branchesID: ID | null; label: string; effectFrom: string }>({ branchesID: null, label: "", effectFrom: today });
   const [stagingDept, setStagingDept] = useState<{ departmentNameID: ID | null; label: string; effectFrom: string }>({ departmentNameID: null, label: "", effectFrom: today });
   const [stagingDesg, setStagingDesg] = useState<{ designationID: ID | null; label: string; effectFrom: string }>({ designationID: null, label: "", effectFrom: today });
@@ -1023,6 +1025,17 @@ export function ManageEmployeesManagement() {
         filteredRows = enrichedEmployees.filter(
           (r: any) => r.companyID === currentUser.companyID && r.branchesID === currentUser.branchesID
         );
+      }
+    }
+    // Desktop manager → company-wide like COMPANY_ADMIN
+    else if (isDesktopManagerEmployee(user)) {
+      const companyId = resolveScopedCompanyId(user);
+      if (companyId) {
+        filteredRows = enrichedEmployees.filter(
+          (r: any) => r.companyID === companyId
+        );
+      } else {
+        filteredRows = [];
       }
     }
     // EMPLOYEE → match via manage-emp/credentials/all
@@ -3506,7 +3519,7 @@ const addCombinedDevMap = () => {
                         {deptList.map((d) => (
                           <div key={d.id} className="px-3 py-2 hover:bg-gray-100 cursor-pointer" onMouseDown={(e) => e.preventDefault()} onClick={() => {
                             setStagingDept(p => ({ ...p, departmentNameID: d.id, label: d.departmentName ?? String(d.id) }));
-                            setStagingDesg({ designationID: null, label: "", effectFrom: today });
+                            setStagingDesg({ designationID: null, label: "", effectFrom: stagingDept.effectFrom || defaultEffectFrom() });
                             setDesgList([]);
                             setDeptList([]);
                           }}>{d.departmentName}</div>
@@ -3526,8 +3539,8 @@ const addCombinedDevMap = () => {
                       const last = updated[updated.length - 1];
                       return { ...p, empDepartmentForm: updated, departmentNameID: last?.departmentNameID ?? null, deptAutocomplete: last?._deptAutocomplete ?? "", promotion: { ...p.promotion, departmentNameID: last?.departmentNameID ?? null } };
                     });
-                    setStagingDept({ departmentNameID: null, label: "", effectFrom: today });
-                    setStagingDesg({ designationID: null, label: "", effectFrom: today });
+                    setStagingDept({ departmentNameID: null, label: "", effectFrom: defaultEffectFrom() });
+                    setStagingDesg({ designationID: null, label: "", effectFrom: defaultEffectFrom() });
                     setDesgList([]);
                   }}>Add</Button>
                 </div>
@@ -3597,7 +3610,7 @@ const addCombinedDevMap = () => {
                       ...p,
                       empDesignationForm: upsertHistoryEntry(p.empDesignationForm, newEntry, (item) => item.designationID === newEntry.designationID),
                     }));
-                    setStagingDesg({ designationID: null, label: "", effectFrom: today });
+                    setStagingDesg({ designationID: null, label: "", effectFrom: defaultEffectFrom() });
                   }}>Add</Button>
                 </div>
                 <div className="border border-gray-200 rounded-lg overflow-hidden">

@@ -6,6 +6,7 @@ export interface TaskViewerContext {
   employeeId?: number;
   companyID?: number;
   serviceProviderID?: number;
+  isDesktopManager?: boolean;
 }
 
 export function parseViewer(query: Record<string, string | undefined>): TaskViewerContext {
@@ -20,11 +21,14 @@ export function parseViewer(query: Record<string, string | undefined>): TaskView
     employeeId: employeeId && !Number.isNaN(employeeId) ? employeeId : undefined,
     companyID: query.companyID ? Number(query.companyID) : undefined,
     serviceProviderID: query.serviceProviderID ? Number(query.serviceProviderID) : undefined,
+    isDesktopManager: query.viewerDesktopManager === '1',
   };
 }
 
 export function canManageTaskModule(viewer: TaskViewerContext): boolean {
-  return viewer.role === 'SUPERADMIN' || viewer.role === 'COMPANY_ADMIN';
+  if (viewer.role === 'SUPERADMIN' || viewer.role === 'COMPANY_ADMIN') return true;
+  if (viewer.role === 'EMPLOYEE' && viewer.isDesktopManager) return true;
+  return false;
 }
 
 export function assertCanManageTaskModule(viewer: TaskViewerContext) {

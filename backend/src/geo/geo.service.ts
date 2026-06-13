@@ -87,6 +87,68 @@ export class GeoService {
     }));
   }
 
+  async lookupByPincode(
+    pincode: string,
+    countryHint = '',
+  ): Promise<{ city: string; state: string; country: string } | null> {
+    const code = pincode.replace(/\s/g, '');
+    if (!code || code.length < 4) return null;
+
+    if (/^\d{6}$/.test(code)) {
+      try {
+        const res = await fetch(`https://api.postalpincode.in/pincode/${code}`);
+        if (res.ok) {
+          const data = (await res.json()) as Array<{
+            Status?: string;
+            PostOffice?: Array<{
+              District?: string;
+              Name?: string;
+              State?: string;
+              Country?: string;
+            }>;
+          }>;
+          const po = data?.[0]?.PostOffice?.[0];
+          if (data?.[0]?.Status === 'Success' && po) {
+            return {
+              city: po.District || po.Name || '',
+              state: po.State || '',
+              country: po.Country || 'India',
+            };
+          }
+        }
+      } catch {
+        /* try international fallback below */
+      }
+    }
+
+    const countryCode = this.resolveCountryCode(countryHint);
+    if (countryCode) {
+      try {
+        const res = await fetch(
+          `https://api.zippopotam.us/${countryCode.toLowerCase()}/${encodeURIComponent(code)}`,
+        );
+        if (res.ok) {
+          const data = (await res.json()) as {
+            country?: string;
+            places?: Array<{ 'place name'?: string; state?: string }>;
+          };
+          const place = data.places?.[0];
+          if (place) {
+            return {
+              city: place['place name'] || '',
+              state: place.state || '',
+              country: data.country || countryHint,
+            };
+          }
+        }
+      } catch {
+        /* ignore */
+      }
+    }
+
+    return null;
+  }
+
   private resolveCountryCode(country: string): string | null {
     const trimmed = country.trim();
     if (!trimmed) return null;

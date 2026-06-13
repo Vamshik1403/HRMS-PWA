@@ -1,14 +1,43 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
+function decodeJwtExp(token: string): number | null {
+  try {
+    const parts = token.split('.')
+    if (parts.length < 2) return null
+    const payload = JSON.parse(
+      Buffer.from(parts[1].replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8'),
+    )
+    return typeof payload.exp === 'number' ? payload.exp : null
+  } catch {
+    return null
+  }
+}
+
+function isTokenValid(token: string): boolean {
+  const exp = decodeJwtExp(token)
+  if (exp == null) return false
+  return exp * 1000 > Date.now()
+}
+
 export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl
 
-  // Auth must not run on Next.js assets or the browser gets 404 / failed chunk loads.
   if (
     pathname.startsWith('/_next') ||
     pathname.startsWith('/api') ||
-    pathname === '/favicon.ico'
+    pathname === '/favicon.ico' ||
+    pathname.startsWith('/icons') ||
+    pathname.startsWith('/img') ||
+    pathname.endsWith('.png') ||
+    pathname.endsWith('.js') ||
+    pathname.endsWith('.json') ||
+    pathname === '/manifest.json' ||
+    pathname === '/push-sw.js' ||
+    pathname === '/push-notification-routing.js' ||
+    pathname === '/worker-push.js' ||
+    pathname === '/openhrm-sw.js' ||
+    pathname === '/sw.js'
   ) {
     return NextResponse.next()
   }
@@ -20,12 +49,19 @@ export function middleware(req: NextRequest) {
 
   const isAuthPage = pathname.startsWith('/login') || pathname === '/'
 
-  if (!token && !isAuthPage) {
-    return NextResponse.redirect(new URL('/login', req.url))
+  if (!token || !isTokenValid(token)) {
+    if (isAuthPage) {
+      const res = NextResponse.next()
+      if (token && !isTokenValid(token)) {
+        res.cookies.set('accessToken', '', { path: '/', maxAge: 0 })
+      }
+      return res
+    }
+    const res = NextResponse.redirect(new URL('/login', req.url))
+    res.cookies.set('accessToken', '', { path: '/', maxAge: 0 })
+    return res
   }
 
-  // Don't redirect authenticated users from auth pages - let client-side routing handle it
-  // based on their role (employee vs admin)
   if (token && isAuthPage) {
     return NextResponse.next()
   }
@@ -35,9 +71,6 @@ export function middleware(req: NextRequest) {
 
 export const config = {
   matcher: [
-    /*
-     * Do not run auth on Next internals or favicon — otherwise JS chunks/fonts 404 or abort on /login.
-     */
     '/((?!_next/static|_next/image|_next/webpack-hmr|favicon.ico).*)',
   ],
 }
