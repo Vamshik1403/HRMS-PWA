@@ -329,11 +329,16 @@ export class MailService {
         note = `ZIP (${(zipSize / (1024 * 1024)).toFixed(1)} MB) stored on server. Attached attendance SQL only.\n\n`;
       }
     } else {
+      const fullDb = params.files.find((f) => f.key === 'full-database');
       const attendance = params.files.find((f) => f.key === 'attendance');
-      const fallback = attendance || [...params.files].sort((a, b) => a.sizeBytes - b.sizeBytes)[0];
+      const fallback =
+        fullDb ||
+        attendance ||
+        [...params.files].sort((a, b) => b.sizeBytes - a.sizeBytes)[0];
       if (!fallback) return false;
       attachPath = path.join(params.dayDir, fallback.fileName);
       attachName = fallback.fileName;
+      note = 'ZIP unavailable — attached full database SQL from server backup.\n\n';
     }
 
     const subject = `OpenHRM daily backup — ${params.dateLabel}`;

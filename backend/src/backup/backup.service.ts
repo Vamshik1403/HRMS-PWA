@@ -200,30 +200,37 @@ export class BackupService {
 
       fs.writeFileSync(path.join(dayDir, 'manifest.json'), JSON.stringify(manifest, null, 2), 'utf8');
 
-      const zip = await this.createZip(
-        dayDir,
-        date,
-        files.map((f) => f.fileName),
-      );
-      manifest.zipFileName = zip.zipFileName;
-      manifest.zipSizeBytes = zip.sizeBytes;
+      let zip: { zipPath: string; zipFileName: string; sizeBytes: number } | undefined;
+      try {
+        zip = await this.createZip(dayDir, date, files.map((f) => f.fileName));
+        manifest.zipFileName = zip.zipFileName;
+        manifest.zipSizeBytes = zip.sizeBytes;
+      } catch (zipErr) {
+        this.logger.warn(
+          `ZIP step skipped (install system 'zip' for archives): ${String(zipErr)}`,
+        );
+      }
 
       manifest.emailSent = await this.mailService.sendDailyBackupEmail({
         dateLabel: date,
         dayDir,
-        zipPath: zip.zipPath,
-        zipFileName: zip.zipFileName,
+        zipPath: zip?.zipPath,
+        zipFileName: zip?.zipFileName,
         files,
       });
 
       const isSunday = started.getDay() === 0;
-      if (isSunday || trigger === 'manual') {
+      if (zip && (isSunday || trigger === 'manual')) {
         manifest.cloudUploads = await this.cloudBackup.uploadZip(zip.zipPath, zip.zipFileName);
       }
 
       fs.writeFileSync(path.join(dayDir, 'manifest.json'), JSON.stringify(manifest, null, 2), 'utf8');
       this.pruneOldBackups(root);
-      this.logger.log(`Backup completed for ${date} (zip ${(zip.sizeBytes / 1024).toFixed(1)} KB)`);
+      if (zip) {
+        this.logger.log(`Backup completed for ${date} (zip ${(zip.sizeBytes / 1024).toFixed(1)} KB)`);
+      } else {
+        this.logger.log(`Backup completed for ${date} (SQL only, email=${manifest.emailSent})`);
+      }
       return manifest;
     } catch (err) {
       this.logger.error(`Backup failed: ${String(err)}`);

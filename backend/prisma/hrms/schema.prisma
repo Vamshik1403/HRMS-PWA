@@ -87,7 +87,6 @@ model BonusSetup {
 model BonusAllocation {
   id             Int            @id @default(autoincrement())
   bonusSetupID   Int
-  
   financialYear  Int?
   salaryPeriod   Int?
   employeeID     Int
