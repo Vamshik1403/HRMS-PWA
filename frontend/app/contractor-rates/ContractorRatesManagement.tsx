@@ -15,7 +15,7 @@ import {
   TableRow,
 } from "../components/ui/table";
 import { Badge } from "../components/ui/badge";
-import { Plus, Search, IndianRupee } from "lucide-react";
+import { Plus, Search, IndianRupee, Filter, RotateCcw, X } from "lucide-react";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import { toast } from "sonner";
 import { getSidebarContext } from "../utils/sidebarContext";
@@ -37,6 +37,7 @@ const API = {
   designations: "/backend/designations",
   workShifts: "/backend/work-shift",
   branches: "/backend/branches",
+  rateCards: "/backend/contractors/rate-cards",
 };
 
 const DEBOUNCE_MS = 250;
@@ -106,6 +107,11 @@ export function ContractorRatesManagement() {
   const shiftSuggest = useSearchSuggest(rcWorkShifts, (w) => w.workShiftName);
 
   const [allRateCards, setAllRateCards] = useState<any[]>([]);
+
+  const [branchFilterList, setBranchFilterList] = useState<any[]>([]);
+  const [selectedBranchNames, setSelectedBranchNames] = useState<string[]>([]);
+  const [showBranchFilterModal, setShowBranchFilterModal] = useState(false);
+  const [branchFilterLoading, setBranchFilterLoading] = useState(false);
   const [loading, setLoading] = useState(false);
   const [currentUserMapping, setCurrentUserMapping] = useState<any>(null);
 
@@ -146,7 +152,7 @@ export function ContractorRatesManagement() {
           const me = users.find((u: any) => u.username === user.username);
           setCurrentUserMapping(me || null);
         })
-        .catch(() => {});
+        .catch(() => { });
     }
   }, [user]);
 
@@ -155,10 +161,16 @@ export function ContractorRatesManagement() {
     // For roles that need user mapping, wait for it
     if ((user.role === "SERVICE_PROVIDER" || user.role === "COMPANY_ADMIN" || user.role === "BRANCH_ADMIN") && !currentUserMapping) return;
     loadContractors();
+    loadBranchFilterList();
   }, [user, currentUserMapping]);
 
   useEffect(() => {
-    const handler = () => { if (user) loadContractors(); };
+    const handler = () => {
+      if (user) {
+        loadContractors();
+        loadBranchFilterList();
+      }
+    };
     window.addEventListener("sidebar-context-changed", handler);
     window.addEventListener("app-data-refresh", handler);
     return () => {
@@ -211,39 +223,117 @@ export function ContractorRatesManagement() {
 
   const loadAllRateCards = async (contractorsList: ContractorRead[]) => {
     try {
-      const allCards: any[] = [];
-      for (const contractor of contractorsList) {
-        try {
-          const cards = await fetchJSONSafe<any[]>(
-            `${API.contractors}/${contractor.id}/rate-cards`
-          );
-          if (cards && cards.length > 0) {
-            allCards.push(
-              ...cards.map((c: any) => ({
-                ...c,
-                contractorId: contractor.id,
-                contractorDisplayName: contractor.contractorName || "",
-              }))
-            );
-          }
-        } catch {
-          /* skip */
-        }
+      const contractorIDs = new Set(contractorsList.map((c) => Number(c.id)));
+
+      const cards = await fetchJSONSafe<any[]>(API.rateCards);
+
+      let filteredCards = Array.isArray(cards) ? cards : [];
+
+      // Show only rate cards of visible contractors
+      filteredCards = filteredCards.filter((rc: any) =>
+        contractorIDs.has(Number(rc.contractorID))
+      );
+
+      // BRANCH_ADMIN: only own branch
+      const userBranchName = user?.branches?.branchName;
+      if (user?.role === "BRANCH_ADMIN" && userBranchName) {
+        filteredCards = filteredCards.filter(
+          (rc: any) =>
+            String(rc.branchName || "").toLowerCase() ===
+            String(userBranchName || "").toLowerCase()
+        );
       }
-      // 🔒 BRANCH_ADMIN — only show rate cards for their branch
-      const finalCards =
-        user?.role === "BRANCH_ADMIN" && user?.branches?.branchName
-          ? allCards.filter(
-              (c: any) =>
-                !c.branchName ||
-                (c.branchName ?? "").toLowerCase() === user.branches!.branchName.toLowerCase()
-            )
-          : allCards;
-      setAllRateCards(finalCards);
-    } catch {
+
+      setAllRateCards(filteredCards);
+    } catch (e) {
+      console.error("Failed to load contractor rate cards:", e);
       setAllRateCards([]);
     }
   };
+
+  const loadBranchFilterList = async () => {
+    try {
+      setBranchFilterLoading(true);
+
+      const all = await fetchJSONSafe<any[]>(API.branches);
+      const ctx = getSidebarContext();
+
+      const activeCompanyID =
+        ctx?.companyID ??
+        user?.companyID ??
+        currentUserMapping?.companyID ??
+        null;
+
+      let branches = Array.isArray(all) ? all : [];
+
+      if (activeCompanyID) {
+        branches = branches.filter(
+          (b: any) => Number(b.companyID) === Number(activeCompanyID)
+        );
+      }
+
+      const userBranchName = user?.branches?.branchName;
+      if (user?.role === "BRANCH_ADMIN" && userBranchName) {
+        branches = branches.filter(
+          (b: any) =>
+            String(b.branchName || "").toLowerCase() ===
+            String(userBranchName || "").toLowerCase()
+        );
+      }
+
+      setBranchFilterList(branches);
+    } catch (e) {
+      console.error("Failed to load branch filter list:", e);
+      setBranchFilterList([]);
+    } finally {
+      setBranchFilterLoading(false);
+    }
+  };
+
+  const toggleBranchFilter = (branchName: string) => {
+    setSelectedBranchNames((prev) =>
+      prev.includes(branchName)
+        ? prev.filter((x) => x !== branchName)
+        : [...prev, branchName]
+    );
+  };
+
+  const selectAllBranches = () => {
+    setSelectedBranchNames(
+      branchFilterList.map((b: any) => String(b.branchName || "")).filter(Boolean)
+    );
+  };
+
+  const clearBranchFilter = () => {
+    setSelectedBranchNames([]);
+  };
+
+  const filteredRateCards = allRateCards.filter((rc: any) => {
+    const t = searchTerm.trim().toLowerCase();
+
+    const matchesBranch =
+      selectedBranchNames.length === 0 ||
+      selectedBranchNames.includes(String(rc.branchName || ""));
+
+    const matchesSearch =
+      !t ||
+      [
+        rc.rateCardName,
+        rc.contractorName,
+        rc.branchName,
+        rc.departmentName,
+        rc.designation,
+        rc.workShiftName,
+        rc.payoutType,
+        rc.otType,
+        rc.commissionType,
+        rc.commissionBasedOn,
+      ]
+        .filter(Boolean)
+        .some((x) => String(x).toLowerCase().includes(t));
+
+    return matchesBranch && matchesSearch;
+  });
 
   const runFetchContrSuggestions = (q: string) => {
     if (contrTimerRef.current) clearTimeout(contrTimerRef.current);
@@ -285,7 +375,7 @@ export function ContractorRatesManagement() {
           : all;
         setContrSuggestions(filtered.slice(0, 20));
       } catch {
-        /* ignore */
+        console.error("Error fetching contractor suggestions");
       }
     }, DEBOUNCE_MS);
   };
@@ -607,10 +697,12 @@ export function ContractorRatesManagement() {
                   <label className="text-xs font-medium text-gray-500 block">Per Minute (₹)</label>
                   <Input type="number" value={formData.dailyRateMinute} onChange={(e) => setFormData((p) => ({ ...p, dailyRateMinute: e.target.value }))} placeholder="0" min="0" />
                 </div>
+
                 <div className="space-y-1">
                   <label className="text-xs font-medium text-gray-500 block">Per Hour (₹)</label>
                   <Input type="number" value={formData.dailyRateHour} onChange={(e) => setFormData((p) => ({ ...p, dailyRateHour: e.target.value }))} placeholder="0" min="0" />
                 </div>
+
                 <div className="space-y-1">
                   <label className="text-xs font-medium text-gray-500 block">Per Day (₹)</label>
                   <Input type="number" value={formData.perDayRate} onChange={(e) => setFormData((p) => ({ ...p, perDayRate: e.target.value }))} placeholder="0" min="0" />
@@ -624,6 +716,7 @@ export function ContractorRatesManagement() {
               <h4 className="text-xs font-semibold text-gray-600 uppercase tracking-wide mt-2">
                 Overtime (OT) Hours Rates
               </h4>
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1">
                   <label className="text-xs font-medium text-gray-500 block">OT Type *</label>
@@ -669,6 +762,7 @@ export function ContractorRatesManagement() {
               <h4 className="text-xs font-semibold text-gray-600 uppercase tracking-wide mt-2">
                 Commission Details
               </h4>
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1">
                   <label className="text-xs font-medium text-gray-500 block">Commission Based On *</label>
@@ -682,6 +776,7 @@ export function ContractorRatesManagement() {
                     <option value="MONTHLY">Monthly</option>
                   </select>
                 </div>
+
                 <div className="space-y-1">
                   <label className="text-xs font-medium text-gray-500 block">Commission Type</label>
                   <select
@@ -694,6 +789,7 @@ export function ContractorRatesManagement() {
                   </select>
                 </div>
               </div>
+
               <div className="space-y-1">
                 <label className="text-xs font-medium text-gray-500 block">
                   Commission Value {formData.commissionType === "PERCENTAGE" ? "(%)" : "(₹)"}
@@ -739,32 +835,145 @@ export function ContractorRatesManagement() {
             </div>
           </div>
 
-          {/* Search */}
-          <Card>
-            <CardContent className="p-6">
-              <div className="flex items-center space-x-4 w-full">
-                <div className="relative flex-1 min-w-0">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-                  <Input
-                    placeholder="Search contractors..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="pl-10 w-full"
-                  />
+       {/* Branch filter button moved inside search card */}
+
+          {showBranchFilterModal && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+              <div className="w-full max-w-2xl rounded-xl bg-white shadow-xl border">
+                <div className="flex items-center justify-between border-b px-5 py-4">
+                  <div className="flex items-center gap-2">
+                    <div className="h-9 w-9 rounded-lg bg-indigo-50 flex items-center justify-center">
+                      <Filter className="w-4 h-4 text-indigo-600" />
+                    </div>
+                    <div>
+                      <h3 className="text-base font-semibold text-gray-900">
+                        Filter Rate Cards by Branch
+                      </h3>
+                      <p className="text-xs text-gray-500">
+                        Showing branches from selected company only
+                      </p>
+                    </div>
+                  </div>
+
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setShowBranchFilterModal(false)}
+                  >
+                    <X className="w-4 h-4" />
+                  </Button>
                 </div>
-                <Badge variant="secondary" className="px-3 py-1 flex-shrink-0">
-                  {
-                    allRateCards.filter((rc) =>
-                      (rc.contractorDisplayName || rc.contractorName || "")
-                        .toLowerCase()
-                        .includes(searchTerm.toLowerCase())
-                    ).length
-                  }{" "}
-                  rate cards
-                </Badge>
+
+                <div className="p-5 space-y-4 max-h-[70vh] overflow-y-auto">
+                  <div className="flex items-center justify-between">
+                    <Badge variant="secondary">
+                      {selectedBranchNames.length} selected
+                    </Badge>
+
+                    <div className="flex gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={selectAllBranches}
+                        disabled={branchFilterLoading || branchFilterList.length === 0}
+                      >
+                        Select All
+                      </Button>
+
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={clearBranchFilter}
+                      >
+                        <RotateCcw className="w-4 h-4 mr-1" />
+                        Clear
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {branchFilterList.length === 0 ? (
+                      <p className="text-sm text-gray-500 col-span-full py-8 text-center">
+                        {branchFilterLoading ? "Loading branches..." : "No branches found"}
+                      </p>
+                    ) : (
+                      branchFilterList.map((b: any) => (
+                        <label
+                          key={b.id}
+                          className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm hover:bg-gray-50 cursor-pointer"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={selectedBranchNames.includes(String(b.branchName || ""))}
+                            onChange={() => toggleBranchFilter(String(b.branchName || ""))}
+                          />
+                          <span className="truncate">{b.branchName}</span>
+                        </label>
+                      ))
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex justify-end gap-2 border-t px-5 py-4">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setShowBranchFilterModal(false)}
+                  >
+                    Cancel
+                  </Button>
+
+                  <Button
+                    type="button"
+                    onClick={() => setShowBranchFilterModal(false)}
+                  >
+                    Apply Filter
+                  </Button>
+                </div>
               </div>
-            </CardContent>
-          </Card>
+            </div>
+          )}
+
+          {/* Search */}
+         <Card>
+  <CardContent className="p-6">
+    <div className="flex items-center gap-3 w-full">
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        onClick={() => setShowBranchFilterModal(true)}
+        className="flex-shrink-0"
+        title="Filter by Branch"
+      >
+        <Filter className="w-4 h-4 mr-1" />
+        Filter
+        {selectedBranchNames.length > 0 && (
+          <Badge variant="secondary" className="ml-2">
+            {selectedBranchNames.length}
+          </Badge>
+        )}
+      </Button>
+
+      <div className="relative flex-1 min-w-0">
+        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+        <Input
+          placeholder="Search rate cards..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="pl-10 w-full"
+        />
+      </div>
+
+      <Badge variant="secondary" className="px-3 py-1 flex-shrink-0">
+        {filteredRateCards.length} rate cards
+      </Badge>
+    </div>
+  </CardContent>
+</Card>
 
           {/* Rate Cards Table */}
           <Card className="w-full">
@@ -795,7 +1004,7 @@ export function ContractorRatesManagement() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {allRateCards.length === 0 ? (
+                    {filteredRateCards.length === 0 ? (
                       <TableRow>
                         <TableCell colSpan={12} className="text-center py-8 text-gray-500">
                           <div className="flex flex-col items-center gap-2">
@@ -808,84 +1017,84 @@ export function ContractorRatesManagement() {
                         </TableCell>
                       </TableRow>
                     ) : (
-                      allRateCards
+                      filteredRateCards
                         .filter((rc) =>
                           (rc.contractorDisplayName || rc.contractorName || "")
                             .toLowerCase()
                             .includes(searchTerm.toLowerCase())
                         )
                         .map((rc, index) => {
-                          const displayType = rc.payoutType === "COMMISSION_ONLY" 
+                          const displayType = rc.payoutType === "COMMISSION_ONLY"
                             ? `commission ${rc.commissionBasedOn?.toLowerCase() || 'hourly'}`
                             : "all inclusive";
                           const displayName = rc.contractorDisplayName || rc.contractorName || "";
                           const fullName = `${displayName}(${displayType})`;
                           return (
-                          <TableRow key={`${rc.contractorId}-${index}`}>
-                            <TableCell>{rc.rateCardName || "—"}</TableCell>
-                            <TableCell>
-                              {fullName}
-                            </TableCell>
-                            <TableCell>
-                              <Badge
-                                variant={
-                                  rc.payoutType === "COMMISSION_ONLY" ? "outline" : "secondary"
-                                }
-                                className="text-xs"
-                              >
-                                {rc.payoutType === "COMMISSION_ONLY"
-                                  ? "Commission"
-                                  : "All Inclusive"}
-                              </Badge>
-                            </TableCell>
-                            <TableCell>{rc.branchName || "—"}</TableCell>
-                            <TableCell>{rc.departmentName || "—"}</TableCell>
-                            <TableCell>{rc.designation || "—"}</TableCell>
-                            <TableCell>{rc.workShiftName || "—"}</TableCell>
-                            <TableCell>
-                              {rc.payoutType === "COMMISSION_ONLY"
-                                ? "—"
-                                : rc.dailyRateMinute || "0"}
-                            </TableCell>
-                            <TableCell>
-                              {rc.payoutType === "COMMISSION_ONLY"
-                                ? "—"
-                                : rc.dailyRateHour || "0"}
-                            </TableCell>
-                            <TableCell>
-                              {rc.payoutType === "COMMISSION_ONLY"
-                                ? "—"
-                                : rc.perDayRate || "0"}
-                            </TableCell>
-                            <TableCell>
-                              {rc.payoutType === "COMMISSION_ONLY"
-                                ? "—"
-                                : rc.perMonthRate || "0"}
-                            </TableCell>
-                            <TableCell>
-                              {rc.payoutType === "COMMISSION_ONLY"
-                                ? "—"
-                                : rc.otRateMultiplier ? `${rc.otRateMultiplier}x` : "—"}
-                            </TableCell>
-                            <TableCell className="text-right">
-                              {canManage && (
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => {
-                                    const contractor = contractors.find(
-                                      (c) => c.id === rc.contractorId
-                                    );
-                                    if (contractor) handleOpenRateCard(contractor, rc);
-                                  }}
-                                  className="h-7 px-2 text-xs text-blue-600 hover:text-blue-700 hover:bg-blue-50"
-                                  title="Edit Rate Card"
+                            <TableRow key={`${rc.contractorId}-${index}`}>
+                              <TableCell>{rc.rateCardName || "—"}</TableCell>
+                              <TableCell>
+                                {fullName}
+                              </TableCell>
+                              <TableCell>
+                                <Badge
+                                  variant={
+                                    rc.payoutType === "COMMISSION_ONLY" ? "outline" : "secondary"
+                                  }
+                                  className="text-xs"
                                 >
-                                  <IndianRupee className="w-3 h-3 mr-1" /> Edit
-                                </Button>
-                              )}
-                            </TableCell>
-                          </TableRow>
+                                  {rc.payoutType === "COMMISSION_ONLY"
+                                    ? "Commission"
+                                    : "All Inclusive"}
+                                </Badge>
+                              </TableCell>
+                              <TableCell>{rc.branchName || "—"}</TableCell>
+                              <TableCell>{rc.departmentName || "—"}</TableCell>
+                              <TableCell>{rc.designation || "—"}</TableCell>
+                              <TableCell>{rc.workShiftName || "—"}</TableCell>
+                              <TableCell>
+                                {rc.payoutType === "COMMISSION_ONLY"
+                                  ? "—"
+                                  : rc.dailyRateMinute || "0"}
+                              </TableCell>
+                              <TableCell>
+                                {rc.payoutType === "COMMISSION_ONLY"
+                                  ? "—"
+                                  : rc.dailyRateHour || "0"}
+                              </TableCell>
+                              <TableCell>
+                                {rc.payoutType === "COMMISSION_ONLY"
+                                  ? "—"
+                                  : rc.perDayRate || "0"}
+                              </TableCell>
+                              <TableCell>
+                                {rc.payoutType === "COMMISSION_ONLY"
+                                  ? "—"
+                                  : rc.perMonthRate || "0"}
+                              </TableCell>
+                              <TableCell>
+                                {rc.payoutType === "COMMISSION_ONLY"
+                                  ? "—"
+                                  : rc.otRateMultiplier ? `${rc.otRateMultiplier}x` : "—"}
+                              </TableCell>
+                              <TableCell className="text-right">
+                                {canManage && (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => {
+                                      const contractor = contractors.find(
+                                        (c) => c.id === rc.contractorId
+                                      );
+                                      if (contractor) handleOpenRateCard(contractor, rc);
+                                    }}
+                                    className="h-7 px-2 text-xs text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                                    title="Edit Rate Card"
+                                  >
+                                    <IndianRupee className="w-3 h-3 mr-1" /> Edit
+                                  </Button>
+                                )}
+                              </TableCell>
+                            </TableRow>
                           );
                         })
                     )}

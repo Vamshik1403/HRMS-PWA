@@ -15,7 +15,7 @@ import {
 } from "../components/ui/table";
 import { Badge } from "../components/ui/badge";
 import { Icon } from "@iconify/react";
-import { Plus, Search, Edit, Trash2, ArrowLeft, X, Save } from "lucide-react";
+import { Plus, Search, Edit, Trash2, ArrowLeft, X, Save, RotateCcw, Filter, ArrowDownUp, ArrowUpDown } from "lucide-react";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import { useRouter } from "next/navigation";
 import { FormDrawer } from "../components/ui/form-drawer";
@@ -117,9 +117,20 @@ export function DeviceManagement() {
   const canManage = user?.role === "SUPERADMIN" || user?.role === "COMPANY_ADMIN" || user?.role === "ADMIN" || user?.role === "SERVICE_PROVIDER" || canDesktopManagerManage(user);
   const canAdd = user?.role === "SUPERADMIN" || user?.role === "COMPANY_ADMIN" || user?.role === "ADMIN" || canDesktopManagerManage(user);
   const canDelete = user?.role === "SUPERADMIN";
-  
+
   // UI
   const [searchTerm, setSearchTerm] = useState("");
+
+  const [selectedBranchIds, setSelectedBranchIds] = useState<string[]>([]);
+  const [sortConfig, setSortConfig] = useState<{
+    key: string;
+    direction: "asc" | "desc";
+  }>({
+    key: "deviceName",
+    direction: "asc",
+  });
+  const [branchFilterList, setBranchFilterList] = useState<Branch[]>([]);
+  const [branchFilterLoading, setBranchFilterLoading] = useState(false);
   const [isAddingNew, setIsAddingNew] = useState(false);
   const [editingDevice, setEditingDevice] = useState<DeviceRead | null>(null);
   const [currentUserMapping, setCurrentUserMapping] = useState<any>(null);
@@ -189,8 +200,57 @@ export function DeviceManagement() {
   };
 
   useEffect(() => {
-    if (user) fetchDevices();
+    if (user) {
+      fetchDevices();
+      fetchBranchFilterList();
+    }
   }, [user]);
+
+  const fetchBranchFilterList = async () => {
+    try {
+      setBranchFilterLoading(true);
+
+      const all = await fetchJSONSafe<any[]>(API.branches);
+      let filtered = Array.isArray(all) ? all : [];
+
+      const mapping = await resolveScopeUserMapping(user);
+      const ctx = getSidebarContext();
+
+      if (user?.role === "SUPERADMIN") {
+        if (ctx?.companyID) {
+          filtered = filtered.filter((b) => Number(b.companyID) === Number(ctx.companyID));
+        }
+      } else if (user?.role === "SERVICE_PROVIDER") {
+        const companyID = ctx?.companyID ?? mapping?.companyID;
+        if (companyID) {
+          filtered = filtered.filter((b) => Number(b.companyID) === Number(companyID));
+        } else if (mapping?.serviceProviderID) {
+          filtered = filtered.filter(
+            (b) => Number(b.serviceProviderID) === Number(mapping.serviceProviderID)
+          );
+        }
+      } else if (user?.role === "COMPANY_ADMIN" || user?.role === "ADMIN") {
+        const companyID = ctx?.companyID ?? mapping?.companyID ?? user?.companyID;
+        if (companyID) {
+          filtered = filtered.filter((b) => Number(b.companyID) === Number(companyID));
+        }
+      } else if (user?.role === "BRANCH_ADMIN") {
+        const branchesID = mapping?.branchesID ?? user?.branchesID;
+        if (branchesID) {
+          filtered = filtered.filter((b) => Number(b.id) === Number(branchesID));
+          setSelectedBranchIds([String(branchesID)]);
+        }
+      }
+
+      setBranchFilterList(filtered);
+    } catch (e) {
+      console.error("Failed to load branch filter list:", e);
+      setBranchFilterList([]);
+    } finally {
+      setBranchFilterLoading(false);
+    }
+  };
+
 
   useEffect(() => {
     const handler = () => { if (user) fetchDevices(); };
@@ -624,35 +684,102 @@ export function DeviceManagement() {
   };
 
 
+  const toggleBranchFilter = (branchId: string) => {
+    setSelectedBranchIds((prev) =>
+      prev.includes(branchId)
+        ? prev.filter((id) => id !== branchId)
+        : [...prev, branchId]
+    );
+  };
+
+  const selectAllBranches = () => {
+    setSelectedBranchIds(branchFilterList.map((b) => String(b.id)));
+  };
+
+  const clearBranchFilter = () => {
+    if (user?.role === "BRANCH_ADMIN") return;
+    setSelectedBranchIds([]);
+  };
+
+  const handleSort = (key: string) => {
+    setSortConfig((prev) => ({
+      key,
+      direction:
+        prev.key === key && prev.direction === "asc" ? "desc" : "asc",
+    }));
+  };
+
+  const SortIcon = ({ column }: { column: string }) => {
+    if (sortConfig.key !== column) {
+      return <ArrowDownUp className="w-3 h-3 ml-1 inline-block text-gray-400" />;
+    }
+
+    return <ArrowUpDown className="w-3 h-3 ml-1 inline-block text-indigo-600" />;
+  };
+
+  const getSortValue = (device: any, key: string) => {
+    switch (key) {
+      case "deviceName":
+        return device.deviceName || "";
+      case "deviceType":
+        return device.deviceType || "";
+      case "deviceMake":
+        return device.deviceMake || "";
+      case "deviceModel":
+        return device.deviceModel || "";
+      case "deviceSN":
+        return device.deviceSN || "";
+      case "branchName":
+        return device.branches?.branchName || device.branchName || "";
+      default:
+        return "";
+    }
+  };
+
 
   // ---------------------------
   // Search
   // ---------------------------
   const filteredDevices = useMemo(() => {
     const t = searchTerm.trim().toLowerCase();
-    if (!t) return devices;
-    const nameOf = (d: DeviceRead) =>
-      d.serviceProvider?.companyName ??
-      d.serviceProviderName ??
-      "";
-    const coNameOf = (d: DeviceRead) => d.company?.companyName ?? d.companyName ?? "";
-    const brNameOf = (d: DeviceRead) => d.branches?.branchName ?? d.branchName ?? "";
-    return devices.filter((d) =>
-      [
-        d.deviceName,
-        d.deviceType,
-        d.deviceMake,
-        d.deviceModel,
-        d.deviceSN,
-        nameOf(d),
-        coNameOf(d),
-        brNameOf(d),
-      ]
-        .filter(Boolean)
-        .map((x) => (x ?? "").toLowerCase())
-        .some((f) => f.includes(t))
-    );
-  }, [devices, searchTerm]);
+
+    const filtered = devices.filter((d) => {
+      const deviceBranchID = String(d.branchesID ?? d.branches?.id ?? "");
+
+      const matchesBranch =
+        selectedBranchIds.length === 0 ||
+        selectedBranchIds.includes(deviceBranchID);
+
+      const matchesSearch =
+        !t ||
+        [
+          d.deviceName,
+          d.deviceType,
+          d.deviceMake,
+          d.deviceModel,
+          d.deviceSN,
+          d.status,
+          d.company?.companyName,
+          d.branches?.branchName,
+          d.branchName,
+        ]
+          .filter(Boolean)
+          .some((x) => String(x).toLowerCase().includes(t));
+
+      return matchesBranch && matchesSearch;
+    });
+
+    filtered.sort((a: any, b: any) => {
+      const av = String(getSortValue(a, sortConfig.key)).toLowerCase();
+      const bv = String(getSortValue(b, sortConfig.key)).toLowerCase();
+
+      if (av < bv) return sortConfig.direction === "asc" ? -1 : 1;
+      if (av > bv) return sortConfig.direction === "asc" ? 1 : -1;
+      return 0;
+    });
+
+    return filtered;
+  }, [devices, searchTerm, selectedBranchIds, sortConfig]);
 
   // ---------------------------
   // Helpers for rendering names in table
@@ -693,298 +820,344 @@ export function DeviceManagement() {
         title={editingDevice ? "Edit Device" : "Add New Device"}
       >
         <div>
-            {error && (
-              <div className="rounded-md border border-red-200 bg-red-50 text-red-700 px-3 py-2 text-sm mb-4">
-                {error}
-              </div>
-            )}
+          {error && (
+            <div className="rounded-md border border-red-200 bg-red-50 text-red-700 px-3 py-2 text-sm mb-4">
+              {error}
+            </div>
+          )}
 
-            <form onSubmit={handleSubmit} className="space-y-4">
-              {/* Status */}
-              <div className="space-y-2">
-                <Label>Status *</Label>
-                <select
-                  value={formData.status}
-                  onChange={(e) =>
-                    setFormData((p) => ({
-                      ...p,
-                      status: e.target.value as "Active" | "Inactive",
-                    }))
-                  }
-                  className="w-full px-3 py-2 border border-gray-300 rounded-sm border-[#d0d0d0] focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-900/15 focus-visible:border-[#b0b0b0]"
-                  required
-                >
-                  <option value="Active">Active</option>
-                  <option value="Inactive">Inactive</option>
-                </select>
-              </div>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            {/* Status */}
+            <div className="space-y-2">
+              <Label>Status *</Label>
+              <select
+                value={formData.status}
+                onChange={(e) =>
+                  setFormData((p) => ({
+                    ...p,
+                    status: e.target.value as "Active" | "Inactive",
+                  }))
+                }
+                className="w-full px-3 py-2 border border-gray-300 rounded-sm border-[#d0d0d0] focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-900/15 focus-visible:border-[#b0b0b0]"
+                required
+              >
+                <option value="Active">Active</option>
+                <option value="Inactive">Inactive</option>
+              </select>
+            </div>
 
-              {/* Service Provider - auto-filled from sidebar */}
-              {false && (
-                <div ref={spRef} className="space-y-2 relative">
-                  <Label>Service Provider *</Label>
-                  <Input
-                    value={formData.spAutocomplete}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      setFormData((p) => ({ ...p, spAutocomplete: val, serviceProviderID: null }));
-                      runFetchServiceProviders(val);
-                    }}
-                    onFocus={(e) => {
-                      const val = e.target.value;
-                      if (val.length >= MIN_CHARS) runFetchServiceProviders(val);
-                    }}
-                    placeholder="Start typing service provider..."
-                    autoComplete="off"
-                    required
-                  />
-                  {spList.length > 0 && (
-                    <div className="absolute z-10 bg-white border rounded w-full shadow max-h-48 overflow-y-auto">
-                      {spLoading && <div className="px-3 py-2 text-sm text-gray-500">Loading…</div>}
-                      {spList.map((sp) => (
-                        <div
-                          key={sp.id}
-                          className="px-3 py-2 hover:bg-gray-100 cursor-pointer"
-                          onMouseDown={(e) => e.preventDefault()}
-                          onClick={() => {
-                            setFormData((p) => ({
-                              ...p,
-                              serviceProviderID: sp.id,
-                              spAutocomplete: sp.companyName,
-                            }));
-                            setSpList([]);
-                          }}
-                        >
-                          {sp.companyName}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Company - auto-filled from sidebar */}
-              {false && (
-                <div ref={coRef} className="space-y-2 relative">
-                  <Label>Company *</Label>
-                  <Input
-                    value={formData.coAutocomplete}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      setFormData((p) => ({ ...p, coAutocomplete: val, companyID: null }));
-                      runFetchCompanies(val);
-                    }}
-                    onFocus={(e) => {
-                      const val = e.target.value;
-                      if (val.length >= MIN_CHARS) runFetchCompanies(val);
-                    }}
-                    placeholder="Start typing company..."
-                    autoComplete="off"
-                    required
-                  />
-                  {coList.length > 0 && (
-                    <div className="absolute z-10 bg-white border rounded w-full shadow max-h-48 overflow-y-auto">
-                      {coLoading && <div className="px-3 py-2 text-sm text-gray-500">Loading…</div>}
-                      {coList.map((co) => (
-                        <div
-                          key={co.id}
-                          className="px-3 py-2 hover:bg-gray-100 cursor-pointer"
-                          onMouseDown={(e) => e.preventDefault()}
-                          onClick={() => {
-                            setFormData((p) => ({
-                              ...p,
-                              companyID: co.id,
-                              coAutocomplete: co.companyName,
-                            }));
-                            setCoList([]);
-                          }}
-                        >
-                          {co.companyName}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Branch Autocomplete */}
-              <div ref={brRef} className="space-y-2 relative">
-                <Label>Branch *</Label>
+            {/* Service Provider - auto-filled from sidebar */}
+            {false && (
+              <div ref={spRef} className="space-y-2 relative">
+                <Label>Service Provider *</Label>
                 <Input
-                  value={formData.brAutocomplete}
+                  value={formData.spAutocomplete}
                   onChange={(e) => {
                     const val = e.target.value;
-                    setFormData((p) => ({ ...p, brAutocomplete: val, branchesID: null }));
-                    runFetchBranches(val);
+                    setFormData((p) => ({ ...p, spAutocomplete: val, serviceProviderID: null }));
+                    runFetchServiceProviders(val);
                   }}
                   onFocus={(e) => {
                     const val = e.target.value;
-                    if (val.length >= MIN_CHARS) runFetchBranches(val);
+                    if (val.length >= MIN_CHARS) runFetchServiceProviders(val);
                   }}
-                  placeholder="Start typing branch..."
+                  placeholder="Start typing service provider..."
                   autoComplete="off"
                   required
                 />
-                {brList.length > 0 && (
+                {spList.length > 0 && (
                   <div className="absolute z-10 bg-white border rounded w-full shadow max-h-48 overflow-y-auto">
-                    {brLoading && <div className="px-3 py-2 text-sm text-gray-500">Loading…</div>}
-                    {brList.map((br) => (
+                    {spLoading && <div className="px-3 py-2 text-sm text-gray-500">Loading…</div>}
+                    {spList.map((sp) => (
                       <div
-                        key={br.id}
+                        key={sp.id}
                         className="px-3 py-2 hover:bg-gray-100 cursor-pointer"
                         onMouseDown={(e) => e.preventDefault()}
                         onClick={() => {
                           setFormData((p) => ({
                             ...p,
-                            branchesID: br.id,
-                            brAutocomplete: br.branchName,
+                            serviceProviderID: sp.id,
+                            spAutocomplete: sp.companyName,
                           }));
-                          setBrList([]);
+                          setSpList([]);
                         }}
                       >
-                        {br.branchName}
+                        {sp.companyName}
                       </div>
                     ))}
                   </div>
                 )}
               </div>
+            )}
 
-              {/* Device fields */}
-              <div className="space-y-2">
-                <Label>Device Name *</Label>
+            {/* Company - auto-filled from sidebar */}
+            {false && (
+              <div ref={coRef} className="space-y-2 relative">
+                <Label>Company *</Label>
                 <Input
-                  value={formData.deviceName}
-                  onChange={(e) => setFormData((p) => ({ ...p, deviceName: e.target.value }))}
-                  placeholder="Enter device name"
-                  required
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label>Device Make *</Label>
-                <Input
-                  value={formData.deviceMake}
-                  onChange={(e) => setFormData((p) => ({ ...p, deviceMake: e.target.value }))}
-                  placeholder="Enter device make"
-                  required
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label>Device Model *</Label>
-                <Input
-                  value={formData.deviceModel}
-                  onChange={(e) => setFormData((p) => ({ ...p, deviceModel: e.target.value }))}
-                  placeholder="Enter device model"
-                  required
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label>Device Type</Label>
-                <select
-                  value={formData.deviceType || "AT"}
+                  value={formData.coAutocomplete}
                   onChange={(e) => {
-                    setFormData((p) => ({
-                      ...p,
-                      deviceType: "AT",
-                      attendanceAuthType: "",
-                      tokenRegAuthType: "",
-                    }));
+                    const val = e.target.value;
+                    setFormData((p) => ({ ...p, coAutocomplete: val, companyID: null }));
+                    runFetchCompanies(val);
                   }}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-sm border-[#d0d0d0] focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-900/15 focus-visible:border-[#b0b0b0]"
-                >
-                  <option value="AT">Attendance</option>
-                </select>
-              </div>
-
-              <div className="space-y-2">
-                <Label>Device SN *</Label>
-                <Input
-                  value={formData.deviceSN}
-                  onChange={(e) => setFormData((p) => ({ ...p, deviceSN: e.target.value }))}
-                  placeholder="Enter device serial number"
+                  onFocus={(e) => {
+                    const val = e.target.value;
+                    if (val.length >= MIN_CHARS) runFetchCompanies(val);
+                  }}
+                  placeholder="Start typing company..."
+                  autoComplete="off"
                   required
                 />
+                {coList.length > 0 && (
+                  <div className="absolute z-10 bg-white border rounded w-full shadow max-h-48 overflow-y-auto">
+                    {coLoading && <div className="px-3 py-2 text-sm text-gray-500">Loading…</div>}
+                    {coList.map((co) => (
+                      <div
+                        key={co.id}
+                        className="px-3 py-2 hover:bg-gray-100 cursor-pointer"
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => {
+                          setFormData((p) => ({
+                            ...p,
+                            companyID: co.id,
+                            coAutocomplete: co.companyName,
+                          }));
+                          setCoList([]);
+                        }}
+                      >
+                        {co.companyName}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
+            )}
 
-              <div className="space-y-3 rounded-lg border border-gray-200 bg-gray-50/60 p-4">
-                <div>
-                  <Label className="text-sm font-semibold text-gray-800">Device location</Label>
-                  <p className="text-xs text-gray-500 mt-0.5">
-                    Shown on the dashboard for employees who punch in through this device.
+            {/* Branch Autocomplete */}
+            <div ref={brRef} className="space-y-2 relative">
+              <Label>Branch *</Label>
+              <Input
+                value={formData.brAutocomplete}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setFormData((p) => ({ ...p, brAutocomplete: val, branchesID: null }));
+                  runFetchBranches(val);
+                }}
+                onFocus={(e) => {
+                  const val = e.target.value;
+                  if (val.length >= MIN_CHARS) runFetchBranches(val);
+                }}
+                placeholder="Start typing branch..."
+                autoComplete="off"
+                required
+              />
+              {brList.length > 0 && (
+                <div className="absolute z-10 bg-white border rounded w-full shadow max-h-48 overflow-y-auto">
+                  {brLoading && <div className="px-3 py-2 text-sm text-gray-500">Loading…</div>}
+                  {brList.map((br) => (
+                    <div
+                      key={br.id}
+                      className="px-3 py-2 hover:bg-gray-100 cursor-pointer"
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => {
+                        setFormData((p) => ({
+                          ...p,
+                          branchesID: br.id,
+                          brAutocomplete: br.branchName,
+                        }));
+                        setBrList([]);
+                      }}
+                    >
+                      {br.branchName}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Device fields */}
+            <div className="space-y-2">
+              <Label>Device Name *</Label>
+              <Input
+                value={formData.deviceName}
+                onChange={(e) => setFormData((p) => ({ ...p, deviceName: e.target.value }))}
+                placeholder="Enter device name"
+                required
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Device Make *</Label>
+              <Input
+                value={formData.deviceMake}
+                onChange={(e) => setFormData((p) => ({ ...p, deviceMake: e.target.value }))}
+                placeholder="Enter device make"
+                required
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Device Model *</Label>
+              <Input
+                value={formData.deviceModel}
+                onChange={(e) => setFormData((p) => ({ ...p, deviceModel: e.target.value }))}
+                placeholder="Enter device model"
+                required
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Device Type</Label>
+              <select
+                value={formData.deviceType || "AT"}
+                onChange={(e) => {
+                  setFormData((p) => ({
+                    ...p,
+                    deviceType: "AT",
+                    attendanceAuthType: "",
+                    tokenRegAuthType: "",
+                  }));
+                }}
+                className="w-full px-3 py-2 border border-gray-300 rounded-sm border-[#d0d0d0] focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-900/15 focus-visible:border-[#b0b0b0]"
+              >
+                <option value="AT">Attendance</option>
+              </select>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Device SN *</Label>
+              <Input
+                value={formData.deviceSN}
+                onChange={(e) => setFormData((p) => ({ ...p, deviceSN: e.target.value }))}
+                placeholder="Enter device serial number"
+                required
+              />
+            </div>
+
+            <div className="space-y-3 rounded-lg border border-gray-200 bg-gray-50/60 p-4">
+              <div>
+                <Label className="text-sm font-semibold text-gray-800">Device location</Label>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  Shown on the dashboard for employees who punch in through this device.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={locationLoading}
+                  onClick={useCurrentLocation}
+                >
+                  Use current location
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={locationLoading}
+                  onClick={resolveDeviceAddress}
+                >
+                  {locationLoading ? "Looking up…" : "Look up address"}
+                </Button>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Latitude</Label>
+                  <Input
+                    type="number"
+                    step="any"
+                    value={formData.latitude}
+                    onChange={(e) => setFormData((p) => ({ ...p, latitude: e.target.value }))}
+                    placeholder="e.g. 16.9944"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Longitude</Label>
+                  <Input
+                    type="number"
+                    step="any"
+                    value={formData.longitude}
+                    onChange={(e) => setFormData((p) => ({ ...p, longitude: e.target.value }))}
+                    placeholder="e.g. 73.3007"
+                  />
+                </div>
+              </div>
+              {formData.address ? (
+                <div className="space-y-1">
+                  <Label className="text-xs text-gray-500">Resolved address</Label>
+                  <p className="text-sm text-gray-800 bg-white border border-gray-200 rounded-md px-3 py-2">
+                    {formData.address}
                   </p>
                 </div>
-                <div className="flex flex-wrap gap-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    disabled={locationLoading}
-                    onClick={useCurrentLocation}
-                  >
-                    Use current location
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    disabled={locationLoading}
-                    onClick={resolveDeviceAddress}
-                  >
-                    {locationLoading ? "Looking up…" : "Look up address"}
-                  </Button>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label>Latitude</Label>
-                    <Input
-                      type="number"
-                      step="any"
-                      value={formData.latitude}
-                      onChange={(e) => setFormData((p) => ({ ...p, latitude: e.target.value }))}
-                      placeholder="e.g. 16.9944"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Longitude</Label>
-                    <Input
-                      type="number"
-                      step="any"
-                      value={formData.longitude}
-                      onChange={(e) => setFormData((p) => ({ ...p, longitude: e.target.value }))}
-                      placeholder="e.g. 73.3007"
-                    />
-                  </div>
-                </div>
-                {formData.address ? (
-                  <div className="space-y-1">
-                    <Label className="text-xs text-gray-500">Resolved address</Label>
-                    <p className="text-sm text-gray-800 bg-white border border-gray-200 rounded-md px-3 py-2">
-                      {formData.address}
-                    </p>
-                  </div>
-                ) : null}
-              </div>
+              ) : null}
+            </div>
 
-              <div className="flex justify-end gap-2 pt-4 border-t border-gray-200">
-                <Button type="button" variant="outline" onClick={handleCancel}>
-                  Cancel
-                </Button>
-                <Button type="submit" className="" disabled={saving}>
-                  <Save className="w-4 h-4 mr-1" />
-                  {saving ? "Saving..." : editingDevice ? "Update Device" : "Add Device"}
-                </Button>
-              </div>
-            </form>
+            <div className="flex justify-end gap-2 pt-4 border-t border-gray-200">
+              <Button type="button" variant="outline" onClick={handleCancel}>
+                Cancel
+              </Button>
+              <Button type="submit" className="" disabled={saving}>
+                <Save className="w-4 h-4 mr-1" />
+                {saving ? "Saving..." : editingDevice ? "Update Device" : "Add Device"}
+              </Button>
+            </div>
+          </form>
         </div>
       </FormDrawer>
 
       {!isAddingNew && (<>
-      {/* Search and Filters */}
+        {/* Search and Filters */}
         <Card>
           <CardContent className="p-6">
             <div className="flex items-center space-x-4 w-full">
+
+              <div className="rounded-xl border bg-white p-4 shadow-sm space-y-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2">
+                    <div className="h-9 w-9 rounded-lg bg-indigo-50 flex items-center justify-center">
+                      <Filter className="w-4 h-4 text-indigo-600" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold text-gray-900">Branch Filter</p>
+                      <p className="text-xs text-gray-500">
+                        Select one or multiple branches
+                      </p>
+                    </div>
+                  </div>
+
+                  {user?.role !== "BRANCH_ADMIN" && (
+                    <div className="flex gap-2">
+                      <Button type="button" variant="outline" size="sm" onClick={selectAllBranches}>
+                        Select All
+                      </Button>
+
+                      <Button type="button" variant="outline" size="sm" onClick={clearBranchFilter}>
+                        <RotateCcw className="w-4 h-4 mr-1" />
+                        Clear
+                      </Button>
+                    </div>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
+                  {branchFilterList.map((b) => (
+                    <label
+                      key={b.id}
+                      className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm hover:bg-gray-50 cursor-pointer"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selectedBranchIds.includes(String(b.id))}
+                        disabled={user?.role === "BRANCH_ADMIN"}
+                        onChange={() => toggleBranchFilter(String(b.id))}
+                      />
+                      <span className="truncate">{b.branchName}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
               <div className="relative flex-1 min-w-0">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
                 <Input
@@ -1001,7 +1174,7 @@ export function DeviceManagement() {
           </CardContent>
         </Card>
 
-      {/* Device Table */}
+        {/* Device Table */}
         <Card className="w-full">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -1014,12 +1187,29 @@ export function DeviceManagement() {
               <Table className="w-full">
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="w-[120px]">Device Name</TableHead>
-                    <TableHead className="w-[80px]">Device Type</TableHead>
-                    <TableHead className="w-[100px]">Device Make</TableHead>
-                    <TableHead className="w-[100px]">Device Model</TableHead>
-                    <TableHead className="w-[120px]">Device SN</TableHead>
-                    <TableHead className="w-[120px]">Branch Name</TableHead>
+                    <TableHead className="w-[120px] cursor-pointer" onClick={() => handleSort("deviceName")}>
+                      Device Name <SortIcon column="deviceName" />
+                    </TableHead>
+
+                    <TableHead className="w-[80px] cursor-pointer" onClick={() => handleSort("deviceType")}>
+                      Device Type <SortIcon column="deviceType" />
+                    </TableHead>
+
+                    <TableHead className="w-[100px] cursor-pointer" onClick={() => handleSort("deviceMake")}>
+                      Device Make <SortIcon column="deviceMake" />
+                    </TableHead>
+
+                    <TableHead className="w-[110px] cursor-pointer" onClick={() => handleSort("deviceModel")}>
+                      Device Model <SortIcon column="deviceModel" />
+                    </TableHead>
+
+                    <TableHead className="w-[120px] cursor-pointer" onClick={() => handleSort("deviceSN")}>
+                      Device SN <SortIcon column="deviceSN" />
+                    </TableHead>
+
+                    <TableHead className="w-[120px] cursor-pointer" onClick={() => handleSort("branchName")}>
+                      Branch Name <SortIcon column="branchName" />
+                    </TableHead>
                     <TableHead className="w-[80px] text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>

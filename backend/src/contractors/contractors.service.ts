@@ -5,37 +5,123 @@ import { UpdateContractorDto } from './dto/update-contractor.dto';
 
 @Injectable()
 export class ContractorsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService) { }
 
-  create(data: CreateContractorDto) {
-    return this.prisma.contractors.create({ data });
-  }
+   async create(data: CreateContractorDto) {
+    const { branchIDs, ...contractorData } = data as any;
 
-  // contractors.service.ts
-findAll() {
-  return this.prisma.contractors.findMany({
-    orderBy: { id: 'desc' },
-    include: { serviceProvider: true, company: true },
-  });
-}
-
-
-  findOne(id: number) {
-    return this.prisma.contractors.findUnique({ where: { id } });
-  }
-
-  update(id: number, data: UpdateContractorDto) {
-    return this.prisma.contractors.update({
-      where: { id },
-      data,
+    return this.prisma.contractors.create({
+      data: {
+        ...contractorData,
+        contractorBranches: Array.isArray(branchIDs) && branchIDs.length > 0
+          ? {
+              create: branchIDs.map((branchID: number) => ({
+                branchID: Number(branchID),
+              })),
+            }
+          : undefined,
+      },
+      include: {
+        serviceProvider: true,
+        company: true,
+        contractorBranches: {
+          include: {
+            branch: true,
+          },
+        },
+      },
     });
   }
 
-  remove(id: number) {
-    return this.prisma.contractors.delete({ where: { id } });
+   findAll() {
+    return this.prisma.contractors.findMany({
+      orderBy: { id: 'desc' },
+      include: {
+        serviceProvider: true,
+        company: true,
+        contractorBranches: {
+          include: {
+            branch: true,
+          },
+        },
+      },
+    });
+  }
+
+
+  findOne(id: number) {
+    return this.prisma.contractors.findUnique({
+      where: { id },
+      include: {
+        serviceProvider: true,
+        company: true,
+        contractorBranches: {
+          include: {
+            branch: true,
+          },
+        },
+      },
+    });
+  }
+
+  async update(id: number, data: UpdateContractorDto) {
+    const { branchIDs, ...contractorData } = data as any;
+
+    return this.prisma.$transaction(async (tx) => {
+      const updated = await tx.contractors.update({
+        where: { id },
+        data: contractorData,
+      });
+
+      if (Array.isArray(branchIDs)) {
+        await tx.contractorBranch.deleteMany({
+          where: { contractorID: id },
+        });
+
+        if (branchIDs.length > 0) {
+          await tx.contractorBranch.createMany({
+            data: branchIDs.map((branchID: number) => ({
+              contractorID: id,
+              branchID: Number(branchID),
+            })),
+            skipDuplicates: true,
+          });
+        }
+      }
+
+      return tx.contractors.findUnique({
+        where: { id },
+        include: {
+          serviceProvider: true,
+          company: true,
+          contractorBranches: {
+            include: {
+              branch: true,
+            },
+          },
+        },
+      });
+    });
+  }
+
+   async remove(id: number) {
+    await this.prisma.contractorBranch.deleteMany({
+      where: { contractorID: id },
+    });
+
+    return this.prisma.contractors.delete({
+      where: { id },
+    });
   }
 
   // --- Contractor Rate Card ---
+
+
+  findAllRateCards() {
+    return this.prisma.contractorRateCard.findMany({
+      orderBy: { id: 'asc' },
+    });
+  }
 
   findRateCards(contractorID: number) {
     return this.prisma.contractorRateCard.findMany({

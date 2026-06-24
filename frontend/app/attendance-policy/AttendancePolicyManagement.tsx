@@ -22,7 +22,7 @@ import {
 } from "../components/ui/table";
 import { Badge } from "../components/ui/badge";
 import { Icon } from "@iconify/react";
-import { Plus, Search, Edit, Trash2, Info, ArrowLeft } from "lucide-react";
+import { Plus, Search, Edit, Trash2, Info, ArrowLeft, Filter, RotateCcw, X } from "lucide-react";
 import { SearchSuggestInput } from "../components/SearchSuggestInput";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import { toast } from "sonner";
@@ -82,7 +82,12 @@ interface SelectedItem {
 export function AttendancePolicyManagement() {
   const [listLoading, setListLoading] = useState(true);
   const [policies, setPolicies] = useState<AttendancePolicy[]>([]);
-  const [searchTerm, setSearchTerm] = useState("");
+const [searchTerm, setSearchTerm] = useState("");
+
+const [selectedFilterBranchIds, setSelectedFilterBranchIds] = useState<string[]>([]);
+const [showBranchFilterModal, setShowBranchFilterModal] = useState(false);
+const [branchFilterList, setBranchFilterList] = useState<any[]>([]);
+const [branchFilterLoading, setBranchFilterLoading] = useState(false);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingPolicy, setEditingPolicy] = useState<AttendancePolicy | null>(
     null
@@ -243,12 +248,21 @@ export function AttendancePolicyManagement() {
     }
   };
 
-  useEffect(() => {
-    if (user) loadAttendancePolicies();
-  }, [user]);
+useEffect(() => {
+  if (user) {
+    loadAttendancePolicies();
+    loadBranchFilterList();
+  }
+}, [user]);
+
 
   useEffect(() => {
-    const handler = () => { if (user) loadAttendancePolicies(); };
+const handler = () => {
+  if (user) {
+    loadAttendancePolicies();
+    loadBranchFilterList();
+  }
+};
     window.addEventListener("sidebar-context-changed", handler);
     window.addEventListener("app-data-refresh", handler);
     return () => {
@@ -256,6 +270,49 @@ export function AttendancePolicyManagement() {
       window.removeEventListener("app-data-refresh", handler);
     };
   }, [user]);
+
+
+  const loadBranchFilterList = async () => {
+  try {
+    setBranchFilterLoading(true);
+
+    const res = await fetch(`${BACKEND_URL}/branches`, { cache: "no-store" });
+    const data = await res.json();
+
+    const ctx = getSidebarContext();
+
+    const activeCompanyID =
+      ctx?.companyID ??
+      user?.companyID ??
+      currentUserMapping?.companyID ??
+      formData.companyID ??
+      null;
+
+    let branches = Array.isArray(data) ? data : [];
+
+    if (user?.role !== "SUPERADMIN" && activeCompanyID) {
+      branches = branches.filter(
+        (b: any) => Number(b.companyID) === Number(activeCompanyID)
+      );
+    }
+
+    if (user?.role === "BRANCH_ADMIN") {
+      const branchID = currentUserMapping?.branchesID ?? user?.branchesID;
+
+      if (branchID) {
+        branches = branches.filter((b: any) => Number(b.id) === Number(branchID));
+        setSelectedFilterBranchIds([String(branchID)]);
+      }
+    }
+
+    setBranchFilterList(branches);
+  } catch (e) {
+    console.error("Failed to load branch filter list:", e);
+    setBranchFilterList([]);
+  } finally {
+    setBranchFilterLoading(false);
+  }
+};
 
   const loadAttendancePolicies = async () => {
     setListLoading(true);
@@ -318,21 +375,41 @@ export function AttendancePolicyManagement() {
     }
   };
 
-  const filteredPolicies = policies.filter(
-    (policy) =>
-      policy.attendancePolicyName
-        .toLowerCase()
-        .includes(searchTerm.toLowerCase()) ||
-      (policy.serviceProvider || "")
-        .toLowerCase()
-        .includes(searchTerm.toLowerCase()) ||
-      (policy.companyName || "")
-        .toLowerCase()
-        .includes(searchTerm.toLowerCase()) ||
-      (policy.branchName || "")
-        .toLowerCase()
-        .includes(searchTerm.toLowerCase())
+  const toggleFilterBranch = (branchId: string) => {
+  setSelectedFilterBranchIds((prev) =>
+    prev.includes(branchId)
+      ? prev.filter((id) => id !== branchId)
+      : [...prev, branchId]
   );
+};
+
+const selectAllFilterBranches = () => {
+  setSelectedFilterBranchIds(branchFilterList.map((b) => String(b.id)));
+};
+
+const clearFilterBranches = () => {
+  if (user?.role === "BRANCH_ADMIN") return;
+  setSelectedFilterBranchIds([]);
+};
+
+
+  const filteredPolicies = policies.filter((policy) => {
+  const t = searchTerm.toLowerCase();
+
+  const matchesBranch =
+    selectedFilterBranchIds.length === 0 ||
+    selectedFilterBranchIds.includes(String(policy.branchesID));
+
+  const matchesSearch =
+    !t ||
+    policy.attendancePolicyName.toLowerCase().includes(t) ||
+    (policy.serviceProvider || "").toLowerCase().includes(t) ||
+    (policy.companyName || "").toLowerCase().includes(t) ||
+    (policy.branchName || "").toLowerCase().includes(t);
+
+  return matchesBranch && matchesSearch;
+});
+
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -372,11 +449,11 @@ export function AttendancePolicyManagement() {
           user?.role === "SERVICE_PROVIDER"
             ? currentUserMapping?.companyID
             : formData.companyID,
-        branchesID:
-          user?.role === "SERVICE_PROVIDER"
-            ? currentUserMapping?.branchesID
-            : formData.branchesID,
-        attendancePolicyName: formData.attendancePolicyName,
+branchesID:
+  user?.role === "BRANCH_ADMIN"
+    ? currentUserMapping?.branchesID ?? user?.branchesID
+    : formData.branchesID,
+            attendancePolicyName: formData.attendancePolicyName,
         workingHoursType: formData.workingHoursType,
         checkin_begin_before_min: formData.checkin_begin_before_min,
         checkout_end_after_min: formData.checkout_end_after_min,
@@ -624,8 +701,8 @@ export function AttendancePolicyManagement() {
                   </>
                 )}
 
-                {user?.role === "SERVICE_PROVIDER" && (
-                  <SearchSuggestInput
+{(user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN") && (
+                    <SearchSuggestInput
                     label="Branch Name"
                     placeholder="Select Branch"
                     value={formData.branchName}
@@ -1205,23 +1282,146 @@ export function AttendancePolicyManagement() {
       {!isDialogOpen && (<>
       {/* Search and Filters */}
       <Card>
-        <CardContent>
-          <div className="flex items-center gap-4 flex-wrap">
-            <div className="relative flex-1 min-w-0">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-              <Input
-                placeholder="Search attendance policies..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10 w-full"
-              />
-            </div>
-            <Badge variant="secondary" className="px-3 py-1 flex-shrink-0">
-              {filteredPolicies.length} attendance policies
-            </Badge>
+  <CardContent>
+    <div className="flex items-center gap-3 w-full">
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        onClick={() => setShowBranchFilterModal(true)}
+        className="flex-shrink-0"
+        title="Filter by Branch"
+      >
+        <Filter className="w-4 h-4 mr-1" />
+        Filter
+        {selectedFilterBranchIds.length > 0 && (
+          <Badge variant="secondary" className="ml-2">
+            {selectedFilterBranchIds.length}
+          </Badge>
+        )}
+      </Button>
+
+      <div className="relative flex-1 min-w-0">
+        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+        <Input
+          placeholder="Search attendance policies..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="pl-10 w-full"
+        />
+      </div>
+
+      <Badge variant="secondary" className="px-3 py-1 flex-shrink-0">
+        {filteredPolicies.length} attendance policies
+      </Badge>
+    </div>
+  </CardContent>
+</Card>
+
+{showBranchFilterModal && (
+  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+    <div className="w-full max-w-2xl rounded-xl bg-white shadow-xl border">
+      <div className="flex items-center justify-between border-b px-5 py-4">
+        <div className="flex items-center gap-2">
+          <div className="h-9 w-9 rounded-lg bg-indigo-50 flex items-center justify-center">
+            <Filter className="w-4 h-4 text-indigo-600" />
           </div>
-        </CardContent>
-      </Card>
+          <div>
+            <h3 className="text-base font-semibold text-gray-900">
+              Filter Attendance Policies by Branch
+            </h3>
+            <p className="text-xs text-gray-500">
+              Company admin sees only mapped company branches. Superadmin sees all branches.
+            </p>
+          </div>
+        </div>
+
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={() => setShowBranchFilterModal(false)}
+        >
+          <X className="w-4 h-4" />
+        </Button>
+      </div>
+
+      <div className="p-5 space-y-4 max-h-[70vh] overflow-y-auto">
+        <div className="flex items-center justify-between">
+          <Badge variant="secondary">
+            {selectedFilterBranchIds.length} selected
+          </Badge>
+
+          <div className="flex gap-2">
+            {user?.role !== "BRANCH_ADMIN" && (
+              <>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={selectAllFilterBranches}
+                  disabled={branchFilterLoading || branchFilterList.length === 0}
+                >
+                  Select All
+                </Button>
+
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={clearFilterBranches}
+                >
+                  <RotateCcw className="w-4 h-4 mr-1" />
+                  Clear
+                </Button>
+              </>
+            )}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          {branchFilterList.length === 0 ? (
+            <p className="text-sm text-gray-500 col-span-full py-8 text-center">
+              {branchFilterLoading ? "Loading branches..." : "No branches found"}
+            </p>
+          ) : (
+            branchFilterList.map((branch) => (
+              <label
+                key={branch.id}
+                className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm hover:bg-gray-50 cursor-pointer"
+              >
+                <input
+                  type="checkbox"
+                  checked={selectedFilterBranchIds.includes(String(branch.id))}
+                  disabled={user?.role === "BRANCH_ADMIN"}
+                  onChange={() => toggleFilterBranch(String(branch.id))}
+                />
+                <span className="truncate">{branch.branchName}</span>
+              </label>
+            ))
+          )}
+        </div>
+      </div>
+
+      <div className="flex justify-end gap-2 border-t px-5 py-4">
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => setShowBranchFilterModal(false)}
+        >
+          Cancel
+        </Button>
+
+        <Button
+          type="button"
+          onClick={() => setShowBranchFilterModal(false)}
+        >
+          Apply Filter
+        </Button>
+      </div>
+    </div>
+  </div>
+)}
 
       {/* Attendance Policies Table */}
       <Card className="w-full">

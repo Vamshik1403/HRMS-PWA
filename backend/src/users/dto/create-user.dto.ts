@@ -1,5 +1,14 @@
-// create-user.dto.ts
-import { IsString, IsOptional, IsEnum, MinLength, IsInt, IsBoolean } from 'class-validator';
+import {
+  IsString,
+  IsOptional,
+  IsEnum,
+  MinLength,
+  IsInt,
+  IsBoolean,
+  IsArray,
+  ArrayUnique,
+} from 'class-validator';
+import { Type } from 'class-transformer';
 
 export enum UserRole {
   SUPERADMIN = 'SUPERADMIN',
@@ -7,6 +16,7 @@ export enum UserRole {
   SERVICE_PROVIDER = 'SERVICE_PROVIDER',
   COMPANY_ADMIN = 'COMPANY_ADMIN',
   BRANCH_ADMIN = 'BRANCH_ADMIN',
+  CONTRACTOR_ADMIN = 'CONTRACTOR_ADMIN',
   EXECUTIVE = 'EXECUTIVE',
   EMPLOYEE = 'EMPLOYEE',
 }
@@ -25,14 +35,47 @@ export class CreateUserDto {
   role?: UserRole;
 
   @IsOptional()
+  @IsString()
+  firstName: string;
+
+  @IsOptional()
+  @IsString()
+  lastName: string;
+
+  @IsOptional()
+  @IsString()
+  contactNo: string;
+
+  @IsOptional()
+  @IsString()
+  email: string;
+
+  @IsOptional()
+  @Type(() => Number)
   @IsInt()
   serviceProviderID?: number;
+
   @IsOptional()
+  @Type(() => Number)
   @IsInt()
   companyID?: number;
+
   @IsOptional()
+  @IsArray()
+  @ArrayUnique()
+  @Type(() => Number)
+  @IsInt({ each: true })
+  companyIDs?: number[];
+
+  @IsOptional()
+  @Type(() => Number)
   @IsInt()
   branchesID?: number;
+
+@IsOptional()
+@Type(() => Number)
+@IsInt()
+contractorID?: number;
 
   @IsOptional()
   @IsBoolean()

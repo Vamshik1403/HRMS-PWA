@@ -22,7 +22,16 @@ export interface CurrentUser {
   branches?: {
     branchName: string
   }
-
+  userCompanies?: {
+    companyID: number
+    companyName: string
+  }[]
+  employee?: {
+    id: number
+  }
+  branch?: {
+    branchName: string
+  }
   type?: string
 }
 

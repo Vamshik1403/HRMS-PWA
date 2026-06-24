@@ -22,7 +22,7 @@ import { cn } from "@/lib/utils"
 import { format } from "date-fns"
 import { Calendar as CalendarIcon } from "lucide-react"
 import { FixedCalendar as CalendarComponent } from "@/app/components/ui/color-calendar"
-
+import { getSidebarContext } from "../utils/sidebarContext"
 // ==================== TYPES ====================
 type ID = number
 type RosterLeaveType = "CASUAL" | "SICK" | "LOP" | "PL" | "COMP_OFF"
@@ -34,13 +34,15 @@ interface Department { id: ID; serviceProviderID: ID; companyID: ID; branchesID:
 interface Designation { id: ID; serviceProviderID: ID; companyID: ID; branchesID: ID; departmentID: ID; designation: string }
 
 interface WorkShift {
-  id: ID
-  workShiftName?: string
-  shiftName?: string
-  shiftCode?: string
-  isActive?: string
-  isRotating?: boolean
-  isFlexible?: boolean
+  id: ID;
+   companyID?: number;
+  branchesID?: number;
+  workShiftName?: string;
+  shiftName?: string;
+  shiftCode?: string;
+  isActive?: string;
+  isRotating?: boolean;
+  isFlexible?: boolean;
 }
 
 interface RosterDay {
@@ -233,6 +235,37 @@ export function RosterManagement() {
   // Get user from localStorage
   const [user, setUser] = useState<any>(null)
   const [userRole, setUserRole] = useState<"SUPERADMIN" | "SERVICE_PROVIDER" | "COMPANY_ADMIN" | "EMPLOYEE" | null>(null)
+  const uid = () => Math.random().toString(36).slice(2)
+
+const getStoredActiveCompanyID = (): number | null => {
+  if (typeof window === "undefined") return null
+
+  try {
+    const sessionId = Number(sessionStorage.getItem("activeCompanyID") || 0)
+    if (sessionId) return sessionId
+
+    const userData = JSON.parse(localStorage.getItem("user") || "{}")
+    const localId = Number(userData?.activeCompanyID || userData?.companyID || 0)
+
+    return localId || null
+  } catch {
+    return null
+  }
+}
+
+const getUserAssignedCompanyIDs = (user: any): number[] => {
+  const ids = new Set<number>()
+
+  if (user?.companyID) ids.add(Number(user.companyID))
+
+  if (Array.isArray(user?.userCompanies)) {
+    user.userCompanies.forEach((uc: any) => {
+      if (uc?.companyID) ids.add(Number(uc.companyID))
+    })
+  }
+
+  return Array.from(ids)
+}
 
   // ==================== USER AUTHENTICATION ====================
   useEffect(() => {
@@ -276,54 +309,59 @@ export function RosterManagement() {
           }
 
           // For COMPANY_ADMIN only: auto-set the single mapped company and branch
+                   // COMPANY_ADMIN: company is controlled by active top dropdown
           if (userRole === "COMPANY_ADMIN") {
-            // Set only the mapped company
-            if (me.company) {
-              const company: Company = {
-                id: me.companyID,
-                serviceProviderID: me.serviceProviderID,
-                companyName: me.company.companyName
-              }
-              setManagerCompanies([company]) // Only one company
-              setCoList([company])
-              setCompanyID(me.companyID) // Auto-select mapped company
-              console.log("🏢 Company set:", company)
+            const assignedCompanyIDs = getUserAssignedCompanyIDs(me)
+            const storedActiveCompanyID = getStoredActiveCompanyID()
+            const ctx = getSidebarContext()
+
+            let activeCompanyID =
+              assignedCompanyIDs.length > 1 && storedActiveCompanyID && assignedCompanyIDs.includes(Number(storedActiveCompanyID))
+                ? storedActiveCompanyID
+                : assignedCompanyIDs.length > 1 && ctx?.companyID && assignedCompanyIDs.includes(Number(ctx.companyID))
+                  ? Number(ctx.companyID)
+                  : me.companyID
+
+            const allCompanies = await safeFetch<Company[]>(API.company)
+            const activeCompany =
+              allCompanies.find((c) => Number(c.id) === Number(activeCompanyID)) ||
+              (me.company
+                ? {
+                    id: me.companyID,
+                    serviceProviderID: me.serviceProviderID,
+                    companyName: me.company.companyName,
+                  }
+                : null)
+
+            if (activeCompany) {
+              setManagerCompanies([activeCompany])
+              setCoList([activeCompany])
+              setServiceProviderID(activeCompany.serviceProviderID)
+              setCompanyID(activeCompany.id)
             }
 
-            // Set only the mapped branch
-            if (me.branches) {
-              const branch: Branch = {
-                id: me.branchesID,
-                serviceProviderID: me.serviceProviderID,
-                companyID: me.companyID,
-                branchName: me.branches.branchName
-              }
-              setManagerBranches([branch]) // Only one branch
-              setBrList([branch])
-              setBranchesID(me.branchesID) // Auto-select mapped branch
-              console.log("🏢 Branch set:", branch)
+            const allBranches = await safeFetch<Branch[]>(API.branches)
+            const companyBranches = allBranches.filter(
+              (b) =>
+                Number(b.serviceProviderID) === Number(me.serviceProviderID) &&
+                Number(b.companyID) === Number(activeCompanyID)
+            )
+
+            setManagerBranches(companyBranches)
+            setBrList(companyBranches)
+
+            if (me.branchesID && companyBranches.some((b) => Number(b.id) === Number(me.branchesID))) {
+              setBranchesID(me.branchesID)
             } else {
-              console.warn("⚠️ No branch found in user mapping")
-              // Try to fetch branches for the company
-              try {
-                const allBranches = await safeFetch<Branch[]>(API.branches)
-                const companyBranches = allBranches.filter(b =>
-                  b.serviceProviderID === me.serviceProviderID &&
-                  b.companyID === me.companyID
-                )
-                if (companyBranches.length > 0) {
-                  setBrList(companyBranches)
-                  if (companyBranches.length === 1) {
-                    setBranchesID(companyBranches[0].id)
-                    console.log("🏢 Auto-selected branch:", companyBranches[0])
-                  }
-                }
-              } catch (error) {
-                console.error("Failed to fetch branches:", error)
-              }
+              setBranchesID(companyBranches.length === 1 ? companyBranches[0].id : "")
             }
+
+            setDepartmentID("")
+            setDesignationID("")
+            setEmployees([])
+            setSelectedEmpIds(new Set())
           }
-          // SERVICE_PROVIDER: serviceProviderID is set above; companies will be loaded
+           // SERVICE_PROVIDER: serviceProviderID is set above; companies will be loaded
           // by the company loading effect when serviceProviderID changes
         }
       } catch (error) {
@@ -338,6 +376,44 @@ export function RosterManagement() {
   const isServiceProviderRole = userRole === "SERVICE_PROVIDER"
   const isServiceProvider = userRole === "COMPANY_ADMIN"
 
+  const getActiveRosterCompanyID = () => {
+    const ctx = getSidebarContext()
+    const userAny = user as any
+    const assignedCompanyIDs = getUserAssignedCompanyIDs(currentUserMapping || userAny)
+    const storedActiveCompanyID = getStoredActiveCompanyID()
+
+    if (isSuperAdmin) {
+      return ctx?.companyID ? Number(ctx.companyID) : companyID ? Number(companyID) : null
+    }
+
+    if (userRole === "COMPANY_ADMIN") {
+      if (
+        assignedCompanyIDs.length > 1 &&
+        storedActiveCompanyID &&
+        assignedCompanyIDs.includes(Number(storedActiveCompanyID))
+      ) {
+        return Number(storedActiveCompanyID)
+      }
+
+      if (
+        assignedCompanyIDs.length > 1 &&
+        ctx?.companyID &&
+        assignedCompanyIDs.includes(Number(ctx.companyID))
+      ) {
+        return Number(ctx.companyID)
+      }
+
+      return Number(
+        currentUserMapping?.companyID ||
+        userAny?.companyID ||
+        assignedCompanyIDs[0] ||
+        0
+      ) || null
+    }
+
+    return Number(companyID || ctx?.companyID || userAny?.companyID || 0) || null
+  }
+
   // ✅ EFFECTIVE SCOPE
   const effectiveServiceProviderID = useMemo(() => {
     if (isServiceProvider && currentUserMapping) return currentUserMapping.serviceProviderID
@@ -345,17 +421,90 @@ export function RosterManagement() {
   }, [isServiceProvider, currentUserMapping, serviceProviderID])
 
   const effectiveCompanyID = useMemo(() => {
-    if (isServiceProvider) return companyID
-    return companyID
-  }, [isServiceProvider, currentUserMapping, companyID])
+    const activeCompanyID = getActiveRosterCompanyID()
+    return activeCompanyID ?? companyID
+  }, [userRole, user, currentUserMapping, companyID])
 
   const effectiveBranchesID = useMemo(() => {
     if (isServiceProvider) return branchesID
     return branchesID
   }, [isServiceProvider, currentUserMapping, branchesID])
 
+  useEffect(() => {
+    if (userRole !== "COMPANY_ADMIN" || !user || !currentUserMapping) return
+
+    const syncActiveCompany = async () => {
+      const assignedCompanyIDs = getUserAssignedCompanyIDs(currentUserMapping)
+      const storedActiveCompanyID = getStoredActiveCompanyID()
+      const ctx = getSidebarContext()
+
+      const activeCompanyID =
+        assignedCompanyIDs.length > 1 && storedActiveCompanyID && assignedCompanyIDs.includes(Number(storedActiveCompanyID))
+          ? storedActiveCompanyID
+          : assignedCompanyIDs.length > 1 && ctx?.companyID && assignedCompanyIDs.includes(Number(ctx.companyID))
+            ? Number(ctx.companyID)
+            : currentUserMapping.companyID
+
+      if (!activeCompanyID) return
+
+      try {
+        const [allCompanies, allBranches] = await Promise.all([
+          safeFetch<Company[]>(API.company),
+          safeFetch<Branch[]>(API.branches),
+        ])
+
+        const activeCompany = allCompanies.find(
+          (c) => Number(c.id) === Number(activeCompanyID)
+        )
+
+        const companyBranches = allBranches.filter(
+          (b) => Number(b.companyID) === Number(activeCompanyID)
+        )
+
+        if (activeCompany) {
+          setCoList([activeCompany])
+          setManagerCompanies([activeCompany])
+          setServiceProviderID(activeCompany.serviceProviderID)
+          setCompanyID(activeCompany.id)
+        }
+
+        setBrList(companyBranches)
+        setManagerBranches(companyBranches)
+
+        setBranchesID((prev) =>
+          prev && companyBranches.some((b) => Number(b.id) === Number(prev))
+            ? prev
+            : companyBranches.length === 1
+              ? companyBranches[0].id
+              : ""
+        )
+
+        setDepartmentID("")
+        setDesignationID("")
+        setDepList([])
+        setDesList([])
+        setEmployees([])
+        setSelectedEmpIds(new Set())
+        setRosterData(new Map())
+      } catch (error) {
+        console.error("Failed to sync active company:", error)
+      }
+    }
+
+    syncActiveCompany()
+
+    const handler = () => syncActiveCompany()
+    window.addEventListener("sidebar-context-changed", handler)
+    window.addEventListener("app-data-refresh", handler)
+
+    return () => {
+      window.removeEventListener("sidebar-context-changed", handler)
+      window.removeEventListener("app-data-refresh", handler)
+    }
+  }, [userRole, user, currentUserMapping])
+
   // ==================== COMPUTED VALUES ====================
-  const dates = useMemo(() => {
+    const dates = useMemo(() => {
     try {
       const dateArray = dateRange(fromDate, toDate)
       return dateArray
@@ -404,7 +553,11 @@ export function RosterManagement() {
 
   const shiftOptions = useMemo(() =>
     shiftList
-      .filter(s => s.isRotating === true)
+      .filter(s =>
+        s.isRotating === true &&
+        Number(s.companyID) === Number(effectiveCompanyID) &&
+        (!effectiveBranchesID || Number(s.branchesID) === Number(effectiveBranchesID))
+      )
       .map((s) => ({
         id: s.id,
         name: s.shiftName ?? s.workShiftName ?? s.shiftCode ?? `Shift-${s.id}`,
@@ -455,12 +608,14 @@ export function RosterManagement() {
 
     setIsLoading(prev => ({ ...prev, employees: true }))
     try {
+            const activeCompanyID = getActiveRosterCompanyID()
+
       const params = new URLSearchParams({
         serviceProviderID: String(effectiveServiceProviderID),
-        companyID: String(effectiveCompanyID),
+        companyID: String(activeCompanyID ?? effectiveCompanyID),
         branchesID: String(effectiveBranchesID),
       })
-
+      
       // Only add departmentID if it's selected (not empty/"All Departments")
       if (departmentID) {
         params.append("departmentID", String(departmentID))
@@ -562,7 +717,7 @@ export function RosterManagement() {
 
   // SUPERADMIN / SERVICE_PROVIDER: Load branches when company changes
   useEffect(() => {
-    if (!isSuperAdmin && !isServiceProviderRole) return
+    if (!isSuperAdmin && !isServiceProviderRole && !isServiceProvider) return
 
     setBranchesID("")
     setDepartmentID("")
@@ -573,21 +728,22 @@ export function RosterManagement() {
     setEmployees([])
     setSelectedEmpIds(new Set())
 
-    if (!serviceProviderID || !companyID) return
+    if (!effectiveServiceProviderID || !effectiveCompanyID) return
 
     const loadBranches = async () => {
       const all = await safeFetch<Branch[]>(API.branches)
       setBrList(
         all.filter(
           b =>
-            b.serviceProviderID === serviceProviderID &&
-            b.companyID === companyID
+                    Number(b.serviceProviderID) === Number(effectiveServiceProviderID) &&
+            Number(b.companyID) === Number(effectiveCompanyID)
         )
       )
     }
 
     loadBranches()
-  }, [serviceProviderID, companyID, isSuperAdmin, isServiceProviderRole])
+  }, [effectiveServiceProviderID, effectiveCompanyID, isSuperAdmin, isServiceProviderRole, isServiceProvider])
+
 
   // Load departments when branch changes (for SUPERADMIN, SERVICE_PROVIDER, and COMPANY_ADMIN)
   useEffect(() => {
@@ -1107,7 +1263,10 @@ export function RosterManagement() {
                 value={companyID}
                 onChange={(e) => {
                   const newCompanyID = e.target.value ? Number(e.target.value) : ""
-                  setCompanyID(newCompanyID)
+                                   setCompanyID(newCompanyID)
+                  setEmployees([])
+                  setRosterData(new Map())
+                  setSelectedEmpIds(new Set())
                   // Reset branch when company changes
                   setBranchesID("")
                   setDepartmentID("")

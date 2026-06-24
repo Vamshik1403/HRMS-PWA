@@ -1,4 +1,5 @@
-import { IsOptional, IsString, IsInt } from 'class-validator';
+import { Type } from 'class-transformer';
+import { IsOptional, IsString, IsInt, IsArray } from 'class-validator';
 
 export class CreateContractorDto {
   @IsOptional() @IsInt() serviceProviderID?: number;
@@ -26,4 +27,10 @@ export class CreateContractorDto {
   @IsOptional() @IsString() emailAdd?: string;
   @IsOptional() @IsString() companyLogoUrl?: string;
   @IsOptional() @IsString() SignatureUrl?: string;
+
+  @IsOptional()
+  @IsArray()
+  @IsInt({ each: true })
+  @Type(() => Number)
+  branchIDs?: number[];
 }

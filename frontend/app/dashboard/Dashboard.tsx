@@ -27,12 +27,18 @@ import { getSidebarContext } from "../utils/sidebarContext";
 function resolveDashboardCompanyId(
   user: ReturnType<typeof useCurrentUser>,
   currentUserMapping: { companyID?: number } | null,
+  activeCompanyId?: number,
 ): number | undefined {
-  const fromMapping = currentUserMapping?.companyID;
-  if (fromMapping != null) return fromMapping;
-  if (user?.companyID != null) return user.companyID;
+  if (activeCompanyId != null) return Number(activeCompanyId);
+
   const ctx = getSidebarContext();
-  if (ctx?.companyID != null) return ctx.companyID;
+  if (ctx?.companyID != null) return Number(ctx.companyID);
+
+  const fromMapping = currentUserMapping?.companyID;
+  if (fromMapping != null) return Number(fromMapping);
+
+  if (user?.companyID != null) return Number(user.companyID);
+
   return undefined;
 }
 
@@ -219,6 +225,7 @@ export default function DashboardPage() {
     const d = String(now.getDate()).padStart(2, '0');
     return `${y}-${m}-${d}`;
   });
+  
   const [weekAgoDate] = useState(() => {
     const d = new Date();
     d.setDate(d.getDate() - 6);
@@ -227,7 +234,19 @@ export default function DashboardPage() {
     const dd = String(d.getDate()).padStart(2, '0');
     return `${y}-${m}-${dd}`;
   });
+
   const [currentUserMapping, setCurrentUserMapping] = useState<any>(null);
+  const [activeCompanyId, setActiveCompanyId] = useState<number | undefined>(() => {
+    const ctx = getSidebarContext();
+    if (ctx?.companyID != null) return Number(ctx.companyID);
+
+    if (typeof window !== "undefined") {
+      const stored = Number(sessionStorage.getItem("activeCompanyID") || 0);
+      if (stored) return stored;
+    }
+
+    return undefined;
+  });
   const [desktopManager, setDesktopManager] = useState(false);
   const [probationAlerts, setProbationAlerts] = useState<
     {
@@ -325,8 +344,8 @@ export default function DashboardPage() {
   }, [user, BACKEND_URL, isDesktopManagerEmployee]);
 
   const resolvedCompanyId = useMemo(
-    () => resolveDashboardCompanyId(user, currentUserMapping),
-    [user, currentUserMapping],
+    () => resolveDashboardCompanyId(user, currentUserMapping, activeCompanyId),
+    [user, currentUserMapping, activeCompanyId],
   );
   const resolvedServiceProviderId = useMemo(
     () => resolveDashboardServiceProviderId(user, currentUserMapping),
@@ -384,17 +403,27 @@ export default function DashboardPage() {
     if (isHrDesktopView) loadHrWidgets();
   }, [user, canLoadDashboard, overviewQueryParams.toString(), isHrDesktopView]);
 
-  useEffect(() => {
+   useEffect(() => {
     const onContextChange = () => {
-      if (user && canLoadDashboard) {
-        loadTodayOverview();
-        loadProbationAlerts();
-        if (isHrDesktopView) loadHrWidgets();
+      const ctx = getSidebarContext();
+      const stored = Number(sessionStorage.getItem("activeCompanyID") || 0);
+      const nextCompanyId = Number(ctx?.companyID || stored || 0);
+
+      if (nextCompanyId) {
+        setSelectedBranchId("");
+        setSelectedDepartmentId("");
+        setActiveCompanyId(nextCompanyId);
       }
     };
+
     window.addEventListener("sidebar-context-changed", onContextChange);
-    return () => window.removeEventListener("sidebar-context-changed", onContextChange);
-  }, [user, canLoadDashboard, isHrDesktopView, overviewQueryParams.toString()]);
+    window.addEventListener("app-data-refresh", onContextChange);
+
+    return () => {
+      window.removeEventListener("sidebar-context-changed", onContextChange);
+      window.removeEventListener("app-data-refresh", onContextChange);
+    };
+  }, []);
 
   const fetchOverviewWithRetry = async (url: string, attempts = 3) => {
     let lastError: unknown;
@@ -658,33 +687,23 @@ export default function DashboardPage() {
   };
 
   useAppRefresh(() => {
+    const ctx = getSidebarContext();
+    const stored = Number(sessionStorage.getItem("activeCompanyID") || 0);
+    const nextCompanyId = Number(ctx?.companyID || stored || 0);
+
+    if (nextCompanyId) {
+      setSelectedBranchId("");
+      setSelectedDepartmentId("");
+      setActiveCompanyId(nextCompanyId);
+    }
+
     loadTodayOverview();
     loadProbationAlerts();
     if (isHrDesktopView) loadHrWidgets();
     loadDashboard();
-  }, [user, currentUserMapping, overviewQueryParams.toString()]);
+  }, [user, currentUserMapping, activeCompanyId, overviewQueryParams.toString()]);
 
-  const getAttendance = (empId: number) => {
-    const logs = attendanceLogs
-      .filter((l) => l.employeeID === empId)
-      .sort(
-        (a, b) =>
-          new Date(a.punchTimeStamp).getTime() -
-          new Date(b.punchTimeStamp).getTime()
-      );
-
-    if (logs.length === 0)
-      return { inTime: "N/A", outTime: "N/A", isPresent: false };
-
-    return {
-      inTime: logs[0].punchTimeStamp.split(" ")[1]?.slice(0, 5) || "N/A",
-      outTime:
-        logs.length > 1
-          ? logs[logs.length - 1].punchTimeStamp.split(" ")[1]?.slice(0, 5)
-          : "N/A",
-      isPresent: true,
-    };
-  };
+  
 
   const barData: SoftBarPoint[] = useMemo(() => {
     const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -731,38 +750,7 @@ export default function DashboardPage() {
     return Math.round((delta / employees.length) * 1000) / 10;
   }, [presentCount, yesterdayPresent, employees.length]);
 
-  const deptSpotlight = useMemo(() => {
-    if (departmentHeadcounts.length > 0) {
-      return [...departmentHeadcounts]
-        .filter((d) => d.employeeCount > 0)
-        .sort((a, b) => b.employeeCount - a.employeeCount)
-        .slice(0, 5)
-        .map((d) => ({
-          id: d.id,
-          title: d.departmentName?.trim() || `Department ${d.id}`,
-          count: d.employeeCount,
-        }));
-    }
-    const counts = new Map<number, number>();
-    for (const e of employees) {
-      if (e.departmentNameID != null) {
-        counts.set(
-          e.departmentNameID,
-          (counts.get(e.departmentNameID) || 0) + 1
-        );
-      }
-    }
-    return departments
-      .map((d) => ({
-        id: d.id,
-        title: d.departmentName?.trim() || `Department ${d.id}`,
-        count: counts.get(d.id) ?? 0,
-      }))
-      .filter((x) => x.count > 0)
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 5);
-  }, [departmentHeadcounts, departments, employees]);
-
+ 
   const filterDepartments = useMemo(() => {
     if (!selectedBranchId) return departments;
     const branchNum = Number(selectedBranchId);

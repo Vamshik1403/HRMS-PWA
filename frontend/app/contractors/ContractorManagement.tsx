@@ -18,7 +18,7 @@ import {
 } from "../components/ui/table";
 import { Badge } from "../components/ui/badge";
 import { Icon } from "@iconify/react";
-import { Plus, Search, Edit, Trash2, Eye, IndianRupee } from "lucide-react";
+import { Plus, Search, Edit, Trash2, Eye, Save, UserPlus, RotateCcw, Filter } from "lucide-react";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import { toast } from "sonner";
 import { PdfUploadField } from "../components/PdfUploadField";
@@ -75,16 +75,31 @@ interface ContractorRead {
   // fallback denormalized names (if your API returns them)
   serviceProviderName?: string | null;
   companyName?: string | null;
+
+  contractorBranches?: {
+    id: number;
+    contractorID: number;
+    branchID: number;
+    branch?: Branch | null;
+  }[];
 }
 
 interface ServiceProvider {
   id: ID;
   companyName: string;
 }
+
+interface Branch {
+  id: number;
+  branchName: string;
+  companyID?: number | null;
+  serviceProviderID?: number | null;
+}
+
 interface Company {
   id: ID;
   companyName: string;
-  serviceProviderID?: ID; // Add this if your company model has serviceProviderID
+  serviceProviderID?: ID;
 }
 
 interface ContractorRateCard {
@@ -108,6 +123,8 @@ const API = {
   serviceProviders: "/backend/service-provider",
   companies: "/backend/company",
   upload: "/backend/files/upload",
+  branches: "/backend/branches",
+  users: "/backend/users",
 };
 
 const MIN_CHARS = 0;
@@ -142,6 +159,9 @@ export function ContractorManagement() {
   const user = useCurrentUser();
   const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN" || user?.role === "BRANCH_ADMIN" || canDesktopManagerManage(user)
   const isEmployee = user?.role === "EMPLOYEE";
+
+  const canManageContractorAdmins =
+    user?.role === "SUPERADMIN" || user?.role === "COMPANY_ADMIN";
   // Add this with your other state declarations
   const [currentUserMapping, setCurrentUserMapping] = useState<any>(null);
 
@@ -222,11 +242,36 @@ export function ContractorManagement() {
 
   // UI
   const [searchTerm, setSearchTerm] = useState("");
+
+  const [branchFilterList, setBranchFilterList] = useState<Branch[]>([]);
+  const [selectedFilterBranchIds, setSelectedFilterBranchIds] = useState<string[]>([]);
+const [branchFilterLoading, setBranchFilterLoading] = useState(false);
+const [showBranchFilterModal, setShowBranchFilterModal] = useState(false);
+
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
 
   const [editing, setEditing] = useState<ContractorRead | null>(null);
   const [viewRow, setViewRow] = useState<ContractorRead | null>(null);
+
+  const CONTRACTOR_ADMIN_ROLE = "CONTRACTOR_ADMIN";
+
+  const [showContractorAdminPanel, setShowContractorAdminPanel] = useState(false);
+  const [selectedContractor, setSelectedContractor] = useState<ContractorRead | null>(null);
+  const [contractorAdmins, setContractorAdmins] = useState<any[]>([]);
+  const [editingContractorAdmin, setEditingContractorAdmin] = useState<any | null>(null);
+  const [contractorAdminSaving, setContractorAdminSaving] = useState(false);
+
+  const [contractorAdminForm, setContractorAdminForm] = useState({
+    username: "",
+    password: "",
+    firstName: "",
+    lastName: "",
+    contactNo: "",
+    email: "",
+    role: CONTRACTOR_ADMIN_ROLE,
+    isActive: true,
+  });
 
   // Suggestions state/refs
   const spRef = useRef<HTMLDivElement>(null);
@@ -253,6 +298,9 @@ export function ContractorManagement() {
     serviceProviderID: null as ID | null,
     companyID: null as ID | null,
 
+    branchSearch: "",
+    branchIDs: [] as number[],
+    selectedBranches: [] as Branch[],
     contractorName: "",
     contractorType: "",
     address: "",
@@ -283,6 +331,38 @@ export function ContractorManagement() {
   // ---------------------------
   // Load contractors
   // ---------------------------
+
+  const fetchBranchFilterList = async () => {
+    try {
+      setBranchFilterLoading(true);
+
+      const all = await fetchJSONSafe<Branch[]>(API.branches);
+      const ctx = getSidebarContext();
+
+      const activeCompanyID =
+        ctx?.companyID ??
+        user?.companyID ??
+        currentUserMapping?.companyID ??
+        null;
+
+      let filtered = Array.isArray(all) ? all : [];
+
+      if (activeCompanyID) {
+        filtered = filtered.filter(
+          (b) => Number(b.companyID) === Number(activeCompanyID)
+        );
+      }
+
+      setBranchFilterList(filtered);
+    } catch (e) {
+      console.error("Failed to load branch filter list:", e);
+      setBranchFilterList([]);
+    } finally {
+      setBranchFilterLoading(false);
+    }
+  };
+
+
   const fetchRows = async () => {
     try {
       setLoading(true);
@@ -290,8 +370,38 @@ export function ContractorManagement() {
 
       const mapping = await resolveScopeUserMapping(user);
       if (mapping) setCurrentUserMapping(mapping);
-      setRows(await filterCompanyScopedRecords(all, user));
 
+      const ctx = getSidebarContext();
+
+      const activeCompanyID =
+        ctx?.companyID ??
+        user?.companyID ??
+        mapping?.companyID ??
+        null;
+
+      let visibleRows = Array.isArray(all) ? all : [];
+
+      // Important: contractors may have companyID null but mapped branch has companyID.
+      // So include contractor if its direct companyID OR any mapped branch companyID matches.
+      if (activeCompanyID) {
+        visibleRows = visibleRows.filter((r: any) => {
+          const directCompanyMatch =
+            Number(r.companyID) === Number(activeCompanyID) ||
+            Number(r.company?.id) === Number(activeCompanyID);
+
+          const branchCompanyMatch = Array.isArray(r.contractorBranches)
+            ? r.contractorBranches.some(
+              (cb: any) => Number(cb.branch?.companyID) === Number(activeCompanyID)
+            )
+            : false;
+
+          return directCompanyMatch || branchCompanyMatch;
+        });
+      } else {
+        visibleRows = await filterCompanyScopedRecords(all, user);
+      }
+
+      setRows(visibleRows);
     } catch (e: any) {
       console.error("Failed to load contractors:", e);
       toast.error("Failed to load data.");
@@ -302,11 +412,19 @@ export function ContractorManagement() {
   };
 
   useEffect(() => {
-    if (user) fetchRows();
+    if (user) {
+      fetchRows();
+      fetchBranchFilterList();
+    }
   }, [user]);
 
   useEffect(() => {
-    const handler = () => { if (user) fetchRows(); };
+const handler = () => {
+  if (user) {
+    fetchRows();
+    fetchBranchFilterList();
+  }
+};
     window.addEventListener("sidebar-context-changed", handler);
     window.addEventListener("app-data-refresh", handler);
     return () => {
@@ -372,19 +490,19 @@ export function ContractorManagement() {
       try {
         // Filter companies based on selected service provider
         let filteredCompanies = allCompanies;
-        
+
         // If a service provider is selected, filter companies by serviceProviderID
         if (formData.serviceProviderID) {
-          filteredCompanies = allCompanies.filter(co => 
+          filteredCompanies = allCompanies.filter(co =>
             co.serviceProviderID === formData.serviceProviderID
           );
         }
-        
+
         // Further filter by search query
         const filtered = filteredCompanies.filter(co =>
           (co.companyName ?? "").toLowerCase().includes(query.toLowerCase())
         );
-        
+
         setCoList(filtered.slice(0, 20));
       } catch (e) {
         if ((e as any).name !== "AbortError") console.error("Company fetch error:", e);
@@ -424,7 +542,7 @@ export function ContractorManagement() {
         coAutocomplete: ""
       }));
       setCoList([]);
-      
+
       // Optionally, you can trigger a company search if there's text in company autocomplete
       if (formData.coAutocomplete.length >= MIN_CHARS) {
         runFetchCompanies(formData.coAutocomplete);
@@ -438,6 +556,9 @@ export function ContractorManagement() {
   const resetForm = () => {
     const baseFormData = {
       serviceProviderID: null as ID | null,
+      branchSearch: "",
+      branchIDs: [],
+      selectedBranches: [],
       companyID: null as ID | null,
       contractorName: "",
       contractorType: "",
@@ -517,10 +638,20 @@ export function ContractorManagement() {
       coName = r.company?.companyName ?? r.companyName ?? "";
     }
 
+    const mappedBranches =
+      Array.isArray((r as any).contractorBranches)
+        ? (r as any).contractorBranches
+          .map((x: any) => x.branch)
+          .filter(Boolean)
+        : [];
+
     setFormData({
       serviceProviderID: finalServiceProviderID,
+
       companyID: finalCompanyID,
-      // ... rest of the fields
+      branchSearch: "",
+      branchIDs: mappedBranches.map((b: any) => Number(b.id)),
+      selectedBranches: mappedBranches,
       contractorName: r.contractorName ?? "",
       contractorType: r.contractorType ?? "",
       address: r.address ?? "",
@@ -568,6 +699,73 @@ export function ContractorManagement() {
     }
   };
 
+  const fetchBranchSuggestions = async (query: string): Promise<Branch[]> => {
+    const all = await fetchJSONSafe<Branch[]>(API.branches);
+    const q = query.trim().toLowerCase();
+
+    const ctx = getSidebarContext();
+
+    const activeCompanyID =
+      formData.companyID ??
+      ctx?.companyID ??
+      user?.companyID ??
+      currentUserMapping?.companyID ??
+      null;
+
+    let filtered = Array.isArray(all) ? all : [];
+
+    if (activeCompanyID) {
+      filtered = filtered.filter(
+        (b) => Number(b.companyID) === Number(activeCompanyID)
+      );
+    }
+
+    if (q) {
+      filtered = filtered.filter((b) =>
+        String(b.branchName || "").toLowerCase().includes(q)
+      );
+    }
+
+    const selectedIds = new Set(formData.branchIDs.map(Number));
+
+    return filtered
+      .filter((b) => !selectedIds.has(Number(b.id)))
+      .slice(0, 20);
+  };
+
+
+  const addContractorBranch = (branch: Branch) => {
+    if (!branch?.id) return;
+
+    setFormData((p) => {
+      const exists = p.branchIDs.includes(Number(branch.id));
+      if (exists) {
+        return { ...p, branchSearch: "" };
+      }
+
+      return {
+        ...p,
+        branchSearch: "",
+        companyID: p.companyID || branch.companyID || null,
+        serviceProviderID: p.serviceProviderID || branch.serviceProviderID || null,
+        branchIDs: [...p.branchIDs, Number(branch.id)],
+        selectedBranches: [...p.selectedBranches, branch],
+      };
+    });
+  };
+
+  const removeContractorBranch = (branchID: number) => {
+    setFormData((p) => ({
+      ...p,
+      branchIDs: p.branchIDs.filter((id) => Number(id) !== Number(branchID)),
+      selectedBranches: p.selectedBranches.filter(
+        (b) => Number(b.id) !== Number(branchID)
+      ),
+    }));
+  };
+
+
+
   // ---------------------------
   // Submit (Create/Update)
   // ---------------------------
@@ -589,14 +787,37 @@ export function ContractorManagement() {
     let finalServiceProviderID = formData.serviceProviderID;
     let finalCompanyID = formData.companyID;
 
+    const selectedBranchFirst = formData.selectedBranches?.[0];
+
+    if (selectedBranchFirst) {
+      finalServiceProviderID =
+        finalServiceProviderID || selectedBranchFirst.serviceProviderID || null;
+      finalCompanyID =
+        finalCompanyID || selectedBranchFirst.companyID || null;
+    }
+
     if (user?.role === "SERVICE_PROVIDER" && currentUserMapping) {
-      finalServiceProviderID = currentUserMapping.serviceProviderID;
-      finalCompanyID = currentUserMapping.companyID;
+      finalServiceProviderID =
+        finalServiceProviderID || currentUserMapping.serviceProviderID;
+      finalCompanyID =
+        finalCompanyID || currentUserMapping.companyID;
     } else if ((user?.role === "COMPANY_ADMIN" || user?.role === "BRANCH_ADMIN") && !finalCompanyID) {
       const ctx = getSidebarContext();
-      finalServiceProviderID = ctx?.serviceProviderID ?? user?.serviceProviderID ?? currentUserMapping?.serviceProviderID ?? null;
-      finalCompanyID = ctx?.companyID ?? user?.companyID ?? currentUserMapping?.companyID ?? null;
+      finalServiceProviderID =
+        finalServiceProviderID ||
+        ctx?.serviceProviderID ||
+        user?.serviceProviderID ||
+        currentUserMapping?.serviceProviderID ||
+        null;
+
+      finalCompanyID =
+        finalCompanyID ||
+        ctx?.companyID ||
+        user?.companyID ||
+        currentUserMapping?.companyID ||
+        null;
     }
+
 
     try {
       // upload files if chosen
@@ -606,8 +827,16 @@ export function ContractorManagement() {
       if (signatureFile) sigUrl = await uploadFile(signatureFile);
 
       const payload: any = {
-        serviceProviderID: finalServiceProviderID ?? undefined,
-        companyID: finalCompanyID ?? undefined,
+        serviceProviderID:
+          finalServiceProviderID ??
+          formData.selectedBranches?.[0]?.serviceProviderID ??
+          undefined,
+
+        companyID:
+          finalCompanyID ??
+          formData.selectedBranches?.[0]?.companyID ??
+          undefined,
+        branchIDs: formData.branchIDs,
         contractorName: formData.contractorName || undefined,
         contractorType: formData.contractorType || undefined,
         address: formData.address || undefined,
@@ -659,35 +888,233 @@ export function ContractorManagement() {
     }
   };
 
+  const resetContractorAdminForm = () => {
+    setContractorAdminForm({
+      username: "",
+      password: "",
+      firstName: "",
+      lastName: "",
+      contactNo: "",
+      email: "",
+      role: CONTRACTOR_ADMIN_ROLE,
+      isActive: true,
+    });
+  };
+
+  const openContractorAdminPanel = async (contractor: ContractorRead) => {
+    setSelectedContractor(contractor);
+    setShowContractorAdminPanel(true);
+    setEditingContractorAdmin(null);
+    setIsDialogOpen(false);
+    setIsViewDialogOpen(false);
+    resetContractorAdminForm();
+
+    try {
+      const data = await fetchJSONSafe<any[]>(API.users);
+      const users = Array.isArray(data) ? data : [];
+
+      const filteredUsers = users.filter((u: any) => {
+        return (
+          String(u.role).toUpperCase() === CONTRACTOR_ADMIN_ROLE &&
+          Number(u.contractorID) === Number(contractor.id)
+        );
+      });
+
+      setContractorAdmins(filteredUsers);
+    } catch (e) {
+      console.error("Failed to load contractor admins:", e);
+      setContractorAdmins([]);
+    }
+  };
+
+  const handleEditContractorAdmin = (admin: any) => {
+    setEditingContractorAdmin(admin);
+
+    setContractorAdminForm({
+      username: admin.username || "",
+      password: "",
+      firstName: admin.firstName || "",
+      lastName: admin.lastName || "",
+      contactNo: admin.contactNo || "",
+      email: admin.email || "",
+      role: CONTRACTOR_ADMIN_ROLE,
+      isActive: admin.isActive ?? true,
+    });
+  };
+
+  const saveContractorAdmin = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (contractorAdminSaving) return;
+
+    if (!selectedContractor?.id) {
+      toast.error("Contractor not selected");
+      return;
+    }
+
+    if (!contractorAdminForm.username.trim()) {
+      toast.error("Username is required");
+      return;
+    }
+
+    if (!editingContractorAdmin && !contractorAdminForm.password.trim()) {
+      toast.error("Password is required");
+      return;
+    }
+
+    if (contractorAdminForm.password && contractorAdminForm.password.length < 6) {
+      toast.error("Password must be at least 6 characters");
+      return;
+    }
+
+    setContractorAdminSaving(true);
+
+    try {
+      const isEdit = Boolean(editingContractorAdmin);
+
+      const payload: any = {
+        username: contractorAdminForm.username.trim(),
+        role: CONTRACTOR_ADMIN_ROLE,
+        firstName: contractorAdminForm.firstName?.trim() || "",
+        lastName: contractorAdminForm.lastName?.trim() || "",
+        contactNo: contractorAdminForm.contactNo?.trim() || "",
+        email: contractorAdminForm.email?.trim() || "",
+        contractorID: selectedContractor.id,
+        companyID: selectedContractor.companyID,
+        serviceProviderID: selectedContractor.serviceProviderID,
+        isActive: contractorAdminForm.isActive,
+      };
+
+      if (contractorAdminForm.password.trim()) {
+        payload.password = contractorAdminForm.password;
+      }
+
+      const res = await fetch(
+        isEdit ? `${API.users}/${editingContractorAdmin.id}` : API.users,
+        {
+          method: isEdit ? "PATCH" : "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        }
+      );
+
+      if (!res.ok) throw new Error(await res.text());
+
+      toast.success(
+        isEdit
+          ? "Contractor admin user updated successfully"
+          : "Contractor admin user created successfully"
+      );
+
+      setEditingContractorAdmin(null);
+      resetContractorAdminForm();
+      await openContractorAdminPanel(selectedContractor);
+    } catch (e: any) {
+      console.error(e);
+      toast.error(e?.message || "Failed to save contractor admin");
+    } finally {
+      setContractorAdminSaving(false);
+    }
+  };
+
+  const handleDeleteContractorAdmin = async (id: number) => {
+    if (!confirm("Delete Contractor Admin?")) return;
+
+    try {
+      const res = await fetch(`${API.users}/${id}`, {
+        method: "DELETE",
+      });
+
+      if (!res.ok) throw new Error(await res.text());
+
+      toast.success("Contractor admin deleted");
+
+      if (selectedContractor) {
+        await openContractorAdminPanel(selectedContractor);
+      }
+    } catch (e: any) {
+      toast.error(e?.message || "Delete failed");
+    }
+  };
+
+  const closeContractorAdminPanel = () => {
+    setShowContractorAdminPanel(false);
+    setSelectedContractor(null);
+    setContractorAdmins([]);
+    setEditingContractorAdmin(null);
+    resetContractorAdminForm();
+  };
+
   // ---------------------------
   // Search
   // ---------------------------
+
+  const toggleFilterBranch = (branchId: string) => {
+    setSelectedFilterBranchIds((prev) =>
+      prev.includes(branchId)
+        ? prev.filter((id) => id !== branchId)
+        : [...prev, branchId]
+    );
+  };
+
+  const selectAllFilterBranches = () => {
+    setSelectedFilterBranchIds(branchFilterList.map((b) => String(b.id)));
+  };
+
+  const clearFilterBranches = () => {
+    setSelectedFilterBranchIds([]);
+  };
+
   const filtered = useMemo(() => {
     const t = searchTerm.trim().toLowerCase();
-    if (!t) return rows;
-    const spNameOf = (r: ContractorRead) => r.serviceProvider?.companyName ?? r.serviceProviderName ?? "";
-    const coNameOf = (r: ContractorRead) => r.company?.companyName ?? r.companyName ?? "";
-    return rows.filter((r) =>
-      [
-        r.contractorName,
-        r.contractorType,
-        r.address,
 
-        r.country,
-        r.state,
-        r.timeZone,
-        r.currency,
-        r.contactNo,
-        r.emailAdd,
-        r.gstNo,
-        spNameOf(r),
-        coNameOf(r),
-      ]
-        .filter(Boolean)
-        .map((x) => (x ?? "").toLowerCase())
-        .some((f) => f.includes(t))
-    );
-  }, [rows, searchTerm]);
+    const spNameOf = (r: ContractorRead) =>
+      r.serviceProvider?.companyName ?? r.serviceProviderName ?? "";
+
+    const coNameOf = (r: ContractorRead) =>
+      r.company?.companyName ?? r.companyName ?? "";
+
+    return rows.filter((r) => {
+      const contractorBranchIds = Array.isArray((r as any).contractorBranches)
+        ? (r as any).contractorBranches
+          .map((cb: any) => String(cb.branchID ?? cb.branch?.id ?? ""))
+          .filter(Boolean)
+        : [];
+
+      const matchesBranch =
+        selectedFilterBranchIds.length === 0 ||
+        contractorBranchIds.some((id: string) =>
+          selectedFilterBranchIds.includes(id)
+        );
+
+      const matchesSearch =
+        !t ||
+        [
+          r.contractorName,
+          r.contractorType,
+          r.address,
+          r.country,
+          r.state,
+          r.timeZone,
+          r.currency,
+          r.contactNo,
+          r.emailAdd,
+          r.gstNo,
+          spNameOf(r),
+          coNameOf(r),
+          ...(Array.isArray((r as any).contractorBranches)
+            ? (r as any).contractorBranches.map(
+              (cb: any) => cb.branch?.branchName
+            )
+            : []),
+        ]
+          .filter(Boolean)
+          .map((x) => String(x ?? "").toLowerCase())
+          .some((f) => f.includes(t));
+
+      return matchesBranch && matchesSearch;
+    });
+  }, [rows, searchTerm, selectedFilterBranchIds]);
 
   // ---------------------------
   // Helpers for table names
@@ -700,17 +1127,33 @@ export function ContractorManagement() {
       {/* Header */}
       <div className="flex items-center justify-between w-full">
         <div className="min-w-0 flex-1">
-          <p className="text-gray-600 mt-1 text-sm">Manage contractor records</p>
+<div className="flex justify-end mr-3">
+    <Button
+    type="button"
+    variant="outline"
+    size="sm"
+    onClick={() => setShowBranchFilterModal(true)}
+    className="flex items-center gap-2"
+  >
+    <Filter className="w-4 h-4" />
+    Branch Filter
+    {selectedFilterBranchIds.length > 0 && (
+      <Badge variant="secondary" className="ml-1">
+        {selectedFilterBranchIds.length}
+      </Badge>
+    )}
+  </Button>
+</div>
         </div>
 
-        {canManage && !isDialogOpen && !isViewDialogOpen && (
-              <Button
-                onClick={() => { resetForm(); setIsDialogOpen(true); }}
-                className="text-sm px-3 py-2"
-              >
-                <Plus className="w-4 h-4 mr-1" /> Add Contractor
-              </Button>
-            )}
+        {canManage && !isDialogOpen && !isViewDialogOpen && !showContractorAdminPanel && (
+          <Button
+            onClick={() => { resetForm(); setIsDialogOpen(true); }}
+            className="text-sm px-3 py-2"
+          >
+            <Plus className="w-4 h-4 mr-1" /> Add Contractor
+          </Button>
+        )}
       </div>
 
       <FormDrawer
@@ -719,282 +1162,333 @@ export function ContractorManagement() {
         title={editing ? "Edit Contractor" : "Add New Contractor"}
         description={editing ? "Update contractor details below." : "Fill in details to add a new contractor."}
       >
-            {error && (
-              <div className="rounded-md border border-red-200 bg-red-50 text-red-700 px-3 py-2 text-sm">
-                {error}
-              </div>
-            )}
+        {error && (
+          <div className="rounded-md border border-red-200 bg-red-50 text-red-700 px-3 py-2 text-sm">
+            {error}
+          </div>
+        )}
 
-            <form onSubmit={handleSubmit} className="space-y-4">
-              {/* Service Provider - auto-filled from sidebar */}
-              {false && (
-                <div ref={spRef} className="space-y-2 relative">
-                  <Label>Service Provider *</Label>
-                  <Input
-                    value={formData.spAutocomplete}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      setFormData((p) => ({ ...p, spAutocomplete: val, serviceProviderID: null }));
-                      runFetchServiceProviders(val);
-                    }}
-                    onFocus={() => {
-                      // Only show suggestions on focus if no selection yet
-                      if (!formData.serviceProviderID && formData.spAutocomplete.length >= MIN_CHARS) {
-                        runFetchServiceProviders(formData.spAutocomplete);
-                      }
-                    }}
-                    placeholder="Start typing service provider..."
-                    autoComplete="off"
-                    required
-                  />
-                  {spList.length > 0 && (
-                    <div className="absolute z-10 bg-white border rounded w-full shadow max-h-48 overflow-y-auto">
-                      {spLoading && <div className="px-3 py-2 text-sm text-gray-500">Loading…</div>}
-                      {spList.map((sp) => (
-                        <div
-                          key={sp.id}
-                          className="px-3 py-2 hover:bg-gray-100 cursor-pointer"
-                          onMouseDown={(e) => e.preventDefault()}
-                          onClick={() => {
-                            setFormData((p) => ({
-                              ...p,
-                              serviceProviderID: sp.id,
-                              spAutocomplete: sp.companyName,
-                            }));
-                            setSpList([]);
-                          }}
-                        >
-                          {sp.companyName}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Company - auto-filled from sidebar */}
-              {false && (
-                <div ref={coRef} className="space-y-2 relative">
-                  <Label>Company *</Label>
-                  <Input
-                    value={formData.coAutocomplete}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      setFormData((p) => ({ ...p, coAutocomplete: val, companyID: null }));
-                      runFetchCompanies(val);
-                    }}
-                    onFocus={() => {
-                      if (!formData.companyID && formData.coAutocomplete.length >= MIN_CHARS) {
-                        runFetchCompanies(formData.coAutocomplete);
-                      }
-                    }}
-                    placeholder={formData.serviceProviderID ? "Start typing company..." : "Please select a service provider first"}
-                    autoComplete="off"
-                    required
-                    disabled={!formData.serviceProviderID} // Disable if no SP selected
-                  />
-                  {coList.length > 0 && (
-                    <div className="absolute z-10 bg-white border rounded w-full shadow max-h-48 overflow-y-auto">
-                      {coLoading && <div className="px-3 py-2 text-sm text-gray-500">Loading…</div>}
-                      {coList.map((co) => (
-                        <div
-                          key={co.id}
-                          className="px-3 py-2 hover:bg-gray-100 cursor-pointer"
-                          onMouseDown={(e) => e.preventDefault()}
-                          onClick={() => {
-                            setFormData((p) => ({
-                              ...p,
-                              companyID: co.id,
-                              coAutocomplete: co.companyName,
-                            }));
-                            setCoList([]);
-                          }}
-                        >
-                          {co.companyName}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  {!formData.serviceProviderID && (
-                    <p className="text-xs text-amber-600 mt-1">Please select a service provider first to see available companies</p>
-                  )}
-                </div>
-              )}
-
-
-              {/* Core fields */}
-              <div className="space-y-2">
-                <Label>Contractor Name</Label>
-                <Input
-                  value={formData.contractorName}
-                  onChange={(e) => setFormData((p) => ({ ...p, contractorName: e.target.value }))}
-                  required
-                />
-              </div>
-
-                          <div className="space-y-2">
-                              <Label>Contractor Type (Select Multiple)</Label>
-                              {(() => {
-                                const CONTRACTOR_TYPES = [
-                                  { value: "MSP", label: "Managed Service Provider", hint: "Contractor pays Employee Salary" },
-                                  { value: "CA", label: "Commission Agent", hint: "Company pays Employee Salary and gives commission to contractor" },
-                                ];
-                                const selected = (formData.contractorType || "").split(",").filter(Boolean);
-                                const toggle = (val: string) => {
-                                  const next = selected.includes(val)
-                                    ? selected.filter((v) => v !== val)
-                                    : [...selected, val];
-                                  setFormData((p) => ({ ...p, contractorType: next.join(",") }));
-                                };
-                                return (
-                                  <div className="space-y-2">
-                                    {CONTRACTOR_TYPES.map((ct) => (
-                                      <label key={ct.value} className="flex items-start gap-2 cursor-pointer">
-                                        <input
-                                          type="checkbox"
-                                          checked={selected.includes(ct.value)}
-                                          onChange={() => toggle(ct.value)}
-                                          className="mt-1 h-4 w-4 rounded border-gray-300"
-                                        />
-                                        <div>
-                                          <span className="text-sm font-medium">{ct.label}</span>
-                                          <p className="text-xs text-gray-500">{ct.hint}</p>
-                                        </div>
-                                      </label>
-                                    ))}
-                                  </div>
-                                );
-                              })()}
-                            </div>
-
-              <div className="space-y-2">
-                <Label>Address</Label>
-                <Textarea
-                  value={formData.address}
-                  onChange={(e) => setFormData((p) => ({ ...p, address: e.target.value }))}
-                  rows={3}
-                />
-              </div>
-
-              <LocationFields
-                values={{
-                  city: formData.city,
-                  state: formData.state,
-                  pincode: formData.pincode,
-                  country: formData.country,
-                  currency: formData.currency,
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {/* Service Provider - auto-filled from sidebar */}
+          {false && (
+            <div ref={spRef} className="space-y-2 relative">
+              <Label>Service Provider *</Label>
+              <Input
+                value={formData.spAutocomplete}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setFormData((p) => ({ ...p, spAutocomplete: val, serviceProviderID: null }));
+                  runFetchServiceProviders(val);
                 }}
-                onChange={(patch) => setFormData((p) => ({ ...p, ...patch }))}
-                showCurrency={false}
+                onFocus={() => {
+                  // Only show suggestions on focus if no selection yet
+                  if (!formData.serviceProviderID && formData.spAutocomplete.length >= MIN_CHARS) {
+                    runFetchServiceProviders(formData.spAutocomplete);
+                  }
+                }}
+                placeholder="Start typing service provider..."
+                autoComplete="off"
+                required
               />
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Time Zone</Label>
-                  <TimezoneSelect
-                    value={formData.timeZone || ""}
-                    onChange={(value) => setFormData((p) => ({ ...p, timeZone: value }))}
-                  />
+              {spList.length > 0 && (
+                <div className="absolute z-10 bg-white border rounded w-full shadow max-h-48 overflow-y-auto">
+                  {spLoading && <div className="px-3 py-2 text-sm text-gray-500">Loading…</div>}
+                  {spList.map((sp) => (
+                    <div
+                      key={sp.id}
+                      className="px-3 py-2 hover:bg-gray-100 cursor-pointer"
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => {
+                        setFormData((p) => ({
+                          ...p,
+                          serviceProviderID: sp.id,
+                          spAutocomplete: sp.companyName,
+                        }));
+                        setSpList([]);
+                      }}
+                    >
+                      {sp.companyName}
+                    </div>
+                  ))}
                 </div>
-                <SearchSuggestInput
-                  label="Currency"
-                  placeholder="Type currency code…"
-                  value={formData.currency}
-                  onChange={(v) => setFormData((p) => ({ ...p, currency: v }))}
-                  onSelect={({ display }) => setFormData((p) => ({ ...p, currency: display }))}
-                  fetchData={fetchCurrencies}
-                  displayField="code"
-                  valueField="code"
+              )}
+            </div>
+          )}
+
+          {/* Company - auto-filled from sidebar */}
+          {false && (
+            <div ref={coRef} className="space-y-2 relative">
+              <Label>Company *</Label>
+              <Input
+                value={formData.coAutocomplete}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setFormData((p) => ({ ...p, coAutocomplete: val, companyID: null }));
+                  runFetchCompanies(val);
+                }}
+                onFocus={() => {
+                  if (!formData.companyID && formData.coAutocomplete.length >= MIN_CHARS) {
+                    runFetchCompanies(formData.coAutocomplete);
+                  }
+                }}
+                placeholder={formData.serviceProviderID ? "Start typing company..." : "Please select a service provider first"}
+                autoComplete="off"
+                required
+                disabled={!formData.serviceProviderID} // Disable if no SP selected
+              />
+              {coList.length > 0 && (
+                <div className="absolute z-10 bg-white border rounded w-full shadow max-h-48 overflow-y-auto">
+                  {coLoading && <div className="px-3 py-2 text-sm text-gray-500">Loading…</div>}
+                  {coList.map((co) => (
+                    <div
+                      key={co.id}
+                      className="px-3 py-2 hover:bg-gray-100 cursor-pointer"
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => {
+                        setFormData((p) => ({
+                          ...p,
+                          companyID: co.id,
+                          coAutocomplete: co.companyName,
+                        }));
+                        setCoList([]);
+                      }}
+                    >
+                      {co.companyName}
+                    </div>
+                  ))}
+                </div>
+              )}
+              {!formData.serviceProviderID && (
+                <p className="text-xs text-amber-600 mt-1">Please select a service provider first to see available companies</p>
+              )}
+            </div>
+          )}
+
+
+          {/* Core fields */}
+          <div className="space-y-3 rounded-xl border bg-gray-50 p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <Label>Assign Branches</Label>
+                <p className="text-xs text-gray-500">
+                  Search and add branches under the selected company
+                </p>
+              </div>
+
+              <Badge variant="secondary">
+                {formData.selectedBranches.length} selected
+              </Badge>
+            </div>
+
+            <SearchSuggestInput
+              label=""
+              placeholder="Search branch and click to add..."
+              value={formData.branchSearch}
+              onChange={(v) => setFormData((p) => ({ ...p, branchSearch: v }))}
+              onSelect={({ item }) => addContractorBranch(item)}
+              fetchData={fetchBranchSuggestions}
+              displayField="branchName"
+              valueField="id"
+            />
+
+            <div className="flex flex-wrap gap-2">
+              {formData.selectedBranches.length === 0 ? (
+                <p className="text-sm text-gray-500">
+                  No branches selected. Contractor will not be mapped to any branch.
+                </p>
+              ) : (
+                formData.selectedBranches.map((branch) => (
+                  <Badge
+                    key={branch.id}
+                    variant="secondary"
+                    className="flex items-center gap-2 px-3 py-1"
+                  >
+                    {branch.branchName}
+                    <button
+                      type="button"
+                      onClick={() => removeContractorBranch(branch.id)}
+                      className="text-red-600 hover:text-red-700 font-bold"
+                    >
+                      ×
+                    </button>
+                  </Badge>
+                ))
+              )}
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Contractor Name</Label>
+            <Input
+              value={formData.contractorName}
+              onChange={(e) => setFormData((p) => ({ ...p, contractorName: e.target.value }))}
+              required
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label>Contractor Type (Select Multiple)</Label>
+            {(() => {
+              const CONTRACTOR_TYPES = [
+                { value: "MSP", label: "Managed Service Provider", hint: "Contractor pays Employee Salary" },
+                { value: "CA", label: "Commission Agent", hint: "Company pays Employee Salary and gives commission to contractor" },
+              ];
+              const selected = (formData.contractorType || "").split(",").filter(Boolean);
+              const toggle = (val: string) => {
+                const next = selected.includes(val)
+                  ? selected.filter((v) => v !== val)
+                  : [...selected, val];
+                setFormData((p) => ({ ...p, contractorType: next.join(",") }));
+              };
+              return (
+                <div className="space-y-2">
+                  {CONTRACTOR_TYPES.map((ct) => (
+                    <label key={ct.value} className="flex items-start gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={selected.includes(ct.value)}
+                        onChange={() => toggle(ct.value)}
+                        className="mt-1 h-4 w-4 rounded border-gray-300"
+                      />
+                      <div>
+                        <span className="text-sm font-medium">{ct.label}</span>
+                        <p className="text-xs text-gray-500">{ct.hint}</p>
+                      </div>
+                    </label>
+                  ))}
+                </div>
+              );
+            })()}
+          </div>
+
+          <div className="space-y-2">
+            <Label>Address</Label>
+            <Textarea
+              value={formData.address}
+              onChange={(e) => setFormData((p) => ({ ...p, address: e.target.value }))}
+              rows={3}
+            />
+          </div>
+
+          <LocationFields
+            values={{
+              city: formData.city,
+              state: formData.state,
+              pincode: formData.pincode,
+              country: formData.country,
+              currency: formData.currency,
+            }}
+            onChange={(patch) => setFormData((p) => ({ ...p, ...patch }))}
+            showCurrency={false}
+          />
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label>Time Zone</Label>
+              <TimezoneSelect
+                value={formData.timeZone || ""}
+                onChange={(value) => setFormData((p) => ({ ...p, timeZone: value }))}
+              />
+            </div>
+            <SearchSuggestInput
+              label="Currency"
+              placeholder="Type currency code…"
+              value={formData.currency}
+              onChange={(v) => setFormData((p) => ({ ...p, currency: v }))}
+              onSelect={({ display }) => setFormData((p) => ({ ...p, currency: display }))}
+              fetchData={fetchCurrencies}
+              displayField="code"
+              valueField="code"
+            />
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="space-y-2"><Label>PF No</Label><Input value={formData.pfNo} onChange={(e) => setFormData((p) => ({ ...p, pfNo: e.target.value }))} /></div>
+            <div className="space-y-2"><Label>TAN No</Label><Input value={formData.tanNo} onChange={(e) => setFormData((p) => ({ ...p, tanNo: e.target.value }))} /></div>
+            <div className="space-y-2"><Label>ESI No</Label><Input value={formData.esiNo} onChange={(e) => setFormData((p) => ({ ...p, esiNo: e.target.value }))} /></div>
+            <div className="space-y-2"><Label>LIN No</Label><Input value={formData.linNo} onChange={(e) => setFormData((p) => ({ ...p, linNo: e.target.value }))} /></div>
+            <div className="space-y-2 sm:col-span-2">
+              <Label>GST No</Label>
+              <Input value={formData.gstNo} onChange={(e) => setFormData((p) => ({ ...p, gstNo: e.target.value }))} />
+              <PdfUploadField label="GST certificate (PDF)" value={formData.gstCertUrl} onChange={(url) => setFormData((p) => ({ ...p, gstCertUrl: url ?? "" }))} />
+            </div>
+            <div className="space-y-2 sm:col-span-2">
+              <Label>Shop Reg No</Label>
+              <Input value={formData.shopRegNo} onChange={(e) => setFormData((p) => ({ ...p, shopRegNo: e.target.value }))} />
+              <PdfUploadField label="Shop registration (PDF)" value={formData.shopRegCertUrl} onChange={(url) => setFormData((p) => ({ ...p, shopRegCertUrl: url ?? "" }))} />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label>Financial Year Start</Label>
+              <select
+                value={formData.financialYearStart || ""}
+                onChange={(e) => setFormData((p) => ({ ...p, financialYearStart: e.target.value }))}
+                className="w-full px-3 py-2 border border-gray-300 rounded-sm border-[#d0d0d0] focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-900/15 focus-visible:border-[#b0b0b0]"
+              >
+                <option value="">Select financial year start</option>
+                <option value="1st Jan">1st Jan</option>
+                <option value="1st April">1st April</option>
+              </select>
+            </div>
+            <div className="space-y-2">
+              <Label>Contact Number</Label>
+              <Input value={formData.contactNo} onChange={(e) => setFormData((p) => ({ ...p, contactNo: e.target.value }))} />
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Email Address</Label>
+            <Input type="email" value={formData.emailAdd} onChange={(e) => setFormData((p) => ({ ...p, emailAdd: e.target.value }))} />
+          </div>
+
+          {/* Uploads */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label>Company Logo</Label>
+              <div className="flex gap-2">
+                <Input
+                  placeholder="Paste logo URL or use Browse"
+                  value={formData.companyLogoUrl}
+                  onChange={(e) => setFormData((p) => ({ ...p, companyLogoUrl: e.target.value }))}
+                />
+                <Input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => setLogoFile(e.target.files?.[0] || null)}
                 />
               </div>
+            </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div className="space-y-2"><Label>PF No</Label><Input value={formData.pfNo} onChange={(e) => setFormData((p) => ({ ...p, pfNo: e.target.value }))} /></div>
-                <div className="space-y-2"><Label>TAN No</Label><Input value={formData.tanNo} onChange={(e) => setFormData((p) => ({ ...p, tanNo: e.target.value }))} /></div>
-                <div className="space-y-2"><Label>ESI No</Label><Input value={formData.esiNo} onChange={(e) => setFormData((p) => ({ ...p, esiNo: e.target.value }))} /></div>
-                <div className="space-y-2"><Label>LIN No</Label><Input value={formData.linNo} onChange={(e) => setFormData((p) => ({ ...p, linNo: e.target.value }))} /></div>
-                <div className="space-y-2 sm:col-span-2">
-                  <Label>GST No</Label>
-                  <Input value={formData.gstNo} onChange={(e) => setFormData((p) => ({ ...p, gstNo: e.target.value }))} />
-                  <PdfUploadField label="GST certificate (PDF)" value={formData.gstCertUrl} onChange={(url) => setFormData((p) => ({ ...p, gstCertUrl: url ?? "" }))} />
-                </div>
-                <div className="space-y-2 sm:col-span-2">
-                  <Label>Shop Reg No</Label>
-                  <Input value={formData.shopRegNo} onChange={(e) => setFormData((p) => ({ ...p, shopRegNo: e.target.value }))} />
-                  <PdfUploadField label="Shop registration (PDF)" value={formData.shopRegCertUrl} onChange={(url) => setFormData((p) => ({ ...p, shopRegCertUrl: url ?? "" }))} />
-                </div>
+            <div className="space-y-2">
+              <Label>Signature Upload</Label>
+              <div className="flex gap-2">
+                <Input
+                  placeholder="Paste signature URL or use Browse"
+                  value={formData.SignatureUrl}
+                  onChange={(e) => setFormData((p) => ({ ...p, SignatureUrl: e.target.value }))}
+                />
+                <Input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => setSignatureFile(e.target.files?.[0] || null)}
+                />
               </div>
+            </div>
+          </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Financial Year Start</Label>
-                  <select
-                    value={formData.financialYearStart || ""}
-                    onChange={(e) => setFormData((p) => ({ ...p, financialYearStart: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-sm border-[#d0d0d0] focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-900/15 focus-visible:border-[#b0b0b0]"
-                  >
-                    <option value="">Select financial year start</option>
-                    <option value="1st Jan">1st Jan</option>
-                    <option value="1st April">1st April</option>
-                  </select>
-                </div>
-                <div className="space-y-2">
-                  <Label>Contact Number</Label>
-                  <Input value={formData.contactNo} onChange={(e) => setFormData((p) => ({ ...p, contactNo: e.target.value }))} />
-                </div>
+          <div className="border-t border-gray-200 pt-4">
+            <div className="flex items-center justify-end">
+              <div className="flex gap-2">
+                <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
+                <Button type="submit" className="" disabled={saving}>
+                  {saving ? "Saving..." : editing ? "Update Contractor" : "Add Contractor"}
+                </Button>
               </div>
-
-              <div className="space-y-2">
-                <Label>Email Address</Label>
-                <Input type="email" value={formData.emailAdd} onChange={(e) => setFormData((p) => ({ ...p, emailAdd: e.target.value }))} />
-              </div>
-
-              {/* Uploads */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Company Logo</Label>
-                  <div className="flex gap-2">
-                    <Input
-                      placeholder="Paste logo URL or use Browse"
-                      value={formData.companyLogoUrl}
-                      onChange={(e) => setFormData((p) => ({ ...p, companyLogoUrl: e.target.value }))}
-                    />
-                    <Input
-                      type="file"
-                      accept="image/*"
-                      onChange={(e) => setLogoFile(e.target.files?.[0] || null)}
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label>Signature Upload</Label>
-                  <div className="flex gap-2">
-                    <Input
-                      placeholder="Paste signature URL or use Browse"
-                      value={formData.SignatureUrl}
-                      onChange={(e) => setFormData((p) => ({ ...p, SignatureUrl: e.target.value }))}
-                    />
-                    <Input
-                      type="file"
-                      accept="image/*"
-                      onChange={(e) => setSignatureFile(e.target.files?.[0] || null)}
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div className="border-t border-gray-200 pt-4">
-                <div className="flex items-center justify-end">
-                  <div className="flex gap-2">
-                    <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
-                    <Button type="submit" className="" disabled={saving}>
-                      {saving ? "Saving..." : editing ? "Update Contractor" : "Add Contractor"}
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            </form>
+            </div>
+          </div>
+        </form>
       </FormDrawer>
 
       {/* View Drawer */}
@@ -1004,61 +1498,448 @@ export function ContractorManagement() {
         title="Contractor Details"
         description="Read-only details"
       >
-          {viewRow && (
-            <div className="space-y-3">
-              <p><strong>Name:</strong> {viewRow.contractorName || "—"}</p>
-              <p><strong>Address:</strong> {viewRow.address || "—"}</p>
-              <p><strong>Country:</strong> {viewRow.country || "—"}</p>
-              <p><strong>State:</strong> {viewRow.state || "—"}</p>
-              <p><strong>TimeZone:</strong> {viewRow.timeZone || "—"}</p>
-              <p><strong>Currency:</strong> {viewRow.currency || "—"}</p>
-              <p><strong>PF:</strong> {viewRow.pfNo || "—"}</p>
-              <p><strong>TAN:</strong> {viewRow.tanNo || "—"}</p>
-              <p><strong>ESI:</strong> {viewRow.esiNo || "—"}</p>
-              <p><strong>LIN:</strong> {viewRow.linNo || "—"}</p>
-              <p><strong>GST:</strong> {viewRow.gstNo || "—"}</p>
-              <p><strong>Shop Reg:</strong> {viewRow.shopRegNo || "—"}</p>
-              <p><strong>FY Start:</strong> {viewRow.financialYearStart || "—"}</p>
-              <p><strong>Contact:</strong> {viewRow.contactNo || "—"}</p>
-              <p><strong>Email:</strong> {viewRow.emailAdd || "—"}</p>
-              {viewRow.companyLogoUrl && <p><strong>Logo:</strong> <a className="text-blue-600 underline" href={viewRow.companyLogoUrl} target="_blank">Open</a></p>}
-              {viewRow.SignatureUrl && <p><strong>Signature:</strong> <a className="text-blue-600 underline" href={viewRow.SignatureUrl} target="_blank">Open</a></p>}
-            </div>
-          )}
-          <div className="flex justify-end pt-4">
-            <Button onClick={() => setIsViewDialogOpen(false)} variant="outline">Close</Button>
+        {viewRow && (
+          <div className="space-y-3">
+            <p><strong>Name:</strong> {viewRow.contractorName || "—"}</p>
+            <p><strong>Address:</strong> {viewRow.address || "—"}</p>
+            <p><strong>Country:</strong> {viewRow.country || "—"}</p>
+            <p><strong>State:</strong> {viewRow.state || "—"}</p>
+            <p><strong>TimeZone:</strong> {viewRow.timeZone || "—"}</p>
+            <p><strong>Currency:</strong> {viewRow.currency || "—"}</p>
+            <p><strong>PF:</strong> {viewRow.pfNo || "—"}</p>
+            <p><strong>TAN:</strong> {viewRow.tanNo || "—"}</p>
+            <p><strong>ESI:</strong> {viewRow.esiNo || "—"}</p>
+            <p><strong>LIN:</strong> {viewRow.linNo || "—"}</p>
+            <p><strong>GST:</strong> {viewRow.gstNo || "—"}</p>
+            <p><strong>Shop Reg:</strong> {viewRow.shopRegNo || "—"}</p>
+            <p><strong>FY Start:</strong> {viewRow.financialYearStart || "—"}</p>
+            <p><strong>Contact:</strong> {viewRow.contactNo || "—"}</p>
+            <p><strong>Email:</strong> {viewRow.emailAdd || "—"}</p>
+            {viewRow.companyLogoUrl && <p><strong>Logo:</strong> <a className="text-blue-600 underline" href={viewRow.companyLogoUrl} target="_blank">Open</a></p>}
+            {viewRow.SignatureUrl && <p><strong>Signature:</strong> <a className="text-blue-600 underline" href={viewRow.SignatureUrl} target="_blank">Open</a></p>}
           </div>
+        )}
+        <div className="flex justify-end pt-4">
+          <Button onClick={() => setIsViewDialogOpen(false)} variant="outline">Close</Button>
+        </div>
       </FormDrawer>
 
-      {!isDialogOpen && !isViewDialogOpen && (<>
-      {/* Search */}
-      <Card>
-        <CardContent>
-          <div className="flex items-center gap-4 flex-wrap">
-            <div className="relative flex-1 min-w-0">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-              <Input
-                placeholder="Search contractors..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10 w-full"
-              />
-            </div>
-            <Badge variant="secondary" className="px-3 py-1 flex-shrink-0">
-              {filtered.length} contractors
-            </Badge>
-          </div>
-        </CardContent>
-      </Card>
+      {showContractorAdminPanel && selectedContractor && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center justify-between">
+              <span className="flex items-center gap-2">
+                <UserPlus className="w-5 h-5 text-indigo-600" />
+                Contractor Admin Users - {selectedContractor.contractorName}
+              </span>
 
-      {/* Table */}
-      <Card className="w-full">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Icon icon="mdi:account-hard-hat" className="w-5 h-5" /> Contractor List
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="p-0 w-full overflow-x-auto">
+              <Button variant="outline" size="sm" onClick={closeContractorAdminPanel}>
+                Back
+              </Button>
+            </CardTitle>
+          </CardHeader>
+
+          <CardContent className="space-y-6">
+            <form onSubmit={saveContractorAdmin} className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Username *</Label>
+                <Input
+                  value={contractorAdminForm.username}
+                  autoComplete="off"
+                  name={`contractor-admin-username-${selectedContractor.id}`}
+                  onChange={(e) =>
+                    setContractorAdminForm((p) => ({ ...p, username: e.target.value }))
+                  }
+                  required
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label>
+                  Password {editingContractorAdmin ? "(leave blank to keep old password)" : "*"}
+                </Label>
+                <Input
+                  type="password"
+                  value={contractorAdminForm.password}
+                  autoComplete="new-password"
+                  name={`contractor-admin-password-${selectedContractor.id}`}
+                  placeholder={editingContractorAdmin ? "Leave blank to keep old password" : "Minimum 6 characters"}
+                  onChange={(e) =>
+                    setContractorAdminForm((p) => ({ ...p, password: e.target.value }))
+                  }
+                  required={!editingContractorAdmin}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label>First Name</Label>
+                <Input
+                  value={contractorAdminForm.firstName}
+                  onChange={(e) =>
+                    setContractorAdminForm((p) => ({ ...p, firstName: e.target.value }))
+                  }
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label>Last Name</Label>
+                <Input
+                  value={contractorAdminForm.lastName}
+                  onChange={(e) =>
+                    setContractorAdminForm((p) => ({ ...p, lastName: e.target.value }))
+                  }
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label>Contact No</Label>
+                <Input
+                  value={contractorAdminForm.contactNo}
+                  onChange={(e) =>
+                    setContractorAdminForm((p) => ({ ...p, contactNo: e.target.value }))
+                  }
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label>Email</Label>
+                <Input
+                  type="email"
+                  value={contractorAdminForm.email}
+                  onChange={(e) =>
+                    setContractorAdminForm((p) => ({ ...p, email: e.target.value }))
+                  }
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label>Role</Label>
+                <Input value={CONTRACTOR_ADMIN_ROLE} readOnly className="bg-gray-50" />
+              </div>
+
+              <div className="space-y-2">
+                <Label>Status</Label>
+                <label className="flex h-10 items-center gap-2 rounded-md border px-3 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={contractorAdminForm.isActive}
+                    onChange={(e) =>
+                      setContractorAdminForm((p) => ({ ...p, isActive: e.target.checked }))
+                    }
+                  />
+                  Active
+                </label>
+              </div>
+
+              <div className="sm:col-span-2 flex justify-end">
+                <Button type="submit" disabled={contractorAdminSaving}>
+                  <Save className="w-4 h-4 mr-1" />
+                  {contractorAdminSaving
+                    ? editingContractorAdmin
+                      ? "Updating..."
+                      : "Creating..."
+                    : editingContractorAdmin
+                      ? "Update Contractor Admin"
+                      : "Create Contractor Admin"}
+                </Button>
+              </div>
+            </form>
+
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Username</TableHead>
+                  <TableHead>Role</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+
+              <TableBody>
+                {contractorAdmins.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={4} className="text-center py-6 text-gray-500">
+                      No contractor admin users found for this contractor
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  contractorAdmins.map((admin) => (
+                    <TableRow
+                      key={admin.id}
+                      className={editingContractorAdmin?.id === admin.id ? "bg-indigo-50" : ""}
+                    >
+                      <TableCell>{admin.username}</TableCell>
+
+                      <TableCell>
+                        <Badge variant="secondary">{admin.role}</Badge>
+                      </TableCell>
+
+                      <TableCell>
+                        <Badge variant={admin.isActive ? "default" : "secondary"}>
+                          {admin.isActive ? "Active" : "Inactive"}
+                        </Badge>
+                      </TableCell>
+
+                      <TableCell className="text-right">
+                        <div className="flex justify-end gap-1">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleEditContractorAdmin(admin)}
+                          >
+                            <Edit className="w-3 h-3" />
+                          </Button>
+
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleDeleteContractorAdmin(admin.id)}
+                            className="text-red-600"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      )}
+
+      {!isDialogOpen && !isViewDialogOpen && !showContractorAdminPanel && (<>
+        {/* Search */}
+
+{showBranchFilterModal && (
+  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+    <div className="w-full max-w-2xl rounded-xl bg-white shadow-xl border">
+      <div className="flex items-center justify-between border-b px-5 py-4">
+        <div className="flex items-center gap-2">
+          <div className="h-9 w-9 rounded-lg bg-indigo-50 flex items-center justify-center">
+            <Filter className="w-4 h-4 text-indigo-600" />
+          </div>
+          <div>
+            <h3 className="text-base font-semibold text-gray-900">
+              Filter Contractors by Branch
+            </h3>
+            <p className="text-xs text-gray-500">
+              Showing branches only from selected company
+            </p>
+          </div>
+        </div>
+
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={() => setShowBranchFilterModal(false)}
+        >
+          ×
+        </Button>
+      </div>
+
+      <div className="p-5 space-y-4 max-h-[70vh] overflow-y-auto">
+        <div className="flex items-center justify-between gap-3">
+          <Badge variant="secondary">
+            {selectedFilterBranchIds.length} selected
+          </Badge>
+
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={selectAllFilterBranches}
+              disabled={branchFilterLoading || branchFilterList.length === 0}
+            >
+              Select All
+            </Button>
+
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={clearFilterBranches}
+            >
+              <RotateCcw className="w-4 h-4 mr-1" />
+              Clear
+            </Button>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          {branchFilterList.length === 0 ? (
+            <p className="text-sm text-gray-500 col-span-full py-8 text-center">
+              {branchFilterLoading ? "Loading branches..." : "No branches found"}
+            </p>
+          ) : (
+            branchFilterList.map((b) => (
+              <label
+                key={b.id}
+                className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm hover:bg-gray-50 cursor-pointer"
+              >
+                <input
+                  type="checkbox"
+                  checked={selectedFilterBranchIds.includes(String(b.id))}
+                  onChange={() => toggleFilterBranch(String(b.id))}
+                />
+                <span className="truncate">{b.branchName}</span>
+              </label>
+            ))
+          )}
+        </div>
+      </div>
+
+      <div className="flex justify-end gap-2 border-t px-5 py-4">
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => setShowBranchFilterModal(false)}
+        >
+          Cancel
+        </Button>
+
+        <Button
+          type="button"
+          onClick={() => setShowBranchFilterModal(false)}
+        >
+          Apply Filter
+        </Button>
+      </div>
+    </div>
+  </div>
+)}
+
+
+{showBranchFilterModal && (
+  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+    <div className="w-full max-w-2xl rounded-xl bg-white shadow-xl border">
+      <div className="flex items-center justify-between border-b px-5 py-4">
+        <div className="flex items-center gap-2">
+          <div className="h-9 w-9 rounded-lg bg-indigo-50 flex items-center justify-center">
+            <Filter className="w-4 h-4 text-indigo-600" />
+          </div>
+          <div>
+            <h3 className="text-base font-semibold text-gray-900">
+              Filter Contractors by Branch
+            </h3>
+            <p className="text-xs text-gray-500">
+              Showing branches only from selected company
+            </p>
+          </div>
+        </div>
+
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={() => setShowBranchFilterModal(false)}
+        >
+          ×
+        </Button>
+      </div>
+
+      <div className="p-5 space-y-4 max-h-[70vh] overflow-y-auto">
+        <div className="flex items-center justify-between gap-3">
+          <Badge variant="secondary">
+            {selectedFilterBranchIds.length} selected
+          </Badge>
+
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={selectAllFilterBranches}
+              disabled={branchFilterLoading || branchFilterList.length === 0}
+            >
+              Select All
+            </Button>
+
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={clearFilterBranches}
+            >
+              <RotateCcw className="w-4 h-4 mr-1" />
+              Clear
+            </Button>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          {branchFilterList.length === 0 ? (
+            <p className="text-sm text-gray-500 col-span-full py-8 text-center">
+              {branchFilterLoading ? "Loading branches..." : "No branches found"}
+            </p>
+          ) : (
+            branchFilterList.map((b) => (
+              <label
+                key={b.id}
+                className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm hover:bg-gray-50 cursor-pointer"
+              >
+                <input
+                  type="checkbox"
+                  checked={selectedFilterBranchIds.includes(String(b.id))}
+                  onChange={() => toggleFilterBranch(String(b.id))}
+                />
+                <span className="truncate">{b.branchName}</span>
+              </label>
+            ))
+          )}
+        </div>
+      </div>
+
+      <div className="flex justify-end gap-2 border-t px-5 py-4">
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => setShowBranchFilterModal(false)}
+        >
+          Cancel
+        </Button>
+
+        <Button
+          type="button"
+          onClick={() => setShowBranchFilterModal(false)}
+        >
+          Apply Filter
+        </Button>
+      </div>
+    </div>
+  </div>
+)}
+        {/* Search */}
+        <Card>
+          <CardContent>
+            <div className="flex items-center gap-4 flex-wrap">
+              <div className="relative flex-1 min-w-0">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                <Input
+                  placeholder="Search contractors..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10 w-full"
+                />
+              </div>
+              <Badge variant="secondary" className="px-3 py-1 flex-shrink-0">
+                {filtered.length} contractors
+              </Badge>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Table */}
+        <Card className="w-full">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Icon icon="mdi:account-hard-hat" className="w-5 h-5" /> Contractor List
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-0 w-full overflow-x-auto">
             <Table className="w-full">
               <TableHeader>
                 <TableRow>
@@ -1110,6 +1991,18 @@ export function ContractorManagement() {
                             <Eye className="w-3 h-3" />
                           </Button>
 
+                          {canManageContractorAdmins && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => openContractorAdminPanel(r)}
+                              className="h-7 w-7 p-0 text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50"
+                              title="Manage Contractor Admin Users"
+                            >
+                              <UserPlus className="w-3 h-3" />
+                            </Button>
+                          )}
+
                           {/* ✏️ Only SUPERADMIN and MANAGER can edit */}
                           {canManage && (
                             <Button
@@ -1142,8 +2035,8 @@ export function ContractorManagement() {
                 )}
               </TableBody>
             </Table>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
       </>)}
     </div>
   );

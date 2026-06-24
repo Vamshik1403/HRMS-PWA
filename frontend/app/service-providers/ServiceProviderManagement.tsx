@@ -17,7 +17,7 @@ import {
 } from "../components/ui/table"
 import { Badge } from "../components/ui/badge"
 import { Icon } from "@iconify/react"
-import { Plus, Search, Edit, Trash2, Eye, ArrowLeft } from "lucide-react"
+import { Plus, Search, Edit, Trash2, Eye, ArrowLeft, EyeOff, UserPlus } from "lucide-react"
 import { toast } from "sonner"
 
 interface ServiceProvider {
@@ -44,6 +44,25 @@ export function ServiceProviderManagement() {
   const [isViewDialogOpen, setIsViewDialogOpen] = useState(false)
   const [editingProvider, setEditingProvider] = useState<ServiceProvider | null>(null)
   const [viewProvider, setViewProvider] = useState<ServiceProvider | null>(null)
+
+  const [isUserDrawerOpen, setIsUserDrawerOpen] = useState(false)
+  const [selectedProviderForUser, setSelectedProviderForUser] = useState<ServiceProvider | null>(null)
+  const [savingUser, setSavingUser] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
+  const [spUsers, setSpUsers] = useState<any[]>([])
+  const [loadingSpUsers, setLoadingSpUsers] = useState(false)
+  const [showCreateUserForm, setShowCreateUserForm] = useState(false)
+
+  const [userForm, setUserForm] = useState({
+    username: "",
+    password: "",
+    role: "SERVICE_PROVIDER",
+    serviceProviderID: "" as string | number,
+    companyID: "",
+    branchesID: "",
+    isActive: true,
+  })
+
   const [formData, setFormData] = useState({
     companyName: "",
     companyAddress: "",
@@ -86,7 +105,6 @@ const handleSubmit = async (e: React.FormEvent) => {
   }
 
   try {
-    console.log("Submitting form data:", formData)
 
     let res
   if (editingProvider) {
@@ -102,9 +120,6 @@ const handleSubmit = async (e: React.FormEvent) => {
     body: JSON.stringify(formData),
   })
 }
-
-
-    console.log("Response status:", res.status)
 
     if (!res.ok) {
       const errText = await res.text()
@@ -123,8 +138,140 @@ const handleSubmit = async (e: React.FormEvent) => {
 }
 
 
+  const fetchServiceProviderUsers = async (providerId: number) => {
+    try {
+      setLoadingSpUsers(true)
+
+      const res = await fetch("/backend/users")
+      if (!res.ok) throw new Error("Failed to load users")
+
+      const data = await res.json()
+      const rows = Array.isArray(data) ? data : []
+
+           setSpUsers(
+        rows.filter(
+          (u) =>
+            Number(u.serviceProviderID) === Number(providerId) &&
+            String(u.role || "").toUpperCase() === "SERVICE_PROVIDER"
+        )
+      )
+    } catch (error) {
+      console.error("Error loading service provider users:", error)
+      toast.error("Failed to load service provider users")
+      setSpUsers([])
+    } finally {
+      setLoadingSpUsers(false)
+    }
+  }
+
+  const openCreateUserDrawer = async (provider: ServiceProvider) => {
+    setSelectedProviderForUser(provider)
+
+    setUserForm({
+      username: "",
+      password: "",
+      role: "SERVICE_PROVIDER",
+      serviceProviderID: provider.id,
+      companyID: "",
+      branchesID: "",
+      isActive: true,
+    })
+
+    setShowPassword(false)
+    setShowCreateUserForm(false)
+    setIsUserDrawerOpen(true)
+
+    await fetchServiceProviderUsers(provider.id)
+  }
+
+ 
+  const closeCreateUserDrawer = () => {
+    setIsUserDrawerOpen(false)
+    setSelectedProviderForUser(null)
+    setShowPassword(false)
+    setShowCreateUserForm(false)
+    setSpUsers([])
+
+    setUserForm({
+      username: "",
+      password: "",
+      role: "SERVICE_PROVIDER",
+      serviceProviderID: "",
+      companyID: "",
+      branchesID: "",
+      isActive: true,
+    })
+  }
+
+    const closeServiceProviderUserPanel = () => {
+    closeCreateUserDrawer()
+  }
+
+  const handleCreateServiceProviderUser = async (e: React.FormEvent) => {
+    e.preventDefault()
+
+    if (!selectedProviderForUser?.id) {
+      toast.error("Service provider is not selected")
+      return
+    }
+
+    if (!userForm.username.trim()) {
+      toast.error("Username is required")
+      return
+    }
+
+    if (!userForm.password.trim()) {
+      toast.error("Password is required")
+      return
+    }
+
+    setSavingUser(true)
+
+    try {
+      const payload = {
+        username: userForm.username.trim(),
+        password: userForm.password,
+        role: "SERVICE_PROVIDER",
+        serviceProviderID: Number(selectedProviderForUser.id),
+        isActive: userForm.isActive,
+      }
+
+      const res = await fetch("/backend/users", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      })
+
+      if (!res.ok) {
+        const errText = await res.text()
+        throw new Error(errText || "Failed to create service provider user")
+      }
+
+       toast.success("Service provider user created successfully")
+
+      setUserForm({
+        username: "",
+        password: "",
+        role: "SERVICE_PROVIDER",
+        serviceProviderID: selectedProviderForUser.id,
+        companyID: "",
+        branchesID: "",
+        isActive: true,
+      })
+
+      setShowPassword(false)
+      setShowCreateUserForm(false)
+      await fetchServiceProviderUsers(selectedProviderForUser.id)
+    } catch (error: any) {
+      console.error("Error creating service provider user:", error)
+      toast.error(error?.message || "Failed to create service provider user")
+    } finally {
+      setSavingUser(false)
+    }
+  }
+
   const handleDelete = async (id: number) => {
-    if (confirm("Are you sure you want to delete this service provider?")) {
+        if (confirm("Are you sure you want to delete this service provider?")) {
       try {
         await fetch(`/backend/service-provider/${id}`, {
           method: "DELETE",
@@ -332,9 +479,7 @@ const handleSubmit = async (e: React.FormEvent) => {
                 />
               </div>
               <div className="flex justify-end gap-3 pt-4">
-                <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
-                  Cancel
-                </Button>
+               
                 <Button type="submit">
                   {editingProvider ? "Update Provider" : "Add Provider"}
                 </Button>
@@ -367,9 +512,183 @@ const handleSubmit = async (e: React.FormEvent) => {
           </div>
       </FormDrawer>
 
-      {!isDialogOpen && !isViewDialogOpen && (<>
-      {/* Search */}
-      <Card>
+
+      
+      {isUserDrawerOpen && selectedProviderForUser && (
+        <Card className="w-full border border-gray-200 shadow-sm">
+          <CardHeader className="border-b bg-white">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <CardTitle className="flex items-center gap-2 text-xl">
+                  <UserPlus className="w-5 h-5 text-indigo-600" />
+                  Service Provider Users
+                </CardTitle>
+                <p className="text-sm text-gray-500 mt-1">
+                  Create and view login users for selected service provider.
+                </p>
+              </div>
+
+              <Button
+                type="button"
+                variant="outline"
+                onClick={closeServiceProviderUserPanel}
+              >
+                <ArrowLeft className="w-4 h-4 mr-2" />
+                Back to Service Providers
+              </Button>
+            </div>
+          </CardHeader>
+
+          <CardContent className="p-6 space-y-6">
+            <div className="rounded-xl border bg-indigo-50/60 px-4 py-3">
+              <p className="text-sm text-gray-500">Selected Service Provider</p>
+              <p className="text-base font-semibold text-gray-900">
+                {selectedProviderForUser.companyName || "—"}
+              </p>
+            </div>
+
+            <form
+              onSubmit={handleCreateServiceProviderUser}
+              className="rounded-xl border bg-white p-5 space-y-5"
+            >
+              <div>
+                <h3 className="text-base font-semibold text-gray-900">
+                  Create Service Provider User
+                </h3>
+                <p className="text-sm text-gray-500">
+                  This user will get SERVICE_PROVIDER role for this service provider only.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Username *</Label>
+                  <Input
+                    autoComplete="new-username"
+                    name="new-sp-user-username"
+                    value={userForm.username}
+                    onChange={(e) =>
+                      setUserForm((p) => ({ ...p, username: e.target.value }))
+                    }
+                    placeholder="Enter username"
+                    required
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Password *</Label>
+                  <div className="relative">
+                    <Input
+                      autoComplete="new-password"
+                      name="new-sp-user-password"
+                      type={showPassword ? "text" : "password"}
+                      value={userForm.password}
+                      onChange={(e) =>
+                        setUserForm((p) => ({ ...p, password: e.target.value }))
+                      }
+                      placeholder="Minimum 6 characters"
+                      required
+                      className="pr-10"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword((p) => !p)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500"
+                    >
+                      {showPassword ? (
+                        <EyeOff className="w-4 h-4" />
+                      ) : (
+                        <Eye className="w-4 h-4" />
+                      )}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Role</Label>
+                  <Input value="SERVICE_PROVIDER" readOnly className="bg-gray-50" />
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Status</Label>
+                  <label className="flex h-10 items-center gap-2 rounded-md border px-3 text-sm bg-white">
+                    <input
+                      type="checkbox"
+                      checked={userForm.isActive}
+                      onChange={(e) =>
+                        setUserForm((p) => ({ ...p, isActive: e.target.checked }))
+                      }
+                    />
+                    Active
+                  </label>
+                </div>
+              </div>
+
+              <div className="flex justify-end">
+                <Button type="submit" disabled={savingUser}>
+                  {savingUser ? "Creating..." : "Create User"}
+                </Button>
+              </div>
+            </form>
+
+            <div className="rounded-xl border bg-white overflow-hidden">
+              <div className="px-5 py-4 border-b">
+                <h3 className="text-base font-semibold text-gray-900">
+                  Existing Service Provider Users
+                </h3>
+                <p className="text-sm text-gray-500">
+                  Only SERVICE_PROVIDER users for this service provider are listed here.
+                </p>
+              </div>
+
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Username</TableHead>
+                    <TableHead>Role</TableHead>
+                    <TableHead>Status</TableHead>
+                  </TableRow>
+                </TableHeader>
+
+                <TableBody>
+                  {loadingSpUsers ? (
+                    <TableRow>
+                      <TableCell colSpan={3} className="text-center py-8 text-gray-500">
+                        Loading users...
+                      </TableCell>
+                    </TableRow>
+                  ) : spUsers.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={3} className="text-center py-8 text-gray-500">
+                        No service provider users found
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    spUsers.map((u) => (
+                      <TableRow key={u.id}>
+                        <TableCell className="font-medium">{u.username}</TableCell>
+                        <TableCell>
+                          <Badge variant="secondary">
+                            {u.role || "SERVICE_PROVIDER"}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={u.isActive ? "default" : "destructive"}>
+                            {u.isActive ? "Active" : "Inactive"}
+                          </Badge>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {!isDialogOpen && !isViewDialogOpen && !isUserDrawerOpen && (<>
+            <Card>
         <CardContent>
           <div className="flex items-center gap-4 flex-wrap">
             <div className="relative flex-1 min-w-0">
@@ -433,15 +752,28 @@ const handleSubmit = async (e: React.FormEvent) => {
                       <TableCell>{provider.contactNo}</TableCell>
                       <TableCell>{provider.emailAdd}</TableCell>
                       <TableCell className="text-right">
+
                         <div className="flex items-center justify-end gap-1">
+                            <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => openCreateUserDrawer(provider)}
+                            className="h-7 w-7 p-0 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                            title="Create service provider user"
+                          >
+                            <UserPlus className="w-3 h-3" />
+                          </Button>
+
                           <Button
                             variant="ghost"
                             size="sm"
                             onClick={() => handleView(provider)}
                             className="h-7 w-7 p-0"
+                            title="View service provider"
                           >
                             <Eye className="w-3 h-3" />
                           </Button>
+
                           <Button
                             variant="ghost"
                             size="sm"
@@ -450,6 +782,7 @@ const handleSubmit = async (e: React.FormEvent) => {
                           >
                             <Edit className="w-3 h-3" />
                           </Button>
+
                           <Button
                             variant="ghost"
                             size="sm"
@@ -458,6 +791,7 @@ const handleSubmit = async (e: React.FormEvent) => {
                           >
                             <Trash2 className="w-3 h-3" />
                           </Button>
+
                         </div>
                       </TableCell>
                     </TableRow>

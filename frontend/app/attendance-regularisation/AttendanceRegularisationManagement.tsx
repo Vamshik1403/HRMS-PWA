@@ -17,7 +17,7 @@ import {
 } from "../components/ui/table"
 import { Badge } from "../components/ui/badge"
 import { Icon } from "@iconify/react"
-import { Plus, Search, Edit, Trash2, Clock, Check, X, ArrowLeft } from "lucide-react"
+import { Plus, Search, Edit, Trash2, Clock, Check, X, ArrowLeft, Filter, RotateCcw } from "lucide-react"
 import { SearchSuggestInput } from "../components/SearchSuggestInput"
 import { useCurrentUser } from "../hooks/useCurrentUser"
 import { toast } from "sonner";
@@ -29,10 +29,13 @@ interface AttendanceRegularisation {
   serviceProviderID?: number
   companyID?: number
   branchesID?: number
+  departmentID?: number
+
   manageEmployeeID?: number
   serviceProvider?: string
   companyName?: string
   branchName?: string
+  departmentName?: string
   employeeId?: string
   employeeName?: string
   attendanceDate: string
@@ -59,14 +62,23 @@ const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "/backend"
 export function AttendanceRegularisationManagement() {
   const [listLoading, setListLoading] = useState(true);
   const [regularisations, setRegularisations] = useState<AttendanceRegularisation[]>([])
-  const [searchTerm, setSearchTerm] = useState("")
+const [searchTerm, setSearchTerm] = useState("")
+
+const [branchFilterList, setBranchFilterList] = useState<any[]>([])
+const [departmentFilterList, setDepartmentFilterList] = useState<any[]>([])
+const [selectedFilterBranchIds, setSelectedFilterBranchIds] = useState<string[]>([])
+const [selectedFilterDepartmentIds, setSelectedFilterDepartmentIds] = useState<string[]>([])
+const [showFilterModal, setShowFilterModal] = useState(false)
+const [filterLoading, setFilterLoading] = useState(false)
+
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editingRegularisation, setEditingRegularisation] = useState<AttendanceRegularisation | null>(null)
   const [formData, setFormData] = useState({
     serviceProvider: "",
     companyName: "",
     branchName: "",
-    employeeName: "",
+departmentName: "",
+employeeName: "",
     attendanceDate: "",
     checkInTime: "",
     day: "",
@@ -77,8 +89,9 @@ export function AttendanceRegularisationManagement() {
     remarks: "",
     serviceProviderID: undefined as number | undefined,
     companyID: undefined as number | undefined,
-    branchesID: undefined as number | undefined,
-    manageEmployeeID: undefined as number | undefined,
+branchesID: undefined as number | undefined,
+departmentID: undefined as number | undefined,
+manageEmployeeID: undefined as number | undefined,
     overtimeApplicable: false,
     otMealApply: false,
     otMealMinutes: "" as string | number,
@@ -234,6 +247,36 @@ export function AttendanceRegularisationManagement() {
     }
   }
 
+
+  const fetchDepartments = async (query: string = "") => {
+  try {
+    const res = await fetch(`${BACKEND_URL}/departments`, { cache: "no-store" })
+    const data = await res.json()
+    const q = query.toLowerCase()
+
+    const ctx = getSidebarContext()
+    const companyID = formData.companyID ?? ctx?.companyID ?? user?.companyID
+    const branchID = formData.branchesID
+
+    let filtered = Array.isArray(data) ? data : []
+
+    if (companyID) {
+      filtered = filtered.filter((d: any) => Number(d.companyID) === Number(companyID))
+    }
+
+    if (branchID) {
+      filtered = filtered.filter((d: any) => Number(d.branchesID) === Number(branchID))
+    }
+
+    return q
+      ? filtered.filter((d: any) => (d.departmentName || "").toLowerCase().includes(q))
+      : filtered
+  } catch (error) {
+    console.error("Error fetching departments:", error)
+    return []
+  }
+}
+
   // Updated fetchEmployees with role-based filtering
   const fetchEmployees = async (query: string) => {
     try {
@@ -255,21 +298,38 @@ export function AttendanceRegularisationManagement() {
       if (user?.role === "SUPERADMIN") {
         const ctx = getSidebarContext();
         const companyID = formData.companyID ?? ctx?.companyID;
-        if (!companyID || !formData.branchesID) return []
-        return applySearch(data.filter((item: any) => item.companyID === companyID && item.branchesID === formData.branchesID))
+      if (!companyID || !formData.branchesID || !formData.departmentID) return []
+return applySearch(
+  data.filter(
+    (item: any) =>
+      Number(item.companyID) === Number(companyID) &&
+      Number(item.branchesID) === Number(formData.branchesID) &&
+      Number(item.departmentNameID ?? item.departmentID ?? item.departments?.id) === Number(formData.departmentID)
+  )
+)
       }
 
       // SERVICE_PROVIDER → filter by company + selected branch
       if (user?.role === "SERVICE_PROVIDER") {
-        if (!formData.branchesID) return []
+if (!formData.branchesID || !formData.departmentID) return []
         const ctx = getSidebarContext();
         const companyID = managerData?.companyID ?? ctx?.companyID ?? user?.companyID;
         const spID = managerData?.serviceProviderID ?? ctx?.serviceProviderID ?? user?.serviceProviderID;
         let filtered;
         if (companyID) {
-          filtered = data.filter((item: any) => item.companyID === companyID && item.branchesID === formData.branchesID)
+filtered = data.filter(
+  (item: any) =>
+    Number(item.companyID) === Number(companyID) &&
+    Number(item.branchesID) === Number(formData.branchesID) &&
+    Number(item.departmentNameID ?? item.departmentID ?? item.departments?.id) === Number(formData.departmentID)
+)
         } else if (spID) {
-          filtered = data.filter((item: any) => item.serviceProviderID === spID && item.branchesID === formData.branchesID)
+filtered = data.filter(
+  (item: any) =>
+    Number(item.serviceProviderID) === Number(spID) &&
+    Number(item.branchesID) === Number(formData.branchesID) &&
+    Number(item.departmentNameID ?? item.departmentID ?? item.departments?.id) === Number(formData.departmentID)
+)
         } else {
           filtered = []
         }
@@ -285,9 +345,16 @@ export function AttendanceRegularisationManagement() {
       {
         const ctx = getSidebarContext();
         const companyID = formData.companyID ?? ctx?.companyID ?? user?.companyID;
-        if (companyID && formData.branchesID) {
-          return applySearch(data.filter((item: any) => item.companyID === companyID && item.branchesID === formData.branchesID))
-        }
+       if (companyID && formData.branchesID && formData.departmentID) {
+  return applySearch(
+    data.filter(
+      (item: any) =>
+        Number(item.companyID) === Number(companyID) &&
+        Number(item.branchesID) === Number(formData.branchesID) &&
+        Number(item.departmentNameID ?? item.departmentID ?? item.departments?.id) === Number(formData.departmentID)
+    )
+  )
+}
       }
 
       return []
@@ -299,11 +366,19 @@ export function AttendanceRegularisationManagement() {
 
   // Load attendance regularisations on component mount
   useEffect(() => {
-    if (user) loadAttendanceRegularisations()
+if (user) {
+  loadAttendanceRegularisations()
+  loadFilterLookups()
+}
   }, [user, managerData, empCreds])
 
   useEffect(() => {
-    const handler = () => { if (user) loadAttendanceRegularisations(); };
+const handler = () => {
+  if (user) {
+    loadAttendanceRegularisations()
+    loadFilterLookups()
+  }
+};
     window.addEventListener("sidebar-context-changed", handler);
     window.addEventListener("app-data-refresh", handler);
     return () => {
@@ -311,6 +386,51 @@ export function AttendanceRegularisationManagement() {
       window.removeEventListener("app-data-refresh", handler);
     };
   }, [user, managerData, empCreds]);
+
+  const loadFilterLookups = async () => {
+  try {
+    setFilterLoading(true)
+
+    const [brRes, deptRes] = await Promise.all([
+      fetch(`${BACKEND_URL}/branches`, { cache: "no-store" }),
+      fetch(`${BACKEND_URL}/departments`, { cache: "no-store" }),
+    ])
+
+    const branchesRaw = await brRes.json()
+    const departmentsRaw = await deptRes.json()
+
+    const ctx = getSidebarContext()
+    const companyID = ctx?.companyID ?? user?.companyID
+
+    let branches = Array.isArray(branchesRaw) ? branchesRaw : []
+    let departments = Array.isArray(departmentsRaw) ? departmentsRaw : []
+
+    if (companyID && user?.role !== "SUPERADMIN") {
+      branches = branches.filter((b: any) => Number(b.companyID) === Number(companyID))
+      departments = departments.filter((d: any) => Number(d.companyID) === Number(companyID))
+    }
+
+    if (ctx?.companyID && user?.role === "SUPERADMIN") {
+      branches = branches.filter((b: any) => Number(b.companyID) === Number(ctx.companyID))
+      departments = departments.filter((d: any) => Number(d.companyID) === Number(ctx.companyID))
+    }
+
+    if (user?.role === "BRANCH_ADMIN" && user?.branchesID) {
+      branches = branches.filter((b: any) => Number(b.id) === Number(user.branchesID))
+      departments = departments.filter((d: any) => Number(d.branchesID) === Number(user.branchesID))
+      setSelectedFilterBranchIds([String(user.branchesID)])
+    }
+
+    setBranchFilterList(branches)
+    setDepartmentFilterList(departments)
+  } catch (e) {
+    console.error("Failed to load filters:", e)
+    setBranchFilterList([])
+    setDepartmentFilterList([])
+  } finally {
+    setFilterLoading(false)
+  }
+}
 
   const loadAttendanceRegularisations = async () => {
     setListLoading(true);
@@ -328,8 +448,14 @@ export function AttendanceRegularisationManagement() {
           manageEmployeeID: regularisation.manageEmployeeID,
           serviceProvider: regularisation.serviceProvider?.companyName || "",
           companyName: regularisation.company?.companyName || "",
-          branchName: regularisation.branches?.branchName || "",
-          employeeId: regularisation.manageEmployee?.employeeID || "",
+   branchName: regularisation.branches?.branchName || "",
+departmentID: regularisation.departmentID ?? regularisation.manageEmployee?.departmentNameID,
+departmentName:
+  regularisation.departments?.departmentName ||
+  regularisation.manageEmployee?.departments?.departmentName ||
+  "",
+employeeId: regularisation.manageEmployee?.employeeID || "",
+
           day: regularisation.day || "",
           employeeName: regularisation.manageEmployee ?
             `${regularisation.manageEmployee.employeeFirstName || ""} ${regularisation.manageEmployee.employeeLastName || ""}`.trim() : "",
@@ -413,14 +539,83 @@ export function AttendanceRegularisationManagement() {
     }
   }
 
-  const filteredRegularisations = regularisations.filter(regularisation =>
-    (regularisation.serviceProvider || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (regularisation.companyName || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (regularisation.branchName || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (regularisation.employeeName || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (regularisation.employeeId || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (regularisation.attendanceDate || "").toLowerCase().includes(searchTerm.toLowerCase())
+  const toggleFilterBranch = (branchId: string) => {
+  setSelectedFilterBranchIds((prev) => {
+    const next = prev.includes(branchId)
+      ? prev.filter((id) => id !== branchId)
+      : [...prev, branchId]
+
+    if (next.length > 0) {
+      setSelectedFilterDepartmentIds((deptPrev) =>
+        deptPrev.filter((deptId) => {
+          const dept = departmentFilterList.find((d: any) => String(d.id) === String(deptId))
+          return dept && next.includes(String(dept.branchesID))
+        })
+      )
+    }
+
+    return next
+  })
+}
+
+const toggleFilterDepartment = (departmentId: string) => {
+  setSelectedFilterDepartmentIds((prev) =>
+    prev.includes(departmentId)
+      ? prev.filter((id) => id !== departmentId)
+      : [...prev, departmentId]
   )
+}
+
+const selectAllFilterBranches = () => {
+  setSelectedFilterBranchIds(branchFilterList.map((b: any) => String(b.id)))
+}
+
+const selectAllFilterDepartments = () => {
+  setSelectedFilterDepartmentIds(visibleFilterDepartments.map((d: any) => String(d.id)))
+}
+
+const clearAllFilters = () => {
+  if (user?.role === "BRANCH_ADMIN" && user?.branchesID) {
+    setSelectedFilterBranchIds([String(user.branchesID)])
+    setSelectedFilterDepartmentIds([])
+    return
+  }
+
+  setSelectedFilterBranchIds([])
+  setSelectedFilterDepartmentIds([])
+}
+
+const visibleFilterDepartments = departmentFilterList.filter((d: any) => {
+  return (
+    selectedFilterBranchIds.length === 0 ||
+    selectedFilterBranchIds.includes(String(d.branchesID))
+  )
+}
+)
+
+  const filteredRegularisations = regularisations.filter((regularisation) => {
+  const t = searchTerm.toLowerCase()
+
+  const matchesBranch =
+    selectedFilterBranchIds.length === 0 ||
+    selectedFilterBranchIds.includes(String(regularisation.branchesID))
+
+  const matchesDepartment =
+    selectedFilterDepartmentIds.length === 0 ||
+    selectedFilterDepartmentIds.includes(String(regularisation.departmentID))
+
+  const matchesSearch =
+    !t ||
+    (regularisation.serviceProvider || "").toLowerCase().includes(t) ||
+    (regularisation.companyName || "").toLowerCase().includes(t) ||
+    (regularisation.branchName || "").toLowerCase().includes(t) ||
+    (regularisation.departmentName || "").toLowerCase().includes(t) ||
+    (regularisation.employeeName || "").toLowerCase().includes(t) ||
+    (regularisation.employeeId || "").toLowerCase().includes(t) ||
+    (regularisation.attendanceDate || "").toLowerCase().includes(t)
+
+  return matchesBranch && matchesDepartment && matchesSearch
+})
 
   const handleServiceProviderSelect = (selected: SelectedItem) => {
     setFormData((prev) => ({
@@ -442,7 +637,11 @@ export function AttendanceRegularisationManagement() {
     setFormData((prev) => ({
       ...prev,
       branchName: selected.display,
-      branchesID: selected.value,
+branchesID: selected.value,
+departmentName: "",
+departmentID: undefined,
+employeeName: "",
+manageEmployeeID: undefined,
     }))
   }
 
@@ -733,7 +932,8 @@ export function AttendanceRegularisationManagement() {
       serviceProvider: ctx?.serviceProviderName ?? "",
       companyName: ctx?.companyName ?? "",
       branchName: "",
-      employeeName: "",
+departmentName: "",
+employeeName: "",
       attendanceDate: "",
       checkInTime: "",
       checkOutTime: "",
@@ -745,6 +945,7 @@ export function AttendanceRegularisationManagement() {
       serviceProviderID: ctx?.serviceProviderID ?? undefined,
       companyID: ctx?.companyID ?? undefined,
       branchesID: undefined,
+      departmentID: undefined,
       manageEmployeeID: undefined,
       overtimeApplicable: false,
       otMealApply: false,
@@ -760,6 +961,7 @@ export function AttendanceRegularisationManagement() {
       serviceProvider: regularisation.serviceProvider || "",
       companyName: regularisation.companyName || "",
       branchName: regularisation.branchName || "",
+      departmentName: regularisation.departmentName || "",
       employeeName: regularisation.employeeName || "",
       attendanceDate: regularisation.attendanceDate,
       checkInTime: regularisation.checkInTime,
@@ -772,6 +974,7 @@ export function AttendanceRegularisationManagement() {
       serviceProviderID: regularisation.serviceProviderID,
       companyID: regularisation.companyID,
       branchesID: regularisation.branchesID,
+      departmentID: regularisation.departmentID,
       manageEmployeeID: regularisation.manageEmployeeID,
       overtimeApplicable: (regularisation as any).overtimeApplicable || false,
       otMealApply: (regularisation as any).otMealApply || false,
@@ -922,6 +1125,36 @@ export function AttendanceRegularisationManagement() {
                   </div>
                 </div>
 
+                <div className="space-y-4">
+  <h3 className="text-lg font-semibold">Department Selection</h3>
+  <SearchSuggestInput
+    label="Department Name"
+    placeholder={
+      !formData.branchesID
+        ? "Select branch first"
+        : "Start typing department name..."
+    }
+    value={formData.departmentName}
+    onChange={(value) =>
+      setFormData((prev) => ({ ...prev, departmentName: value }))
+    }
+    onSelect={(selected) =>
+      setFormData((prev) => ({
+        ...prev,
+        departmentName: selected.display,
+        departmentID: selected.value,
+        employeeName: "",
+        manageEmployeeID: undefined,
+      }))
+    }
+    fetchData={fetchDepartments}
+    displayField="departmentName"
+    valueField="id"
+    required
+    disabled={!formData.branchesID}
+  />
+</div>
+
                 {/* Employee Selection */}
                 <div className="space-y-4">
                   <h3 className="text-lg font-semibold">Employee Selection</h3>
@@ -1054,8 +1287,119 @@ export function AttendanceRegularisationManagement() {
       {/* Search and Filters */}
       <Card>
         <CardContent className="p-6">
-          <div className="flex items-center space-x-4 w-full">
-            <div className="relative flex-1 min-w-0">
+<div className="flex items-center gap-3 w-full">
+  <Button
+    type="button"
+    variant="outline"
+    size="sm"
+    onClick={() => setShowFilterModal(true)}
+    className="flex-shrink-0"
+  >
+    <Filter className="w-4 h-4 mr-1" />
+    Filter
+    {(selectedFilterBranchIds.length + selectedFilterDepartmentIds.length) > 0 && (
+      <Badge variant="secondary" className="ml-2">
+        {selectedFilterBranchIds.length + selectedFilterDepartmentIds.length}
+      </Badge>
+    )}
+  </Button>
+  
+  {showFilterModal && (
+  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+    <div className="w-full max-w-3xl rounded-xl bg-white shadow-xl border">
+      <div className="flex items-center justify-between border-b px-5 py-4">
+        <div className="flex items-center gap-2">
+          <div className="h-9 w-9 rounded-lg bg-indigo-50 flex items-center justify-center">
+            <Filter className="w-4 h-4 text-indigo-600" />
+          </div>
+          <div>
+            <h3 className="text-base font-semibold text-gray-900">
+              Filter Attendance Regularisations
+            </h3>
+            <p className="text-xs text-gray-500">
+              Select branch and department filters
+            </p>
+          </div>
+        </div>
+
+        <Button type="button" variant="ghost" size="sm" onClick={() => setShowFilterModal(false)}>
+          <X className="w-4 h-4" />
+        </Button>
+      </div>
+
+      <div className="p-5 space-y-6 max-h-[70vh] overflow-y-auto">
+        <div className="flex items-center justify-between">
+          <Badge variant="secondary">
+            {selectedFilterBranchIds.length} branches, {selectedFilterDepartmentIds.length} departments selected
+          </Badge>
+
+          <Button type="button" variant="outline" size="sm" onClick={clearAllFilters}>
+            <RotateCcw className="w-4 h-4 mr-1" />
+            Clear
+          </Button>
+        </div>
+
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <Label>Branches</Label>
+            {user?.role !== "BRANCH_ADMIN" && (
+              <Button type="button" variant="outline" size="sm" onClick={selectAllFilterBranches}>
+                Select All Branches
+              </Button>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            {branchFilterList.map((b: any) => (
+              <label key={b.id} className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm hover:bg-gray-50 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={selectedFilterBranchIds.includes(String(b.id))}
+                  disabled={user?.role === "BRANCH_ADMIN"}
+                  onChange={() => toggleFilterBranch(String(b.id))}
+                />
+                <span className="truncate">{b.branchName}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <Label>Departments</Label>
+            <Button type="button" variant="outline" size="sm" onClick={selectAllFilterDepartments}>
+              Select All Departments
+            </Button>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            {visibleFilterDepartments.map((d: any) => (
+              <label key={d.id} className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm hover:bg-gray-50 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={selectedFilterDepartmentIds.includes(String(d.id))}
+                  onChange={() => toggleFilterDepartment(String(d.id))}
+                />
+                <span className="truncate">{d.departmentName}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="flex justify-end gap-2 border-t px-5 py-4">
+        <Button type="button" variant="outline" onClick={() => setShowFilterModal(false)}>
+          Cancel
+        </Button>
+        <Button type="button" onClick={() => setShowFilterModal(false)}>
+          Apply Filter
+        </Button>
+      </div>
+    </div>
+  </div>
+)}
+  
+              <div className="relative flex-1 min-w-0">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
               <Input
                 placeholder="Search attendance regularisations..."
@@ -1085,6 +1429,7 @@ export function AttendanceRegularisationManagement() {
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-[80px]">Branch Name</TableHead>
+                  <TableHead className="w-[100px]">Department Name</TableHead>
                   <TableHead className="w-[70px]">Employee ID</TableHead>
                   <TableHead className="w-[100px]">Employee Name</TableHead>
                   <TableHead className="w-[80px]">Attendance Date</TableHead>
@@ -1113,6 +1458,7 @@ export function AttendanceRegularisationManagement() {
                   filteredRegularisations.map((regularisation, index) => (
                     <TableRow key={regularisation.id}>
                       <TableCell className="truncate" title={regularisation.branchName}>{regularisation.branchName}</TableCell>
+                      <TableCell className="truncate" title={regularisation.departmentName}>{regularisation.departmentName}</TableCell>
                       <TableCell className="truncate">{regularisation.employeeId}</TableCell>
                       <TableCell className="truncate" title={regularisation.employeeName}>{regularisation.employeeName}</TableCell>
                       <TableCell className="truncate">{regularisation.attendanceDate}</TableCell>

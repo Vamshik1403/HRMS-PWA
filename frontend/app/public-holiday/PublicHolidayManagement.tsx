@@ -26,7 +26,7 @@ import {
 } from "../components/ui/table"
 import { Badge } from "../components/ui/badge"
 import { Icon } from "@iconify/react"
-import { Plus, Search, Edit, Trash2 } from "lucide-react"
+import { Plus, Search, Edit, Trash2, Filter, RotateCcw, X } from "lucide-react"
 import { SearchSuggestInput } from "../components/SearchSuggestInput"
 import { toast } from "sonner";
 import { getSidebarContext } from "../utils/sidebarContext";
@@ -79,7 +79,6 @@ function buildFinancialYearOptions(fyStart:string|null|undefined, monthStartDay:
       out.push(`${y}-${y+1}`) // April to March
     }
   } else {
-    // Rolling cycles – 12 windows
     for (let i=0;i<12;i++) {
       const start = new Date(y, isJan?11:2, day) // Dec(prev)/Mar(curr)
       start.setMonth(start.getMonth()+i)
@@ -94,7 +93,12 @@ function buildFinancialYearOptions(fyStart:string|null|undefined, monthStartDay:
 
 export function PublicHolidayManagement() {
   const [publicHolidays, setPublicHolidays] = useState<PublicHoliday[]>([])
-  const [searchTerm, setSearchTerm] = useState("")
+const [searchTerm, setSearchTerm] = useState("")
+
+const [selectedFilterBranchIds, setSelectedFilterBranchIds] = useState<string[]>([])
+const [showBranchFilterModal, setShowBranchFilterModal] = useState(false)
+const [branchFilterList, setBranchFilterList] = useState<any[]>([])
+const [branchFilterLoading, setBranchFilterLoading] = useState(false)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editingHoliday, setEditingHoliday] = useState<PublicHoliday | null>(null)
   const [holidayOptions, setHolidayOptions] = useState<any[]>([])
@@ -174,14 +178,21 @@ export function PublicHolidayManagement() {
   }, [user]);
 
   useEffect(() => {
-    if (user) {
-      loadPublicHolidays()
-    }
+   if (user) {
+  loadPublicHolidays()
+  loadBranchFilterList()
+}
   }, [user, managerData, empCreds])
 
   useEffect(() => {
-    const handler = () => { if (user) loadPublicHolidays(); };
-    window.addEventListener("sidebar-context-changed", handler);
+const handler = () => {
+  if (user) {
+    loadPublicHolidays()
+    loadBranchFilterList()
+  }
+};
+
+window.addEventListener("sidebar-context-changed", handler);
     window.addEventListener("app-data-refresh", handler);
     return () => {
       window.removeEventListener("sidebar-context-changed", handler);
@@ -308,6 +319,52 @@ export function PublicHolidayManagement() {
     const holidays = await fetchManageHolidays(companyID, branchesID);
     setHolidayOptions(holidays);
   }
+
+  const loadBranchFilterList = async () => {
+  try {
+    setBranchFilterLoading(true)
+
+    const data = await robustGet<any[]>(`${BACKEND_URL}/branches`)
+    const ctx = getSidebarContext()
+
+    const activeCompanyID =
+      ctx?.companyID ??
+      user?.companyID ??
+      managerData?.companyID ??
+      empCreds?.companyID ??
+      formData.companyID
+
+    let branches = Array.isArray(data) ? data : []
+
+    if (user?.role !== "SUPERADMIN" && activeCompanyID) {
+      branches = branches.filter(
+        (b: any) => Number(b.companyID) === Number(activeCompanyID)
+      )
+    }
+
+    if (user?.role === "SUPERADMIN" && ctx?.companyID) {
+      branches = branches.filter(
+        (b: any) => Number(b.companyID) === Number(ctx.companyID)
+      )
+    }
+
+    if (user?.role === "BRANCH_ADMIN") {
+      const branchID = user?.branchesID ?? managerData?.branchesID ?? empCreds?.branchesID
+
+      if (branchID) {
+        branches = branches.filter((b: any) => Number(b.id) === Number(branchID))
+        setSelectedFilterBranchIds([String(branchID)])
+      }
+    }
+
+    setBranchFilterList(branches)
+  } catch (e) {
+    console.error("Failed to load branch filter list:", e)
+    setBranchFilterList([])
+  } finally {
+    setBranchFilterLoading(false)
+  }
+}
 
   const loadPublicHolidays = async () => {
     setIsLoading(true);
@@ -653,11 +710,40 @@ export function PublicHolidayManagement() {
     }
   }
 
-  const filtered = publicHolidays.filter(h=>
-    (h.companyName||"").toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (h.holidayName||"").toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (h.financialYear||"").toLowerCase().includes(searchTerm.toLowerCase())
+  const toggleFilterBranch = (branchId: string) => {
+  setSelectedFilterBranchIds((prev) =>
+    prev.includes(branchId)
+      ? prev.filter((id) => id !== branchId)
+      : [...prev, branchId]
   )
+}
+
+const selectAllFilterBranches = () => {
+  setSelectedFilterBranchIds(branchFilterList.map((b: any) => String(b.id)))
+}
+
+const clearFilterBranches = () => {
+  if (user?.role === "BRANCH_ADMIN") return
+  setSelectedFilterBranchIds([])
+}
+
+ const filtered = publicHolidays.filter((h) => {
+  const t = searchTerm.toLowerCase()
+
+  const matchesBranch =
+    selectedFilterBranchIds.length === 0 ||
+    selectedFilterBranchIds.includes(String(h.branchesID))
+
+  const matchesSearch =
+    !t ||
+    (h.serviceProvider || "").toLowerCase().includes(t) ||
+    (h.companyName || "").toLowerCase().includes(t) ||
+    (h.branchName || "").toLowerCase().includes(t) ||
+    (h.holidayName || "").toLowerCase().includes(t) ||
+    (h.financialYear || "").toLowerCase().includes(t)
+
+  return matchesBranch && matchesSearch
+})
 
   return (
     <div className="space-y-6 w-full max-w-6xl mx-auto px-4 page-content-enter">
@@ -812,17 +898,28 @@ export function PublicHolidayManagement() {
       {!isDialogOpen && (
       <>
       {/* Header */}
-      <div className="flex items-center justify-between w-full">
-        <div className="min-w-0 flex-1">
-          <p className="text-gray-600 mt-1 text-sm">Manage public holidays for companies and branches</p>
-        </div>
-        {canManage && (
-          <Button onClick={() => { resetForm(); setIsDialogOpen(true); }}>
-            <Plus className="w-4 h-4 mr-2" />
-            Add Public Holiday
-          </Button>
-        )}
-      </div>
+  {/* Header */}
+<div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 w-full">
+  <div className="min-w-0 flex-1">
+    <p className="text-gray-600 mt-1 text-sm">
+      Manage public holidays for companies and branches
+    </p>
+  </div>
+
+  {canManage && (
+    <Button
+      onClick={() => {
+        resetForm()
+        setIsDialogOpen(true)
+      }}
+      className="w-full sm:w-auto"
+    >
+      <Plus className="w-4 h-4 mr-2" />
+      Add Public Holiday
+    </Button>
+  )}
+</div>
+
 
       {/* Search and Table */}
       <Card>
@@ -834,20 +931,143 @@ export function PublicHolidayManagement() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="flex items-center mb-6">
-            <div className="relative flex-1 max-w-md">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-              <Input 
-                placeholder="Search holidays..." 
-                value={searchTerm} 
-                onChange={e=>setSearchTerm(e.target.value)}
-                className="pl-10"
-              />
-            </div>
-            <Badge variant="secondary" className="ml-3 px-3 py-1 flex-shrink-0">
-              {filtered.length} {filtered.length === 1 ? 'holiday' : 'holidays'}
-            </Badge>
+        <div className="flex flex-col lg:flex-row lg:items-center gap-3 mb-6">
+  <Button
+    type="button"
+    variant="outline"
+    size="sm"
+    onClick={() => setShowBranchFilterModal(true)}
+    className="w-full sm:w-auto flex-shrink-0 justify-center"
+    title="Filter by Branch"
+  >
+    <Filter className="w-4 h-4 mr-1" />
+    Filter
+    {selectedFilterBranchIds.length > 0 && (
+      <Badge variant="secondary" className="ml-2">
+        {selectedFilterBranchIds.length}
+      </Badge>
+    )}
+  </Button>
+
+  <div className="relative flex-1 min-w-0">
+    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+    <Input
+      placeholder="Search public holidays..."
+      value={searchTerm}
+      onChange={(e) => setSearchTerm(e.target.value)}
+      className="pl-10 w-full"
+    />
+  </div>
+
+  <Badge variant="secondary" className="px-3 py-1 flex-shrink-0 w-fit">
+    {filtered.length} {filtered.length === 1 ? "holiday" : "holidays"}
+  </Badge>
+</div>
+
+{showBranchFilterModal && (
+  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+    <div className="w-full max-w-2xl rounded-xl bg-white shadow-xl border">
+      <div className="flex items-center justify-between border-b px-5 py-4">
+        <div className="flex items-center gap-2">
+          <div className="h-9 w-9 rounded-lg bg-indigo-50 flex items-center justify-center">
+            <Filter className="w-4 h-4 text-indigo-600" />
           </div>
+          <div>
+            <h3 className="text-base font-semibold text-gray-900">
+              Filter Public Holidays by Branch
+            </h3>
+            <p className="text-xs text-gray-500">
+              Select one or multiple branches
+            </p>
+          </div>
+        </div>
+
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={() => setShowBranchFilterModal(false)}
+        >
+          <X className="w-4 h-4" />
+        </Button>
+      </div>
+
+      <div className="p-5 space-y-4 max-h-[70vh] overflow-y-auto">
+        <div className="flex items-center justify-between">
+          <Badge variant="secondary">
+            {selectedFilterBranchIds.length} selected
+          </Badge>
+
+          <div className="flex gap-2">
+            {user?.role !== "BRANCH_ADMIN" && (
+              <>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={selectAllFilterBranches}
+                  disabled={branchFilterLoading || branchFilterList.length === 0}
+                >
+                  Select All
+                </Button>
+
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={clearFilterBranches}
+                >
+                  <RotateCcw className="w-4 h-4 mr-1" />
+                  Clear
+                </Button>
+              </>
+            )}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          {branchFilterList.length === 0 ? (
+            <p className="text-sm text-gray-500 col-span-full py-8 text-center">
+              {branchFilterLoading ? "Loading branches..." : "No branches found"}
+            </p>
+          ) : (
+            branchFilterList.map((branch: any) => (
+              <label
+                key={branch.id}
+                className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm hover:bg-gray-50 cursor-pointer"
+              >
+                <input
+                  type="checkbox"
+                  checked={selectedFilterBranchIds.includes(String(branch.id))}
+                  disabled={user?.role === "BRANCH_ADMIN"}
+                  onChange={() => toggleFilterBranch(String(branch.id))}
+                />
+                <span className="truncate">{branch.branchName}</span>
+              </label>
+            ))
+          )}
+        </div>
+      </div>
+
+      <div className="flex justify-end gap-2 border-t px-5 py-4">
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => setShowBranchFilterModal(false)}
+        >
+          Cancel
+        </Button>
+
+        <Button
+          type="button"
+          onClick={() => setShowBranchFilterModal(false)}
+        >
+          Apply Filter
+        </Button>
+      </div>
+    </div>
+  </div>
+)}
           
           <div className="rounded-md border overflow-hidden">
             <Table>

@@ -16,7 +16,7 @@ import {
 } from "../components/ui/table";
 import { Badge } from "../components/ui/badge";
 import { Icon } from "@iconify/react";
-import { Plus, Search, Edit, Trash2, Eye, X, Save } from "lucide-react";
+import { Plus, Search, Edit, Trash2, Eye, X, Save, Filter, RotateCcw } from "lucide-react";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import { FormDrawer } from "../components/ui/form-drawer";
 import { toast } from "sonner";
@@ -53,7 +53,12 @@ interface DepartmentRead {
 
 interface ServiceProvider { id: ID; companyName: string; }
 interface Company { id: ID; companyName: string; }
-interface Branch { id: ID; branchName: string; }
+interface Branch {
+  id: ID;
+  branchName: string;
+  companyID?: ID | null;
+  serviceProviderID?: ID | null;
+}
 
 // ---------------------------
 // Config & helpers
@@ -63,6 +68,7 @@ const API = {
   serviceProviders: "/backend/service-provider",
   companies: "/backend/company",
   branches: "/backend/branches",
+
 };
 
 const MIN_CHARS = 0;
@@ -90,7 +96,12 @@ export function DepartmentManagement() {
   const [currentUserMapping, setCurrentUserMapping] = useState<any>(null);
 
   // UI
-  const [searchTerm, setSearchTerm] = useState("");
+const [searchTerm, setSearchTerm] = useState("");
+
+const [branchFilterList, setBranchFilterList] = useState<Branch[]>([]);
+const [selectedFilterBranchIds, setSelectedFilterBranchIds] = useState<string[]>([]);
+const [showBranchFilterModal, setShowBranchFilterModal] = useState(false);
+const [branchFilterLoading, setBranchFilterLoading] = useState(false);
   const [isAddingNew, setIsAddingNew] = useState(false);
   const [isViewing, setIsViewing] = useState(false);
   const [editing, setEditing] = useState<DepartmentRead | null>(null);
@@ -165,15 +176,61 @@ export function DepartmentManagement() {
     setBrMap(Object.fromEntries((brs || []).map(b => [b.id, b.branchName ?? ""])));
   }
 
+    const fetchBranchFilterList = async () => {
+    try {
+      setBranchFilterLoading(true);
+
+      const all = await fetchJSONSafe<Branch[]>(API.branches);
+      const ctx = getSidebarContext();
+
+      const activeCompanyID =
+        ctx?.companyID ??
+        user?.companyID ??
+        currentUserMapping?.companyID ??
+        null;
+
+      let branches = Array.isArray(all) ? all : [];
+
+      if (activeCompanyID) {
+        branches = branches.filter(
+          (b: any) => Number(b.companyID) === Number(activeCompanyID)
+        );
+      }
+
+      if (user?.role === "BRANCH_ADMIN") {
+        const branchesID = currentUserMapping?.branchesID ?? user?.branchesID;
+        if (branchesID) {
+          branches = branches.filter(
+            (b: any) => Number(b.id) === Number(branchesID)
+          );
+          setSelectedFilterBranchIds([String(branchesID)]);
+        }
+      }
+
+      setBranchFilterList(branches);
+    } catch (e) {
+      console.error("Failed to load branch filter list:", e);
+      setBranchFilterList([]);
+    } finally {
+      setBranchFilterLoading(false);
+    }
+  };
+
   useEffect(() => {
     if (user) {
-      fetchRows();
-      fetchLookups();
-    }
+  fetchRows();
+  fetchLookups();
+  fetchBranchFilterList();
+}
   }, [user]);
 
   useEffect(() => {
-    const handler = () => { if (user) fetchRows(); };
+const handler = () => {
+  if (user) {
+    fetchRows();
+    fetchBranchFilterList();
+  }
+};
     window.addEventListener("sidebar-context-changed", handler);
     window.addEventListener("app-data-refresh", handler);
     return () => {
@@ -482,27 +539,64 @@ export function DepartmentManagement() {
   // ---------------------------
   // Search
   // ---------------------------
-  const filtered = useMemo(() => {
-    const t = searchTerm.trim().toLowerCase();
-    if (!t) return rows;
-    const spNameOf = (r: DepartmentRead) =>
-      r.serviceProvider?.companyName ?? r.serviceProviderName ?? (r.serviceProviderID != null ? spMap[r.serviceProviderID] : "");
-    const coNameOf = (r: DepartmentRead) =>
-      r.company?.companyName ?? r.companyName ?? (r.companyID != null ? coMap[r.companyID] : "");
-    const brNameOf = (r: DepartmentRead) =>
-      r.branches?.branchName ?? r.branchName ?? (r.branchesID != null ? brMap[r.branchesID] : "");
-    return rows.filter((r) =>
-      [
-        r.departmentName,
-        spNameOf(r),
-        coNameOf(r),
-        brNameOf(r),
-      ]
-        .filter(Boolean)
-        .map((x) => (x ?? "").toLowerCase())
-        .some((f) => f.includes(t))
+
+    const toggleFilterBranch = (branchId: string) => {
+    setSelectedFilterBranchIds((prev) =>
+      prev.includes(branchId)
+        ? prev.filter((id) => id !== branchId)
+        : [...prev, branchId]
     );
-  }, [rows, searchTerm, spMap, coMap, brMap]);
+  };
+
+  const selectAllFilterBranches = () => {
+    setSelectedFilterBranchIds(branchFilterList.map((b) => String(b.id)));
+  };
+
+  const clearFilterBranches = () => {
+    if (user?.role === "BRANCH_ADMIN") return;
+    setSelectedFilterBranchIds([]);
+  };
+
+    const filtered = useMemo(() => {
+    const t = searchTerm.trim().toLowerCase();
+
+    const spNameOf = (r: DepartmentRead) =>
+      r.serviceProvider?.companyName ??
+      r.serviceProviderName ??
+      (r.serviceProviderID != null ? spMap[r.serviceProviderID] : "");
+
+    const coNameOf = (r: DepartmentRead) =>
+      r.company?.companyName ??
+      r.companyName ??
+      (r.companyID != null ? coMap[r.companyID] : "");
+
+    const brNameOf = (r: DepartmentRead) =>
+      r.branches?.branchName ??
+      r.branchName ??
+      (r.branchesID != null ? brMap[r.branchesID] : "");
+
+    return rows.filter((r) => {
+      const departmentBranchID = String(r.branchesID ?? r.branches?.id ?? "");
+
+      const matchesBranch =
+        selectedFilterBranchIds.length === 0 ||
+        selectedFilterBranchIds.includes(departmentBranchID);
+
+      const matchesSearch =
+        !t ||
+        [
+          r.departmentName,
+          spNameOf(r),
+          coNameOf(r),
+          brNameOf(r),
+        ]
+          .filter(Boolean)
+          .map((x) => String(x ?? "").toLowerCase())
+          .some((f) => f.includes(t));
+
+      return matchesBranch && matchesSearch;
+    });
+  }, [rows, searchTerm, spMap, coMap, brMap, selectedFilterBranchIds]);
 
   // ---------------------------
   // Name helpers for table
@@ -732,21 +826,147 @@ export function DepartmentManagement() {
 
       {!isAddingNew && !isViewing && (<>
           <Card>
-            <CardContent className="p-6 flex items-center space-x-4">
-              <div className="relative flex-1 min-w-0">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-                <Input
-                  placeholder="Search departments..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10 w-full"
+  <CardContent className="p-6">
+    <div className="flex items-center gap-3 w-full">
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        onClick={() => setShowBranchFilterModal(true)}
+        className="flex-shrink-0"
+        title="Filter by Branch"
+      >
+        <Filter className="w-4 h-4 mr-1" />
+        Filter
+        {selectedFilterBranchIds.length > 0 && (
+          <Badge variant="secondary" className="ml-2">
+            {selectedFilterBranchIds.length}
+          </Badge>
+        )}
+      </Button>
+
+      <div className="relative flex-1 min-w-0">
+        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+        <Input
+          placeholder="Search departments..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="pl-10 w-full"
+        />
+      </div>
+
+      <Badge variant="secondary" className="px-3 py-1 flex-shrink-0">
+        {filtered.length} departments
+      </Badge>
+    </div>
+  </CardContent>
+</Card>
+
+
+{showBranchFilterModal && (
+  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+    <div className="w-full max-w-2xl rounded-xl bg-white shadow-xl border">
+      <div className="flex items-center justify-between border-b px-5 py-4">
+        <div className="flex items-center gap-2">
+          <div className="h-9 w-9 rounded-lg bg-indigo-50 flex items-center justify-center">
+            <Filter className="w-4 h-4 text-indigo-600" />
+          </div>
+          <div>
+            <h3 className="text-base font-semibold text-gray-900">
+              Filter Departments by Branch
+            </h3>
+            <p className="text-xs text-gray-500">
+              Showing branches from selected company only
+            </p>
+          </div>
+        </div>
+
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={() => setShowBranchFilterModal(false)}
+        >
+          <X className="w-4 h-4" />
+        </Button>
+      </div>
+
+      <div className="p-5 space-y-4 max-h-[70vh] overflow-y-auto">
+        <div className="flex items-center justify-between">
+          <Badge variant="secondary">
+            {selectedFilterBranchIds.length} selected
+          </Badge>
+
+          <div className="flex gap-2">
+            {user?.role !== "BRANCH_ADMIN" && (
+              <>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={selectAllFilterBranches}
+                  disabled={branchFilterLoading || branchFilterList.length === 0}
+                >
+                  Select All
+                </Button>
+
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={clearFilterBranches}
+                >
+                  <RotateCcw className="w-4 h-4 mr-1" />
+                  Clear
+                </Button>
+              </>
+            )}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          {branchFilterList.length === 0 ? (
+            <p className="text-sm text-gray-500 col-span-full py-8 text-center">
+              {branchFilterLoading ? "Loading branches..." : "No branches found"}
+            </p>
+          ) : (
+            branchFilterList.map((b) => (
+              <label
+                key={b.id}
+                className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm hover:bg-gray-50 cursor-pointer"
+              >
+                <input
+                  type="checkbox"
+                  checked={selectedFilterBranchIds.includes(String(b.id))}
+                  disabled={user?.role === "BRANCH_ADMIN"}
+                  onChange={() => toggleFilterBranch(String(b.id))}
                 />
-              </div>
-              <Badge variant="secondary" className="px-3 py-1 flex-shrink-0">
-                {filtered.length} departments
-              </Badge>
-            </CardContent>
-          </Card>
+                <span className="truncate">{b.branchName}</span>
+              </label>
+            ))
+          )}
+        </div>
+      </div>
+
+      <div className="flex justify-end gap-2 border-t px-5 py-4">
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => setShowBranchFilterModal(false)}
+        >
+          Cancel
+        </Button>
+
+        <Button
+          type="button"
+          onClick={() => setShowBranchFilterModal(false)}
+        >
+          Apply Filter
+        </Button>
+      </div>
+    </div>
+  </div>
+)}
 
           <Card className="w-full">
             <CardHeader>

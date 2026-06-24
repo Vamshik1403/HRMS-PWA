@@ -4,13 +4,14 @@ import type { ReactNode } from "react";
 import { ChevronDown, ChevronUp } from "lucide-react";
 import { cn } from "../../lib/utils";
 
-export type EmpFormSectionId = "basic" | "employment" | "attendance" | "additional";
+export type EmpFormSectionId = "basic" | "employment" | "additional" | "attendance" | "roles&permissions";
 
 export const EMPLOYEE_FORM_SECTIONS: { id: EmpFormSectionId; label: string }[] = [
   { id: "basic", label: "Basic Information" },
   { id: "employment", label: "Employment Information" },
+    { id: "additional", label: "Additional Information" },
   { id: "attendance", label: "Attendance & Selfcare Setup" },
-  { id: "additional", label: "Additional Information" },
+  { id: "roles&permissions", label: "Roles & Permissions" },
 ];
 
 export function EmployeeFormSectionNav({

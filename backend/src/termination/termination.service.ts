@@ -27,6 +27,22 @@ async findAll() {
           employeeLastName: true,
           employeeID: true,
           lifecycleStatus: true,
+          serviceProviderID: true,
+          companyID: true,
+          branchesID: true,
+          departmentNameID: true,
+          branches: {
+            select: {
+              id: true,
+              branchName: true,
+            },
+          },
+          departments: {
+            select: {
+              id: true,
+              departmentName: true,
+            },
+          },
         },
       },
     },
@@ -35,17 +51,38 @@ async findAll() {
 }
 
 
-    findOne(id: number) {
-      return this.prisma.workShift.findUnique({
-        where: { id },
-        include: {
-          branches: true,
-          company: true,
-          serviceProvider: true,
-          workShiftDay: true,
+     findOne(id: number) {
+    return this.prisma.employeeTermination.findUnique({
+      where: { id },
+      include: {
+        employee: {
+          select: {
+            id: true,
+            employeeFirstName: true,
+            employeeLastName: true,
+            employeeID: true,
+            lifecycleStatus: true,
+            serviceProviderID: true,
+            companyID: true,
+            branchesID: true,
+            departmentNameID: true,
+            branches: {
+              select: {
+                id: true,
+                branchName: true,
+              },
+            },
+            departments: {
+              select: {
+                id: true,
+                departmentName: true,
+              },
+            },
+          },
         },
-      });
-    }
+      },
+    });
+  }
 
 
  async create(dto: CreateTerminationDto) {
@@ -54,6 +91,10 @@ async findAll() {
   });
 
   if (!employee) throw new NotFoundException('Employee not found');
+  
+  if (dto.branchesID && Number(dto.branchesID) !== Number(employee.branchesID)) {
+  throw new BadRequestException('Selected branch does not match employee branch');
+}
 
   if (employee.lifecycleStatus === 'EXITED') {
     throw new BadRequestException('Employee already exited');

@@ -27,6 +27,8 @@ import {
   Save,
   CheckCircle2,
   AlertTriangle,
+  RotateCcw,
+  Filter,
 } from "lucide-react";
 import {
   Dialog,
@@ -46,6 +48,36 @@ interface Employee {
   employeeLastName?: string;
   employeeID?: string;
   lifecycleStatus: "ACTIVE" | "EXITED" | "INACTIVE";
+
+  serviceProviderID?: ID | null;
+  companyID?: ID | null;
+  branchesID?: ID | null;
+  departmentNameID?: ID | null;
+
+  branches?: {
+    id: ID;
+    branchName?: string | null;
+  } | null;
+
+  departments?: {
+    id: ID;
+    departmentName?: string | null;
+  } | null;
+}
+
+interface Branch {
+  id: ID;
+  branchName?: string | null;
+  companyID?: ID | null;
+  serviceProviderID?: ID | null;
+}
+
+interface Department {
+  id: ID;
+  departmentName?: string | null;
+  branchesID?: ID | null;
+  companyID?: ID | null;
+  serviceProviderID?: ID | null;
 }
 
 interface Termination {
@@ -65,6 +97,8 @@ interface Termination {
 const API = {
   employees: "/backend/manage-emp/list",
   terminations: "/backend/termination",
+  branches: "/backend/branches",
+  departments: "/backend/departments",
 };
 
 const EXIT_TYPES_WITHOUT_NOTICE = new Set(["TERMINATION", "DEATH", "ABSCONDING"]);
@@ -87,8 +121,19 @@ export default function TerminationManagement() {
   // Employee autocomplete
   const [empSearch, setEmpSearch] = useState("");
   const [empList, setEmpList] = useState<Employee[]>([]);
-  const [empLoading, setEmpLoading] = useState(false);
-  const empRef = useRef<HTMLDivElement>(null);
+ const [empLoading, setEmpLoading] = useState(false);
+
+const [branchList, setBranchList] = useState<Branch[]>([]);
+const [departmentList, setDepartmentList] = useState<Department[]>([]);
+const [selectedBranchID, setSelectedBranchID] = useState("");
+const [selectedDepartmentID, setSelectedDepartmentID] = useState("");
+
+const [selectedFilterBranchIds, setSelectedFilterBranchIds] = useState<string[]>([]);
+const [selectedFilterDepartmentIds, setSelectedFilterDepartmentIds] = useState<string[]>([]);
+const [showFilterModal, setShowFilterModal] = useState(false);
+
+const empRef = useRef<HTMLDivElement>(null);
+
   const empTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [approveModalOpen, setApproveModalOpen] = useState(false);
@@ -113,6 +158,99 @@ export default function TerminationManagement() {
   // -------------------
   // Load Data
   // -------------------
+
+    const getActiveCompanyID = () => {
+    const ctx = getSidebarContext();
+    return ctx?.companyID ?? user?.companyID ?? null;
+  };
+
+  const getActiveServiceProviderID = () => {
+    const ctx = getSidebarContext();
+    return ctx?.serviceProviderID ?? user?.serviceProviderID ?? null;
+  };
+
+  const fetchBranchAndDepartmentLookups = async () => {
+    try {
+      const [brRes, deptRes] = await Promise.all([
+        fetch(API.branches),
+        fetch(API.departments),
+      ]);
+
+      const brRaw = await brRes.json();
+      const deptRaw = await deptRes.json();
+
+      let branches: Branch[] = Array.isArray(brRaw) ? brRaw : brRaw?.data ?? [];
+      let departments: Department[] = Array.isArray(deptRaw)
+        ? deptRaw
+        : deptRaw?.data ?? [];
+
+      const companyID = getActiveCompanyID();
+
+      if (companyID) {
+        branches = branches.filter(
+          (b) => Number(b.companyID) === Number(companyID)
+        );
+        departments = departments.filter(
+          (d) => Number(d.companyID) === Number(companyID)
+        );
+      }
+
+      if (user?.role === "BRANCH_ADMIN" && user?.branchesID) {
+        branches = branches.filter(
+          (b) => Number(b.id) === Number(user.branchesID)
+        );
+        departments = departments.filter(
+          (d) => Number(d.branchesID) === Number(user.branchesID)
+        );
+        setSelectedBranchID(String(user.branchesID));
+      }
+
+      setBranchList(branches);
+      setDepartmentList(departments);
+    } catch (e) {
+      console.error("Failed to load branch/department lookup", e);
+      setBranchList([]);
+      setDepartmentList([]);
+    }
+  };
+
+  const visibleDepartments = useMemo(() => {
+    if (!selectedBranchID) return [];
+
+    return departmentList.filter(
+      (d) => Number(d.branchesID) === Number(selectedBranchID)
+    );
+  }, [departmentList, selectedBranchID]);
+
+  const visibleEmployeesForTermination = useMemo(() => {
+    const activeTerminatedIds = new Set(
+      terminations
+        .filter(
+          (t) =>
+            t.exitStatus === "DRAFT" ||
+            t.exitStatus === "APPROVED" ||
+            t.exitStatus === "NOTICE_RUNNING"
+        )
+        .map((t) => t.employeeId)
+    );
+
+    return employees.filter((e) => {
+      if (activeTerminatedIds.has(e.id)) return false;
+
+      const matchesBranch =
+        selectedBranchID &&
+        Number(e.branchesID ?? e.branches?.id) === Number(selectedBranchID);
+
+      const matchesDepartment =
+        selectedDepartmentID &&
+        Number(e.departmentNameID ?? e.departments?.id) ===
+          Number(selectedDepartmentID);
+
+      return Boolean(matchesBranch && matchesDepartment);
+    });
+  }, [employees, terminations, selectedBranchID, selectedDepartmentID]);
+
+
   const fetchData = async () => {
     try {
       setLoading(true);
@@ -123,9 +261,16 @@ export default function TerminationManagement() {
       // Filter by company from sidebar context
       const ctx = getSidebarContext();
       const companyID = ctx?.companyID ?? user?.companyID;
-      if (companyID) {
-        empData = empData.filter((e: any) => e.companyID === companyID);
-      }
+     if (companyID) {
+  empData = empData.filter((e: any) => Number(e.companyID) === Number(companyID));
+}
+
+if (user?.role === "BRANCH_ADMIN" && user?.branchesID) {
+  empData = empData.filter(
+    (e: any) => Number(e.branchesID) === Number(user.branchesID)
+  );
+}
+
       setEmployees(empData);
 
       const termRes = await fetch(API.terminations);
@@ -142,30 +287,36 @@ export default function TerminationManagement() {
     }
   };
 
-  useEffect(() => {
-    if (user) fetchData();
-  }, [user]);
+useEffect(() => {
+  if (user) {
+    fetchData();
+    fetchBranchAndDepartmentLookups();
+  }
+}, [user]);
 
   const runFetchEmp = (q: string) => {
-    if (empTimerRef.current) clearTimeout(empTimerRef.current);
-    empTimerRef.current = setTimeout(() => {
-      if (q.length < 1) { setEmpList([]); return; }
-      const ql = q.toLowerCase();
-      // Exclude employees who already have an active/approved termination
-      const activeTerminatedIds = new Set(
-        terminations
-          .filter((t) => t.exitStatus === "DRAFT" || t.exitStatus === "APPROVED" || t.exitStatus === "NOTICE_RUNNING")
-          .map((t) => t.employeeId)
-      );
-      const filtered = employees.filter((e) => {
-        if (activeTerminatedIds.has(e.id)) return false;
-        const name = `${e.employeeFirstName ?? ""} ${e.employeeLastName ?? ""}`.toLowerCase();
-        const eid = (e.employeeID ?? "").toLowerCase();
-        return name.includes(ql) || eid.includes(ql);
-      });
-      setEmpList(filtered.slice(0, 20));
-    }, 150);
-  };
+  if (empTimerRef.current) clearTimeout(empTimerRef.current);
+
+  empTimerRef.current = setTimeout(() => {
+    if (!selectedBranchID || !selectedDepartmentID) {
+      setEmpList([]);
+      return;
+    }
+
+    const ql = q.toLowerCase();
+
+    const filtered = visibleEmployeesForTermination.filter((e) => {
+      const name = `${e.employeeFirstName ?? ""} ${e.employeeLastName ?? ""}`.toLowerCase();
+      const eid = (e.employeeID ?? "").toLowerCase();
+
+      if (!ql) return true;
+
+      return name.includes(ql) || eid.includes(ql);
+    });
+
+    setEmpList(filtered.slice(0, 20));
+  }, 150);
+};
 
   useEffect(() => {
     const onClick = (e: MouseEvent) => {
@@ -187,9 +338,12 @@ export default function TerminationManagement() {
       const createRes = await fetch(API.terminations, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          employeeId: Number(form.employeeId),
-          exitType: form.exitType,
+       body: JSON.stringify({
+  employeeId: Number(form.employeeId),
+  serviceProviderID: getActiveServiceProviderID(),
+  companyID: getActiveCompanyID(),
+  branchesID: Number(selectedBranchID),
+  exitType: form.exitType,
           reasonCategory: form.reasonCategory,
           resignationDate: form.resignationDate || undefined,
           noticeStartDate: form.initiatedOn || undefined,
@@ -224,9 +378,14 @@ export default function TerminationManagement() {
         });
       }
 
-      setIsAdding(false);
-      setEmpSearch("");
-      setForm({
+     setIsAdding(false);
+setEmpSearch("");
+setEmpList([]);
+setSelectedDepartmentID("");
+if (user?.role !== "BRANCH_ADMIN") {
+  setSelectedBranchID("");
+}
+setForm({
         employeeId: "",
         exitType: "",
         reasonCategory: "",
@@ -297,16 +456,107 @@ export default function TerminationManagement() {
   // -------------------
   // Search
   // -------------------
-  const filtered = useMemo(() => {
-    if (!Array.isArray(terminations)) return [];
-    if (!search) return terminations;
 
-    return terminations.filter((t) =>
-      `${t.employee?.employeeFirstName} ${t.employee?.employeeLastName}`
-        .toLowerCase()
-        .includes(search.toLowerCase())
+    const toggleFilterBranch = (branchId: string) => {
+    setSelectedFilterBranchIds((prev) => {
+      const next = prev.includes(branchId)
+        ? prev.filter((id) => id !== branchId)
+        : [...prev, branchId];
+
+      if (next.length > 0) {
+        setSelectedFilterDepartmentIds((deptPrev) =>
+          deptPrev.filter((deptId) => {
+            const dept = departmentList.find(
+              (d) => String(d.id) === String(deptId)
+            );
+            return dept && next.includes(String(dept.branchesID));
+          })
+        );
+      }
+
+      return next;
+    });
+  };
+
+  const toggleFilterDepartment = (departmentId: string) => {
+    setSelectedFilterDepartmentIds((prev) =>
+      prev.includes(departmentId)
+        ? prev.filter((id) => id !== departmentId)
+        : [...prev, departmentId]
     );
-  }, [search, terminations]);
+  };
+
+  const selectAllFilterBranches = () => {
+    setSelectedFilterBranchIds(branchList.map((b) => String(b.id)));
+  };
+
+  const selectAllFilterDepartments = () => {
+    setSelectedFilterDepartmentIds(
+      visibleFilterDepartments.map((d) => String(d.id))
+    );
+  };
+
+  const clearAllFilters = () => {
+    if (user?.role === "BRANCH_ADMIN" && user?.branchesID) {
+      setSelectedFilterBranchIds([String(user.branchesID)]);
+      setSelectedFilterDepartmentIds([]);
+      return;
+    }
+
+    setSelectedFilterBranchIds([]);
+    setSelectedFilterDepartmentIds([]);
+  };
+
+  const visibleFilterDepartments = departmentList.filter((d) => {
+    return (
+      selectedFilterBranchIds.length === 0 ||
+      selectedFilterBranchIds.includes(String(d.branchesID))
+    );
+  });
+
+
+   const filtered = useMemo(() => {
+    if (!Array.isArray(terminations)) return [];
+
+    const q = search.trim().toLowerCase();
+
+    return terminations.filter((t) => {
+      const branchId = String(t.employee?.branchesID ?? t.employee?.branches?.id ?? "");
+      const departmentId = String(
+        t.employee?.departmentNameID ?? t.employee?.departments?.id ?? ""
+      );
+
+      const matchesBranch =
+        selectedFilterBranchIds.length === 0 ||
+        selectedFilterBranchIds.includes(branchId);
+
+      const matchesDepartment =
+        selectedFilterDepartmentIds.length === 0 ||
+        selectedFilterDepartmentIds.includes(departmentId);
+
+      const matchesSearch =
+        !q ||
+        [
+          t.employee?.employeeFirstName,
+          t.employee?.employeeLastName,
+          t.employee?.employeeID,
+          t.employee?.branches?.branchName,
+          t.employee?.departments?.departmentName,
+          t.exitType,
+          t.exitStatus,
+          t.reasonCategory,
+        ]
+          .filter(Boolean)
+          .some((x) => String(x).toLowerCase().includes(q));
+
+      return matchesBranch && matchesDepartment && matchesSearch;
+    });
+  }, [
+    search,
+    terminations,
+    selectedFilterBranchIds,
+    selectedFilterDepartmentIds,
+  ]);
 
   return (
     <div className="space-y-6 w-full max-w-6xl mx-auto px-4">
@@ -328,39 +578,116 @@ export default function TerminationManagement() {
           </CardHeader>
           <CardContent>
             <form onSubmit={handleCreate} className="space-y-4">
-              <div ref={empRef} className="relative">
-                <Label>Employee *</Label>
-                <Input
-                  value={empSearch}
-                  onChange={(e) => {
-                    setEmpSearch(e.target.value);
-                    setForm({ ...form, employeeId: "" });
-                    runFetchEmp(e.target.value);
-                  }}
-                  onFocus={(e) => { if (e.target.value.length >= 1) runFetchEmp(e.target.value); }}
-                  placeholder="Type employee name or ID…"
-                  autoComplete="off"
-                  required={!form.employeeId}
-                />
-                {empList.length > 0 && (
-                  <div className="absolute z-10 bg-white border rounded w-full shadow max-h-48 overflow-y-auto">
-                    {empList.map((e) => (
-                      <div
-                        key={e.id}
-                        className="px-3 py-2 hover:bg-gray-100 cursor-pointer"
-                        onMouseDown={(ev) => ev.preventDefault()}
-                        onClick={() => {
-                          setForm({ ...form, employeeId: String(e.id) });
-                          setEmpSearch(`${e.employeeFirstName ?? ""} ${e.employeeLastName ?? ""} - ${e.employeeID ?? ""}`.trim());
-                          setEmpList([]);
-                        }}
-                      >
-                        {e.employeeFirstName ?? ""} {e.employeeLastName ?? ""} - {e.employeeID ?? ""}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
+             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+  <div>
+    <Label>Branch *</Label>
+    <select
+      value={selectedBranchID}
+      disabled={user?.role === "BRANCH_ADMIN"}
+      onChange={(e) => {
+        const branchID = e.target.value;
+        setSelectedBranchID(branchID);
+        setSelectedDepartmentID("");
+        setEmpSearch("");
+        setEmpList([]);
+        setForm({ ...form, employeeId: "" });
+      }}
+      className="w-full border rounded p-2"
+      required
+    >
+      <option value="">Select Branch</option>
+      {branchList.map((b) => (
+        <option key={b.id} value={String(b.id)}>
+          {b.branchName || "Unnamed Branch"}
+        </option>
+      ))}
+    </select>
+  </div>
+
+  <div>
+    <Label>Department *</Label>
+    <select
+      value={selectedDepartmentID}
+      disabled={!selectedBranchID}
+      onChange={(e) => {
+        setSelectedDepartmentID(e.target.value);
+        setEmpSearch("");
+        setEmpList([]);
+        setForm({ ...form, employeeId: "" });
+      }}
+      className="w-full border rounded p-2"
+      required
+    >
+      <option value="">Select Department</option>
+      {visibleDepartments.map((d) => (
+        <option key={d.id} value={String(d.id)}>
+          {d.departmentName || "Unnamed Department"}
+        </option>
+      ))}
+    </select>
+  </div>
+</div>
+
+<div ref={empRef} className="relative">
+  <Label>Employee *</Label>
+  <Input
+    value={empSearch}
+    onChange={(e) => {
+      setEmpSearch(e.target.value);
+      setForm({ ...form, employeeId: "" });
+      runFetchEmp(e.target.value);
+    }}
+    onFocus={(e) => runFetchEmp(e.target.value)}
+    placeholder={
+      !selectedBranchID
+        ? "Select branch first"
+        : !selectedDepartmentID
+          ? "Select department first"
+          : "Type employee name or ID…"
+    }
+    autoComplete="off"
+    disabled={!selectedBranchID || !selectedDepartmentID}
+    required={!form.employeeId}
+  />
+
+  {empList.length > 0 && (
+    <div className="absolute z-10 bg-white border rounded w-full shadow max-h-48 overflow-y-auto">
+      {empList.map((e) => (
+        <div
+          key={e.id}
+          className="px-3 py-2 hover:bg-gray-100 cursor-pointer"
+          onMouseDown={(ev) => ev.preventDefault()}
+          onClick={() => {
+            setForm({ ...form, employeeId: String(e.id) });
+            setEmpSearch(
+              `${e.employeeFirstName ?? ""} ${e.employeeLastName ?? ""} - ${
+                e.employeeID ?? ""
+              }`.trim()
+            );
+            setEmpList([]);
+          }}
+        >
+          <div className="font-medium">
+            {e.employeeFirstName ?? ""} {e.employeeLastName ?? ""} -{" "}
+            {e.employeeID ?? ""}
+          </div>
+          <div className="text-xs text-gray-500">
+            {e.branches?.branchName || "Branch"} /{" "}
+            {e.departments?.departmentName || "Department"}
+          </div>
+        </div>
+      ))}
+    </div>
+  )}
+
+  {selectedBranchID &&
+    selectedDepartmentID &&
+    visibleEmployeesForTermination.length === 0 && (
+      <p className="text-xs text-red-500 mt-1">
+        No active employees found for selected branch and department.
+      </p>
+    )}
+</div>
 
               <div>
                 <Label>Exit Type *</Label>
@@ -440,6 +767,193 @@ export default function TerminationManagement() {
             </form>
           </CardContent>
         </Card>
+      )}
+
+      {/* Table */}
+            {/* Search + Filters */}
+      {!isAdding && (
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex items-center gap-3 w-full">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setShowFilterModal(true)}
+                className="flex-shrink-0"
+                title="Filter by Branch / Department"
+              >
+                <Filter className="w-4 h-4 mr-1" />
+                Filter
+                {(selectedFilterBranchIds.length + selectedFilterDepartmentIds.length) > 0 && (
+                  <Badge variant="secondary" className="ml-2">
+                    {selectedFilterBranchIds.length + selectedFilterDepartmentIds.length}
+                  </Badge>
+                )}
+              </Button>
+
+              <div className="relative flex-1 min-w-0">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+                <Input
+                  placeholder="Search termination records..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="pl-10 w-full"
+                />
+              </div>
+
+              <Badge variant="secondary" className="px-3 py-1 flex-shrink-0">
+                {filtered.length} records
+              </Badge>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {showFilterModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+          <div className="w-full max-w-3xl rounded-xl bg-white shadow-xl border">
+            <div className="flex items-center justify-between border-b px-5 py-4">
+              <div className="flex items-center gap-2">
+                <div className="h-9 w-9 rounded-lg bg-indigo-50 flex items-center justify-center">
+                  <Filter className="w-4 h-4 text-indigo-600" />
+                </div>
+                <div>
+                  <h3 className="text-base font-semibold text-gray-900">
+                    Filter Termination Records
+                  </h3>
+                  <p className="text-xs text-gray-500">
+                    Filter by branch and department
+                  </p>
+                </div>
+              </div>
+
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowFilterModal(false)}
+              >
+                <X className="w-4 h-4" />
+              </Button>
+            </div>
+
+            <div className="p-5 space-y-6 max-h-[70vh] overflow-y-auto">
+              <div className="flex items-center justify-between">
+                <Badge variant="secondary">
+                  {selectedFilterBranchIds.length} branches,{" "}
+                  {selectedFilterDepartmentIds.length} departments selected
+                </Badge>
+
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={clearAllFilters}
+                >
+                  <RotateCcw className="w-4 h-4 mr-1" />
+                  Clear
+                </Button>
+              </div>
+
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <Label>Branches</Label>
+
+                  {user?.role !== "BRANCH_ADMIN" && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={selectAllFilterBranches}
+                      disabled={branchList.length === 0}
+                    >
+                      Select All Branches
+                    </Button>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {branchList.length === 0 ? (
+                    <p className="text-sm text-gray-500 col-span-full py-4 text-center">
+                      No branches found
+                    </p>
+                  ) : (
+                    branchList.map((b) => (
+                      <label
+                        key={b.id}
+                        className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm hover:bg-gray-50 cursor-pointer"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selectedFilterBranchIds.includes(String(b.id))}
+                          disabled={user?.role === "BRANCH_ADMIN"}
+                          onChange={() => toggleFilterBranch(String(b.id))}
+                        />
+                        <span className="truncate">{b.branchName}</span>
+                      </label>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <Label>Departments</Label>
+
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={selectAllFilterDepartments}
+                    disabled={visibleFilterDepartments.length === 0}
+                  >
+                    Select All Departments
+                  </Button>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {visibleFilterDepartments.length === 0 ? (
+                    <p className="text-sm text-gray-500 col-span-full py-4 text-center">
+                      No departments found
+                    </p>
+                  ) : (
+                    visibleFilterDepartments.map((d) => (
+                      <label
+                        key={d.id}
+                        className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm hover:bg-gray-50 cursor-pointer"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selectedFilterDepartmentIds.includes(String(d.id))}
+                          onChange={() => toggleFilterDepartment(String(d.id))}
+                        />
+                        <span className="truncate">{d.departmentName}</span>
+                      </label>
+                    ))
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 border-t px-5 py-4">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setShowFilterModal(false)}
+              >
+                Cancel
+              </Button>
+
+              <Button
+                type="button"
+                onClick={() => setShowFilterModal(false)}
+              >
+                Apply Filter
+              </Button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Table */}

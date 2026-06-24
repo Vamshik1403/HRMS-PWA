@@ -13,4 +13,20 @@ export class RegisterDto {
   @IsOptional()
   @IsEnum(UserRole)
   role?: UserRole;
+
+  @IsString()
+  @IsOptional()
+  firstName: string;
+  
+  @IsString()
+  @IsOptional()
+  lastName: string;
+
+  @IsOptional()
+  @IsString()
+  contactNo: string;
+  
+  @IsOptional()
+  @IsString()
+  email: string;
 }

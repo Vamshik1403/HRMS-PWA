@@ -10,17 +10,10 @@ import { Textarea } from "../components/ui/textarea";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../components/ui/table";
 import { Badge } from "../components/ui/badge";
 import { Icon } from "@iconify/react";
-import { Plus, Search, Edit, Trash2, Eye, ArrowLeft, X, Save, ChevronDown, FileText, Shield } from "lucide-react";
+import { Plus, Search, Edit, Trash2, Eye, ArrowLeft, X, Save, ChevronDown, FileText, Shield, UserPlus } from "lucide-react";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import { useRouter } from "next/navigation";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "../components/ui/dropdown-menu";
+
 import { FormDrawer } from "../components/ui/form-drawer";
 import { TimezoneSelect } from "../components/ui/timezone-select";
 import { LocationFields } from "../components/ui/location-fields";
@@ -97,7 +90,22 @@ interface ServiceProvider {
 interface Company {
   id: ID;
   companyName: string;
+  address?: string | null;
+  country?: string | null;
+  state?: string | null;
+  city?: string | null;
+  pincode?: string | null;
+  timeZone?: string | null;
+  currency?: string | null;
+  pfNo?: string | null;
+  panNo?: string | null;
+  tanNo?: string | null;
+  esiNo?: string | null;
+  linNo?: string | null;
+  gstNo?: string | null;
 }
+
+
 
 // ---------------------------
 // Config & helpers
@@ -106,12 +114,42 @@ const API = {
   branches: "/backend/branches",
   serviceProviders: "/backend/service-provider",
   companies: "/backend/company",
+  users: "/backend/users",
 };
 
 const MIN_CHARS = 0;
 const DEBOUNCE_MS = 250;
-
 const uid = () => Math.random().toString(36).slice(2, 10);
+
+const getStoredActiveCompanyID = (): number | null => {
+  if (typeof window === "undefined") return null;
+
+  try {
+    const sessionId = Number(sessionStorage.getItem("activeCompanyID") || 0);
+    if (sessionId) return sessionId;
+
+    const userData = JSON.parse(localStorage.getItem("user") || "{}");
+    const localId = Number(userData?.activeCompanyID || userData?.companyID || 0);
+
+    return localId || null;
+  } catch {
+    return null;
+  }
+};
+
+const getUserAssignedCompanyIDs = (user: any): number[] => {
+  const ids = new Set<number>();
+
+  if (user?.companyID) ids.add(Number(user.companyID));
+
+  if (Array.isArray(user?.userCompanies)) {
+    user.userCompanies.forEach((uc: any) => {
+      if (uc?.companyID) ids.add(Number(uc.companyID));
+    });
+  }
+
+  return Array.from(ids);
+};
 
 async function fetchJSONSafe<T>(url: string, signal?: AbortSignal): Promise<T> {
   const res = await fetch(url, { signal });
@@ -138,6 +176,22 @@ export function BranchManagement() {
   const [editingBranch, setEditingBranch] = useState<BranchRead | null>(null);
   const [viewBranch, setViewBranch] = useState<BranchRead | null>(null);
 
+  const [showBranchAdminPanel, setShowBranchAdminPanel] = useState(false);
+  const [selectedBranch, setSelectedBranch] = useState<BranchRead | null>(null);
+  const [branchAdmins, setBranchAdmins] = useState<any[]>([]);
+  const [editingBranchAdmin, setEditingBranchAdmin] = useState<any | null>(null);
+  const [branchAdminSaving, setBranchAdminSaving] = useState(false);
+  const [branchAdminForm, setBranchAdminForm] = useState({
+    username: "",
+    password: "",
+    role: "BRANCH_ADMIN",
+    firstName: "",
+    lastName: "",
+    contactNo: "",
+    email: "",
+    isActive: true,
+  });
+
   // Suggestions state/refs
   const spRef = useRef<HTMLDivElement>(null);
   const coRef = useRef<HTMLDivElement>(null);
@@ -156,6 +210,9 @@ export function BranchManagement() {
   const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN" || user?.role === "ADMIN";
   const canCreate = user?.role === "SUPERADMIN" || user?.role === "COMPANY_ADMIN" || user?.role === "ADMIN";
   const isEmployee = user?.role === "EMPLOYEE";
+
+  const canManageBranchAdmins =
+    user?.role === "SUPERADMIN" || user?.role === "COMPANY_ADMIN";
 
   // Add this with your other state declarations
   const [currentUserMapping, setCurrentUserMapping] = useState<any>(null);
@@ -196,7 +253,9 @@ export function BranchManagement() {
     bankDetailsForm: [] as BankDetailForm[],
   });
 
-  // Track original bank IDs on edit to compute deletions
+  const [sameAsCompany, setSameAsCompany] = useState(false);
+  const [companyFillLoading, setCompanyFillLoading] = useState(false);
+
   const [originalBankIds, setOriginalBankIds] = useState<ID[]>([]);
 
   const [stagingShopReg, setStagingShopReg] = useState({ certNo: "", effectFrom: new Date().toISOString().slice(0, 10), pdfUrl: "" as string });
@@ -212,7 +271,16 @@ export function BranchManagement() {
       const all = await fetchJSONSafe<BranchRead[]>(API.branches);
       const mapping = await resolveScopeUserMapping(user);
       if (mapping) setCurrentUserMapping(mapping);
-      setBranches(await filterBranchesForUser(all, user));
+      let visibleBranches = await filterBranchesForUser(all, user);
+
+      const ctx = getSidebarContext();
+      if (ctx?.companyID) {
+        visibleBranches = visibleBranches.filter(
+          (b: any) => Number(b.companyID) === Number(ctx.companyID)
+        );
+      }
+
+      setBranches(visibleBranches);
     } catch (e: any) {
       console.error("Failed to load branches:", e);
       setBranches([]);
@@ -308,9 +376,163 @@ export function BranchManagement() {
     };
   }, []);
 
+  const getActiveBranchContext = () => {
+    const ctx = getSidebarContext();
+
+    const userAny = user as any;
+
+    const isCompanyScopedUser =
+      user?.role === "COMPANY_ADMIN" ||
+      user?.role === "ADMIN" ||
+      user?.role === "BRANCH_ADMIN";
+
+    const userCompanyList = Array.isArray(userAny?.userCompanies)
+      ? userAny.userCompanies
+      : [];
+
+    const assignedCompanyIDs = getUserAssignedCompanyIDs(userAny);
+
+    const hasMultiCompany =
+      userCompanyList.length > 1 || assignedCompanyIDs.length > 1;
+
+    let companyID: any = null;
+
+    if (isCompanyScopedUser) {
+      const storedActiveCompanyID = getStoredActiveCompanyID();
+
+      if (hasMultiCompany) {
+        if (
+          storedActiveCompanyID &&
+          assignedCompanyIDs.includes(Number(storedActiveCompanyID))
+        ) {
+          companyID = storedActiveCompanyID;
+        } else if (
+          ctx?.companyID &&
+          assignedCompanyIDs.includes(Number(ctx.companyID))
+        ) {
+          companyID = ctx.companyID;
+        } else {
+          companyID =
+            currentUserMapping?.companyID ??
+            user?.companyID ??
+            assignedCompanyIDs[0] ??
+            formData.companyID ??
+            null;
+        }
+      } else {
+        companyID =
+          currentUserMapping?.companyID ??
+          user?.companyID ??
+          assignedCompanyIDs[0] ??
+          formData.companyID ??
+          null;
+      }
+    } else {
+      companyID =
+        ctx?.companyID ??
+        formData.companyID ??
+        currentUserMapping?.companyID ??
+        user?.companyID ??
+        null;
+    }
+
+    const activeCompanyFromUserCompanies = userCompanyList.find(
+      (uc: any) => Number(uc.companyID) === Number(companyID)
+    );
+
+    const companyName =
+      Number(ctx?.companyID) === Number(companyID)
+        ? ctx?.companyName ?? ""
+        : activeCompanyFromUserCompanies?.company?.companyName ??
+        activeCompanyFromUserCompanies?.companyName ??
+        currentUserMapping?.company?.companyName ??
+        userAny?.company?.companyName ??
+        userAny?.companyName ??
+        formData.coAutocomplete ??
+        "";
+
+    return {
+      serviceProviderID:
+        ctx?.serviceProviderID ??
+        currentUserMapping?.serviceProviderID ??
+        user?.serviceProviderID ??
+        formData.serviceProviderID ??
+        null,
+
+      companyID,
+
+      serviceProviderName:
+        ctx?.serviceProviderName ??
+        currentUserMapping?.serviceProvider?.companyName ??
+        userAny?.serviceProvider?.companyName ??
+        formData.spAutocomplete ??
+        "",
+
+      companyName,
+    };
+  };
+
+
+ const handleEditBranchAdmin = (admin: any) => {
+  setEditingBranchAdmin(admin);
+
+  setBranchAdminForm({
+    username: admin.username || "",
+    password: "",
+    firstName: admin.firstName || "",
+    lastName: admin.lastName || "",
+    contactNo: admin.contactNo || "",
+    email: admin.email || "",
+    role: "BRANCH_ADMIN",
+    isActive: admin.isActive ?? true,
+  });
+};
+
   // ---------------------------
   // Form helpers
   // ---------------------------
+  const fillBranchFromCompany = async () => {
+    const activeCtx = getActiveBranchContext();
+    const companyId = activeCtx.companyID;
+    if (!companyId) {
+      toast.error("Company is not selected");
+      setSameAsCompany(false);
+      return;
+    }
+
+    try {
+      setCompanyFillLoading(true);
+
+      const company = await fetchJSONSafe<Company>(`${API.companies}/${companyId}`);
+
+      setFormData((p) => ({
+        ...p,
+        serviceProviderID: activeCtx.serviceProviderID,
+        companyID: companyId,
+        spAutocomplete: activeCtx.serviceProviderName,
+        coAutocomplete: company.companyName ?? activeCtx.companyName,
+        address: company.address ?? "",
+        country: company.country ?? "",
+        state: company.state ?? "",
+        city: company.city ?? "",
+        pincode: company.pincode ?? "",
+        timeZone: company.timeZone ?? "",
+        currency: company.currency ?? "",
+        pfNo: company.pfNo ?? "",
+        tanNo: company.tanNo ?? "",
+        esiNo: company.esiNo ?? "",
+        linNo: company.linNo ?? "",
+        gstNo: company.gstNo ?? "",
+      }));
+    } catch (e) {
+      console.error("Company autofill failed:", e);
+      toast.error("Unable to fetch company details");
+      setSameAsCompany(false);
+    } finally {
+      setCompanyFillLoading(false);
+    }
+  };
+
   const resetForm = () => {
     const baseFormData = {
       serviceProviderID: null as ID | null,
@@ -345,17 +567,13 @@ export function BranchManagement() {
     };
 
     // Auto-set Service Provider and Company for MANAGER/COMPANY_ADMIN/ADMIN (no UI display)
-    if ((user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN" || user?.role === "ADMIN") && currentUserMapping) {
-      baseFormData.serviceProviderID = currentUserMapping.serviceProviderID;
-      baseFormData.companyID = currentUserMapping.companyID;
-    } else if (user?.role === "SUPERADMIN") {
-      const ctx = getSidebarContext();
-      if (ctx) {
-        baseFormData.serviceProviderID = ctx.serviceProviderID;
-        baseFormData.companyID = ctx.companyID;
-        baseFormData.spAutocomplete = ctx.serviceProviderName;
-        baseFormData.coAutocomplete = ctx.companyName;
-      }
+    const activeCtx = getActiveBranchContext();
+
+    if (activeCtx.companyID) {
+      baseFormData.serviceProviderID = activeCtx.serviceProviderID;
+      baseFormData.companyID = activeCtx.companyID;
+      baseFormData.spAutocomplete = activeCtx.serviceProviderName;
+      baseFormData.coAutocomplete = activeCtx.companyName;
     }
 
     setFormData(baseFormData);
@@ -363,6 +581,8 @@ export function BranchManagement() {
     setEditingBranch(null);
     setSpList([]);
     setCoList([]);
+    setSameAsCompany(false);
+    setCompanyFillLoading(false);
     setError(null);
   };
 
@@ -416,12 +636,18 @@ export function BranchManagement() {
     setError(null);
 
     // For MANAGER/COMPANY_ADMIN, ensure serviceProviderID and companyID are set from user mapping
-    let finalServiceProviderID = formData.serviceProviderID;
-    let finalCompanyID = formData.companyID;
+    const activeCtx = getActiveBranchContext();
 
-    if ((user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN" || user?.role === "ADMIN") && currentUserMapping) {
-      finalServiceProviderID = currentUserMapping.serviceProviderID;
-      finalCompanyID = currentUserMapping.companyID;
+    let finalServiceProviderID =
+      activeCtx.serviceProviderID || formData.serviceProviderID;
+
+    let finalCompanyID =
+      activeCtx.companyID || formData.companyID;
+
+    if (!finalCompanyID) {
+      toast.error("Company is not selected");
+      setSaving(false);
+      return;
     }
 
     // map UI bankDetails to API shape
@@ -499,6 +725,27 @@ export function BranchManagement() {
     }
   };
 
+
+  const handleDeleteBranchAdmin = async (id: number) => {
+    if (!confirm("Delete Branch Admin?")) return;
+
+    try {
+      const res = await fetch(`${API.users}/${id}`, {
+        method: "DELETE",
+      });
+
+      if (!res.ok) throw new Error(await res.text());
+
+      toast.success("Branch Admin deleted");
+
+      if (selectedBranch) {
+        await openBranchAdminPanel(selectedBranch);
+      }
+    } catch (e: any) {
+      toast.error(e.message);
+    }
+  };
+
   const handleEdit = async (b: BranchRead) => {
     setEditingBranch(b);
     setIsAddingNew(true);
@@ -519,12 +766,13 @@ export function BranchManagement() {
     let spName = "";
     let coName = "";
 
-    if ((user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN" || user?.role === "ADMIN") && currentUserMapping) {
-      // Use user's mapped IDs
-      finalServiceProviderID = currentUserMapping.serviceProviderID;
-      finalCompanyID = currentUserMapping.companyID;
-      spName = currentUserMapping.serviceProvider?.companyName ?? "";
-      coName = currentUserMapping.company?.companyName ?? "";
+    const activeCtx = getActiveBranchContext();
+
+    if (user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN" || user?.role === "ADMIN") {
+      finalServiceProviderID = b.serviceProviderID ?? activeCtx.serviceProviderID;
+      finalCompanyID = b.companyID ?? activeCtx.companyID;
+      spName = activeCtx.serviceProviderName;
+      coName = activeCtx.companyName;
     } else {
       // For SUPERADMIN, fetch the names as before
       if (b.serviceProviderID) {
@@ -615,6 +863,162 @@ export function BranchManagement() {
     setViewBranch(null);
   };
 
+  const openBranchAdminPanel = async (branch: BranchRead) => {
+    setSelectedBranch(branch);
+    setShowBranchAdminPanel(true);
+    setEditingBranchAdmin(null);
+    setIsAddingNew(false);
+    setIsViewing(false);
+
+    setBranchAdminForm({
+      username: "",
+      password: "",
+      firstName: "",
+      lastName: "",
+      contactNo: "",
+      email: "",
+      role: "BRANCH_ADMIN",
+      isActive: true,
+    });
+
+    try {
+      const data = await fetchJSONSafe<any[]>(API.users);
+      const users = Array.isArray(data) ? data : [];
+
+      const filteredUsers = users.filter((u: any) => {
+        console.log(
+          "User:",
+          u.username,
+          "Role:",
+          u.role,
+          "First Name:",
+          u.firstName,
+          "Last Name:",
+          u.lastName,
+          "Contact No:",
+          u.contactNo,
+          "Email:",
+          u.email,
+          "Branch:",
+          u.branchesID
+        );
+
+        return (
+          u.role === "BRANCH_ADMIN" &&
+          Number(u.branchesID) === Number(branch.id)
+        );
+      });
+
+      setBranchAdmins(filteredUsers);
+    } catch (e) {
+      console.error("Failed to load branch admins:", e);
+      setBranchAdmins([]);
+      setEditingBranchAdmin(null);
+    }
+  };
+
+  const saveBranchAdmin = async (e: React.FormEvent) => {
+  e.preventDefault();
+
+  if (branchAdminSaving) return;
+
+  if (!selectedBranch?.id) {
+    toast.error("Branch not selected");
+    return;
+  }
+
+  if (!branchAdminForm.username.trim()) {
+    toast.error("Username is required");
+    return;
+  }
+
+  if (!editingBranchAdmin && !branchAdminForm.password.trim()) {
+    toast.error("Password is required");
+    return;
+  }
+
+  if (branchAdminForm.password && branchAdminForm.password.length < 6) {
+    toast.error("Password must be at least 6 characters");
+    return;
+  }
+
+  setBranchAdminSaving(true);
+
+  try {
+    const isEdit = Boolean(editingBranchAdmin);
+
+    const payload: any = {
+      username: branchAdminForm.username.trim(),
+      role: "BRANCH_ADMIN",
+      firstName: branchAdminForm.firstName?.trim() || "",
+      lastName: branchAdminForm.lastName?.trim() || "",
+      contactNo: branchAdminForm.contactNo?.trim() || "",
+      email: branchAdminForm.email?.trim() || "",
+      branchesID: selectedBranch.id,
+      companyID: selectedBranch.companyID,
+      serviceProviderID: selectedBranch.serviceProviderID,
+      isActive: branchAdminForm.isActive,
+    };
+
+    if (branchAdminForm.password.trim()) {
+      payload.password = branchAdminForm.password;
+    }
+
+    const res = await fetch(
+      isEdit ? `${API.users}/${editingBranchAdmin.id}` : API.users,
+      {
+        method: isEdit ? "PATCH" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      }
+    );
+
+    if (!res.ok) throw new Error(await res.text());
+
+    toast.success(
+      isEdit
+        ? "Branch admin user updated successfully"
+        : "Branch admin user created successfully"
+    );
+
+    setBranchAdminForm({
+      username: "",
+      password: "",
+      role: "BRANCH_ADMIN",
+      firstName: "",
+      lastName: "",
+      contactNo: "",
+      email: "",
+      isActive: true,
+    });
+
+    setEditingBranchAdmin(null);
+    await openBranchAdminPanel(selectedBranch);
+  } catch (e: any) {
+    console.error(e);
+    toast.error(e?.message || "Failed to save branch admin");
+  } finally {
+    setBranchAdminSaving(false);
+  }
+};
+
+
+  const closeBranchAdminPanel = () => {
+    setShowBranchAdminPanel(false);
+    setSelectedBranch(null);
+    setBranchAdmins([]);
+    setBranchAdminForm({
+      username: "",
+      password: "",
+      role: "BRANCH_ADMIN",
+      firstName: "",
+      lastName: "",
+      contactNo: "",
+      email: "",
+      isActive: true,
+    });
+  };
+
 
   // ---------------------------
   // Search
@@ -638,9 +1042,11 @@ export function BranchManagement() {
     );
   }, [branches, searchTerm]);
 
+
+
   return (
     <div className="space-y-6 w-full max-w-7xl mx-auto px-4 page-content-enter">
-     
+
 
       {/* Header */}
       <div className="flex items-center justify-between w-full">
@@ -649,10 +1055,21 @@ export function BranchManagement() {
         </div>
 
         <div className="flex items-center gap-3">
-          {!isAddingNew && !isViewing && canCreate && (
+          {!isAddingNew && !isViewing && !showBranchAdminPanel && canCreate && (
             <Button
               onClick={() => {
                 resetForm();
+
+                const activeCtx = getActiveBranchContext();
+
+                setFormData((p) => ({
+                  ...p,
+                  serviceProviderID: activeCtx.serviceProviderID,
+                  companyID: activeCtx.companyID,
+                  spAutocomplete: activeCtx.serviceProviderName,
+                  coAutocomplete: activeCtx.companyName,
+                }));
+
                 setIsAddingNew(true);
               }}
               className="text-sm px-3 py-2"
@@ -775,6 +1192,29 @@ export function BranchManagement() {
               )}
 
               {/* Core fields */}
+              {/* Core fields */}
+              <div className="flex items-center gap-2 rounded-md border p-3 bg-gray-50">
+                <input
+                  id="sameAsCompany"
+                  type="checkbox"
+                  checked={sameAsCompany}
+                  disabled={companyFillLoading}
+                  onChange={async (e) => {
+                    const checked = e.target.checked;
+                    setSameAsCompany(checked);
+
+                    if (checked) {
+                      await fillBranchFromCompany();
+                    }
+                  }}
+                  className="w-4 h-4"
+                />
+                <Label htmlFor="sameAsCompany" className="cursor-pointer">
+                  Same as Company
+                  {companyFillLoading ? " loading..." : ""}
+                </Label>
+              </div>
+
               <div className="space-y-2">
                 <Label>Branch Name</Label>
                 <Input
@@ -1011,9 +1451,9 @@ export function BranchManagement() {
                   <div className="text-center py-8 text-gray-500 border border-gray-200 rounded-lg">
                     <Icon icon="mdi:bank" className="w-12 h-12 text-gray-300 mx-auto mb-2" />
                     <p>No bank details added yet</p>
-<p className="text-sm">
-  Click &quot;Add Bank Detail&quot; to add bank information
-</p>
+                    <p className="text-sm">
+                      Click &quot;Add Bank Detail&quot; to add bank information
+                    </p>
                   </div>
                 ) : (
                   formData.bankDetailsForm.map((bank) => (
@@ -1090,7 +1530,7 @@ export function BranchManagement() {
         title="Branch Details"
       >
         {viewBranch && (
-        <div>
+          <div>
             <div className="space-y-3">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="p-3 bg-gray-50 rounded-lg"><strong>Name:</strong> {viewBranch.branchName}</div>
@@ -1120,7 +1560,7 @@ export function BranchManagement() {
                 </div>
                 <div className="p-3 bg-gray-50 rounded-lg"><strong>FY Start:</strong> {viewBranch.financialYearStart}</div>
               </div>
-              
+
               {viewBranch.bankDetails && viewBranch.bankDetails.length > 0 && (
                 <div className="mt-4">
                   <p className="font-semibold mb-2">Bank Accounts:</p>
@@ -1136,104 +1576,314 @@ export function BranchManagement() {
                 </div>
               )}
             </div>
-        </div>
+          </div>
         )}
       </FormDrawer>
 
-      {!isAddingNew && !isViewing && (<>
-      {/* Search & Table */}
-      <Card>
-            <CardContent className="p-6 flex items-center space-x-4">
-              <div className="relative flex-1 min-w-0">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+      {showBranchAdminPanel && selectedBranch && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center justify-between">
+              <span className="flex items-center gap-2">
+                <UserPlus className="w-5 h-5 text-indigo-600" />
+                Branch Admin Users - {selectedBranch.branchName}
+              </span>
+
+              <Button variant="outline" size="sm" onClick={closeBranchAdminPanel}>
+                Back
+              </Button>
+            </CardTitle>
+          </CardHeader>
+
+          <CardContent className="space-y-6">
+            <form onSubmit={saveBranchAdmin} className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Username *</Label>
                 <Input
-                  placeholder="Search branches..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10 w-full"
+                  value={branchAdminForm.username}
+                  autoComplete="off"
+                  name={`branch-admin-username-${selectedBranch?.id || "new"}`}
+                  onChange={(e) =>
+                    setBranchAdminForm((p) => ({ ...p, username: e.target.value }))
+                  }
+                  required
                 />
               </div>
-              <Badge variant="secondary" className="px-3 py-1 flex-shrink-0">
-                {filteredBranches.length} branches
-              </Badge>
-            </CardContent>
-          </Card>
 
-          <Card className="w-full">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Icon icon="mdi:office-building-multiple" className="w-5 h-5" /> Branch List
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-0 w-full overflow-x-auto">
-                <Table className="w-full">
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Branch Name</TableHead>
-                      <TableHead>City</TableHead>
-                      <TableHead>Pin</TableHead>
-                      <TableHead>State</TableHead>
-                      <TableHead>Country</TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
+              <div className="space-y-2">
+  <Label>
+    Password {editingBranchAdmin ? "(leave blank to keep old password)" : "*"}
+  </Label>
+  <Input
+    type="password"
+    value={branchAdminForm.password}
+    autoComplete="new-password"
+    name={`branch-admin-password-${selectedBranch?.id || "new"}`}
+    placeholder={editingBranchAdmin ? "Leave blank to keep old password" : "Minimum 6 characters"}
+    onChange={(e) =>
+      setBranchAdminForm((p) => ({ ...p, password: e.target.value }))
+    }
+    required={!editingBranchAdmin}
+  />
+</div>
+
+
+              <div className="space-y-2">
+                <Label>First Name</Label>
+                <Input
+                  value={branchAdminForm.firstName}
+                  onChange={(e) =>
+                    setBranchAdminForm((p) => ({ ...p, firstName: e.target.value }))
+                  }
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label>Last Name</Label>
+                <Input
+                  value={branchAdminForm.lastName}
+                  onChange={(e) =>
+                    setBranchAdminForm((p) => ({ ...p, lastName: e.target.value }))
+                  }
+                />
+              </div>
+
+
+              <div className="space-y-2">
+
+                <Label>Contact No</Label>
+                <Input
+                  value={branchAdminForm.contactNo}
+                  onChange={(e) =>
+                    setBranchAdminForm((p) => ({ ...p, contactNo: e.target.value }))
+                  }
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label>Email</Label>
+                <Input
+                  type="email"
+                  value={branchAdminForm.email}
+                  onChange={(e) =>
+                    setBranchAdminForm((p) => ({ ...p, email: e.target.value }))
+                  }
+                />
+              </div>
+
+
+
+              <div className="space-y-2">
+                <Label>Role</Label>
+                <Input value="BRANCH_ADMIN" readOnly className="bg-gray-50" />
+              </div>
+
+              <div className="space-y-2">
+                <Label>Status</Label>
+                <label className="flex h-10 items-center gap-2 rounded-md border px-3 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={branchAdminForm.isActive}
+                    onChange={(e) =>
+                      setBranchAdminForm((p) => ({ ...p, isActive: e.target.checked }))
+                    }
+                  />
+                  Active
+                </label>
+              </div>
+
+              <div className="sm:col-span-2 flex justify-end">
+<Button type="submit" disabled={branchAdminSaving}>
+                    <Save className="w-4 h-4 mr-1" />
+{branchAdminSaving
+  ? editingBranchAdmin
+    ? "Updating..."
+    : "Creating..."
+  : editingBranchAdmin
+    ? "Update Branch Admin"
+    : "Create Branch Admin"}
+
+                </Button>
+              </div>
+            </form>
+
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Username</TableHead>
+                  <TableHead>Role</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+
+              <TableBody>
+                {branchAdmins.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={4} className="text-center py-6 text-gray-500">
+                      No branch admin users found for this branch
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  branchAdmins.map((admin) => (
+                    <TableRow
+                      key={admin.id}
+                      className={
+                        editingBranchAdmin?.id === admin.id
+                          ? "bg-indigo-50"
+                          : ""
+                      }
+                    >
+                      <TableCell>{admin.username}</TableCell>
+
+                      <TableCell>
+                        <Badge variant="secondary">
+                          {admin.role}
+                        </Badge>
+                      </TableCell>
+
+                      <TableCell>
+                        <Badge variant={admin.isActive ? "default" : "secondary"}>
+                          {admin.isActive ? "Active" : "Inactive"}
+                        </Badge>
+                      </TableCell>
+
+                      <TableCell className="text-right">
+                        <div className="flex justify-end gap-1">
+
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleEditBranchAdmin(admin)}
+                          >
+                            <Edit className="w-3 h-3" />
+                          </Button>
+
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleDeleteBranchAdmin(admin.id)}
+                            className="text-red-600"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </Button>
+
+                        </div>
+                      </TableCell>
                     </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {loading ? (
-                      <TableBodySkeleton cols={6} />
-                    ) : filteredBranches.length === 0 ? (
-                      <TableRow>
-                        <TableCell colSpan={6} className="text-center py-8 text-gray-500">
-                          <div className="flex flex-col items-center gap-2">
-                            <Icon icon="mdi:account-search" className="w-12 h-12 text-gray-300" />
-                            <p>No branches found</p>
-                            <p className="text-sm">Try adjusting your search criteria</p>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ) : (
-                      filteredBranches.map((b) => (
-                        <TableRow key={b.id}>
-                          <TableCell>{b.branchName || "—"}</TableCell>
-                          <TableCell>{b.city || "—"}</TableCell>
-                          <TableCell>{b.pincode || "—"}</TableCell>
-                          <TableCell>{b.state || "—"}</TableCell>
-                          <TableCell>{b.country || "—"}</TableCell>
-                          <TableCell className="text-right">
-                            <div className="flex items-center justify-end gap-1">
-                              {/* ✏️ Only SUPERADMIN and MANAGER can edit */}
-                              {canManage && (
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => handleEdit(b)}
-                                  className="h-7 w-7 p-0"
-                                  title="Edit"
-                                >
-                                  <Edit className="w-3 h-3" />
-                                </Button>
-                              )}
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      )}
 
-                              {/* 🗑️ Only SUPERADMIN can delete */}
-                              {user?.role === "SUPERADMIN" && (
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => handleDelete(b.id)}
-                                  className="h-7 w-7 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
-                                  title="Delete"
-                                >
-                                  <Trash2 className="w-3 h-3" />
-                                </Button>
-                              )}
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ))
-                    )}
-                  </TableBody>
-                </Table>
-            </CardContent>
-          </Card>
+      {!isAddingNew && !isViewing && !showBranchAdminPanel && (<>
+        {/* Search & Table */}
+        <Card>
+          <CardContent className="p-6 flex items-center space-x-4">
+            <div className="relative flex-1 min-w-0">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+              <Input
+                placeholder="Search branches..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-10 w-full"
+              />
+            </div>
+            <Badge variant="secondary" className="px-3 py-1 flex-shrink-0">
+              {filteredBranches.length} branches
+            </Badge>
+          </CardContent>
+        </Card>
+
+        <Card className="w-full">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Icon icon="mdi:office-building-multiple" className="w-5 h-5" /> Branch List
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-0 w-full overflow-x-auto">
+            <Table className="w-full">
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Branch Name</TableHead>
+                  <TableHead>City</TableHead>
+                  <TableHead>Pin</TableHead>
+                  <TableHead>State</TableHead>
+                  <TableHead>Country</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {loading ? (
+                  <TableBodySkeleton cols={6} />
+                ) : filteredBranches.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-center py-8 text-gray-500">
+                      <div className="flex flex-col items-center gap-2">
+                        <Icon icon="mdi:account-search" className="w-12 h-12 text-gray-300" />
+                        <p>No branches found</p>
+                        <p className="text-sm">Try adjusting your search criteria</p>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  filteredBranches.map((b) => (
+                    <TableRow key={b.id}>
+                      <TableCell>{b.branchName || "—"}</TableCell>
+                      <TableCell>{b.city || "—"}</TableCell>
+                      <TableCell>{b.pincode || "—"}</TableCell>
+                      <TableCell>{b.state || "—"}</TableCell>
+                      <TableCell>{b.country || "—"}</TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex items-center justify-end gap-1">
+                          {canManageBranchAdmins && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => openBranchAdminPanel(b)}
+                              className="h-7 w-7 p-0 text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50"
+                              title="Manage Branch Admin Users"
+                            >
+                              <UserPlus className="w-3 h-3" />
+                            </Button>
+                          )}
+                          {/* ✏️ Only SUPERADMIN and MANAGER can edit */}
+                          {canManage && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleEdit(b)}
+                              className="h-7 w-7 p-0"
+                              title="Edit"
+                            >
+                              <Edit className="w-3 h-3" />
+                            </Button>
+                          )}
+
+                          {/* 🗑️ Only SUPERADMIN can delete */}
+                          {user?.role === "SUPERADMIN" && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleDelete(b.id)}
+                              className="h-7 w-7 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+                              title="Delete"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </Button>
+                          )}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
       </>)}
     </div>
   );

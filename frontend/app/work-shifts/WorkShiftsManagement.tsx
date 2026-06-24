@@ -22,7 +22,7 @@ import {
 } from "../components/ui/table";
 import { Badge } from "../components/ui/badge";
 import { Icon } from "@iconify/react";
-import { Plus, Search, Edit, Trash2, ArrowLeft } from "lucide-react";
+import { Plus, Search, Edit, Trash2, Filter, RotateCcw, X } from "lucide-react";
 import { SearchSuggestInput } from "../components/SearchSuggestInput";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import { toast } from "sonner";
@@ -84,7 +84,11 @@ const DAYS_OF_WEEK = [
 export function WorkShiftsManagement() {
   const [listLoading, setListLoading] = useState(true);
   const [workShifts, setWorkShifts] = useState<WorkShift[]>([]);
-  const [searchTerm, setSearchTerm] = useState("");
+const [searchTerm, setSearchTerm] = useState("");
+
+const [selectedFilterBranchIds, setSelectedFilterBranchIds] = useState<string[]>([]);
+const [showBranchFilterModal, setShowBranchFilterModal] = useState(false);
+const [branchFilterList, setBranchFilterList] = useState<any[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingWorkShift, setEditingWorkShift] = useState<WorkShift | null>(
     null
@@ -261,6 +265,32 @@ export function WorkShiftsManagement() {
     };
   }, [user]);
 
+  const loadBranchFilterList = async () => {
+  try {
+    const res = await fetch(`${BACKEND_URL}/branches`);
+    const data = await res.json();
+
+    if (user?.role === "SUPERADMIN") {
+      setBranchFilterList(data);
+      return;
+    }
+
+    const companyID =
+      currentUserMapping?.companyID ??
+      user?.companyID ??
+      formData.companyID;
+
+    setBranchFilterList(
+      data.filter(
+        (b: any) =>
+          Number(b.companyID) === Number(companyID)
+      )
+    );
+  } catch (e) {
+    console.error(e);
+    setBranchFilterList([]);
+  }
+};
 
   const loadWorkShifts = async () => {
     setListLoading(true);
@@ -334,26 +364,37 @@ export function WorkShiftsManagement() {
 
 
 
-  const filteredWorkShifts = workShifts.filter(
-    (workShift) =>
-      workShift.workShiftName
-        .toLowerCase()
-        .includes(searchTerm.toLowerCase()) ||
-      workShift.isFlexible === (searchTerm.toLowerCase() === "flexible") ||
-      workShift.isRotating === (searchTerm.toLowerCase() === "rotating") ||
-      workShift.workShiftType
-        ?.toLowerCase()
-        .includes(searchTerm.toLowerCase()) ||
-      (workShift.serviceProvider || "")
-        .toLowerCase()
-        .includes(searchTerm.toLowerCase()) ||
-      (workShift.companyName || "")
-        .toLowerCase()
-        .includes(searchTerm.toLowerCase()) ||
-      (workShift.branchName || "")
-        .toLowerCase()
-        .includes(searchTerm.toLowerCase())
-  );
+  const filteredWorkShifts = workShifts.filter((workShift) => {
+  const matchesBranch =
+    selectedFilterBranchIds.length === 0 ||
+    selectedFilterBranchIds.includes(
+      String(workShift.branchesID)
+    );
+
+  const matchesSearch =
+    workShift.workShiftName
+      .toLowerCase()
+      .includes(searchTerm.toLowerCase()) ||
+    workShift.isFlexible ===
+      (searchTerm.toLowerCase() === "flexible") ||
+    workShift.isRotating ===
+      (searchTerm.toLowerCase() === "rotating") ||
+    workShift.workShiftType
+      ?.toLowerCase()
+      .includes(searchTerm.toLowerCase()) ||
+    (workShift.serviceProvider || "")
+      .toLowerCase()
+      .includes(searchTerm.toLowerCase()) ||
+    (workShift.companyName || "")
+      .toLowerCase()
+      .includes(searchTerm.toLowerCase()) ||
+    (workShift.branchName || "")
+      .toLowerCase()
+      .includes(searchTerm.toLowerCase());
+
+  return matchesBranch && matchesSearch;
+});
+
 
   const calcMinutes = (start: string, end: string): number => {
     if (!start || !end) return 0;
@@ -488,7 +529,8 @@ export function WorkShiftsManagement() {
         throw new Error(`Failed to save work shift: ${res.status}`);
       }
 
-      await loadWorkShifts();
+await loadWorkShifts();
+await loadBranchFilterList();
       resetForm();
       setIsDialogOpen(false);
       toast.success(editingWorkShift ? "Updated successfully" : "Created successfully");
@@ -656,7 +698,8 @@ export function WorkShiftsManagement() {
                 )}
 
                 {/* MANAGER → Only Branch input */}
-                {user?.role === "SERVICE_PROVIDER" && (
+{(user?.role === "SERVICE_PROVIDER" ||
+  user?.role === "COMPANY_ADMIN") && (
                   <SearchSuggestInput
                     label="Branch Name"
                     placeholder="Select Branch"
@@ -671,17 +714,27 @@ export function WorkShiftsManagement() {
                         branchesID: selected.value,
                       }))
                     }
-                    fetchData={async (query) => {
-                      const res = await fetch(`${BACKEND_URL}/branches`);
-                      const data = await res.json();
-                      const q = query.toLowerCase();
-                      return data
-                        .filter(
-                          (b: any) =>
-                            b.companyID === currentUserMapping?.companyID &&
-                            (b.branchName || "").toLowerCase().includes(q)
-                        );
-                    }}
+                   fetchData={async (query) => {
+  const res = await fetch(`${BACKEND_URL}/branches`);
+  const data = await res.json();
+
+  const q = query.toLowerCase();
+
+  return data.filter((b: any) => {
+    const matchesCompany =
+      Number(b.companyID) ===
+      Number(
+        currentUserMapping?.companyID ??
+        user?.companyID ??
+        formData.companyID
+      );
+
+    const matchesSearch =
+      (b.branchName || "").toLowerCase().includes(q);
+
+    return matchesCompany && matchesSearch;
+  });
+}}
                     displayField="branchName"
                     valueField="id"
                     required
@@ -926,7 +979,83 @@ export function WorkShiftsManagement() {
       {/* Search and Filters */}
       <Card>
         <CardContent>
-          <div className="flex items-center gap-4 flex-wrap">
+<div className="flex items-center gap-3 w-full">
+  <Button
+    variant="outline"
+    size="sm"
+    onClick={() => setShowBranchFilterModal(true)}
+  >
+    <Filter className="w-4 h-4 mr-1" />
+    Filter
+    {selectedFilterBranchIds.length > 0 && (
+      <Badge className="ml-2">
+        {selectedFilterBranchIds.length}
+      </Badge>
+    )}
+  </Button>
+  
+  {showBranchFilterModal && (
+  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+    <div className="bg-white rounded-xl shadow-xl w-full max-w-xl p-5">
+      <div className="flex justify-between items-center mb-4">
+        <h3 className="font-semibold">
+          Filter Work Shifts by Branch
+        </h3>
+
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => setShowBranchFilterModal(false)}
+        >
+          <X className="w-4 h-4" />
+        </Button>
+      </div>
+
+      <div className="space-y-2 max-h-80 overflow-y-auto">
+        {branchFilterList.map((branch) => (
+          <label
+            key={branch.id}
+            className="flex items-center gap-2 border rounded p-2"
+          >
+            <input
+              type="checkbox"
+              checked={selectedFilterBranchIds.includes(
+                String(branch.id)
+              )}
+              onChange={() => {
+                setSelectedFilterBranchIds((prev) =>
+                  prev.includes(String(branch.id))
+                    ? prev.filter(
+                        (x) => x !== String(branch.id)
+                      )
+                    : [...prev, String(branch.id)]
+                );
+              }}
+            />
+            {branch.branchName}
+          </label>
+        ))}
+      </div>
+
+      <div className="flex justify-end gap-2 mt-4">
+        <Button
+          variant="outline"
+          onClick={() => setSelectedFilterBranchIds([])}
+        >
+          <RotateCcw className="w-4 h-4 mr-1" />
+          Clear
+        </Button>
+
+        <Button
+          onClick={() => setShowBranchFilterModal(false)}
+        >
+          Apply
+        </Button>
+      </div>
+    </div>
+  </div>
+)}
+
             <div className="relative flex-1 min-w-0">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
               <Input

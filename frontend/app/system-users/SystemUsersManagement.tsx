@@ -21,10 +21,22 @@ import { FormDrawer } from "../components/ui/form-drawer";
 
 const API = "/backend/users";
 
+interface UserCompanyRow {
+  id: number;
+  userID: number;
+  companyID: number;
+  isPrimary: boolean;
+  company?: {
+    id: number;
+    companyName?: string;
+  } | null;
+}
+
 interface UserRow {
   id: number;
   username: string;
   role: string;
+  
   isActive: boolean;
   serviceProviderID?: number | null;
   companyID?: number | null;
@@ -32,8 +44,9 @@ interface UserRow {
   createdAt?: string;
   updatedAt?: string;
   serviceProvider?: { companyName?: string } | null;
-  company?: { companyName?: string } | null;
+  company?: { id?: number; companyName?: string } | null;
   branches?: { branchName?: string } | null;
+  userCompanies?: UserCompanyRow[];
 }
 
 // Roles available based on the current user's role
@@ -48,6 +61,17 @@ const ROLE_DISPLAY: Record<string, string> = {
   ADMIN: "ADMIN",
   BRANCH_ADMIN: "BRANCH ADMIN",
   EMPLOYEE: "EMPLOYEE",
+};
+
+const emptyUserForm = {
+  username: "",
+  password: "",
+  role: "",
+  serviceProviderID: "" as string | number,
+  companyID: "" as string | number,
+  companyIDs: [] as number[],
+  branchesID: "" as string | number,
+  isActive: true,
 };
 
 export function SystemUsersManagement() {
@@ -72,15 +96,9 @@ export function SystemUsersManagement() {
   const [companyList, setCompanyList] = useState<any[]>([]);
   const [branchList, setBranchList] = useState<any[]>([]);
 
-  const [form, setForm] = useState({
-    username: "",
-    password: "",
-    role: "",
-    serviceProviderID: "" as string | number,
-    companyID: "" as string | number,
-    branchesID: "" as string | number,
-    isActive: true,
-  });
+   const [form, setForm] = useState({ ...emptyUserForm });
+  const [companySearch, setCompanySearch] = useState("");
+  const [companyDropdownOpen, setCompanyDropdownOpen] = useState(false);
 
   const fetchRows = async () => {
     setLoading(true);
@@ -117,8 +135,13 @@ export function SystemUsersManagement() {
   }, []);
 
   const resetForm = () => {
-    setForm({ username: "", password: "", role: "", serviceProviderID: "", companyID: "", branchesID: "", isActive: true });
+    setForm({ ...emptyUserForm });
     setEditingRow(null);
+    setIsViewing(false);
+    setViewRow(null);
+    setShowPassword(false);
+    setCompanySearch("");
+    setCompanyDropdownOpen(false);
   };
 
   const filteredCompanies = useMemo(() => {
@@ -126,6 +149,54 @@ export function SystemUsersManagement() {
     if (!spId) return companyList;
     return companyList.filter((c: any) => c.serviceProviderID === Number(spId));
   }, [companyList, form.serviceProviderID, isServiceProvider, user?.serviceProviderID]);
+
+  const selectedCompanies = useMemo(() => {
+    return companyList.filter((c: any) =>
+      form.companyIDs.includes(Number(c.id))
+    );
+  }, [companyList, form.companyIDs]);
+
+  const companySuggestions = useMemo(() => {
+    const term = companySearch.trim().toLowerCase();
+
+    return filteredCompanies
+      .filter((c: any) => !form.companyIDs.includes(Number(c.id)))
+      .filter((c: any) =>
+        !term ? true : String(c.companyName || "").toLowerCase().includes(term)
+      )
+      .slice(0, 8);
+  }, [filteredCompanies, companySearch, form.companyIDs]);
+
+  const addCompanyToUser = (company: any) => {
+    const id = Number(company.id);
+
+    setForm((p) => {
+      const ids = Array.from(new Set([...p.companyIDs, id]));
+
+      return {
+        ...p,
+        companyIDs: ids,
+        companyID: p.companyID || id,
+        branchesID: "",
+      };
+    });
+
+    setCompanySearch("");
+    setCompanyDropdownOpen(false);
+  };
+
+  const removeCompanyFromUser = (companyId: number) => {
+    setForm((p) => {
+      const ids = p.companyIDs.filter((id) => id !== companyId);
+
+      return {
+        ...p,
+        companyIDs: ids,
+        companyID: Number(p.companyID) === companyId ? ids[0] || "" : p.companyID,
+        branchesID: "",
+      };
+    });
+  };
 
   const filteredBranches = useMemo(() => {
     if (!form.companyID) return branchList;
@@ -136,13 +207,30 @@ export function SystemUsersManagement() {
     e.preventDefault();
     if (!form.username) { toast.error("Username is required"); return; }
     if (!editingRow && !form.password) { toast.error("Password is required"); return; }
+    if (form.role === "COMPANY_ADMIN" && form.companyIDs.length === 0) {
+      toast.error("Select at least one company");
+      return;
+    }
+
+    if ((form.role === "ADMIN" || form.role === "BRANCH_ADMIN") && !form.companyID) {
+      toast.error("Company is required");
+      return;
+    }
+
+    if (form.role === "BRANCH_ADMIN" && !form.branchesID) {
+      toast.error("Branch is required");
+      return;
+    }
+
     setSaving(true);
+    
     try {
       const payload: any = {
-        username: form.username,
+        username: form.username.trim(),
         role: form.role || undefined,
         serviceProviderID: form.serviceProviderID ? Number(form.serviceProviderID) : undefined,
         companyID: form.companyID ? Number(form.companyID) : undefined,
+        companyIDs: form.role === "COMPANY_ADMIN" ? form.companyIDs : undefined,
         branchesID: form.branchesID ? Number(form.branchesID) : undefined,
         isActive: form.isActive,
       };
@@ -154,6 +242,9 @@ export function SystemUsersManagement() {
       if (!res.ok) throw new Error(await res.text());
       toast.success(editingRow ? "User updated" : "User created");
       resetForm();
+      setTimeout(() => {
+  setForm({ ...emptyUserForm });
+}, 0);
       setIsAddingNew(false);
       fetchRows();
     } catch (err: any) {
@@ -163,17 +254,29 @@ export function SystemUsersManagement() {
     }
   };
 
-  const handleEdit = (row: UserRow) => {
+    const handleEdit = (row: UserRow) => {
+    const mappedCompanyIDs =
+      row.userCompanies?.length
+        ? row.userCompanies.map((x) => Number(x.companyID))
+        : row.companyID
+          ? [Number(row.companyID)]
+          : [];
+
     setEditingRow(row);
     setForm({
       username: row.username,
       password: "",
       role: row.role ?? "",
       serviceProviderID: row.serviceProviderID ?? "",
-      companyID: row.companyID ?? "",
+      companyID: row.companyID ?? mappedCompanyIDs[0] ?? "",
+      companyIDs: mappedCompanyIDs,
       branchesID: row.branchesID ?? "",
       isActive: row.isActive,
     });
+
+    setCompanySearch("");
+    setCompanyDropdownOpen(false);
+    setShowPassword(false);
     setIsAddingNew(true);
   };
 
@@ -222,8 +325,23 @@ export function SystemUsersManagement() {
       <div className="flex items-center justify-between w-full">
         <p className="text-gray-600 text-sm">Manage system users and access</p>
         {!isAddingNew && !isViewing && (
-          <Button onClick={() => { resetForm(); if (isAdmin && user?.companyID) { setForm(p => ({ ...p, companyID: user.companyID as number })); } setIsAddingNew(true); }} className="text-sm px-3 py-2">
-            <Plus className="w-4 h-4 mr-1" /> Add User
+          <Button
+            onClick={() => {
+              resetForm();
+
+              if (isAdmin && user?.companyID) {
+                setForm((p) => ({
+                  ...p,
+                  companyID: user.companyID as number,
+                  companyIDs: [Number(user.companyID)],
+                }));
+              }
+
+              setIsAddingNew(true);
+            }}
+            className="text-sm px-3 py-2"
+          >
+              <Plus className="w-4 h-4 mr-1" /> Add User
           </Button>
         )}
       </div>
@@ -234,13 +352,21 @@ export function SystemUsersManagement() {
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
             <Label>Username *</Label>
-            <Input value={form.username} onChange={(e) => setForm((p) => ({ ...p, username: e.target.value }))} placeholder="Username" required />
+            <Input
+  autoComplete="new-username"
+  name="new-user-username"
+  value={form.username}
+   onChange={(e) => setForm((p) => ({ ...p, username: e.target.value }))} placeholder="Username" required />
           </div>
 
           <div className="space-y-2">
             <Label>{editingRow ? "New Password (leave blank to keep)" : "Password *"}</Label>
             <div className="relative">
-              <Input type={showPassword ? "text" : "password"} value={form.password} onChange={(e) => setForm((p) => ({ ...p, password: e.target.value }))} placeholder={editingRow ? "Leave blank to keep current" : "Minimum 6 characters"} className="pr-10" {...(!editingRow ? { required: true, minLength: 6 } : {})} />
+              <Input
+  autoComplete="new-password"
+  name="new-user-password"
+  type={showPassword ? "text" : "password"}
+  value={form.password} onChange={(e) => setForm((p) => ({ ...p, password: e.target.value }))} placeholder={editingRow ? "Leave blank to keep current" : "Minimum 6 characters"} className="pr-10" {...(!editingRow ? { required: true, minLength: 6 } : {})} />
               <button type="button" onClick={() => setShowPassword((v) => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600" tabIndex={-1}>
                 {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
@@ -249,8 +375,19 @@ export function SystemUsersManagement() {
 
           <div className="space-y-2">
             <Label>Role</Label>
-            <Select value={form.role} onValueChange={(v) => setForm((p) => ({ ...p, role: v, companyID: "", branchesID: "" }))}>
-              <SelectTrigger><SelectValue placeholder="Select role…" /></SelectTrigger>
+            <Select
+              value={form.role}
+              onValueChange={(v) =>
+                setForm((p) => ({
+                  ...p,
+                  role: v,
+                  companyID: "",
+                  companyIDs: [],
+                  branchesID: "",
+                }))
+              }
+            >
+                <SelectTrigger><SelectValue placeholder="Select role…" /></SelectTrigger>
               <SelectContent>
                 {(isSuperAdmin ? SUPERADMIN_ROLES : isAdmin ? ADMIN_ROLES : SERVICE_PROVIDER_ROLES).map((r) => <SelectItem key={r} value={r}>{r === "SERVICE_PROVIDER" ? "SERVICE PROVIDER" : r === "BRANCH_ADMIN" ? "BRANCH ADMIN" : r === "COMPANY_ADMIN" ? "COMPANY ADMIN" : r}</SelectItem>)}
               </SelectContent>
@@ -261,7 +398,18 @@ export function SystemUsersManagement() {
           {isSuperAdmin && (form.role === "SERVICE_PROVIDER" || form.role === "COMPANY_ADMIN" || form.role === "ADMIN" || form.role === "BRANCH_ADMIN") && (
             <div className="space-y-2">
               <Label>Service Provider</Label>
-              <Select value={String(form.serviceProviderID)} onValueChange={(v) => setForm((p) => ({ ...p, serviceProviderID: v, companyID: "", branchesID: "" }))}>
+              <Select
+                value={String(form.serviceProviderID)}
+                onValueChange={(v) =>
+                  setForm((p) => ({
+                    ...p,
+                    serviceProviderID: v,
+                    companyID: "",
+                    companyIDs: [],
+                    branchesID: "",
+                  }))
+                }
+              >
                 <SelectTrigger><SelectValue placeholder="Select service provider…" /></SelectTrigger>
                 <SelectContent>
                   {spList.map((s: any) => <SelectItem key={s.id} value={String(s.id)}>{s.companyName}</SelectItem>)}
@@ -270,16 +418,131 @@ export function SystemUsersManagement() {
             </div>
           )}
 
-          {/* Company field: shown for COMPANY_ADMIN, ADMIN, BRANCH_ADMIN */}
+                   {/* Company field */}
           {(form.role === "COMPANY_ADMIN" || form.role === "ADMIN" || form.role === "BRANCH_ADMIN") && (
             <div className="space-y-2">
-              <Label>Company</Label>
-              <Select value={String(form.companyID)} onValueChange={(v) => setForm((p) => ({ ...p, companyID: v, branchesID: "" }))}>
-                <SelectTrigger><SelectValue placeholder="Select company…" /></SelectTrigger>
-                <SelectContent>
-                  {filteredCompanies.map((c: any) => <SelectItem key={c.id} value={String(c.id)}>{c.companyName}</SelectItem>)}
-                </SelectContent>
-              </Select>
+              <Label>
+                {form.role === "COMPANY_ADMIN" ? "Companies" : "Company"}
+              </Label>
+
+              {form.role === "COMPANY_ADMIN" ? (
+                <div className="space-y-3">
+                  <div className="relative">
+                    <div className="flex gap-2">
+                      <Input
+                        value={companySearch}
+                        onFocus={() => setCompanyDropdownOpen(true)}
+                        onChange={(e) => {
+                          setCompanySearch(e.target.value);
+                          setCompanyDropdownOpen(true);
+                        }}
+                        placeholder="Search company and add..."
+                        autoComplete="off"
+                      />
+
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => {
+                          if (companySuggestions.length > 0) {
+                            addCompanyToUser(companySuggestions[0]);
+                          }
+                        }}
+                        disabled={companySuggestions.length === 0}
+                        title="Add company"
+                      >
+                        <Plus className="w-4 h-4" />
+                      </Button>
+                    </div>
+
+                    {companyDropdownOpen && companySuggestions.length > 0 && (
+                      <div className="absolute z-50 mt-1 w-full rounded-md border bg-white shadow-lg max-h-56 overflow-auto">
+                        {companySuggestions.map((company: any) => (
+                          <button
+                            key={company.id}
+                            type="button"
+                            onClick={() => addCompanyToUser(company)}
+                            className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100"
+                          >
+                            {company.companyName}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {selectedCompanies.length > 0 && (
+                    <div className="space-y-2">
+                      {selectedCompanies.map((company: any, index: number) => (
+                        <div
+                          key={company.id}
+                          className="flex items-center justify-between rounded-md border px-3 py-2 bg-gray-50"
+                        >
+                          <div>
+                            <p className="text-sm font-medium">{company.companyName}</p>
+                            {Number(form.companyID) === Number(company.id) ? (
+                              <p className="text-xs text-green-600">Primary company</p>
+                            ) : (
+                              <button
+                                type="button"
+                                className="text-xs text-blue-600 hover:underline"
+                                onClick={() =>
+                                  setForm((p) => ({
+                                    ...p,
+                                    companyID: company.id,
+                                  }))
+                                }
+                              >
+                                Set as primary
+                              </button>
+                            )}
+                          </div>
+
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => removeCompanyFromUser(Number(company.id))}
+                            className="text-red-500 hover:text-red-700"
+                            disabled={selectedCompanies.length === 1 && !editingRow}
+                          >
+                            <X className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {selectedCompanies.length === 0 && (
+                    <p className="text-xs text-gray-500">
+                      Add at least one company. First selected company becomes primary.
+                    </p>
+                  )}
+                </div>
+              ) : (
+                <Select
+                  value={String(form.companyID)}
+                  onValueChange={(v) =>
+                    setForm((p) => ({
+                      ...p,
+                      companyID: v,
+                      companyIDs: [Number(v)],
+                      branchesID: "",
+                    }))
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select company…" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {filteredCompanies.map((c: any) => (
+                      <SelectItem key={c.id} value={String(c.id)}>
+                        {c.companyName}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
             </div>
           )}
 
@@ -318,7 +581,13 @@ export function SystemUsersManagement() {
             <p><strong>Username:</strong> {viewRow.username}</p>
             <p><strong>Role:</strong> {ROLE_DISPLAY[viewRow.role] || viewRow.role}</p>
             <p><strong>Service Provider:</strong> {viewRow.serviceProvider?.companyName ?? "—"}</p>
-            <p><strong>Company:</strong> {viewRow.company?.companyName ?? "—"}</p>
+            <p>
+              <strong>Company:</strong>{" "}
+              {viewRow.userCompanies?.length
+                ? viewRow.userCompanies.map((x) => x.company?.companyName).filter(Boolean).join(", ")
+                : viewRow.company?.companyName ?? "—"}
+            </p>
+            
             <p><strong>Branch:</strong> {viewRow.branches?.branchName ?? "—"}</p>
             <p><strong>Status:</strong> {viewRow.isActive ? "Active" : "Inactive"}</p>
             <p><strong>Created:</strong> {viewRow.createdAt ? new Date(viewRow.createdAt).toLocaleDateString() : "—"}</p>
@@ -362,8 +631,16 @@ export function SystemUsersManagement() {
                       <TableRow key={r.id}>
                         <TableCell className="font-medium">{r.username}</TableCell>
                         <TableCell><Badge variant="secondary">{ROLE_DISPLAY[r.role] || r.role}</Badge></TableCell>
-                        <TableCell>{r.company?.companyName ?? "—"}</TableCell>
-                        <TableCell>{r.branches?.branchName ?? "—"}</TableCell>
+                        <TableCell>
+                          {r.userCompanies?.length
+                            ? r.userCompanies
+                                .map((x) => x.company?.companyName)
+                                .filter(Boolean)
+                                .join(", ")
+                            : r.company?.companyName ?? "—"}
+                        </TableCell>
+                        
+                         <TableCell>{r.branches?.branchName ?? "—"}</TableCell>
                         <TableCell>
                           <Badge variant={r.isActive ? "default" : "destructive"}>{r.isActive ? "Active" : "Inactive"}</Badge>
                         </TableCell>

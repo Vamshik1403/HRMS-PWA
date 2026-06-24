@@ -100,6 +100,8 @@ export class EmpAttendanceRegulariseService {
       });
     }
 
+
+
     // Handle single punch using policy markAs setting
     if (punches.length === 1) {
       const singlePunchStatus = policy?.markAs === 'Absent' ? 'ABSENT' : 'HALFDAY';
@@ -226,6 +228,7 @@ export class EmpAttendanceRegulariseService {
         serviceProvider: true,
         company: true,
         branches: true,
+        departments: true,
         manageEmployee: true,
       },
     });
@@ -237,6 +240,7 @@ export class EmpAttendanceRegulariseService {
         serviceProvider: true,
         company: true,
         branches: true,
+        departments: true,
         manageEmployee: true,
       },
       orderBy: {
@@ -252,6 +256,7 @@ export class EmpAttendanceRegulariseService {
         serviceProvider: true,
         company: true,
         branches: true,
+        departments: true,
         manageEmployee: true,
       },
     });
@@ -266,6 +271,7 @@ export class EmpAttendanceRegulariseService {
         serviceProvider: true,
         company: true,
         branches: true,
+        departments: true,
         manageEmployee: true,
       },
     });

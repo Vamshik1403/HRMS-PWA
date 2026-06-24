@@ -14,6 +14,18 @@ export class CreateTerminationDto {
   @IsInt()
   employeeId: number;
 
+  @IsOptional()
+@IsInt()
+serviceProviderID?: number;
+
+@IsOptional()
+@IsInt()
+companyID?: number;
+
+@IsOptional()
+@IsInt()
+branchesID?: number;
+
   @IsEnum(ExitType)
   exitType: ExitType;
 

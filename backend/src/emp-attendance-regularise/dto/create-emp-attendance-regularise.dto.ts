@@ -15,6 +15,10 @@ export class CreateEmpAttendanceRegulariseDto {
 
   @IsOptional()
   @IsInt()
+  departmentID?: number;
+
+  @IsOptional()
+  @IsInt()
   manageEmployeeID?: number;
 
   @IsOptional()

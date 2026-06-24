@@ -34,7 +34,9 @@ interface MemoRecipient {
   employeeID?: string | null;
 }
 
-interface MemoRow {
+
+
+ interface MemoRow {
   id: number;
   employeeID: number;
   employeeIDs?: number[];
@@ -508,8 +510,15 @@ export function EmployeeMemoManagement() {
                 Employees *{" "}
                 <span className="text-gray-400 font-normal text-xs">(select one or more)</span>
               </Label>
+              <Input
+                value={empSearch}
+                onChange={(e) => { setEmpSearch(e.target.value); runFetchEmp(e.target.value); }}
+                onFocus={(e) => { if (e.target.value.length >= 1) runFetchEmp(e.target.value); }}
+                placeholder="Search and add employees…"
+                autoComplete="off"
+              />
 
-              {selectedEmployees.length > 0 && (
+               {selectedEmployees.length > 0 && (
                 <div className="flex flex-wrap gap-1.5 p-2 border rounded-md bg-gray-50 min-h-[36px]">
                   {selectedEmployees.map((emp) => (
                     <span
@@ -530,13 +539,6 @@ export function EmployeeMemoManagement() {
                 </div>
               )}
 
-              <Input
-                value={empSearch}
-                onChange={(e) => { setEmpSearch(e.target.value); runFetchEmp(e.target.value); }}
-                onFocus={(e) => { if (e.target.value.length >= 1) runFetchEmp(e.target.value); }}
-                placeholder="Search and add employees…"
-                autoComplete="off"
-              />
               {empList.length > 0 && (
                 <div className="absolute z-10 bg-white border rounded w-full shadow max-h-48 overflow-y-auto">
                   {empList.map((e) => {
@@ -584,6 +586,7 @@ export function EmployeeMemoManagement() {
                   <SelectItem value="Notice">Notice</SelectItem>
                   <SelectItem value="Warning">Warning</SelectItem>
                   <SelectItem value="Complaint">Complaint</SelectItem>
+                  <SelectItem value="Announcement">Announcement</SelectItem>
                 </SelectContent>
               </Select>
             </div>

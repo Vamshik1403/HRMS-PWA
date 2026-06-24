@@ -1,77 +1,12 @@
 /** @type {import('next').NextConfig} */
 const withPWA = require('next-pwa')({
   dest: 'public',
-  // Single registration path in ServiceWorkerBootstrap (avoids races with push flow)
+  // Push uses /push-sw.js only. Workbox offline SW cached stale CSS after deploys.
+  disable: true,
   register: false,
-  // Activate new SW immediately — avoids hung push registration after PWA reinstall
   skipWaiting: true,
-  
-  // Service Worker configuration
-  // Distinct name avoids stale CDN cache on /sw.js after deploys (broke push on iOS)
   sw: 'openhrm-sw.js',
-
-  // Include custom worker code (push handlers) — persists across builds
   customWorkerDir: 'worker',
-  
-  // Runtime caching strategies
-  runtimeCaching: [
-    // API endpoints - Network first, fallback to cache
-    {
-      urlPattern: /^https?.*\/(api|backend|v1)\/.*/i,
-      handler: 'NetworkFirst',
-      options: {
-        cacheName: 'api-cache',
-        networkTimeoutSeconds: 10,
-        expiration: {
-          maxEntries: 50,
-          maxAgeSeconds: 5 * 60, // 5 minutes
-        },
-      },
-    },
-    // Images - Cache first
-    {
-      urlPattern: /\.(?:png|jpg|jpeg|svg|webp|gif)$/i,
-      handler: 'CacheFirst',
-      options: {
-        cacheName: 'image-cache',
-        expiration: {
-          maxEntries: 100,
-          maxAgeSeconds: 60 * 60 * 24 * 30, // 30 days
-        },
-      },
-    },
-    // Static assets - Cache first
-    {
-      urlPattern: /\.(?:js|css|woff2|woff|ttf|eot)$/i,
-      handler: 'CacheFirst',
-      options: {
-        cacheName: 'static-cache',
-        expiration: {
-          maxEntries: 100,
-          maxAgeSeconds: 60 * 60 * 24 * 365, // 1 year
-        },
-      },
-    },
-    // HTML pages - Network first
-    {
-      urlPattern: /^https?.*\.html$/i,
-      handler: 'NetworkFirst',
-      options: {
-        cacheName: 'html-cache',
-        networkTimeoutSeconds: 10,
-        expiration: {
-          maxEntries: 50,
-          maxAgeSeconds: 60 * 60 * 24, // 1 day
-        },
-      },
-    },
-  ],
-  
-  // Disable automatic PWA features (we'll handle manually)
-  buildExcludes: [/chunks\/pages\/api\/.*/],
-  
-  // Scope
-  scope: '/',
 });
 
 const nextConfig = {

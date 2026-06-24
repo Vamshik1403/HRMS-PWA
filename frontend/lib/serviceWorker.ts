@@ -3,6 +3,41 @@
  * openhrm-sw.js (Workbox) is optional for offline cache and is not required for notifications.
  */
 
+/** Clear legacy Workbox caches that served outdated CSS/JS after deploys. */
+export async function clearLegacyPwaCaches(): Promise<void> {
+  if (!("caches" in window)) return;
+  const keys = await caches.keys();
+  await Promise.all(
+    keys
+      .filter(
+        (k) =>
+          k.startsWith("workbox-") ||
+          k === "static-cache" ||
+          k === "api-cache" ||
+          k === "image-cache" ||
+          k === "html-cache" ||
+          k === "next-static",
+      )
+      .map((k) => caches.delete(k)),
+  );
+}
+
+async function removeLegacyServiceWorkers(): Promise<boolean> {
+  if (!("serviceWorker" in navigator)) return false;
+  const regs = await navigator.serviceWorker.getRegistrations();
+  let removed = false;
+  for (const reg of regs) {
+    if (!isPushSwRegistration(reg)) {
+      await reg.unregister().catch(() => undefined);
+      removed = true;
+    }
+  }
+  if (removed) await clearLegacyPwaCaches();
+  return removed;
+}
+
+const LEGACY_SW_CLEANUP_KEY = "_pwa_legacy_sw_cleanup_v2";
+
 const PUSH_SW_URL = "/push-sw.js";
 
 function registrationScriptUrl(reg: ServiceWorkerRegistration): string {
@@ -133,9 +168,17 @@ export function bootstrapServiceWorker(): void {
 
   void (async () => {
     try {
+      const removedLegacy = await removeLegacyServiceWorkers();
+      if (removedLegacy && !sessionStorage.getItem(LEGACY_SW_CLEANUP_KEY)) {
+        sessionStorage.setItem(LEGACY_SW_CLEANUP_KEY, "1");
+        window.location.reload();
+        return;
+      }
+
       let reg = await navigator.serviceWorker.getRegistration("/");
       if (reg && (!reg.active || !isPushSwRegistration(reg))) {
         await reg.unregister().catch(() => undefined);
+        await clearLegacyPwaCaches();
         reg = undefined;
       }
       if (!reg) {

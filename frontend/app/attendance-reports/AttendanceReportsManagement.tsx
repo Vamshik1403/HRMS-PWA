@@ -10,6 +10,7 @@ import { useCurrentUser } from "../hooks/useCurrentUser";
 import * as XLSX from "xlsx";
 import { formatDevicePunchForDisplay } from "../utils/devicePunchTime";
 import { formatWorkedDuration } from "../utils/attendanceDuration";
+import { getSidebarContext } from "@/app/utils/sidebarContext";
 
 type ReportMode = "actual" | "factual";
 
@@ -202,6 +203,36 @@ interface ReportData {
 // ==================== CONSTANTS ====================
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "/backend";
+
+const getStoredActiveCompanyID = (): number | null => {
+  if (typeof window === "undefined") return null;
+
+  try {
+    const sessionId = Number(sessionStorage.getItem("activeCompanyID") || 0);
+    if (sessionId) return sessionId;
+
+    const userData = JSON.parse(localStorage.getItem("user") || "{}");
+    const localId = Number(userData?.activeCompanyID || userData?.companyID || 0);
+
+    return localId || null;
+  } catch {
+    return null;
+  }
+};
+
+const getUserAssignedCompanyIDs = (user: any): number[] => {
+  const ids = new Set<number>();
+
+  if (user?.companyID) ids.add(Number(user.companyID));
+
+  if (Array.isArray(user?.userCompanies)) {
+    user.userCompanies.forEach((uc: any) => {
+      if (uc?.companyID) ids.add(Number(uc.companyID));
+    });
+  }
+
+  return Array.from(ids);
+};
 
 const getTodayStr = () => {
   const d = new Date();
@@ -868,8 +899,71 @@ export function AttendanceReportsManagement({ mode = "actual" }: { mode?: Report
       ? ["SUPERADMIN", "COMPANY_ADMIN", "BRANCH_ADMIN", "ADMIN"].includes(user.role)
       : ["SUPERADMIN", "COMPANY_ADMIN", "BRANCH_ADMIN"].includes(user.role);
 
-  // ==================== LOAD BRANCH DATA ON SELECTION ====================
-  
+  const getActiveReportContext = () => {
+    const ctx = getSidebarContext();
+    const userAny = user as any;
+
+    const assignedCompanyIDs = getUserAssignedCompanyIDs(userAny);
+
+    const isCompanyScopedUser =
+      user?.role === "COMPANY_ADMIN" ||
+      user?.role === "ADMIN" ||
+      user?.role === "BRANCH_ADMIN";
+
+    const hasMultiCompany = assignedCompanyIDs.length > 1;
+    const storedActiveCompanyID = getStoredActiveCompanyID();
+
+    let companyID: number | null = null;
+
+    if (user?.role === "SUPERADMIN") {
+      companyID =
+        formData.companyID ??
+        ctx?.companyID ??
+        null;
+    } else if (isCompanyScopedUser) {
+      if (
+        hasMultiCompany &&
+        storedActiveCompanyID &&
+        assignedCompanyIDs.includes(Number(storedActiveCompanyID))
+      ) {
+        companyID = storedActiveCompanyID;
+      } else if (
+        hasMultiCompany &&
+        ctx?.companyID &&
+        assignedCompanyIDs.includes(Number(ctx.companyID))
+      ) {
+        companyID = Number(ctx.companyID);
+      } else {
+        companyID =
+          managerData?.companyID ??
+          user?.companyID ??
+          assignedCompanyIDs[0] ??
+          null;
+      }
+    } else if (user?.role === "SERVICE_PROVIDER") {
+      companyID = managerData?.companyID ?? user?.companyID ?? null;
+    } else if (user?.role === "EMPLOYEE") {
+      companyID = empCreds?.companyID ?? user?.companyID ?? null;
+    } else {
+      companyID = formData.companyID ?? ctx?.companyID ?? user?.companyID ?? null;
+    }
+
+    let branchID: number | null =
+      branches.find((b) => b.branchName === formData.branchName)?.id ?? null;
+
+    if (user?.role === "BRANCH_ADMIN") {
+      branchID = managerData?.branchesID ?? branchID;
+    } else if (user?.role === "EMPLOYEE") {
+      branchID = empCreds?.branchesID ?? branchID;
+    }
+
+    return {
+      companyID: companyID ? Number(companyID) : null,
+      branchID: branchID ? Number(branchID) : null,
+    };
+  };
+
+  // ==================== LOAD BRANCH DATA ON SELECTION ====================  
  useEffect(() => {
   const loadBranchData = async () => {
     if (!formData.branchName || !formData.companyID) return;
@@ -947,37 +1041,55 @@ export function AttendanceReportsManagement({ mode = "actual" }: { mode?: Report
 
   // ==================== BRANCH FILTERING ====================
 
-  useEffect(() => {
+    useEffect(() => {
     if (!user) return;
 
+    const ctx = getActiveReportContext();
     let data = [...allBranches];
 
-    if (user.role === "SERVICE_PROVIDER" && managerData) {
-      if (managerData.companyID) data = data.filter(b => b.companyID === managerData.companyID);
-    } else if ((user.role === "COMPANY_ADMIN" || user.role === "ADMIN") && managerData) {
-      if (managerData.companyID) data = data.filter(b => b.companyID === managerData.companyID);
-    } else if (user.role === "BRANCH_ADMIN" && managerData) {
-      if (managerData.companyID && managerData.branchesID) {
-        data = data.filter(b => b.companyID === managerData.companyID && b.id === managerData.branchesID);
-      }
-    } else if (user.role === "EMPLOYEE" && empCreds) {
-      data = data.filter(b => b.companyID === empCreds.companyID);
-    } else if (user.role === "SUPERADMIN") {
-      // Only show branches for the selected company; show nothing until a company is chosen
-      data = formData.companyID ? data.filter(b => b.companyID === formData.companyID) : [];
+    if (ctx.companyID) {
+      data = data.filter((b) => Number(b.companyID) === Number(ctx.companyID));
+    } else {
+      data = [];
+    }
+
+    if (user.role === "BRANCH_ADMIN" && managerData?.branchesID) {
+      data = data.filter((b) => Number(b.id) === Number(managerData.branchesID));
+    }
+
+    if (user.role === "EMPLOYEE" && empCreds?.branchesID) {
+      data = data.filter((b) => Number(b.id) === Number(empCreds.branchesID));
     }
 
     setBranches(data);
 
-    if (user.role !== "SUPERADMIN" && data.length > 0) {
+    if (user.role !== "SUPERADMIN" && data.length > 0 && !formData.branchName) {
       const b = data[0];
-      setFormData(prev => ({ ...prev, companyID: b.companyID, branchName: b.branchName }));
+      setFormData((prev) => ({
+        ...prev,
+        companyID: Number(b.companyID),
+        branchName: b.branchName,
+      }));
     }
-  }, [user, managerData, empCreds, formData.companyID, allBranches]);
+  }, [
+    user,
+    managerData,
+    empCreds,
+    formData.companyID,
+    formData.branchName,
+    allBranches,
+  ]);
 
 const handleBranchChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
   const branchName = e.target.value;
-  setFormData(prev => ({ ...prev, branchName }));
+  const branch = branches.find((b) => b.branchName === branchName);
+
+  setFormData(prev => ({
+    ...prev,
+    branchName,
+    companyID: branch?.companyID ? Number(branch.companyID) : prev.companyID,
+  }));
+
   // Clear filters and data — loadBranchData will repopulate for the new branch
   setDepartments([]);
   setDesignations([]);
@@ -1614,20 +1726,18 @@ const employeeOptions = filteredEmployees.map((e: Employee) => ({
     setSandwichOverrides(new Map());
 
     try {
-      let selectedCompanyID: number | null = formData.companyID;
-      let selectedBranchID: number | null = branches.find(b => b.branchName === formData.branchName)?.id || null;
+      const activeCtx = getActiveReportContext();
 
-      if (user?.role === "COMPANY_ADMIN" && managerData?.companyID) {
-        selectedCompanyID = managerData.companyID;
-      } else if (user?.role === "BRANCH_ADMIN" && managerData) {
-        selectedCompanyID = managerData.companyID;
-        selectedBranchID = managerData.branchesID;
-      } else if (user?.role === "SERVICE_PROVIDER" && managerData) {
-        selectedCompanyID = managerData.companyID;
-        selectedBranchID = managerData.branchesID;
-      } else if (user?.role === "EMPLOYEE" && empCreds) {
-        selectedCompanyID = empCreds.companyID;
-        selectedBranchID = empCreds.branchesID;
+      let selectedCompanyID: number | null = activeCtx.companyID;
+      let selectedBranchID: number | null = activeCtx.branchID;
+
+      if (!selectedBranchID && formData.branchName) {
+        selectedBranchID =
+          branches.find(
+            (b) =>
+              b.branchName === formData.branchName &&
+              Number(b.companyID) === Number(selectedCompanyID)
+          )?.id || null;
       }
 
       if (!selectedCompanyID || !selectedBranchID) {
@@ -1740,8 +1850,15 @@ const employeeOptions = filteredEmployees.map((e: Employee) => ({
       const logsData = allLogs.filter((log: ProcessAttLog) => {
         const parsed = parsePunchTime(log.punch_time);
         if (!parsed) return false;
+
         const logDate = new Date(parsed.dateKey);
-        return logDate >= fromDate && logDate <= toDate;
+        if (logDate < fromDate || logDate > toDate) return false;
+
+        // Strict company/branch guard from log itself when available
+        if ((log as any).companyID && Number((log as any).companyID) !== Number(selectedCompanyID)) return false;
+        if ((log as any).branchesID && Number((log as any).branchesID) !== Number(selectedBranchID)) return false;
+
+        return true;
       });
 
       // Build employee list from log manage_employee_id values to handle company/branch name mismatches
@@ -1758,11 +1875,9 @@ const employeeOptions = filteredEmployees.map((e: Employee) => ({
       const byCompanyBranchIds = new Set(byCompanyBranch.map((e: Employee) => Number(e.id)));
 
       // Also include employees that appear in the returned logs (covers name-mismatch scenarios)
-      const empFromLogs = safeEmpData.filter((e: Employee) =>
-        logEmployeeIdSet.has(Number(e.id)) && !byCompanyBranchIds.has(Number(e.id))
-      );
+          // Strict report scope: do NOT include employees from logs if they are outside selected company/branch.
+      const filteredEmpData: Employee[] = [...byCompanyBranch];
 
-      const filteredEmpData: Employee[] = [...byCompanyBranch, ...empFromLogs];
       setAllEmployees(filteredEmpData);
 
       const companiesData = await fetch(`${BACKEND_URL}/company`).then(r => r.json());
@@ -1870,12 +1985,13 @@ const employeeOptions = filteredEmployees.map((e: Employee) => ({
 
     const dateColumns = buildDateRangeColumns();
     
-    let selectedCompanyID = formData.companyID;
-    if (user?.role === "COMPANY_ADMIN" && managerData?.companyID) selectedCompanyID = managerData.companyID;
-    else if (user?.role === "BRANCH_ADMIN" && managerData?.companyID) selectedCompanyID = managerData.companyID;
-    else if (user?.role === "SERVICE_PROVIDER" && managerData?.companyID) selectedCompanyID = managerData.companyID;
-    
-    const selectedBranch = branches.find(b => b.branchName === formData.branchName);
+    const activeCtx = getActiveReportContext();
+    const selectedCompanyID = activeCtx.companyID;
+    const selectedBranch = branches.find(
+      (b) =>
+        b.branchName === formData.branchName &&
+        Number(b.companyID) === Number(selectedCompanyID)
+    );
     const selectedBranchID = selectedBranch?.id || 0;
     const getDisplayPunches = (employeeID: number, date: string, punches: string[]) =>
       isFactualMode && factualWeekoffOverrides.get(employeeID)?.has(date) ? [] : punches;
@@ -2032,11 +2148,15 @@ const employeeOptions = filteredEmployees.map((e: Employee) => ({
   }, [reportData, searchTerm]);
 
   const renderDateCell = useCallback((punches: string[], date: string, employeeID: number) => {
-    let selectedCompanyID = formData.companyID;
-    if (user?.role === "COMPANY_ADMIN" && managerData?.companyID) selectedCompanyID = managerData.companyID;
-    else if (user?.role === "BRANCH_ADMIN" && managerData?.companyID) selectedCompanyID = managerData.companyID;
-    else if (user?.role === "SERVICE_PROVIDER" && managerData?.companyID) selectedCompanyID = managerData.companyID;
-    const selectedBranch = branches.find(b => b.branchName === formData.branchName);
+    const activeCtx = getActiveReportContext();
+    const selectedCompanyID = activeCtx.companyID;
+    
+    const selectedBranch = branches.find(
+      (b) =>
+        b.branchName === formData.branchName &&
+        Number(b.companyID) === Number(selectedCompanyID)
+    );
+
     const displayPunches = isFactualMode && factualWeekoffOverrides.get(employeeID)?.has(date) ? [] : punches;
     return <DateCell punches={displayPunches} date={date} employeeID={employeeID} formData={formData} reportData={reportData} selectedCompanyID={selectedCompanyID} selectedBranchID={selectedBranch?.id || 0} getComprehensiveStatus={getComprehensiveStatus} />;
   }, [formData, user, managerData, branches, reportData, isFactualMode, factualWeekoffOverrides]);
@@ -2086,8 +2206,27 @@ const employeeOptions = filteredEmployees.map((e: Employee) => ({
             {user?.role === "SUPERADMIN" && (
               <div className="space-y-2">
                 <Label>Company</Label>
-                <select className="w-full px-3 py-2 border rounded-md bg-white" value={formData.companyID ?? ""} onChange={e => { setFormData(prev => ({ ...prev, companyID: e.target.value ? Number(e.target.value) : null, branchName: "" })); setDepartments([]); setDesignations([]); setAllEmployees([]); setSelectedDepartments([]); setSelectedDesignations([]); setSelectedEmployees([]); }}>
-                  <option value="">Select company</option>
+<select
+  className="w-full px-3 py-2 border rounded-md bg-white"
+  value={formData.companyID ?? ""}
+  onChange={(e) => {
+    const companyID = e.target.value ? Number(e.target.value) : null;
+
+    setFormData((prev) => ({
+      ...prev,
+      companyID,
+      branchName: "",
+    }));
+
+    setReportData([]);
+    setDepartments([]);
+    setDesignations([]);
+    setAllEmployees([]);
+    setSelectedDepartments([]);
+    setSelectedDesignations([]);
+    setSelectedEmployees([]);
+  }}
+>                  <option value="">Select company</option>
                   {companies.map(c => <option key={c.id} value={c.id}>{c.companyName}</option>)}
                 </select>
               </div>

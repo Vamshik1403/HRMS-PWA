@@ -16,11 +16,18 @@ export class ContractorsController {
   findAll() {
     return this.contractorsService.findAll();
   }
+  
+@Get('rate-cards')
+findAllRateCards() {
+  return this.contractorsService.findAllRateCards();
+}
 
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.contractorsService.findOne(+id);
   }
+
+ 
 
   @Patch(':id')
   update(@Param('id') id: string, @Body() updateContractorDto: UpdateContractorDto) {
