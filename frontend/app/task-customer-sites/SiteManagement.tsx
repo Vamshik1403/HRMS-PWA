@@ -74,8 +74,39 @@ export default function SiteManagement() {
     finally { setLoading(false); }
   }, [canManage, user, page, search, filterCustomer]);
 
+  const closeSitePagePanels = () => {
+  setFormOpen(false);
+  setViewOpen(false);
+
+  setEditing(null);
+  setViewRow(null);
+
+  setForm(emptyForm);
+  setCustomerLabel("");
+  setSelectedCustomer(null);
+  setSameAsCustomer(false);
+  setContacts([]);
+  setSaving(false);
+};
+
   useEffect(() => { loadCustomers(); }, [loadCustomers]);
   useListAutoRefresh(() => { void load(); }, [load]);
+
+  useEffect(() => {
+  const sidebarPageClickHandler = (e: any) => {
+    if (e.detail?.path === "/task-customer-sites") {
+      closeSitePagePanels();
+      loadCustomers();
+      load();
+    }
+  };
+
+  window.addEventListener("sidebar-main-page-click", sidebarPageClickHandler);
+
+  return () => {
+    window.removeEventListener("sidebar-main-page-click", sidebarPageClickHandler);
+  };
+}, [load, loadCustomers]);
 
   const applyCustomerAddress = (c: CustomerOpt) => {
     setForm((p) => ({ ...p, address: c.address || "", city: c.city || "", state: c.state || "", pincode: c.pincode || "", country: c.country || "" }));
@@ -231,7 +262,7 @@ export default function SiteManagement() {
           </div>
           <TaskContactsRepeater title="Site Contacts" contacts={contacts} onChange={setContacts} />
           <div className="flex justify-end gap-2 pt-4 border-t">
-            <Button type="button" variant="outline" onClick={() => setFormOpen(false)}>Cancel</Button>
+<Button type="button" variant="outline" onClick={closeSitePagePanels}>Cancel</Button>
             <Button type="submit" disabled={saving}>{saving ? "Saving…" : "Save"}</Button>
           </div>
         </form>

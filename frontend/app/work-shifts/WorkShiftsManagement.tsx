@@ -256,14 +256,27 @@ const [branchFilterList, setBranchFilterList] = useState<any[]>([]);
   }, [user]);
 
   useEffect(() => {
-    const handler = () => { if (user) loadWorkShifts(); };
-    window.addEventListener("sidebar-context-changed", handler);
-    window.addEventListener("app-data-refresh", handler);
-    return () => {
-      window.removeEventListener("sidebar-context-changed", handler);
-      window.removeEventListener("app-data-refresh", handler);
-    };
-  }, [user]);
+  const handler = () => {
+    if (user) loadWorkShifts();
+  };
+
+  const sidebarPageClickHandler = (e: any) => {
+    if (e.detail?.path === "/work-shifts") {
+      closeWorkShiftPagePanels();
+      if (user) loadWorkShifts();
+    }
+  };
+
+  window.addEventListener("sidebar-context-changed", handler);
+  window.addEventListener("app-data-refresh", handler);
+  window.addEventListener("sidebar-main-page-click", sidebarPageClickHandler);
+
+  return () => {
+    window.removeEventListener("sidebar-context-changed", handler);
+    window.removeEventListener("app-data-refresh", handler);
+    window.removeEventListener("sidebar-main-page-click", sidebarPageClickHandler);
+  };
+}, [user]);
 
   const loadBranchFilterList = async () => {
   try {
@@ -564,6 +577,15 @@ await loadBranchFilterList();
     setEditingWorkShift(null);
   };
 
+  const closeWorkShiftPagePanels = () => {
+  resetForm();
+
+  setIsDialogOpen(false);
+  setEditingWorkShift(null);
+
+  setShowBranchFilterModal(false);
+};
+
   const handleServiceProviderSelect = (selected: SelectedItem) => {
     setFormData(prev => ({
       ...prev,
@@ -639,7 +661,7 @@ await loadBranchFilterList();
         </div>
         {canManage && !isDialogOpen && (
           <Button
-            onClick={() => { resetForm(); setIsDialogOpen(true); }}
+onClick={() => { closeWorkShiftPagePanels(); setIsDialogOpen(true); }}
             className="flex-shrink-0 text-sm px-3 py-2"
           >
             <Plus className="w-4 h-4 mr-1" />
@@ -964,7 +986,7 @@ await loadBranchFilterList();
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => setIsDialogOpen(false)}
+onClick={closeWorkShiftPagePanels}
                 >
                   Cancel
                 </Button>

@@ -6,6 +6,14 @@ export class CreateBonusAllocationDto {
   @Type(() => Number) @IsInt() @Min(1)
   bonusSetupID!: number;
 
+  @IsInt()
+  @IsOptional()
+  branchesID: number;
+
+  @IsInt()
+  @IsOptional()
+  departmentID: number;
+
   @Type(() => Number) @IsInt() @Min(1)
   employeeID!: number;
 

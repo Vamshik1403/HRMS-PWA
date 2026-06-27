@@ -141,14 +141,25 @@ export function EmployeeMemoManagement() {
   useEffect(() => { if (user) fetchRows(); }, [user]);
 
   useEffect(() => {
-    const handler = () => fetchRows();
-    window.addEventListener("sidebar-context-changed", handler);
-    window.addEventListener("app-data-refresh", handler);
-    return () => {
-      window.removeEventListener("sidebar-context-changed", handler);
-      window.removeEventListener("app-data-refresh", handler);
-    };
-  }, []);
+  const handler = () => fetchRows();
+
+  const sidebarPageClickHandler = (e: any) => {
+    if (e.detail?.path === "/employee-memo") {
+      closeMemoPagePanels();
+      fetchRows();
+    }
+  };
+
+  window.addEventListener("sidebar-context-changed", handler);
+  window.addEventListener("app-data-refresh", handler);
+  window.addEventListener("sidebar-main-page-click", sidebarPageClickHandler);
+
+  return () => {
+    window.removeEventListener("sidebar-context-changed", handler);
+    window.removeEventListener("app-data-refresh", handler);
+    window.removeEventListener("sidebar-main-page-click", sidebarPageClickHandler);
+  };
+}, []);
 
   // ── Employee autocomplete ──────────────────────────────────────────────────
   const runFetchEmp = (q: string) => {
@@ -310,12 +321,24 @@ export function EmployeeMemoManagement() {
     setIsAddingNew(true);
   };
 
-  const handleCancel = () => {
-    resetForm();
-    setIsAddingNew(false);
-    setIsViewing(false);
-    setViewRow(null);
-  };
+ const closeMemoPagePanels = () => {
+  resetForm();
+
+  setIsAddingNew(false);
+  setIsViewing(false);
+  setViewRow(null);
+
+  setChatOpen(false);
+  setChatMemo(null);
+  setReplyText("");
+
+  setEmpList([]);
+};
+
+const handleCancel = () => {
+  closeMemoPagePanels();
+};
+
 
   const openView = (row: MemoRow) => {
     setViewRow(row);

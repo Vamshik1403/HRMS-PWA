@@ -55,16 +55,39 @@ export default function CustomerManagement() {
     finally { setLoading(false); }
   }, [canManage, user, page, search]);
 
+  const closeCustomerPagePanels = () => {
+  setFormOpen(false);
+  setViewOpen(false);
+
+  setEditing(null);
+  setViewRow(null);
+
+  setForm(emptyForm);
+  setContacts([]);
+  setSaving(false);
+};
+
   useEffect(() => { load(); }, [load]);
-  useEffect(() => {
-    const h = () => load();
-    window.addEventListener("sidebar-context-changed", h);
-    window.addEventListener("app-data-refresh", h);
-    return () => {
-      window.removeEventListener("sidebar-context-changed", h);
-      window.removeEventListener("app-data-refresh", h);
-    };
-  }, [load]);
+ useEffect(() => {
+  const h = () => load();
+
+  const sidebarPageClickHandler = (e: any) => {
+    if (e.detail?.path === "/task-customers") {
+      closeCustomerPagePanels();
+      load();
+    }
+  };
+
+  window.addEventListener("sidebar-context-changed", h);
+  window.addEventListener("app-data-refresh", h);
+  window.addEventListener("sidebar-main-page-click", sidebarPageClickHandler);
+
+  return () => {
+    window.removeEventListener("sidebar-context-changed", h);
+    window.removeEventListener("app-data-refresh", h);
+    window.removeEventListener("sidebar-main-page-click", sidebarPageClickHandler);
+  };
+}, [load]);
 
   const openCreate = () => { setEditing(null); setForm(emptyForm); setContacts([]); setFormOpen(true); };
 
@@ -194,7 +217,7 @@ export default function CustomerManagement() {
           <LocationFields values={form} onChange={(patch) => setForm((p) => ({ ...p, ...patch }))} showCurrency={false} />
           <TaskContactsRepeater contacts={contacts} onChange={setContacts} />
           <div className="flex justify-end gap-2 pt-4 border-t">
-            <Button type="button" variant="outline" onClick={() => setFormOpen(false)}>Cancel</Button>
+<Button type="button" variant="outline" onClick={closeCustomerPagePanels}>Cancel</Button>
             <Button type="submit" disabled={saving}>{saving ? "Saving…" : editing ? "Update" : "Create"}</Button>
           </div>
         </form>

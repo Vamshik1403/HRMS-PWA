@@ -86,12 +86,16 @@ model BonusSetup {
 
 model BonusAllocation {
   id             Int            @id @default(autoincrement())
+  branchesID     Int?
+  departmentID   Int?
   bonusSetupID   Int
   financialYear  Int?
   salaryPeriod   Int?
   employeeID     Int
   bonusSetup     BonusSetup     @relation(fields: [bonusSetupID], references: [id], onDelete: NoAction, onUpdate: NoAction)
   manageEmployee ManageEmployee @relation(fields: [employeeID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  branches          Branches?   @relation(fields: [branchesID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  departments      Departments? @relation(fields: [departmentID], references: [id], onDelete: NoAction, onUpdate: NoAction)
 }
 
 model Branches {
@@ -157,6 +161,7 @@ model Branches {
   leavePolicy             leavePolicy[]
   leavePolicyHoliday      leavePolicyHoliday[]
   contractorBranches      ContractorBranch[]
+  bonusAllocation         BonusAllocation[]
 }
 
 model Company {
@@ -400,6 +405,8 @@ model Departments {
   roster                                                              Roster[]
   taskProjects                                                        TaskProject[]
   empAttendanceRegularise                                             EmpAttendanceRegularise[]
+  bonusAllocation                                                     BonusAllocation[]
+  reimbursement                                                       Reimbursement[]
 }
 
 model Designations {
@@ -1421,6 +1428,7 @@ model Reimbursement {
   serviceProviderID Int?
   companyID         Int?
   branchesID        Int?
+  departmentID      Int?
   manageEmployeeID  Int?
   taskProjectID     Int?
   date              String?
@@ -1437,6 +1445,7 @@ model Reimbursement {
   paymentDate       String?
   paymentRemark     String?
   paymentProof      String?
+  departments        Departments?       @relation(fields: [departmentID], references: [id], onDelete: NoAction, onUpdate: NoAction)
   branches          Branches?           @relation(fields: [branchesID], references: [id], onDelete: NoAction, onUpdate: NoAction)
   company           Company?            @relation(fields: [companyID], references: [id], onDelete: NoAction, onUpdate: NoAction)
   manageEmployee    ManageEmployee?     @relation(fields: [manageEmployeeID], references: [id], onDelete: NoAction, onUpdate: NoAction)

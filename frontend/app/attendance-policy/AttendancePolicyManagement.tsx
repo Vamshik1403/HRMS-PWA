@@ -257,19 +257,34 @@ useEffect(() => {
 
 
   useEffect(() => {
-const handler = () => {
-  if (user) {
-    loadAttendancePolicies();
-    loadBranchFilterList();
-  }
-};
-    window.addEventListener("sidebar-context-changed", handler);
-    window.addEventListener("app-data-refresh", handler);
-    return () => {
-      window.removeEventListener("sidebar-context-changed", handler);
-      window.removeEventListener("app-data-refresh", handler);
-    };
-  }, [user]);
+  const handler = () => {
+    if (user) {
+      loadAttendancePolicies();
+      loadBranchFilterList();
+    }
+  };
+
+  const sidebarPageClickHandler = (e: any) => {
+    if (e.detail?.path === "/attendance-policy") {
+      closeAttendancePolicyPagePanels();
+
+      if (user) {
+        loadAttendancePolicies();
+        loadBranchFilterList();
+      }
+    }
+  };
+
+  window.addEventListener("sidebar-context-changed", handler);
+  window.addEventListener("app-data-refresh", handler);
+  window.addEventListener("sidebar-main-page-click", sidebarPageClickHandler);
+
+  return () => {
+    window.removeEventListener("sidebar-context-changed", handler);
+    window.removeEventListener("app-data-refresh", handler);
+    window.removeEventListener("sidebar-main-page-click", sidebarPageClickHandler);
+  };
+}, [user]);
 
 
   const loadBranchFilterList = async () => {
@@ -550,6 +565,15 @@ branchesID:
     setEditingPolicy(null);
   };
 
+  const closeAttendancePolicyPagePanels = () => {
+  resetForm();
+
+  setIsDialogOpen(false);
+  setEditingPolicy(null);
+
+  setShowBranchFilterModal(false);
+};
+
   const handleServiceProviderSelect = (selected: SelectedItem) => {
     setFormData(prev => ({
       ...prev,
@@ -649,7 +673,7 @@ branchesID:
         </div>
         {canManage && !isDialogOpen && (
           <Button
-            onClick={() => { resetForm(); setIsDialogOpen(true); }}
+onClick={() => { closeAttendancePolicyPagePanels(); setIsDialogOpen(true); }}
             className="flex-shrink-0 text-sm px-3 py-2"
           >
             <Plus className="w-4 h-4 mr-1" />
@@ -1268,7 +1292,7 @@ branchesID:
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => setIsDialogOpen(false)}
+onClick={closeAttendancePolicyPagePanels}
                 >
                   Cancel
                 </Button>

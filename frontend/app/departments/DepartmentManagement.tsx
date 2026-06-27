@@ -224,20 +224,35 @@ const [branchFilterLoading, setBranchFilterLoading] = useState(false);
 }
   }, [user]);
 
-  useEffect(() => {
-const handler = () => {
-  if (user) {
-    fetchRows();
-    fetchBranchFilterList();
-  }
-};
-    window.addEventListener("sidebar-context-changed", handler);
-    window.addEventListener("app-data-refresh", handler);
-    return () => {
-      window.removeEventListener("sidebar-context-changed", handler);
-      window.removeEventListener("app-data-refresh", handler);
-    };
-  }, [user]);
+ useEffect(() => {
+  const handler = () => {
+    if (user) {
+      fetchRows();
+      fetchBranchFilterList();
+    }
+  };
+
+  const sidebarPageClickHandler = (e: any) => {
+    if (e.detail?.path === "/departments") {
+      closeDepartmentPagePanels();
+
+      if (user) {
+        fetchRows();
+        fetchBranchFilterList();
+      }
+    }
+  };
+
+  window.addEventListener("sidebar-context-changed", handler);
+  window.addEventListener("app-data-refresh", handler);
+  window.addEventListener("sidebar-main-page-click", sidebarPageClickHandler);
+
+  return () => {
+    window.removeEventListener("sidebar-context-changed", handler);
+    window.removeEventListener("app-data-refresh", handler);
+    window.removeEventListener("sidebar-main-page-click", sidebarPageClickHandler);
+  };
+}, [user]);
 
   // ---------------------------
   // Debounced suggestions
@@ -529,12 +544,22 @@ const handler = () => {
     }
   };
 
-  const handleCancel = () => {
-    resetForm();
-    setIsAddingNew(false);
-    setIsViewing(false);
-    setViewRow(null);
-  };
+  const closeDepartmentPagePanels = () => {
+  resetForm();
+
+  setIsAddingNew(false);
+  setIsViewing(false);
+  setEditing(null);
+  setViewRow(null);
+
+  setSpList([]);
+  setCoList([]);
+  setBrList([]);
+};
+
+const handleCancel = () => {
+  closeDepartmentPagePanels();
+};
 
   // ---------------------------
   // Search

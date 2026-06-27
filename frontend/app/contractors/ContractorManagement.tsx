@@ -245,8 +245,8 @@ export function ContractorManagement() {
 
   const [branchFilterList, setBranchFilterList] = useState<Branch[]>([]);
   const [selectedFilterBranchIds, setSelectedFilterBranchIds] = useState<string[]>([]);
-const [branchFilterLoading, setBranchFilterLoading] = useState(false);
-const [showBranchFilterModal, setShowBranchFilterModal] = useState(false);
+  const [branchFilterLoading, setBranchFilterLoading] = useState(false);
+  const [showBranchFilterModal, setShowBranchFilterModal] = useState(false);
 
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
@@ -418,20 +418,58 @@ const [showBranchFilterModal, setShowBranchFilterModal] = useState(false);
     }
   }, [user]);
 
-  useEffect(() => {
-const handler = () => {
-  if (user) {
-    fetchRows();
-    fetchBranchFilterList();
-  }
+  const closeContractorPagePanels = () => {
+  resetForm();
+
+  setIsDialogOpen(false);
+  setIsViewDialogOpen(false);
+  setViewRow(null);
+
+  setShowContractorAdminPanel(false);
+  setSelectedContractor(null);
+  setContractorAdmins([]);
+  setEditingContractorAdmin(null);
+  resetContractorAdminForm();
+
+  setIsRateCardOpen(false);
+  setRateCardContractor(null);
+  setRateCards([]);
+
+  setShowBranchFilterModal(false);
+
+  setSpList([]);
+  setCoList([]);
 };
-    window.addEventListener("sidebar-context-changed", handler);
-    window.addEventListener("app-data-refresh", handler);
-    return () => {
-      window.removeEventListener("sidebar-context-changed", handler);
-      window.removeEventListener("app-data-refresh", handler);
-    };
-  }, [user]);
+
+ useEffect(() => {
+  const handler = () => {
+    if (user) {
+      fetchRows();
+      fetchBranchFilterList();
+    }
+  };
+
+  const sidebarPageClickHandler = (e: any) => {
+    if (e.detail?.path === "/contractors") {
+      closeContractorPagePanels();
+
+      if (user) {
+        fetchRows();
+        fetchBranchFilterList();
+      }
+    }
+  };
+
+  window.addEventListener("sidebar-context-changed", handler);
+  window.addEventListener("app-data-refresh", handler);
+  window.addEventListener("sidebar-main-page-click", sidebarPageClickHandler);
+
+  return () => {
+    window.removeEventListener("sidebar-context-changed", handler);
+    window.removeEventListener("app-data-refresh", handler);
+    window.removeEventListener("sidebar-main-page-click", sidebarPageClickHandler);
+  };
+}, [user]);
 
   // Fetch all companies once on component mount
   useEffect(() => {
@@ -1127,23 +1165,23 @@ const handler = () => {
       {/* Header */}
       <div className="flex items-center justify-between w-full">
         <div className="min-w-0 flex-1">
-<div className="flex justify-end mr-3">
-    <Button
-    type="button"
-    variant="outline"
-    size="sm"
-    onClick={() => setShowBranchFilterModal(true)}
-    className="flex items-center gap-2"
-  >
-    <Filter className="w-4 h-4" />
-    Branch Filter
-    {selectedFilterBranchIds.length > 0 && (
-      <Badge variant="secondary" className="ml-1">
-        {selectedFilterBranchIds.length}
-      </Badge>
-    )}
-  </Button>
-</div>
+          <div className="flex justify-end mr-3">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setShowBranchFilterModal(true)}
+              className="flex items-center gap-2"
+            >
+              <Filter className="w-4 h-4" />
+              Branch Filter
+              {selectedFilterBranchIds.length > 0 && (
+                <Badge variant="secondary" className="ml-1">
+                  {selectedFilterBranchIds.length}
+                </Badge>
+              )}
+            </Button>
+          </div>
         </div>
 
         {canManage && !isDialogOpen && !isViewDialogOpen && !showContractorAdminPanel && (
@@ -1157,11 +1195,14 @@ const handler = () => {
       </div>
 
       <FormDrawer
-        open={isDialogOpen}
-        onOpenChange={(v) => { setIsDialogOpen(v); if (!v) resetForm(); }}
-        title={editing ? "Edit Contractor" : "Add New Contractor"}
-        description={editing ? "Update contractor details below." : "Fill in details to add a new contractor."}
-      >
+  open={isDialogOpen}
+  onOpenChange={(v) => {
+    setIsDialogOpen(v);
+    if (!v) closeContractorPagePanels();
+  }}
+  title={editing ? "Edit Contractor" : "Add New Contractor"}
+  description={editing ? "Update contractor details below." : "Fill in details to add a new contractor."}
+>
         {error && (
           <div className="rounded-md border border-red-200 bg-red-50 text-red-700 px-3 py-2 text-sm">
             {error}
@@ -1712,206 +1753,206 @@ const handler = () => {
       {!isDialogOpen && !isViewDialogOpen && !showContractorAdminPanel && (<>
         {/* Search */}
 
-{showBranchFilterModal && (
-  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-    <div className="w-full max-w-2xl rounded-xl bg-white shadow-xl border">
-      <div className="flex items-center justify-between border-b px-5 py-4">
-        <div className="flex items-center gap-2">
-          <div className="h-9 w-9 rounded-lg bg-indigo-50 flex items-center justify-center">
-            <Filter className="w-4 h-4 text-indigo-600" />
+        {showBranchFilterModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+            <div className="w-full max-w-2xl rounded-xl bg-white shadow-xl border">
+              <div className="flex items-center justify-between border-b px-5 py-4">
+                <div className="flex items-center gap-2">
+                  <div className="h-9 w-9 rounded-lg bg-indigo-50 flex items-center justify-center">
+                    <Filter className="w-4 h-4 text-indigo-600" />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-semibold text-gray-900">
+                      Filter Contractors by Branch
+                    </h3>
+                    <p className="text-xs text-gray-500">
+                      Showing branches only from selected company
+                    </p>
+                  </div>
+                </div>
+
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowBranchFilterModal(false)}
+                >
+                  ×
+                </Button>
+              </div>
+
+              <div className="p-5 space-y-4 max-h-[70vh] overflow-y-auto">
+                <div className="flex items-center justify-between gap-3">
+                  <Badge variant="secondary">
+                    {selectedFilterBranchIds.length} selected
+                  </Badge>
+
+                  <div className="flex gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={selectAllFilterBranches}
+                      disabled={branchFilterLoading || branchFilterList.length === 0}
+                    >
+                      Select All
+                    </Button>
+
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={clearFilterBranches}
+                    >
+                      <RotateCcw className="w-4 h-4 mr-1" />
+                      Clear
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {branchFilterList.length === 0 ? (
+                    <p className="text-sm text-gray-500 col-span-full py-8 text-center">
+                      {branchFilterLoading ? "Loading branches..." : "No branches found"}
+                    </p>
+                  ) : (
+                    branchFilterList.map((b) => (
+                      <label
+                        key={b.id}
+                        className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm hover:bg-gray-50 cursor-pointer"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selectedFilterBranchIds.includes(String(b.id))}
+                          onChange={() => toggleFilterBranch(String(b.id))}
+                        />
+                        <span className="truncate">{b.branchName}</span>
+                      </label>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2 border-t px-5 py-4">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setShowBranchFilterModal(false)}
+                >
+                  Cancel
+                </Button>
+
+                <Button
+                  type="button"
+                  onClick={() => setShowBranchFilterModal(false)}
+                >
+                  Apply Filter
+                </Button>
+              </div>
+            </div>
           </div>
-          <div>
-            <h3 className="text-base font-semibold text-gray-900">
-              Filter Contractors by Branch
-            </h3>
-            <p className="text-xs text-gray-500">
-              Showing branches only from selected company
-            </p>
+        )}
+
+
+        {showBranchFilterModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+            <div className="w-full max-w-2xl rounded-xl bg-white shadow-xl border">
+              <div className="flex items-center justify-between border-b px-5 py-4">
+                <div className="flex items-center gap-2">
+                  <div className="h-9 w-9 rounded-lg bg-indigo-50 flex items-center justify-center">
+                    <Filter className="w-4 h-4 text-indigo-600" />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-semibold text-gray-900">
+                      Filter Contractors by Branch
+                    </h3>
+                    <p className="text-xs text-gray-500">
+                      Showing branches only from selected company
+                    </p>
+                  </div>
+                </div>
+
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowBranchFilterModal(false)}
+                >
+                  ×
+                </Button>
+              </div>
+
+              <div className="p-5 space-y-4 max-h-[70vh] overflow-y-auto">
+                <div className="flex items-center justify-between gap-3">
+                  <Badge variant="secondary">
+                    {selectedFilterBranchIds.length} selected
+                  </Badge>
+
+                  <div className="flex gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={selectAllFilterBranches}
+                      disabled={branchFilterLoading || branchFilterList.length === 0}
+                    >
+                      Select All
+                    </Button>
+
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={clearFilterBranches}
+                    >
+                      <RotateCcw className="w-4 h-4 mr-1" />
+                      Clear
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {branchFilterList.length === 0 ? (
+                    <p className="text-sm text-gray-500 col-span-full py-8 text-center">
+                      {branchFilterLoading ? "Loading branches..." : "No branches found"}
+                    </p>
+                  ) : (
+                    branchFilterList.map((b) => (
+                      <label
+                        key={b.id}
+                        className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm hover:bg-gray-50 cursor-pointer"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selectedFilterBranchIds.includes(String(b.id))}
+                          onChange={() => toggleFilterBranch(String(b.id))}
+                        />
+                        <span className="truncate">{b.branchName}</span>
+                      </label>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2 border-t px-5 py-4">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setShowBranchFilterModal(false)}
+                >
+                  Cancel
+                </Button>
+
+                <Button
+                  type="button"
+                  onClick={() => setShowBranchFilterModal(false)}
+                >
+                  Apply Filter
+                </Button>
+              </div>
+            </div>
           </div>
-        </div>
-
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          onClick={() => setShowBranchFilterModal(false)}
-        >
-          ×
-        </Button>
-      </div>
-
-      <div className="p-5 space-y-4 max-h-[70vh] overflow-y-auto">
-        <div className="flex items-center justify-between gap-3">
-          <Badge variant="secondary">
-            {selectedFilterBranchIds.length} selected
-          </Badge>
-
-          <div className="flex gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={selectAllFilterBranches}
-              disabled={branchFilterLoading || branchFilterList.length === 0}
-            >
-              Select All
-            </Button>
-
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={clearFilterBranches}
-            >
-              <RotateCcw className="w-4 h-4 mr-1" />
-              Clear
-            </Button>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-          {branchFilterList.length === 0 ? (
-            <p className="text-sm text-gray-500 col-span-full py-8 text-center">
-              {branchFilterLoading ? "Loading branches..." : "No branches found"}
-            </p>
-          ) : (
-            branchFilterList.map((b) => (
-              <label
-                key={b.id}
-                className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm hover:bg-gray-50 cursor-pointer"
-              >
-                <input
-                  type="checkbox"
-                  checked={selectedFilterBranchIds.includes(String(b.id))}
-                  onChange={() => toggleFilterBranch(String(b.id))}
-                />
-                <span className="truncate">{b.branchName}</span>
-              </label>
-            ))
-          )}
-        </div>
-      </div>
-
-      <div className="flex justify-end gap-2 border-t px-5 py-4">
-        <Button
-          type="button"
-          variant="outline"
-          onClick={() => setShowBranchFilterModal(false)}
-        >
-          Cancel
-        </Button>
-
-        <Button
-          type="button"
-          onClick={() => setShowBranchFilterModal(false)}
-        >
-          Apply Filter
-        </Button>
-      </div>
-    </div>
-  </div>
-)}
-
-
-{showBranchFilterModal && (
-  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-    <div className="w-full max-w-2xl rounded-xl bg-white shadow-xl border">
-      <div className="flex items-center justify-between border-b px-5 py-4">
-        <div className="flex items-center gap-2">
-          <div className="h-9 w-9 rounded-lg bg-indigo-50 flex items-center justify-center">
-            <Filter className="w-4 h-4 text-indigo-600" />
-          </div>
-          <div>
-            <h3 className="text-base font-semibold text-gray-900">
-              Filter Contractors by Branch
-            </h3>
-            <p className="text-xs text-gray-500">
-              Showing branches only from selected company
-            </p>
-          </div>
-        </div>
-
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          onClick={() => setShowBranchFilterModal(false)}
-        >
-          ×
-        </Button>
-      </div>
-
-      <div className="p-5 space-y-4 max-h-[70vh] overflow-y-auto">
-        <div className="flex items-center justify-between gap-3">
-          <Badge variant="secondary">
-            {selectedFilterBranchIds.length} selected
-          </Badge>
-
-          <div className="flex gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={selectAllFilterBranches}
-              disabled={branchFilterLoading || branchFilterList.length === 0}
-            >
-              Select All
-            </Button>
-
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={clearFilterBranches}
-            >
-              <RotateCcw className="w-4 h-4 mr-1" />
-              Clear
-            </Button>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-          {branchFilterList.length === 0 ? (
-            <p className="text-sm text-gray-500 col-span-full py-8 text-center">
-              {branchFilterLoading ? "Loading branches..." : "No branches found"}
-            </p>
-          ) : (
-            branchFilterList.map((b) => (
-              <label
-                key={b.id}
-                className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm hover:bg-gray-50 cursor-pointer"
-              >
-                <input
-                  type="checkbox"
-                  checked={selectedFilterBranchIds.includes(String(b.id))}
-                  onChange={() => toggleFilterBranch(String(b.id))}
-                />
-                <span className="truncate">{b.branchName}</span>
-              </label>
-            ))
-          )}
-        </div>
-      </div>
-
-      <div className="flex justify-end gap-2 border-t px-5 py-4">
-        <Button
-          type="button"
-          variant="outline"
-          onClick={() => setShowBranchFilterModal(false)}
-        >
-          Cancel
-        </Button>
-
-        <Button
-          type="button"
-          onClick={() => setShowBranchFilterModal(false)}
-        >
-          Apply Filter
-        </Button>
-      </div>
-    </div>
-  </div>
-)}
+        )}
         {/* Search */}
         <Card>
           <CardContent>

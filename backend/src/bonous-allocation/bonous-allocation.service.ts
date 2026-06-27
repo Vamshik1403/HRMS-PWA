@@ -19,6 +19,8 @@ export class BonusAllocationService {
     const created = await this.prisma.bonusAllocation.create({
       data: {
         bonusSetupID: dto.bonusSetupID,
+        branchesID:dto.branchesID,
+        departmentID:dto.branchesID,
         employeeID: dto.employeeID,
         financialYear: dto.financialYear ?? null,
         salaryPeriod: dto.salaryPeriod ?? null,
@@ -50,6 +52,8 @@ export class BonusAllocationService {
       where: { id },
       data: {
         bonusSetupID: dto.bonusSetupID ?? undefined,
+        branchesID: dto.branchesID ?? undefined,
+        departmentID: dto.departmentID ?? undefined,
         employeeID: dto.employeeID ?? undefined,
         financialYear: dto.financialYear ?? undefined,
         salaryPeriod: dto.salaryPeriod ?? undefined,

@@ -294,14 +294,25 @@ export function BranchManagement() {
   }, [user]);
 
   useEffect(() => {
-    const handler = () => { if (user) fetchBranches(); };
-    window.addEventListener("sidebar-context-changed", handler);
-    window.addEventListener("app-data-refresh", handler);
-    return () => {
-      window.removeEventListener("sidebar-context-changed", handler);
-      window.removeEventListener("app-data-refresh", handler);
-    };
-  }, [user]);
+  const handler = () => { if (user) fetchBranches(); };
+
+  const sidebarPageClickHandler = (e: any) => {
+    if (e.detail?.path === "/branches") {
+      closeBranchPagePanels();
+      if (user) fetchBranches();
+    }
+  };
+
+  window.addEventListener("sidebar-context-changed", handler);
+  window.addEventListener("app-data-refresh", handler);
+  window.addEventListener("sidebar-main-page-click", sidebarPageClickHandler);
+
+  return () => {
+    window.removeEventListener("sidebar-context-changed", handler);
+    window.removeEventListener("app-data-refresh", handler);
+    window.removeEventListener("sidebar-main-page-click", sidebarPageClickHandler);
+  };
+}, [user]);
 
   // ---------------------------
   // Debounced suggestions
@@ -856,13 +867,34 @@ export function BranchManagement() {
     }
   };
 
-  const handleCancel = () => {
-    resetForm();
-    setIsAddingNew(false);
-    setIsViewing(false);
-    setViewBranch(null);
-  };
+ const closeBranchPagePanels = () => {
+  resetForm();
 
+  setIsAddingNew(false);
+  setIsViewing(false);
+  setEditingBranch(null);
+  setViewBranch(null);
+
+  setShowBranchAdminPanel(false);
+  setSelectedBranch(null);
+  setBranchAdmins([]);
+  setEditingBranchAdmin(null);
+
+  setBranchAdminForm({
+    username: "",
+    password: "",
+    firstName: "",
+    lastName: "",
+    contactNo: "",
+    email: "",
+    role: "BRANCH_ADMIN",
+    isActive: true,
+  });
+};
+
+const handleCancel = () => {
+  closeBranchPagePanels();
+};
   const openBranchAdminPanel = async (branch: BranchRead) => {
     setSelectedBranch(branch);
     setShowBranchAdminPanel(true);

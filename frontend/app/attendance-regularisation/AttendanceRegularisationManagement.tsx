@@ -373,19 +373,35 @@ if (user) {
   }, [user, managerData, empCreds])
 
   useEffect(() => {
-const handler = () => {
-  if (user) {
-    loadAttendanceRegularisations()
-    loadFilterLookups()
-  }
-};
-    window.addEventListener("sidebar-context-changed", handler);
-    window.addEventListener("app-data-refresh", handler);
-    return () => {
-      window.removeEventListener("sidebar-context-changed", handler);
-      window.removeEventListener("app-data-refresh", handler);
-    };
-  }, [user, managerData, empCreds]);
+  const handler = () => {
+    if (user) {
+      loadAttendanceRegularisations();
+      loadFilterLookups();
+    }
+  };
+
+  const sidebarPageClickHandler = (e: any) => {
+    if (e.detail?.path === "/attendance-regularisation") {
+      closeRegularisationPagePanels();
+
+      if (user) {
+        loadAttendanceRegularisations();
+        loadFilterLookups();
+      }
+    }
+  };
+
+  window.addEventListener("sidebar-context-changed", handler);
+  window.addEventListener("app-data-refresh", handler);
+  window.addEventListener("sidebar-main-page-click", sidebarPageClickHandler);
+
+  return () => {
+    window.removeEventListener("sidebar-context-changed", handler);
+    window.removeEventListener("app-data-refresh", handler);
+    window.removeEventListener("sidebar-main-page-click", sidebarPageClickHandler);
+  };
+}, [user, managerData, empCreds]);
+
 
   const loadFilterLookups = async () => {
   try {
@@ -956,6 +972,17 @@ employeeName: "",
     setEditingRegularisation(null)
   }
 
+  const closeRegularisationPagePanels = () => {
+  resetForm();
+
+  setIsDialogOpen(false);
+  setEditingRegularisation(null);
+  setSelectedEmployee(null);
+
+  setShowFilterModal(false);
+  setIsFetchingStatus(false);
+};
+
   const handleEdit = (regularisation: AttendanceRegularisation) => {
     setFormData({
       serviceProvider: regularisation.serviceProvider || "",
@@ -1051,7 +1078,7 @@ employeeName: "",
         </div>
         <div className="flex items-center gap-3">
           {!isDialogOpen && (
-            <Button onClick={() => { resetForm(); setIsDialogOpen(true); }} className="flex-shrink-0 text-sm px-3 py-2">
+            <Button onClick={() => { closeRegularisationPagePanels(); setIsDialogOpen(true); }} className="flex-shrink-0 text-sm px-3 py-2">
               <Plus className="w-4 h-4 mr-1" />
               Submit Regularisation
             </Button>
@@ -1273,7 +1300,7 @@ employeeName: "",
                 </div>
 
                 <div className="flex justify-end gap-3 pt-4">
-                  <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
+                  <Button type="button" variant="outline" onClick={closeRegularisationPagePanels}>
                     Cancel
                   </Button>
                   <Button type="submit" className="">

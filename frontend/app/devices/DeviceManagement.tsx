@@ -252,15 +252,35 @@ export function DeviceManagement() {
   };
 
 
-  useEffect(() => {
-    const handler = () => { if (user) fetchDevices(); };
-    window.addEventListener("sidebar-context-changed", handler);
-    window.addEventListener("app-data-refresh", handler);
-    return () => {
-      window.removeEventListener("sidebar-context-changed", handler);
-      window.removeEventListener("app-data-refresh", handler);
-    };
-  }, [user]);
+useEffect(() => {
+  const handler = () => {
+    if (user) {
+      fetchDevices();
+      fetchBranchFilterList();
+    }
+  };
+
+  const sidebarPageClickHandler = (e: any) => {
+    if (e.detail?.path === "/devices") {
+      closeDevicePagePanels();
+
+      if (user) {
+        fetchDevices();
+        fetchBranchFilterList();
+      }
+    }
+  };
+
+  window.addEventListener("sidebar-context-changed", handler);
+  window.addEventListener("app-data-refresh", handler);
+  window.addEventListener("sidebar-main-page-click", sidebarPageClickHandler);
+
+  return () => {
+    window.removeEventListener("sidebar-context-changed", handler);
+    window.removeEventListener("app-data-refresh", handler);
+    window.removeEventListener("sidebar-main-page-click", sidebarPageClickHandler);
+  };
+}, [user]);
 
   // ---------------------------
   // Debounced suggestions
@@ -677,11 +697,20 @@ export function DeviceManagement() {
 
 
 
-  const handleCancel = () => {
-    resetForm();
-    setIsAddingNew(false);
-    setEditingDevice(null);
-  };
+const closeDevicePagePanels = () => {
+  resetForm();
+
+  setIsAddingNew(false);
+  setEditingDevice(null);
+
+  setSpList([]);
+  setCoList([]);
+  setBrList([]);
+};
+
+const handleCancel = () => {
+  closeDevicePagePanels();
+};
 
 
   const toggleBranchFilter = (branchId: string) => {

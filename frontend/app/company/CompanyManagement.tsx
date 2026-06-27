@@ -152,8 +152,8 @@ export function CompanyManagement() {
   const [companyAdminForm, setCompanyAdminForm] = useState({ ...emptyCompanyAdminForm })
   const [companyAdminSaving, setCompanyAdminSaving] = useState(false)
   const [companyAdminLoading, setCompanyAdminLoading] = useState(false)
-const [editingCompanyAdmin, setEditingCompanyAdmin] =
-  useState<CompanyAdminUser | null>(null)
+  const [editingCompanyAdmin, setEditingCompanyAdmin] =
+    useState<CompanyAdminUser | null>(null)
 
   const user = useCurrentUser()
 
@@ -172,7 +172,7 @@ const [editingCompanyAdmin, setEditingCompanyAdmin] =
     autocompleteName?: string
   }
 
-    const [formData, setFormData] = useState<CompanyFormData>({
+  const [formData, setFormData] = useState<CompanyFormData>({
     companyName: "",
     companyType: "",
     noticePeriodDaysForResignation: "",
@@ -208,15 +208,26 @@ const [editingCompanyAdmin, setEditingCompanyAdmin] =
     }
   }, [user])
 
-  useEffect(() => {
-    const handler = () => { if (user) fetchCompanies() }
-    window.addEventListener("sidebar-context-changed", handler)
-    window.addEventListener("app-data-refresh", handler)
-    return () => {
-      window.removeEventListener("sidebar-context-changed", handler)
-      window.removeEventListener("app-data-refresh", handler)
+useEffect(() => {
+  const handler = () => { if (user) fetchCompanies() }
+
+  const sidebarPageClickHandler = (e: any) => {
+    if (e.detail?.path === "/company") {
+      closeCompanyPagePanels()
+      if (user) fetchCompanies()
     }
-  }, [user])
+  }
+
+  window.addEventListener("sidebar-context-changed", handler)
+  window.addEventListener("app-data-refresh", handler)
+  window.addEventListener("sidebar-main-page-click", sidebarPageClickHandler)
+
+  return () => {
+    window.removeEventListener("sidebar-context-changed", handler)
+    window.removeEventListener("app-data-refresh", handler)
+    window.removeEventListener("sidebar-main-page-click", sidebarPageClickHandler)
+  }
+}, [user])
 
   // For non-SUPERADMIN users, auto-open edit form with their company
   useEffect(() => {
@@ -357,7 +368,7 @@ const [editingCompanyAdmin, setEditingCompanyAdmin] =
     }
   };
 
-    const handleEditCompanyAdmin = (user: CompanyAdminUser) => {
+  const handleEditCompanyAdmin = (user: CompanyAdminUser) => {
     setEditingCompanyAdmin(user)
 
     setCompanyAdminForm({
@@ -375,39 +386,39 @@ const [editingCompanyAdmin, setEditingCompanyAdmin] =
     })
   }
 
-const handleDeleteCompanyAdmin = async (id: number) => {
-  if (!confirm("Delete this Company Admin user?")) return
+  const handleDeleteCompanyAdmin = async (id: number) => {
+    if (!confirm("Delete this Company Admin user?")) return
 
-  try {
-    const res = await fetch(`/backend/users/${id}`, {
-      method: "DELETE",
-    })
-
-    if (!res.ok) {
-      const errText = await res.text()
-      throw new Error(errText || "Failed to delete Company Admin")
-    }
-
-    toast.success("Company Admin deleted successfully")
-
-    if (editingCompanyAdmin?.id === id) {
-      setEditingCompanyAdmin(null)
-      setCompanyAdminForm({
-        ...emptyCompanyAdminForm,
-        role: "COMPANY_ADMIN",
-        serviceProviderID: selectedCompanyForAdmin?.serviceProviderID || "",
-        companyID: selectedCompanyForAdmin?.id || "",
-        isActive: true,
+    try {
+      const res = await fetch(`/backend/users/${id}`, {
+        method: "DELETE",
       })
-    }
 
-    if (selectedCompanyForAdmin) {
-      await fetchCompanyAdminUsers(selectedCompanyForAdmin)
+      if (!res.ok) {
+        const errText = await res.text()
+        throw new Error(errText || "Failed to delete Company Admin")
+      }
+
+      toast.success("Company Admin deleted successfully")
+
+      if (editingCompanyAdmin?.id === id) {
+        setEditingCompanyAdmin(null)
+        setCompanyAdminForm({
+          ...emptyCompanyAdminForm,
+          role: "COMPANY_ADMIN",
+          serviceProviderID: selectedCompanyForAdmin?.serviceProviderID || "",
+          companyID: selectedCompanyForAdmin?.id || "",
+          isActive: true,
+        })
+      }
+
+      if (selectedCompanyForAdmin) {
+        await fetchCompanyAdminUsers(selectedCompanyForAdmin)
+      }
+    } catch (error: any) {
+      toast.error(error?.message || "Failed to delete Company Admin")
     }
-  } catch (error: any) {
-    toast.error(error?.message || "Failed to delete Company Admin")
   }
-}
 
   const handleEdit = (company: Company & { serviceProvider?: ServiceProvider }) => {
     setServiceProviders([])
@@ -483,9 +494,25 @@ const handleDeleteCompanyAdmin = async (id: number) => {
     setViewCompany(null)
   }
 
-  const handleBack = () => {
-    router.push('/company')
-  }
+const closeCompanyPagePanels = () => {
+  resetForm()
+  setIsAddingNew(false)
+  setIsViewing(false)
+  setViewCompany(null)
+
+  closeModuleDrawer()
+
+  setCompanyAdminDrawerOpen(false)
+  setSelectedCompanyForAdmin(null)
+  setCompanyAdminUsers([])
+  setCompanyAdminForm({ ...emptyCompanyAdminForm })
+  setEditingCompanyAdmin(null)
+}
+
+const handleBack = () => {
+  closeCompanyPagePanels()
+  router.push('/company')
+}
 
   const openModuleDrawer = async (company: Company) => {
     setSelectedCompanyForModules(company)
@@ -633,14 +660,14 @@ const handleDeleteCompanyAdmin = async (id: number) => {
     await fetchCompanyAdminUsers(company)
   }
 
-    const closeCompanyAdminPanel = () => {
+  const closeCompanyAdminPanel = () => {
     setCompanyAdminDrawerOpen(false)
     setSelectedCompanyForAdmin(null)
     setCompanyAdminUsers([])
     setCompanyAdminForm({ ...emptyCompanyAdminForm })
   }
 
-   const createCompanyAdminUser = async (e: React.FormEvent) => {
+  const createCompanyAdminUser = async (e: React.FormEvent) => {
     e.preventDefault()
 
     if (companyAdminSaving) return
@@ -701,9 +728,9 @@ const handleDeleteCompanyAdmin = async (id: number) => {
         const errText = await res.text()
         throw new Error(
           errText ||
-            (isEdit
-              ? "Failed to update company admin"
-              : "Failed to create company admin")
+          (isEdit
+            ? "Failed to update company admin"
+            : "Failed to create company admin")
         )
       }
 
@@ -954,7 +981,7 @@ const handleDeleteCompanyAdmin = async (id: number) => {
             </div>
 
             <div className="flex justify-end gap-2 pt-4">
-           
+
               <Button
                 type="submit"
                 disabled={saving}
@@ -1128,16 +1155,16 @@ const handleDeleteCompanyAdmin = async (id: number) => {
             >
               <div>
                 <h3 className="text-base font-semibold text-gray-900">
-{editingCompanyAdmin
-  ? "Update Company Admin"
-  : "Create Company Admin"}
-                  </h3>
+                  {editingCompanyAdmin
+                    ? "Update Company Admin"
+                    : "Create Company Admin"}
+                </h3>
                 <p className="text-sm text-gray-500">
-{editingCompanyAdmin
-  ? "Update COMPANY_ADMIN user details. Leave password blank to keep existing password."
-  : "This user will get COMPANY_ADMIN role for this company only."}
-  
-                  </p>
+                  {editingCompanyAdmin
+                    ? "Update COMPANY_ADMIN user details. Leave password blank to keep existing password."
+                    : "This user will get COMPANY_ADMIN role for this company only."}
+
+                </p>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1258,35 +1285,35 @@ const handleDeleteCompanyAdmin = async (id: number) => {
               </div>
 
               <div className="flex justify-end gap-2">
-  {editingCompanyAdmin && (
-    <Button
-      type="button"
-      variant="outline"
-      onClick={() => {
-        setEditingCompanyAdmin(null)
-        setCompanyAdminForm({
-          ...emptyCompanyAdminForm,
-          role: "COMPANY_ADMIN",
-          serviceProviderID: selectedCompanyForAdmin?.serviceProviderID || "",
-          companyID: selectedCompanyForAdmin?.id || "",
-          isActive: true,
-        })
-      }}
-    >
-      Cancel Edit
-    </Button>
-  )}
+                {editingCompanyAdmin && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      setEditingCompanyAdmin(null)
+                      setCompanyAdminForm({
+                        ...emptyCompanyAdminForm,
+                        role: "COMPANY_ADMIN",
+                        serviceProviderID: selectedCompanyForAdmin?.serviceProviderID || "",
+                        companyID: selectedCompanyForAdmin?.id || "",
+                        isActive: true,
+                      })
+                    }}
+                  >
+                    Cancel Edit
+                  </Button>
+                )}
 
-  <Button type="submit" disabled={companyAdminSaving}>
-{companyAdminSaving
-  ? editingCompanyAdmin
-    ? "Updating..."
-    : "Creating..."
-  : editingCompanyAdmin
-    ? "Update Company Admin"
-    : "Create Company Admin"}
-    
-                    </Button>
+                <Button type="submit" disabled={companyAdminSaving}>
+                  {companyAdminSaving
+                    ? editingCompanyAdmin
+                      ? "Updating..."
+                      : "Creating..."
+                    : editingCompanyAdmin
+                      ? "Update Company Admin"
+                      : "Create Company Admin"}
+
+                </Button>
               </div>
             </form>
 
@@ -1305,8 +1332,8 @@ const handleDeleteCompanyAdmin = async (id: number) => {
                   <TableRow>
                     <TableHead>Username</TableHead>
                     <TableHead>Role</TableHead>
-<TableHead>Status</TableHead>
-<TableHead className="text-right">Actions</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
 
@@ -1315,7 +1342,7 @@ const handleDeleteCompanyAdmin = async (id: number) => {
                     <TableRow>
                       <TableCell colSpan={4} className="text-center py-8 text-gray-500">
                         Loading users...
-                        
+
                       </TableCell>
                     </TableRow>
                   ) : companyAdminUsers.length === 0 ? (
@@ -1369,7 +1396,7 @@ const handleDeleteCompanyAdmin = async (id: number) => {
       )}
 
       {!isAddingNew && !isViewing && !isCompanyProfileOnly && !companyAdminDrawerOpen && (<>
-          <Card>
+        <Card>
           <CardContent className="p-6 flex items-center space-x-4">
             <div className="relative flex-1 min-w-0">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
@@ -1386,7 +1413,7 @@ const handleDeleteCompanyAdmin = async (id: number) => {
           </CardContent>
         </Card>
 
-       
+
         <Card className="w-full">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -1428,7 +1455,7 @@ const handleDeleteCompanyAdmin = async (id: number) => {
                       <TableCell>{company.gstNo}</TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-1">
-                           
+
                           {isSuperAdmin && (
                             <Button
                               variant="ghost"
@@ -1439,7 +1466,7 @@ const handleDeleteCompanyAdmin = async (id: number) => {
                               <UserPlus className="w-4 h-4 text-indigo-600" />
                             </Button>
                           )}
-                          
+
                           <Button
                             variant="ghost"
                             size="sm"
@@ -1491,9 +1518,7 @@ const handleDeleteCompanyAdmin = async (id: number) => {
           </CardContent>
         </Card>
       </>
-    )}
-
-      
+      )}
     </div>
   )
 }

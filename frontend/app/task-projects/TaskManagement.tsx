@@ -174,8 +174,31 @@ export default function TaskManagement() {
     finally { setLoading(false); }
   }, [user, search, statusFilter, priorityFilter, taskTypeFilter]);
 
-  useEffect(() => { if (user) loadTasks(); }, [user, loadTasks]);
-  useAppRefresh(() => { if (user) loadTasks(); }, [user, loadTasks]);
+useEffect(() => {
+  const load = () => {
+    if (user) loadTasks();
+  };
+
+  load();
+
+  const sidebarPageClickHandler = (e: any) => {
+    if (e.detail?.path === "/task-projects") {
+      closeTaskPagePanels();
+      load();
+    }
+  };
+
+  window.addEventListener("sidebar-main-page-click", sidebarPageClickHandler);
+
+  return () => {
+    window.removeEventListener("sidebar-main-page-click", sidebarPageClickHandler);
+  };
+}, [user, loadTasks]);
+
+useAppRefresh(() => {
+  if (user) loadTasks();
+}, [user, loadTasks]);
+
 
   const downloadReport = async (t: Task) => {
     try {
@@ -211,6 +234,22 @@ export default function TaskManagement() {
     customerIdRef.current = "";
     setCustomerLabel(""); setBranchLabel(""); setDepartmentLabel(""); setEditingTask(null);
   };
+
+ const closeTaskPagePanels = () => {
+  resetForm();
+
+  setFormOpen(false);
+  setEditingTask(null);
+
+  setDetailOpen(false);
+  setDetail(null);
+
+  setChatOpen(false);
+  setChatTask(null);
+  setChatMsg("");
+
+  setFilterOpen(false);
+};
 
   const openAssign = async (t: Task) => {
     const full = await taskFetch<Task>(`/task-projects/${t.id}`, user).catch(() => t);
@@ -413,9 +452,15 @@ export default function TaskManagement() {
       {!formOpen && !detailOpen && (
         <>
           <div className="flex flex-wrap items-center gap-2">
-            <Button size="sm" onClick={() => { resetForm(); setFormOpen(true); }}>
-              <Plus className="w-4 h-4 mr-1" /> Create Task
-            </Button>
+            <Button
+  size="sm"
+  onClick={() => {
+    closeTaskPagePanels();
+    setFormOpen(true);
+  }}
+>
+  <Plus className="w-4 h-4 mr-1" /> Create Task
+</Button>
             <div className="relative" ref={filterRef}>
               <Button
                 variant="outline"

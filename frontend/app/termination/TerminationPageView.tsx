@@ -287,11 +287,65 @@ if (user?.role === "BRANCH_ADMIN" && user?.branchesID) {
     }
   };
 
-useEffect(() => {
-  if (user) {
-    fetchData();
-    fetchBranchAndDepartmentLookups();
+
+  const closeTerminationPagePanels = () => {
+  setIsAdding(false);
+
+  setEmpSearch("");
+  setEmpList([]);
+
+  setSelectedDepartmentID("");
+
+  if (user?.role !== "BRANCH_ADMIN") {
+    setSelectedBranchID("");
   }
+
+  setForm({
+    employeeId: "",
+    exitType: "",
+    reasonCategory: "",
+    resignationDate: "",
+    initiatedOn: new Date().toISOString().split("T")[0],
+    noticePeriod: "",
+  });
+
+  setApproveModalOpen(false);
+  setSelectedTermination(null);
+  setApprovalForm({
+    lastWorkingDay: "",
+    noticeDays: "",
+    disableLoginOn: "",
+  });
+
+  setShowFilterModal(false);
+};
+
+useEffect(() => {
+  const load = () => {
+    if (user) {
+      fetchData();
+      fetchBranchAndDepartmentLookups();
+    }
+  };
+
+  load();
+
+  const sidebarPageClickHandler = (e: any) => {
+    if (e.detail?.path === "/termination") {
+      closeTerminationPagePanels();
+      load();
+    }
+  };
+
+  window.addEventListener("sidebar-main-page-click", sidebarPageClickHandler);
+  window.addEventListener("sidebar-context-changed", load);
+  window.addEventListener("app-data-refresh", load);
+
+  return () => {
+    window.removeEventListener("sidebar-main-page-click", sidebarPageClickHandler);
+    window.removeEventListener("sidebar-context-changed", load);
+    window.removeEventListener("app-data-refresh", load);
+  };
 }, [user]);
 
   const runFetchEmp = (q: string) => {
@@ -1154,9 +1208,10 @@ setForm({
           </div>
 
           <DialogFooter className="mt-6">
-            <Button variant="outline" onClick={() => setApproveModalOpen(false)}>
-              Cancel
-            </Button>
+            <Button type="button" variant="outline" onClick={closeTerminationPagePanels}>
+  <X className="w-4 h-4 mr-1" />
+  Cancel
+</Button>
             <Button
               className="bg-red-600 hover:bg-red-700"
               onClick={confirmApprove}

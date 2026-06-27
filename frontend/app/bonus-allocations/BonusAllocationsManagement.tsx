@@ -6,16 +6,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card"
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
-import {
-  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger,
-} from "../components/ui/dialog";
 import { FormDrawer } from "../components/ui/form-drawer";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "../components/ui/table";
 import { Badge } from "../components/ui/badge";
 import { Icon } from "@iconify/react";
-import { Plus, Search, Edit, Trash2, Play } from "lucide-react";
+import { Plus, Search, Edit, Trash2, Play, Filter, RotateCcw, X } from "lucide-react";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import { toast } from "sonner";
 import { getSidebarContext } from "../utils/sidebarContext";
@@ -32,6 +29,8 @@ const API = {
   bonusSetups: "/backend/bonus-setup",
   companies: "/backend/company",
   salaryCycle: "/backend/salary-cycle",
+  branches: "/backend/branches",
+  departments : "/backend/departments"
 };
 const MIN_CHARS = 0;
 
@@ -41,8 +40,12 @@ type ApiAllocation = {
   bonusSetupID: number;
   financialYear: number | null;
   salaryPeriod: number | null;
-  employeeID: number;
-  createdAt?: string;
+ employeeID: number;
+branchesID?: number | null;
+departmentID?: number | null;
+createdAt?: string;
+branches?: { id: number; branchName?: string | null } | null;
+departments?: { id: number; departmentName?: string | null } | null;
   bonusSetup?: {
     id: number;
     bonusName: string | null;
@@ -61,8 +64,10 @@ type ApiAllocation = {
     employeeFirstName: string | null;
     employeeLastName: string | null;
     companyID?: number | null;
-    branchesID?: number | null;
-  } | null;
+branchesID?: number | null;
+departmentNameID?: number | null;
+departments?: { id: number; departmentName?: string | null } | null;
+branches?: { id: number; branchName?: string | null } | null;  } | null;
 };
 
 type EmployeeApi = {
@@ -71,7 +76,10 @@ type EmployeeApi = {
   employeeFirstName: string | null;
   employeeLastName: string | null;
   companyID?: number | null;
-  branchesID?: number | null;
+branchesID?: number | null;
+departmentNameID?: number | null;
+departments?: { id: number; departmentName?: string | null } | null;
+branches?: { id: number; branchName?: string | null } | null;
 };
 
 type BonusSetupApi = { 
@@ -104,7 +112,10 @@ interface BonusAllocationUI {
   bonusAmount: number;
   createdAt: string;
   companyID?: number | null;
-  branchesID?: number | null;
+branchesID?: number | null;
+departmentID?: number | null;
+branchName?: string;
+departmentName?: string;
 }
 
 /* ---------------- Helpers ---------------- */
@@ -203,7 +214,16 @@ function parseSalaryPeriodLabelToMonth(label: string): number | null {
 export function BonusAllocationsManagement() {
   const [listLoading, setListLoading] = useState(true);
   const [allocations, setAllocations] = useState<BonusAllocationUI[]>([]);
-  const [searchTerm, setSearchTerm] = useState("");
+const [searchTerm, setSearchTerm] = useState("");
+const [branchList, setBranchList] = useState<any[]>([]);
+const [departmentList, setDepartmentList] = useState<any[]>([]);
+const [selectedBranchID, setSelectedBranchID] = useState("");
+const [selectedDepartmentID, setSelectedDepartmentID] = useState("");
+
+const [selectedFilterBranchIds, setSelectedFilterBranchIds] = useState<string[]>([]);
+const [selectedFilterDepartmentIds, setSelectedFilterDepartmentIds] = useState<string[]>([]);
+const [showFilterModal, setShowFilterModal] = useState(false);
+const [filterLoading, setFilterLoading] = useState(false);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingAllocation, setEditingAllocation] = useState<BonusAllocationUI | null>(null);
 
@@ -242,8 +262,10 @@ export function BonusAllocationsManagement() {
     bonusSetupID: null as number | null,
     employeeDbID: null as number | null,
     bonusAutocomplete: "",
-    employeeAutocomplete: "",
-    financialYearLabel: "",
+  employeeAutocomplete: "",
+branchName: "",
+departmentName: "",
+financialYearLabel: "",
     salaryPeriodLabel: "",
   });
 
@@ -257,12 +279,22 @@ export function BonusAllocationsManagement() {
     return () => document.removeEventListener("click", onDocClick);
   }, []);
 
-  useEffect(() => {
-    if (user) loadAllocations();
-  }, [user]);
+ useEffect(() => {
+  if (user) {
+    loadBranchDepartmentLookups().then(() => {
+      loadAllocations();
+    });
+  }
+}, [user]);
 
   useEffect(() => {
-    const handler = () => { if (user) loadAllocations(); };
+  const handler = () => {
+  if (user) {
+    loadBranchDepartmentLookups().then(() => {
+      loadAllocations();
+    });
+  }
+ };
     window.addEventListener("sidebar-context-changed", handler);
     window.addEventListener("app-data-refresh", handler);
     return () => {
@@ -270,6 +302,59 @@ export function BonusAllocationsManagement() {
       window.removeEventListener("app-data-refresh", handler);
     };
   }, [user]);
+
+  const loadBranchDepartmentLookups = async () => {
+  try {
+    setFilterLoading(true);
+
+    const [brRes, deptRes] = await Promise.all([
+      fetch(API.branches, { cache: "no-store" }),
+      fetch(API.departments, { cache: "no-store" }),
+    ]);
+
+    const brRaw = await brRes.json();
+    const deptRaw = await deptRes.json();
+
+    const ctx = getSidebarContext();
+    const activeCompanyID =
+      ctx?.companyID ??
+      user?.companyID ??
+      currentUserMapping?.companyID ??
+      null;
+
+    let branches = Array.isArray(brRaw) ? brRaw : brRaw?.data ?? [];
+    let departments = Array.isArray(deptRaw) ? deptRaw : deptRaw?.data ?? [];
+
+    if (activeCompanyID && user?.role !== "SUPERADMIN") {
+      branches = branches.filter((b: any) => Number(b.companyID) === Number(activeCompanyID));
+      departments = departments.filter((d: any) => Number(d.companyID) === Number(activeCompanyID));
+    }
+
+    if (user?.role === "SUPERADMIN" && ctx?.companyID) {
+      branches = branches.filter((b: any) => Number(b.companyID) === Number(ctx.companyID));
+      departments = departments.filter((d: any) => Number(d.companyID) === Number(ctx.companyID));
+    }
+
+    if (user?.role === "BRANCH_ADMIN") {
+      const branchID = currentUserMapping?.branchesID ?? user?.branchesID;
+      if (branchID) {
+        branches = branches.filter((b: any) => Number(b.id) === Number(branchID));
+        departments = departments.filter((d: any) => Number(d.branchesID) === Number(branchID));
+        setSelectedBranchID(String(branchID));
+        setSelectedFilterBranchIds([String(branchID)]);
+      }
+    }
+
+    setBranchList(branches);
+    setDepartmentList(departments);
+  } catch (e) {
+    console.error("Failed to load branch/department filters", e);
+    setBranchList([]);
+    setDepartmentList([]);
+  } finally {
+    setFilterLoading(false);
+  }
+};
 
   const loadAllocations = async () => {
     setListLoading(true);
@@ -338,8 +423,21 @@ export function BonusAllocationsManagement() {
         employeeCode: x.manageEmployee?.employeeID || "",
         bonusAmount: 0,
         createdAt: x.createdAt ? x.createdAt.split("T")[0] : new Date().toISOString().split("T")[0],
-        companyID: x.bonusSetup?.companyID ?? null,
-        branchesID: x.bonusSetup?.branchesID ?? null,
+       companyID: x.bonusSetup?.companyID ?? x.manageEmployee?.companyID ?? null,
+branchesID: x.branchesID ?? x.manageEmployee?.branchesID ?? x.bonusSetup?.branchesID ?? null,
+departmentID: x.departmentID ?? x.manageEmployee?.departmentNameID ?? null,
+branchName:
+  x.branches?.branchName ??
+  x.manageEmployee?.branches?.branchName ??
+  branchList.find((b: any) => Number(b.id) === Number(x.branchesID))?.branchName ??
+  "",
+
+departmentName:
+  x.departments?.departmentName ??
+  x.manageEmployee?.departments?.departmentName ??
+  departmentList.find((d: any) => Number(d.id) === Number(x.departmentID))?.departmentName ??
+  "",
+
       }));
 
       setAllocations(await filterCompanyScopedRecords(all, user));
@@ -371,54 +469,76 @@ export function BonusAllocationsManagement() {
   }
 
   const runFetchEmployees = debounce(async (val: string) => {
-    if (!val || val.length < MIN_CHARS) return setEmpList([]);
-    setEmpLoading(true);
-    try {
-      // Build URL with filters for MANAGER role
-      let employeesUrl = API.employees;
-      
-      if (user?.role === "SERVICE_PROVIDER" && currentUserMapping) {
-        const params = new URLSearchParams();
-        if (currentUserMapping.companyID) params.append('companyID', currentUserMapping.companyID.toString());
-        if (currentUserMapping.branchesID) params.append('branchesID', currentUserMapping.branchesID.toString());
-        
-        const queryString = params.toString();
-        if (queryString) {
-          employeesUrl += `?${queryString}`;
-        }
-      }
+  if (!selectedBranchID || !selectedDepartmentID) {
+    setEmpList([]);
+    return;
+  }
 
-      const list: EmployeeApi[] = await robustGet(employeesUrl, val);
-      
-      // Additional client-side filtering by company
-      let filtered = list;
-      if (user?.role === "SERVICE_PROVIDER" && currentUserMapping) {
-        filtered = list.filter(employee => {
-          return employee.companyID === currentUserMapping.companyID && 
-                 employee.branchesID === currentUserMapping.branchesID;
-        });
-      } else if (user?.role !== "SERVICE_PROVIDER") {
-        const ctx = getSidebarContext();
-        const companyID = ctx?.companyID ?? user?.companyID;
-        if (companyID) {
-          filtered = list.filter((employee: any) => employee.companyID === companyID);
-        }
-      }
+  setEmpLoading(true);
 
-      const lc = val.toLowerCase();
-      filtered = filtered.filter((e) => {
-        const nm = `${(e.employeeFirstName ?? "").trim()} ${(e.employeeLastName ?? "").trim()}`.trim().toLowerCase();
-        return nm.includes(lc) || (e.employeeID ?? "").toLowerCase().includes(lc);
-      });
-      
-      setEmpList(filtered.slice(0, 50));
-    } catch (e) {
-      console.error("Employees fetch error", e);
-      setEmpList([]);
-    } finally {
-      setEmpLoading(false);
+  try {
+    let employeesUrl = API.employees;
+
+    const list: EmployeeApi[] = await robustGet(employeesUrl, val);
+
+    const ctx = getSidebarContext();
+    const companyID =
+      ctx?.companyID ??
+      user?.companyID ??
+      currentUserMapping?.companyID ??
+      null;
+
+    let filtered = Array.isArray(list) ? list : [];
+
+    if (companyID && user?.role !== "SUPERADMIN") {
+      filtered = filtered.filter(
+        (e: any) => Number(e.companyID) === Number(companyID)
+      );
     }
-  }, 250);
+
+    filtered = filtered.filter((e: any) => {
+      const empBranchID =
+        e.branchesID ??
+        e.branchID ??
+        e.branches?.id ??
+        e.branch?.id ??
+        null;
+
+      const empDeptID =
+        e.departmentNameID ??
+        e.departmentID ??
+        e.departmentsID ??
+        e.departments?.id ??
+        e.department?.id ??
+        null;
+
+      return (
+        Number(empBranchID) === Number(selectedBranchID) &&
+        Number(empDeptID) === Number(selectedDepartmentID)
+      );
+    });
+
+    const lc = val.toLowerCase();
+
+    filtered = filtered.filter((e) => {
+      const name = `${e.employeeFirstName ?? ""} ${e.employeeLastName ?? ""}`
+        .trim()
+        .toLowerCase();
+
+      return (
+        name.includes(lc) ||
+        String(e.employeeID ?? "").toLowerCase().includes(lc)
+      );
+    });
+
+    setEmpList(filtered.slice(0, 50));
+  } catch (e) {
+    console.error("Employees fetch error", e);
+    setEmpList([]);
+  } finally {
+    setEmpLoading(false);
+  }
+}, 250);
 
   const runFetchBonus = debounce(async (val: string) => {
     if (!val || val.length < MIN_CHARS) return setBonusList([]);
@@ -473,8 +593,10 @@ export function BonusAllocationsManagement() {
       return;
     }
 
-    const payload = {
+  const payload = {
       bonusSetupID: formData.bonusSetupID,
+      branchesID: selectedBranchID ? Number(selectedBranchID) : undefined,
+      departmentID: selectedDepartmentID ? Number(selectedDepartmentID) : undefined,
       employeeID: formData.employeeDbID,
       financialYear: parseFinancialYearLabelToYear(formData.financialYearLabel),
       salaryPeriod: parseSalaryPeriodLabelToMonth(formData.salaryPeriodLabel),
@@ -500,6 +622,11 @@ export function BonusAllocationsManagement() {
           employeeName: nameFromEmp(updated.manageEmployee),
           employeeCode: updated.manageEmployee?.employeeID || "",
           bonusAmount: 0,
+          companyID: updated.bonusSetup?.companyID ?? updated.manageEmployee?.companyID ?? null,
+branchesID: updated.branchesID ?? updated.manageEmployee?.branchesID ?? updated.bonusSetup?.branchesID ?? null,
+departmentID: updated.departmentID ?? updated.manageEmployee?.departmentNameID ?? null,
+branchName: updated.branches?.branchName ?? updated.manageEmployee?.branches?.branchName ?? "",
+departmentName: updated.departments?.departmentName ?? updated.manageEmployee?.departments?.departmentName ?? "",
           createdAt: updated.createdAt ? updated.createdAt.split("T")[0] : new Date().toISOString().split("T")[0],
         };
 
@@ -522,6 +649,11 @@ export function BonusAllocationsManagement() {
           salaryPeriodLabel: inferSalaryPeriodLabelFromNumber(created.salaryPeriod ?? undefined, monthStartDay, financialYearStart),
           employeeName: nameFromEmp(created.manageEmployee),
           employeeCode: created.manageEmployee?.employeeID || "",
+          companyID: created.bonusSetup?.companyID ?? created.manageEmployee?.companyID ?? null,
+branchesID: created.branchesID ?? created.manageEmployee?.branchesID ?? created.bonusSetup?.branchesID ?? null,
+departmentID: created.departmentID ?? created.manageEmployee?.departmentNameID ?? null,
+branchName: created.branches?.branchName ?? created.manageEmployee?.branches?.branchName ?? "",
+departmentName: created.departments?.departmentName ?? created.manageEmployee?.departments?.departmentName ?? "",
           bonusAmount: 0,
           createdAt: created.createdAt ? created.createdAt.split("T")[0] : new Date().toISOString().split("T")[0],
         };
@@ -544,6 +676,8 @@ export function BonusAllocationsManagement() {
       employeeDbID: allocation.employeeDbID,
       bonusAutocomplete: allocation.bonusName,
       employeeAutocomplete: `${allocation.employeeName}${allocation.employeeCode ? ` (${allocation.employeeCode})` : ""}`,
+      branchName: allocation.branchName ?? "",
+      departmentName: allocation.departmentName ?? "",
       financialYearLabel: allocation.financialYearLabel,
       salaryPeriodLabel: allocation.salaryPeriodLabel,
     });
@@ -567,26 +701,95 @@ export function BonusAllocationsManagement() {
       bonusSetupID: null,
       employeeDbID: null,
       bonusAutocomplete: "",
-      employeeAutocomplete: "",
-      financialYearLabel: "",
+    employeeAutocomplete: "",
+branchName: "",
+departmentName: "",
+financialYearLabel: "",
       salaryPeriodLabel: "",
     });
     setEditingAllocation(null);
     setEmpList([]);
     setBonusList([]);
+    setSelectedDepartmentID("");
+if (user?.role !== "BRANCH_ADMIN") setSelectedBranchID("");
   };
 
-  const filteredAllocations = useMemo(() => {
+  const visibleFormDepartments = departmentList.filter((d: any) =>
+  selectedBranchID ? Number(d.branchesID) === Number(selectedBranchID) : false
+);
+
+const visibleFilterDepartments = departmentList.filter((d: any) =>
+  selectedFilterBranchIds.length === 0 ||
+  selectedFilterBranchIds.includes(String(d.branchesID))
+);
+
+const toggleFilterBranch = (branchId: string) => {
+  setSelectedFilterBranchIds((prev) => {
+    const next = prev.includes(branchId)
+      ? prev.filter((id) => id !== branchId)
+      : [...prev, branchId];
+
+    if (next.length > 0) {
+      setSelectedFilterDepartmentIds((deptPrev) =>
+        deptPrev.filter((deptId) => {
+          const dept = departmentList.find((d: any) => String(d.id) === String(deptId));
+          return dept && next.includes(String(dept.branchesID));
+        })
+      );
+    }
+
+    return next;
+  });
+};
+
+const toggleFilterDepartment = (departmentId: string) => {
+  setSelectedFilterDepartmentIds((prev) =>
+    prev.includes(departmentId)
+      ? prev.filter((id) => id !== departmentId)
+      : [...prev, departmentId]
+  );
+};
+
+const selectAllFilterBranches = () => {
+  setSelectedFilterBranchIds(branchList.map((b: any) => String(b.id)));
+};
+
+const selectAllFilterDepartments = () => {
+  setSelectedFilterDepartmentIds(visibleFilterDepartments.map((d: any) => String(d.id)));
+};
+
+const clearAllFilters = () => {
+  if (user?.role === "BRANCH_ADMIN") return;
+  setSelectedFilterBranchIds([]);
+  setSelectedFilterDepartmentIds([]);
+};
+
+
+const filteredAllocations = useMemo(() => {
     const q = searchTerm.toLowerCase();
-    return allocations.filter(
-      (a) =>
+
+    return allocations.filter((a) => {
+      const matchesBranch =
+        selectedFilterBranchIds.length === 0 ||
+        selectedFilterBranchIds.includes(String(a.branchesID));
+
+      const matchesDepartment =
+        selectedFilterDepartmentIds.length === 0 ||
+        selectedFilterDepartmentIds.includes(String(a.departmentID));
+
+      const matchesSearch =
+        !q ||
         a.bonusName.toLowerCase().includes(q) ||
         a.employeeName.toLowerCase().includes(q) ||
         a.employeeCode.toLowerCase().includes(q) ||
+        (a.branchName || "").toLowerCase().includes(q) ||
+        (a.departmentName || "").toLowerCase().includes(q) ||
         a.financialYearLabel.toLowerCase().includes(q) ||
-        a.salaryPeriodLabel.toLowerCase().includes(q),
-    );
-  }, [allocations, searchTerm]);
+        a.salaryPeriodLabel.toLowerCase().includes(q);
+
+      return matchesBranch && matchesDepartment && matchesSearch;
+    });
+  }, [allocations, searchTerm, selectedFilterBranchIds, selectedFilterDepartmentIds]);
 
   return (
     <div className="space-y-6 w-full max-w-6xl mx-auto px-4">
@@ -677,8 +880,70 @@ export function BonusAllocationsManagement() {
                   </div>
                 </div>
 
-                <div className="space-y-4">
-                  <h3 className="text-lg font-semibold">Employee Selection</h3>
+              <div className="space-y-4">
+  <h3 className="text-lg font-semibold">Employee Filter</h3>
+
+  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+    <div className="space-y-2">
+      <Label>Branch *</Label>
+      <select
+        value={selectedBranchID}
+        disabled={user?.role === "BRANCH_ADMIN"}
+        onChange={(e) => {
+          setSelectedBranchID(e.target.value);
+          setSelectedDepartmentID("");
+          setFormData((p) => ({
+            ...p,
+            branchName: branchList.find((b: any) => String(b.id) === e.target.value)?.branchName || "",
+            departmentName: "",
+            employeeAutocomplete: "",
+            employeeDbID: null,
+          }));
+          setEmpList([]);
+        }}
+        className="w-full px-3 py-2 border border-gray-300 rounded-sm"
+        required
+      >
+        <option value="">Select Branch</option>
+        {branchList.map((b: any) => (
+          <option key={b.id} value={String(b.id)}>
+            {b.branchName}
+          </option>
+        ))}
+      </select>
+    </div>
+
+    <div className="space-y-2">
+      <Label>Department *</Label>
+      <select
+        value={selectedDepartmentID}
+        disabled={!selectedBranchID}
+        onChange={(e) => {
+          setSelectedDepartmentID(e.target.value);
+          setFormData((p) => ({
+            ...p,
+            departmentName: visibleFormDepartments.find((d: any) => String(d.id) === e.target.value)?.departmentName || "",
+            employeeAutocomplete: "",
+            employeeDbID: null,
+          }));
+          setEmpList([]);
+        }}
+        className="w-full px-3 py-2 border border-gray-300 rounded-sm"
+        required
+      >
+        <option value="">Select Department</option>
+        {visibleFormDepartments.map((d: any) => (
+          <option key={d.id} value={String(d.id)}>
+            {d.departmentName}
+          </option>
+        ))}
+      </select>
+    </div>
+  </div>
+</div>
+
+<div className="space-y-4">
+  <h3 className="text-lg font-semibold">Employee Selection</h3>
                   <div ref={empRef} className="space-y-2 relative">
                     <Label>Employee *</Label>
                     <Input
@@ -754,7 +1019,104 @@ export function BonusAllocationsManagement() {
 
       <Card>
         <CardContent className="p-6">
-          <div className="flex items-center space-x-4 w-full">
+<div className="flex items-center gap-3 w-full">
+  <Button
+    type="button"
+    variant="outline"
+    size="sm"
+    onClick={() => setShowFilterModal(true)}
+    className="flex-shrink-0"
+  >
+    <Filter className="w-4 h-4 mr-1" />
+    Filter
+    {(selectedFilterBranchIds.length + selectedFilterDepartmentIds.length) > 0 && (
+      <Badge variant="secondary" className="ml-2">
+        {selectedFilterBranchIds.length + selectedFilterDepartmentIds.length}
+      </Badge>
+    )}
+  </Button>
+  
+  {showFilterModal && (
+  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+    <div className="w-full max-w-3xl rounded-xl bg-white shadow-xl border">
+      <div className="flex items-center justify-between border-b px-5 py-4">
+        <div className="flex items-center gap-2">
+          <Filter className="w-4 h-4 text-indigo-600" />
+          <div>
+            <h3 className="text-base font-semibold text-gray-900">Filter Bonus Allocations</h3>
+            <p className="text-xs text-gray-500">Select branches and departments</p>
+          </div>
+        </div>
+        <Button type="button" variant="ghost" size="sm" onClick={() => setShowFilterModal(false)}>
+          <X className="w-4 h-4" />
+        </Button>
+      </div>
+
+      <div className="p-5 space-y-6 max-h-[70vh] overflow-y-auto">
+        <div className="flex items-center justify-between">
+          <Badge variant="secondary">
+            {selectedFilterBranchIds.length} branches, {selectedFilterDepartmentIds.length} departments selected
+          </Badge>
+          <Button type="button" variant="outline" size="sm" onClick={clearAllFilters}>
+            <RotateCcw className="w-4 h-4 mr-1" />
+            Clear
+          </Button>
+        </div>
+
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <Label>Branches</Label>
+            {user?.role !== "BRANCH_ADMIN" && (
+              <Button type="button" variant="outline" size="sm" onClick={selectAllFilterBranches}>
+                Select All Branches
+              </Button>
+            )}
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            {branchList.map((b: any) => (
+              <label key={b.id} className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm hover:bg-gray-50 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={selectedFilterBranchIds.includes(String(b.id))}
+                  disabled={user?.role === "BRANCH_ADMIN"}
+                  onChange={() => toggleFilterBranch(String(b.id))}
+                />
+                <span className="truncate">{b.branchName}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <Label>Departments</Label>
+            <Button type="button" variant="outline" size="sm" onClick={selectAllFilterDepartments}>
+              Select All Departments
+            </Button>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            {visibleFilterDepartments.map((d: any) => (
+              <label key={d.id} className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm hover:bg-gray-50 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={selectedFilterDepartmentIds.includes(String(d.id))}
+                  onChange={() => toggleFilterDepartment(String(d.id))}
+                />
+                <span className="truncate">{d.departmentName}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="flex justify-end gap-2 border-t px-5 py-4">
+        <Button type="button" variant="outline" onClick={() => setShowFilterModal(false)}>Cancel</Button>
+        <Button type="button" onClick={() => setShowFilterModal(false)}>Apply Filter</Button>
+      </div>
+    </div>
+  </div>
+)}
+
             <div className="relative flex-1 min-w-0">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
               <Input
@@ -786,7 +1148,9 @@ export function BonusAllocationsManagement() {
                   <TableHead className="w-[150px]">Bonus Name</TableHead>
                   <TableHead className="w-[120px]">Financial Year</TableHead>
                   <TableHead className="w-[160px]">Salary Period</TableHead>
-                  <TableHead className="w-[150px]">Employee Name</TableHead>
+<TableHead className="w-[120px]">Branch</TableHead>
+<TableHead className="w-[120px]">Department</TableHead>
+<TableHead className="w-[150px]">Employee Name</TableHead>
                   <TableHead className="w-[100px]">Employee ID</TableHead>
                   <TableHead className="w-[100px]">Created</TableHead>
                   <TableHead className="w-[80px] text-right">Actions</TableHead>
@@ -794,10 +1158,10 @@ export function BonusAllocationsManagement() {
               </TableHeader>
               <TableBody>
                 {listLoading ? (
-                      <TableBodySkeleton cols={7} />
+                      <TableBodySkeleton cols={9} />
                     ) : filteredAllocations.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center py-8 text-gray-500">
+                    <TableCell colSpan={9} className="text-center py-8 text-gray-500">
                       <div className="flex flex-col items-center gap-2">
                         <Icon icon="mdi:trophy-outline" className="w-12 h-12 text-gray-300" />
                         <p>No bonus allocations found</p>
@@ -811,7 +1175,15 @@ export function BonusAllocationsManagement() {
                       <TableCell className="font-medium whitespace-nowrap">{a.bonusName}</TableCell>
                       <TableCell className="whitespace-nowrap">{a.financialYearLabel}</TableCell>
                       <TableCell className="whitespace-nowrap">{a.salaryPeriodLabel}</TableCell>
-                      <TableCell className="whitespace-nowrap">{a.employeeName}</TableCell>
+<TableCell className="whitespace-nowrap">
+  {a.branchName ||  "—"}
+</TableCell>
+
+<TableCell className="whitespace-nowrap">
+  {a.departmentName ||  "—"}
+</TableCell>
+
+<TableCell className="whitespace-nowrap">{a.employeeName}</TableCell>
                       <TableCell className="whitespace-nowrap">{a.employeeCode}</TableCell>
                       <TableCell className="whitespace-nowrap">{a.createdAt}</TableCell>
                       {canManage && (

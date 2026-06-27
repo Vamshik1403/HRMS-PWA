@@ -1211,20 +1211,35 @@ if (user) {
   fetchEmployeeFilterLists();
 }  }, [user]);
 
-  useEffect(() => {
-    const handler = () => {
-  if (user) {
-    fetchRows();
-    fetchEmployeeFilterLists();
-  }
-};
-    window.addEventListener("sidebar-context-changed", handler);
-    window.addEventListener("app-data-refresh", handler);
-    return () => {
-      window.removeEventListener("sidebar-context-changed", handler);
-      window.removeEventListener("app-data-refresh", handler);
-    };
-  }, [user]);
+useEffect(() => {
+  const handler = () => {
+    if (user) {
+      fetchRows();
+      fetchEmployeeFilterLists();
+    }
+  };
+
+  const sidebarPageClickHandler = (e: any) => {
+    if (e.detail?.path === "/manage-employees") {
+      closeEmployeePagePanels();
+
+      if (user) {
+        fetchRows();
+        fetchEmployeeFilterLists();
+      }
+    }
+  };
+
+  window.addEventListener("sidebar-context-changed", handler);
+  window.addEventListener("app-data-refresh", handler);
+  window.addEventListener("sidebar-main-page-click", sidebarPageClickHandler);
+
+  return () => {
+    window.removeEventListener("sidebar-context-changed", handler);
+    window.removeEventListener("app-data-refresh", handler);
+    window.removeEventListener("sidebar-main-page-click", sidebarPageClickHandler);
+  };
+}, [user]);
 
 
   const addTokenDevMap = () => setTokenDevMapForm(p => [...p, {
@@ -3154,12 +3169,48 @@ const addCombinedDevMap = () => {
     }
   };
 
-  const handleCancel = () => {
-    resetForm();
-    setIsAddingNew(false);
-    setIsViewing(false);
-    setViewRow(null);
-  };
+const closeEmployeePagePanels = () => {
+  resetForm();
+
+  setIsAddingNew(false);
+  setIsViewing(false);
+  setEditingRow(null);
+  setViewRow(null);
+
+  setShowFilterModal(false);
+
+  setQuickAddOpen(null);
+  setQuickAddValue("");
+  setQuickAddSuggestions([]);
+
+  setHistoryOpen(false);
+  setHistoryData([]);
+  setHistoryEmployee(null);
+
+  setActiveFormSection("basic");
+  setExpandedGroups({});
+
+  setSpList([]);
+  setCoList([]);
+  setBrList([]);
+  setDeptList([]);
+  setDesgList([]);
+  setContrList([]);
+  setWsList([]);
+  setApList([]);
+  setLpList([]);
+  setDevList([]);
+  setTokenDevList([]);
+  setTokenVerifierDevList([]);
+  setCombinedDevList([]);
+  setLinkedEmpSuggestions([]);
+  setMonthlyPGList([]);
+  setHourlyPGList([]);
+};
+
+const handleCancel = () => {
+  closeEmployeePagePanels();
+};
 
   /* ==========
      Search

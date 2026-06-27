@@ -374,20 +374,35 @@ const [filterLoading, setFilterLoading] = useState(false);
 }
   }, [user]);
 
-  useEffect(() => {
-const handler = () => {
-  if (user) {
-    fetchRows();
-    fetchFilterLists();
-  }
-};
-    window.addEventListener("sidebar-context-changed", handler);
-    window.addEventListener("app-data-refresh", handler);
-    return () => {
-      window.removeEventListener("sidebar-context-changed", handler);
-      window.removeEventListener("app-data-refresh", handler);
-    };
-  }, [user]);
+ useEffect(() => {
+  const handler = () => {
+    if (user) {
+      fetchRows();
+      fetchFilterLists();
+    }
+  };
+
+  const sidebarPageClickHandler = (e: any) => {
+    if (e.detail?.path === "/designations") {
+      closeDesignationPagePanels();
+
+      if (user) {
+        fetchRows();
+        fetchFilterLists();
+      }
+    }
+  };
+
+  window.addEventListener("sidebar-context-changed", handler);
+  window.addEventListener("app-data-refresh", handler);
+  window.addEventListener("sidebar-main-page-click", sidebarPageClickHandler);
+
+  return () => {
+    window.removeEventListener("sidebar-context-changed", handler);
+    window.removeEventListener("app-data-refresh", handler);
+    window.removeEventListener("sidebar-main-page-click", sidebarPageClickHandler);
+  };
+}, [user]);
 
   // Close suggestion popovers on outside click
   useEffect(() => {
@@ -579,12 +594,20 @@ const handler = () => {
     }
   };
 
-  const handleCancel = () => {
+ const closeDesignationPagePanels = () => {
     resetForm();
+
     setIsAddingNew(false);
     setIsViewing(false);
+    setEditing(null);
     setViewRow(null);
-  };
+
+    setSpList([]);
+};
+
+const handleCancel = () => {
+    closeDesignationPagePanels();
+};
 
   // Filter SP list based on search
   const [spList, setSpList] = useState<ServiceProvider[]>([]);

@@ -427,20 +427,35 @@ useEffect(() => {
   }, [user]);
 
   useEffect(() => {
-const handler = () => {
+  const handler = () => {
+    if (user) {
+      loadLeavePolicies();
+      loadBranchFilterList();
+    }
+  };
+
+  const sidebarPageClickHandler = (e: any) => {
+    if (e.detail?.path === "/leave-policy") {
+      closeLeavePolicyPagePanels();
+
       if (user) {
-        loadLeavePolicies()
-        loadBranchFilterList()
+        loadLeavePolicies();
+        loadBranchFilterList();
       }
-    };
-    
-    window.addEventListener("sidebar-context-changed", handler);
-    window.addEventListener("app-data-refresh", handler);
-    return () => {
-      window.removeEventListener("sidebar-context-changed", handler);
-      window.removeEventListener("app-data-refresh", handler);
-    };
-  }, [user]);
+    }
+  };
+
+  window.addEventListener("sidebar-context-changed", handler);
+  window.addEventListener("app-data-refresh", handler);
+  window.addEventListener("sidebar-main-page-click", sidebarPageClickHandler);
+
+  return () => {
+    window.removeEventListener("sidebar-context-changed", handler);
+    window.removeEventListener("app-data-refresh", handler);
+    window.removeEventListener("sidebar-main-page-click", sidebarPageClickHandler);
+  };
+}, [user]);
+
 
   const loadLeavePolicies = async () => {
     try {
@@ -668,6 +683,15 @@ const handler = () => {
     setEditingPolicy(null)
   }
 
+  const closeLeavePolicyPagePanels = () => {
+  resetForm();
+
+  setIsDialogOpen(false);
+  setEditingPolicy(null);
+
+  setShowBranchFilterModal(false);
+};
+
   const handleEdit = (policy: LeavePolicy) => {
     const plParts = plExpiryToParts(policy.lapseEncashmentDate)
     setFormData({
@@ -772,7 +796,10 @@ const handleCompanySelect = (selected: SelectedItem) => {
         </div>
         {canManage && !isDialogOpen && (
           <Button
-            onClick={() => { resetForm(); setIsDialogOpen(true); }}
+onClick={() => {
+  closeLeavePolicyPagePanels();
+  setIsDialogOpen(true);
+}}
             className="flex-shrink-0 text-sm px-3 py-2"
           >
             <Plus className="w-4 h-4 mr-1" />
@@ -1128,7 +1155,7 @@ const handleCompanySelect = (selected: SelectedItem) => {
               </div>
 
               <div className="flex justify-end gap-3 pt-4">
-                <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
+                <Button type="button" variant="outline" onClick={closeLeavePolicyPagePanels}>
                   Cancel
                 </Button>
                 <Button type="submit" className="">
