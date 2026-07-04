@@ -16,10 +16,17 @@ import {
 } from "../components/ui/table";
 import { Badge } from "../components/ui/badge";
 import { Icon } from "@iconify/react";
-import { Plus, Search, Edit, Trash2, Eye, X, Save, Filter, RotateCcw } from "lucide-react";
+import { Plus, Edit, Trash2, Eye, X, Save, Filter, RotateCcw, Users } from "lucide-react";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import { FormDrawer } from "../components/ui/form-drawer";
+import { NoticeBanner } from "../components/ui/notice-banner";
 import { toast } from "sonner";
+import { PageHeader } from "../components/app/page-header";
+import { FilterBar, FilterSelect } from "../components/app/filter-bar";
+import { EntityListShell } from "../components/app/entity-list-shell";
+import type { DataTableColumn } from "../components/app/data-table";
+import { EntityRowActions } from "../components/app/entity-row-actions";
+import { useClientTable, sortRows } from "../hooks/use-client-table";
 import { getSidebarContext } from "../utils/sidebarContext";
 import {
   canDesktopManagerManage,
@@ -96,11 +103,10 @@ export function DepartmentManagement() {
   const [currentUserMapping, setCurrentUserMapping] = useState<any>(null);
 
   // UI
-const [searchTerm, setSearchTerm] = useState("");
+const table = useClientTable("departmentName");
+const [branchFilter, setBranchFilter] = useState("ALL");
 
 const [branchFilterList, setBranchFilterList] = useState<Branch[]>([]);
-const [selectedFilterBranchIds, setSelectedFilterBranchIds] = useState<string[]>([]);
-const [showBranchFilterModal, setShowBranchFilterModal] = useState(false);
 const [branchFilterLoading, setBranchFilterLoading] = useState(false);
   const [isAddingNew, setIsAddingNew] = useState(false);
   const [isViewing, setIsViewing] = useState(false);
@@ -153,9 +159,22 @@ const [branchFilterLoading, setBranchFilterLoading] = useState(false);
       setLoading(true);
       const all = await fetchJSONSafe<DepartmentRead[]>(API.departments);
 
-      const mapping = await resolveScopeUserMapping(user);
-      if (mapping) setCurrentUserMapping(mapping);
-      setRows(await filterCompanyScopedRecords(all, user));
+ const mapping = await resolveScopeUserMapping(user);
+if (mapping) setCurrentUserMapping(mapping);
+
+const ctx = getSidebarContext();
+
+const activeCompanyID =
+  ctx?.companyID ??
+  mapping?.companyID ??
+  user?.companyID;
+
+const filteredRows = (all || []).filter((r: any) => {
+  if (!activeCompanyID) return true;
+  return Number(r.companyID) === Number(activeCompanyID);
+});
+
+setRows(filteredRows);
 
     } catch (e: any) {
       console.error("Failed to load departments:", e);
@@ -183,12 +202,14 @@ const [branchFilterLoading, setBranchFilterLoading] = useState(false);
       const all = await fetchJSONSafe<Branch[]>(API.branches);
       const ctx = getSidebarContext();
 
-      const activeCompanyID =
-        ctx?.companyID ??
-        user?.companyID ??
-        currentUserMapping?.companyID ??
-        null;
+const mapping = await resolveScopeUserMapping(user);
 
+const activeCompanyID =
+  ctx?.companyID ??
+  mapping?.companyID ??
+  user?.companyID ??
+  null;
+  
       let branches = Array.isArray(all) ? all : [];
 
       if (activeCompanyID) {
@@ -203,7 +224,7 @@ const [branchFilterLoading, setBranchFilterLoading] = useState(false);
           branches = branches.filter(
             (b: any) => Number(b.id) === Number(branchesID)
           );
-          setSelectedFilterBranchIds([String(branchesID)]);
+          setBranchFilter(String(branchesID));
         }
       }
 
@@ -216,13 +237,31 @@ const [branchFilterLoading, setBranchFilterLoading] = useState(false);
     }
   };
 
-  useEffect(() => {
-    if (user) {
+useEffect(() => {
   fetchRows();
   fetchLookups();
   fetchBranchFilterList();
-}
-  }, [user]);
+
+const reload = () => {
+  setBranchFilter(user?.role === "BRANCH_ADMIN" ? String(user?.branchesID ?? "ALL") : "ALL");
+  setBrList([]);
+  setFormData((p) => ({
+    ...p,
+    branchesID: null,
+    brAutocomplete: "",
+  }));
+  fetchRows();
+  fetchBranchFilterList();
+};
+
+  window.addEventListener("sidebar-context-changed", reload);
+  window.addEventListener("app-data-refresh", reload);
+
+  return () => {
+    window.removeEventListener("sidebar-context-changed", reload);
+    window.removeEventListener("app-data-refresh", reload);
+  };
+}, []);
 
  useEffect(() => {
   const handler = () => {
@@ -307,49 +346,64 @@ const [branchFilterLoading, setBranchFilterLoading] = useState(false);
     }, DEBOUNCE_MS);
   };
 
-  const runFetchBranches = (query: string) => {
-    if (brTimerRef.current) clearTimeout(brTimerRef.current);
-    brTimerRef.current = setTimeout(async () => {
-      if (query.length < MIN_CHARS) {
-        setBrList([]);
-        return;
-      }
-      if (brAbortRef.current) brAbortRef.current.abort();
-      const ctrl = new AbortController();
-      brAbortRef.current = ctrl;
-      setBrLoading(true);
-      try {
-        const all = await fetchJSONSafe<Branch[]>(API.branches, ctrl.signal);
+ const runFetchBranches = (query: string) => {
+  if (brTimerRef.current) clearTimeout(brTimerRef.current);
 
-        // 🟡 Filter by companyID
-        let filtered = all || [];
-        if ((user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN") && currentUserMapping?.companyID) {
+  brTimerRef.current = setTimeout(async () => {
+    if (query.length < MIN_CHARS) {
+      setBrList([]);
+      return;
+    }
+
+    if (brAbortRef.current) brAbortRef.current.abort();
+
+    const ctrl = new AbortController();
+    brAbortRef.current = ctrl;
+    setBrLoading(true);
+
+    try {
+      const all = await fetchJSONSafe<Branch[]>(API.branches, ctrl.signal);
+      const ctx = getSidebarContext();
+
+      const activeCompanyID =
+        ctx?.companyID ??
+        formData.companyID ??
+        currentUserMapping?.companyID ??
+        user?.companyID ??
+        null;
+
+      let filtered = Array.isArray(all) ? all : [];
+
+      if (activeCompanyID) {
+        filtered = filtered.filter(
+          (b: any) => Number(b.companyID) === Number(activeCompanyID)
+        );
+      }
+
+      if (user?.role === "BRANCH_ADMIN") {
+        const branchesID = currentUserMapping?.branchesID ?? user?.branchesID;
+
+        if (branchesID) {
           filtered = filtered.filter(
-            (b: any) => b.companyID === currentUserMapping.companyID
-          );        } else if (user?.role === "BRANCH_ADMIN") {
-          const companyID = currentUserMapping?.companyID ?? user?.companyID;
-          if (companyID) filtered = filtered.filter((b: any) => b.companyID === companyID);
-          const branchesID = currentUserMapping?.branchesID ?? user?.branchesID;
-          if (branchesID) filtered = filtered.filter((b: any) => Number(b.id) === Number(branchesID));        } else if (formData.companyID) {
-          filtered = filtered.filter(
-            (b: any) => b.companyID === formData.companyID
+            (b: any) => Number(b.id) === Number(branchesID)
           );
         }
-
-        // 🟢 Then apply search filtering
-        filtered = filtered.filter((b) =>
-          (b.branchName ?? "").toLowerCase().includes(query.toLowerCase())
-        );
-
-        setBrList(filtered.slice(0, 20));
-      } catch (e) {
-        if ((e as any).name !== "AbortError")
-          console.error("Branches fetch error:", e);
-      } finally {
-        setBrLoading(false);
       }
-    }, DEBOUNCE_MS);
-  };
+
+      filtered = filtered.filter((b) =>
+        (b.branchName ?? "").toLowerCase().includes(query.toLowerCase())
+      );
+
+      setBrList(filtered.slice(0, 20));
+    } catch (e) {
+      if ((e as any).name !== "AbortError") {
+        console.error("Branches fetch error:", e);
+      }
+    } finally {
+      setBrLoading(false);
+    }
+  }, DEBOUNCE_MS);
+};
 
   // Close suggestion popovers on outside click
   useEffect(() => {
@@ -389,33 +443,25 @@ const [branchFilterLoading, setBranchFilterLoading] = useState(false);
     };
 
     // Auto-set Service Provider and Company for MANAGER
-    if (user?.role === "SERVICE_PROVIDER" && currentUserMapping) {
-      baseFormData.serviceProviderID = currentUserMapping.serviceProviderID;
-      baseFormData.companyID = currentUserMapping.companyID;
-      baseFormData.spAutocomplete = currentUserMapping.serviceProvider?.companyName || "";
-      baseFormData.coAutocomplete = currentUserMapping.company?.companyName || "";
-    } else if ((user?.role === "COMPANY_ADMIN" || user?.role === "ADMIN") && currentUserMapping) {
-      baseFormData.serviceProviderID = currentUserMapping.serviceProviderID;
-      baseFormData.companyID = currentUserMapping.companyID;
-      baseFormData.spAutocomplete = currentUserMapping.serviceProvider?.companyName || "";
-      baseFormData.coAutocomplete = currentUserMapping.company?.companyName || "";
-    } else if (user?.role === "BRANCH_ADMIN" && currentUserMapping) {
-      baseFormData.serviceProviderID = currentUserMapping.serviceProviderID;
-      baseFormData.companyID = currentUserMapping.companyID;
-      baseFormData.branchesID = currentUserMapping.branchesID;
-      baseFormData.spAutocomplete = currentUserMapping.serviceProvider?.companyName || "";
-      baseFormData.coAutocomplete = currentUserMapping.company?.companyName || "";
-      baseFormData.brAutocomplete = currentUserMapping.branches?.branchName || "";
-    } else if (user?.role === "SUPERADMIN") {
-      const ctx = getSidebarContext();
-      if (ctx) {
-        baseFormData.serviceProviderID = ctx.serviceProviderID;
-        baseFormData.companyID = ctx.companyID;
-        baseFormData.spAutocomplete = ctx.serviceProviderName;
-        baseFormData.coAutocomplete = ctx.companyName;
-      }
-    }
+   const ctx = getSidebarContext();
 
+// Sidebar selected company always gets first priority
+if (ctx) {
+  baseFormData.serviceProviderID = ctx.serviceProviderID;
+  baseFormData.companyID = ctx.companyID;
+  baseFormData.spAutocomplete = ctx.serviceProviderName;
+  baseFormData.coAutocomplete = ctx.companyName;
+} else if (currentUserMapping) {
+  baseFormData.serviceProviderID = currentUserMapping.serviceProviderID;
+  baseFormData.companyID = currentUserMapping.companyID;
+  baseFormData.spAutocomplete = currentUserMapping.serviceProvider?.companyName || "";
+  baseFormData.coAutocomplete = currentUserMapping.company?.companyName || "";
+
+  if (user?.role === "BRANCH_ADMIN") {
+    baseFormData.branchesID = currentUserMapping.branchesID;
+    baseFormData.brAutocomplete = currentUserMapping.branches?.branchName || "";
+  }
+}
     setFormData(baseFormData);
     setEditing(null);
     setSpList([]);
@@ -435,13 +481,19 @@ const [branchFilterLoading, setBranchFilterLoading] = useState(false);
     let spName = "";
     let coName = "";
 
-    if ((user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN" || user?.role === "ADMIN") && currentUserMapping) {
-      // Use user's mapped IDs
-      finalServiceProviderID = currentUserMapping.serviceProviderID;
-      finalCompanyID = currentUserMapping.companyID;
-      spName = currentUserMapping.serviceProvider?.companyName ?? "";
-      coName = currentUserMapping.company?.companyName ?? "";
-    } else {
+ const ctx = getSidebarContext();
+
+if (ctx) {
+  finalServiceProviderID = ctx.serviceProviderID;
+  finalCompanyID = ctx.companyID;
+  spName = ctx.serviceProviderName || "";
+  coName = ctx.companyName || "";
+} else if ((user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN" || user?.role === "ADMIN") && currentUserMapping) {
+  finalServiceProviderID = currentUserMapping.serviceProviderID;
+  finalCompanyID = currentUserMapping.companyID;
+  spName = currentUserMapping.serviceProvider?.companyName ?? "";
+  coName = currentUserMapping.company?.companyName ?? "";
+} else {
       // For SUPERADMIN, use the department's original data
       spName = r.serviceProvider?.companyName 
         ?? r.serviceProviderName 
@@ -500,13 +552,26 @@ const [branchFilterLoading, setBranchFilterLoading] = useState(false);
     setError(null);
 
     // For MANAGER, ensure serviceProviderID and companyID are set from user mapping
-    let finalServiceProviderID = formData.serviceProviderID;
-    let finalCompanyID = formData.companyID;
+  const ctx = getSidebarContext();
 
-    if ((user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN" || user?.role === "ADMIN") && currentUserMapping) {
-      finalServiceProviderID = currentUserMapping.serviceProviderID;
-      finalCompanyID = currentUserMapping.companyID;
-    }
+let finalServiceProviderID =
+  ctx?.serviceProviderID ??
+  formData.serviceProviderID;
+
+let finalCompanyID =
+  ctx?.companyID ??
+  formData.companyID;
+
+if (
+  (user?.role === "SERVICE_PROVIDER" ||
+    user?.role === "COMPANY_ADMIN" ||
+    user?.role === "ADMIN") &&
+  !ctx &&
+  currentUserMapping
+) {
+  finalServiceProviderID = currentUserMapping.serviceProviderID;
+  finalCompanyID = currentUserMapping.companyID;
+}
 
     const payload: any = {
       serviceProviderID: finalServiceProviderID ?? undefined,
@@ -546,12 +611,10 @@ const [branchFilterLoading, setBranchFilterLoading] = useState(false);
 
   const closeDepartmentPagePanels = () => {
   resetForm();
-
   setIsAddingNew(false);
   setIsViewing(false);
   setEditing(null);
   setViewRow(null);
-
   setSpList([]);
   setCoList([]);
   setBrList([]);
@@ -562,28 +625,11 @@ const handleCancel = () => {
 };
 
   // ---------------------------
-  // Search
+  // Search / filters
   // ---------------------------
 
-    const toggleFilterBranch = (branchId: string) => {
-    setSelectedFilterBranchIds((prev) =>
-      prev.includes(branchId)
-        ? prev.filter((id) => id !== branchId)
-        : [...prev, branchId]
-    );
-  };
-
-  const selectAllFilterBranches = () => {
-    setSelectedFilterBranchIds(branchFilterList.map((b) => String(b.id)));
-  };
-
-  const clearFilterBranches = () => {
-    if (user?.role === "BRANCH_ADMIN") return;
-    setSelectedFilterBranchIds([]);
-  };
-
     const filtered = useMemo(() => {
-    const t = searchTerm.trim().toLowerCase();
+    const t = table.search.trim().toLowerCase();
 
     const spNameOf = (r: DepartmentRead) =>
       r.serviceProvider?.companyName ??
@@ -600,12 +646,11 @@ const handleCancel = () => {
       r.branchName ??
       (r.branchesID != null ? brMap[r.branchesID] : "");
 
-    return rows.filter((r) => {
+    let list = rows.filter((r) => {
       const departmentBranchID = String(r.branchesID ?? r.branches?.id ?? "");
 
       const matchesBranch =
-        selectedFilterBranchIds.length === 0 ||
-        selectedFilterBranchIds.includes(departmentBranchID);
+        branchFilter === "ALL" || branchFilter === departmentBranchID;
 
       const matchesSearch =
         !t ||
@@ -621,7 +666,62 @@ const handleCancel = () => {
 
       return matchesBranch && matchesSearch;
     });
-  }, [rows, searchTerm, spMap, coMap, brMap, selectedFilterBranchIds]);
+
+    return sortRows(list, table.sortBy, table.sortDir, (row, key) => {
+      const r = row as DepartmentRead;
+      if (key === "departmentName") return r.departmentName ?? "";
+      if (key === "branch") {
+        return (
+          r.branches?.branchName ??
+          r.branchName ??
+          (r.branchesID != null ? brMap[r.branchesID] : "") ??
+          ""
+        );
+      }
+      return "";
+    });
+  }, [rows, table.search, table.sortBy, table.sortDir, branchFilter, spMap, coMap, brMap]);
+
+  const branchFilterOptions = useMemo(
+    () => [
+      { value: "ALL", label: "All branches" },
+      ...branchFilterList.map((b) => ({
+        value: String(b.id),
+        label: b.branchName || `Branch #${b.id}`,
+      })),
+    ],
+    [branchFilterList],
+  );
+
+  const departmentColumns = useMemo((): DataTableColumn<DepartmentRead>[] => [
+    {
+      key: "departmentName",
+      header: "Name",
+      sortable: true,
+      colSpan: 5,
+      cell: (r) => <span className="font-medium">{r.departmentName || "—"}</span>,
+    },
+    {
+      key: "branch",
+      header: "Branch",
+      sortable: true,
+      colSpan: 4,
+      cell: (r) => brName(r),
+    },
+    {
+      key: "actions",
+      header: "Actions",
+      colSpan: 3,
+      align: "right",
+      cell: (r) => (
+        <EntityRowActions
+          onView={() => handleView(r)}
+          onEdit={canManage ? () => handleEdit(r) : undefined}
+          onDelete={canManage ? () => handleDelete(r.id) : undefined}
+        />
+      ),
+    },
+  ], [canManage]);
 
   // ---------------------------
   // Name helpers for table
@@ -642,24 +742,19 @@ const handleCancel = () => {
     ?? (r.branchesID != null ? (brMap[r.branchesID] ?? "—") : "—");
 
   return (
-    <div className="space-y-6 w-full max-w-7xl mx-auto px-4 page-content-enter">
-      {/* Header */}
-      <div className="flex items-center justify-between w-full">
-        <div className="min-w-0 flex-1">
-          <p className="text-gray-600 mt-1 text-sm">Manage department records</p>
-        </div>
-
-        <div className="flex items-center gap-3">
-          {!isAddingNew && !isViewing && canManage && (
-            <Button
-              onClick={() => { resetForm(); setIsAddingNew(true); }}
-              className="text-sm px-3 py-2"
-            >
+    <div className="space-y-6 w-full max-w-none animate-fade-in page-content-enter">
+      <PageHeader
+        icon={Users}
+        title="Departments"
+        description="Functional teams across the organisation. Can be branch-scoped or company-wide."
+        actions={
+          !isAddingNew && !isViewing && canManage ? (
+            <Button onClick={() => { resetForm(); setIsAddingNew(true); }}>
               <Plus className="w-4 h-4 mr-1" /> Add Department
             </Button>
-          )}
-        </div>
-      </div>
+          ) : null
+        }
+      />
 
       {/* Add/Edit Form - Drawer */}
       <FormDrawer
@@ -669,9 +764,9 @@ const handleCancel = () => {
       >
         <div>
             {error && (
-              <div className="rounded-md border border-red-200 bg-red-50 text-red-700 px-3 py-2 text-sm mb-4">
+              <NoticeBanner variant="error" compact className="mb-4">
                 {error}
-              </div>
+              </NoticeBanner>
             )}
 
             <form onSubmit={handleSubmit} className="space-y-4">
@@ -850,229 +945,44 @@ const handleCancel = () => {
       </FormDrawer>
 
       {!isAddingNew && !isViewing && (<>
-          <Card>
-  <CardContent className="p-6">
-    <div className="flex items-center gap-3 w-full">
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        onClick={() => setShowBranchFilterModal(true)}
-        className="flex-shrink-0"
-        title="Filter by Branch"
-      >
-        <Filter className="w-4 h-4 mr-1" />
-        Filter
-        {selectedFilterBranchIds.length > 0 && (
-          <Badge variant="secondary" className="ml-2">
-            {selectedFilterBranchIds.length}
-          </Badge>
-        )}
-      </Button>
-
-      <div className="relative flex-1 min-w-0">
-        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-        <Input
-          placeholder="Search departments..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="pl-10 w-full"
+        <FilterBar
+          search={{
+            value: table.search,
+            onChange: table.setSearch,
+            placeholder: "Search code or name…",
+          }}
+          filters={
+            <FilterSelect
+              id="departments-branch"
+              value={branchFilter}
+              onChange={setBranchFilter}
+              options={branchFilterOptions}
+              width="w-56"
+              ariaLabel="Filter by branch"
+            />
+          }
         />
-      </div>
 
-      <Badge variant="secondary" className="px-3 py-1 flex-shrink-0">
-        {filtered.length} departments
-      </Badge>
-    </div>
-  </CardContent>
-</Card>
-
-
-{showBranchFilterModal && (
-  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-    <div className="w-full max-w-2xl rounded-xl bg-white shadow-xl border">
-      <div className="flex items-center justify-between border-b px-5 py-4">
-        <div className="flex items-center gap-2">
-          <div className="h-9 w-9 rounded-lg bg-indigo-50 flex items-center justify-center">
-            <Filter className="w-4 h-4 text-indigo-600" />
-          </div>
-          <div>
-            <h3 className="text-base font-semibold text-gray-900">
-              Filter Departments by Branch
-            </h3>
-            <p className="text-xs text-gray-500">
-              Showing branches from selected company only
-            </p>
-          </div>
-        </div>
-
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          onClick={() => setShowBranchFilterModal(false)}
-        >
-          <X className="w-4 h-4" />
-        </Button>
-      </div>
-
-      <div className="p-5 space-y-4 max-h-[70vh] overflow-y-auto">
-        <div className="flex items-center justify-between">
-          <Badge variant="secondary">
-            {selectedFilterBranchIds.length} selected
-          </Badge>
-
-          <div className="flex gap-2">
-            {user?.role !== "BRANCH_ADMIN" && (
-              <>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={selectAllFilterBranches}
-                  disabled={branchFilterLoading || branchFilterList.length === 0}
-                >
-                  Select All
-                </Button>
-
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={clearFilterBranches}
-                >
-                  <RotateCcw className="w-4 h-4 mr-1" />
-                  Clear
-                </Button>
-              </>
-            )}
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-          {branchFilterList.length === 0 ? (
-            <p className="text-sm text-gray-500 col-span-full py-8 text-center">
-              {branchFilterLoading ? "Loading branches..." : "No branches found"}
-            </p>
-          ) : (
-            branchFilterList.map((b) => (
-              <label
-                key={b.id}
-                className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm hover:bg-gray-50 cursor-pointer"
-              >
-                <input
-                  type="checkbox"
-                  checked={selectedFilterBranchIds.includes(String(b.id))}
-                  disabled={user?.role === "BRANCH_ADMIN"}
-                  onChange={() => toggleFilterBranch(String(b.id))}
-                />
-                <span className="truncate">{b.branchName}</span>
-              </label>
-            ))
-          )}
-        </div>
-      </div>
-
-      <div className="flex justify-end gap-2 border-t px-5 py-4">
-        <Button
-          type="button"
-          variant="outline"
-          onClick={() => setShowBranchFilterModal(false)}
-        >
-          Cancel
-        </Button>
-
-        <Button
-          type="button"
-          onClick={() => setShowBranchFilterModal(false)}
-        >
-          Apply Filter
-        </Button>
-      </div>
-    </div>
-  </div>
-)}
-
-          <Card className="w-full">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Icon icon="mdi:account-group" className="w-5 h-5" /> Department List
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-0 w-full overflow-x-auto">
-                <Table className="w-full">
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Department</TableHead>
-                      <TableHead>Branch</TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {loading ? (
-                      <TableBodySkeleton cols={3} />
-                    ) : filtered.length === 0 ? (
-                      <TableRow>
-                        <TableCell colSpan={3} className="text-center py-8 text-gray-500">
-                          <div className="flex flex-col items-center gap-2">
-                            <Icon icon="mdi:account-search" className="w-12 h-12 text-gray-300" />
-                            <p>No departments found</p>
-                            <p className="text-sm">Try adjusting your search criteria</p>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ) : (
-                      filtered.map((r) => (
-                        <TableRow key={r.id}>
-                          <TableCell className="whitespace-nowrap">{r.departmentName || "—"}</TableCell>
-                          <TableCell className="whitespace-nowrap">{brName(r)}</TableCell>
-                          <TableCell className="text-right whitespace-nowrap">
-                            <div className="flex items-center justify-end gap-1">
-                              {/* 👁 Everyone can view */}
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleView(r)}
-                                className="h-7 w-7 p-0"
-                                title="View"
-                              >
-                                <Eye className="w-3 h-3" />
-                              </Button>
-
-                              {/* ✏️ SUPERADMIN and MANAGER can edit */}
-                              {canManage && (
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => handleEdit(r)}
-                                  className="h-7 w-7 p-0"
-                                  title="Edit"
-                                >
-                                  <Edit className="w-3 h-3" />
-                                </Button>
-                              )}
-
-                              {/* 🗑️ Only SUPERADMIN and MANAGER can delete */}
-                              {canManage && (
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => handleDelete(r.id)}
-                                  className="h-7 w-7 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
-                                  title="Delete"
-                                >
-                                  <Trash2 className="w-3 h-3" />
-                                </Button>
-                              )}
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ))
-                    )}
-                  </TableBody>
-                </Table>
-            </CardContent>
-          </Card>
+        <EntityListShell
+          title="All departments"
+          columns={departmentColumns}
+          rows={filtered}
+          rowKey={(r) => String(r.id)}
+          isLoading={loading}
+          sortBy={table.sortBy}
+          sortDir={table.sortDir}
+          onSort={table.setSort}
+          emptyIcon={Users}
+          emptyTitle="No departments yet"
+          emptyDescription="Create your first department to group people functionally."
+          emptyAction={
+            canManage ? (
+              <Button onClick={() => { resetForm(); setIsAddingNew(true); }}>
+                <Plus className="w-4 h-4 mr-1" /> Add Department
+              </Button>
+            ) : undefined
+          }
+        />
       </>)}
     </div>
   );

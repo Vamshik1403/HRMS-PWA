@@ -1,21 +1,24 @@
 "use client";
-import { TableBodySkeleton } from "../components/ui/TableBodySkeleton";
-
-import { useCallback, useEffect, useState } from "react";
-import { Card, CardContent } from "../components/ui/card";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 import { Textarea } from "../components/ui/textarea";
 import { FormDrawer } from "../components/ui/form-drawer";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../components/ui/table";
-import { Badge } from "../components/ui/badge";
-import { Plus, Search, Edit, Trash2, Eye, ChevronLeft, ChevronRight } from "lucide-react";
+import { Plus, ChevronLeft, ChevronRight, ClipboardList } from "lucide-react";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import { toast } from "sonner";
 import { LocationFields } from "../components/ui/location-fields";
 import { taskFetch } from "../utils/taskApi";
 import { TaskContactsRepeater, sanitizeContacts, type TaskContactRow } from "../components/task/TaskContactsRepeater";
+import { SearchSuggestInput } from "../components/SearchSuggestInput";
+import { getSidebarContext } from "../utils/sidebarContext";
+import { PageHeader } from "../components/app/page-header";
+import { FilterBar, FilterSelect } from "../components/app/filter-bar";
+import { EntityListShell } from "../components/app/entity-list-shell";
+import type { DataTableColumn } from "../components/app/data-table";
+import { EntityRowActions } from "../components/app/entity-row-actions";
+import { useClientTable, sortRows } from "../hooks/use-client-table";
 
 interface Contact { id?: number; contactPerson: string; contactNumber: string; designation?: string | null; email?: string | null; }
 interface Customer {
@@ -23,18 +26,44 @@ interface Customer {
   address?: string | null; city?: string | null; state?: string | null;
   pincode?: string | null; country?: string | null; createdAt?: string;
   contacts?: Contact[]; _count?: { sites: number; tasks: number };
+  branchesID?: number | null;
+  branchName?: string | null;
+  branches?: {
+    id: number;
+    branchName?: string | null;
+    companyID?: number | null;
+  } | null;
 }
 
-const emptyForm = { customerCode: "", customerName: "", address: "", city: "", state: "", pincode: "", country: "" };
+interface Branch {
+  id: number;
+  branchName: string;
+  companyID?: number | null;
+  serviceProviderID?: number | null;
+}
+
+const emptyForm = {
+  customerCode: "",
+  customerName: "",
+  branchesID: undefined as number | undefined,
+  branchName: "",
+  address: "",
+  city: "",
+  state: "",
+  pincode: "",
+  country: "",
+};
 
 export default function CustomerManagement() {
   const user = useCurrentUser();
   const canManage = user?.role === "SUPERADMIN" || user?.role === "COMPANY_ADMIN";
+  const table = useClientTable("customerName");
   const [rows, setRows] = useState<Customer[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
-  const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [branchFilter, setBranchFilter] = useState("ALL");
   const [loading, setLoading] = useState(false);
   const [formOpen, setFormOpen] = useState(false);
   const [viewOpen, setViewOpen] = useState(false);
@@ -44,50 +73,148 @@ export default function CustomerManagement() {
   const [contacts, setContacts] = useState<TaskContactRow[]>([]);
   const [saving, setSaving] = useState(false);
 
+  const [branchFilterList, setBranchFilterList] = useState<Branch[]>([]);
+
+  const getActiveCompanyID = () => {
+    const ctx = getSidebarContext();
+    return ctx?.companyID ?? user?.companyID ?? null;
+  };
+
+  const loadBranchFilterList = useCallback(async () => {
+    try {
+      const res = await fetch("/backend/branches", { cache: "no-store" });
+      const data = await res.json();
+
+      const activeCompanyID = getActiveCompanyID();
+
+      let branches: Branch[] = Array.isArray(data) ? data : data?.data ?? [];
+
+      if (activeCompanyID) {
+        branches = branches.filter(
+          (b) => Number(b.companyID) === Number(activeCompanyID)
+        );
+      }
+
+      setBranchFilterList(branches);
+    } catch (e) {
+      console.error("Failed to load branch filter list:", e);
+      setBranchFilterList([]);
+    }
+  }, [user]);
+
   const load = useCallback(async () => {
     if (!canManage) return;
     setLoading(true);
     try {
       const data = await taskFetch<{ items: Customer[]; total: number; totalPages: number }>(
-        "/task-customers", user, undefined, { page, limit: 10, search });
+        "/task-customers", user, undefined, { page, limit: 10, search: debouncedSearch });
       setRows(data.items); setTotal(data.total); setTotalPages(data.totalPages || 1);
     } catch (e: any) { toast.error(e.message || "Failed to load customers"); }
     finally { setLoading(false); }
-  }, [canManage, user, page, search]);
+  }, [canManage, user, page, debouncedSearch]);
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(table.search), 300);
+    return () => clearTimeout(t);
+  }, [table.search]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedSearch]);
 
   const closeCustomerPagePanels = () => {
-  setFormOpen(false);
-  setViewOpen(false);
+    setFormOpen(false);
+    setViewOpen(false);
 
-  setEditing(null);
-  setViewRow(null);
+    setEditing(null);
+    setViewRow(null);
 
-  setForm(emptyForm);
-  setContacts([]);
-  setSaving(false);
-};
+    setForm(emptyForm);
+    setContacts([]);
+    setSaving(false);
+  };
 
-  useEffect(() => { load(); }, [load]);
- useEffect(() => {
-  const h = () => load();
+  useEffect(() => {
+    load();
+    loadBranchFilterList();
+  }, [load, loadBranchFilterList]);
 
-  const sidebarPageClickHandler = (e: any) => {
-    if (e.detail?.path === "/task-customers") {
-      closeCustomerPagePanels();
+  useEffect(() => {
+    const h = () => {
       load();
+      loadBranchFilterList();
+    };
+
+    const sidebarPageClickHandler = (e: any) => {
+      if (e.detail?.path === "/task-customers") {
+        closeCustomerPagePanels();
+        load();
+        loadBranchFilterList();
+      }
+    };
+
+    window.addEventListener("sidebar-context-changed", h);
+    window.addEventListener("app-data-refresh", h);
+    window.addEventListener("sidebar-main-page-click", sidebarPageClickHandler);
+
+    return () => {
+      window.removeEventListener("sidebar-context-changed", h);
+      window.removeEventListener("app-data-refresh", h);
+      window.removeEventListener("sidebar-main-page-click", sidebarPageClickHandler);
+    };
+  }, [load]);
+
+  const fetchBranchSuggestions = async (query: string): Promise<Branch[]> => {
+    const res = await fetch("/backend/branches", { cache: "no-store" });
+    const data = await res.json();
+
+    const activeCompanyID = getActiveCompanyID();
+    const q = query.trim().toLowerCase();
+
+    let branches: Branch[] = Array.isArray(data) ? data : data?.data ?? [];
+
+    if (activeCompanyID) {
+      branches = branches.filter(
+        (b) => Number(b.companyID) === Number(activeCompanyID)
+      );
     }
+
+    if (q) {
+      branches = branches.filter((b) =>
+        String(b.branchName || "").toLowerCase().includes(q)
+      );
+    }
+
+    return branches.slice(0, 20);
   };
 
-  window.addEventListener("sidebar-context-changed", h);
-  window.addEventListener("app-data-refresh", h);
-  window.addEventListener("sidebar-main-page-click", sidebarPageClickHandler);
+  const filteredRows = useMemo(() => {
+    const list = rows.filter((r) =>
+      branchFilter === "ALL" ||
+      branchFilter === String(r.branchesID ?? r.branches?.id ?? "")
+    );
+    return sortRows(list, table.sortBy, table.sortDir, (row, key) => {
+      const r = row as Customer;
+      if (key === "customerCode") return r.customerCode ?? "";
+      if (key === "customerName") return r.customerName ?? "";
+      if (key === "branchName") return r.branchName ?? r.branches?.branchName ?? "";
+      if (key === "city") return r.city ?? "";
+      if (key === "state") return r.state ?? "";
+      if (key === "sites") return r._count?.sites ?? 0;
+      return "";
+    });
+  }, [rows, branchFilter, table.sortBy, table.sortDir]);
 
-  return () => {
-    window.removeEventListener("sidebar-context-changed", h);
-    window.removeEventListener("app-data-refresh", h);
-    window.removeEventListener("sidebar-main-page-click", sidebarPageClickHandler);
-  };
-}, [load]);
+  const branchFilterOptions = useMemo(
+    () => [
+      { value: "ALL", label: "All branches" },
+      ...branchFilterList.map((b) => ({
+        value: String(b.id),
+        label: b.branchName || `Branch #${b.id}`,
+      })),
+    ],
+    [branchFilterList],
+  );
 
   const openCreate = () => { setEditing(null); setForm(emptyForm); setContacts([]); setFormOpen(true); };
 
@@ -95,9 +222,17 @@ export default function CustomerManagement() {
     try {
       const full = await taskFetch<Customer>(`/task-customers/${r.id}`, user);
       setEditing(full);
-      setForm({ customerCode: full.customerCode || "", customerName: full.customerName || "",
-        address: full.address || "", city: full.city || "", state: full.state || "",
-        pincode: full.pincode || "", country: full.country || "" });
+      setForm({
+        customerCode: full.customerCode || "",
+        customerName: full.customerName || "",
+        branchesID: full.branchesID ?? full.branches?.id ?? undefined,
+        branchName: full.branchName || full.branches?.branchName || "",
+        address: full.address || "",
+        city: full.city || "",
+        state: full.state || "",
+        pincode: full.pincode || "",
+        country: full.country || "",
+      });
       setContacts(full.contacts?.length
         ? full.contacts.map((c) => ({ contactPerson: c.contactPerson, contactNumber: c.contactNumber, designation: c.designation || "", email: c.email || "" }))
         : []);
@@ -115,6 +250,10 @@ export default function CustomerManagement() {
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.customerName.trim()) { toast.error("Customer name is required"); return; }
+    if (!form.branchesID) {
+      toast.error("Branch is required");
+      return;
+    }
     if (!editing && !form.customerCode.trim()) { toast.error("Customer ID is required"); return; }
     setSaving(true);
     const payload = { ...form, customerCode: form.customerCode.trim() || undefined, contacts: sanitizeContacts(contacts) };
@@ -137,58 +276,120 @@ export default function CustomerManagement() {
     catch (err: any) { toast.error(err.message || "Delete failed"); }
   };
 
+  const customerColumns = useMemo((): DataTableColumn<Customer>[] => [
+    {
+      key: "customerCode",
+      header: "Customer ID",
+      sortable: true,
+      colSpan: 2,
+      cell: (r) => <span className="font-mono text-sm">{r.customerCode}</span>,
+    },
+    {
+      key: "customerName",
+      header: "Name",
+      sortable: true,
+      colSpan: 3,
+      cell: (r) => <span className="font-medium">{r.customerName}</span>,
+    },
+    {
+      key: "branchName",
+      header: "Branch Name",
+      sortable: true,
+      colSpan: 2,
+      cell: (r) => r.branchName || r.branches?.branchName || "—",
+    },
+    {
+      key: "city",
+      header: "City",
+      sortable: true,
+      colSpan: 1,
+      cell: (r) => r.city || "—",
+    },
+    {
+      key: "state",
+      header: "State",
+      sortable: true,
+      colSpan: 1,
+      cell: (r) => r.state || "—",
+    },
+    {
+      key: "sites",
+      header: "Sites",
+      sortable: true,
+      colSpan: 1,
+      cell: (r) => r._count?.sites ?? 0,
+    },
+    {
+      key: "actions",
+      header: "Actions",
+      colSpan: 2,
+      align: "right",
+      cell: (r) => (
+        <EntityRowActions
+          onView={() => openView(r)}
+          onEdit={() => openEdit(r)}
+          onDelete={() => remove(r.id)}
+        />
+      ),
+    },
+  ], []);
+
   if (!canManage) return <div className="p-6 text-gray-500">Access denied. Task customers are available to SuperAdmin and Company Admin only.</div>;
 
   return (
-    <div className="space-y-6">
-      {!formOpen && !viewOpen && (
-        <div className="flex items-center justify-end">
-          {canManage && <Button onClick={openCreate}><Plus className="w-4 h-4 mr-1" /> Add Customer</Button>}
-        </div>
-      )}
+    <div className="space-y-6 w-full max-w-none animate-fade-in page-content-enter">
+      <PageHeader
+        icon={ClipboardList}
+        title="Customers"
+        description="Manage task customers and contacts"
+        actions={
+          !formOpen && !viewOpen && canManage ? (
+            <Button onClick={openCreate}><Plus className="w-4 h-4 mr-1" /> Add Customer</Button>
+          ) : null
+        }
+      />
       {!formOpen && !viewOpen && (
         <>
-          <Card>
-            <CardContent className="p-4 flex gap-3 items-center">
-              <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                <Input className="pl-10" placeholder="Search by name or ID…" value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} />
-              </div>
-              <Badge variant="secondary">{total} customers</Badge>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-0 overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Customer ID</TableHead><TableHead>Name</TableHead>
-                    <TableHead>City</TableHead><TableHead>State</TableHead>
-                    <TableHead>Sites</TableHead><TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {loading ? (
-                    <TableBodySkeleton cols={6} />
-                  ) : rows.length === 0 ? (
-                    <TableRow><TableCell colSpan={6} className="text-center py-8 text-gray-500">No customers found</TableCell></TableRow>
-                  ) : rows.map((r) => (
-                    <TableRow key={r.id}>
-                      <TableCell className="font-mono text-sm">{r.customerCode}</TableCell>
-                      <TableCell className="font-medium">{r.customerName}</TableCell>
-                      <TableCell>{r.city || "—"}</TableCell><TableCell>{r.state || "—"}</TableCell>
-                      <TableCell>{r._count?.sites ?? 0}</TableCell>
-                      <TableCell className="text-right space-x-1">
-                        <Button variant="ghost" size="sm" onClick={() => openView(r)}><Eye className="w-4 h-4" /></Button>
-                        <Button variant="ghost" size="sm" onClick={() => openEdit(r)}><Edit className="w-4 h-4" /></Button>
-                        <Button variant="ghost" size="sm" onClick={() => remove(r.id)}><Trash2 className="w-4 h-4 text-red-500" /></Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
+          <FilterBar
+            search={{
+              value: table.search,
+              onChange: table.setSearch,
+              placeholder: "Search by name or ID…",
+            }}
+            filters={
+              <FilterSelect
+                id="customers-branch"
+                value={branchFilter}
+                onChange={setBranchFilter}
+                options={branchFilterOptions}
+                width="w-56"
+                ariaLabel="Filter by branch"
+              />
+            }
+          />
+
+          <EntityListShell
+            title="All customers"
+            totalLabel={() => `${total} customers`}
+            columns={customerColumns}
+            rows={filteredRows}
+            rowKey={(r) => String(r.id)}
+            isLoading={loading}
+            sortBy={table.sortBy}
+            sortDir={table.sortDir}
+            onSort={table.setSort}
+            emptyIcon={ClipboardList}
+            emptyTitle="No customers found"
+            emptyDescription="Add a customer to get started with task management."
+            emptyAction={
+              canManage ? (
+                <Button onClick={openCreate}>
+                  <Plus className="w-4 h-4 mr-1" /> Add Customer
+                </Button>
+              ) : undefined
+            }
+          />
+
           <div className="flex items-center justify-between">
             <span className="text-sm text-gray-500">Page {page} of {totalPages}</span>
             <div className="flex gap-2">
@@ -210,6 +411,31 @@ export default function CustomerManagement() {
             <Label>Customer Name *</Label>
             <Input value={form.customerName} onChange={(e) => setForm((p) => ({ ...p, customerName: e.target.value }))} required />
           </div>
+
+          <SearchSuggestInput
+            label="Branch *"
+            placeholder="Search branch..."
+            value={form.branchName}
+            onChange={(value) =>
+              setForm((p) => ({
+                ...p,
+                branchName: value,
+                branchesID: undefined,
+              }))
+            }
+            onSelect={(selected: { display: string; value: number; item: Branch }) =>
+              setForm((p) => ({
+                ...p,
+                branchName: selected.display,
+                branchesID: Number(selected.value),
+              }))
+            }
+            fetchData={fetchBranchSuggestions}
+            displayField="branchName"
+            valueField="id"
+            required
+          />
+
           <div className="space-y-2">
             <Label>Address</Label>
             <Textarea value={form.address} onChange={(e) => setForm((p) => ({ ...p, address: e.target.value }))} rows={3} />
@@ -217,9 +443,12 @@ export default function CustomerManagement() {
           <LocationFields values={form} onChange={(patch) => setForm((p) => ({ ...p, ...patch }))} showCurrency={false} />
           <TaskContactsRepeater contacts={contacts} onChange={setContacts} />
           <div className="flex justify-end gap-2 pt-4 border-t">
-<Button type="button" variant="outline" onClick={closeCustomerPagePanels}>Cancel</Button>
+            <Button type="button" variant="outline" onClick={closeCustomerPagePanels}>Cancel</Button>
             <Button type="submit" disabled={saving}>{saving ? "Saving…" : editing ? "Update" : "Create"}</Button>
           </div>
+
+
+
         </form>
       </FormDrawer>
 

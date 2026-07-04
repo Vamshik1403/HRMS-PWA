@@ -3,6 +3,7 @@
 import { useState, useRef, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
 import { Button } from "../components/ui/button";
+import { NoticeBanner } from "../components/ui/notice-banner";
 import { Upload, Download, Trash2, FileSpreadsheet, CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -153,20 +154,25 @@ export function ImportAttendanceManagement() {
         </ul>
       </div>
       
-      <div className="mt-2 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-        <p className="font-semibold text-yellow-800">⚠️ Date Format (DD/MM/YYYY):</p>
-        <p className="text-yellow-800 text-xs mt-1">
-          <strong>Day first, then Month.</strong> Use this exact format to avoid confusion.
-        </p>
-        <ul className="list-disc list-inside ml-4 mt-2 text-xs text-yellow-700 space-y-1">
-          <li><code className="bg-yellow-100 px-1 py-0.5 rounded">01/02/2026 09:00:00</code> = 1st February 2026, 9:00 AM</li>
-          <li><code className="bg-yellow-100 px-1 py-0.5 rounded">15/12/2026 20:00:00</code> = 15th December 2026, 8:00 PM</li>
-          <li><code className="bg-yellow-100 px-1 py-0.5 rounded">1/2/2026 9:00</code> = 1st February 2026, 9:00 AM (shorter format accepted)</li>
-        </ul>
-        <p className="text-red-600 text-xs mt-2">
-          ❌ Do NOT use MM/DD/YYYY (US format) - it will be rejected or misinterpreted!
-        </p>
-      </div>
+      <NoticeBanner
+        variant="warning"
+        title="Date format (DD/MM/YYYY)"
+        className="mt-2"
+      >
+        <div className="space-y-2 text-[13px] text-muted-foreground leading-relaxed">
+          <p>
+            <strong className="text-foreground">Day first, then month.</strong> Use this exact format to avoid confusion.
+          </p>
+          <ul className="list-disc list-inside ml-1 space-y-1">
+            <li><code className="bg-muted px-1 py-0.5 rounded text-foreground">01/02/2026 09:00:00</code> = 1st February 2026, 9:00 AM</li>
+            <li><code className="bg-muted px-1 py-0.5 rounded text-foreground">15/12/2026 20:00:00</code> = 15th December 2026, 8:00 PM</li>
+            <li><code className="bg-muted px-1 py-0.5 rounded text-foreground">1/2/2026 9:00</code> = 1st February 2026, 9:00 AM (shorter format accepted)</li>
+          </ul>
+          <p className="text-destructive text-xs">
+            Do not use MM/DD/YYYY (US format) — it will be rejected or misinterpreted.
+          </p>
+        </div>
+      </NoticeBanner>
       
       <div className="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
         <p className="text-blue-800 text-xs">

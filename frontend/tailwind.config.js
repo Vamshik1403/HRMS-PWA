@@ -58,7 +58,15 @@ module.exports = {
   				'3': 'hsl(var(--chart-3))',
   				'4': 'hsl(var(--chart-4))',
   				'5': 'hsl(var(--chart-5))'
-  			}
+  			},
+  			success: {
+  				DEFAULT: 'hsl(var(--success))',
+  				foreground: 'hsl(var(--success-foreground))',
+  			},
+  			warning: {
+  				DEFAULT: 'hsl(var(--warning))',
+  				foreground: 'hsl(var(--warning-foreground))',
+  			},
   		},
   		borderRadius: {
   			lg: 'var(--radius)',
@@ -66,11 +74,10 @@ module.exports = {
   			sm: 'calc(var(--radius) - 4px)'
   		},
   		fontFamily: {
-  			sans: [
-  				'Inter',
-  				'sans-serif'
-  			]
-  		}
+  			sans: ['var(--font-sans)', 'DM Sans', 'system-ui', 'sans-serif'],
+  			display: ['var(--font-display)', 'Bricolage Grotesque', 'system-ui', 'sans-serif'],
+  			mono: ['var(--font-mono)', 'JetBrains Mono', 'ui-monospace', 'monospace'],
+  		},
   	}
   },
   plugins: [require("tailwindcss-animate")],

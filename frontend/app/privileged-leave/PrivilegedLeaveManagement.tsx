@@ -1,8 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { TableBodySkeleton } from "../components/ui/TableBodySkeleton"
-import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card"
+import { useState, useEffect, useMemo } from "react"
 import { Button } from "../components/ui/button"
 import { Input } from "../components/ui/input"
 import { Label } from "../components/ui/label"
@@ -17,9 +15,16 @@ import {
 } from "../components/ui/table"
 import { Badge } from "../components/ui/badge"
 import { Icon } from "@iconify/react"
-import { Plus, Search, Edit, Trash2 } from "lucide-react"
+import { Plus, Calendar, History } from "lucide-react"
+import { PageHeader } from "../components/app/page-header";
+import { FilterBar } from "../components/app/filter-bar";
+import { EntityListShell } from "../components/app/entity-list-shell";
+import type { DataTableColumn } from "../components/app/data-table";
+import { EntityRowActions } from "../components/app/entity-row-actions";
+import { useClientTable, sortRows } from "../hooks/use-client-table";
 import { useCurrentUser } from "../hooks/useCurrentUser"
 import { toast } from "sonner";
+import { getSidebarContext } from "../utils/sidebarContext"
 
 const BACKEND_URL = "/backend"
 
@@ -53,7 +58,7 @@ interface LapseEntry {
 export function PrivilegedLeaveManagement() {
   const [ledgerEntries, setLedgerEntries] = useState<LedgerEntry[]>([])
   const [lapseEntries, setLapseEntries] = useState<LapseEntry[]>([])
-  const [searchTerm, setSearchTerm] = useState("")
+  const table = useClientTable("employeeName")
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [isCreditDialogOpen, setIsCreditDialogOpen] = useState(false)
   const [isLapseDialogOpen, setIsLapseDialogOpen] = useState(false)
@@ -85,6 +90,11 @@ export function PrivilegedLeaveManagement() {
   const user = useCurrentUser()
   const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN" || user?.role === "BRANCH_ADMIN"
 
+  const getActiveCompanyID = () => {
+    const ctx = getSidebarContext();
+    return ctx?.companyID ?? user?.companyID ?? null;
+  };
+
   useEffect(() => {
     if (!user) return
     const loadInitial = async () => {
@@ -98,15 +108,67 @@ export function PrivilegedLeaveManagement() {
     loadInitial()
   }, [user])
 
+  useEffect(() => {
+    if (!user) return;
+
+    const reload = async () => {
+      setEmployees([]);
+      setPolicies([]);
+      setLedgerEntries([]);
+      table.setSearch("");
+
+      setFormData((p) => ({ ...p, employeeID: 0, leavePolicyID: 0 }));
+      setCreditData({ employeeID: 0, leavePolicyID: 0 });
+      setLapseData({ employeeID: 0, leavePolicyID: 0 });
+      setCalcData({ employeeID: 0, leavePolicyID: 0 });
+
+      setListLoading(true);
+      try {
+        await Promise.all([loadLedger(), loadLapses(), loadEmployees(), loadPolicies()]);
+      } finally {
+        setListLoading(false);
+      }
+    };
+
+    window.addEventListener("sidebar-context-changed", reload);
+    window.addEventListener("app-data-refresh", reload);
+
+    return () => {
+      window.removeEventListener("sidebar-context-changed", reload);
+      window.removeEventListener("app-data-refresh", reload);
+    };
+  }, [user]);
+
   const loadLedger = async () => {
     try {
-      const res = await fetch(`${BACKEND_URL}/privileged-leave`)
-      const data = await res.json()
-      setLedgerEntries(Array.isArray(data) ? data : [])
+      const res = await fetch(`${BACKEND_URL}/privileged-leave`, { cache: "no-store" });
+      const data = await res.json();
+
+      const activeCompanyID = getActiveCompanyID();
+
+      let list = Array.isArray(data) ? data : [];
+
+      if (activeCompanyID) {
+        list = list.filter(
+          (entry: any) =>
+            Number(entry.companyID) === Number(activeCompanyID) ||
+            Number(entry.manageEmployee?.companyID) === Number(activeCompanyID)
+        );
+      }
+
+      if (user?.role === "BRANCH_ADMIN" && user?.branchesID) {
+        list = list.filter(
+          (entry: any) =>
+            Number(entry.branchesID) === Number(user.branchesID) ||
+            Number(entry.manageEmployee?.branchesID) === Number(user.branchesID)
+        );
+      }
+
+      setLedgerEntries(list);
     } catch (err) {
-      console.error("Error loading PL ledger:", err)
+      console.error("Error loading PL ledger:", err);
       toast.error("Failed to load data.");
-      setLedgerEntries([])
+      setLedgerEntries([]);
     }
   }
 
@@ -122,45 +184,78 @@ export function PrivilegedLeaveManagement() {
 
   const loadEmployees = async () => {
     try {
-      const res = await fetch(`${BACKEND_URL}/manage-emp/list`)
-      const data = await res.json()
-      setEmployees(Array.isArray(data) ? data : [])
+      const res = await fetch(`${BACKEND_URL}/manage-emp/list`, { cache: "no-store" });
+      const data = await res.json();
+
+      const activeCompanyID = getActiveCompanyID();
+
+      let list = Array.isArray(data) ? data : [];
+
+      if (activeCompanyID) {
+        list = list.filter(
+          (emp: any) => Number(emp.companyID) === Number(activeCompanyID)
+        );
+      }
+
+      if (user?.role === "BRANCH_ADMIN" && user?.branchesID) {
+        list = list.filter(
+          (emp: any) => Number(emp.branchesID) === Number(user.branchesID)
+        );
+      }
+
+      setEmployees(list);
     } catch (err) {
-      console.error("Error loading employees:", err)
-      toast.error("Failed to load data.");
+      console.error("Error loading employees:", err);
+      toast.error("Failed to load employees.");
+      setEmployees([]);
     }
   }
 
   const loadPolicies = async () => {
     try {
-      const res = await fetch(`${BACKEND_URL}/leave-policy`)
-      const data = await res.json()
-      const plPolicies = (Array.isArray(data) ? data : []).filter(
+      const res = await fetch(`${BACKEND_URL}/leave-policy`, { cache: "no-store" });
+      const data = await res.json();
+
+      const activeCompanyID = getActiveCompanyID();
+
+      let plPolicies = (Array.isArray(data) ? data : []).filter(
         (p: any) => p.isPrivilegedLeaveApplicable
-      )
-      setPolicies(plPolicies)
+      );
+
+      if (activeCompanyID) {
+        plPolicies = plPolicies.filter(
+          (p: any) => Number(p.companyID) === Number(activeCompanyID)
+        );
+      }
+
+      setPolicies(plPolicies);
     } catch (err) {
-      console.error("Error loading policies:", err)
-      toast.error("Failed to load data.");
+      console.error("Error loading policies:", err);
+      toast.error("Failed to load policies.");
+      setPolicies([]);
     }
   }
 
-  // Only filter when a search term is entered – no results shown by default
-  const filteredLedger = searchTerm.trim()
-    ? ledgerEntries.filter((entry) => {
-        const empName = `${entry.manageEmployee?.employeeFirstName || ""} ${entry.manageEmployee?.employeeLastName || ""}`.toLowerCase()
-        return empName.includes(searchTerm.toLowerCase())
-      })
-    : []
+  const filteredLedger = useMemo(() => {
+    const q = table.search.trim().toLowerCase()
+    if (!q) return []
+    return ledgerEntries.filter((entry) => {
+      const empName = `${entry.manageEmployee?.employeeFirstName || ""} ${entry.manageEmployee?.employeeLastName || ""}`.toLowerCase()
+      return empName.includes(q)
+    })
+  }, [ledgerEntries, table.search])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     try {
+      const ctx = getSidebarContext();
+      const selectedEmp = employees.find((e: any) => Number(e.id) === Number(formData.employeeID));
+
       const payload = {
         ...formData,
-        serviceProviderID: undefined,
-        companyID: undefined,
-        branchesID: undefined,
+        serviceProviderID: ctx?.serviceProviderID ?? selectedEmp?.serviceProviderID ?? user?.serviceProviderID ?? null,
+        companyID: ctx?.companyID ?? selectedEmp?.companyID ?? user?.companyID ?? null,
+        branchesID: selectedEmp?.branchesID ?? user?.branchesID ?? null,
       }
 
       if (editingEntry) {
@@ -355,8 +450,7 @@ export function PrivilegedLeaveManagement() {
     manageEmployee: any
   }
 
-  const aggregatedData: EmployeePLSummary[] = (() => {
-    // Group filtered ledger entries by employeeID
+  const aggregatedData: EmployeePLSummary[] = useMemo(() => {
     const map = new Map<number, LedgerEntry[]>()
     for (const entry of filteredLedger) {
       const arr = map.get(entry.employeeID) || []
@@ -377,7 +471,6 @@ export function PrivilegedLeaveManagement() {
       const totalUsed = entries.reduce((s, e) => s + (e.usedLeaves || 0), 0)
       const totalBalance = entries.reduce((s, e) => s + (e.balanceLeaves || 0), 0)
 
-      // C/F from previous FY: sum of credited entries before current FY start
       const fyStartDate = new Date(currentFYStart, 3, 1)
       const previousEntries = entries.filter((e) => new Date(e.creditDate) < fyStartDate)
       const cfPreviousFY = previousEntries.reduce((s, e) => s + (e.balanceLeaves || 0), 0)
@@ -391,7 +484,7 @@ export function PrivilegedLeaveManagement() {
         employeeName: getEmployeeName(emp),
         financialYear: fyLabel,
         policyName: policy?.leavePolicyName || "-",
-        totalDaysPresent: 0, // Not tracked in current PL ledger
+        totalDaysPresent: 0,
         plEarn: totalCredited,
         cfPreviousFY,
         totalPLCount: totalCredited + cfPreviousFY,
@@ -401,395 +494,424 @@ export function PrivilegedLeaveManagement() {
         manageEmployee: emp,
       })
     })
-    return rows
-  })()
+
+    return sortRows(rows, table.sortBy, table.sortDir, (row, key) => {
+      const r = row as EmployeePLSummary
+      if (key === "employeeCode") return r.employeeCode ?? ""
+      if (key === "employeeName") return r.employeeName ?? ""
+      if (key === "financialYear") return r.financialYear ?? ""
+      if (key === "policyName") return r.policyName ?? ""
+      if (key === "plEarn") return r.plEarn ?? 0
+      if (key === "cfPreviousFY") return r.cfPreviousFY ?? 0
+      if (key === "totalPLCount") return r.totalPLCount ?? 0
+      if (key === "consumedPL") return r.consumedPL ?? 0
+      if (key === "balancePL") return r.balancePL ?? 0
+      if (key === "plExpiryDate") return r.plExpiryDate ?? ""
+      return ""
+    })
+  }, [filteredLedger, table.sortBy, table.sortDir])
+
+  const plSummaryColumns = useMemo((): DataTableColumn<EmployeePLSummary>[] => [
+    {
+      key: "employeeCode",
+      header: "Employee ID",
+      sortable: true,
+      colSpan: 1,
+      cell: (row) => row.employeeCode || "—",
+    },
+    {
+      key: "employeeName",
+      header: "Employee Name",
+      sortable: true,
+      colSpan: 2,
+      cell: (row) => <span className="font-medium">{row.employeeName || "—"}</span>,
+    },
+    {
+      key: "financialYear",
+      header: "Financial Year",
+      sortable: true,
+      colSpan: 1,
+      cell: (row) => row.financialYear || "—",
+    },
+    {
+      key: "policyName",
+      header: "PL Policy",
+      sortable: true,
+      colSpan: 2,
+      cell: (row) => row.policyName || "—",
+    },
+    {
+      key: "plEarn",
+      header: "PL Earn",
+      sortable: true,
+      colSpan: 1,
+      cell: (row) => (
+        <Badge variant="secondary" className="bg-green-100 text-green-800">{row.plEarn}</Badge>
+      ),
+    },
+    {
+      key: "cfPreviousFY",
+      header: "C/F (Prev FY)",
+      sortable: true,
+      colSpan: 1,
+      cell: (row) => row.cfPreviousFY,
+    },
+    {
+      key: "totalPLCount",
+      header: "Total PL",
+      sortable: true,
+      colSpan: 1,
+      cell: (row) => <span className="font-semibold">{row.totalPLCount}</span>,
+    },
+    {
+      key: "consumedPL",
+      header: "Consumed",
+      sortable: true,
+      colSpan: 1,
+      cell: (row) => (
+        <Badge variant="secondary" className="bg-red-100 text-red-800">{row.consumedPL}</Badge>
+      ),
+    },
+    {
+      key: "balancePL",
+      header: "Balance",
+      sortable: true,
+      colSpan: 1,
+      cell: (row) => <span className="font-semibold">{row.balancePL}</span>,
+    },
+    {
+      key: "plExpiryDate",
+      header: "Expiry",
+      sortable: true,
+      colSpan: 1,
+      cell: (row) => row.plExpiryDate || "—",
+    },
+    {
+      key: "actions",
+      header: "Actions",
+      colSpan: 1,
+      align: "right",
+      cell: (row) => (
+        <EntityRowActions
+          extra={[{
+            icon: History,
+            title: "View History",
+            onClick: () => handleShowHistory(row.employeeID, row.manageEmployee),
+          }]}
+        />
+      ),
+    },
+  ], [])
 
   return (
-    <div className="space-y-6 w-full max-w-6xl mx-auto px-4">
-      {/* Header */}
-      <div className="flex items-center justify-between w-full">
-        <div className="min-w-0 flex-1">
-          <p className="text-gray-600 mt-1 text-sm">Track PL credits, balances, and lapse history</p>
-        </div>
-        <div className="flex gap-2 flex-wrap">
-          {canManage && (
+    <div className="space-y-6 w-full max-w-none animate-fade-in page-content-enter">
+      <PageHeader
+        icon={Calendar}
+        title="Privileged Leave"
+        description="Track PL credits, balances, and lapse history"
+        actions={
+          canManage ? (
             <Button
               size="sm"
               onClick={() => { setIsCalcDialogOpen(true); setCalcPreview(null) }}
-              className="bg-indigo-600 hover:bg-indigo-700 gap-1.5"
+              className="gap-1.5"
             >
               <Icon icon="mdi:calculator" className="w-4 h-4" />
               Calculate from Attendance
             </Button>
-          )}
-        </div>
-      </div>
+          ) : null
+        }
+      />
       {canManage && (
         <>
-              {/* Calculate from Attendance Dialog */}
-              <FormDrawer open={isCalcDialogOpen} onOpenChange={(o) => { setIsCalcDialogOpen(o); if (!o) { setCalcPreview(null); setCalcData({ employeeID: 0, leavePolicyID: 0 }) } }} title="Calculate PL from Attendance" description="Count actual attendance days and auto-credit Privileged Leave based on the policy ratio">
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <Label>Employee</Label>
-                    <select
-                      className="w-full border rounded-md px-3 py-2 text-sm"
-                      value={calcData.employeeID}
-                      onChange={(e) => { setCalcData((p) => ({ ...p, employeeID: Number(e.target.value) })); setCalcPreview(null) }}
-                    >
-                      <option value={0}>Select Employee</option>
-                      {employees.map((emp) => (
-                        <option key={emp.id} value={emp.id}>
-                          {getEmployeeName(emp)} ({emp.employeeID || emp.id})
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Leave Policy (PL Enabled)</Label>
-                    <select
-                      className="w-full border rounded-md px-3 py-2 text-sm"
-                      value={calcData.leavePolicyID}
-                      onChange={(e) => { setCalcData((p) => ({ ...p, leavePolicyID: Number(e.target.value) })); setCalcPreview(null) }}
-                    >
-                      <option value={0}>Select Policy</option>
-                      {policies.map((pol) => (
-                        <option key={pol.id} value={pol.id}>
-                          {pol.leavePolicyName} (Ratio: {pol.privilegedLeaveRatio || "20:1"})
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+          {/* Calculate from Attendance Dialog */}
+          <FormDrawer open={isCalcDialogOpen} onOpenChange={(o) => { setIsCalcDialogOpen(o); if (!o) { setCalcPreview(null); setCalcData({ employeeID: 0, leavePolicyID: 0 }) } }} title="Calculate PL from Attendance" description="Count actual attendance days and auto-credit Privileged Leave based on the policy ratio">
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label>Employee</Label>
+                <select
+                  className="w-full border rounded-md px-3 py-2 text-sm"
+                  value={calcData.employeeID}
+                  onChange={(e) => { setCalcData((p) => ({ ...p, employeeID: Number(e.target.value) })); setCalcPreview(null) }}
+                >
+                  <option value={0}>Select Employee</option>
+                  {employees.map((emp) => (
+                    <option key={emp.id} value={emp.id}>
+                      {getEmployeeName(emp)} ({emp.employeeID || emp.id})
+                    </option>
+                  ))}
+                </select>
+              </div>
 
-                  <Button type="button" variant="outline" onClick={handlePreviewCalc} disabled={calcLoading} className="w-full">
-                    {calcLoading ? "Calculating..." : "Preview Calculation"}
-                  </Button>
-                  {calcPreview && (
-                    <div className="rounded-xl bg-gray-50 border border-gray-200 p-4 space-y-3">
-                      <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Calculation Preview</p>
-                      <div className="grid grid-cols-2 gap-2 text-sm">
-                        <div className="bg-white rounded-lg border p-3 text-center">
-                          <p className="text-2xl font-bold text-blue-600">{calcPreview.totalWorkingDays}</p>
-                          <p className="text-xs text-gray-500 mt-0.5">Working Days</p>
-                        </div>
-                        <div className="bg-white rounded-lg border p-3 text-center">
-                          <p className="text-2xl font-bold text-green-600">{calcPreview.plEarned}</p>
-                          <p className="text-xs text-gray-500 mt-0.5">PL Earned</p>
-                        </div>
-                        <div className="bg-white rounded-lg border p-3 text-center">
-                          <p className="text-2xl font-bold text-gray-500">{calcPreview.alreadyCredited}</p>
-                          <p className="text-xs text-gray-500 mt-0.5">Already Credited</p>
-                        </div>
-                        <div className="bg-white rounded-lg border p-3 text-center">
-                          <p className={`text-2xl font-bold ${(calcPreview.toCredit || 0) > 0 ? "text-indigo-600" : "text-gray-400"}`}>{calcPreview.toCredit || 0}</p>
-                          <p className="text-xs text-gray-500 mt-0.5">New PL to Credit</p>
-                        </div>
-                      </div>
-                      <p className="text-xs text-gray-500">
-                        Ratio: {calcPreview.ratio} &nbsp;·&nbsp; Week Off: {calcPreview.weekOffConsidered ? "counted" : "not counted"} &nbsp;·&nbsp; Holiday: {calcPreview.holidayConsidered ? "counted" : "not counted"}
-                      </p>
-                      <p className="text-xs font-medium text-gray-700">{calcPreview.message}</p>
+              <div className="space-y-2">
+                <Label>Leave Policy (PL Enabled)</Label>
+                <select
+                  className="w-full border rounded-md px-3 py-2 text-sm"
+                  value={calcData.leavePolicyID}
+                  onChange={(e) => { setCalcData((p) => ({ ...p, leavePolicyID: Number(e.target.value) })); setCalcPreview(null) }}
+                >
+                  <option value={0}>Select Policy</option>
+                  {policies.map((pol) => (
+                    <option key={pol.id} value={pol.id}>
+                      {pol.leavePolicyName} (Ratio: {pol.privilegedLeaveRatio || "20:1"})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <Button type="button" variant="outline" onClick={handlePreviewCalc} disabled={calcLoading} className="w-full">
+                {calcLoading ? "Calculating..." : "Preview Calculation"}
+              </Button>
+              {calcPreview && (
+                <div className="rounded-xl bg-gray-50 border border-gray-200 p-4 space-y-3">
+                  <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Calculation Preview</p>
+                  <div className="grid grid-cols-2 gap-2 text-sm">
+                    <div className="bg-white rounded-lg border p-3 text-center">
+                      <p className="text-2xl font-bold text-blue-600">{calcPreview.totalWorkingDays}</p>
+                      <p className="text-xs text-gray-500 mt-0.5">Working Days</p>
                     </div>
-                  )}
-                  <div className="flex justify-end gap-3 pt-2">
-                    <Button type="button" variant="outline" onClick={() => setIsCalcDialogOpen(false)}>Cancel</Button>
-                    <Button
-                      type="button"
-                      disabled={calcLoading || !calcPreview || (calcPreview.toCredit || 0) === 0}
-                      onClick={handleCalculateAndCredit}
-                      className="bg-indigo-600 hover:bg-indigo-700"
-                    >
-                      {calcLoading ? "Crediting..." : `Credit ${calcPreview?.toCredit || 0} PL`}
-                    </Button>
+                    <div className="bg-white rounded-lg border p-3 text-center">
+                      <p className="text-2xl font-bold text-green-600">{calcPreview.plEarned}</p>
+                      <p className="text-xs text-gray-500 mt-0.5">PL Earned</p>
+                    </div>
+                    <div className="bg-white rounded-lg border p-3 text-center">
+                      <p className="text-2xl font-bold text-gray-500">{calcPreview.alreadyCredited}</p>
+                      <p className="text-xs text-gray-500 mt-0.5">Already Credited</p>
+                    </div>
+                    <div className="bg-white rounded-lg border p-3 text-center">
+                      <p className={`text-2xl font-bold ${(calcPreview.toCredit || 0) > 0 ? "text-indigo-600" : "text-gray-400"}`}>{calcPreview.toCredit || 0}</p>
+                      <p className="text-xs text-gray-500 mt-0.5">New PL to Credit</p>
+                    </div>
                   </div>
+                  <p className="text-xs text-gray-500">
+                    Ratio: {calcPreview.ratio} &nbsp;·&nbsp; Week Off: {calcPreview.weekOffConsidered ? "counted" : "not counted"} &nbsp;·&nbsp; Holiday: {calcPreview.holidayConsidered ? "counted" : "not counted"}
+                  </p>
+                  <p className="text-xs font-medium text-gray-700">{calcPreview.message}</p>
                 </div>
-              </FormDrawer>
+              )}
+              <div className="flex justify-end gap-3 pt-2">
+                <Button type="button" variant="outline" onClick={() => setIsCalcDialogOpen(false)}>Cancel</Button>
+                <Button
+                  type="button"
+                  disabled={calcLoading || !calcPreview || (calcPreview.toCredit || 0) === 0}
+                  onClick={handleCalculateAndCredit}
+                  className="bg-indigo-600 hover:bg-indigo-700"
+                >
+                  {calcLoading ? "Crediting..." : `Credit ${calcPreview?.toCredit || 0} PL`}
+                </Button>
+              </div>
+            </div>
+          </FormDrawer>
 
-              <FormDrawer open={isCreditDialogOpen} onOpenChange={setIsCreditDialogOpen} title={"Credit Privileged Leave"} description={"Auto-credit PL based on policy ratio"}>
-                  <form onSubmit={handleCreditPL} className="space-y-4">
-                    <div className="space-y-2">
-                      <Label>Employee</Label>
-                      <select
-                        className="w-full border rounded-md px-3 py-2 text-sm"
-                        value={creditData.employeeID}
-                        onChange={(e) => setCreditData((p) => ({ ...p, employeeID: Number(e.target.value) }))}
-                        required
-                      >
-                        <option value={0}>Select Employee</option>
-                        {employees.map((emp) => (
-                          <option key={emp.id} value={emp.id}>
-                            {getEmployeeName(emp)} ({emp.employeeID || emp.id})
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Leave Policy (PL Enabled)</Label>
-                      <select
-                        className="w-full border rounded-md px-3 py-2 text-sm"
-                        value={creditData.leavePolicyID}
-                        onChange={(e) => setCreditData((p) => ({ ...p, leavePolicyID: Number(e.target.value) }))}
-                        required
-                      >
-                        <option value={0}>Select Policy</option>
-                        {policies.map((pol) => (
-                          <option key={pol.id} value={pol.id}>
-                            {pol.leavePolicyName} (Ratio: {pol.privilegedLeaveRatio || "20:1"})
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="flex justify-end gap-3 pt-4">
-                      <Button type="button" variant="outline" onClick={() => setIsCreditDialogOpen(false)}>Cancel</Button>
-                      <Button type="submit" className="bg-green-600 hover:bg-green-700">Credit PL</Button>
-                    </div>
-                  </form>
-                
-              </FormDrawer>
+          <FormDrawer open={isCreditDialogOpen} onOpenChange={setIsCreditDialogOpen} title={"Credit Privileged Leave"} description={"Auto-credit PL based on policy ratio"}>
+            <form onSubmit={handleCreditPL} className="space-y-4">
+              <div className="space-y-2">
+                <Label>Employee</Label>
+                <select
+                  className="w-full border rounded-md px-3 py-2 text-sm"
+                  value={creditData.employeeID}
+                  onChange={(e) => setCreditData((p) => ({ ...p, employeeID: Number(e.target.value) }))}
+                  required
+                >
+                  <option value={0}>Select Employee</option>
+                  {employees.map((emp) => (
+                    <option key={emp.id} value={emp.id}>
+                      {getEmployeeName(emp)} ({emp.employeeID || emp.id})
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-2">
+                <Label>Leave Policy (PL Enabled)</Label>
+                <select
+                  className="w-full border rounded-md px-3 py-2 text-sm"
+                  value={creditData.leavePolicyID}
+                  onChange={(e) => setCreditData((p) => ({ ...p, leavePolicyID: Number(e.target.value) }))}
+                  required
+                >
+                  <option value={0}>Select Policy</option>
+                  {policies.map((pol) => (
+                    <option key={pol.id} value={pol.id}>
+                      {pol.leavePolicyName} (Ratio: {pol.privilegedLeaveRatio || "20:1"})
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex justify-end gap-3 pt-4">
+                <Button type="button" variant="outline" onClick={() => setIsCreditDialogOpen(false)}>Cancel</Button>
+                <Button type="submit" className="bg-green-600 hover:bg-green-700">Credit PL</Button>
+              </div>
+            </form>
 
-              <FormDrawer open={isLapseDialogOpen} onOpenChange={setIsLapseDialogOpen} title={"Process PL Lapse"} description={"Lapse excess PL beyond carry-forward limit"}>
-                  <form onSubmit={handleProcessLapse} className="space-y-4">
-                    <div className="space-y-2">
-                      <Label>Employee</Label>
-                      <select
-                        className="w-full border rounded-md px-3 py-2 text-sm"
-                        value={lapseData.employeeID}
-                        onChange={(e) => setLapseData((p) => ({ ...p, employeeID: Number(e.target.value) }))}
-                        required
-                      >
-                        <option value={0}>Select Employee</option>
-                        {employees.map((emp) => (
-                          <option key={emp.id} value={emp.id}>
-                            {getEmployeeName(emp)} ({emp.employeeID || emp.id})
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Leave Policy</Label>
-                      <select
-                        className="w-full border rounded-md px-3 py-2 text-sm"
-                        value={lapseData.leavePolicyID}
-                        onChange={(e) => setLapseData((p) => ({ ...p, leavePolicyID: Number(e.target.value) }))}
-                        required
-                      >
-                        <option value={0}>Select Policy</option>
-                        {policies.map((pol) => (
-                          <option key={pol.id} value={pol.id}>
-                            {pol.leavePolicyName} (Limit: {pol.plCarryForwardLimit || 0})
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="flex justify-end gap-3 pt-4">
-                      <Button type="button" variant="outline" onClick={() => setIsLapseDialogOpen(false)}>Cancel</Button>
-                      <Button type="submit" className="bg-orange-600 hover:bg-orange-700">Process Lapse</Button>
-                    </div>
-                  </form>
-                
-              </FormDrawer>
+          </FormDrawer>
 
-              <FormDrawer open={isDialogOpen} onOpenChange={setIsDialogOpen} title={editingEntry ? "Edit PL Entry" : "Add PL Ledger Entry"} description={"Manually add or edit a privileged leave ledger record"}>
-                  <form onSubmit={handleSubmit} className="space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label>Employee</Label>
-                        <select
-                          className="w-full border rounded-md px-3 py-2 text-sm"
-                          value={formData.employeeID}
-                          onChange={(e) => setFormData((p) => ({ ...p, employeeID: Number(e.target.value) }))}
-                          required
-                        >
-                          <option value={0}>Select Employee</option>
-                          {employees.map((emp) => (
-                            <option key={emp.id} value={emp.id}>
-                              {getEmployeeName(emp)}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Leave Policy</Label>
-                        <select
-                          className="w-full border rounded-md px-3 py-2 text-sm"
-                          value={formData.leavePolicyID}
-                          onChange={(e) => setFormData((p) => ({ ...p, leavePolicyID: Number(e.target.value) }))}
-                          required
-                        >
-                          <option value={0}>Select Policy</option>
-                          {policies.map((pol) => (
-                            <option key={pol.id} value={pol.id}>
-                              {pol.leavePolicyName}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-3 gap-4">
-                      <div className="space-y-2">
-                        <Label>Credited Leaves</Label>
-                        <Input
-                          type="number"
-                          step="0.5"
-                          value={formData.creditedLeaves}
-                          onChange={(e) => setFormData((p) => ({ ...p, creditedLeaves: parseFloat(e.target.value) || 0 }))}
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Used Leaves</Label>
-                        <Input
-                          type="number"
-                          step="0.5"
-                          value={formData.usedLeaves}
-                          onChange={(e) => setFormData((p) => ({ ...p, usedLeaves: parseFloat(e.target.value) || 0 }))}
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Balance Leaves</Label>
-                        <Input
-                          type="number"
-                          step="0.5"
-                          value={formData.balanceLeaves}
-                          onChange={(e) => setFormData((p) => ({ ...p, balanceLeaves: parseFloat(e.target.value) || 0 }))}
-                        />
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label>Credit Date</Label>
-                        <Input
-                          type="date"
-                          value={formData.creditDate}
-                          onChange={(e) => setFormData((p) => ({ ...p, creditDate: e.target.value }))}
-                          required
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Description</Label>
-                        <Input
-                          value={formData.description}
-                          onChange={(e) => setFormData((p) => ({ ...p, description: e.target.value }))}
-                          placeholder="Optional note"
-                        />
-                      </div>
-                    </div>
-                    <div className="flex justify-end gap-3 pt-4">
-                      <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
-                      <Button type="submit" className="">
-                        {editingEntry ? "Update" : "Add Entry"}
-                      </Button>
-                    </div>
-                  </form>
-                
-              </FormDrawer>
+          <FormDrawer open={isLapseDialogOpen} onOpenChange={setIsLapseDialogOpen} title={"Process PL Lapse"} description={"Lapse excess PL beyond carry-forward limit"}>
+            <form onSubmit={handleProcessLapse} className="space-y-4">
+              <div className="space-y-2">
+                <Label>Employee</Label>
+                <select
+                  className="w-full border rounded-md px-3 py-2 text-sm"
+                  value={lapseData.employeeID}
+                  onChange={(e) => setLapseData((p) => ({ ...p, employeeID: Number(e.target.value) }))}
+                  required
+                >
+                  <option value={0}>Select Employee</option>
+                  {employees.map((emp) => (
+                    <option key={emp.id} value={emp.id}>
+                      {getEmployeeName(emp)} ({emp.employeeID || emp.id})
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-2">
+                <Label>Leave Policy</Label>
+                <select
+                  className="w-full border rounded-md px-3 py-2 text-sm"
+                  value={lapseData.leavePolicyID}
+                  onChange={(e) => setLapseData((p) => ({ ...p, leavePolicyID: Number(e.target.value) }))}
+                  required
+                >
+                  <option value={0}>Select Policy</option>
+                  {policies.map((pol) => (
+                    <option key={pol.id} value={pol.id}>
+                      {pol.leavePolicyName} (Limit: {pol.plCarryForwardLimit || 0})
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex justify-end gap-3 pt-4">
+                <Button type="button" variant="outline" onClick={() => setIsLapseDialogOpen(false)}>Cancel</Button>
+                <Button type="submit" className="bg-orange-600 hover:bg-orange-700">Process Lapse</Button>
+              </div>
+            </form>
+
+          </FormDrawer>
+
+          <FormDrawer open={isDialogOpen} onOpenChange={setIsDialogOpen} title={editingEntry ? "Edit PL Entry" : "Add PL Ledger Entry"} description={"Manually add or edit a privileged leave ledger record"}>
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Employee</Label>
+                  <select
+                    className="w-full border rounded-md px-3 py-2 text-sm"
+                    value={formData.employeeID}
+                    onChange={(e) => setFormData((p) => ({ ...p, employeeID: Number(e.target.value) }))}
+                    required
+                  >
+                    <option value={0}>Select Employee</option>
+                    {employees.map((emp) => (
+                      <option key={emp.id} value={emp.id}>
+                        {getEmployeeName(emp)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Leave Policy</Label>
+                  <select
+                    className="w-full border rounded-md px-3 py-2 text-sm"
+                    value={formData.leavePolicyID}
+                    onChange={(e) => setFormData((p) => ({ ...p, leavePolicyID: Number(e.target.value) }))}
+                    required
+                  >
+                    <option value={0}>Select Policy</option>
+                    {policies.map((pol) => (
+                      <option key={pol.id} value={pol.id}>
+                        {pol.leavePolicyName}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <div className="grid grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <Label>Credited Leaves</Label>
+                  <Input
+                    type="number"
+                    step="0.5"
+                    value={formData.creditedLeaves}
+                    onChange={(e) => setFormData((p) => ({ ...p, creditedLeaves: parseFloat(e.target.value) || 0 }))}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Used Leaves</Label>
+                  <Input
+                    type="number"
+                    step="0.5"
+                    value={formData.usedLeaves}
+                    onChange={(e) => setFormData((p) => ({ ...p, usedLeaves: parseFloat(e.target.value) || 0 }))}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Balance Leaves</Label>
+                  <Input
+                    type="number"
+                    step="0.5"
+                    value={formData.balanceLeaves}
+                    onChange={(e) => setFormData((p) => ({ ...p, balanceLeaves: parseFloat(e.target.value) || 0 }))}
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Credit Date</Label>
+                  <Input
+                    type="date"
+                    value={formData.creditDate}
+                    onChange={(e) => setFormData((p) => ({ ...p, creditDate: e.target.value }))}
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Description</Label>
+                  <Input
+                    value={formData.description}
+                    onChange={(e) => setFormData((p) => ({ ...p, description: e.target.value }))}
+                    placeholder="Optional note"
+                  />
+                </div>
+              </div>
+              <div className="flex justify-end gap-3 pt-4">
+                <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
+                <Button type="submit" className="">
+                  {editingEntry ? "Update" : "Add Entry"}
+                </Button>
+              </div>
+            </form>
+
+          </FormDrawer>
         </>
       )}
 
-      {!isDialogOpen && !isCreditDialogOpen && !isLapseDialogOpen && !isHistoryOpen && (<>
-      {/* Search */}
-      <Card>
-        <CardContent className="p-6">
-          <div className="flex items-center space-x-4 w-full">
-            <div className="relative flex-1 min-w-0">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-              <Input
-                placeholder="Search by employee name..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10 w-full"
-              />
-            </div>
-            <Badge variant="secondary" className="px-3 py-1 flex-shrink-0">
-              {aggregatedData.length} records
-            </Badge>
-          </div>
-        </CardContent>
-      </Card>
+      {!isDialogOpen && !isCreditDialogOpen && !isLapseDialogOpen && !isHistoryOpen && !isCalcDialogOpen && (
+        <>
+          <FilterBar
+            search={{
+              value: table.search,
+              onChange: table.setSearch,
+              placeholder: "Search by employee name…",
+            }}
+          />
 
-      {/* PL Summary Table */}
-        <Card className="w-full">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Icon icon="mdi:book-open-page-variant" className="w-5 h-5" />
-              Privileged Leave Summary
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-0 w-full">
-            <div className="overflow-x-auto w-full">
-              <Table className="w-full">
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Employee ID</TableHead>
-                    <TableHead>Employee Name</TableHead>
-                    <TableHead>Financial Year</TableHead>
-                    <TableHead>PL Policy</TableHead>
-                    <TableHead className="text-center">Total Days Present</TableHead>
-                    <TableHead className="text-center">PL Earn</TableHead>
-                    <TableHead className="text-center">C/F PL (Prev FY)</TableHead>
-                    <TableHead className="text-center">Total PL Count</TableHead>
-                    <TableHead className="text-center">Consumed PL</TableHead>
-                    <TableHead className="text-center">Balance PL</TableHead>
-                    <TableHead>PL Expiry Date</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {listLoading ? (
-                    <TableBodySkeleton cols={12} />
-                  ) : aggregatedData.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={12} className="text-center py-10 text-gray-500">
-                        <div className="flex flex-col items-center gap-2">
-                          <Icon icon="mdi:magnify" className="w-12 h-12 text-gray-300" />
-                          {!searchTerm.trim() ? (
-                            <>
-                              <p className="font-medium text-gray-600">Search to view PL records</p>
-                              <p className="text-xs text-gray-400">Type an employee name above to see their Privileged Leave summary</p>
-                            </>
-                          ) : (
-                            <p>No PL records found for &ldquo;{searchTerm}&rdquo;</p>
-                          )}
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    aggregatedData.map((row) => (
-                      <TableRow key={row.employeeID}>
-                        <TableCell className="whitespace-nowrap">{row.employeeCode}</TableCell>
-                        <TableCell className="font-medium whitespace-nowrap">{row.employeeName}</TableCell>
-                        <TableCell className="whitespace-nowrap">{row.financialYear}</TableCell>
-                        <TableCell className="whitespace-nowrap">{row.policyName}</TableCell>
-                        <TableCell className="text-center">{row.totalDaysPresent || "-"}</TableCell>
-                        <TableCell className="text-center">
-                          <Badge variant="secondary" className="bg-green-100 text-green-800">{row.plEarn}</Badge>
-                        </TableCell>
-                        <TableCell className="text-center">{row.cfPreviousFY}</TableCell>
-                        <TableCell className="text-center font-semibold">{row.totalPLCount}</TableCell>
-                        <TableCell className="text-center">
-                          <Badge variant="secondary" className="bg-red-100 text-red-800">{row.consumedPL}</Badge>
-                        </TableCell>
-                        <TableCell className="text-center font-semibold">{row.balancePL}</TableCell>
-                        <TableCell className="whitespace-nowrap">{row.plExpiryDate}</TableCell>
-                        <TableCell className="text-right whitespace-nowrap">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleShowHistory(row.employeeID, row.manageEmployee)}
-                            className="h-7 px-2 text-xs gap-1"
-                            title="View History"
-                          >
-                            <Icon icon="mdi:history" className="w-3.5 h-3.5" />
-                            History
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
-            </div>
-          </CardContent>
-        </Card>
-      </>)}
+          <EntityListShell
+            title="Privileged leave summary"
+            columns={plSummaryColumns}
+            rows={aggregatedData}
+            rowKey={(row) => String(row.employeeID)}
+            isLoading={listLoading}
+            sortBy={table.sortBy}
+            sortDir={table.sortDir}
+            onSort={table.setSort}
+            emptyIcon={Calendar}
+            emptyTitle={!table.search.trim() ? "Search to view PL records" : "No PL records found"}
+            emptyDescription={
+              !table.search.trim()
+                ? "Type an employee name above to see their Privileged Leave summary."
+                : `No PL records found for "${table.search.trim()}".`
+            }
+          />
+        </>
+      )}
 
       {/* History Drawer */}
       <FormDrawer

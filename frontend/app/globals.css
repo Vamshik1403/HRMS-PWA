@@ -1,42 +1,47 @@
 :root {
-  --primary: 243 75% 59%;
+  --primary: 217 91% 60%;
   --primary-foreground: 0 0% 100%;
   --secondary: 240 4.8% 95.9%;
   --secondary-foreground: 240 5.9% 10%;
-  --muted: 240 4.8% 95.9%;
-  --muted-foreground: 240 3.8% 46.1%;
-  --accent: 236 100% 97%;
-  --accent-foreground: 243 75% 59%;
-  --destructive: 0 84.2% 60.2%;
+  --muted: 220 14% 96%;
+  --muted-foreground: 220 9% 46%;
+  --accent: 214 95% 93%;
+  --accent-foreground: 217 91% 35%;
+  --destructive: 0 84% 60%;
   --destructive-foreground: 0 0% 98%;
+  --success: 142 71% 45%;
+  --success-foreground: 0 0% 100%;
+  --warning: 38 92% 50%;
+  --warning-foreground: 0 0% 100%;
+  --info: 187 86% 43%;
+  --info-foreground: 0 0% 100%;
   --card: 0 0% 100%;
-  --card-foreground: 215 28% 17%;
+  --card-foreground: 222 47% 11%;
   --popover: 0 0% 100%;
-  --popover-foreground: 215 28% 17%;
-  --border: 220 13% 84%;
-  --input: 220 13% 84%;
-  --ring: 243 75% 59%;
-  /* Match dashboard shell (#f4f4f4); active rows use white pills on this base */
+  --popover-foreground: 222 47% 11%;
+  --border: 220 13% 91%;
+  --input: 220 13% 91%;
+  --ring: 217 91% 60%;
   --sidebar: 0 0% 100%;
-  --sidebar-foreground: 215 28% 17%;
-  --sidebar-primary: 243 75% 59%;
+  --sidebar-foreground: 222 47% 11%;
+  --sidebar-primary: 217 91% 60%;
   --sidebar-primary-foreground: 0 0% 100%;
-  --sidebar-accent: 236 100% 97%;
-  --sidebar-accent-foreground: 243 75% 59%;
-  --sidebar-border: 220 13% 84%;
-  --sidebar-ring: 243 75% 59%;
-  --chart-1: 12 76% 61%;
-  --chart-2: 173 58% 39%;
-  --chart-3: 197 37% 24%;
-  --chart-4: 43 74% 66%;
-  --chart-5: 27 87% 67%;
+  --sidebar-accent: 214 95% 93%;
+  --sidebar-accent-foreground: 217 91% 35%;
+  --sidebar-border: 220 13% 91%;
+  --sidebar-ring: 217 91% 60%;
+  --chart-1: 217 91% 60%;
+  --chart-2: 142 71% 45%;
+  --chart-3: 38 92% 50%;
+  --chart-4: 187 86% 43%;
+  --chart-5: 0 84% 60%;
 
   --font-sans: "Inter";
   --font-heading: "Inter";
   --font-serif: "Playfair Display";
   --font-mono: "JetBrains Mono";
 
-  --radius: 0.9rem;
+  --radius: 0.625rem;
 }
 
 @tailwind base;
@@ -45,57 +50,57 @@
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 215 28% 17%;
+    --background: 220 14% 98%;
+    --foreground: 222 47% 11%;
     --card: 0 0% 100%;
-    --card-foreground: 215 28% 17%;
+    --card-foreground: 222 47% 11%;
     --popover: 0 0% 100%;
-    --popover-foreground: 215 28% 17%;
-    --primary: 243 75% 59%;
+    --popover-foreground: 222 47% 11%;
+    --primary: 217 91% 60%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 0 0% 96.1%;
-    --secondary-foreground: 215 28% 17%;
-    --muted: 0 0% 96.1%;
-    --muted-foreground: 0 0% 45.1%;
-    --accent: 236 100% 97%;
-    --accent-foreground: 243 75% 59%;
-    --destructive: 0 84.2% 60.2%;
+    --secondary: 220 14% 96%;
+    --secondary-foreground: 222 47% 11%;
+    --muted: 220 14% 96%;
+    --muted-foreground: 220 9% 46%;
+    --accent: 214 95% 93%;
+    --accent-foreground: 217 91% 35%;
+    --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 98%;
-    --border: 220 13% 84%;
-    --input: 220 13% 84%;
-    --ring: 243 75% 59%;
-    --chart-1: 12 76% 61%;
-    --chart-2: 173 58% 39%;
-    --chart-3: 197 37% 24%;
-    --chart-4: 43 74% 66%;
-    --chart-5: 27 87% 67%;
-    --radius: 0.9rem;
+    --border: 220 13% 91%;
+    --input: 220 13% 91%;
+    --ring: 217 91% 60%;
+    --chart-1: 217 91% 60%;
+    --chart-2: 142 71% 45%;
+    --chart-3: 38 92% 50%;
+    --chart-4: 187 86% 43%;
+    --chart-5: 0 84% 60%;
+    --radius: 0.625rem;
   }
   .dark {
-    --background: 0 0% 3.9%;
-    --foreground: 0 0% 98%;
-    --card: 0 0% 3.9%;
-    --card-foreground: 0 0% 98%;
-    --popover: 0 0% 3.9%;
-    --popover-foreground: 0 0% 98%;
-    --primary: 0 0% 98%;
-    --primary-foreground: 0 0% 9%;
-    --secondary: 0 0% 14.9%;
-    --secondary-foreground: 0 0% 98%;
-    --muted: 0 0% 14.9%;
-    --muted-foreground: 0 0% 63.9%;
-    --accent: 0 0% 14.9%;
-    --accent-foreground: 0 0% 98%;
-    --destructive: 0 62.8% 30.6%;
+    --background: 224 71% 4%;
+    --foreground: 210 40% 98%;
+    --card: 224 71% 6%;
+    --card-foreground: 210 40% 98%;
+    --popover: 224 71% 6%;
+    --popover-foreground: 210 40% 98%;
+    --primary: 217 91% 60%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 215 28% 12%;
+    --secondary-foreground: 210 40% 98%;
+    --muted: 215 28% 12%;
+    --muted-foreground: 215 20% 65%;
+    --accent: 217 33% 17%;
+    --accent-foreground: 210 40% 98%;
+    --destructive: 0 63% 31%;
     --destructive-foreground: 0 0% 98%;
-    --border: 0 0% 14.9%;
-    --input: 0 0% 14.9%;
-    --ring: 0 0% 83.1%;
-    --chart-1: 220 70% 50%;
-    --chart-2: 160 60% 45%;
-    --chart-3: 30 80% 55%;
-    --chart-4: 280 65% 60%;
-    --chart-5: 340 75% 55%;
+    --border: 215 28% 14%;
+    --input: 215 28% 14%;
+    --ring: 217 91% 60%;
+    --chart-1: 217 91% 65%;
+    --chart-2: 142 71% 50%;
+    --chart-3: 38 92% 55%;
+    --chart-4: 187 86% 48%;
+    --chart-5: 0 84% 65%;
   }
 }
 
@@ -109,9 +114,18 @@
     overscroll-behavior: none;
     -webkit-overflow-scrolling: touch;
   }
+  html.hrms-admin-shell,
+  html.hrms-admin-shell body {
+    overflow: hidden;
+    height: 100%;
+    max-height: 100%;
+  }
   html {
-    overflow-y: scroll;
+    overflow-y: auto;
     color-scheme: light;
+  }
+  html.dark {
+    color-scheme: dark;
   }
   body {
     @apply bg-background text-foreground;
@@ -140,6 +154,9 @@
 .emp-pwa-shell,
 .form-drawer-body {
   color-scheme: light;
+}
+html.dark .form-drawer-body {
+  color-scheme: dark;
 }
 
 .app-form-control,
@@ -332,19 +349,38 @@ html[data-emp-theme="dark"] .emp-pwa-shell select:-webkit-autofill {
 }
 
 .form-drawer-body form {
-  display: flex;
-  flex-direction: column;
-  gap: 1.25rem;
+  display: block;
 }
 
-/* Neutralize Tailwind space-y-* on top-level form (CSS gap handles spacing) */
+/* Consistent vertical spacing between stacked field groups in drawer forms */
 .form-drawer-body form > :not([hidden]) ~ :not([hidden]) {
-  margin-top: 0;
+  margin-top: 1.25rem;
 }
 
-/* Tighter label-to-field gap within field containers */
+/* Label-to-control gap inside a single field row */
 .form-drawer-body .space-y-2 > :not([hidden]) ~ :not([hidden]) {
-  margin-top: 0.375rem;
+  margin-top: 0.5rem;
+}
+
+/* Nested field stacks (sections, grids, repeaters) */
+.form-drawer-body .space-y-3 > :not([hidden]) ~ :not([hidden]) {
+  margin-top: 0.75rem;
+}
+
+.form-drawer-body .space-y-4 > :not([hidden]) ~ :not([hidden]) {
+  margin-top: 1rem;
+}
+
+.form-drawer-body .space-y-5 > :not([hidden]) ~ :not([hidden]) {
+  margin-top: 1.25rem;
+}
+
+.form-drawer-body .space-y-6 > :not([hidden]) ~ :not([hidden]) {
+  margin-top: 1.5rem;
+}
+
+.form-drawer-body .space-y-8 > :not([hidden]) ~ :not([hidden]) {
+  margin-top: 2rem;
 }
 
 /* Section titles inside form drawers */
@@ -363,7 +399,7 @@ html[data-emp-theme="dark"] .emp-pwa-shell select:-webkit-autofill {
 
 /* Autocomplete dropdown styling */
 .form-drawer-body .absolute.z-10 {
-  border-radius: 3px;
+  border-radius: calc(var(--radius) - 2px);
   border-color: #cbd5e1;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08), 0 1px 3px rgba(0, 0, 0, 0.04);
 }
@@ -371,7 +407,7 @@ html[data-emp-theme="dark"] .emp-pwa-shell select:-webkit-autofill {
 /* Repeater card sections (bank details, items, etc.) */
 .form-drawer-body .border.border-gray-200 {
   border-color: #e2e8f0;
-  border-radius: 4px;
+  border-radius: var(--radius);
   background-color: #f9fafb;
 }
 
@@ -386,7 +422,7 @@ html[data-emp-theme="dark"] .emp-pwa-shell select:-webkit-autofill {
 .form-drawer-body select {
   height: 2.5rem;
   width: 100%;
-  border-radius: 3px;
+  border-radius: calc(var(--radius) - 2px);
   border: 1px solid #cbd5e1;
   font-size: 13px;
   color: #111827;
@@ -405,18 +441,18 @@ html[data-emp-theme="dark"] .emp-pwa-shell select:-webkit-autofill {
 /* View detail panels */
 .form-drawer-body .bg-gray-50 {
   background-color: #f9fafb;
-  border-radius: 4px;
+  border-radius: var(--radius);
 }
 
 /* Error banners */
 .form-drawer-body .bg-red-50 {
-  border-radius: 8px;
+  border-radius: var(--radius);
 }
 
 /* Shared select styling (filters, tables, modals outside form drawer) */
 .app-select {
   height: 2.5rem;
-  border-radius: 3px;
+  border-radius: calc(var(--radius) - 2px);
   border: 1px solid #cbd5e1;
   font-size: 13px;
   color: #111827;
@@ -744,4 +780,257 @@ html[data-emp-theme="dark"] .emp-pwa-shell .emp-mobile-date-field input[type="da
     opacity: 1;
     transform: scale(1) translateY(0);
   }
+}
+
+@layer utilities {
+  .grain {
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.4'/%3E%3C/svg%3E");
+  }
+
+  .dotted-bg {
+    background-image: radial-gradient(hsl(var(--muted-foreground) / 0.15) 1px, transparent 1px);
+    background-size: 18px 18px;
+  }
+
+  .animate-fade-in {
+    animation: fade-in 0.4s ease-out;
+  }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Auto-hide scrollbars until hover / scroll ── */
+.scrollbar-auto-hide {
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+
+.scrollbar-auto-hide:hover {
+  scrollbar-color: hsl(var(--border) / 0.85) transparent;
+}
+
+.scrollbar-auto-hide::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.scrollbar-auto-hide::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.scrollbar-auto-hide::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 9999px;
+}
+
+.scrollbar-auto-hide:hover::-webkit-scrollbar-thumb {
+  background: hsl(var(--border) / 0.85);
+}
+
+.scrollbar-auto-hide::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--muted-foreground) / 0.45);
+}
+
+.app-scroll {
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+
+.app-scroll:hover {
+  scrollbar-color: hsl(var(--border) / 0.85) transparent;
+}
+
+.app-scroll::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.app-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.app-scroll::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 9999px;
+}
+
+.app-scroll:hover::-webkit-scrollbar-thumb {
+  background: hsl(var(--border) / 0.85);
+}
+
+/* Legacy global scrollbar — hidden until container hover */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 9999px;
+}
+
+*:hover::-webkit-scrollbar-thumb {
+  background: hsl(var(--border) / 0.85);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--muted-foreground) / 0.45);
+}
+
+::selection {
+  background: hsl(var(--primary) / 0.25);
+  color: hsl(var(--foreground));
+}
+
+/* Emergent-style list page: white search/filter controls on grey page canvas */
+.hrms-admin-content [data-hrms-list-control] {
+  background-color: #ffffff !important;
+  border-color: hsl(var(--input)) !important;
+  border-radius: calc(var(--radius) - 2px);
+  box-shadow: none !important;
+}
+
+/* ── Admin content UI consistency ── */
+.hrms-admin-content {
+  @apply animate-fade-in;
+}
+
+
+.hrms-admin-content .text-indigo-600,
+.hrms-admin-content .text-indigo-700 {
+  color: hsl(var(--primary)) !important;
+}
+
+.hrms-admin-content .bg-indigo-50,
+.hrms-admin-content .bg-indigo-50\/60 {
+  background-color: hsl(var(--accent)) !important;
+}
+
+.hrms-admin-content .border-indigo-100,
+.hrms-admin-content .border-indigo-200 {
+  border-color: hsl(var(--border)) !important;
+}
+
+.hrms-admin-content .hover\:bg-indigo-50:hover {
+  background-color: hsl(var(--accent) / 0.6) !important;
+}
+
+.hrms-admin-content .focus-visible\:ring-\[\#4f46e5\]\/25:focus-visible,
+.hrms-admin-content [class*="ring-[#4f46e5]"] {
+  --tw-ring-color: hsl(var(--ring) / 0.25) !important;
+}
+
+.hrms-admin-content .app-select:focus,
+.hrms-admin-content .form-drawer-body select:focus {
+  border-color: hsl(var(--ring)) !important;
+  box-shadow: 0 0 0 2px hsl(var(--ring) / 0.25) !important;
+}
+
+/* ── Admin dark mode: fix legacy hardcoded light classes ── */
+html.dark .hrms-admin-content .bg-white {
+  background-color: hsl(var(--card)) !important;
+}
+
+html.dark .hrms-admin-content [class*="bg-[#f9fafb]"],
+html.dark .hrms-admin-content [class*="bg-[#fafafa]"],
+html.dark .hrms-admin-content [class*="bg-[#f4f4f4]"],
+html.dark .hrms-admin-content [class*="bg-[#f6f6f6]"],
+html.dark .hrms-admin-content .bg-gray-50 {
+  background-color: hsl(var(--muted)) !important;
+}
+
+html.dark .hrms-admin-content .text-gray-900,
+html.dark .hrms-admin-content .text-gray-800,
+html.dark .hrms-admin-content [class*="text-[#111827]"] {
+  color: hsl(var(--foreground)) !important;
+}
+
+html.dark .hrms-admin-content .text-gray-700,
+html.dark .hrms-admin-content .text-gray-600 {
+  color: hsl(var(--muted-foreground)) !important;
+}
+
+html.dark .hrms-admin-content .text-gray-500,
+html.dark .hrms-admin-content .text-gray-400 {
+  color: hsl(var(--muted-foreground)) !important;
+}
+
+html.dark .hrms-admin-content [class*="border-[#e5e7eb]"],
+html.dark .hrms-admin-content [class*="border-[#ebebeb]"],
+html.dark .hrms-admin-content [class*="border-[#e5e5e5]"] {
+  border-color: hsl(var(--border)) !important;
+}
+
+html.dark .form-drawer-body h3,
+html.dark .form-drawer-body h4 {
+  color: hsl(var(--foreground));
+}
+
+html.dark .form-drawer-body select {
+  background-color: hsl(var(--background));
+  color: hsl(var(--foreground));
+  border-color: hsl(var(--input));
+}
+
+html.dark .form-drawer-body .border.border-gray-200,
+html.dark .form-drawer-body .bg-gray-50 {
+  background-color: hsl(var(--muted));
+  border-color: hsl(var(--border));
+}
+
+html.dark .form-drawer-body .absolute.z-10 {
+  background-color: hsl(var(--popover));
+  color: hsl(var(--popover-foreground));
+  border-color: hsl(var(--border));
+}
+
+html.dark .form-drawer-body input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):not([type="hidden"]),
+html.dark .form-drawer-body textarea {
+  background-color: hsl(var(--background));
+  color: hsl(var(--foreground));
+  border-color: hsl(var(--input));
+}
+
+html.dark .form-drawer-body input::placeholder,
+html.dark .form-drawer-body textarea::placeholder {
+  color: hsl(var(--muted-foreground));
+  opacity: 1;
+}
+
+html.dark .app-select {
+  background-color: hsl(var(--background));
+  color: hsl(var(--foreground));
+  border-color: hsl(var(--input));
+  color-scheme: dark;
+}
+
+html.dark .app-select:focus {
+  background-color: hsl(var(--background));
+  border-color: hsl(var(--ring));
+}
+
+/* ── Premium SaaS micro-interactions ── */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.skeleton-shimmer {
+  background: linear-gradient(
+    90deg,
+    hsl(var(--muted)) 0%,
+    hsl(var(--muted) / 0.5) 50%,
+    hsl(var(--muted)) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
 }

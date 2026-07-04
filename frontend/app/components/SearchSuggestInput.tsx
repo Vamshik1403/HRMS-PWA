@@ -3,6 +3,9 @@
 import { useState, useEffect, useRef } from "react";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
+import { formDropdownClass, formDropdownItemClass } from "./ui/form-control-styles";
+import { cn } from "@/app/utils/cn";
+import { Search } from "lucide-react";
 
 interface SearchSuggestInputProps {
   label: string;
@@ -110,33 +113,43 @@ export function SearchSuggestInput({
     };
   }, []);
 
+  const showRequiredMark = required && !/\*\s*$/.test(label);
+
   return (
-    <div ref={containerRef} className="space-y-2 relative">
-      <Label>{label}</Label>
-      <Input
-        value={value}
-        onChange={(e) => handleInputChange(e.target.value)}
-        onFocus={handleFocus}
-        placeholder={placeholder}
-        required={required}
-        disabled={disabled}
-        spellCheck={false}
-        autoComplete="off"
-        autoCorrect="off"
-      />
-      
+    <div ref={containerRef} className="space-y-2.5 relative">
+      <Label>
+        {label}
+        {showRequiredMark && (
+          <span className="text-red-500 ml-0.5" aria-hidden="true">
+            *
+          </span>
+        )}
+      </Label>
+      <div className="relative">
+        <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground pointer-events-none" />
+        <Input
+          value={value}
+          onChange={(e) => handleInputChange(e.target.value)}
+          onFocus={handleFocus}
+          placeholder={placeholder}
+          required={required}
+          disabled={disabled}
+          spellCheck={false}
+          autoComplete="off"
+          autoCorrect="off"
+          className="pl-10"
+        />
+      </div>
+
       {showSuggestions && (
-        <div className="absolute z-10 bg-white border rounded-md shadow-lg w-full max-h-48 overflow-y-auto">
+        <div className={cn(formDropdownClass, "absolute z-50 w-full max-h-52 overflow-y-auto mt-1 p-1.5")}>
           {isLoading ? (
-            <div className="px-3 py-2 text-sm text-gray-500">Loading...</div>
+            <div className="px-3 py-2.5 text-sm text-muted-foreground">Searching…</div>
           ) : suggestions.length > 0 ? (
             suggestions.map((item, index) => (
               <div
                 key={index}
-                className="px-3 py-2 hover:bg-gray-100 cursor-pointer text-sm"
-                // onMouseDown (not onClick) so the selection registers on the
-                // first press — before the input loses focus / list re-renders.
-                // This fixes having to click an option twice to select it.
+                className={formDropdownItemClass}
                 onMouseDown={(e) => {
                   e.preventDefault();
                   handleSelect(item);
@@ -146,7 +159,7 @@ export function SearchSuggestInput({
               </div>
             ))
           ) : (
-            <div className="px-3 py-2 text-sm text-gray-500">No results found</div>
+            <div className="px-3 py-2.5 text-sm text-muted-foreground">No results found</div>
           )}
         </div>
       )}

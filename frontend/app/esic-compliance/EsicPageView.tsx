@@ -5,6 +5,7 @@ import { Pencil, Save, AlertTriangle, Building2, Users, PlusCircle } from "lucid
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import { getSidebarContext } from "../utils/sidebarContext";
 import { Button } from "../components/ui/button"
+import { NoticeBanner } from "../components/ui/notice-banner"
 import { ArrowLeft } from "lucide-react"
 import { useRouter } from "next/navigation"
 type Company = {
@@ -603,15 +604,16 @@ export default function ESICCompliancePage() {
       )}
 
       {!selectedCompany && (
-        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-8 text-center">
-          <AlertTriangle className="mx-auto h-12 w-12 text-yellow-500 mb-4" />
-          <h2 className="text-xl font-semibold text-yellow-800 mb-2">No Company Selected</h2>
-          <p className="text-yellow-700">
-            {currentUser?.role === "SERVICE_PROVIDER" 
+        <NoticeBanner
+          variant="warning"
+          centered
+          title="No company selected"
+          description={
+            currentUser?.role === "SERVICE_PROVIDER"
               ? "No company is assigned to your profile. Please contact an administrator."
-              : "Please select a company to view ESIC compliance settings."}
-          </p>
-        </div>
+              : "Please select a company to view ESIC compliance settings."
+          }
+        />
       )}
     </div>
   );

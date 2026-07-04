@@ -18,7 +18,6 @@ import {
 } from "../ui/sidebar";
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "../ui/collapsible";
 import { Icon } from "@iconify/react";
-import { Avatar, AvatarImage, AvatarFallback } from "../ui/avatar";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -43,6 +42,7 @@ import { TASK_MANAGEMENT_ENABLED } from "@/app/config/featureFlags";
 import { dispatchAppRefresh } from "@/app/utils/appRefresh";
 import { ensureFetchRefreshPatch } from "@/app/utils/patchFetchForRefresh";
 import { Skeleton } from "../ui/skeleton";
+import { HrmsTopbar } from "../app/hrms-topbar";
 
 const SIDEBAR_OPEN_SECTIONS_KEY = "sidebarOpenSections";
 
@@ -94,22 +94,22 @@ const sbMenuBtnReset =
   "!h-11 !min-h-[44px] !max-h-11 !rounded-md !p-0 w-full max-w-full border-0 !bg-transparent !shadow-none hover:!bg-transparent hover:!text-inherit active:!bg-transparent data-[active=true]:!bg-transparent data-[state=open]:!bg-transparent focus-visible:ring-1 focus-visible:ring-gray-900/10";
 
 const sbRow =
-  "flex w-full items-center gap-3 rounded-md px-3 h-11 min-h-[44px] max-h-11 shrink-0 transition-colors duration-150";
+  "flex w-full items-center gap-3.5 rounded-xl px-3.5 h-[46px] min-h-[46px] max-h-[46px] shrink-0 transition-all duration-150";
 
 const sbActive =
-  "!bg-[#eef2ff] text-[#4f46e5] font-medium !shadow-none ring-0 relative overflow-visible before:absolute before:-left-3 before:top-[20%] before:h-[60%] before:w-[3px] before:rounded-r-sm before:bg-[#4f46e5] [&_svg]:!text-[#4f46e5]";
+  "!bg-primary !text-primary-foreground font-semibold !shadow-md rounded-xl [&_svg]:!text-primary-foreground";
 
 const sbIdle =
-  "text-[#6b7280] hover:bg-[#eef2ff] hover:text-[#4f46e5] !bg-transparent";
+  "text-muted-foreground hover:bg-muted/70 hover:text-foreground !bg-transparent";
 
 const sbSubRow =
-  "flex w-full items-center rounded-md !px-3 min-h-9 h-9 max-h-9 text-[13px] font-normal transition-colors duration-150 overflow-hidden";
+  "flex w-full items-center rounded-md !px-3 min-h-9 h-9 max-h-9 text-[13px] font-normal transition-all duration-150 overflow-hidden";
 
 const sbSubActive =
-  "!bg-[#eef2ff] text-[#4f46e5] font-medium !shadow-none ring-0 relative !pl-6 before:absolute before:left-0 before:top-[30%] before:h-[40%] before:w-[2px] before:rounded-full before:bg-[#4f46e5]";
+  "!bg-accent text-accent-foreground font-medium !shadow-sm ring-0 relative !pl-6 before:absolute before:left-0 before:top-[30%] before:h-[40%] before:w-[2px] before:rounded-full before:bg-primary";
 
 const sbSubIdle =
-  "text-[#6b7280] hover:bg-[#eef2ff] hover:text-[#4f46e5] !bg-transparent";
+  "text-muted-foreground hover:bg-accent/60 hover:text-foreground !bg-transparent";
 
 // Path groups for section active-state detection
 const TASK_MANAGEMENT_PATHS = ["/task-customers", "/task-customer-sites", "/task-projects"];
@@ -126,12 +126,34 @@ const LEAVE_MANAGEMENT_PATHS = ["/leave-applications", "/privileged-leave"];
 const REPORTS_PATHS = ["/attendance-reports", "/payroll-reports"];
 const CANTEEN_PATHS = ["/canteen", "/canteen/setup", "/canteen/reports"];
 const SETTINGS_PATHS = ["/import-attendance", "/hrms-integrations", "/system-settings", "/system-settings/general", "/system-settings/compliance", "/system-settings/email-templates"];
-const ADMIN_PATHS = ["/system-users", "/backup-restore", "/audit-logs"];
+const ADMIN_PATHS = ["/system-users", "/subscription"];
+const SUPERADMIN_SYSTEM_PATHS = ["/service-providers", "/company"];
 const ALL_SECTION_PATHS = [...SETUP_PATHS, ...CONTRACTOR_MANAGEMENT_PATHS, ...EMPLOYEE_PATHS, ...IM_PATHS, ...TASK_MANAGEMENT_PATHS, ...PAYROLL_PATHS, ...SALARY_PATHS, ...PAYROLL_POLICY_PATHS, ...LEAVE_PATHS, ...LEAVE_MANAGEMENT_PATHS, ...ATTENDANCE_PATHS, ...REPORTS_PATHS, ...CANTEEN_PATHS, ...SETTINGS_PATHS];
 export function PageLayout({ children }: PageLayoutProps) {
   const pathname = usePathname()
   const router = useRouter()
+ const handleSidebarNavigation = (
+  e: React.MouseEvent<HTMLAnchorElement>,
+  href: string
+) => {
+  e.preventDefault();
+
+  window.dispatchEvent(
+    new CustomEvent("sidebar-main-page-click", {
+      detail: { path: href },
+    })
+  );
+
+  if (pathname === href) {
+    router.refresh();
+    return;
+  }
+
+  router.push(href);
+};
+
   const currentUser = useCurrentUser()
+  console.log("CURRENT USER", currentUser);
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [fetchedServiceProviders, setFetchedServiceProviders] = useState<any[]>(
     () => getPageCache<any[]>("sidebarSPs") ?? []
@@ -163,6 +185,32 @@ export function PageLayout({ children }: PageLayoutProps) {
     }
   }, [])
 
+  useEffect(() => {
+if (currentUser?.role !== "SUPERADMIN") return;
+
+    const blockedForSuperAdmin = [
+      "/dashboard",
+      "/manage-employees",
+      "/branches",
+      "/devices",
+      "/departments",
+      "/designations",
+      "/work-shifts",
+      "/attendance-policy",
+      "/roster",
+      "/attendance-regularisation",
+      "/leave-policy",
+      "/generate-salary",
+      "/attendance-reports",
+      "/import-attendance",
+    ];
+
+    if (blockedForSuperAdmin.includes(pathname)) {
+      router.replace("/superdashboard");
+    }
+  }, [currentUser?.role, pathname, router]);
+
+
   const [desktopManager, setDesktopManager] = useState(false)
   useEffect(() => {
     setDesktopManager(isDesktopManagerFlagSet())
@@ -173,8 +221,12 @@ export function PageLayout({ children }: PageLayoutProps) {
   const isCompanyAdmin = currentUser?.role === 'COMPANY_ADMIN'
   const isAdmin = currentUser?.role === 'ADMIN'
   const isBranchAdmin = currentUser?.role === 'BRANCH_ADMIN'
-  const isDesktopManager =
-    desktopManager && currentUser?.role === 'EMPLOYEE'
+const isDesktopManager = desktopManager && currentUser?.role === 'EMPLOYEE'
+const isPlatformSimpleSidebarUser = isSuperAdmin || isServiceProvider
+
+
+
+
   const isRegularUser =
     !isSuperAdmin &&
     !isServiceProvider &&
@@ -182,23 +234,17 @@ export function PageLayout({ children }: PageLayoutProps) {
     !isAdmin &&
     !isBranchAdmin &&
     !isDesktopManager
-  const canAccessFullHrSections =
-    (isSuperAdmin ||
-      isCompanyAdmin ||
-      isServiceProvider ||
-      isBranchAdmin ||
-      isDesktopManager) &&
-    !isAdmin
 
-    const canSeeCompanySetupSections =
-    isSuperAdmin ||
-    isServiceProvider ||
-    isCompanyAdmin ||
-    isAdmin ||
-    isBranchAdmin ||
-    isDesktopManager
-  const isCompanyScopedSidebarUser =
-    isCompanyAdmin || isAdmin || isBranchAdmin || isDesktopManager
+const canAccessFullHrSections =
+  (isCompanyAdmin || isBranchAdmin || isDesktopManager) && !isAdmin
+
+const canSeeCompanySetupSections =
+  isCompanyAdmin || isAdmin || isBranchAdmin || isDesktopManager
+
+const isCompanyScopedSidebarUser =
+  isCompanyAdmin || isAdmin || isBranchAdmin || isDesktopManager
+
+
 
   // Profile modal state
   const [profileOpen, setProfileOpen] = useState(false)
@@ -333,12 +379,15 @@ export function PageLayout({ children }: PageLayoutProps) {
 
   // Fetch service providers and companies for sidebar (cache-first, background refresh)
   useEffect(() => {
+    if (isSuperAdmin) return;
+
     const fetchData = async () => {
       try {
         const [spRes, compRes] = await Promise.all([
           fetch("/backend/service-provider"),
           fetch("/backend/company"),
         ])
+
         if (spRes.ok) {
           const data = await spRes.json()
           if (Array.isArray(data)) {
@@ -346,6 +395,7 @@ export function PageLayout({ children }: PageLayoutProps) {
             setPageCache("sidebarSPs", data)
           }
         }
+
         if (compRes.ok) {
           const data = await compRes.json()
           const companies = Array.isArray(data) ? data : data?.data ?? []
@@ -354,9 +404,9 @@ export function PageLayout({ children }: PageLayoutProps) {
         }
       } catch { /* ignore */ }
     }
-    fetchData()
-  }, [sidebarRefreshKey])
 
+    fetchData()
+  }, [sidebarRefreshKey, isSuperAdmin])
 
   // Listen for custom sidebar refresh events from child components
   useEffect(() => {
@@ -374,20 +424,38 @@ export function PageLayout({ children }: PageLayoutProps) {
   }, [currentUser?.serviceProvider, currentUser?.serviceProviderID, fetchedServiceProviders])
 
   const accessibleCompanies = useMemo(() => {
-    return displaySPs.flatMap((sp) => {
-      let companies = fetchedCompanies.filter((c) => c.serviceProviderID === sp.id)
+  if (!isCompanyAdmin) {
+    return [];
+  }
 
-      if (isCompanyScopedSidebarUser && assignedCompanyIds.length > 0) {
-        companies = companies.filter((c) => assignedCompanyIds.includes(Number(c.id)))
-      }
+  return displaySPs.flatMap((sp) => {
+    let companies = fetchedCompanies.filter(
+      (c) => c.serviceProviderID === sp.id
+    );
 
-      return companies.map((company: any) => ({
-        ...company,
-        serviceProviderID: sp.id,
-        serviceProviderName: sp.companyName || "",
-      }))
-    })
-  }, [displaySPs, fetchedCompanies, isCompanyScopedSidebarUser, assignedCompanyIds])
+    if (assignedCompanyIds.length > 0) {
+      companies = companies.filter((c) =>
+        assignedCompanyIds.includes(Number(c.id))
+      );
+    }
+
+    return companies.map((company: any) => ({
+      ...company,
+      serviceProviderID: sp.id,
+      serviceProviderName: sp.companyName || "",
+    }));
+  });
+}, [
+  displaySPs,
+  fetchedCompanies,
+  assignedCompanyIds,
+  isCompanyAdmin,
+]);
+
+const currentRole = String(currentUser?.role || "").toUpperCase();
+
+const canShowCompanySwitcher =
+  currentRole === "COMPANY_ADMIN" && accessibleCompanies.length > 1;
 
   const activeCompany = useMemo(() => {
     const storedCompanyID = getStoredActiveCompanyID();
@@ -441,8 +509,11 @@ export function PageLayout({ children }: PageLayoutProps) {
     window.dispatchEvent(new Event("app-data-refresh"))
     dispatchAppRefresh()
 
-    if (pathname !== "/dashboard") {
-      router.push("/dashboard")
+    const targetDashboard =
+      currentUser?.role === "SUPERADMIN" ? "/superdashboard" : "/dashboard"
+
+    if (pathname !== targetDashboard) {
+      router.push(targetDashboard)
     } else {
       router.refresh()
     }
@@ -492,8 +563,8 @@ export function PageLayout({ children }: PageLayoutProps) {
           newOpen[`company_${comp.id}`] = true
           if (SETUP_PATHS.includes(pathname)) newOpen[`c${comp.id}_setup`] = true
           if (CONTRACTOR_MANAGEMENT_PATHS.includes(pathname)) newOpen[`c${comp.id}_contractorMgmt`] = true
-if (EMPLOYEE_PATHS.includes(pathname)) newOpen[`c${comp.id}_employee`] = true
-if (IM_PATHS.includes(pathname)) newOpen[`c${comp.id}_im`] = true
+          if (EMPLOYEE_PATHS.includes(pathname)) newOpen[`c${comp.id}_employee`] = true
+          if (IM_PATHS.includes(pathname)) newOpen[`c${comp.id}_im`] = true
           if (TASK_MANAGEMENT_PATHS.includes(pathname)) newOpen[`c${comp.id}_taskMgmt`] = true
           if (PAYROLL_PATHS.includes(pathname)) newOpen[`c${comp.id}_payroll`] = true
           if (SALARY_PATHS.includes(pathname)) newOpen[`c${comp.id}_salary`] = true
@@ -534,7 +605,7 @@ if (IM_PATHS.includes(pathname)) newOpen[`c${comp.id}_im`] = true
   }, [pathname, displaySPs, companiesBySP, sidebarCtx, isBranchAdmin, currentUser?.branchesID])
 
   const pageTitle = (() => {
-    if (pathname === "/dashboard") return "Dashboard";
+    if (pathname === "/dashboard" || pathname === "/superdashboard") return "Dashboard";
     if (pathname === "/employee-memo") return "Internal Messaging (IM)";
     const parts = pathname.split("/").filter(Boolean);
     if (parts.length === 0) return "Dashboard";
@@ -561,7 +632,7 @@ if (IM_PATHS.includes(pathname)) newOpen[`c${comp.id}_im`] = true
     if (!currentUser) return false;
     const hasCachedSp = (getPageCache<any[]>("sidebarSPs")?.length ?? 0) > 0;
     const hasCachedCo = (getPageCache<any[]>("sidebarCompanies")?.length ?? 0) > 0;
-    if (isSuperAdmin || (isServiceProvider && !currentUser.serviceProviderID)) {
+    if ((isServiceProvider && !currentUser.serviceProviderID)) {
       return displaySPs.length === 0 && !hasCachedSp;
     }
     if (isCompanyScopedSidebarUser) {
@@ -588,7 +659,7 @@ if (IM_PATHS.includes(pathname)) newOpen[`c${comp.id}_im`] = true
             <Skeleton className="h-4 w-4 shrink-0 rounded-md" />
           </div>
           {i === 0 && (
-            <div className="ml-5 space-y-1.5 border-l border-[#f0f0f0] pl-3">
+            <div className="ml-5 space-y-1.5 border-l border-border pl-3">
               {Array.from({ length: 4 }).map((__, j) => (
                 <Skeleton key={j} className="h-9 w-full max-w-[88%] rounded-md" />
               ))}
@@ -602,31 +673,44 @@ if (IM_PATHS.includes(pathname)) newOpen[`c${comp.id}_im`] = true
   /* ── helper: render all management sections under a company ── */
   const renderCompanySections = (companyId: number, spId: number, spName: string, companyName: string) => {
     const k = (s: string) => `c${companyId}_${s}`
-    
-const onNav = (e?: any) => {
-  setSidebarContext(spId, spName, companyId, companyName)
 
-  if (e?.currentTarget?.href) {
-    e.preventDefault()
+    const onNav = (e?: React.MouseEvent<HTMLAnchorElement>) => {
+setSidebarContext(spId, spName, companyId, companyName);
+setSidebarCtxState({
+  serviceProviderID: spId,
+  serviceProviderName: spName,
+  companyID: companyId,
+  companyName,
+});
+window.dispatchEvent(new Event("sidebar-context-changed"));
+window.dispatchEvent(new Event("app-data-refresh"));
 
-    const url = new URL(e.currentTarget.href)
+if (!e?.currentTarget?.href) return;
 
-    window.dispatchEvent(
-      new CustomEvent("sidebar-main-page-click", {
-        detail: { path: url.pathname },
-      })
-    )
+  e.preventDefault();
 
-    router.push(url.pathname)
-    router.refresh()
+  const url = new URL(e.currentTarget.href);
+  const href = url.pathname;
+
+  window.dispatchEvent(
+    new CustomEvent("sidebar-main-page-click", {
+      detail: { path: href },
+    })
+  );
+
+  if (pathname === href) {
+    router.refresh();
+    return;
   }
-}
+
+  router.push(href);
+};
 
     const setupSectionActive = isSectionActiveForCompany(SETUP_PATHS, companyId);
     const contractorManagementSectionActive = isSectionActiveForCompany(CONTRACTOR_MANAGEMENT_PATHS, companyId);
-  const employeeSectionActive = isSectionActiveForCompany(EMPLOYEE_PATHS, companyId);
-const imSectionActive = isSectionActiveForCompany(IM_PATHS, companyId);
-const taskMgmtSectionActive = isSectionActiveForCompany(TASK_MANAGEMENT_PATHS, companyId);
+    const employeeSectionActive = isSectionActiveForCompany(EMPLOYEE_PATHS, companyId);
+    const imSectionActive = isSectionActiveForCompany(IM_PATHS, companyId);
+    const taskMgmtSectionActive = isSectionActiveForCompany(TASK_MANAGEMENT_PATHS, companyId);
     const payrollSectionActive = isSectionActiveForCompany(PAYROLL_PATHS, companyId);
     const salarySectionActive = isSectionActiveForCompany(SALARY_PATHS, companyId);
     const payrollPolicySectionActive = isSectionActiveForCompany(PAYROLL_POLICY_PATHS, companyId);
@@ -637,10 +721,10 @@ const taskMgmtSectionActive = isSectionActiveForCompany(TASK_MANAGEMENT_PATHS, c
     const canteenSectionActive = isSectionActiveForCompany(CANTEEN_PATHS, companyId);
     const settingsSectionActive = isSectionActiveForCompany(SETTINGS_PATHS, companyId);
     return (
-      <div className="ml-2 border-l border-[#f0f0f0] pl-1">
+      <div className="ml-2 border-l border-border pl-1">
 
         {/* Company Dashboard - SUPERADMIN only */}
-        {isSuperAdmin && (
+        {false && isSuperAdmin && (
           <SidebarMenuButton asChild size="lg" className={sbMenuBtnReset}>
             <Link
               href="/dashboard"
@@ -655,7 +739,7 @@ const taskMgmtSectionActive = isSectionActiveForCompany(TASK_MANAGEMENT_PATHS, c
                 className={cn(
                   "w-5 h-5 shrink-0",
                   isActiveLink("/dashboard", companyId)
-                    ? "text-[#4f46e5]"
+                    ? "text-primary"
                     : "text-gray-400"
                 )}
               />
@@ -668,22 +752,22 @@ const taskMgmtSectionActive = isSectionActiveForCompany(TASK_MANAGEMENT_PATHS, c
         {(canSeeCompanySetupSections) && (
           <Collapsible open={openSections[k('setup')]} onOpenChange={o => toggleSection(k('setup'), o)}>
             <CollapsibleTrigger asChild>
-              <SidebarMenuButton size="lg" className={cn(sbMenuBtnReset, sbRow, "mx-0 justify-between", setupSectionActive ? sbActive : cn(sbIdle, openSections[k('setup')] && "font-semibold text-[#4f46e5]"))}>
+              <SidebarMenuButton size="lg" className={cn(sbMenuBtnReset, sbRow, "mx-0 justify-between", setupSectionActive ? sbActive : cn(sbIdle, openSections[k('setup')] && "font-semibold text-primary"))}>
                 <span className="flex items-center gap-3 min-w-0">
-                  <Icon icon="mdi:domain" className={cn("w-5 h-5 shrink-0", setupSectionActive ? "text-[#4f46e5]" : "text-gray-400")} />
+                  <Icon icon="mdi:domain" className={cn("w-5 h-5 shrink-0", setupSectionActive ? "text-primary" : "text-gray-400")} />
                   <span className="truncate font-semibold text-sm">Company Management</span>
                 </span>
                 <Icon icon="mdi:chevron-down" className={cn("w-4 h-4 shrink-0 text-gray-500 transition-transform duration-300", openSections[k('setup')] && "rotate-180")} />
               </SidebarMenuButton>
             </CollapsibleTrigger>
             <CollapsibleContent>
-              <SidebarMenuSub className="ml-5 mt-1 space-y-0.5 border-l border-[#f0f0f0] pl-3">
-                {(canSeeCompanySetupSections) && (
-                  <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={(e) => onNav(e)} href="/company" className={cn(sbSubRow, isActiveLink('/company', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Company Profile</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
+              <SidebarMenuSub className="ml-5 mt-1 space-y-0.5 border-l border-border pl-3">
+            {(canSeeCompanySetupSections && !isCompanyAdmin) && (
+  <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={(e) => onNav(e)} href="/company" className={cn(sbSubRow, isActiveLink('/company', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Company Profile</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
                 )}
                 <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={(e) => onNav(e)} href="/branches" className={cn(sbSubRow, isActiveLink('/branches', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Branches</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
                 <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={(e) => onNav(e)} href="/devices" className={cn(sbSubRow, isActiveLink('/devices', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Devices</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
-               <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={(e) => onNav(e)} href="/departments" className={cn(sbSubRow, isActiveLink('/departments', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Departments</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
+                <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={(e) => onNav(e)} href="/departments" className={cn(sbSubRow, isActiveLink('/departments', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Departments</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
                 <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={(e) => onNav(e)} href="/designations" className={cn(sbSubRow, isActiveLink('/designations', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Designations</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
 
               </SidebarMenuSub>
@@ -695,16 +779,16 @@ const taskMgmtSectionActive = isSectionActiveForCompany(TASK_MANAGEMENT_PATHS, c
         {canAccessFullHrSections && (
           <Collapsible open={openSections[k('contractorMgmt')]} onOpenChange={o => toggleSection(k('contractorMgmt'), o)}>
             <CollapsibleTrigger asChild>
-              <SidebarMenuButton size="lg" className={cn(sbMenuBtnReset, sbRow, "mx-0 justify-between", contractorManagementSectionActive ? sbActive : cn(sbIdle, openSections[k('contractorMgmt')] && "font-semibold text-[#4f46e5]"))}>
+              <SidebarMenuButton size="lg" className={cn(sbMenuBtnReset, sbRow, "mx-0 justify-between", contractorManagementSectionActive ? sbActive : cn(sbIdle, openSections[k('contractorMgmt')] && "font-semibold text-primary"))}>
                 <span className="flex items-center gap-3 min-w-0">
-                  <Icon icon="mdi:briefcase-outline" className={cn("w-5 h-5 shrink-0", contractorManagementSectionActive ? "text-[#4f46e5]" : "text-gray-400")} />
+                  <Icon icon="mdi:briefcase-outline" className={cn("w-5 h-5 shrink-0", contractorManagementSectionActive ? "text-primary" : "text-gray-400")} />
                   <span className="truncate font-semibold text-sm">Contractor Management</span>
                 </span>
                 <Icon icon="mdi:chevron-down" className={cn("w-4 h-4 shrink-0 text-gray-500 transition-transform duration-300", openSections[k('contractorMgmt')] && "rotate-180")} />
               </SidebarMenuButton>
             </CollapsibleTrigger>
             <CollapsibleContent>
-              <SidebarMenuSub className="ml-5 mt-1 space-y-0.5 border-l border-[#f0f0f0] pl-3">
+              <SidebarMenuSub className="ml-5 mt-1 space-y-0.5 border-l border-border pl-3">
                 <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={(e) => onNav(e)} href="/contractors" className={cn(sbSubRow, isActiveLink('/contractors', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Contractors</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
                 <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={(e) => onNav(e)} href="/contractor-rates" className={cn(sbSubRow, isActiveLink('/contractor-rates', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Contractor Rates</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
               </SidebarMenuSub>
@@ -716,16 +800,16 @@ const taskMgmtSectionActive = isSectionActiveForCompany(TASK_MANAGEMENT_PATHS, c
         {(canSeeCompanySetupSections) && (
           <Collapsible open={openSections[k('employee')]} onOpenChange={o => toggleSection(k('employee'), o)}>
             <CollapsibleTrigger asChild>
-              <SidebarMenuButton size="lg" className={cn(sbMenuBtnReset, sbRow, "mx-0 justify-between", employeeSectionActive ? sbActive : cn(sbIdle, openSections[k('employee')] && "font-semibold text-[#4f46e5]"))}>
+              <SidebarMenuButton size="lg" className={cn(sbMenuBtnReset, sbRow, "mx-0 justify-between", employeeSectionActive ? sbActive : cn(sbIdle, openSections[k('employee')] && "font-semibold text-primary"))}>
                 <span className="flex items-center gap-3 min-w-0">
-                  <Icon icon="mdi:message-text-outline" className={cn("w-5 h-5 shrink-0", employeeSectionActive ? "text-[#4f46e5]" : "text-gray-400")} />
+                  <Icon icon="mdi:message-text-outline" className={cn("w-5 h-5 shrink-0", employeeSectionActive ? "text-primary" : "text-gray-400")} />
                   <span className="truncate font-semibold text-sm">Employee Management</span>
                 </span>
                 <Icon icon="mdi:chevron-down" className={cn("w-4 h-4 shrink-0 text-gray-500 transition-transform duration-300", openSections[k('employee')] && "rotate-180")} />
               </SidebarMenuButton>
             </CollapsibleTrigger>
             <CollapsibleContent>
-              <SidebarMenuSub className="ml-5 mt-1 space-y-0.5 border-l border-[#f0f0f0] pl-3">
+              <SidebarMenuSub className="ml-5 mt-1 space-y-0.5 border-l border-border pl-3">
                 <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={(e) => onNav(e)} href="/manage-employees" className={cn(sbSubRow, isActiveLink('/manage-employees', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Manage Employees</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
                 {/* Promotions & Transfers - temporarily hidden */}
                 <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={(e) => onNav(e)} href="/termination" className={cn(sbSubRow, isActiveLink('/termination', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Off Boarding</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
@@ -736,19 +820,19 @@ const taskMgmtSectionActive = isSectionActiveForCompany(TASK_MANAGEMENT_PATHS, c
 
 
         {(canSeeCompanySetupSections) && (
-<Collapsible open={openSections[k('im')]} onOpenChange={o => toggleSection(k('im'), o)}>
+          <Collapsible open={openSections[k('im')]} onOpenChange={o => toggleSection(k('im'), o)}>
             <CollapsibleTrigger asChild>
-              <SidebarMenuButton size="lg" className={cn(sbMenuBtnReset, sbRow, "mx-0 justify-between", imSectionActive ? sbActive : cn(sbIdle, openSections[k('im')] && "font-semibold text-[#4f46e5]"))}>
+              <SidebarMenuButton size="lg" className={cn(sbMenuBtnReset, sbRow, "mx-0 justify-between", imSectionActive ? sbActive : cn(sbIdle, openSections[k('im')] && "font-semibold text-primary"))}>
                 <span className="flex items-center gap-3 min-w-0">
-                  <Icon icon="mdi:account-group-outline" className={cn("w-5 h-5 shrink-0", imSectionActive ? "text-[#4f46e5]" : "text-gray-400")} />
+                  <Icon icon="mdi:account-group-outline" className={cn("w-5 h-5 shrink-0", imSectionActive ? "text-primary" : "text-gray-400")} />
                   <span className="truncate font-semibold text-sm">Internal Messaging (IM)</span>
                 </span>
                 <Icon icon="mdi:chevron-down" className={cn("w-4 h-4 shrink-0 text-gray-500 transition-transform duration-300", openSections[k('im')] && "rotate-180")} />
               </SidebarMenuButton>
             </CollapsibleTrigger>
             <CollapsibleContent>
-              <SidebarMenuSub className="ml-5 mt-1 space-y-0.5 border-l border-[#f0f0f0] pl-3">
-              <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={(e) => onNav(e)} href="/employee-memo" className={cn(sbSubRow, isActiveLink('/employee-memo', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Internal Messaging (IM)</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
+              <SidebarMenuSub className="ml-5 mt-1 space-y-0.5 border-l border-border pl-3">
+                <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={(e) => onNav(e)} href="/employee-memo" className={cn(sbSubRow, isActiveLink('/employee-memo', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Internal Messaging (IM)</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
               </SidebarMenuSub>
             </CollapsibleContent>
           </Collapsible>
@@ -756,19 +840,19 @@ const taskMgmtSectionActive = isSectionActiveForCompany(TASK_MANAGEMENT_PATHS, c
 
 
         {/* Task Management System — temporarily hidden */}
-        {TASK_MANAGEMENT_ENABLED && (isSuperAdmin || isCompanyAdmin || isDesktopManager) && (
+        {TASK_MANAGEMENT_ENABLED && (isCompanyAdmin || isDesktopManager) && (
           <Collapsible open={openSections[k('taskMgmt')]} onOpenChange={o => toggleSection(k('taskMgmt'), o)}>
             <CollapsibleTrigger asChild>
-              <SidebarMenuButton size="lg" className={cn(sbMenuBtnReset, sbRow, "mx-0 justify-between", taskMgmtSectionActive ? sbActive : cn(sbIdle, openSections[k('taskMgmt')] && "font-semibold text-[#4f46e5]"))}>
+              <SidebarMenuButton size="lg" className={cn(sbMenuBtnReset, sbRow, "mx-0 justify-between", taskMgmtSectionActive ? sbActive : cn(sbIdle, openSections[k('taskMgmt')] && "font-semibold text-primary"))}>
                 <span className="flex items-center gap-3 min-w-0">
-                  <Icon icon="mdi:clipboard-check-outline" className={cn("w-5 h-5 shrink-0", taskMgmtSectionActive ? "text-[#4f46e5]" : "text-gray-400")} />
+                  <Icon icon="mdi:clipboard-check-outline" className={cn("w-5 h-5 shrink-0", taskMgmtSectionActive ? "text-primary" : "text-gray-400")} />
                   <span className="truncate font-semibold text-sm">Task Management System</span>
                 </span>
                 <Icon icon="mdi:chevron-down" className={cn("w-4 h-4 shrink-0 text-gray-500 transition-transform duration-300", openSections[k('taskMgmt')] && "rotate-180")} />
               </SidebarMenuButton>
             </CollapsibleTrigger>
             <CollapsibleContent>
-              <SidebarMenuSub className="ml-5 mt-1 space-y-0.5 border-l border-[#f0f0f0] pl-3">
+              <SidebarMenuSub className="ml-5 mt-1 space-y-0.5 border-l border-border pl-3">
                 <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={(e) => onNav(e)} href="/task-customers" className={cn(sbSubRow, isActiveLink('/task-customers', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Customers</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
                 <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={(e) => onNav(e)} href="/task-customer-sites" className={cn(sbSubRow, isActiveLink('/task-customer-sites', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Sites / Branches</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
                 <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={(e) => onNav(e)} href="/task-projects" className={cn(sbSubRow, isActiveLink('/task-projects', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Tasks / Projects</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
@@ -778,19 +862,19 @@ const taskMgmtSectionActive = isSectionActiveForCompany(TASK_MANAGEMENT_PATHS, c
         )}
 
         {/* Shift & Attendance Management */}
-        {(isSuperAdmin || isServiceProvider || isCompanyAdmin || isBranchAdmin || isDesktopManager) && !isAdmin && (
+        {(isServiceProvider || isCompanyAdmin || isBranchAdmin || isDesktopManager) && !isAdmin && (
           <Collapsible open={openSections[k('payroll')]} onOpenChange={o => toggleSection(k('payroll'), o)}>
             <CollapsibleTrigger asChild>
-              <SidebarMenuButton size="lg" className={cn(sbMenuBtnReset, sbRow, "mx-0 justify-between", payrollSectionActive ? sbActive : cn(sbIdle, openSections[k('payroll')] && "font-semibold text-[#4f46e5]"))}>
+              <SidebarMenuButton size="lg" className={cn(sbMenuBtnReset, sbRow, "mx-0 justify-between", payrollSectionActive ? sbActive : cn(sbIdle, openSections[k('payroll')] && "font-semibold text-primary"))}>
                 <span className="flex items-center gap-3 min-w-0">
-                  <Icon icon="mdi:account-cash-outline" className={cn("w-5 h-5 shrink-0", payrollSectionActive ? "text-[#4f46e5]" : "text-gray-400")} />
+                  <Icon icon="mdi:account-cash-outline" className={cn("w-5 h-5 shrink-0", payrollSectionActive ? "text-primary" : "text-gray-400")} />
                   <span className="truncate font-semibold text-sm">Shift & Attendance Management</span>
                 </span>
                 <Icon icon="mdi:chevron-down" className={cn("w-4 h-4 shrink-0 text-gray-500 transition-transform duration-300", openSections[k('payroll')] && "rotate-180")} />
               </SidebarMenuButton>
             </CollapsibleTrigger>
             <CollapsibleContent>
-              <SidebarMenuSub className="ml-5 mt-1 space-y-0.5 border-l border-[#f0f0f0] pl-3">
+              <SidebarMenuSub className="ml-5 mt-1 space-y-0.5 border-l border-border pl-3">
                 <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={(e) => onNav(e)} href="/work-shifts" className={cn(sbSubRow, isActiveLink('/work-shifts', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Work Shifts</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
                 <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={(e) => onNav(e)} href="/attendance-policy" className={cn(sbSubRow, isActiveLink('/attendance-policy', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Attendance Policy</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
                 <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={(e) => onNav(e)} href="/roster" className={cn(sbSubRow, isActiveLink('/roster', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Workshift Roster</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
@@ -804,21 +888,21 @@ const taskMgmtSectionActive = isSectionActiveForCompany(TASK_MANAGEMENT_PATHS, c
         {canAccessFullHrSections && (
           <Collapsible open={openSections[k('leave')]} onOpenChange={o => toggleSection(k('leave'), o)}>
             <CollapsibleTrigger asChild>
-              <SidebarMenuButton size="lg" className={cn(sbMenuBtnReset, sbRow, "mx-0 justify-between", leaveSectionActive ? sbActive : cn(sbIdle, openSections[k('leave')] && "font-semibold text-[#4f46e5]"))}>
+              <SidebarMenuButton size="lg" className={cn(sbMenuBtnReset, sbRow, "mx-0 justify-between", leaveSectionActive ? sbActive : cn(sbIdle, openSections[k('leave')] && "font-semibold text-primary"))}>
                 <span className="flex items-center gap-3 min-w-0">
-                  <Icon icon="mdi:calendar-clock-outline" className={cn("w-5 h-5 shrink-0", leaveSectionActive ? "text-[#4f46e5]" : "text-gray-400")} />
+                  <Icon icon="mdi:calendar-clock-outline" className={cn("w-5 h-5 shrink-0", leaveSectionActive ? "text-primary" : "text-gray-400")} />
                   <span className="truncate font-semibold text-sm">Leave Policy</span>
                 </span>
                 <Icon icon="mdi:chevron-down" className={cn("w-4 h-4 shrink-0 text-gray-500 transition-transform duration-300", openSections[k('leave')] && "rotate-180")} />
               </SidebarMenuButton>
             </CollapsibleTrigger>
             <CollapsibleContent>
-              <SidebarMenuSub className="ml-5 mt-1 space-y-0.5 border-l border-[#f0f0f0] pl-3">
-                {(isSuperAdmin || isServiceProvider || isCompanyAdmin || isBranchAdmin || isDesktopManager) && (
+              <SidebarMenuSub className="ml-5 mt-1 space-y-0.5 border-l border-border pl-3">
+                {(isServiceProvider || isCompanyAdmin || isBranchAdmin || isDesktopManager) && (
                   <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={(e) => onNav(e)} href="/manage-holidays" className={cn(sbSubRow, isActiveLink('/manage-holidays', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Manage Holidays</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
                 )}
                 <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={(e) => onNav(e)} href="/public-holiday" className={cn(sbSubRow, isActiveLink('/public-holiday', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Public Holiday</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
-                {(isSuperAdmin || isServiceProvider || isCompanyAdmin || isBranchAdmin || isDesktopManager) && (
+                {(isServiceProvider || isCompanyAdmin || isBranchAdmin || isDesktopManager) && (
                   <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={(e) => onNav(e)} href="/leave-policy" className={cn(sbSubRow, isActiveLink('/leave-policy', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Leave Policy</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
                 )}
               </SidebarMenuSub>
@@ -830,16 +914,16 @@ const taskMgmtSectionActive = isSectionActiveForCompany(TASK_MANAGEMENT_PATHS, c
         {canAccessFullHrSections && (
           <Collapsible open={openSections[k('payrollPolicy')]} onOpenChange={o => toggleSection(k('payrollPolicy'), o)}>
             <CollapsibleTrigger asChild>
-              <SidebarMenuButton size="lg" className={cn(sbMenuBtnReset, sbRow, "mx-0 justify-between", payrollPolicySectionActive ? sbActive : cn(sbIdle, openSections[k('payrollPolicy')] && "font-semibold text-[#4f46e5]"))}>
+              <SidebarMenuButton size="lg" className={cn(sbMenuBtnReset, sbRow, "mx-0 justify-between", payrollPolicySectionActive ? sbActive : cn(sbIdle, openSections[k('payrollPolicy')] && "font-semibold text-primary"))}>
                 <span className="flex items-center gap-3 min-w-0">
-                  <Icon icon="mdi:file-document-edit-outline" className={cn("w-5 h-5 shrink-0", payrollPolicySectionActive ? "text-[#4f46e5]" : "text-gray-400")} />
+                  <Icon icon="mdi:file-document-edit-outline" className={cn("w-5 h-5 shrink-0", payrollPolicySectionActive ? "text-primary" : "text-gray-400")} />
                   <span className="truncate font-semibold text-sm">Payroll Policy</span>
                 </span>
                 <Icon icon="mdi:chevron-down" className={cn("w-4 h-4 shrink-0 text-gray-500 transition-transform duration-300", openSections[k('payrollPolicy')] && "rotate-180")} />
               </SidebarMenuButton>
             </CollapsibleTrigger>
             <CollapsibleContent>
-              <SidebarMenuSub className="ml-5 mt-1 space-y-0.5 border-l border-[#f0f0f0] pl-3">
+              <SidebarMenuSub className="ml-5 mt-1 space-y-0.5 border-l border-border pl-3">
                 <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={(e) => onNav(e)} href="/monthly-salary-cycle" className={cn(sbSubRow, isActiveLink('/monthly-salary-cycle', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Payroll Salary Cycle</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
                 <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={(e) => onNav(e)} href="/salary-allowances" className={cn(sbSubRow, isActiveLink('/salary-allowances', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Allowances</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
                 <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={(e) => onNav(e)} href="/salary-deductions" className={cn(sbSubRow, isActiveLink('/salary-deductions', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Deductions</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
@@ -854,17 +938,17 @@ const taskMgmtSectionActive = isSectionActiveForCompany(TASK_MANAGEMENT_PATHS, c
         {canAccessFullHrSections && (
           <Collapsible open={openSections[k('salary')]} onOpenChange={o => toggleSection(k('salary'), o)}>
             <CollapsibleTrigger asChild>
-              <SidebarMenuButton size="lg" className={cn(sbMenuBtnReset, sbRow, "mx-0 justify-between", salarySectionActive ? sbActive : cn(sbIdle, openSections[k('salary')] && "font-semibold text-[#4f46e5]"))}>
+              <SidebarMenuButton size="lg" className={cn(sbMenuBtnReset, sbRow, "mx-0 justify-between", salarySectionActive ? sbActive : cn(sbIdle, openSections[k('salary')] && "font-semibold text-primary"))}>
                 <span className="flex items-center gap-3 min-w-0">
-                  <Icon icon="mdi:currency-usd" className={cn("w-5 h-5 shrink-0", salarySectionActive ? "text-[#4f46e5]" : "text-gray-400")} />
+                  <Icon icon="mdi:currency-usd" className={cn("w-5 h-5 shrink-0", salarySectionActive ? "text-primary" : "text-gray-400")} />
                   <span className="truncate font-semibold text-sm">Payroll Management</span>
                 </span>
                 <Icon icon="mdi:chevron-down" className={cn("w-4 h-4 shrink-0 text-gray-500 transition-transform duration-300", openSections[k('salary')] && "rotate-180")} />
               </SidebarMenuButton>
             </CollapsibleTrigger>
             <CollapsibleContent>
-              <SidebarMenuSub className="ml-5 mt-1 space-y-0.5 border-l border-[#f0f0f0] pl-3">
-                {(isSuperAdmin || isServiceProvider || isCompanyAdmin || isBranchAdmin || isDesktopManager) && (
+              <SidebarMenuSub className="ml-5 mt-1 space-y-0.5 border-l border-border pl-3">
+                {(isServiceProvider || isCompanyAdmin || isBranchAdmin || isDesktopManager) && (
                   <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={(e) => onNav(e)} href="/bonus-allocations" className={cn(sbSubRow, isActiveLink('/bonus-allocations', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Bonus Allocations</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
                 )}
                 <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={(e) => onNav(e)} href="/salary-advance" className={cn(sbSubRow, isActiveLink('/salary-advance', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Salary Advances</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
@@ -882,18 +966,18 @@ const taskMgmtSectionActive = isSectionActiveForCompany(TASK_MANAGEMENT_PATHS, c
         {canAccessFullHrSections && (
           <Collapsible open={openSections[k('leaveManagement')]} onOpenChange={o => toggleSection(k('leaveManagement'), o)}>
             <CollapsibleTrigger asChild>
-              <SidebarMenuButton size="lg" className={cn(sbMenuBtnReset, sbRow, "mx-0 justify-between", leaveManagementSectionActive ? sbActive : cn(sbIdle, openSections[k('leaveManagement')] && "font-semibold text-[#4f46e5]"))}>
+              <SidebarMenuButton size="lg" className={cn(sbMenuBtnReset, sbRow, "mx-0 justify-between", leaveManagementSectionActive ? sbActive : cn(sbIdle, openSections[k('leaveManagement')] && "font-semibold text-primary"))}>
                 <span className="flex items-center gap-3 min-w-0">
-                  <Icon icon="mdi:calendar-check" className={cn("w-5 h-5 shrink-0", leaveManagementSectionActive ? "text-[#4f46e5]" : "text-gray-400")} />
+                  <Icon icon="mdi:calendar-check" className={cn("w-5 h-5 shrink-0", leaveManagementSectionActive ? "text-primary" : "text-gray-400")} />
                   <span className="truncate font-semibold text-sm">Leave Management</span>
                 </span>
                 <Icon icon="mdi:chevron-down" className={cn("w-4 h-4 shrink-0 text-gray-500 transition-transform duration-300", openSections[k('leaveManagement')] && "rotate-180")} />
               </SidebarMenuButton>
             </CollapsibleTrigger>
             <CollapsibleContent>
-              <SidebarMenuSub className="ml-5 mt-1 space-y-0.5 border-l border-[#f0f0f0] pl-3">
+              <SidebarMenuSub className="ml-5 mt-1 space-y-0.5 border-l border-border pl-3">
                 <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={(e) => onNav(e)} href="/leave-applications" className={cn(sbSubRow, isActiveLink('/leave-applications', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Leave Application</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
-                {(isSuperAdmin || isServiceProvider || isCompanyAdmin || isBranchAdmin || isDesktopManager) && (
+                {(isServiceProvider || isCompanyAdmin || isBranchAdmin || isDesktopManager) && (
                   <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={(e) => onNav(e)} href="/privileged-leave" className={cn(sbSubRow, isActiveLink('/privileged-leave', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Privileged Leave</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
                 )}
               </SidebarMenuSub>
@@ -902,19 +986,19 @@ const taskMgmtSectionActive = isSectionActiveForCompany(TASK_MANAGEMENT_PATHS, c
         )}
 
         {/* Canteen Management - temporarily hidden */}
-        {false && (isSuperAdmin || isServiceProvider || isCompanyAdmin || isBranchAdmin) && !isAdmin && (
+        {false && (isServiceProvider || isCompanyAdmin || isBranchAdmin) && !isAdmin && (
           <Collapsible open={openSections[k('canteen')]} onOpenChange={o => toggleSection(k('canteen'), o)}>
             <CollapsibleTrigger asChild>
-              <SidebarMenuButton size="lg" className={cn(sbMenuBtnReset, sbRow, "mx-0 justify-between", canteenSectionActive ? sbActive : cn(sbIdle, openSections[k('canteen')] && "font-semibold text-[#4f46e5]"))}>
+              <SidebarMenuButton size="lg" className={cn(sbMenuBtnReset, sbRow, "mx-0 justify-between", canteenSectionActive ? sbActive : cn(sbIdle, openSections[k('canteen')] && "font-semibold text-primary"))}>
                 <span className="flex items-center gap-3 min-w-0">
-                  <Icon icon="mdi:silverware-fork-knife" className={cn("w-5 h-5 shrink-0", canteenSectionActive ? "text-[#4f46e5]" : "text-gray-400")} />
+                  <Icon icon="mdi:silverware-fork-knife" className={cn("w-5 h-5 shrink-0", canteenSectionActive ? "text-primary" : "text-gray-400")} />
                   <span className="truncate font-semibold text-sm">Canteen Management</span>
                 </span>
                 <Icon icon="mdi:chevron-down" className={cn("w-4 h-4 shrink-0 text-gray-500 transition-transform duration-300", openSections[k('canteen')] && "rotate-180")} />
               </SidebarMenuButton>
             </CollapsibleTrigger>
             <CollapsibleContent>
-              <SidebarMenuSub className="ml-5 mt-1 space-y-0.5 border-l border-[#f0f0f0] pl-3">
+              <SidebarMenuSub className="ml-5 mt-1 space-y-0.5 border-l border-border pl-3">
                 <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={(e) => onNav(e)} href="/canteen" className={cn(sbSubRow, isActiveLink('/canteen', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Dashboard</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
                 <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={(e) => onNav(e)} href="/canteen/setup" className={cn(sbSubRow, isActiveLink('/canteen/setup', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Configuration</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
                 <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={(e) => onNav(e)} href="/canteen/reports" className={cn(sbSubRow, isActiveLink('/canteen/reports', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Reports</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
@@ -927,16 +1011,16 @@ const taskMgmtSectionActive = isSectionActiveForCompany(TASK_MANAGEMENT_PATHS, c
         {(canSeeCompanySetupSections) && (
           <Collapsible open={openSections[k('reports')]} onOpenChange={o => toggleSection(k('reports'), o)}>
             <CollapsibleTrigger asChild>
-              <SidebarMenuButton size="lg" className={cn(sbMenuBtnReset, sbRow, "mx-0 justify-between", reportsSectionActive ? sbActive : cn(sbIdle, openSections[k('reports')] && "font-semibold text-[#4f46e5]"))}>
+              <SidebarMenuButton size="lg" className={cn(sbMenuBtnReset, sbRow, "mx-0 justify-between", reportsSectionActive ? sbActive : cn(sbIdle, openSections[k('reports')] && "font-semibold text-primary"))}>
                 <span className="flex items-center gap-3 min-w-0">
-                  <Icon icon="mdi:chart-line" className={cn("w-5 h-5 shrink-0", reportsSectionActive ? "text-[#4f46e5]" : "text-gray-400")} />
+                  <Icon icon="mdi:chart-line" className={cn("w-5 h-5 shrink-0", reportsSectionActive ? "text-primary" : "text-gray-400")} />
                   <span className="truncate font-semibold text-sm">Reports</span>
                 </span>
                 <Icon icon="mdi:chevron-down" className={cn("w-4 h-4 shrink-0 text-gray-500 transition-transform duration-300", openSections[k('reports')] && "rotate-180")} />
               </SidebarMenuButton>
             </CollapsibleTrigger>
             <CollapsibleContent>
-              <SidebarMenuSub className="ml-5 mt-1 space-y-0.5 border-l border-[#f0f0f0] pl-3">
+              <SidebarMenuSub className="ml-5 mt-1 space-y-0.5 border-l border-border pl-3">
                 <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={(e) => onNav(e)} href="/attendance-reports" className={cn(sbSubRow, isActiveLink('/attendance-reports', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Attendance Reports</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
                 {/* Payroll Reports - temporarily hidden */}
                 {/* Leave Reports - temporarily hidden */}
@@ -951,21 +1035,21 @@ const taskMgmtSectionActive = isSectionActiveForCompany(TASK_MANAGEMENT_PATHS, c
         {(canSeeCompanySetupSections) && (
           <Collapsible open={openSections[k('settings')]} onOpenChange={o => toggleSection(k('settings'), o)}>
             <CollapsibleTrigger asChild>
-              <SidebarMenuButton size="lg" className={cn(sbMenuBtnReset, sbRow, "mx-0 justify-between", settingsSectionActive ? sbActive : cn(sbIdle, openSections[k('settings')] && "font-semibold text-[#4f46e5]"))}>
+              <SidebarMenuButton size="lg" className={cn(sbMenuBtnReset, sbRow, "mx-0 justify-between", settingsSectionActive ? sbActive : cn(sbIdle, openSections[k('settings')] && "font-semibold text-primary"))}>
                 <span className="flex items-center gap-3 min-w-0">
-                  <Icon icon="mdi:cog-outline" className={cn("w-5 h-5 shrink-0", settingsSectionActive ? "text-[#4f46e5]" : "text-gray-400")} />
+                  <Icon icon="mdi:cog-outline" className={cn("w-5 h-5 shrink-0", settingsSectionActive ? "text-primary" : "text-gray-400")} />
                   <span className="truncate font-semibold text-sm">Settings</span>
                 </span>
                 <Icon icon="mdi:chevron-down" className={cn("w-4 h-4 shrink-0 text-gray-500 transition-transform duration-300", openSections[k('settings')] && "rotate-180")} />
               </SidebarMenuButton>
             </CollapsibleTrigger>
             <CollapsibleContent>
-              <SidebarMenuSub className="ml-5 mt-1 space-y-0.5 border-l border-[#f0f0f0] pl-3">
+              <SidebarMenuSub className="ml-5 mt-1 space-y-0.5 border-l border-border pl-3">
                 {!isAdmin && (<SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={(e) => onNav(e)} href="/import-attendance" className={cn(sbSubRow, isActiveLink('/import-attendance', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Import Attendance</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>)}
                 {isAdmin && (<SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={(e) => onNav(e)} href="/hrms-integrations" className={cn(sbSubRow, isActiveLink('/hrms-integrations', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>HRMS Integrations</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>)}
-                {(isSuperAdmin || isCompanyAdmin || isDesktopManager) && (<SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={(e) => onNav(e)} href="/system-settings/general" className={cn(sbSubRow, isActiveLink('/system-settings/general', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>General</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>)}
-                {(isSuperAdmin || isCompanyAdmin || isDesktopManager) && (<SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={(e) => onNav(e)} href="/system-settings/compliance" className={cn(sbSubRow, isActiveLink('/system-settings/compliance', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Compliance</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>)}
-                {(isSuperAdmin || isCompanyAdmin || isDesktopManager) && (<SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={(e) => onNav(e)} href="/system-settings/email-templates" className={cn(sbSubRow, isActiveLink('/system-settings/email-templates', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Email templates</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>)}
+                {(isCompanyAdmin || isDesktopManager) && (<SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={(e) => onNav(e)} href="/system-settings/general" className={cn(sbSubRow, isActiveLink('/system-settings/general', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>General</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>)}
+                {(isCompanyAdmin || isDesktopManager) && (<SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={(e) => onNav(e)} href="/system-settings/compliance" className={cn(sbSubRow, isActiveLink('/system-settings/compliance', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Compliance</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>)}
+                {(isCompanyAdmin || isDesktopManager) && (<SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={(e) => onNav(e)} href="/system-settings/email-templates" className={cn(sbSubRow, isActiveLink('/system-settings/email-templates', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Email templates</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>)}
               </SidebarMenuSub>
             </CollapsibleContent>
           </Collapsible>
@@ -974,25 +1058,42 @@ const taskMgmtSectionActive = isSectionActiveForCompany(TASK_MANAGEMENT_PATHS, c
     )
   }
 
+  const handleLogout = () => {
+    const token = localStorage.getItem("token") || localStorage.getItem("accessToken") || "";
+    if (token) {
+      void fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL || "/backend"}/auth/logout`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      }).catch(() => undefined);
+    }
+    localStorage.removeItem("accessToken");
+    localStorage.removeItem("token");
+    localStorage.removeItem("user");
+    document.cookie = "accessToken=; path=/; max-age=0; expires=Thu, 01 Jan 1970 00:00:00 UTC; samesite=lax";
+    router.push("/login");
+  };
+
   return (
-    <div className="min-h-screen bg-[#f8fafc]">
+    <div className="min-h-screen bg-background">
       <SidebarProvider open={sidebarOpen} onOpenChange={setSidebarOpen}>
-        <Sidebar collapsible="icon" className="border-r border-[#d1d5db] bg-sidebar text-sidebar-foreground">
-          <SidebarHeader className="px-4 pt-5 pb-4 border-0">
+        <Sidebar collapsible="icon" className="border-r border-border bg-card/40 backdrop-blur-sm text-sidebar-foreground">
+          <SidebarHeader className="px-4 pt-5 pb-4 border-b border-border">
             <div className="space-y-4">
               <div className="flex items-center justify-between gap-3">
-                <Link href="/dashboard" className="flex min-w-0 items-center gap-3">
-                  <img
-                    src="/img/OpenHRM_Logo.png"
-                    alt="OpenHRM"
-                    className="w-14 h-14 rounded-full object-cover shrink-0 shadow-[0_6px_16px_rgba(79,70,229,0.35)]"
-                  />
-                  <div className="min-w-0">
-                    <span className="text-[#111827] font-bold text-base tracking-tight block truncate">
+                <Link
+                  href={isSuperAdmin ? "/superdashboard" : "/dashboard"}
+                  onClick={(e) => handleSidebarNavigation(e, isSuperAdmin ? "/superdashboard" : "/dashboard")}
+                  className="flex min-w-0 items-center gap-3"
+                >
+                  <div className="size-10 rounded-lg bg-primary text-primary-foreground grid place-items-center font-bold text-base shadow-sm shrink-0">
+                    O
+                  </div>
+                  <div className="min-w-0 group-data-[collapsible=icon]:hidden">
+                    <span className="font-display text-base font-semibold tracking-tight block truncate">
                       OpenHRM
                     </span>
-                    <p className="text-xs text-gray-400 leading-tight">
-                      Human resources
+                    <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-mono mt-0.5">
+                      v1.0.0
                     </p>
                   </div>
                 </Link>
@@ -1004,23 +1105,24 @@ const taskMgmtSectionActive = isSectionActiveForCompany(TASK_MANAGEMENT_PATHS, c
                     dispatchAppRefresh();
                     router.refresh();
                   }}
-                  className="p-2 rounded-md text-gray-400 hover:text-[#4f46e5] hover:bg-[#eef2ff] transition-colors shrink-0"
+                  className="p-2 rounded-md text-gray-400 hover:text-primary hover:bg-accent transition-colors shrink-0"
                   title="Refresh data"
                 >
                   <Icon icon="mdi:refresh" className="w-6 h-6" />
                 </button>
               </div>
 
-              {isCompanyScopedSidebarUser && accessibleCompanies.length > 1 && (
-                <DropdownMenu modal={false}>
-                  <DropdownMenuTrigger asChild>
+  
+{canShowCompanySwitcher && (
+<DropdownMenu modal={false}>
+                    <DropdownMenuTrigger asChild>
                     <button
                       type="button"
-                      className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-left shadow-sm hover:border-[#4f46e5]/40 hover:bg-[#f8f7ff]"
+                      className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-left shadow-sm hover:border-primary/40 hover:bg-[#f8f7ff]"
                       title="Switch company"
                     >
                       <div className="flex items-center gap-2">
-                        <Icon icon="mdi:office-building" className="h-4 w-4 shrink-0 text-[#4f46e5]" />
+                        <Icon icon="mdi:office-building" className="h-4 w-4 shrink-0 text-primary" />
                         <span className="min-w-0 flex-1 truncate text-sm font-semibold text-gray-800">
                           {activeCompany?.companyName || "Select company"}
                         </span>
@@ -1043,7 +1145,7 @@ const taskMgmtSectionActive = isSectionActiveForCompany(TASK_MANAGEMENT_PATHS, c
                           className={cn(
                             "cursor-pointer rounded-lg px-3 py-2 text-sm",
                             selected
-                              ? "bg-[#eef2ff] text-[#4f46e5] font-semibold"
+                              ? "bg-accent text-primary font-semibold"
                               : "text-gray-700"
                           )}
                           onClick={() => switchCompany(company)}
@@ -1052,7 +1154,7 @@ const taskMgmtSectionActive = isSectionActiveForCompany(TASK_MANAGEMENT_PATHS, c
                             icon={selected ? "mdi:check-circle" : "mdi:office-building-outline"}
                             className={cn(
                               "mr-2 h-4 w-4",
-                              selected ? "text-[#4f46e5]" : "text-gray-400"
+                              selected ? "text-primary" : "text-gray-400"
                             )}
                           />
                           <span className="truncate">{company.companyName}</span>
@@ -1061,7 +1163,7 @@ const taskMgmtSectionActive = isSectionActiveForCompany(TASK_MANAGEMENT_PATHS, c
                     })}
                   </DropdownMenuContent>
                 </DropdownMenu>
-              )}
+)}
             </div>
           </SidebarHeader>
 
@@ -1073,22 +1175,33 @@ const taskMgmtSectionActive = isSectionActiveForCompany(TASK_MANAGEMENT_PATHS, c
                     <SidebarMenuItem className="mx-0">
                       <SidebarMenuButton asChild size="lg" className={sbMenuBtnReset}>
                         <Link href="/dashboard" title="Dashboard" className={cn(sbRow, isActiveLink("/dashboard") ? sbActive : sbIdle)}>
-                          <Icon icon="mdi:view-dashboard-outline" className={cn("w-5 h-5 shrink-0", isActiveLink("/dashboard") ? "text-[#4f46e5]" : "text-gray-400")} />
+                          <Icon icon="mdi:view-dashboard-outline" className={cn("w-5 h-5 shrink-0", isActiveLink("/dashboard") ? "text-primary" : "text-gray-400")} />
                           <span className="sr-only">Dashboard</span>
                         </Link>
                       </SidebarMenuButton>
                     </SidebarMenuItem>
                   )}
-                  {isSuperAdmin && (
-                    <SidebarMenuItem className="mx-0">
+                  {isSuperAdmin && [
+                    { href: "/superdashboard", icon: "mdi:view-dashboard-outline", label: "Dashboard" },
+                    { href: "/service-providers", icon: "mdi:account-supervisor-outline", label: "Service Providers" },
+                    { href: "/company", icon: "mdi:domain", label: "Tenants" },
+                    { href: "/system-users", icon: "mdi:account-cog-outline", label: "System Users" },
+                    { href: "/subscription", icon: "mdi:credit-card-outline", label: "Subscriptions" },
+                  ].map((item) => (
+                    <SidebarMenuItem key={item.href} className="mx-0">
                       <SidebarMenuButton asChild size="lg" className={sbMenuBtnReset}>
-                        <Link href="/service-providers" title="Service Providers" className={cn(sbRow, isActiveLink("/service-providers") ? sbActive : sbIdle)}>
-                          <Icon icon="mdi:account-supervisor-outline" className={cn("w-5 h-5 shrink-0", isActiveLink("/service-providers") ? "text-[#4f46e5]" : "text-gray-400")} />
-                          <span className="sr-only">Service Providers</span>
+                        <Link
+                          href={item.href}
+                          title={item.label}
+                          onClick={(e) => handleSidebarNavigation(e, item.href)}
+                          className={cn(sbRow, isActiveLink(item.href) ? sbActive : sbIdle)}
+                        >
+                          <Icon icon={item.icon} className={cn("w-5 h-5 shrink-0", isActiveLink(item.href) ? "text-primary" : "text-gray-400")} />
+                          <span className="sr-only">{item.label}</span>
                         </Link>
                       </SidebarMenuButton>
                     </SidebarMenuItem>
-                  )}
+                  ))}
                   {!isSuperAdmin && [
                     { href: "/company", icon: "mdi:domain", label: "Company Management", paths: SETUP_PATHS },
                     { href: "/contractors", icon: "mdi:briefcase-account", label: "Contractor Management", paths: CONTRACTOR_MANAGEMENT_PATHS },
@@ -1113,15 +1226,18 @@ const taskMgmtSectionActive = isSectionActiveForCompany(TASK_MANAGEMENT_PATHS, c
                         <Link
                           href={item.href}
                           title={item.label}
-                          onClick={() => {
-                            const companyId = activeCompanyID ?? fetchedCompanies[0]?.id;
-                            const spId = sidebarCtx?.serviceProviderID ?? fetchedServiceProviders[0]?.id;
-                            if (companyId && spId) {
-                              const comp = fetchedCompanies.find((c: { id: number }) => c.id === companyId);
-                              const sp = fetchedServiceProviders.find((s: { id: number }) => s.id === spId);
-                              setSidebarContext(spId, sp?.companyName ?? "", companyId, comp?.companyName ?? "");
-                            }
-                          }}
+                        onClick={(e) => {
+  const companyId = activeCompanyID ?? fetchedCompanies[0]?.id;
+  const spId = sidebarCtx?.serviceProviderID ?? fetchedServiceProviders[0]?.id;
+
+  if (companyId && spId) {
+    const comp = fetchedCompanies.find((c: { id: number }) => c.id === companyId);
+    const sp = fetchedServiceProviders.find((s: { id: number }) => s.id === spId);
+    setSidebarContext(spId, sp?.companyName ?? "", companyId, comp?.companyName ?? "");
+  }
+
+  handleSidebarNavigation(e, item.href);
+}}
                           className={cn(
                             sbRow,
                             item.paths.includes(pathname) ? sbActive : sbIdle,
@@ -1132,7 +1248,7 @@ const taskMgmtSectionActive = isSectionActiveForCompany(TASK_MANAGEMENT_PATHS, c
                             icon={item.icon}
                             className={cn(
                               "w-5 h-5 shrink-0",
-                              item.paths.includes(pathname) ? "text-[#4f46e5]" : "text-gray-400",
+                              item.paths.includes(pathname) ? "text-primary" : "text-gray-400",
                             )}
                           />
                           <span className="truncate font-semibold text-sm group-data-[collapsible=icon]:sr-only">
@@ -1148,34 +1264,112 @@ const taskMgmtSectionActive = isSectionActiveForCompany(TASK_MANAGEMENT_PATHS, c
 
             <SidebarGroup className="group-data-[collapsible=icon]:hidden">
               <SidebarMenu className="gap-1.5 flex flex-col">
-
-                {/* ── Dashboard ── */}
                 {!isSuperAdmin && (
                   <SidebarMenuItem className="mx-0">
                     <SidebarMenuButton asChild size="lg" className={sbMenuBtnReset}>
-                      <Link href="/dashboard" className={cn(sbRow, isActiveLink("/dashboard") ? sbActive : sbIdle)}>
-                        <Icon icon="mdi:view-dashboard-outline" className={cn("w-5 h-5 shrink-0", isActiveLink("/dashboard") ? "text-[#4f46e5]" : "text-gray-400")} />
+                      <Link
+                        href="/dashboard"
+                        onClick={(e) => handleSidebarNavigation(e, "/dashboard")}
+                        className={cn(sbRow, isActiveLink("/dashboard") ? sbActive : sbIdle)}
+                      >
+                        <Icon icon="mdi:view-dashboard-outline" className={cn("w-5 h-5 shrink-0", isActiveLink("/dashboard") ? "text-primary" : "text-gray-400")} />
                         <span className="truncate font-semibold">Dashboard</span>
                       </Link>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
                 )}
 
-                {/* ── Service Providers link (SUPERADMIN only) ── */}
-                {isSuperAdmin && (
-                  <SidebarMenuItem className="mx-0">
-                    <SidebarMenuButton asChild size="lg" className={sbMenuBtnReset}>
-                      <Link href="/service-providers" className={cn(sbRow, isActiveLink("/service-providers") ? sbActive : sbIdle)}>
-                        <Icon icon="mdi:account-supervisor-outline" className={cn("w-5 h-5 shrink-0", isActiveLink("/service-providers") ? "text-[#4f46e5]" : "text-gray-400")} />
-                        <span className="truncate font-semibold">Service Providers</span>
-                      </Link>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                )}
+         {/* ── SUPERADMIN / SERVICE_PROVIDER simple sidebar ── */}
+{isPlatformSimpleSidebarUser && (
+                  <>
+                    <SidebarMenuItem className="mx-0">
+                      <SidebarMenuButton asChild size="lg" className={sbMenuBtnReset}>
+                        <Link
+                       href={isSuperAdmin ? "/superdashboard" : "/dashboard"}
+onClick={(e) => handleSidebarNavigation(e, isSuperAdmin ? "/superdashboard" : "/dashboard")}
+className={cn(sbRow, isActiveLink(isSuperAdmin ? "/superdashboard" : "/dashboard") ? sbActive : sbIdle)}
+                        >
+                          <Icon icon="mdi:view-dashboard-outline" className={cn("w-5 h-5 shrink-0", isActiveLink(isSuperAdmin ? "/superdashboard" : "/dashboard") ? "text-primary" : "text-gray-400")} />
+                          <span className="truncate font-semibold">Dashboard</span>
+                        </Link>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
 
+                    <Collapsible open={openSections["super_system"]} onOpenChange={o => toggleSection("super_system", o)}>
+                      <CollapsibleTrigger asChild>
+                        <SidebarMenuButton size="lg" className={cn(sbMenuBtnReset, sbRow, "mx-0 justify-between", SUPERADMIN_SYSTEM_PATHS.includes(pathname) ? sbActive : cn(sbIdle, openSections["super_system"] && "font-semibold text-primary"))}>
+                          <span className="flex items-center gap-3 min-w-0">
+                            <Icon icon="mdi:cog-outline" className={cn("w-5 h-5 shrink-0", SUPERADMIN_SYSTEM_PATHS.includes(pathname) ? "text-primary" : "text-gray-400")} />
+                            <span className="truncate font-semibold">System</span>
+                          </span>
+                          <Icon icon="mdi:chevron-down" className={cn("w-4 h-4 shrink-0 text-gray-500 transition-transform duration-300", openSections["super_system"] && "rotate-180")} />
+                        </SidebarMenuButton>
+                      </CollapsibleTrigger>
+                      <CollapsibleContent>
+                        <SidebarMenuSub className="ml-5 mt-1 space-y-0.5 border-l border-border pl-3">
+                         {isSuperAdmin && (
+  <SidebarMenuSubItem>
+    <SidebarMenuSubButton asChild>
+      <Link
+        href="/service-providers"
+        onClick={(e) => handleSidebarNavigation(e, "/service-providers")}
+        className={cn(sbSubRow, isActiveLink("/service-providers") ? sbSubActive : sbSubIdle)}
+      >
+        <span className="font-medium truncate" style={{ display: "block" }}>Service Provider</span>
+      </Link>
+    </SidebarMenuSubButton>
+  </SidebarMenuSubItem>
+)}
+
+                          <SidebarMenuSubItem>
+                            <SidebarMenuSubButton asChild>
+                              <Link
+                                href="/company"
+                                onClick={(e) => handleSidebarNavigation(e, "/company")}
+                                className={cn(sbSubRow, isActiveLink("/company") ? sbSubActive : sbSubIdle)}
+                              >
+                                <span className="font-medium truncate" style={{ display: "block" }}>Tenants</span>
+                              </Link>
+                            </SidebarMenuSubButton>
+                          </SidebarMenuSubItem>
+                        </SidebarMenuSub>
+                      </CollapsibleContent>
+                </Collapsible>
+
+                    {isServiceProvider && (
+                      <Collapsible open={openSections["personal"]} onOpenChange={o => toggleSection("personal", o)}>
+                        <CollapsibleTrigger asChild>
+                          <SidebarMenuButton size="lg" className={cn(sbMenuBtnReset, sbRow, "mx-0 justify-between", isActiveLink("/service-providers") ? sbActive : cn(sbIdle, openSections["personal"] && "font-semibold text-primary"))}>
+                            <span className="flex items-center gap-3 min-w-0">
+                              <Icon icon="mdi:account-circle-outline" className={cn("w-5 h-5 shrink-0", isActiveLink("/service-providers") ? "text-primary" : "text-gray-400")} />
+                              <span className="truncate font-semibold">Personal</span>
+                            </span>
+                            <Icon icon="mdi:chevron-down" className={cn("w-4 h-4 shrink-0 text-gray-500 transition-transform duration-300", openSections["personal"] && "rotate-180")} />
+                          </SidebarMenuButton>
+                        </CollapsibleTrigger>
+                        <CollapsibleContent>
+                          <SidebarMenuSub className="ml-5 mt-1 space-y-0.5 border-l border-border pl-3">
+                            <SidebarMenuSubItem>
+                              <SidebarMenuSubButton asChild>
+                                <Link
+                                  href="/profile"
+                                  onClick={(e) => handleSidebarNavigation(e, "/profile")}
+                                  className={cn(sbSubRow, isActiveLink("/profile") ? sbSubActive : sbSubIdle)}
+                                >
+                                  <span className="font-medium truncate" style={{ display: "block" }}>Profile</span>
+                                </Link>
+                              </SidebarMenuSubButton>
+                            </SidebarMenuSubItem>
+                          </SidebarMenuSub>
+                        </CollapsibleContent>
+                      </Collapsible>
+                    )}
+                  </>
+                )}
+                
                 {/* ── SP → Company → Sections hierarchy ── */}
-                {sidebarHierarchyLoading ? (
-                  renderSidebarHierarchySkeleton()
+{isPlatformSimpleSidebarUser ? null : sidebarHierarchyLoading ? (
+                    renderSidebarHierarchySkeleton()
                 ) : displaySPs.map(sp => {
                   const spCompanies = companiesBySP[sp.id] || []
                   const hasCompanies = spCompanies.length > 0
@@ -1187,7 +1381,7 @@ const taskMgmtSectionActive = isSectionActiveForCompany(TASK_MANAGEMENT_PATHS, c
                     return company ? (
                       <SidebarMenuItem key={sp.id} className="mx-0 list-none">
                         {isBranchAdmin && currentUser?.branches?.branchName ? (
-                          <div className="ml-0 border-l border-[#f0f0f0] pl-1">
+                          <div className="ml-0 border-l border-border pl-1">
                             <Collapsible
                               open={openSections[`branch_${currentUser.branchesID}`]}
                               onOpenChange={o => toggleSection(`branch_${currentUser.branchesID}`, o)}
@@ -1199,7 +1393,7 @@ const taskMgmtSectionActive = isSectionActiveForCompany(TASK_MANAGEMENT_PATHS, c
                                     sbMenuBtnReset,
                                     sbRow,
                                     "mx-0 justify-between",
-                                    cn(sbIdle, openSections[`branch_${currentUser.branchesID}`] && "font-semibold text-[#4f46e5]")
+                                    cn(sbIdle, openSections[`branch_${currentUser.branchesID}`] && "font-semibold text-primary")
                                   )}
                                 >
                                   <span className="flex items-center gap-3 min-w-0">
@@ -1208,7 +1402,7 @@ const taskMgmtSectionActive = isSectionActiveForCompany(TASK_MANAGEMENT_PATHS, c
                                       className={cn(
                                         "w-5 h-5 shrink-0",
                                         openSections[`branch_${currentUser.branchesID}`]
-                                          ? "text-[#4f46e5]"
+                                          ? "text-primary"
                                           : "text-gray-400"
                                       )}
                                     />
@@ -1241,23 +1435,23 @@ const taskMgmtSectionActive = isSectionActiveForCompany(TASK_MANAGEMENT_PATHS, c
                   return (
                     <Collapsible key={sp.id} open={openSections[`sp_${sp.id}`]} onOpenChange={o => toggleSection(`sp_${sp.id}`, o)}>
                       <CollapsibleTrigger asChild>
-                        <SidebarMenuButton size="lg" className={cn(sbMenuBtnReset, sbRow, "mx-0 justify-between", cn(sbIdle, openSections[`sp_${sp.id}`] && "font-semibold text-[#4f46e5]"))}>
+                        <SidebarMenuButton size="lg" className={cn(sbMenuBtnReset, sbRow, "mx-0 justify-between", cn(sbIdle, openSections[`sp_${sp.id}`] && "font-semibold text-primary"))}>
                           <span className="flex items-center gap-3 min-w-0">
-                            <Icon icon="mdi:office-building-outline" className={cn("w-5 h-5 shrink-0", openSections[`sp_${sp.id}`] ? "text-[#4f46e5]" : "text-gray-400")} />
+                            <Icon icon="mdi:office-building-outline" className={cn("w-5 h-5 shrink-0", openSections[`sp_${sp.id}`] ? "text-primary" : "text-gray-400")} />
                             <span className="truncate font-semibold">{sp.companyName}</span>
                           </span>
                           <Icon icon="mdi:chevron-down" className={cn("w-4 h-4 shrink-0 text-gray-500 transition-transform duration-300", openSections[`sp_${sp.id}`] && "rotate-180")} />
                         </SidebarMenuButton>
                       </CollapsibleTrigger>
                       <CollapsibleContent>
-                        <div className="ml-3 border-l border-[#f0f0f0] pl-1">
+                        <div className="ml-3 border-l border-border pl-1">
                           {hasCompanies ? (
                             spCompanies.map((company: any) => (
                               <Collapsible key={company.id} open={openSections[`company_${company.id}`]} onOpenChange={o => toggleSection(`company_${company.id}`, o)}>
                                 <CollapsibleTrigger asChild>
-                                  <SidebarMenuButton size="lg" className={cn(sbMenuBtnReset, sbRow, "mx-0 justify-between", cn(sbIdle, openSections[`company_${company.id}`] && "font-semibold text-[#4f46e5]"))}>
+                                  <SidebarMenuButton size="lg" className={cn(sbMenuBtnReset, sbRow, "mx-0 justify-between", cn(sbIdle, openSections[`company_${company.id}`] && "font-semibold text-primary"))}>
                                     <span className="flex items-center gap-3 min-w-0">
-                                      <Icon icon="mdi:domain" className={cn("w-5 h-5 shrink-0", openSections[`company_${company.id}`] ? "text-[#4f46e5]" : "text-gray-400")} />
+                                      <Icon icon="mdi:domain" className={cn("w-5 h-5 shrink-0", openSections[`company_${company.id}`] ? "text-primary" : "text-gray-400")} />
                                       <span className="truncate font-semibold text-sm">{company.companyName || "Unnamed Company"}</span>
                                     </span>
                                     <Icon icon="mdi:chevron-down" className={cn("w-4 h-4 shrink-0 text-gray-500 transition-transform duration-300", openSections[`company_${company.id}`] && "rotate-180")} />
@@ -1282,7 +1476,7 @@ const taskMgmtSectionActive = isSectionActiveForCompany(TASK_MANAGEMENT_PATHS, c
                   <SidebarMenuItem className="mx-0">
                     <SidebarMenuButton asChild size="lg" className={sbMenuBtnReset}>
                       <Link href="/system-users" className={cn(sbRow, isActiveLink("/system-users") ? sbActive : sbIdle)}>
-                        <Icon icon="mdi:account-cog-outline" className={cn("w-5 h-5 shrink-0", isActiveLink("/system-users") ? "text-[#4f46e5]" : "text-gray-400")} />
+                        <Icon icon="mdi:account-cog-outline" className={cn("w-5 h-5 shrink-0", isActiveLink("/system-users") ? "text-primary" : "text-gray-400")} />
                         <span className="truncate font-semibold">User Management</span>
                       </Link>
                     </SidebarMenuButton>
@@ -1290,22 +1484,42 @@ const taskMgmtSectionActive = isSectionActiveForCompany(TASK_MANAGEMENT_PATHS, c
                 )}
 
                 {/* ── Administration (SUPERADMIN only) ── */}
-                {isSuperAdmin && (
-                  <Collapsible open={openSections['admin']} onOpenChange={o => toggleSection('admin', o)}>
+               {isPlatformSimpleSidebarUser && (
+  <Collapsible open={openSections['admin']} onOpenChange={o => toggleSection('admin', o)}>
                     <CollapsibleTrigger asChild>
-                      <SidebarMenuButton size="lg" className={cn(sbMenuBtnReset, sbRow, "mx-0 justify-between", adminSectionActive ? sbActive : cn(sbIdle, openSections['admin'] && "font-semibold text-[#4f46e5]"))}>
+                      <SidebarMenuButton size="lg" className={cn(sbMenuBtnReset, sbRow, "mx-0 justify-between", adminSectionActive ? sbActive : cn(sbIdle, openSections['admin'] && "font-semibold text-primary"))}>
                         <span className="flex items-center gap-3 min-w-0">
-                          <Icon icon="mdi:shield-lock-outline" className={cn("w-5 h-5 shrink-0", adminSectionActive ? "text-[#4f46e5]" : "text-gray-400")} />
+                          <Icon icon="mdi:shield-lock-outline" className={cn("w-5 h-5 shrink-0", adminSectionActive ? "text-primary" : "text-gray-400")} />
                           <span className="truncate font-semibold">Administration</span>
                         </span>
                         <Icon icon="mdi:chevron-down" className={cn("w-4 h-4 shrink-0 text-gray-500 transition-transform duration-300", openSections['admin'] && "rotate-180")} />
                       </SidebarMenuButton>
                     </CollapsibleTrigger>
                     <CollapsibleContent>
-                      <SidebarMenuSub className="ml-5 mt-1 space-y-0.5 border-l border-[#f0f0f0] pl-3">
-                        <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link href="/system-users" className={cn(sbSubRow, isActiveLink('/system-users') ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>System Users</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
-                        <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link href="/backup-restore" className={cn(sbSubRow, isActiveLink('/backup-restore') ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Backup & Restore</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
-                        <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link href="/audit-logs" className={cn(sbSubRow, isActiveLink('/audit-logs') ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Audit Logs</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
+                      <SidebarMenuSub className="ml-5 mt-1 space-y-0.5 border-l border-border pl-3">
+                        <SidebarMenuSubItem>
+                          <SidebarMenuSubButton asChild>
+                            <Link
+                              href="/system-users"
+                              onClick={(e) => handleSidebarNavigation(e, "/system-users")}
+                              className={cn(sbSubRow, isActiveLink('/system-users') ? sbSubActive : sbSubIdle)}
+                            >
+                              <span className="font-medium truncate" style={{ display: "block" }}>System Users</span>
+                            </Link>
+                          </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
+
+                        <SidebarMenuSubItem>
+                          <SidebarMenuSubButton asChild>
+                            <Link
+                              href="/subscription"
+                              onClick={(e) => handleSidebarNavigation(e, "/subscription")}
+                              className={cn(sbSubRow, isActiveLink('/subscription') ? sbSubActive : sbSubIdle)}
+                            >
+                              <span className="font-medium truncate" style={{ display: "block" }}>Subscriptions</span>
+                            </Link>
+                          </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
                       </SidebarMenuSub>
                     </CollapsibleContent>
                   </Collapsible>
@@ -1315,70 +1529,19 @@ const taskMgmtSectionActive = isSectionActiveForCompany(TASK_MANAGEMENT_PATHS, c
             </SidebarGroup>
           </SidebarContent>
 
-          <div className="mt-auto border-t border-[#e8e8e8] p-4 flex flex-col items-center">
+          <div className="mt-auto border-t border-border p-4 flex flex-col items-center">
             <p className="text-[10px] text-gray-400 font-medium">v1.0.0</p>
           </div>
         </Sidebar>
 
         <SidebarInset>
-          <div className="min-h-screen bg-[#f8fafc] overflow-x-hidden">
-            <header className="sticky top-0 z-30 bg-[#f8fafc]/95 backdrop-blur-sm px-4 sm:px-8 pt-5 pb-4">
-              <div className="flex flex-wrap items-center gap-4 lg:flex-nowrap lg:justify-between">
-                <div className="order-1 flex flex-1 items-center gap-3 min-w-0">
-                  <SidebarTrigger className="text-gray-500 hover:text-[#4f46e5] hover:bg-[#eef2ff] rounded-full h-10 w-10 shrink-0 border border-[#d1d5db] shadow-sm" />
-                  <h1 className="text-2xl sm:text-[1.65rem] font-bold text-gray-900 tracking-tight truncate">{pageTitle}</h1>
-                </div>
-                <div className="order-2 lg:order-3 flex items-center justify-end gap-2 sm:gap-2 shrink-0 ml-auto">
-                  <DropdownMenu modal={false}>
-                    <DropdownMenuTrigger asChild>
-                      <button type="button" className="flex items-center gap-2 cursor-pointer focus:outline-none rounded-full pl-1 pr-1 py-1 hover:bg-white/80 transition-colors">
-                        <Avatar className="w-10 h-10 ring-[3px] ring-white shadow-md">
-                          <AvatarFallback className="bg-gray-900 text-white text-sm font-bold">{currentUser?.username?.[0]?.toUpperCase() || "A"}</AvatarFallback>
-                        </Avatar>
-                      </button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-52 rounded-2xl">
-                      <div className="px-3 py-2 border-b border-gray-100">
-                        <p className="text-sm font-semibold text-gray-900 truncate">{currentUser?.username || "User"}</p>
-                        <p className="text-[11px] text-gray-400 font-medium mt-0.5">{(() => {
-                          const roleMap: Record<string, string> = {
-                            SUPERADMIN: "Super Admin",
-                            SERVICE_PROVIDER: "Service Provider",
-                            COMPANY_ADMIN: "Company Admin",
-                            ADMIN: "Admin",
-                            BRANCH_ADMIN: "Branch Admin",
-                            EMPLOYEE: "Employee",
-                          };
-                          return roleMap[currentUser?.role || ""] || currentUser?.role || "—";
-                        })()}</p>
-                      </div>
-                      <DropdownMenuItem className="cursor-pointer rounded-xl m-1" onClick={handleProfileOpen}>
-                        <Icon icon="mdi:account-circle-outline" className="w-4 h-4 mr-2" />
-                        User Profile
-                      </DropdownMenuItem>
-                      <DropdownMenuItem className="cursor-pointer text-red-600 focus:text-red-600 rounded-xl m-1" onClick={() => {
-                        const token = localStorage.getItem("token") || localStorage.getItem("accessToken") || "";
-                        if (token) {
-                          void fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL || "/backend"}/auth/logout`, {
-                            method: "POST",
-                            headers: { Authorization: `Bearer ${token}` },
-                          }).catch(() => undefined);
-                        }
-                        localStorage.removeItem("accessToken");
-                        localStorage.removeItem("token");
-                        localStorage.removeItem("user");
-                        document.cookie = "accessToken=; path=/; max-age=0; expires=Thu, 01 Jan 1970 00:00:00 UTC; samesite=lax";
-                        router.push("/login");
-                      }}>
-                        <Icon icon="mdi:logout" className="w-4 h-4 mr-2" />
-                        Logout
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
-              </div>
-            </header>
-            <main className="px-4 sm:px-8 pb-8 pt-0 overflow-x-hidden">{children}</main>
+          <div className="min-h-screen bg-background overflow-x-hidden flex flex-col">
+            <HrmsTopbar
+              user={currentUser}
+              onProfileOpen={handleProfileOpen}
+              onLogout={handleLogout}
+            />
+            <main className="flex-1 p-7 lg:p-10 max-w-screen-2xl w-full mx-auto overflow-x-hidden hrms-admin-content">{children}</main>
           </div>
         </SidebarInset>
       </SidebarProvider>
@@ -1466,7 +1629,7 @@ const taskMgmtSectionActive = isSectionActiveForCompany(TASK_MANAGEMENT_PATHS, c
               <div className="border-t border-gray-200 pt-4 space-y-4">
                 <p className="text-sm text-gray-500 font-medium">Change Password</p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-end">
-                   <div className="space-y-2">
+                  <div className="space-y-2">
                     <Label>New Password (leave blank to keep current)</Label>
                     <div className="relative">
                       <Input

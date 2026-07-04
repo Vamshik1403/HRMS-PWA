@@ -1,23 +1,18 @@
 "use client"
-import { TableBodySkeleton } from "../components/ui/TableBodySkeleton";
 
-import { useState, useEffect } from "react"
-import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card"
+import { useState, useEffect, useMemo } from "react"
 import { Button } from "../components/ui/button"
 import { Input } from "../components/ui/input"
 import { Label } from "../components/ui/label"
 import { FormDrawer } from "../components/ui/form-drawer"
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "../components/ui/table"
 import { Badge } from "../components/ui/badge"
-import { Icon } from "@iconify/react"
-import { Plus, Search, Edit, Trash2, Clock, Check, X, ArrowLeft, Filter, RotateCcw } from "lucide-react"
+import { Plus, Search, Clock, Check, X, CalendarCheck2 } from "lucide-react"
+import { PageHeader } from "../components/app/page-header";
+import { FilterBar, FilterSelect } from "../components/app/filter-bar";
+import { EntityListShell } from "../components/app/entity-list-shell";
+import type { DataTableColumn } from "../components/app/data-table";
+import { EntityRowActions } from "../components/app/entity-row-actions";
+import { useClientTable, sortRows } from "../hooks/use-client-table";
 import { SearchSuggestInput } from "../components/SearchSuggestInput"
 import { useCurrentUser } from "../hooks/useCurrentUser"
 import { toast } from "sonner";
@@ -62,14 +57,11 @@ const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "/backend"
 export function AttendanceRegularisationManagement() {
   const [listLoading, setListLoading] = useState(true);
   const [regularisations, setRegularisations] = useState<AttendanceRegularisation[]>([])
-const [searchTerm, setSearchTerm] = useState("")
-
-const [branchFilterList, setBranchFilterList] = useState<any[]>([])
-const [departmentFilterList, setDepartmentFilterList] = useState<any[]>([])
-const [selectedFilterBranchIds, setSelectedFilterBranchIds] = useState<string[]>([])
-const [selectedFilterDepartmentIds, setSelectedFilterDepartmentIds] = useState<string[]>([])
-const [showFilterModal, setShowFilterModal] = useState(false)
-const [filterLoading, setFilterLoading] = useState(false)
+  const table = useClientTable("employeeName")
+  const [branchFilterList, setBranchFilterList] = useState<any[]>([])
+  const [departmentFilterList, setDepartmentFilterList] = useState<any[]>([])
+  const [branchFilter, setBranchFilter] = useState("ALL")
+  const [departmentFilter, setDepartmentFilter] = useState("ALL")
 
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editingRegularisation, setEditingRegularisation] = useState<AttendanceRegularisation | null>(null)
@@ -405,8 +397,6 @@ if (user) {
 
   const loadFilterLookups = async () => {
   try {
-    setFilterLoading(true)
-
     const [brRes, deptRes] = await Promise.all([
       fetch(`${BACKEND_URL}/branches`, { cache: "no-store" }),
       fetch(`${BACKEND_URL}/departments`, { cache: "no-store" }),
@@ -434,7 +424,7 @@ if (user) {
     if (user?.role === "BRANCH_ADMIN" && user?.branchesID) {
       branches = branches.filter((b: any) => Number(b.id) === Number(user.branchesID))
       departments = departments.filter((d: any) => Number(d.branchesID) === Number(user.branchesID))
-      setSelectedFilterBranchIds([String(user.branchesID)])
+      setBranchFilter(String(user.branchesID))
     }
 
     setBranchFilterList(branches)
@@ -443,8 +433,6 @@ if (user) {
     console.error("Failed to load filters:", e)
     setBranchFilterList([])
     setDepartmentFilterList([])
-  } finally {
-    setFilterLoading(false)
   }
 }
 
@@ -555,83 +543,86 @@ employeeId: regularisation.manageEmployee?.employeeID || "",
     }
   }
 
-  const toggleFilterBranch = (branchId: string) => {
-  setSelectedFilterBranchIds((prev) => {
-    const next = prev.includes(branchId)
-      ? prev.filter((id) => id !== branchId)
-      : [...prev, branchId]
-
-    if (next.length > 0) {
-      setSelectedFilterDepartmentIds((deptPrev) =>
-        deptPrev.filter((deptId) => {
-          const dept = departmentFilterList.find((d: any) => String(d.id) === String(deptId))
-          return dept && next.includes(String(dept.branchesID))
-        })
-      )
-    }
-
-    return next
-  })
-}
-
-const toggleFilterDepartment = (departmentId: string) => {
-  setSelectedFilterDepartmentIds((prev) =>
-    prev.includes(departmentId)
-      ? prev.filter((id) => id !== departmentId)
-      : [...prev, departmentId]
-  )
-}
-
-const selectAllFilterBranches = () => {
-  setSelectedFilterBranchIds(branchFilterList.map((b: any) => String(b.id)))
-}
-
-const selectAllFilterDepartments = () => {
-  setSelectedFilterDepartmentIds(visibleFilterDepartments.map((d: any) => String(d.id)))
-}
-
-const clearAllFilters = () => {
-  if (user?.role === "BRANCH_ADMIN" && user?.branchesID) {
-    setSelectedFilterBranchIds([String(user.branchesID)])
-    setSelectedFilterDepartmentIds([])
-    return
-  }
-
-  setSelectedFilterBranchIds([])
-  setSelectedFilterDepartmentIds([])
-}
-
-const visibleFilterDepartments = departmentFilterList.filter((d: any) => {
-  return (
-    selectedFilterBranchIds.length === 0 ||
-    selectedFilterBranchIds.includes(String(d.branchesID))
-  )
-}
+const visibleFilterDepartments = departmentFilterList.filter((d: any) =>
+  branchFilter === "ALL" || branchFilter === String(d.branchesID)
 )
 
-  const filteredRegularisations = regularisations.filter((regularisation) => {
-  const t = searchTerm.toLowerCase()
+const handleBranchFilterChange = (value: string) => {
+  setBranchFilter(value)
+  if (departmentFilter !== "ALL") {
+    const dept = departmentFilterList.find((d: any) => String(d.id) === departmentFilter)
+    if (dept && value !== "ALL" && String(dept.branchesID) !== value) {
+      setDepartmentFilter("ALL")
+    }
+  }
+}
 
-  const matchesBranch =
-    selectedFilterBranchIds.length === 0 ||
-    selectedFilterBranchIds.includes(String(regularisation.branchesID))
+const filteredRegularisations = useMemo(() => {
+  const t = table.search.trim().toLowerCase()
 
-  const matchesDepartment =
-    selectedFilterDepartmentIds.length === 0 ||
-    selectedFilterDepartmentIds.includes(String(regularisation.departmentID))
+  let list = regularisations.filter((regularisation) => {
+    const matchesBranch =
+      branchFilter === "ALL" || branchFilter === String(regularisation.branchesID)
 
-  const matchesSearch =
-    !t ||
-    (regularisation.serviceProvider || "").toLowerCase().includes(t) ||
-    (regularisation.companyName || "").toLowerCase().includes(t) ||
-    (regularisation.branchName || "").toLowerCase().includes(t) ||
-    (regularisation.departmentName || "").toLowerCase().includes(t) ||
-    (regularisation.employeeName || "").toLowerCase().includes(t) ||
-    (regularisation.employeeId || "").toLowerCase().includes(t) ||
-    (regularisation.attendanceDate || "").toLowerCase().includes(t)
+    const matchesDepartment =
+      departmentFilter === "ALL" || departmentFilter === String(regularisation.departmentID)
 
-  return matchesBranch && matchesDepartment && matchesSearch
-})
+    const matchesSearch =
+      !t ||
+      (regularisation.serviceProvider || "").toLowerCase().includes(t) ||
+      (regularisation.companyName || "").toLowerCase().includes(t) ||
+      (regularisation.branchName || "").toLowerCase().includes(t) ||
+      (regularisation.departmentName || "").toLowerCase().includes(t) ||
+      (regularisation.employeeName || "").toLowerCase().includes(t) ||
+      (regularisation.employeeId || "").toLowerCase().includes(t) ||
+      (regularisation.attendanceDate || "").toLowerCase().includes(t)
+
+    return matchesBranch && matchesDepartment && matchesSearch
+  })
+
+  return sortRows(list, table.sortBy, table.sortDir, (row, key) => {
+    const r = row as AttendanceRegularisation
+    if (key === "branch") return r.branchName ?? ""
+    if (key === "department") return r.departmentName ?? ""
+    if (key === "employeeId") return r.employeeId ?? ""
+    if (key === "employeeName") return r.employeeName ?? ""
+    if (key === "attendanceDate") return r.attendanceDate ?? ""
+    if (key === "actualStatus") return r.actualStatus ?? ""
+    if (key === "requestedStatus") return r.requestedStatus ?? ""
+    if (key === "reason") return r.reason ?? ""
+    if (key === "status") return r.status ?? ""
+    if (key === "createdAt") return r.createdAt ?? ""
+    return ""
+  })
+}, [regularisations, table.search, table.sortBy, table.sortDir, branchFilter, departmentFilter])
+
+const branchFilterOptions = useMemo(
+  () => [
+    { value: "ALL", label: "All branches" },
+    ...branchFilterList.map((b: any) => ({
+      value: String(b.id),
+      label: b.branchName || `Branch #${b.id}`,
+    })),
+  ],
+  [branchFilterList],
+)
+
+const departmentFilterOptions = useMemo(
+  () => [
+    { value: "ALL", label: "All departments" },
+    ...visibleFilterDepartments.map((d: any) => ({
+      value: String(d.id),
+      label: d.departmentName || `Department #${d.id}`,
+    })),
+  ],
+  [visibleFilterDepartments],
+)
+
+const statusBadgeVariant = (status?: AttendanceRegularisation["status"]) => {
+  if (status === "Approved") return "default" as const
+  if (status === "Rejected") return "destructive" as const
+  return "secondary" as const
+}
 
   const handleServiceProviderSelect = (selected: SelectedItem) => {
     setFormData((prev) => ({
@@ -979,7 +970,6 @@ employeeName: "",
   setEditingRegularisation(null);
   setSelectedEmployee(null);
 
-  setShowFilterModal(false);
   setIsFetchingStatus(false);
 };
 
@@ -1069,22 +1059,130 @@ employeeName: "",
     }
   }
 
+  const regularisationColumns = useMemo((): DataTableColumn<AttendanceRegularisation>[] => [
+    {
+      key: "branch",
+      header: "Branch",
+      sortable: true,
+      colSpan: 1,
+      cell: (r) => <span className="truncate" title={r.branchName}>{r.branchName || "—"}</span>,
+    },
+    {
+      key: "department",
+      header: "Department",
+      sortable: true,
+      colSpan: 1,
+      cell: (r) => <span className="truncate" title={r.departmentName}>{r.departmentName || "—"}</span>,
+    },
+    {
+      key: "employeeId",
+      header: "Employee ID",
+      sortable: true,
+      colSpan: 1,
+      cell: (r) => r.employeeId || "—",
+    },
+    {
+      key: "employeeName",
+      header: "Employee",
+      sortable: true,
+      colSpan: 1,
+      cell: (r) => <span className="truncate" title={r.employeeName}>{r.employeeName || "—"}</span>,
+    },
+    {
+      key: "attendanceDate",
+      header: "Date",
+      sortable: true,
+      colSpan: 1,
+      cell: (r) => r.attendanceDate || "—",
+    },
+    {
+      key: "actualStatus",
+      header: "Actual",
+      sortable: true,
+      colSpan: 1,
+      cell: (r) => r.actualStatus ? <Badge variant="outline">{r.actualStatus}</Badge> : "—",
+    },
+    {
+      key: "requestedStatus",
+      header: "Requested",
+      sortable: true,
+      colSpan: 1,
+      cell: (r) => r.requestedStatus ? <Badge variant="secondary">{r.requestedStatus}</Badge> : "—",
+    },
+    {
+      key: "reason",
+      header: "Reason",
+      sortable: true,
+      colSpan: 1,
+      cell: (r) => <span className="truncate" title={r.reason}>{r.reason || "—"}</span>,
+    },
+    {
+      key: "status",
+      header: "Status",
+      sortable: true,
+      colSpan: 1,
+      cell: (r) => (
+        <Badge variant={statusBadgeVariant(r.status)}>
+          {r.status || "Pending"}
+        </Badge>
+      ),
+    },
+    {
+      key: "createdAt",
+      header: "Created",
+      sortable: true,
+      colSpan: 1,
+      cell: (r) => r.createdAt || "—",
+    },
+    {
+      key: "actions",
+      header: "Actions",
+      colSpan: 1,
+      align: "right",
+      cell: (r) => {
+        const extra = canManage && r.status === "Pending"
+          ? [
+              {
+                icon: Check,
+                title: "Approve",
+                onClick: () => handleApprove(r.id),
+                className: "text-green-600",
+              },
+              {
+                icon: X,
+                title: "Reject",
+                onClick: () => handleReject(r.id),
+                className: "text-destructive",
+              },
+            ]
+          : undefined
+
+        return (
+          <EntityRowActions
+            onEdit={() => handleEdit(r)}
+            onDelete={() => handleDelete(r.id)}
+            extra={extra}
+          />
+        )
+      },
+    },
+  ], [canManage])
+
   return (
-    <div className="space-y-6 w-full max-w-6xl mx-auto px-4">
-      {/* Header */}
-      <div className="flex items-center justify-between w-full">
-        <div className="min-w-0 flex-1">
-          <p className="text-gray-600 mt-1 text-sm">Manage attendance corrections and time adjustments</p>
-        </div>
-        <div className="flex items-center gap-3">
-          {!isDialogOpen && (
-            <Button onClick={() => { closeRegularisationPagePanels(); setIsDialogOpen(true); }} className="flex-shrink-0 text-sm px-3 py-2">
+    <div className="space-y-6 w-full max-w-none animate-fade-in page-content-enter">
+      <PageHeader
+        icon={CalendarCheck2}
+        title="Regularisation"
+        description="Manage attendance corrections and time adjustments"
+        actions={
+          !isDialogOpen ? (
+            <Button onClick={() => { closeRegularisationPagePanels(); setIsDialogOpen(true); }}>
               <Plus className="w-4 h-4 mr-1" />
               Submit Regularisation
             </Button>
-          )}
-        </div>
-      </div>
+          ) : null
+        }
+      />
 
       <FormDrawer open={isDialogOpen} onOpenChange={setIsDialogOpen} title={editingRegularisation ? "Edit Attendance Regularisation" : "Submit Attendance Regularisation"} description={editingRegularisation ? "Update the attendance regularisation information below." : "Fill in the details to submit a new attendance regularisation."}>
               <form onSubmit={handleSubmit} className="space-y-6">
@@ -1310,259 +1408,56 @@ employeeName: "",
               </form>
       </FormDrawer>
 
-      {!isDialogOpen && (<>
-      {/* Search and Filters */}
-      <Card>
-        <CardContent className="p-6">
-<div className="flex items-center gap-3 w-full">
-  <Button
-    type="button"
-    variant="outline"
-    size="sm"
-    onClick={() => setShowFilterModal(true)}
-    className="flex-shrink-0"
-  >
-    <Filter className="w-4 h-4 mr-1" />
-    Filter
-    {(selectedFilterBranchIds.length + selectedFilterDepartmentIds.length) > 0 && (
-      <Badge variant="secondary" className="ml-2">
-        {selectedFilterBranchIds.length + selectedFilterDepartmentIds.length}
-      </Badge>
-    )}
-  </Button>
-  
-  {showFilterModal && (
-  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-    <div className="w-full max-w-3xl rounded-xl bg-white shadow-xl border">
-      <div className="flex items-center justify-between border-b px-5 py-4">
-        <div className="flex items-center gap-2">
-          <div className="h-9 w-9 rounded-lg bg-indigo-50 flex items-center justify-center">
-            <Filter className="w-4 h-4 text-indigo-600" />
-          </div>
-          <div>
-            <h3 className="text-base font-semibold text-gray-900">
-              Filter Attendance Regularisations
-            </h3>
-            <p className="text-xs text-gray-500">
-              Select branch and department filters
-            </p>
-          </div>
-        </div>
+      {!isDialogOpen && (
+        <>
+          <FilterBar
+            search={{
+              value: table.search,
+              onChange: table.setSearch,
+              placeholder: "Search regularisations…",
+            }}
+            filters={
+              <>
+                <FilterSelect
+                  id="attendance-regularisation-branch"
+                  value={branchFilter}
+                  onChange={handleBranchFilterChange}
+                  options={branchFilterOptions}
+                  width="w-56"
+                  ariaLabel="Filter by branch"
+                />
+                <FilterSelect
+                  id="attendance-regularisation-department"
+                  value={departmentFilter}
+                  onChange={setDepartmentFilter}
+                  options={departmentFilterOptions}
+                  width="w-56"
+                  ariaLabel="Filter by department"
+                />
+              </>
+            }
+          />
 
-        <Button type="button" variant="ghost" size="sm" onClick={() => setShowFilterModal(false)}>
-          <X className="w-4 h-4" />
-        </Button>
-      </div>
-
-      <div className="p-5 space-y-6 max-h-[70vh] overflow-y-auto">
-        <div className="flex items-center justify-between">
-          <Badge variant="secondary">
-            {selectedFilterBranchIds.length} branches, {selectedFilterDepartmentIds.length} departments selected
-          </Badge>
-
-          <Button type="button" variant="outline" size="sm" onClick={clearAllFilters}>
-            <RotateCcw className="w-4 h-4 mr-1" />
-            Clear
-          </Button>
-        </div>
-
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <Label>Branches</Label>
-            {user?.role !== "BRANCH_ADMIN" && (
-              <Button type="button" variant="outline" size="sm" onClick={selectAllFilterBranches}>
-                Select All Branches
+          <EntityListShell
+            title="All attendance regularisations"
+            columns={regularisationColumns}
+            rows={filteredRegularisations}
+            rowKey={(r) => r.id}
+            isLoading={listLoading}
+            sortBy={table.sortBy}
+            sortDir={table.sortDir}
+            onSort={table.setSort}
+            emptyIcon={CalendarCheck2}
+            emptyTitle="No attendance regularisations found"
+            emptyDescription="Try adjusting your search or filters."
+            emptyAction={
+              <Button onClick={() => { closeRegularisationPagePanels(); setIsDialogOpen(true); }}>
+                <Plus className="w-4 h-4 mr-1" /> Submit Regularisation
               </Button>
-            )}
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            {branchFilterList.map((b: any) => (
-              <label key={b.id} className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm hover:bg-gray-50 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={selectedFilterBranchIds.includes(String(b.id))}
-                  disabled={user?.role === "BRANCH_ADMIN"}
-                  onChange={() => toggleFilterBranch(String(b.id))}
-                />
-                <span className="truncate">{b.branchName}</span>
-              </label>
-            ))}
-          </div>
-        </div>
-
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <Label>Departments</Label>
-            <Button type="button" variant="outline" size="sm" onClick={selectAllFilterDepartments}>
-              Select All Departments
-            </Button>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            {visibleFilterDepartments.map((d: any) => (
-              <label key={d.id} className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm hover:bg-gray-50 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={selectedFilterDepartmentIds.includes(String(d.id))}
-                  onChange={() => toggleFilterDepartment(String(d.id))}
-                />
-                <span className="truncate">{d.departmentName}</span>
-              </label>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      <div className="flex justify-end gap-2 border-t px-5 py-4">
-        <Button type="button" variant="outline" onClick={() => setShowFilterModal(false)}>
-          Cancel
-        </Button>
-        <Button type="button" onClick={() => setShowFilterModal(false)}>
-          Apply Filter
-        </Button>
-      </div>
-    </div>
-  </div>
-)}
-  
-              <div className="relative flex-1 min-w-0">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-              <Input
-                placeholder="Search attendance regularisations..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10 w-full"
-              />
-            </div>
-            <Badge variant="secondary" className="px-3 py-1 flex-shrink-0">
-              {filteredRegularisations.length} regularisations
-            </Badge>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Attendance Regularisations Table */}
-      <Card className="w-full">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Icon icon="mdi:clock-edit" className="w-5 h-5" />
-            Attendance Regularisations List
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="p-0">
-          <div className="overflow-x-auto">
-            <Table className="w-full">
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-[80px]">Branch Name</TableHead>
-                  <TableHead className="w-[100px]">Department Name</TableHead>
-                  <TableHead className="w-[70px]">Employee ID</TableHead>
-                  <TableHead className="w-[100px]">Employee Name</TableHead>
-                  <TableHead className="w-[80px]">Attendance Date</TableHead>
-                  <TableHead className="w-[80px]">Actual Status</TableHead>
-                  <TableHead className="w-[80px]">Requested As</TableHead>
-                  <TableHead className="w-[100px]">Reason</TableHead>
-                  <TableHead className="w-[70px]">Status</TableHead>
-                  <TableHead className="w-[80px]">Created</TableHead>
-                  <TableHead className="w-[80px] text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {listLoading ? (
-                    <TableBodySkeleton cols={10} />
-                  ) : filteredRegularisations.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={10} className="text-center py-8 text-gray-500">
-                      <div className="flex flex-col items-center gap-2">
-                        <Icon icon="mdi:clock-edit" className="w-12 h-12 text-gray-300" />
-                        <p>No attendance regularisations found</p>
-                        <p className="text-sm">Try adjusting your search criteria</p>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  filteredRegularisations.map((regularisation, index) => (
-                    <TableRow key={regularisation.id}>
-                      <TableCell className="truncate" title={regularisation.branchName}>{regularisation.branchName}</TableCell>
-                      <TableCell className="truncate" title={regularisation.departmentName}>{regularisation.departmentName}</TableCell>
-                      <TableCell className="truncate">{regularisation.employeeId}</TableCell>
-                      <TableCell className="truncate" title={regularisation.employeeName}>{regularisation.employeeName}</TableCell>
-                      <TableCell className="truncate">{regularisation.attendanceDate}</TableCell>
-                      <TableCell className="truncate">
-                        {regularisation.actualStatus && (
-                          <Badge variant="outline">{regularisation.actualStatus}</Badge>
-                        )}
-                      </TableCell>
-                      <TableCell className="truncate">
-                        {regularisation.requestedStatus && (
-                          <Badge variant="secondary">{regularisation.requestedStatus}</Badge>
-                        )}
-                      </TableCell>
-                      <TableCell className="truncate" title={regularisation.reason}>{regularisation.reason}</TableCell>
-                      <TableCell className="whitespace-nowrap">
-                        <Badge variant={
-                          regularisation.status === "Approved" ? "default" :
-                            regularisation.status === "Rejected" ? "destructive" : "secondary"
-                        }>
-                          {regularisation.status}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="truncate">{regularisation.createdAt}</TableCell>
-                      <TableCell className="text-right whitespace-nowrap">
-                        <div className="flex items-center justify-end gap-1">
-                          {canManage && regularisation.status === "Pending" && (  
-                            <>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleApprove(regularisation.id)}
-                                className="h-7 w-7 p-0 text-green-600 hover:text-green-700 hover:bg-green-50"
-                                title="Approve"
-                              >
-                                <Check className="w-3 h-3" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleReject(regularisation.id)}
-                                className="h-7 w-7 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
-                                title="Reject"
-                              >
-                                <X className="w-3 h-3" />
-                              </Button>
-                            </>
-                          )}
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleEdit(regularisation)}
-                            className="h-7 w-7 p-0"
-                            title="Edit"
-                          >
-                            <Edit className="w-3 h-3" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleDelete(regularisation.id)}
-                            className="h-7 w-7 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
-                            title="Delete"
-                          >
-                            <Trash2 className="w-3 h-3" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </div>
-        </CardContent>
-      </Card>
-  </>
-  )}
+            }
+          />
+        </>
+      )}
     </div>
   )
 }

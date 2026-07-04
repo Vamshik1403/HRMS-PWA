@@ -1,12 +1,26 @@
 import type { Metadata, Viewport } from 'next'
-import { Inter } from 'next/font/google'
+import { Bricolage_Grotesque, DM_Sans, JetBrains_Mono } from 'next/font/google'
 import './globals.css'
 import { Toaster } from 'sonner'
 import ServiceWorkerBootstrap from './components/ServiceWorkerBootstrap'
 import FetchRefreshBootstrap from './components/FetchRefreshBootstrap'
 import { AdminShellProvider } from './components/layout/AdminShellProvider'
+import { Providers } from './providers'
 
-const inter = Inter({ subsets: ['latin'] })
+const display = Bricolage_Grotesque({
+  subsets: ['latin'],
+  variable: '--font-display',
+})
+
+const sans = DM_Sans({
+  subsets: ['latin'],
+  variable: '--font-sans',
+})
+
+const mono = JetBrains_Mono({
+  subsets: ['latin'],
+  variable: '--font-mono',
+})
 
 // Viewport configuration for mobile and PWA
 export const viewport: Viewport = {
@@ -83,7 +97,7 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en" suppressHydrationWarning className={`${display.variable} ${sans.variable} ${mono.variable}`}>
       <head>
         {/* Favicon and Apple icons */}
         <link rel="icon" href="/favicon.ico" sizes="any" />
@@ -113,11 +127,13 @@ export default function RootLayout({
         {/* PWA splash screen configuration */}
         <meta name="description" content="Comprehensive HR Management Dashboard" />
       </head>
-      <body className={inter.className}>
-        <ServiceWorkerBootstrap />
-        <FetchRefreshBootstrap />
-        <AdminShellProvider>{children}</AdminShellProvider>
-        <Toaster position="top-right" richColors closeButton />
+      <body className={sans.className}>
+        <Providers>
+          <ServiceWorkerBootstrap />
+          <FetchRefreshBootstrap />
+          <AdminShellProvider>{children}</AdminShellProvider>
+          <Toaster position="top-right" richColors closeButton />
+        </Providers>
       </body>
     </html>
   )

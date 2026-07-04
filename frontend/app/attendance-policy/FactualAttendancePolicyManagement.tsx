@@ -1,27 +1,16 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "../components/ui/card";
+import { useState, useEffect, useMemo } from "react";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 import { FormDrawer } from "../components/ui/form-drawer";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "../components/ui/table";
-import { Badge } from "../components/ui/badge";
-import { Icon } from "@iconify/react";
-import { Plus, Search, Edit, Trash2, Info, ArrowLeft } from "lucide-react";
+import { FilterBar } from "../components/app/filter-bar";
+import { EntityListShell } from "../components/app/entity-list-shell";
+import type { DataTableColumn } from "../components/app/data-table";
+import { EntityRowActions } from "../components/app/entity-row-actions";
+import { useClientTable, sortRows } from "../hooks/use-client-table";
+import { Plus, Info, Clock } from "lucide-react";
 import { SearchSuggestInput } from "../components/SearchSuggestInput";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import { toast } from "sonner";
@@ -81,7 +70,8 @@ interface SelectedItem {
 
 export function FactualAttendancePolicyManagement() {
   const [policies, setPolicies] = useState<AttendancePolicy[]>([]);
-  const [searchTerm, setSearchTerm] = useState("");
+  const [listLoading, setListLoading] = useState(true);
+  const table = useClientTable("attendancePolicyName");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingPolicy, setEditingPolicy] = useState<AttendancePolicy | null>(
     null
@@ -259,6 +249,7 @@ export function FactualAttendancePolicyManagement() {
   }, [user]);
 
   const loadAttendancePolicies = async () => {
+    setListLoading(true);
     try {
       const res = await fetch(`${BACKEND_URL}/factual-attendance-policy`, { cache: "no-store" });
       const data = await res.json();
@@ -314,24 +305,33 @@ export function FactualAttendancePolicyManagement() {
       console.error("Error loading attendance policies:", err);
       toast.error("Failed to load data.");
       setPolicies([]);
+    } finally {
+      setListLoading(false);
     }
   };
 
-  const filteredPolicies = policies.filter(
-    (policy) =>
-      policy.attendancePolicyName
-        .toLowerCase()
-        .includes(searchTerm.toLowerCase()) ||
-      (policy.serviceProvider || "")
-        .toLowerCase()
-        .includes(searchTerm.toLowerCase()) ||
-      (policy.companyName || "")
-        .toLowerCase()
-        .includes(searchTerm.toLowerCase()) ||
-      (policy.branchName || "")
-        .toLowerCase()
-        .includes(searchTerm.toLowerCase())
-  );
+  const filteredPolicies = useMemo(() => {
+    const q = table.search.trim().toLowerCase();
+    let list = policies.filter((policy) => {
+      const matchesSearch =
+        !q ||
+        [
+          policy.attendancePolicyName,
+          policy.serviceProvider,
+          policy.companyName,
+          policy.branchName,
+        ]
+          .filter(Boolean)
+          .map((f) => String(f ?? "").toLowerCase())
+          .some((f) => f.includes(q));
+      return matchesSearch;
+    });
+    return sortRows(list, table.sortBy, table.sortDir, (row, key) => {
+      const p = row as AttendancePolicy;
+      if (key === "attendancePolicyName") return p.attendancePolicyName ?? "";
+      return "";
+    });
+  }, [policies, table.search, table.sortBy, table.sortDir]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -563,8 +563,30 @@ export function FactualAttendancePolicyManagement() {
     }
   };
 
+  const policyColumns = useMemo((): DataTableColumn<AttendancePolicy>[] => [
+    {
+      key: "attendancePolicyName",
+      header: "Policy Name",
+      sortable: true,
+      colSpan: 9,
+      cell: (p) => <span className="font-medium">{p.attendancePolicyName}</span>,
+    },
+    {
+      key: "actions",
+      header: "Actions",
+      colSpan: 3,
+      align: "right",
+      cell: (p) => (
+        <EntityRowActions
+          onEdit={canManage ? () => handleEdit(p) : undefined}
+          onDelete={canManage ? () => handleDelete(p.id) : undefined}
+        />
+      ),
+    },
+  ], [canManage]);
+
   return (
-    <div className="space-y-6 w-full max-w-6xl mx-auto px-4">
+    <div className="space-y-6 w-full max-w-none animate-fade-in page-content-enter">
       {/* Header */}
       <div className="flex items-center justify-between w-full">
         <div className="min-w-0 flex-1">
@@ -1232,102 +1254,35 @@ export function FactualAttendancePolicyManagement() {
       </FormDrawer>
 
       {!isDialogOpen && (<>
-      {/* Search and Filters */}
-      <Card>
-        <CardContent>
-          <div className="flex items-center gap-4 flex-wrap">
-            <div className="relative flex-1 min-w-0">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-              <Input
-                placeholder="Search attendance policies..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10 w-full"
-              />
-            </div>
-            <Badge variant="secondary" className="px-3 py-1 flex-shrink-0">
-              {filteredPolicies.length} attendance policies
-            </Badge>
-          </div>
-        </CardContent>
-      </Card>
+      <FilterBar
+        search={{
+          value: table.search,
+          onChange: table.setSearch,
+          placeholder: "Search attendance policies…",
+        }}
+      />
 
-      {/* Attendance Policies Table */}
-      <Card className="w-full">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Icon icon="mdi:clock-outline" className="w-5 h-5" />
-            Attendance Policies List
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="p-0 w-full">
-          <div className="overflow-x-auto w-full">
-            <Table className="w-full">
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-[200px]">Policy Name</TableHead>
-                  <TableHead className="w-[80px] text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredPolicies.length === 0 ? (
-                  <TableRow>
-                    <TableCell
-                      colSpan={2}
-                      className="text-center py-8 text-gray-500"
-                    >
-                      <div className="flex flex-col items-center gap-2">
-                        <Icon
-                          icon="mdi:clock-outline"
-                          className="w-12 h-12 text-gray-300"
-                        />
-                        <p>No attendance policies found</p>
-                        <p className="text-sm">
-                          Try adjusting your search criteria
-                        </p>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  filteredPolicies.map((policy) => (
-                    <TableRow key={policy.id}>
-                      <TableCell className="font-medium whitespace-nowrap">
-                        {policy.attendancePolicyName}
-                      </TableCell>
-                      <TableCell className="text-right whitespace-nowrap">
-                        <div className="flex items-center justify-end gap-1">
-                          {canManage && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleEdit(policy)}
-                              className="h-7 w-7 p-0"
-                              title="Edit"
-                            >
-                              <Edit className="w-3 h-3" />
-                            </Button>
-                          )}
-                          {canManage && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleDelete(policy.id)}
-                              className="h-7 w-7 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
-                              title="Delete"
-                            >
-                              <Trash2 className="w-3 h-3" />
-                            </Button>
-                          )}
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </div>
-        </CardContent>
-      </Card>
+      <EntityListShell
+        title="Attendance policies list"
+        columns={policyColumns}
+        rows={filteredPolicies}
+        rowKey={(p) => String(p.id)}
+        isLoading={listLoading}
+        sortBy={table.sortBy}
+        sortDir={table.sortDir}
+        onSort={table.setSort}
+        emptyIcon={Clock}
+        emptyTitle="No attendance policies found"
+        emptyDescription="Try adjusting your search criteria."
+        emptyAction={
+          canManage ? (
+            <Button onClick={() => { resetForm(); setIsDialogOpen(true); }}>
+              <Plus className="w-4 h-4 mr-1" />
+              Add Attendance Policy
+            </Button>
+          ) : undefined
+        }
+      />
       </>)}
     </div>
   );

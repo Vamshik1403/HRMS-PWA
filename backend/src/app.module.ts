@@ -75,6 +75,7 @@ import { EmailTemplateModule } from './email-template/email-template.module';
 import { EmpManagerScopeModule } from './common/emp-manager-scope.module';
 import { BackupModule } from './backup/backup.module';
 import { AuditLogModule } from './audit-log/audit-log.module';
+import { SubscriptionModule } from './subscription/subscription.module';
 
 
 @Module({
@@ -155,6 +156,7 @@ import { AuditLogModule } from './audit-log/audit-log.module';
     EmailTemplateModule,
     BackupModule,
     AuditLogModule,
+    SubscriptionModule,
   ],
   providers: [AuthService],
   controllers: [AuthController],

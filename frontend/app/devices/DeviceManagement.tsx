@@ -15,10 +15,17 @@ import {
 } from "../components/ui/table";
 import { Badge } from "../components/ui/badge";
 import { Icon } from "@iconify/react";
-import { Plus, Search, Edit, Trash2, ArrowLeft, X, Save, RotateCcw, Filter, ArrowDownUp, ArrowUpDown } from "lucide-react";
+import { Plus, Search, Edit, Trash2, ArrowLeft, X, Save, RotateCcw, Filter, ArrowDownUp, ArrowUpDown, Fingerprint } from "lucide-react";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import { useRouter } from "next/navigation";
 import { FormDrawer } from "../components/ui/form-drawer";
+import { NoticeBanner } from "../components/ui/notice-banner";
+import { PageHeader } from "../components/app/page-header";
+import { FilterBar, FilterSelect } from "../components/app/filter-bar";
+import { EntityListShell } from "../components/app/entity-list-shell";
+import type { DataTableColumn } from "../components/app/data-table";
+import { EntityRowActions } from "../components/app/entity-row-actions";
+import { useClientTable, sortRows } from "../hooks/use-client-table";
 import { toast } from "sonner";
 import { getSidebarContext } from "../utils/sidebarContext";
 import {
@@ -119,16 +126,9 @@ export function DeviceManagement() {
   const canDelete = user?.role === "SUPERADMIN";
 
   // UI
-  const [searchTerm, setSearchTerm] = useState("");
-
-  const [selectedBranchIds, setSelectedBranchIds] = useState<string[]>([]);
-  const [sortConfig, setSortConfig] = useState<{
-    key: string;
-    direction: "asc" | "desc";
-  }>({
-    key: "deviceName",
-    direction: "asc",
-  });
+  const table = useClientTable("deviceName");
+  const [branchFilter, setBranchFilter] = useState("ALL");
+  const [statusFilter, setStatusFilter] = useState("ALL");
   const [branchFilterList, setBranchFilterList] = useState<Branch[]>([]);
   const [branchFilterLoading, setBranchFilterLoading] = useState(false);
   const [isAddingNew, setIsAddingNew] = useState(false);
@@ -188,9 +188,24 @@ export function DeviceManagement() {
     try {
       setLoading(true);
       const all = await fetchJSONSafe<DeviceRead[]>(API.devices);
-      const mapping = await resolveScopeUserMapping(user);
-      if (mapping) setCurrentUserMapping(mapping);
-      setDevices(await filterCompanyScopedRecords(all, user));
+  const mapping = await resolveScopeUserMapping(user);
+if (mapping) setCurrentUserMapping(mapping);
+
+const ctx = getSidebarContext();
+
+const activeCompanyID =
+  ctx?.companyID ??
+  mapping?.companyID ??
+  user?.companyID ??
+  null;
+
+const filteredDevices = (Array.isArray(all) ? all : []).filter((d: any) => {
+  if (!activeCompanyID) return true;
+  return Number(d.companyID) === Number(activeCompanyID);
+});
+
+setDevices(filteredDevices);
+
     } catch (e: any) {
       console.error("Failed to load devices:", e);
       setDevices([]);
@@ -238,7 +253,7 @@ export function DeviceManagement() {
         const branchesID = mapping?.branchesID ?? user?.branchesID;
         if (branchesID) {
           filtered = filtered.filter((b) => Number(b.id) === Number(branchesID));
-          setSelectedBranchIds([String(branchesID)]);
+          setBranchFilter(String(branchesID));
         }
       }
 
@@ -253,11 +268,19 @@ export function DeviceManagement() {
 
 
 useEffect(() => {
-  const handler = () => {
-    if (user) {
-      fetchDevices();
-      fetchBranchFilterList();
-    }
+const handler = () => {
+  setBranchFilter(user?.role === "BRANCH_ADMIN" ? String(user?.branchesID ?? "ALL") : "ALL");
+  setBrList([]);
+  setFormData((p) => ({
+    ...p,
+    branchesID: null,
+    brAutocomplete: "",
+  }));
+
+  if (user) {
+    fetchDevices();
+    fetchBranchFilterList();
+  }
   };
 
   const sidebarPageClickHandler = (e: any) => {
@@ -336,64 +359,63 @@ useEffect(() => {
   };
 
   const runFetchBranches = (query: string) => {
-    if (brTimerRef.current) clearTimeout(brTimerRef.current);
-    brTimerRef.current = setTimeout(async () => {
-      if (query.length < MIN_CHARS) {
-        setBrList([]);
-        return;
-      }
-      if (brAbortRef.current) brAbortRef.current.abort();
-      const ctrl = new AbortController();
-      brAbortRef.current = ctrl;
-      setBrLoading(true);
-      try {
-        const all = await fetchJSONSafe<Branch[]>(API.branches, ctrl.signal);
+  if (brTimerRef.current) clearTimeout(brTimerRef.current);
 
-        // 🟡 Filter branches by the currently selected company from sidebar context
-        let filtered = all || [];
-        if (user?.role === "SUPERADMIN") {
-          const ctx = getSidebarContext();
-          if (ctx?.companyID) {
-            filtered = filtered.filter((b: any) => b.companyID === ctx.companyID);
-          }
-        } else if (user?.role === "SERVICE_PROVIDER") {
-          const ctx = getSidebarContext();
-          const companyID = ctx?.companyID ?? currentUserMapping?.companyID;
-          if (companyID) {
-            filtered = filtered.filter((b: any) => b.companyID === companyID);
-          } else if (currentUserMapping?.serviceProviderID) {
-            filtered = filtered.filter(
-              (b: any) => b.serviceProviderID === currentUserMapping.serviceProviderID
-            );
-          }
-        } else if (user?.role === "COMPANY_ADMIN" || user?.role === "BRANCH_ADMIN") {
-          const companyID = currentUserMapping?.companyID
-            ?? getSidebarContext()?.companyID
-            ?? user?.companyID;
-          if (companyID) {
-            filtered = filtered.filter((b: any) => b.companyID === companyID);
-          }
-          // 🔒 BRANCH_ADMIN — restrict to their own branch only
-          if (user?.role === "BRANCH_ADMIN") {
-            const branchesID = currentUserMapping?.branchesID ?? user?.branchesID;
-            if (branchesID) filtered = filtered.filter((b: any) => Number(b.id) === Number(branchesID));
-          }
-        }
+  brTimerRef.current = setTimeout(async () => {
+    if (query.length < MIN_CHARS) {
+      setBrList([]);
+      return;
+    }
 
-        // 🟢 Then apply search filtering
-        filtered = filtered.filter((b) =>
-          (b.branchName ?? "").toLowerCase().includes(query.toLowerCase())
+    if (brAbortRef.current) brAbortRef.current.abort();
+
+    const ctrl = new AbortController();
+    brAbortRef.current = ctrl;
+    setBrLoading(true);
+
+    try {
+      const all = await fetchJSONSafe<Branch[]>(API.branches, ctrl.signal);
+      const ctx = getSidebarContext();
+
+      const activeCompanyID =
+        ctx?.companyID ??
+        formData.companyID ??
+        currentUserMapping?.companyID ??
+        user?.companyID ??
+        null;
+
+      let filtered = Array.isArray(all) ? all : [];
+
+      if (activeCompanyID) {
+        filtered = filtered.filter(
+          (b: any) => Number(b.companyID) === Number(activeCompanyID)
         );
-
-        setBrList(filtered.slice(0, 20));
-      } catch (e) {
-        if ((e as any).name !== "AbortError")
-          console.error("Branches fetch error:", e);
-      } finally {
-        setBrLoading(false);
       }
-    }, DEBOUNCE_MS);
-  };
+
+      if (user?.role === "BRANCH_ADMIN") {
+        const branchesID = currentUserMapping?.branchesID ?? user?.branchesID;
+
+        if (branchesID) {
+          filtered = filtered.filter(
+            (b: any) => Number(b.id) === Number(branchesID)
+          );
+        }
+      }
+
+      filtered = filtered.filter((b) =>
+        (b.branchName ?? "").toLowerCase().includes(query.toLowerCase())
+      );
+
+      setBrList(filtered.slice(0, 20));
+    } catch (e) {
+      if ((e as any).name !== "AbortError") {
+        console.error("Branches fetch error:", e);
+      }
+    } finally {
+      setBrLoading(false);
+    }
+  }, DEBOUNCE_MS);
+};
 
   // Close suggestion popovers on outside click
   useEffect(() => {
@@ -443,27 +465,25 @@ useEffect(() => {
     };
 
     // Auto-set Service Provider, Company, and Branch for MANAGER (no UI display)
-    if (user?.role === "SERVICE_PROVIDER" && currentUserMapping) {
-      baseFormData.serviceProviderID = currentUserMapping.serviceProviderID;
-      baseFormData.companyID = currentUserMapping.companyID;
-      baseFormData.branchesID = currentUserMapping.branchesID;
-    } else if (user?.role === "COMPANY_ADMIN" || user?.role === "ADMIN" || user?.role === "BRANCH_ADMIN") {
-      const ctx = getSidebarContext();
-      baseFormData.serviceProviderID = ctx?.serviceProviderID ?? null;
-      baseFormData.companyID = ctx?.companyID ?? user?.companyID ?? null;
-      if (user?.role === "BRANCH_ADMIN") {
-        baseFormData.branchesID = currentUserMapping?.branchesID ?? user?.branchesID ?? null;
-        baseFormData.brAutocomplete = currentUserMapping?.branches?.branchName ?? user?.branches?.branchName ?? "";
-      }
-    } else if (user?.role === "SUPERADMIN") {
-      const ctx = getSidebarContext();
-      if (ctx) {
-        baseFormData.serviceProviderID = ctx.serviceProviderID;
-        baseFormData.companyID = ctx.companyID;
-        baseFormData.spAutocomplete = ctx.serviceProviderName;
-        baseFormData.coAutocomplete = ctx.companyName;
-      }
-    }
+    const ctx = getSidebarContext();
+
+// Active sidebar company always gets first priority
+if (ctx) {
+  baseFormData.serviceProviderID = ctx.serviceProviderID;
+  baseFormData.companyID = ctx.companyID;
+  baseFormData.spAutocomplete = ctx.serviceProviderName;
+  baseFormData.coAutocomplete = ctx.companyName;
+} else if (currentUserMapping) {
+  baseFormData.serviceProviderID = currentUserMapping.serviceProviderID;
+  baseFormData.companyID = currentUserMapping.companyID;
+  baseFormData.spAutocomplete = currentUserMapping.serviceProvider?.companyName || "";
+  baseFormData.coAutocomplete = currentUserMapping.company?.companyName || "";
+
+  if (user?.role === "BRANCH_ADMIN") {
+    baseFormData.branchesID = currentUserMapping.branchesID;
+    baseFormData.brAutocomplete = currentUserMapping.branches?.branchName || "";
+  }
+}
 
     setFormData(baseFormData);
     setEditingDevice(null);
@@ -550,22 +570,30 @@ useEffect(() => {
     setError(null);
 
     // For MANAGER, ensure serviceProviderID, companyID, and branchesID are set from user mapping
-    let finalServiceProviderID = formData.serviceProviderID;
-    let finalCompanyID = formData.companyID;
-    let finalBranchesID = formData.branchesID;
+   const ctx = getSidebarContext();
 
-    if (user?.role === "SERVICE_PROVIDER" && currentUserMapping) {
-      finalServiceProviderID = currentUserMapping.serviceProviderID;
-      finalCompanyID = currentUserMapping.companyID;
-      finalBranchesID = currentUserMapping.branchesID;
-    } else if (user?.role === "COMPANY_ADMIN" || user?.role === "BRANCH_ADMIN") {
-      const ctx = getSidebarContext();
-      finalServiceProviderID = formData.serviceProviderID ?? ctx?.serviceProviderID ?? null;
-      finalCompanyID = formData.companyID ?? ctx?.companyID ?? user?.companyID ?? null;
-      if (user?.role === "BRANCH_ADMIN") {
-        finalBranchesID = formData.branchesID ?? currentUserMapping?.branchesID ?? user?.branchesID ?? null;
-      }
-    }
+let finalServiceProviderID =
+  ctx?.serviceProviderID ??
+  formData.serviceProviderID ??
+  currentUserMapping?.serviceProviderID ??
+  null;
+
+let finalCompanyID =
+  ctx?.companyID ??
+  formData.companyID ??
+  currentUserMapping?.companyID ??
+  user?.companyID ??
+  null;
+
+let finalBranchesID = formData.branchesID;
+
+if (user?.role === "BRANCH_ADMIN") {
+  finalBranchesID =
+    formData.branchesID ??
+    currentUserMapping?.branchesID ??
+    user?.branchesID ??
+    null;
+}
 
     const payload: any = {
       status: formData.status,
@@ -713,71 +741,17 @@ const handleCancel = () => {
 };
 
 
-  const toggleBranchFilter = (branchId: string) => {
-    setSelectedBranchIds((prev) =>
-      prev.includes(branchId)
-        ? prev.filter((id) => id !== branchId)
-        : [...prev, branchId]
-    );
-  };
-
-  const selectAllBranches = () => {
-    setSelectedBranchIds(branchFilterList.map((b) => String(b.id)));
-  };
-
-  const clearBranchFilter = () => {
-    if (user?.role === "BRANCH_ADMIN") return;
-    setSelectedBranchIds([]);
-  };
-
-  const handleSort = (key: string) => {
-    setSortConfig((prev) => ({
-      key,
-      direction:
-        prev.key === key && prev.direction === "asc" ? "desc" : "asc",
-    }));
-  };
-
-  const SortIcon = ({ column }: { column: string }) => {
-    if (sortConfig.key !== column) {
-      return <ArrowDownUp className="w-3 h-3 ml-1 inline-block text-gray-400" />;
-    }
-
-    return <ArrowUpDown className="w-3 h-3 ml-1 inline-block text-indigo-600" />;
-  };
-
-  const getSortValue = (device: any, key: string) => {
-    switch (key) {
-      case "deviceName":
-        return device.deviceName || "";
-      case "deviceType":
-        return device.deviceType || "";
-      case "deviceMake":
-        return device.deviceMake || "";
-      case "deviceModel":
-        return device.deviceModel || "";
-      case "deviceSN":
-        return device.deviceSN || "";
-      case "branchName":
-        return device.branches?.branchName || device.branchName || "";
-      default:
-        return "";
-    }
-  };
-
-
-  // ---------------------------
-  // Search
-  // ---------------------------
   const filteredDevices = useMemo(() => {
-    const t = searchTerm.trim().toLowerCase();
+    const t = table.search.trim().toLowerCase();
 
-    const filtered = devices.filter((d) => {
+    let list = devices.filter((d) => {
       const deviceBranchID = String(d.branchesID ?? d.branches?.id ?? "");
 
       const matchesBranch =
-        selectedBranchIds.length === 0 ||
-        selectedBranchIds.includes(deviceBranchID);
+        branchFilter === "ALL" || branchFilter === deviceBranchID;
+
+      const matchesStatus =
+        statusFilter === "ALL" || (d.status || "").toUpperCase() === statusFilter;
 
       const matchesSearch =
         !t ||
@@ -795,20 +769,82 @@ const handleCancel = () => {
           .filter(Boolean)
           .some((x) => String(x).toLowerCase().includes(t));
 
-      return matchesBranch && matchesSearch;
+      return matchesBranch && matchesStatus && matchesSearch;
     });
 
-    filtered.sort((a: any, b: any) => {
-      const av = String(getSortValue(a, sortConfig.key)).toLowerCase();
-      const bv = String(getSortValue(b, sortConfig.key)).toLowerCase();
-
-      if (av < bv) return sortConfig.direction === "asc" ? -1 : 1;
-      if (av > bv) return sortConfig.direction === "asc" ? 1 : -1;
-      return 0;
+    return sortRows(list, table.sortBy, table.sortDir, (row, key) => {
+      const d = row as DeviceRead;
+      if (key === "deviceName") return d.deviceName || "";
+      if (key === "deviceType") return d.deviceType || "";
+      if (key === "deviceMake") return d.deviceMake || "";
+      if (key === "deviceModel") return d.deviceModel || "";
+      if (key === "deviceSN") return d.deviceSN || "";
+      if (key === "branchName") return d.branches?.branchName || d.branchName || "";
+      if (key === "status") return d.status || "";
+      return "";
     });
+  }, [devices, table.search, table.sortBy, table.sortDir, branchFilter, statusFilter]);
 
-    return filtered;
-  }, [devices, searchTerm, selectedBranchIds, sortConfig]);
+  const branchFilterOptions = useMemo(
+    () => [
+      { value: "ALL", label: "All branches" },
+      ...branchFilterList.map((b) => ({
+        value: String(b.id),
+        label: b.branchName || `Branch #${b.id}`,
+      })),
+    ],
+    [branchFilterList],
+  );
+
+  const statusFilterOptions = useMemo(() => {
+    const statuses = new Set(
+      devices.map((d) => (d.status || "").toUpperCase()).filter(Boolean),
+    );
+    return [
+      { value: "ALL", label: "All statuses" },
+      ...Array.from(statuses).map((s) => ({ value: s, label: s })),
+    ];
+  }, [devices]);
+
+  const deviceTypeLabel = (type?: string | null) => {
+    if (!type) return "—";
+    const typeMap: Record<string, string> = {
+      AT: "Attendance",
+      TR: "Token Reg",
+      TV: "Token Ver",
+      "AT+TR": "Att + Token Reg",
+    };
+    return typeMap[type] || type;
+  };
+
+  const deviceColumns = useMemo((): DataTableColumn<DeviceRead>[] => [
+    { key: "deviceName", header: "Name", sortable: true, colSpan: 2, cell: (d) => <span className="font-medium">{d.deviceName}</span> },
+    {
+      key: "deviceType",
+      header: "Type",
+      sortable: true,
+      colSpan: 2,
+      cell: (d) => d.deviceType ? (
+        <Badge variant="secondary" className="text-xs">{deviceTypeLabel(d.deviceType)}</Badge>
+      ) : "—",
+    },
+    { key: "deviceMake", header: "Make", sortable: true, colSpan: 1, cell: (d) => d.deviceMake || "—" },
+    { key: "deviceModel", header: "Model", sortable: true, colSpan: 2, cell: (d) => d.deviceModel || "—" },
+    { key: "deviceSN", header: "Serial", sortable: true, colSpan: 2, cell: (d) => d.deviceSN || "—" },
+    { key: "branchName", header: "Branch", sortable: true, colSpan: 2, cell: (d) => brName(d) },
+    {
+      key: "actions",
+      header: "Actions",
+      colSpan: 1,
+      align: "right",
+      cell: (d) => (
+        <EntityRowActions
+          onEdit={canManage ? () => handleEdit(d) : undefined}
+          onDelete={canDelete ? () => handleDelete(d.id) : undefined}
+        />
+      ),
+    },
+  ], [canManage, canDelete]);
 
   // ---------------------------
   // Helpers for rendering names in table
@@ -821,26 +857,21 @@ const handleCancel = () => {
     d.branches?.branchName ?? d.branchName ?? "—";
 
   return (
-    <div className="space-y-6 w-full max-w-6xl mx-auto px-4 page-content-enter">
+    <div className="space-y-6 w-full max-w-none animate-fade-in page-content-enter">
 
-      {/* Header */}
-      <div className="flex items-center justify-between w-full">
-        <div className="min-w-0 flex-1">
-          <p className="text-gray-600 mt-1 text-sm">Manage your devices</p>
-        </div>
-
-        <div className="flex items-center gap-3">
-          {!isAddingNew && canAdd && (
-            <Button
-              onClick={() => { resetForm(); setIsAddingNew(true); }}
-              className="flex-shrink-0 text-sm px-3 py-2"
-            >
+      <PageHeader
+        icon={Fingerprint}
+        title="Attendance Devices"
+        description="Biometric, web, mobile, and geo sources used to capture attendance events."
+        actions={
+          !isAddingNew && canAdd ? (
+            <Button onClick={() => { resetForm(); setIsAddingNew(true); }}>
               <Plus className="w-4 h-4 mr-1" />
               Add Device
             </Button>
-          )}
-        </div>
-      </div>
+          ) : null
+        }
+      />
 
       {/* Add/Edit Form - Drawer */}
       <FormDrawer
@@ -850,9 +881,9 @@ const handleCancel = () => {
       >
         <div>
           {error && (
-            <div className="rounded-md border border-red-200 bg-red-50 text-red-700 px-3 py-2 text-sm mb-4">
+            <NoticeBanner variant="error" compact className="mb-4">
               {error}
-            </div>
+            </NoticeBanner>
           )}
 
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -1137,192 +1168,54 @@ const handleCancel = () => {
       </FormDrawer>
 
       {!isAddingNew && (<>
-        {/* Search and Filters */}
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center space-x-4 w-full">
+        <FilterBar
+          search={{
+            value: table.search,
+            onChange: table.setSearch,
+            placeholder: "Search code, name, serial, IP…",
+          }}
+          filters={
+            <>
+              <FilterSelect
+                id="devices-branch"
+                value={branchFilter}
+                onChange={setBranchFilter}
+                options={branchFilterOptions}
+                width="w-56"
+                ariaLabel="Filter by branch"
+              />
+              <FilterSelect
+                id="devices-status"
+                value={statusFilter}
+                onChange={setStatusFilter}
+                options={statusFilterOptions}
+                width="w-44"
+                ariaLabel="Filter by status"
+              />
+            </>
+          }
+        />
 
-              <div className="rounded-xl border bg-white p-4 shadow-sm space-y-4">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-2">
-                    <div className="h-9 w-9 rounded-lg bg-indigo-50 flex items-center justify-center">
-                      <Filter className="w-4 h-4 text-indigo-600" />
-                    </div>
-                    <div>
-                      <p className="text-sm font-semibold text-gray-900">Branch Filter</p>
-                      <p className="text-xs text-gray-500">
-                        Select one or multiple branches
-                      </p>
-                    </div>
-                  </div>
-
-                  {user?.role !== "BRANCH_ADMIN" && (
-                    <div className="flex gap-2">
-                      <Button type="button" variant="outline" size="sm" onClick={selectAllBranches}>
-                        Select All
-                      </Button>
-
-                      <Button type="button" variant="outline" size="sm" onClick={clearBranchFilter}>
-                        <RotateCcw className="w-4 h-4 mr-1" />
-                        Clear
-                      </Button>
-                    </div>
-                  )}
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
-                  {branchFilterList.map((b) => (
-                    <label
-                      key={b.id}
-                      className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm hover:bg-gray-50 cursor-pointer"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={selectedBranchIds.includes(String(b.id))}
-                        disabled={user?.role === "BRANCH_ADMIN"}
-                        onChange={() => toggleBranchFilter(String(b.id))}
-                      />
-                      <span className="truncate">{b.branchName}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
-              <div className="relative flex-1 min-w-0">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-                <Input
-                  placeholder="Search devices..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10 w-full"
-                />
-              </div>
-              <Badge variant="secondary" className="px-3 py-1 flex-shrink-0">
-                {filteredDevices.length} devices
-              </Badge>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Device Table */}
-        <Card className="w-full">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Icon icon="mdi:devices" className="w-5 h-5" />
-              Device List
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-0 w-full">
-            <div className="overflow-x-auto w-full">
-              <Table className="w-full">
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-[120px] cursor-pointer" onClick={() => handleSort("deviceName")}>
-                      Device Name <SortIcon column="deviceName" />
-                    </TableHead>
-
-                    <TableHead className="w-[80px] cursor-pointer" onClick={() => handleSort("deviceType")}>
-                      Device Type <SortIcon column="deviceType" />
-                    </TableHead>
-
-                    <TableHead className="w-[100px] cursor-pointer" onClick={() => handleSort("deviceMake")}>
-                      Device Make <SortIcon column="deviceMake" />
-                    </TableHead>
-
-                    <TableHead className="w-[110px] cursor-pointer" onClick={() => handleSort("deviceModel")}>
-                      Device Model <SortIcon column="deviceModel" />
-                    </TableHead>
-
-                    <TableHead className="w-[120px] cursor-pointer" onClick={() => handleSort("deviceSN")}>
-                      Device SN <SortIcon column="deviceSN" />
-                    </TableHead>
-
-                    <TableHead className="w-[120px] cursor-pointer" onClick={() => handleSort("branchName")}>
-                      Branch Name <SortIcon column="branchName" />
-                    </TableHead>
-                    <TableHead className="w-[80px] text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {loading ? (
-                    Array.from({ length: 8 }).map((_, i) => (
-                      <TableRow key={i}>
-                        {Array.from({ length: 7 }).map((__, c) => (
-                          <TableCell key={c}>
-                            <div className={`h-3.5 rounded-full skeleton-shimmer ${c === 1 ? "w-32" : "w-20"}`} />
-                          </TableCell>
-                        ))}
-                      </TableRow>
-                    ))
-                  ) : filteredDevices.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={7} className="text-center py-8 text-gray-500">
-                        <div className="flex flex-col items-center gap-2">
-                          <Icon icon="mdi:devices" className="w-12 h-12 text-gray-300" />
-                          <p>No devices found</p>
-                          <p className="text-sm">Try adjusting your search criteria</p>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    filteredDevices.map((device) => (
-                      <TableRow key={device.id}>
-                        <TableCell className="font-medium whitespace-nowrap">{device.deviceName}</TableCell>
-                        <TableCell className="whitespace-nowrap">
-                          {device.deviceType ? (() => {
-                            const typeMap: Record<string, string> = {
-                              'AT': 'Attendance',
-                              'TR': 'Token Reg',
-                              'TV': 'Token Ver',
-                              'AT+TR': 'Att + Token Reg',
-                            };
-                            return (
-                              <Badge variant="secondary" className="text-xs">
-                                {typeMap[device.deviceType] || device.deviceType}
-                              </Badge>
-                            );
-                          })() : <span>—</span>}
-                        </TableCell>
-                        <TableCell className="whitespace-nowrap">{device.deviceMake}</TableCell>
-                        <TableCell className="whitespace-nowrap">{device.deviceModel}</TableCell>
-                        <TableCell className="whitespace-nowrap">{device.deviceSN}</TableCell>
-                        <TableCell className="whitespace-nowrap">{brName(device)}</TableCell>
-                        <TableCell className="text-right whitespace-nowrap">
-                          <div className="flex items-center justify-end gap-1">
-                            {/* ✏️ SUPERADMIN, SERVICE_PROVIDER & COMPANY_ADMIN can edit */}
-                            {canManage && (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleEdit(device)}
-                                className="h-7 w-7 p-0"
-                                title="Edit"
-                              >
-                                <Edit className="w-3 h-3" />
-                              </Button>
-                            )}
-
-                            {/* 🗑️ SUPERADMIN only can delete */}
-                            {canDelete && (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleDelete(device.id)}
-                                className="h-7 w-7 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
-                                title="Delete"
-                              >
-                                <Trash2 className="w-3 h-3" />
-                              </Button>
-                            )}
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
-            </div>
-          </CardContent>
-        </Card>
+        <EntityListShell
+          title="All devices"
+          columns={deviceColumns}
+          rows={filteredDevices}
+          rowKey={(d) => String(d.id)}
+          isLoading={loading}
+          sortBy={table.sortBy}
+          sortDir={table.sortDir}
+          onSort={table.setSort}
+          emptyIcon={Fingerprint}
+          emptyTitle="No devices yet"
+          emptyDescription="Add your first attendance device to start capturing punches."
+          emptyAction={
+            canAdd ? (
+              <Button onClick={() => { resetForm(); setIsAddingNew(true); }}>
+                <Plus className="w-4 h-4 mr-1" /> Add Device
+              </Button>
+            ) : undefined
+          }
+        />
       </>)}
     </div>
   );

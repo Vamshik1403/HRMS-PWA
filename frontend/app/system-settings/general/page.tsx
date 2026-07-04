@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useCurrentUser } from "../../hooks/useCurrentUser";
 import { getSidebarContext } from "../../utils/sidebarContext";
+import { NoticeBanner } from "../../components/ui/notice-banner";
 import { toast } from "sonner";
 
 const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL || "/backend";
@@ -98,9 +99,9 @@ export default function GeneralSettingsPage() {
         {loading ? (
           <p className="text-sm text-gray-400">Loading…</p>
         ) : !companyId ? (
-          <p className="text-sm text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-4 py-3">
+          <NoticeBanner variant="warning" compact>
             Select a company in the sidebar, then return to this page.
-          </p>
+          </NoticeBanner>
         ) : (
           <div className="bg-white border border-gray-200 rounded-xl p-5 space-y-4 shadow-sm">
             <div>

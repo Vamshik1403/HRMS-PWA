@@ -16,9 +16,44 @@ import { useCurrentUser } from "../hooks/useCurrentUser";
 import { authHeaders } from "@/lib/auth";
 import SoftBarChart from "./components/SoftBarChart";
 import type { SoftBarPoint } from "./components/SoftBarChart";
+import { DashboardHero } from "./components/DashboardHero";
+import { SuperadminPlatformDashboard } from "./components/SuperadminPlatformDashboard";
 import EmployeeStatusCharts, {
   type StatusBreakdownItem,
 } from "./components/EmployeeStatusCharts";
+import { StatCard } from "./components/StatCard";
+import {
+  cardShell,
+  panelTitle,
+  actionTileStackClass,
+  filterSelectClass,
+  listItemClass,
+  iconTileClass,
+  sectionGap,
+  gridGap,
+} from "./components/dashboard-ui";
+import { QuickActionGrid, type QuickActionItem } from "./components/QuickActionCard";
+import { AttendanceTrendChart } from "./components/AttendanceTrendChart";
+import { ActivityFeed, type ActivityItem } from "./components/ActivityFeed";
+import { EmptyState } from "./components/EmptyState";
+import { StatusChip } from "./components/StatusChip";
+import { NoticeBanner } from "@/app/components/ui/notice-banner";
+import {
+  Users,
+  UserCheck,
+  UserX,
+  CalendarClock,
+  UserCog,
+  MessageSquare,
+  UserMinus,
+  CalendarCheck,
+  CalendarDays,
+  CalendarX,
+  Banknote,
+  Wallet,
+  IndianRupee,
+  LineChart,
+} from "lucide-react";
 import { formatDevicePunchForDisplay } from "../utils/devicePunchTime";
 import { useAppRefresh } from "../hooks/useAppRefresh";
 import { isDesktopManagerFlagSet } from "@/lib/desktopManager";
@@ -118,27 +153,27 @@ interface OverviewSummary {
 function statusBadgeClass(statusType: string): string {
   switch (statusType) {
     case "PRESENT":
-      return "bg-emerald-50 text-emerald-700";
+      return "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300";
     case "LATE_MARK":
-      return "bg-amber-50 text-amber-700";
+      return "bg-amber-50 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300";
     case "HALF_DAY":
-      return "bg-violet-50 text-violet-700";
+      return "bg-violet-50 text-violet-700 dark:bg-violet-950/50 dark:text-violet-300";
     case "ABSENT":
-      return "bg-orange-50 text-orange-600";
+      return "bg-orange-50 text-orange-600 dark:bg-orange-950/50 dark:text-orange-300";
     case "SINGLE_PUNCH":
-      return "bg-indigo-50 text-indigo-700";
+      return "bg-indigo-50 text-indigo-700 dark:bg-indigo-950/50 dark:text-indigo-300";
     case "OT":
-      return "bg-teal-50 text-teal-700";
+      return "bg-teal-50 text-teal-700 dark:bg-teal-950/50 dark:text-teal-300";
     case "REGULARIZATION":
-      return "bg-purple-50 text-purple-700";
+      return "bg-purple-50 text-purple-700 dark:bg-purple-950/50 dark:text-purple-300";
     case "LEAVE":
-      return "bg-pink-50 text-pink-700";
+      return "bg-pink-50 text-pink-700 dark:bg-pink-950/50 dark:text-pink-300";
     case "WEEK_OFF":
-      return "bg-slate-100 text-slate-600";
+      return "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300";
     case "HOLIDAY":
-      return "bg-sky-50 text-sky-700";
+      return "bg-sky-50 text-sky-700 dark:bg-sky-950/50 dark:text-sky-300";
     default:
-      return "bg-gray-100 text-gray-700";
+      return "bg-muted text-muted-foreground";
   }
 }
 
@@ -186,8 +221,6 @@ interface ActivityComment {
   avatarBg: string;
 }
 
-const cardShell =
-  "bg-white rounded-xl shadow-[0_1px_3px_rgba(0,0,0,0.04),0_4px_12px_rgba(0,0,0,0.03)] border border-[#e5e7eb]";
 
 export default function DashboardPage() {
   const user = useCurrentUser();
@@ -863,15 +896,78 @@ export default function DashboardPage() {
     return items.sort((a, b) => b.sortAt - a.sortAt).slice(0, 20);
   }, [attendanceLogs, employees]);
 
+  const sparklineData = useMemo(() => barData.map((d) => d.value), [barData]);
+
+  const dashboardInsights = useMemo(() => {
+    const items: { label: string; value: string; tone?: "default" | "success" | "warning" | "info" }[] = [];
+    if (overviewStatsReady) {
+      items.push({ label: "Present today", value: String(overviewPresent), tone: "success" });
+    }
+    const pendingLeave = hrWidgets?.pendingCounts?.leave;
+    if (typeof pendingLeave === "number" && pendingLeave > 0) {
+      items.push({ label: "Pending leave", value: String(pendingLeave), tone: "warning" });
+    }
+    const birthdays = hrWidgets?.upcomingEvents?.filter((e) => e.kind === "birthday").length ?? 0;
+    if (birthdays > 0) {
+      items.push({ label: "Birthdays", value: String(birthdays), tone: "info" });
+    }
+    if (overviewStatsReady && overviewTotal > 0) {
+      const rate = Math.round((overviewPresent / overviewTotal) * 1000) / 10;
+      items.push({ label: "Attendance", value: `${rate}%`, tone: "default" });
+    }
+    return items;
+  }, [overviewStatsReady, overviewPresent, hrWidgets, overviewTotal]);
+
+  const activityItems: ActivityItem[] = useMemo(() => {
+    const fromComments: ActivityItem[] = commentFeed.map((c) => ({
+      id: String(c.id),
+      headline: c.headline,
+      body: c.body,
+      time: c.time,
+      avatarInitial: c.avatarInitial,
+      avatarBg: c.avatarBg,
+      href: "/attendance-logs",
+    }));
+    const fromTasks = (hrWidgets?.latestTasks ?? []).slice(0, 3).map((t) => ({
+      id: `task-${t.id}`,
+      headline: `${t.taskCode} — ${t.taskName}`,
+      body: `${t.status} · ${t.priority}`,
+      time: "Task update",
+      avatarInitial: "T",
+      avatarBg: "bg-primary",
+      href: "/task-projects",
+    }));
+    return [...fromTasks, ...fromComments].slice(0, 8);
+  }, [commentFeed, hrWidgets]);
+
+  const quickActions: QuickActionItem[] = useMemo(
+    () => [
+      { href: "/manage-employees", label: "Manage employees", description: "Create or edit staff records", icon: UserCog },
+      { href: "/employee-memo", label: "Internal messaging", description: "Send memos and announcements", icon: MessageSquare },
+      { href: "/termination", label: "Off boarding", description: "Process employee exits", icon: UserMinus },
+      { href: "/attendance-regularisation", label: "Attendance regularization", description: "Review and approve punches", icon: CalendarCheck },
+      { href: "/roster", label: "Workshift roster", description: "Plan shifts and schedules", icon: CalendarDays },
+      { href: "/leave-applications", label: "Leave applications", description: "Review time-off requests", icon: CalendarX },
+      { href: "/reimbursement", label: "Reimbursements", description: "Process expense claims", icon: Wallet },
+      { href: "/salary-advance", label: "Salary advance", description: "Manage advance requests", icon: Banknote },
+      { href: "/generate-salary", label: "Run payroll", description: "Generate monthly payroll", icon: IndianRupee },
+      { href: "/attendance-reports", label: "Reports", description: "Attendance and HR analytics", icon: LineChart },
+    ],
+    [],
+  );
+
   if (!dashboardLoading && !overviewLoading && bootstrapReady && user) {
     hasShownDashboardContent.current = true;
   }
 
+  const isSuperadmin = user?.role === "SUPERADMIN";
+
   const showFullPageSkeleton =
     !user ||
-    !bootstrapReady ||
-    dashboardLoading ||
-    (overviewLoading && !hasShownDashboardContent.current);
+    (!isSuperadmin &&
+      (!bootstrapReady ||
+        dashboardLoading ||
+        (overviewLoading && !hasShownDashboardContent.current)));
 
   if (showFullPageSkeleton) {
     return (
@@ -893,6 +989,15 @@ export default function DashboardPage() {
     );
   }
 
+  if (isSuperadmin) {
+    return (
+      <div className="space-y-6 animate-fade-in">
+        <DashboardHero firstName={user?.firstName || user?.username} isSuperadmin />
+        <SuperadminPlatformDashboard />
+      </div>
+    );
+  }
+
   const attRate =
     overviewTotal > 0
       ? Math.round((overviewPresent / overviewTotal) * 1000) / 10
@@ -901,32 +1006,34 @@ export default function DashboardPage() {
   const absentCount = overviewAbsent;
 
   return (
-    <div className="space-y-5">
+    <div className={`${sectionGap} animate-fade-in`}>
+      <DashboardHero
+        firstName={user?.firstName || user?.username}
+        roleLabel={user?.role === "COMPANY_ADMIN" ? "Company Admin" : user?.role?.replace(/_/g, " ")}
+        isSuperadmin={user?.role === "SUPERADMIN"}
+        lastSyncMinutesAgo={overviewStatsReady ? 2 : null}
+        insights={dashboardInsights}
+      />
       {probationAlerts.length > 0 && (
-        <section className="rounded-xl border border-amber-200 bg-amber-50 p-4 sm:p-5">
-          <div className="flex items-start gap-3">
-            <Icon icon="mdi:alert-circle-outline" className="w-6 h-6 text-amber-700 shrink-0 mt-0.5" />
-            <div className="flex-1 min-w-0">
-              <h2 className="text-sm font-bold text-amber-900">Probation ending soon</h2>
-              <p className="text-xs text-amber-800 mt-1">
-                Employees on probation whose period is ending within 60 days (based on employment status WEF and probation period).
-              </p>
-              <ul className="mt-3 space-y-2 max-h-40 overflow-y-auto">
-                {probationAlerts.slice(0, 8).map((a) => (
-                  <li key={a.employeeId} className="text-xs text-amber-900 flex flex-wrap gap-x-2 gap-y-0.5">
-                    <Link href="/manage-employees" className="font-semibold underline">
-                      {a.employeeName}
-                    </Link>
-                    <span>· {a.probationPeriod} · ends {a.probationEndDate}</span>
-                    <span className={a.isOverdue ? "text-red-700 font-semibold" : ""}>
-                      {a.isOverdue ? "(overdue)" : `(${a.daysRemaining} days left)`}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </div>
-        </section>
+        <NoticeBanner
+          variant="warning"
+          title="Probation ending soon"
+          description="Employees on probation whose period is ending within 60 days (based on employment status WEF and probation period)."
+        >
+          <ul className="space-y-2 max-h-40 overflow-y-auto">
+            {probationAlerts.slice(0, 8).map((a) => (
+              <li key={a.employeeId} className="text-xs text-foreground flex flex-wrap gap-x-2 gap-y-0.5">
+                <Link href="/manage-employees" className="font-semibold text-primary hover:underline">
+                  {a.employeeName}
+                </Link>
+                <span className="text-muted-foreground">· {a.probationPeriod} · ends {a.probationEndDate}</span>
+                <span className={a.isOverdue ? "text-destructive font-semibold" : "text-muted-foreground"}>
+                  {a.isOverdue ? "(overdue)" : `(${a.daysRemaining} days left)`}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </NoticeBanner>
       )}
       {/* Create Company Card - SUPERADMIN only */}
       {user?.role === "SUPERADMIN" && (
@@ -946,13 +1053,66 @@ export default function DashboardPage() {
           </div>
         </section>
       )}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 items-stretch">
-        <div className="lg:col-span-2 flex flex-col gap-5 min-h-0">
-          <section className={`${cardShell} p-6 sm:p-7 shrink-0`}>
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
-              <h2 className="text-lg font-bold text-gray-900 tracking-tight">
-                Overview
-              </h2>
+      <div className={`grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 ${gridGap}`}>
+        <StatCard
+          stat={{
+            label: "Employees",
+            value: formatOverviewStat(overviewTotal),
+            icon: Users,
+            trendLabel: "Total workforce",
+            sparkline: sparklineData,
+          }}
+        />
+        <StatCard
+          stat={{
+            label: "Present today",
+            value: formatOverviewStat(overviewPresent),
+            icon: UserCheck,
+            trend: overviewStatsReady ? presentTrendVsYesterday : undefined,
+            trendLabel: overviewStatsReady
+              ? `${attRate}% attendance rate`
+              : undefined,
+            sparkline: sparklineData,
+            iconClassName: "bg-emerald-500/10 text-emerald-600",
+          }}
+        />
+        <StatCard
+          stat={{
+            label: "Absent today",
+            value: formatOverviewStat(absentCount),
+            icon: UserX,
+            trend:
+              overviewStatsReady && overviewTotal > 0
+                ? -Math.round((absentCount / overviewTotal) * 100)
+                : undefined,
+            trendLabel:
+              overviewStatsReady && overviewTotal > 0
+                ? `${Math.round((absentCount / overviewTotal) * 100)}% of workforce`
+                : undefined,
+            iconClassName: "bg-rose-500/10 text-rose-600",
+          }}
+        />
+        {isHrDesktopView && (
+          <StatCard
+            stat={{
+              label: "Pending leave",
+              value: hrWidgets?.pendingCounts?.leave ?? 0,
+              icon: CalendarClock,
+              trendLabel: "Awaiting approval",
+              iconClassName: "bg-amber-500/10 text-amber-600",
+            }}
+          />
+        )}
+      </div>
+
+      <div className={`grid grid-cols-1 lg:grid-cols-3 ${gridGap} items-stretch`}>
+        <div className="lg:col-span-2 flex flex-col gap-8 min-h-0">
+          <section className={`${cardShell} p-7 sm:p-8 shrink-0`}>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+              <div>
+                <h2 className={panelTitle}>Overview</h2>
+                <p className="text-[13px] text-muted-foreground mt-1">Workforce distribution and attendance mix</p>
+              </div>
               <div className="flex flex-wrap items-center gap-2">
                 {user.role !== "EMPLOYEE" && user.role !== "BRANCH_ADMIN" && (
                   <select
@@ -961,7 +1121,7 @@ export default function DashboardPage() {
                       setSelectedBranchId(e.target.value);
                       setSelectedDepartmentId("");
                     }}
-                    className="rounded-full border border-[#e5e7eb] bg-white px-3 py-1.5 text-xs font-medium text-gray-700 min-w-[140px]"
+                    className={filterSelectClass}
                     aria-label="Filter by branch"
                   >
                     <option value="">All branches</option>
@@ -975,7 +1135,7 @@ export default function DashboardPage() {
                 <select
                   value={selectedDepartmentId}
                   onChange={(e) => setSelectedDepartmentId(e.target.value)}
-                  className="rounded-full border border-[#e5e7eb] bg-white px-3 py-1.5 text-xs font-medium text-gray-700 min-w-[140px]"
+                  className={filterSelectClass}
                   aria-label="Filter by department"
                 >
                   <option value="">All departments</option>
@@ -992,105 +1152,39 @@ export default function DashboardPage() {
             </div>
 
             {overviewLoadError && !overviewStatsReady && (
-              <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
-                <p className="text-sm text-amber-900">
-                  Overview data could not be loaded. This is usually temporary.
-                </p>
-                <button
-                  type="button"
-                  onClick={() => loadTodayOverview()}
-                  className="text-sm font-semibold text-[#4f46e5] hover:underline"
-                >
-                  Retry
-                </button>
-              </div>
+              <NoticeBanner
+                variant="warning"
+                compact
+                className="mb-4"
+                actionLabel="Retry"
+                onAction={() => loadTodayOverview()}
+              >
+                Overview data could not be loaded. This is usually temporary.
+              </NoticeBanner>
             )}
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-              {/* All Employees */}
-              <div className="rounded-xl border border-[#e5e7eb] bg-white p-5">
-                <div className="relative">
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="w-10 h-10 rounded-lg bg-[#eef2ff] flex items-center justify-center">
-                      <Icon icon="mdi:account-group" className="w-5 h-5 text-[#4f46e5]" />
-                    </div>
-                    <span className="text-[11px] font-medium text-[#4338ca] bg-[#eef2ff] px-2.5 py-1 rounded-full">Total</span>
-                  </div>
-                  <p className="text-3xl font-bold tracking-tight tabular-nums text-[#111827]">
-                    {formatOverviewStat(overviewTotal)}
-                  </p>
-                  <p className="text-[13px] font-medium text-gray-500 mt-1">
-                    All employees
-                  </p>
-                  <div className="mt-3 h-1 w-full rounded-full bg-[#eef2ff] overflow-hidden">
-                    <div className="h-full rounded-full bg-[#4f46e5] transition-[width] duration-500" style={{ width: "100%" }} />
-                  </div>
-                </div>
-              </div>
-
-              {/* Present Employees */}
-              <div className="rounded-xl border border-[#e5e7eb] bg-white p-5">
-                <div className="relative">
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="w-10 h-10 rounded-lg bg-[#eef2ff] flex items-center justify-center">
-                      <Icon icon="mdi:account-check" className="w-5 h-5 text-[#4f46e5]" />
-                    </div>
-                    <span className="text-[11px] font-medium text-[#4338ca] bg-[#eef2ff] px-2.5 py-1 rounded-full">{overviewStatsReady ? `${attRate}%` : "—"}</span>
-                  </div>
-                  <p className="text-3xl font-bold tracking-tight tabular-nums text-[#111827]">
-                    {formatOverviewStat(overviewPresent)}
-                  </p>
-                  <p className="text-[13px] font-medium text-gray-500 mt-1">
-                    Present today
-                  </p>
-                  <div className="mt-3 flex items-center gap-2">
-                    <div className="flex-1 h-1 rounded-full bg-[#eef2ff] overflow-hidden">
-                      <div className="h-full rounded-full bg-[#4f46e5] transition-[width] duration-500" style={{ width: `${attRate}%` }} />
-                    </div>
-                    <span className={`text-[11px] font-bold ${presentTrendVsYesterday >= 0 ? "text-[#4f46e5]" : "text-rose-500"}`}>
-                      {presentTrendVsYesterday >= 0 ? "+" : ""}{presentTrendVsYesterday}%
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Absent Employees */}
-              <div className="rounded-xl border border-[#e5e7eb] bg-white p-5">
-                <div className="relative">
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="w-10 h-10 rounded-lg bg-[#eef2ff] flex items-center justify-center">
-                      <Icon icon="mdi:account-remove" className="w-5 h-5 text-[#4f46e5]" />
-                    </div>
-                    <span className="text-[11px] font-medium text-[#4338ca] bg-[#eef2ff] px-2.5 py-1 rounded-full">{overviewStatsReady && overviewTotal > 0 ? Math.round((absentCount / overviewTotal) * 100) : 0}%</span>
-                  </div>
-                  <p className="text-3xl font-bold tracking-tight tabular-nums text-[#111827]">
-                    {formatOverviewStat(absentCount)}
-                  </p>
-                  <p className="text-[13px] font-medium text-gray-500 mt-1">
-                    Absent today
-                  </p>
-                  <div className="mt-3 h-1 w-full rounded-full bg-[#eef2ff] overflow-hidden">
-                    <div className="h-full rounded-full bg-[#4f46e5] transition-[width] duration-500" style={{ width: `${overviewTotal > 0 ? Math.round((absentCount / overviewTotal) * 100) : 0}%`, minWidth: absentCount > 0 ? "4px" : undefined }} />
-                  </div>
-                </div>
-              </div>
+            <div className="rounded-xl bg-muted/30 p-5 sm:p-6 mb-6">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-4">
+                Workforce distribution
+              </p>
+              <EmployeeStatusCharts
+                total={overviewTotal}
+                present={overviewPresent}
+                absent={absentCount}
+                statusBreakdown={statusBreakdown}
+              />
             </div>
 
-            {!isHrDesktopView && (
-              <div className="rounded-xl border border-[#e5e7eb] bg-[#fafafa]/60 p-4 sm:p-5 mb-6">
-                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-4">
-                  Workforce mix
+            {isHrDesktopView && (
+              <div className="rounded-xl bg-muted/30 p-5 sm:p-6 mb-2">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-4">
+                  Attendance trend · Last 7 days
                 </p>
-                <EmployeeStatusCharts
-                  total={overviewTotal}
-                  present={overviewPresent}
-                  absent={absentCount}
-                  statusBreakdown={statusBreakdown}
-                />
+                <AttendanceTrendChart data={barData} className="h-[220px]" />
               </div>
             )}
 
-            <p className="text-sm font-semibold text-gray-800 mb-4">
+            <p className="text-sm font-semibold text-foreground mb-4">
               {overviewPresent} checked in today
               {overviewSummary && overviewSummary.lateMark > 0
                 ? ` · ${overviewSummary.lateMark} late mark`
@@ -1134,9 +1228,7 @@ export default function DashboardPage() {
 
           {isHrDesktopView && (
             <section className={`${cardShell} p-6 sm:p-7 shrink-0`}>
-              <h2 className="text-lg font-bold text-gray-900 tracking-tight mb-4">
-                Pending requests
-              </h2>
+              <h2 className={`${panelTitle} mb-4`}>Pending requests</h2>
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
                 {[
                   { href: "/employee-memo", label: "Internal Messages (IM)", count: hrWidgets?.pendingCounts?.im },
@@ -1148,7 +1240,7 @@ export default function DashboardPage() {
                   <Link
                     key={item.href}
                     href={item.href}
-                    className="flex flex-col items-center justify-center gap-1.5 rounded-lg border border-[#ebebeb] px-3 py-2.5 text-xs font-semibold text-gray-800 hover:bg-[#fafafa] text-center min-h-[4.5rem]"
+                    className={actionTileStackClass}
                   >
                     <span className="leading-snug">{item.label}</span>
                     {typeof item.count === "number" && item.count > 0 ? (
@@ -1166,28 +1258,26 @@ export default function DashboardPage() {
 
           {isHrDesktopView && (
             <section className={`${cardShell} p-6 sm:p-7 shrink-0`}>
-              <h2 className="text-lg font-bold text-gray-900 tracking-tight mb-2">
-                News feed
-              </h2>
+              <h2 className={`${panelTitle} mb-2`}>News feed</h2>
               {hrWidgets?.newsFeed?.length ? (
                 <ul className="space-y-3">
                   {hrWidgets.newsFeed.map((item) => (
                     <li key={item.id} className="flex gap-3 text-sm">
-                      <div className="w-8 h-8 rounded-lg bg-[#eef2ff] flex items-center justify-center shrink-0">
+                      <div className={iconTileClass}>
                         <Icon
                           icon={item.kind === "holiday" ? "mdi:calendar-star" : "mdi:account-plus"}
-                          className="w-4 h-4 text-[#4f46e5]"
+                          className="w-4 h-4 text-primary"
                         />
                       </div>
                       <div className="min-w-0">
-                        <p className="font-semibold text-gray-900">{item.title}</p>
-                        <p className="text-xs text-gray-500 mt-0.5">{item.subtitle}</p>
+                        <p className="font-semibold text-foreground">{item.title}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">{item.subtitle}</p>
                       </div>
                     </li>
                   ))}
                 </ul>
               ) : (
-                <p className="text-sm text-gray-400">No news updates right now</p>
+                <p className="text-sm text-muted-foreground">No news updates right now</p>
               )}
             </section>
           )}
@@ -1210,131 +1300,79 @@ export default function DashboardPage() {
           )}
         </div>
 
-        <div className="flex flex-col gap-5 min-h-0 h-full lg:min-h-full">
-          <section className={`${cardShell} p-6 shrink-0`}>
-            <h2 className="text-lg font-bold text-gray-900 tracking-tight mb-4">
-              Quick actions
-            </h2>
-            <div className="grid grid-cols-2 gap-2">
-              {[
-                { href: "/manage-employees", label: "Manage employee", icon: "mdi:account-group" },
-                { href: "/employee-memo", label: "Internal Messaging (IM)", icon: "mdi:message-text" },
-                { href: "/termination", label: "Off boarding", icon: "mdi:account-off" },
-                { href: "/attendance-regularisation", label: "Attendance regularization", icon: "mdi:calendar-check" },
-                { href: "/roster", label: "Workshift roster", icon: "mdi:calendar-sync" },
-                { href: "/leave-applications", label: "Leave application", icon: "mdi:calendar-remove" },
-                { href: "/reimbursement", label: "Reimbursement", icon: "mdi:cash-refund" },
-                { href: "/salary-advance", label: "Salary advance", icon: "mdi:cash-fast" },
-                { href: "/generate-salary", label: "Run payroll", icon: "mdi:currency-inr" },
-                { href: "/attendance-reports", label: "Reports", icon: "mdi:chart-line" },
-              ].map((a) => (
-                <Link
-                  key={a.href}
-                  href={a.href}
-                  className="flex items-center gap-2 rounded-lg border border-[#ebebeb] px-3 py-2.5 text-xs font-semibold text-gray-800 hover:bg-[#fafafa] transition-colors"
-                >
-                  <Icon icon={a.icon} className="w-4 h-4 text-[#4f46e5] shrink-0" />
-                  <span className="leading-tight">{a.label}</span>
-                </Link>
-              ))}
+        <div className="flex flex-col gap-5 h-full min-h-0">
+          <section className={`${cardShell} p-4 sm:p-5 shrink-0`}>
+            <h2 className="text-base font-semibold tracking-tight text-foreground mb-3">Quick actions</h2>
+            <QuickActionGrid actions={quickActions} iconOnly />
+          </section>
+
+          <section className={`${cardShell} p-5 flex flex-col flex-1 min-h-[11rem]`}>
+            <h2 className={`${panelTitle} mb-3 shrink-0`}>Recent activity</h2>
+            <div className="flex-1 flex flex-col min-h-0">
+              <ActivityFeed items={activityItems} fillHeight />
             </div>
           </section>
 
-          {!isHrDesktopView && (
-          <section className={`${cardShell} p-6 flex flex-col min-h-0 flex-1 overflow-hidden`}>
-            <h2 className="text-lg font-bold text-gray-900 tracking-tight mb-3 shrink-0">
-              Comments
-            </h2>
-            {commentFeed.length === 0 ? (
-              <div className="flex flex-1 min-h-0 basis-0 items-center justify-center">
-                <p className="text-sm text-gray-400 text-center">No comments yet</p>
-              </div>
-            ) : (
-              <div className="overflow-y-auto flex-1 min-h-0 basis-0 pr-1 -mr-1">
-                <ul className="space-y-5">
-                  {commentFeed.map((c) => (
-                    <li key={`${c.id}-${c.sortAt}`} className="flex gap-3">
-                      <div
-                        className={`w-10 h-10 rounded-full ${c.avatarBg} flex items-center justify-center text-white text-sm font-bold shrink-0`}
-                      >
-                        {c.avatarInitial}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-xs font-semibold text-gray-900">
-                          {c.headline}
-                        </p>
-                        <p className="text-[11px] text-gray-400 mt-0.5">
-                          {c.time}
-                        </p>
-                        <p className="text-sm text-gray-600 mt-2 leading-relaxed">
-                          {c.body}
-                        </p>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-          </section>
-          )}
-
           {isHrDesktopView && (
-            <section className={`${cardShell} p-6 shrink-0`}>
-              <h2 className="text-lg font-bold text-gray-900 tracking-tight mb-3">
-                Task list
-              </h2>
-              {hrWidgets?.latestTasks?.length ? (
-                <ul className="space-y-2">
-                  {hrWidgets.latestTasks.map((t) => (
-                    <li key={t.id}>
-                      <Link
-                        href="/task-projects"
-                        className="block rounded-lg border border-[#ebebeb] px-3 py-2 hover:bg-[#fafafa]"
-                      >
-                        <p className="text-xs font-semibold text-gray-900 leading-snug whitespace-normal break-words">
-                          {t.taskCode} — {t.taskName}
-                        </p>
-                        <p className="text-[11px] text-gray-500 mt-0.5">
-                          {t.status} · {t.priority}
-                        </p>
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="text-sm text-gray-400">No tasks to show</p>
-              )}
+            <section className={`${cardShell} p-5 flex flex-col flex-1 min-h-[9rem]`}>
+              <h2 className={`${panelTitle} mb-3 shrink-0`}>Task list</h2>
+              <div className="flex-1 flex flex-col min-h-0">
+                {hrWidgets?.latestTasks?.length ? (
+                  <ul className="space-y-2 flex-1 overflow-y-auto min-h-0">
+                    {hrWidgets.latestTasks.map((t) => (
+                      <li key={t.id}>
+                        <Link href="/task-projects" className={listItemClass}>
+                          <p className="text-xs font-semibold text-foreground leading-snug whitespace-normal break-words">
+                            {t.taskCode} — {t.taskName}
+                          </p>
+                          <p className="text-[11px] text-muted-foreground mt-0.5">
+                            {t.status} · {t.priority}
+                          </p>
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <div className="flex-1 flex items-center justify-center">
+                    <p className="text-sm text-muted-foreground">No tasks to show</p>
+                  </div>
+                )}
+              </div>
             </section>
           )}
 
           {isHrDesktopView && (
-            <section className={`${cardShell} p-6 shrink-0`}>
-              <h2 className="text-lg font-bold text-gray-900 tracking-tight mb-3">
+            <section className={`${cardShell} p-5 flex flex-col flex-1 min-h-[9rem]`}>
+              <h2 className={`${panelTitle} mb-3 shrink-0`}>
                 Upcoming birthdays &amp; anniversary
               </h2>
-              {hrWidgets?.upcomingEvents?.length ? (
-                <ul className="space-y-2">
-                  {hrWidgets.upcomingEvents.map((ev) => (
-                    <li
-                      key={ev.id}
-                      className="flex items-start gap-2.5 rounded-lg border border-[#ebebeb] px-3 py-2.5"
-                    >
-                      <Icon
-                        icon={ev.kind === "birthday" ? "mdi:cake-variant" : "mdi:medal"}
-                        className="w-4 h-4 text-[#4f46e5] shrink-0 mt-0.5"
-                      />
-                      <div className="min-w-0 flex-1">
-                        <p className="text-xs font-semibold text-gray-900 leading-snug whitespace-normal break-words">
-                          {ev.label}
-                        </p>
-                        <p className="text-[11px] text-gray-500 capitalize mt-0.5">{ev.kind} · {ev.when}</p>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="text-sm text-gray-400">No upcoming events</p>
-              )}
+              <div className="flex-1 flex flex-col min-h-0">
+                {hrWidgets?.upcomingEvents?.length ? (
+                  <ul className="space-y-2 flex-1 overflow-y-auto min-h-0">
+                    {hrWidgets.upcomingEvents.map((ev) => (
+                      <li
+                        key={ev.id}
+                        className="flex items-start gap-2.5 rounded-lg border border-border bg-background px-3 py-2.5"
+                      >
+                        <Icon
+                          icon={ev.kind === "birthday" ? "mdi:cake-variant" : "mdi:medal"}
+                          className="w-4 h-4 text-primary shrink-0 mt-0.5"
+                        />
+                        <div className="min-w-0 flex-1">
+                          <p className="text-xs font-semibold text-foreground leading-snug whitespace-normal break-words">
+                            {ev.label}
+                          </p>
+                          <p className="text-[11px] text-muted-foreground capitalize mt-0.5">{ev.kind} · {ev.when}</p>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <div className="flex-1 flex items-center justify-center">
+                    <p className="text-sm text-muted-foreground">No upcoming events</p>
+                  </div>
+                )}
+              </div>
             </section>
           )}
 
@@ -1390,8 +1428,8 @@ export default function DashboardPage() {
       </div>
 
       <section className={`${cardShell} overflow-hidden`}>
-        <div className="px-6 py-4 border-b border-[#f0f0f0] flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-          <h2 className="text-sm font-bold text-gray-900">
+        <div className="px-6 py-4 border-b border-border flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <h2 className="text-sm font-bold text-foreground">
             Today&apos;s attendance
           </h2>
           <div className="flex flex-wrap items-center gap-2">
@@ -1402,7 +1440,7 @@ export default function DashboardPage() {
                   setSelectedBranchId(e.target.value);
                   setSelectedDepartmentId("");
                 }}
-                className="rounded-full border border-[#e5e7eb] bg-white px-3 py-1.5 text-xs font-medium text-gray-700"
+                className={filterSelectClass}
               >
                 <option value="">All branches</option>
                 {branches.map((b) => (
@@ -1416,7 +1454,7 @@ export default function DashboardPage() {
               <select
                 value={selectedDepartmentId}
                 onChange={(e) => setSelectedDepartmentId(e.target.value)}
-                className="rounded-full border border-[#e5e7eb] bg-white px-3 py-1.5 text-xs font-medium text-gray-700"
+                className={filterSelectClass}
               >
                 <option value="">All departments</option>
                 {filterDepartments.map((d) => (
@@ -1426,7 +1464,7 @@ export default function DashboardPage() {
                 ))}
               </select>
             )}
-            <span className="text-xs text-gray-500 font-medium bg-[#f6f6f6] border border-[#ebebeb] px-3 py-1.5 rounded-full">
+            <span className="text-xs text-muted-foreground font-medium bg-muted border border-border px-3 py-1.5 rounded-full">
               {todayDate}
             </span>
           </div>
@@ -1434,35 +1472,35 @@ export default function DashboardPage() {
         <div className="overflow-x-auto">
           <Table>
             <TableHeader>
-              <TableRow className="bg-[#fafafa]/80 hover:bg-[#fafafa]/80 border-0">
-                <TableHead className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider w-12">
+              <TableRow className="bg-muted/50 hover:bg-muted/50 border-0">
+                <TableHead className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider w-12">
                   #
                 </TableHead>
-                <TableHead className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">
+                <TableHead className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
                   Name
                 </TableHead>
                 {isHrDesktopView && (
                   <>
-                    <TableHead className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">
+                    <TableHead className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
                       Department
                     </TableHead>
-                    <TableHead className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">
+                    <TableHead className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
                       Designation
                     </TableHead>
                   </>
                 )}
-                <TableHead className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">
+                <TableHead className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
                   {isHrDesktopView ? "In time & Location" : "In"}
                 </TableHead>
-                <TableHead className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">
+                <TableHead className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
                   {isHrDesktopView ? "Out time & Location" : "Out"}
                 </TableHead>
                 {!isHrDesktopView && (
-                <TableHead className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">
+                <TableHead className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
                   Location
                 </TableHead>
                 )}
-                <TableHead className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">
+                <TableHead className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
                   Status
                 </TableHead>
               </TableRow>
@@ -1470,18 +1508,26 @@ export default function DashboardPage() {
             <TableBody>
               {overviewEmployees.length === 0 ? (
                 <TableRow>
-                  <TableCell
-                    colSpan={isHrDesktopView ? 7 : 6}
-                    className="text-center py-10 text-sm text-gray-400"
-                  >
-                    {overviewLoading ? "Loading attendance…" : "No employees found"}
+                  <TableCell colSpan={isHrDesktopView ? 7 : 6} className="p-0">
+                    <EmptyState
+                      icon={Users}
+                      title="No attendance records"
+                      description={
+                        overviewLoading
+                          ? "Loading today's attendance data…"
+                          : "Employees haven't checked in yet today."
+                      }
+                      actionLabel={overviewLoadError ? "Refresh" : "View employees"}
+                      actionHref={overviewLoadError ? undefined : "/manage-employees"}
+                      onAction={overviewLoadError ? () => loadTodayOverview() : undefined}
+                    />
                   </TableCell>
                 </TableRow>
               ) : (
                 overviewEmployees.map((e, i) => (
                     <TableRow
                       key={e.id}
-                      className="hover:bg-[#fafafa]/80 border-[#f5f5f5]"
+                      className="hover:bg-muted/40 border-border"
                     >
                       <TableCell className="text-sm text-gray-500 font-medium">
                         {i + 1}
@@ -1546,12 +1592,11 @@ export default function DashboardPage() {
                       </TableCell>
                       )}
                       <TableCell>
-                        <span
-                          className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold ${statusBadgeClass(e.statusType)}`}
+                        <StatusChip
+                          statusType={e.statusType}
+                          label={e.statusDisplay}
                           title={e.statusLabel}
-                        >
-                          {e.statusDisplay}
-                        </span>
+                        />
                       </TableCell>
                     </TableRow>
                   ))

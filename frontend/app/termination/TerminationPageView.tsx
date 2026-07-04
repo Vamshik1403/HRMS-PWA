@@ -11,25 +11,15 @@ import {
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "../components/ui/table";
 import { Badge } from "../components/ui/badge";
 import {
   Plus,
-  Search,
   X,
   Save,
   CheckCircle2,
-  AlertTriangle,
-  RotateCcw,
-  Filter,
+  UserCog,
 } from "lucide-react";
+import { NoticeBanner } from "../components/ui/notice-banner";
 import {
   Dialog,
   DialogContent,
@@ -38,7 +28,11 @@ import {
   DialogFooter,
 } from "../components/ui/dialog";
 import { useCurrentUser } from "../hooks/useCurrentUser";
-import { TableBodySkeleton } from "../components/ui/TableBodySkeleton";
+import { PageHeader } from "../components/app/page-header";
+import { FilterBar, FilterSelect } from "../components/app/filter-bar";
+import { EntityListShell } from "../components/app/entity-list-shell";
+import type { DataTableColumn } from "../components/app/data-table";
+import { useClientTable, sortRows } from "../hooks/use-client-table";
 
 type ID = number;
 
@@ -116,7 +110,9 @@ export default function TerminationManagement() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [isAdding, setIsAdding] = useState(false);
-  const [search, setSearch] = useState("");
+  const table = useClientTable("employee");
+  const [branchFilter, setBranchFilter] = useState("ALL");
+  const [departmentFilter, setDepartmentFilter] = useState("ALL");
 
   // Employee autocomplete
   const [empSearch, setEmpSearch] = useState("");
@@ -127,10 +123,6 @@ const [branchList, setBranchList] = useState<Branch[]>([]);
 const [departmentList, setDepartmentList] = useState<Department[]>([]);
 const [selectedBranchID, setSelectedBranchID] = useState("");
 const [selectedDepartmentID, setSelectedDepartmentID] = useState("");
-
-const [selectedFilterBranchIds, setSelectedFilterBranchIds] = useState<string[]>([]);
-const [selectedFilterDepartmentIds, setSelectedFilterDepartmentIds] = useState<string[]>([]);
-const [showFilterModal, setShowFilterModal] = useState(false);
 
 const empRef = useRef<HTMLDivElement>(null);
 
@@ -203,6 +195,7 @@ const empRef = useRef<HTMLDivElement>(null);
           (d) => Number(d.branchesID) === Number(user.branchesID)
         );
         setSelectedBranchID(String(user.branchesID));
+        setBranchFilter(String(user.branchesID));
       }
 
       setBranchList(branches);
@@ -316,8 +309,6 @@ if (user?.role === "BRANCH_ADMIN" && user?.branchesID) {
     noticeDays: "",
     disableLoginOn: "",
   });
-
-  setShowFilterModal(false);
 };
 
 useEffect(() => {
@@ -511,82 +502,81 @@ setForm({
   // Search
   // -------------------
 
-    const toggleFilterBranch = (branchId: string) => {
-    setSelectedFilterBranchIds((prev) => {
-      const next = prev.includes(branchId)
-        ? prev.filter((id) => id !== branchId)
-        : [...prev, branchId];
-
-      if (next.length > 0) {
-        setSelectedFilterDepartmentIds((deptPrev) =>
-          deptPrev.filter((deptId) => {
-            const dept = departmentList.find(
-              (d) => String(d.id) === String(deptId)
-            );
-            return dept && next.includes(String(dept.branchesID));
-          })
-        );
-      }
-
-      return next;
-    });
-  };
-
-  const toggleFilterDepartment = (departmentId: string) => {
-    setSelectedFilterDepartmentIds((prev) =>
-      prev.includes(departmentId)
-        ? prev.filter((id) => id !== departmentId)
-        : [...prev, departmentId]
-    );
-  };
-
-  const selectAllFilterBranches = () => {
-    setSelectedFilterBranchIds(branchList.map((b) => String(b.id)));
-  };
-
-  const selectAllFilterDepartments = () => {
-    setSelectedFilterDepartmentIds(
-      visibleFilterDepartments.map((d) => String(d.id))
-    );
-  };
-
-  const clearAllFilters = () => {
-    if (user?.role === "BRANCH_ADMIN" && user?.branchesID) {
-      setSelectedFilterBranchIds([String(user.branchesID)]);
-      setSelectedFilterDepartmentIds([]);
-      return;
+  const employeeStatusBadge = (t: Termination) => {
+    if (t.exitStatus === "FINAL_SETTLED" || t.exitStatus === "APPROVED") {
+      return <Badge className="bg-red-100 text-red-700">Inactive</Badge>;
     }
-
-    setSelectedFilterBranchIds([]);
-    setSelectedFilterDepartmentIds([]);
+    if (t.exitStatus === "CANCELLED" || t.exitStatus === "WITHDRAWN") {
+      return <Badge className="bg-green-100 text-green-700">Active</Badge>;
+    }
+    if (t.noticeStartDate && t.noticeDays) {
+      const end = new Date(t.noticeStartDate);
+      end.setDate(end.getDate() + t.noticeDays);
+      if (new Date() >= end) {
+        return <Badge className="bg-red-100 text-red-700">Inactive</Badge>;
+      }
+      return <Badge className="bg-orange-100 text-orange-700">Notice Period</Badge>;
+    }
+    return <Badge className="bg-green-100 text-green-700">Active</Badge>;
   };
 
-  const visibleFilterDepartments = departmentList.filter((d) => {
-    return (
-      selectedFilterBranchIds.length === 0 ||
-      selectedFilterBranchIds.includes(String(d.branchesID))
-    );
-  });
+  const exitStatusBadge = (status: string) => (
+    <Badge
+      className={
+        status === "DRAFT"
+          ? "bg-yellow-100 text-yellow-700"
+          : status === "APPROVED"
+          ? "bg-red-100 text-red-700"
+          : "bg-green-100 text-green-700"
+      }
+    >
+      {status}
+    </Badge>
+  );
 
+  const filterDepartmentOptions = useMemo(() => {
+    const depts =
+      branchFilter === "ALL"
+        ? departmentList
+        : departmentList.filter(
+            (d) => String(d.branchesID) === branchFilter
+          );
+    return [
+      { value: "ALL", label: "All departments" },
+      ...depts.map((d) => ({
+        value: String(d.id),
+        label: d.departmentName || `Department #${d.id}`,
+      })),
+    ];
+  }, [departmentList, branchFilter]);
 
-   const filtered = useMemo(() => {
+  const branchFilterOptions = useMemo(
+    () => [
+      { value: "ALL", label: "All branches" },
+      ...branchList.map((b) => ({
+        value: String(b.id),
+        label: b.branchName || `Branch #${b.id}`,
+      })),
+    ],
+    [branchList],
+  );
+
+  const filtered = useMemo(() => {
     if (!Array.isArray(terminations)) return [];
 
-    const q = search.trim().toLowerCase();
+    const q = table.search.trim().toLowerCase();
 
-    return terminations.filter((t) => {
+    let list = terminations.filter((t) => {
       const branchId = String(t.employee?.branchesID ?? t.employee?.branches?.id ?? "");
       const departmentId = String(
         t.employee?.departmentNameID ?? t.employee?.departments?.id ?? ""
       );
 
       const matchesBranch =
-        selectedFilterBranchIds.length === 0 ||
-        selectedFilterBranchIds.includes(branchId);
+        branchFilter === "ALL" || branchFilter === branchId;
 
       const matchesDepartment =
-        selectedFilterDepartmentIds.length === 0 ||
-        selectedFilterDepartmentIds.includes(departmentId);
+        departmentFilter === "ALL" || departmentFilter === departmentId;
 
       const matchesSearch =
         !q ||
@@ -605,24 +595,147 @@ setForm({
 
       return matchesBranch && matchesDepartment && matchesSearch;
     });
+
+    return sortRows(list, table.sortBy, table.sortDir, (row, key) => {
+      const t = row as Termination;
+      if (key === "employee") {
+        return `${t.employee?.employeeFirstName ?? ""} ${t.employee?.employeeLastName ?? ""}`.trim();
+      }
+      if (key === "exitType") return t.exitType ?? "";
+      if (key === "exitStatus") return t.exitStatus ?? "";
+      if (key === "noticeStartDate") return t.noticeStartDate ?? "";
+      if (key === "noticeDays") return t.noticeDays ?? 0;
+      if (key === "lastWorkingDay") return t.lastWorkingDay ?? "";
+      return "";
+    });
   }, [
-    search,
+    table.search,
+    table.sortBy,
+    table.sortDir,
     terminations,
-    selectedFilterBranchIds,
-    selectedFilterDepartmentIds,
+    branchFilter,
+    departmentFilter,
   ]);
 
-  return (
-    <div className="space-y-6 w-full max-w-6xl mx-auto px-4">
-
-      {canManage && !isAdding && (
-        <div className="flex justify-end">
-          <Button onClick={() => setIsAdding(true)}>
-            <Plus className="w-4 h-4 mr-1" />
-            Initiate Off Boarding
-          </Button>
+  const terminationColumns = useMemo((): DataTableColumn<Termination>[] => [
+    {
+      key: "employee",
+      header: "Employee",
+      sortable: true,
+      colSpan: 3,
+      cell: (t) => (
+        <span className="font-medium">
+          {t.employee?.employeeFirstName} {t.employee?.employeeLastName}
+        </span>
+      ),
+    },
+    {
+      key: "exitType",
+      header: "Exit Type",
+      sortable: true,
+      colSpan: 2,
+      cell: (t) => t.exitType,
+    },
+    {
+      key: "exitStatus",
+      header: "Status",
+      sortable: true,
+      colSpan: 2,
+      cell: (t) => exitStatusBadge(t.exitStatus),
+    },
+    {
+      key: "noticeStartDate",
+      header: "Initiated On",
+      sortable: true,
+      colSpan: 2,
+      cell: (t) =>
+        t.noticeStartDate
+          ? new Date(t.noticeStartDate).toLocaleDateString()
+          : "—",
+    },
+    {
+      key: "noticeDays",
+      header: "Notice Period",
+      sortable: true,
+      colSpan: 2,
+      cell: (t) => (t.noticeDays != null ? `${t.noticeDays} days` : "—"),
+    },
+    {
+      key: "lastWorkingDay",
+      header: "Last Working Day",
+      sortable: true,
+      colSpan: 2,
+      cell: (t) =>
+        t.lastWorkingDay
+          ? new Date(t.lastWorkingDay).toLocaleDateString()
+          : "—",
+    },
+    {
+      key: "employeeStatus",
+      header: "Employee Status",
+      colSpan: 2,
+      cell: (t) => employeeStatusBadge(t),
+    },
+    {
+      key: "actions",
+      header: "Actions",
+      colSpan: 3,
+      align: "right",
+      cell: (t) => (
+        <div className="flex justify-end gap-2 flex-wrap">
+          {t.exitStatus === "DRAFT" && !canManage && (
+            <>
+              <Button
+                size="sm"
+                className="bg-red-600 hover:bg-red-700"
+                onClick={() => openApproveModal(t)}
+              >
+                Approve
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => handleCancel(t.id)}
+              >
+                Cancel
+              </Button>
+            </>
+          )}
+          {t.exitStatus === "DRAFT" && canManage && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => handleCancel(t.id)}
+            >
+              Cancel
+            </Button>
+          )}
+          {t.exitStatus === "APPROVED" && (
+            <Button size="sm" onClick={() => handleFinal(t.id)}>
+              Final Settle
+            </Button>
+          )}
         </div>
-      )}
+      ),
+    },
+  ], [canManage]);
+
+  return (
+    <div className="space-y-6 w-full max-w-none animate-fade-in page-content-enter">
+
+      <PageHeader
+        icon={UserCog}
+        title="Off Boarding"
+        description="Manage employee exit and termination records"
+        actions={
+          canManage && !isAdding ? (
+            <Button onClick={() => setIsAdding(true)}>
+              <Plus className="w-4 h-4 mr-1" />
+              Initiate Off Boarding
+            </Button>
+          ) : null
+        }
+      />
 
       {/* Create Form */}
       {isAdding && (
@@ -823,329 +936,60 @@ setForm({
         </Card>
       )}
 
-      {/* Table */}
-            {/* Search + Filters */}
       {!isAdding && (
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center gap-3 w-full">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => setShowFilterModal(true)}
-                className="flex-shrink-0"
-                title="Filter by Branch / Department"
-              >
-                <Filter className="w-4 h-4 mr-1" />
-                Filter
-                {(selectedFilterBranchIds.length + selectedFilterDepartmentIds.length) > 0 && (
-                  <Badge variant="secondary" className="ml-2">
-                    {selectedFilterBranchIds.length + selectedFilterDepartmentIds.length}
-                  </Badge>
-                )}
-              </Button>
-
-              <div className="relative flex-1 min-w-0">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
-                <Input
-                  placeholder="Search termination records..."
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  className="pl-10 w-full"
+        <>
+          <FilterBar
+            search={{
+              value: table.search,
+              onChange: table.setSearch,
+              placeholder: "Search termination records…",
+            }}
+            filters={
+              <>
+                <FilterSelect
+                  id="termination-branch"
+                  value={branchFilter}
+                  onChange={(v) => {
+                    setBranchFilter(v);
+                    setDepartmentFilter("ALL");
+                  }}
+                  options={branchFilterOptions}
+                  width="w-56"
+                  ariaLabel="Filter by branch"
                 />
-              </div>
+                <FilterSelect
+                  id="termination-department"
+                  value={departmentFilter}
+                  onChange={setDepartmentFilter}
+                  options={filterDepartmentOptions}
+                  width="w-56"
+                  ariaLabel="Filter by department"
+                />
+              </>
+            }
+          />
 
-              <Badge variant="secondary" className="px-3 py-1 flex-shrink-0">
-                {filtered.length} records
-              </Badge>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {showFilterModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-          <div className="w-full max-w-3xl rounded-xl bg-white shadow-xl border">
-            <div className="flex items-center justify-between border-b px-5 py-4">
-              <div className="flex items-center gap-2">
-                <div className="h-9 w-9 rounded-lg bg-indigo-50 flex items-center justify-center">
-                  <Filter className="w-4 h-4 text-indigo-600" />
-                </div>
-                <div>
-                  <h3 className="text-base font-semibold text-gray-900">
-                    Filter Termination Records
-                  </h3>
-                  <p className="text-xs text-gray-500">
-                    Filter by branch and department
-                  </p>
-                </div>
-              </div>
-
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={() => setShowFilterModal(false)}
-              >
-                <X className="w-4 h-4" />
-              </Button>
-            </div>
-
-            <div className="p-5 space-y-6 max-h-[70vh] overflow-y-auto">
-              <div className="flex items-center justify-between">
-                <Badge variant="secondary">
-                  {selectedFilterBranchIds.length} branches,{" "}
-                  {selectedFilterDepartmentIds.length} departments selected
-                </Badge>
-
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={clearAllFilters}
-                >
-                  <RotateCcw className="w-4 h-4 mr-1" />
-                  Clear
+          <EntityListShell
+            title="Termination records"
+            columns={terminationColumns}
+            rows={filtered}
+            rowKey={(t) => String(t.id)}
+            isLoading={loading}
+            sortBy={table.sortBy}
+            sortDir={table.sortDir}
+            onSort={table.setSort}
+            emptyIcon={UserCog}
+            emptyTitle="No termination records found"
+            emptyDescription="Off-boarding records will appear here once initiated."
+            emptyAction={
+              canManage ? (
+                <Button onClick={() => setIsAdding(true)}>
+                  <Plus className="w-4 h-4 mr-1" /> Initiate Off Boarding
                 </Button>
-              </div>
-
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <Label>Branches</Label>
-
-                  {user?.role !== "BRANCH_ADMIN" && (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={selectAllFilterBranches}
-                      disabled={branchList.length === 0}
-                    >
-                      Select All Branches
-                    </Button>
-                  )}
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  {branchList.length === 0 ? (
-                    <p className="text-sm text-gray-500 col-span-full py-4 text-center">
-                      No branches found
-                    </p>
-                  ) : (
-                    branchList.map((b) => (
-                      <label
-                        key={b.id}
-                        className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm hover:bg-gray-50 cursor-pointer"
-                      >
-                        <input
-                          type="checkbox"
-                          checked={selectedFilterBranchIds.includes(String(b.id))}
-                          disabled={user?.role === "BRANCH_ADMIN"}
-                          onChange={() => toggleFilterBranch(String(b.id))}
-                        />
-                        <span className="truncate">{b.branchName}</span>
-                      </label>
-                    ))
-                  )}
-                </div>
-              </div>
-
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <Label>Departments</Label>
-
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={selectAllFilterDepartments}
-                    disabled={visibleFilterDepartments.length === 0}
-                  >
-                    Select All Departments
-                  </Button>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  {visibleFilterDepartments.length === 0 ? (
-                    <p className="text-sm text-gray-500 col-span-full py-4 text-center">
-                      No departments found
-                    </p>
-                  ) : (
-                    visibleFilterDepartments.map((d) => (
-                      <label
-                        key={d.id}
-                        className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm hover:bg-gray-50 cursor-pointer"
-                      >
-                        <input
-                          type="checkbox"
-                          checked={selectedFilterDepartmentIds.includes(String(d.id))}
-                          onChange={() => toggleFilterDepartment(String(d.id))}
-                        />
-                        <span className="truncate">{d.departmentName}</span>
-                      </label>
-                    ))
-                  )}
-                </div>
-              </div>
-            </div>
-
-            <div className="flex justify-end gap-2 border-t px-5 py-4">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setShowFilterModal(false)}
-              >
-                Cancel
-              </Button>
-
-              <Button
-                type="button"
-                onClick={() => setShowFilterModal(false)}
-              >
-                Apply Filter
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Table */}
-      {!isAdding && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Termination List</CardTitle>
-          </CardHeader>
-          <CardContent className="p-0">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Employee</TableHead>
-                  <TableHead>Exit Type</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Initiated On</TableHead>
-                  <TableHead>Notice Period</TableHead>
-                  <TableHead>Last Working Day</TableHead>
-                  <TableHead>Employee Status</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-
-              <TableBody>
-                {loading ? (
-                  <TableBodySkeleton cols={8} />
-                ) : filtered.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={8} className="text-center py-8 text-gray-500">
-                      No termination records found
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                filtered.map((t) => (
-                  <TableRow key={t.id}>
-                    <TableCell>
-                      {t.employee?.employeeFirstName}{" "}
-                      {t.employee?.employeeLastName}
-                    </TableCell>
-
-                    <TableCell>{t.exitType}</TableCell>
-
-                    <TableCell>
-                      <Badge
-                        className={
-                          t.exitStatus === "DRAFT"
-                            ? "bg-yellow-100 text-yellow-700"
-                            : t.exitStatus === "APPROVED"
-                            ? "bg-red-100 text-red-700"
-                            : "bg-green-100 text-green-700"
-                        }
-                      >
-                        {t.exitStatus}
-                      </Badge>
-                    </TableCell>
-
-                    <TableCell>
-                      {t.noticeStartDate
-                        ? new Date(t.noticeStartDate).toLocaleDateString()
-                        : "-"}
-                    </TableCell>
-
-                    <TableCell>
-                      {t.noticeDays != null ? `${t.noticeDays} days` : "-"}
-                    </TableCell>
-
-                    <TableCell>
-                      {t.lastWorkingDay
-                        ? new Date(t.lastWorkingDay).toLocaleDateString()
-                        : "-"}
-                    </TableCell>
-
-                    <TableCell>
-                      {(() => {
-                        if (t.exitStatus === "FINAL_SETTLED" || t.exitStatus === "APPROVED") {
-                          return <Badge className="bg-red-100 text-red-700">Inactive</Badge>;
-                        }
-                        if (t.exitStatus === "CANCELLED" || t.exitStatus === "WITHDRAWN") {
-                          return <Badge className="bg-green-100 text-green-700">Active</Badge>;
-                        }
-                        if (t.noticeStartDate && t.noticeDays) {
-                          const end = new Date(t.noticeStartDate);
-                          end.setDate(end.getDate() + t.noticeDays);
-                          if (new Date() >= end) {
-                            return <Badge className="bg-red-100 text-red-700">Inactive</Badge>;
-                          }
-                          return <Badge className="bg-orange-100 text-orange-700">Notice Period</Badge>;
-                        }
-                        return <Badge className="bg-green-100 text-green-700">Active</Badge>;
-                      })()}
-                    </TableCell>
-
-                    <TableCell className="text-right space-x-2">
-                      {t.exitStatus === "DRAFT" && !canManage && (
-                        <>
-                          <Button
-                            size="sm"
-                            className="bg-red-600 hover:bg-red-700"
-                            onClick={() => openApproveModal(t)}
-                          >
-                            Approve
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => handleCancel(t.id)}
-                          >
-                            Cancel
-                          </Button>
-                        </>
-                      )}
-
-                      {t.exitStatus === "DRAFT" && canManage && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => handleCancel(t.id)}
-                        >
-                          Cancel
-                        </Button>
-                      )}
-
-                      {t.exitStatus === "APPROVED" && (
-                        <Button
-                          size="sm"
-                          onClick={() => handleFinal(t.id)}
-                        >
-                          Final Settle
-                        </Button>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                ))
-                )}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
+              ) : undefined
+            }
+          />
+        </>
       )}
 
       {/* Approval Modal */}
@@ -1201,10 +1045,9 @@ setForm({
               />
             </div>
 
-            <div className="bg-yellow-50 border border-yellow-200 p-3 rounded text-sm text-yellow-700 flex gap-2">
-              <AlertTriangle className="w-4 h-4 mt-0.5" />
+            <NoticeBanner variant="warning" compact>
               Approving will disable login and mark employee as EXITED.
-            </div>
+            </NoticeBanner>
           </div>
 
           <DialogFooter className="mt-6">

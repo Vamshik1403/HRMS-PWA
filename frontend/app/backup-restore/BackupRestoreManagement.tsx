@@ -7,6 +7,7 @@ import { useCurrentUser } from "../hooks/useCurrentUser";
 import { toast } from "sonner";
 import { Cloud, Download, Database, Loader2, Play, RotateCcw } from "lucide-react";
 import { FormModal } from "../components/ui/form-modal";
+import { NoticeBanner } from "../components/ui/notice-banner";
 import {
   Table,
   TableBody,
@@ -427,10 +428,10 @@ export function BackupRestoreManagement() {
               Restore <strong>{restoreTarget.label}</strong> from{" "}
               <strong>{restoreTarget.date}</strong> ({restoreTarget.fileName})?
             </p>
-            <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-3">
+            <NoticeBanner variant="warning" compact>
               Recommended: restore only the sectional file you need (e.g. attendance). Full-database
               restore replaces all tables.
-            </p>
+            </NoticeBanner>
             <div className="flex gap-3 pt-2">
               <Button type="button" variant="outline" className="flex-1" onClick={() => setRestoreTarget(null)}>
                 Cancel

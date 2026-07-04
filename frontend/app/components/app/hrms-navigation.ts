@@ -1,0 +1,264 @@
+import {
+  LayoutDashboard,
+  Users,
+  ShieldCheck,
+  Building2,
+  Settings2,
+  FileClock,
+  Calendar,
+  CalendarCheck2,
+  GitBranch,
+  Wallet,
+  BadgeCheck,
+  Fingerprint,
+  Briefcase,
+  ClipboardList,
+  MessageSquare,
+  UserCog,
+  Database,
+  CreditCard,
+  type LucideIcon,
+} from "lucide-react";
+import { TASK_MANAGEMENT_ENABLED } from "@/app/config/featureFlags";
+
+export interface NavContext {
+  role: string;
+  isSuperAdmin: boolean;
+  isServiceProvider: boolean;
+  isCompanyAdmin: boolean;
+  isAdmin: boolean;
+  isBranchAdmin: boolean;
+  isDesktopManager: boolean;
+  canAccessFullHrSections: boolean;
+  canSeeCompanySetupSections: boolean;
+}
+
+export interface NavItem {
+  label: string;
+  href: string;
+  icon: LucideIcon;
+  comingSoon?: boolean;
+  show?: (ctx: NavContext) => boolean;
+}
+
+export interface NavGroup {
+  label: string;
+  show?: (ctx: NavContext) => boolean;
+  items: NavItem[];
+}
+
+export function buildNavContext(user: any, desktopManager: boolean): NavContext {
+  const role = String(user?.role || "").toUpperCase();
+
+  const isSuperAdmin = role === "SUPERADMIN";
+  const isServiceProvider = role === "SERVICE_PROVIDER";
+  const isCompanyAdmin = role === "COMPANY_ADMIN";
+  const isAdmin = role === "ADMIN";
+  const isBranchAdmin = role === "BRANCH_ADMIN";
+  const isDesktopManager = desktopManager && role === "EMPLOYEE";
+
+  const canAccessFullHrSections =
+    (isCompanyAdmin || isBranchAdmin || isDesktopManager) && !isAdmin;
+
+  const canSeeCompanySetupSections =
+    isCompanyAdmin || isAdmin || isBranchAdmin || isDesktopManager;
+
+  return {
+    role,
+    isSuperAdmin,
+    isServiceProvider,
+    isCompanyAdmin,
+    isAdmin,
+    isBranchAdmin,
+    isDesktopManager,
+    canAccessFullHrSections,
+    canSeeCompanySetupSections,
+  };
+}
+
+const always = () => true;
+
+export const HRMS_NAVIGATION: NavGroup[] = [
+  {
+    label: "Overview",
+    items: [
+      {
+        label: "Dashboard",
+        href: "/superdashboard",
+        icon: LayoutDashboard,
+        show: (c) => c.isSuperAdmin,
+      },
+      {
+        label: "Dashboard",
+        href: "/dashboard",
+        icon: LayoutDashboard,
+        show: (c) => !c.isSuperAdmin,
+      },
+    ],
+  },
+  {
+    label: "System",
+    show: (c) => c.isSuperAdmin || c.isServiceProvider,
+    items: [
+      { label: "Service Provider", href: "/service-providers", icon: Building2, show: (c) => c.isSuperAdmin },
+      { label: "Tenants", href: "/company", icon: Building2, show: always },
+    ],
+  },
+
+  {
+    label: "Company Setup",
+    show: (c) => c.canSeeCompanySetupSections,
+    items: [
+      { label: "Tenants", href: "/company", icon: Building2, show: (c) => !c.isCompanyAdmin },
+      { label: "Branches", href: "/branches", icon: GitBranch, show: always },
+      { label: "Departments", href: "/departments", icon: Users, show: always },
+      { label: "Designations", href: "/designations", icon: BadgeCheck, show: always },
+      { label: "Attendance Devices", href: "/devices", icon: Fingerprint, show: always },
+    ],
+  },
+  {
+    label: "Workforce",
+    show: (c) => c.canSeeCompanySetupSections,
+    items: [
+      { label: "Employees", href: "/manage-employees", icon: Users, show: always },
+      { label: "Off Boarding", href: "/termination", icon: UserCog, show: always },
+    ],
+  },
+  {
+    label: "Contractor",
+    show: (c) => c.canAccessFullHrSections,
+    items: [
+      { label: "Contractors", href: "/contractors", icon: Briefcase, show: always },
+      { label: "Contractor Rates", href: "/contractor-rates", icon: Wallet, show: always },
+    ],
+  },
+  {
+    label: "Task Management",
+    show: (c) =>
+      TASK_MANAGEMENT_ENABLED && (c.isCompanyAdmin || c.isDesktopManager),
+    items: [
+      { label: "Customers", href: "/task-customers", icon: ClipboardList, show: always },
+      { label: "Sites / Branches", href: "/task-customer-sites", icon: GitBranch, show: always },
+      { label: "Tasks / Projects", href: "/task-projects", icon: ClipboardList, show: always },
+    ],
+  },
+  {
+    label: "Shift & Attendance",
+    show: (c) =>
+      (c.isCompanyAdmin || c.isBranchAdmin || c.isDesktopManager) &&
+      !c.isAdmin,
+    items: [
+      { label: "Work Shifts", href: "/work-shifts", icon: CalendarCheck2, show: always },
+      { label: "Attendance Policy", href: "/attendance-policy", icon: Calendar, show: always },
+      { label: "Workshift Roster", href: "/roster", icon: CalendarCheck2, show: always },
+      { label: "Regularisation", href: "/attendance-regularisation", icon: CalendarCheck2, show: always },
+    ],
+  },
+  {
+    label: "Leave Policy",
+    show: (c) => c.canAccessFullHrSections,
+    items: [
+      { label: "Manage Holidays", href: "/manage-holidays", icon: Calendar, show: always },
+      { label: "Public Holiday", href: "/public-holiday", icon: Calendar, show: always },
+      { label: "Leave Policy", href: "/leave-policy", icon: Calendar, show: always },
+    ],
+  },
+  {
+    label: "Payroll Policy",
+    show: (c) => c.canAccessFullHrSections,
+    items: [
+      { label: "Salary Cycle", href: "/monthly-salary-cycle", icon: Wallet, show: always },
+      { label: "Allowances", href: "/salary-allowances", icon: Wallet, show: always },
+      { label: "Deductions", href: "/salary-deductions", icon: Wallet, show: always },
+      { label: "Paygrade", href: "/monthly-pay-grade", icon: Wallet, show: always },
+      { label: "Bonus Rule", href: "/bonus-setup", icon: Wallet, show: always },
+    ],
+  },
+  {
+    label: "Payroll",
+    show: (c) => c.canAccessFullHrSections,
+    items: [
+      { label: "Bonus Allocations", href: "/bonus-allocations", icon: Wallet, show: always },
+      { label: "Salary Advances", href: "/salary-advance", icon: Wallet, show: always },
+      { label: "Reimbursements", href: "/reimbursement", icon: Wallet, show: always },
+      { label: "Run Payroll", href: "/generate-salary", icon: Wallet, show: always },
+      { label: "Contractor Payouts", href: "/contractor-payout", icon: Wallet, show: always },
+    ],
+  },
+  {
+    label: "Leave Management",
+    show: (c) => c.canAccessFullHrSections,
+    items: [
+      { label: "Leave Applications", href: "/leave-applications", icon: Calendar, show: always },
+      { label: "Privileged Leave", href: "/privileged-leave", icon: Calendar, show: always },
+    ],
+  },
+  {
+    label: "Messaging",
+    show: (c) => c.canSeeCompanySetupSections,
+    items: [
+      { label: "Internal Messaging", href: "/employee-memo", icon: MessageSquare, show: always },
+    ],
+  },
+  {
+    label: "Reports",
+    show: (c) => c.canSeeCompanySetupSections,
+    items: [
+      { label: "Attendance Reports", href: "/attendance-reports", icon: FileClock, show: always },
+    ],
+  },
+  {
+    label: "Settings",
+    show: (c) => c.canSeeCompanySetupSections,
+    items: [
+      { label: "Import Attendance", href: "/import-attendance", icon: Settings2, show: (c) => !c.isAdmin },
+      { label: "HRMS Integrations", href: "/hrms-integrations", icon: Settings2, show: (c) => c.isAdmin },
+      { label: "General", href: "/system-settings/general", icon: Settings2, show: (c) => c.isCompanyAdmin || c.isDesktopManager },
+      { label: "Compliance", href: "/system-settings/compliance", icon: Settings2, show: (c) => c.isCompanyAdmin || c.isDesktopManager },
+      { label: "Email Templates", href: "/system-settings/email-templates", icon: Settings2, show: (c) => c.isCompanyAdmin || c.isDesktopManager },
+    ],
+  },
+  {
+    label: "Administration",
+    show: (c) => c.isSuperAdmin || c.isServiceProvider,
+    items: [
+      { label: "System Users", href: "/system-users", icon: Users, show: always },
+      {
+        label: "Subscriptions",
+        href: "/subscription",
+        icon: CreditCard,
+        show: (c) => c.isSuperAdmin || c.isServiceProvider,
+      },
+
+    ],
+  },
+  {
+    label: "Personal",
+    show: (c) => c.isServiceProvider || c.isCompanyAdmin || c.isAdmin || c.isBranchAdmin || c.isDesktopManager || c.isSuperAdmin,
+    items: [
+      { label: "Profile", href: "/profile", icon: UserCog, show: always },
+    ],
+  },
+];
+
+export function dispatchSidebarMainPageClick(path: string) {
+  if (typeof window === "undefined") return;
+
+  window.dispatchEvent(
+    new CustomEvent("sidebar-main-page-click", {
+      detail: { path },
+    })
+  );
+}
+
+export function filterNavigation(ctx: NavContext): NavGroup[] {
+  return HRMS_NAVIGATION.map((group) => {
+    if (group.show && !group.show(ctx)) return null;
+
+    const items = group.items.filter((item) => !item.show || item.show(ctx));
+
+    if (items.length === 0) return null;
+
+    return { ...group, items };
+  }).filter(Boolean) as NavGroup[];
+}

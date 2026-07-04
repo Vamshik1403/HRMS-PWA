@@ -1,5 +1,7 @@
 "use client";
 
+import { useMemo } from "react";
+import { useTheme } from "next-themes";
 import {
   BarChart,
   Bar,
@@ -38,12 +40,29 @@ const DEFAULT_COLORS: Record<string, string> = {
   Regularized: "#8b5cf6",
 };
 
+function chartTheme(isDark: boolean) {
+  return {
+    tick: isDark ? "#a1a1aa" : "#6b7280",
+    tooltipBg: isDark ? "#18181b" : "#ffffff",
+    tooltipBorder: isDark ? "#3f3f46" : "#ececec",
+    tooltipText: isDark ? "#fafafa" : "#111827",
+    cursor: isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.02)",
+    centerValue: isDark ? "#fafafa" : "#111827",
+    centerLabel: isDark ? "#a1a1aa" : "#9ca3af",
+    emptyText: isDark ? "#71717a" : "#9ca3af",
+  };
+}
+
 export default function EmployeeStatusCharts({
   total,
   present,
   absent,
   statusBreakdown,
 }: EmployeeStatusChartsProps) {
+  const { resolvedTheme } = useTheme();
+  const isDark = resolvedTheme === "dark";
+  const theme = useMemo(() => chartTheme(isDark), [isDark]);
+
   const breakdown =
     statusBreakdown && statusBreakdown.length > 0
       ? statusBreakdown.filter((d) => d.value > 0)
@@ -53,7 +72,7 @@ export default function EmployeeStatusCharts({
         ].filter((d) => d.value > 0);
 
   const barData = [
-    { name: "All employees", value: total, fill: "#374151" },
+    { name: "All employees", value: total, fill: isDark ? "#a1a1aa" : "#374151" },
     ...breakdown.map((d) => ({
       name: d.name,
       value: d.value,
@@ -65,6 +84,18 @@ export default function EmployeeStatusCharts({
   const barAxisMax = Math.ceil(rawMax * 1.2) || 1;
 
   const pieData = total === 0 ? [] : breakdown;
+
+  const tooltipStyle = {
+    borderRadius: 14,
+    border: `1px solid ${theme.tooltipBorder}`,
+    fontSize: 12,
+    fontWeight: 600,
+    backgroundColor: theme.tooltipBg,
+    color: theme.tooltipText,
+    boxShadow: isDark
+      ? "0 8px 24px rgba(0,0,0,0.45)"
+      : "0 8px 24px rgba(0,0,0,0.08)",
+  };
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
@@ -83,18 +114,9 @@ export default function EmployeeStatusCharts({
               width={108}
               axisLine={false}
               tickLine={false}
-              tick={{ fontSize: 11, fill: "#6b7280", fontWeight: 600 }}
+              tick={{ fontSize: 11, fill: theme.tick, fontWeight: 600 }}
             />
-            <Tooltip
-              cursor={{ fill: "rgba(0,0,0,0.02)" }}
-              contentStyle={{
-                borderRadius: 14,
-                border: "1px solid #ececec",
-                fontSize: 12,
-                fontWeight: 600,
-                boxShadow: "0 8px 24px rgba(0,0,0,0.08)",
-              }}
-            />
+            <Tooltip cursor={{ fill: theme.cursor }} contentStyle={tooltipStyle} />
             <Bar dataKey="value" radius={[0, 10, 10, 0]} maxBarSize={22}>
               {barData.map((entry, i) => (
                 <Cell key={i} fill={entry.fill} />
@@ -105,7 +127,7 @@ export default function EmployeeStatusCharts({
       </div>
       <div className="h-[220px] w-full min-h-[200px] relative">
         {total === 0 ? (
-          <p className="text-sm text-gray-400 text-center pt-16">
+          <p className="text-sm text-muted-foreground text-center pt-16">
             No employees in scope
           </p>
         ) : (
@@ -132,24 +154,23 @@ export default function EmployeeStatusCharts({
                   />
                 ))}
               </Pie>
-              <Tooltip
-                contentStyle={{
-                  borderRadius: 14,
-                  border: "1px solid #ececec",
-                  fontSize: 12,
-                  fontWeight: 600,
-                }}
-              />
+              <Tooltip contentStyle={tooltipStyle} />
             </PieChart>
           </ResponsiveContainer>
         )}
         {total > 0 && (
           <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
             <div className="text-center">
-              <p className="text-2xl font-bold text-gray-900 tabular-nums">
+              <p
+                className="text-2xl font-bold tabular-nums"
+                style={{ color: theme.centerValue }}
+              >
                 {total}
               </p>
-              <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">
+              <p
+                className="text-[10px] font-semibold uppercase tracking-wide"
+                style={{ color: theme.centerLabel }}
+              >
                 Total
               </p>
             </div>

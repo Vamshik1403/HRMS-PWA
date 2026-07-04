@@ -1,9 +1,10 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateTaskCustomerDto } from './dto/create-task-customer.dto';
 import { UpdateTaskCustomerDto } from './dto/update-task-customer.dto';
 import { assertCanManageTaskModule, parseViewer, TaskViewerContext } from './task-context';
 import { nextCustomerCode } from './task-code.util';
+import { Prisma } from '@prisma/client';
 
 @Injectable()
 export class TaskCustomersService {
@@ -35,7 +36,10 @@ export class TaskCustomersService {
         orderBy: { createdAt: 'desc' },
         skip: (page - 1) * limit,
         take: limit,
-        include: { _count: { select: { sites: true, tasks: true } } },
+include: {
+  branches: true,
+  _count: { select: { sites: true, tasks: true } },
+},
       }),
       this.prisma.taskCustomer.count({ where }),
     ]);
@@ -47,23 +51,31 @@ export class TaskCustomersService {
     assertCanManageTaskModule(viewer);
     const row = await this.prisma.taskCustomer.findFirst({
       where: { id, isDeleted: false },
-      include: { sites: { where: { isDeleted: false } }, _count: { select: { tasks: true } } },
+include: {
+  branches: true,
+  sites: { where: { isDeleted: false } },
+  _count: { select: { tasks: true } },
+},
     });
     if (!row) throw new NotFoundException('Customer not found');
     return row;
   }
 
   async create(dto: CreateTaskCustomerDto, query: Record<string, string | undefined>) {
-    const viewer = parseViewer(query);
-    assertCanManageTaskModule(viewer);
-    const companyID = dto.companyID ?? viewer.companyID ?? null;
-    let code = await nextCustomerCode(this.prisma, companyID);
-    for (let i = 0; i < 5; i++) {
-      const exists = await this.prisma.taskCustomer.findUnique({ where: { customerCode: code } });
-      if (!exists) break;
-      code = await nextCustomerCode(this.prisma, companyID);
-    }
-    return this.prisma.taskCustomer.create({
+  const viewer = parseViewer(query);
+  assertCanManageTaskModule(viewer);
+
+  const companyID = dto.companyID ?? viewer.companyID ?? null;
+  const branchesID = dto.branchesID ?? viewer.branchesID ?? null;
+
+  const code = dto.customerCode?.trim();
+
+  if (!code) {
+    throw new BadRequestException('Customer ID is required');
+  }
+
+  try {
+    return await this.prisma.taskCustomer.create({
       data: {
         customerCode: code,
         customerName: dto.customerName,
@@ -74,10 +86,21 @@ export class TaskCustomersService {
         country: dto.country,
         serviceProviderID: dto.serviceProviderID ?? viewer.serviceProviderID ?? null,
         companyID,
+        branchesID,
         createdByUserID: dto.createdByUserID ?? viewer.userId ?? null,
       },
     });
+  } catch (error) {
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === 'P2002'
+    ) {
+      throw new ConflictException('Customer ID already exists');
+    }
+
+    throw error;
   }
+}
 
   async update(id: number, dto: UpdateTaskCustomerDto, query: Record<string, string | undefined>) {
     const viewer = parseViewer(query);
@@ -85,14 +108,17 @@ export class TaskCustomersService {
     await this.findOne(id, query);
     return this.prisma.taskCustomer.update({
       where: { id },
-      data: {
-        customerName: dto.customerName,
-        address: dto.address,
-        city: dto.city,
-        state: dto.state,
-        pincode: dto.pincode,
-        country: dto.country,
-      },
+    data: {
+  customerName: dto.customerName,
+  address: dto.address,
+  city: dto.city,
+  state: dto.state,
+  pincode: dto.pincode,
+  country: dto.country,
+  serviceProviderID: dto.serviceProviderID ?? viewer.serviceProviderID ?? undefined,
+  companyID: dto.companyID ?? viewer.companyID ?? undefined,
+  branchesID: dto.branchesID ?? viewer.branchesID ?? undefined,
+},
     });
   }
 
@@ -121,6 +147,7 @@ export class TaskCustomersService {
         id: true,
         customerCode: true,
         customerName: true,
+        branches:true,
         address: true,
         city: true,
         state: true,

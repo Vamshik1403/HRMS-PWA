@@ -166,11 +166,23 @@ export function ContractorRatesManagement() {
 
   useEffect(() => {
     const handler = () => {
-      if (user) {
-        loadContractors();
-        loadBranchFilterList();
-      }
-    };
+  setSelectedBranchNames([]);
+  setContrSearch("");
+  setContrSuggestions([]);
+  setSelectedContractor(null);
+  setAllRateCards([]);
+
+  branchSuggest.setQuery("");
+  deptSuggest.setQuery("");
+  desigSuggest.setQuery("");
+  shiftSuggest.setQuery("");
+
+  if (user) {
+    loadContractors();
+    loadBranchFilterList();
+  }
+};
+
     window.addEventListener("sidebar-context-changed", handler);
     window.addEventListener("app-data-refresh", handler);
     return () => {
@@ -182,36 +194,36 @@ export function ContractorRatesManagement() {
   const loadContractors = async () => {
     setLoading(true);
     try {
-      let data = await fetchJSONSafe<ContractorRead[]>(API.contractors);
-      if (user?.role === "SUPERADMIN") {
-        const ctx = getSidebarContext();
-        if (ctx?.companyID) {
-          data = data.filter((c: any) =>
-            Number(c.companyID) === Number(ctx.companyID) ||
-            (c.companyID == null && Number(c.serviceProviderID) === Number(ctx.serviceProviderID))
-          );
-        }
-      } else if (user?.role === "SERVICE_PROVIDER") {
-        const ctx = getSidebarContext();
-        if (ctx?.companyID) {
-          data = data.filter((c: any) =>
-            Number(c.companyID) === Number(ctx.companyID) ||
-            (c.companyID == null && Number(c.serviceProviderID) === Number(ctx.serviceProviderID))
-          );
-        } else if (currentUserMapping?.serviceProviderID) {
-          data = data.filter((c: any) => Number(c.serviceProviderID) === Number(currentUserMapping.serviceProviderID));
-        }
-      } else if (user?.role === "COMPANY_ADMIN" || user?.role === "BRANCH_ADMIN") {
-        const ctx = getSidebarContext();
-        const companyID = ctx?.companyID ?? currentUserMapping?.companyID ?? user?.companyID;
-        const spID = ctx?.serviceProviderID ?? currentUserMapping?.serviceProviderID ?? user?.serviceProviderID;
-        if (companyID) {
-          data = data.filter((c: any) =>
-            Number(c.companyID) === Number(companyID) ||
-            (c.companyID == null && spID && Number(c.serviceProviderID) === Number(spID))
-          );
-        }
-      }
+     let data = await fetchJSONSafe<ContractorRead[]>(API.contractors);
+
+const ctx = getSidebarContext();
+
+const activeCompanyID =
+  ctx?.companyID ??
+  currentUserMapping?.companyID ??
+  user?.companyID ??
+  null;
+
+const activeServiceProviderID =
+  ctx?.serviceProviderID ??
+  currentUserMapping?.serviceProviderID ??
+  user?.serviceProviderID ??
+  null;
+
+// STRICT: if company selected, show only that company contractors
+if (activeCompanyID) {
+  data = data.filter(
+    (c: any) => Number(c.companyID) === Number(activeCompanyID)
+  );
+} else if (activeServiceProviderID) {
+  data = data.filter(
+    (c: any) => Number(c.serviceProviderID) === Number(activeServiceProviderID)
+  );
+}
+
+if (user?.role === "BRANCH_ADMIN" && user?.branchesID) {
+  // if contractor has branchesID in future, filter here
+}
       setContractors(data);
       await loadAllRateCards(data);
     } catch (e) {
@@ -339,36 +351,31 @@ export function ContractorRatesManagement() {
     if (contrTimerRef.current) clearTimeout(contrTimerRef.current);
     contrTimerRef.current = setTimeout(async () => {
       try {
-        let all = await fetchJSONSafe<ContractorRead[]>(API.contractors);
-        if (user?.role === "SERVICE_PROVIDER" && currentUserMapping) {
-          const ctx = getSidebarContext();
-          if (ctx?.companyID) {
-            all = all.filter((c) =>
-              Number(c.companyID) === Number(ctx.companyID) ||
-              (c.companyID == null && Number(c.serviceProviderID) === Number(ctx.serviceProviderID))
-            );
-          } else {
-            all = all.filter((c) => Number(c.serviceProviderID) === Number(currentUserMapping.serviceProviderID));
-          }
-        } else if (user?.role === "COMPANY_ADMIN" || user?.role === "BRANCH_ADMIN") {
-          const ctx = getSidebarContext();
-          const companyID = ctx?.companyID ?? currentUserMapping?.companyID ?? user?.companyID;
-          const spID = ctx?.serviceProviderID ?? currentUserMapping?.serviceProviderID ?? user?.serviceProviderID;
-          if (companyID) {
-            all = all.filter((c) =>
-              Number(c.companyID) === Number(companyID) ||
-              (c.companyID == null && spID && Number(c.serviceProviderID) === Number(spID))
-            );
-          }
-        } else if (user?.role === "SUPERADMIN") {
-          const ctx = getSidebarContext();
-          if (ctx?.companyID) {
-            all = all.filter((c) =>
-              Number(c.companyID) === Number(ctx.companyID) ||
-              (c.companyID == null && Number(c.serviceProviderID) === Number(ctx.serviceProviderID))
-            );
-          }
-        }
+       let all = await fetchJSONSafe<ContractorRead[]>(API.contractors);
+
+const ctx = getSidebarContext();
+
+const activeCompanyID =
+  ctx?.companyID ??
+  currentUserMapping?.companyID ??
+  user?.companyID ??
+  null;
+
+const activeServiceProviderID =
+  ctx?.serviceProviderID ??
+  currentUserMapping?.serviceProviderID ??
+  user?.serviceProviderID ??
+  null;
+
+if (activeCompanyID) {
+  all = all.filter(
+    (c: any) => Number(c.companyID) === Number(activeCompanyID)
+  );
+} else if (activeServiceProviderID) {
+  all = all.filter(
+    (c: any) => Number(c.serviceProviderID) === Number(activeServiceProviderID)
+  );
+}
         const ql = q.trim().toLowerCase();
         const filtered = ql
           ? all.filter((c) => (c.contractorName || "").toLowerCase().includes(ql))
@@ -472,7 +479,15 @@ export function ContractorRatesManagement() {
     deptSuggest.setQuery("");
     desigSuggest.setQuery("");
     shiftSuggest.setQuery("");
-    await loadDropdowns(user?.companyID);
+const ctx = getSidebarContext();
+
+const activeCompanyID =
+  ctx?.companyID ??
+  currentUserMapping?.companyID ??
+  user?.companyID ??
+  null;
+
+await loadDropdowns(activeCompanyID);
     // 🔒 BRANCH_ADMIN — pre-fill branch
     if (user?.role === "BRANCH_ADMIN" && user?.branches?.branchName) {
       setFormData((prev) => ({ ...prev, branchName: user.branches!.branchName }));
@@ -572,7 +587,7 @@ export function ContractorRatesManagement() {
   );
 
   return (
-    <div className="space-y-6 w-full max-w-6xl mx-auto px-4">
+    <div className="space-y-6 w-full max-w-none animate-fade-in page-content-enter">
       {/* ── Rate Card FormDrawer ── */}
       <FormDrawer
         open={isRateCardOpen}

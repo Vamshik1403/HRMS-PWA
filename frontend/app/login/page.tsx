@@ -2,7 +2,12 @@
 import { useState, useRef, useEffect } from 'react'
 import axios from 'axios'
 import { useRouter } from 'next/navigation'
-import { Eye, EyeOff, Lock, User, LogIn } from 'lucide-react'
+import { Eye, EyeOff, Lock, User, LogIn, ArrowRight, Loader2 } from 'lucide-react'
+import { Button } from '@/app/components/ui/button'
+import { NoticeBanner } from '@/app/components/ui/notice-banner'
+import { Input } from '@/app/components/ui/input'
+import { Label } from '@/app/components/ui/label'
+import { LoginBrandPanel } from './LoginBrandPanel'
 import { clearLegacyEmpPhoto } from '../utils/empPhotoCache'
 import { clearInAppNotifications } from '../utils/empInAppNotifications'
 import { clearPageCache, clearPageCachesByPrefix } from '../utils/pageCache'
@@ -100,15 +105,15 @@ function TermsModal({ onClose }: { onClose: () => void }) {
           {TERMS_AND_CONDITIONS}
         </div>
         {!canAccept && (
-          <p className="text-center text-xs text-amber-600 bg-amber-50 px-4 py-2 border-t border-amber-100">
+          <NoticeBanner variant="warning" compact className="rounded-none border-0 shadow-none ring-0 bg-amber-500/[0.06]">
             Scroll to the bottom to enable the Accept button
-          </p>
+          </NoticeBanner>
         )}
         <div className="px-6 py-4 border-t border-gray-100 flex justify-end">
           <button
             disabled={!canAccept}
             onClick={onClose}
-            className="px-5 py-2 bg-[#4f46e5] text-white text-sm font-semibold rounded-xl transition-all disabled:bg-gray-300 disabled:cursor-not-allowed hover:bg-[#4338ca]"
+            className="px-5 py-2 bg-primary text-primary-foreground text-sm font-semibold rounded-xl transition-all disabled:bg-muted disabled:text-muted-foreground disabled:cursor-not-allowed hover:bg-primary/90"
           >
             Accept
           </button>
@@ -169,8 +174,8 @@ export default function LoginPage() {
           router.replace('/empdashboard')
         }
       } else if (role) {
-        router.replace('/dashboard')
-      } else {
+  router.replace(role === 'SUPERADMIN' ? '/superdashboard' : '/dashboard')
+} else {
         setAuthChecked(true)
       }
     } catch {
@@ -232,22 +237,30 @@ export default function LoginPage() {
           localStorage.setItem('user', JSON.stringify(completeUser))
 
           setTimeout(() => {
-            if (completeUser.role === 'SUPERADMIN' || completeUser.role === 'SERVICE_PROVIDER' || completeUser.role === 'COMPANY_ADMIN' || completeUser.role === 'ADMIN' || completeUser.role === 'BRANCH_ADMIN') {
-              router.push('/dashboard')
-            } else {
-              router.push('/empdashboard')
-            }
+            const role = String(completeUser.role || '').toUpperCase()
+
+if (role === 'SUPERADMIN') {
+  router.push('/superdashboard')
+} else if (role === 'SERVICE_PROVIDER' || role === 'COMPANY_ADMIN' || role === 'ADMIN' || role === 'BRANCH_ADMIN') {
+  router.push('/dashboard')
+} else {
+  router.push('/empdashboard')
+}
           }, 100)
         } catch (detailsError) {
           console.error('Error fetching user details:', detailsError)
           localStorage.setItem('user', JSON.stringify(basicUser))
           
           setTimeout(() => {
-            if (basicUser.role === 'SUPERADMIN' || basicUser.role === 'SERVICE_PROVIDER' || basicUser.role === 'COMPANY_ADMIN' || basicUser.role === 'ADMIN' || basicUser.role === 'BRANCH_ADMIN') {
-              router.push('/dashboard')
-            } else {
-              router.push('/empdashboard')
-            }
+           const role = String(basicUser.role || '').toUpperCase()
+
+if (role === 'SUPERADMIN') {
+  router.push('/superdashboard')
+} else if (role === 'SERVICE_PROVIDER' || role === 'COMPANY_ADMIN' || role === 'ADMIN' || role === 'BRANCH_ADMIN') {
+  router.push('/dashboard')
+} else {
+  router.push('/empdashboard')
+}
           }, 100)
           
           return
@@ -267,124 +280,65 @@ export default function LoginPage() {
       {showTermsModal && (
         <TermsModal onClose={() => { setShowTermsModal(false); setTermsAccepted(true) }} />
       )}
-    <div style={{ position: 'fixed', inset: 0, overflowY: 'auto', overscrollBehavior: 'none' }} className="login-page flex items-center justify-center bg-[#f4f4f4] relative">
-      {/* Subtle background pattern */}
-      <div className="absolute inset-0 opacity-[0.03] pointer-events-none" style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, #000 1px, transparent 0)', backgroundSize: '32px 32px' }} />
-
-      <div className="relative w-full max-w-[420px] mx-4">
-        {/* Brand header */}
-        <div className="flex flex-col items-center mb-5">
-          <img src="/img/OpenHRM_Logo.png" alt="OpenHRM" className="w-14 h-14 rounded-full object-cover shrink-0 shadow-[0_6px_16px_rgba(79,70,229,0.35)] mb-3" />
-          <h1 className="text-xl font-bold text-gray-900 tracking-tight">OpenHRM</h1>
-        </div>
-
-        {/* Card */}
-        <div className="bg-white rounded-2xl shadow-[0_2px_8px_rgba(0,0,0,0.04),0_8px_32px_rgba(0,0,0,0.06)] border border-gray-100 p-8">
-          <div className="mb-5">
-            <h2 className="text-lg font-semibold text-gray-900">Sign in</h2>
-            <p className="text-sm text-gray-400 mt-1">Enter your credentials to continue</p>
-          </div>
-
-          <form onSubmit={handleLogin} className="space-y-4">
-            {/* Username */}
-            <div className="space-y-1.5">
-              <label className="text-xs font-medium text-gray-500 uppercase tracking-wider">Username</label>
-              <div className="relative">
-                <User className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 w-[18px] h-[18px]" />
-                <input
-                  type="text"
-                  placeholder="Enter username"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  className="app-form-control w-full pl-11 pr-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-gray-900/10 focus:border-gray-300 outline-none text-sm transition-all placeholder:text-gray-400"
-                  required
-                />
+      <div className="min-h-screen grid lg:grid-cols-[1.05fr_1fr]">
+        <LoginBrandPanel />
+        <main className="flex items-center justify-center p-6 sm:p-12 dotted-bg bg-background">
+          <div className="w-full max-w-md space-y-8 animate-fade-in">
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 lg:hidden mb-6">
+                <img src="/img/OpenHRM_Logo.png" alt="OpenHRM" className="size-9 rounded-lg object-cover shadow-sm" />
+                <span className="font-display text-lg font-semibold">OpenHRM</span>
               </div>
+              <h2 className="font-display text-3xl font-medium tracking-tight">Sign in</h2>
+              <p className="text-sm text-muted-foreground">Enter your credentials to continue</p>
             </div>
 
-            {/* Password */}
-            <div className="space-y-1.5">
-              <label className="text-xs font-medium text-gray-500 uppercase tracking-wider">Password</label>
-              <div className="relative">
-                <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 w-[18px] h-[18px]" />
-                <input
-                  type={showPassword ? 'text' : 'password'}
-                  placeholder="Enter password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="app-form-control w-full pl-11 pr-11 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-gray-900/10 focus:border-gray-300 outline-none text-sm transition-all placeholder:text-gray-400"
-                  required
-                />
-                <button
-                  type="button"
-                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
-                  onClick={() => setShowPassword(!showPassword)}
-                >
-                  {showPassword ? (
-                    <EyeOff className="w-[18px] h-[18px]" />
-                  ) : (
-                    <Eye className="w-[18px] h-[18px]" />
-                  )}
-                </button>
+            <form onSubmit={handleLogin} className="space-y-5">
+              <div className="space-y-2">
+                <Label htmlFor="username">Username</Label>
+                <div className="relative">
+                  <User className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground size-4" />
+                  <Input id="username" type="text" placeholder="Enter username" value={username} onChange={(e) => setUsername(e.target.value)} className="pl-9" required />
+                </div>
               </div>
-            </div>
 
-            {/* Terms and Conditions Checkbox */}
-            <div className="flex items-start gap-2.5 pt-0.5">
-              <input
-                id="terms-checkbox"
-                type="checkbox"
-                checked={termsAccepted}
-                onChange={(e) => setTermsAccepted(e.target.checked)}
-                className="app-form-checkbox mt-0.5 h-4 w-4 shrink-0 rounded border-gray-300 cursor-pointer"
-              />
-              <label htmlFor="terms-checkbox" className="text-xs text-gray-500 leading-snug cursor-pointer select-none">
-                Accept the{' '}
-                <button
-                  type="button"
-                  onClick={() => setShowTermsModal(true)}
-                  className="text-[#4f46e5] underline underline-offset-2 hover:text-[#4338ca] font-medium focus:outline-none"
-                >
-                  terms & conditions
-                </button>
-                {' '}and end user license agreement
-              </label>
-            </div>
-
-            {/* Error Message */}
-            {error && (
-              <div className="flex items-center gap-2 text-red-600 text-sm bg-red-50 border border-red-100 rounded-xl px-3.5 py-2.5">
-                <svg className="w-4 h-4 shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" /></svg>
-                {error}
+              <div className="space-y-2">
+                <Label htmlFor="password">Password</Label>
+                <div className="relative">
+                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground size-4" />
+                  <Input id="password" type={showPassword ? 'text' : 'password'} placeholder="Enter password" value={password} onChange={(e) => setPassword(e.target.value)} className="pl-9 pr-10" required />
+                  <button type="button" className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground" onClick={() => setShowPassword(!showPassword)}>
+                    {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                  </button>
+                </div>
               </div>
-            )}
 
-            {/* Submit */}
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full py-2.5 bg-[#4f46e5] hover:bg-[#4338ca] text-white font-semibold rounded-xl transition-all duration-200 disabled:bg-gray-300 disabled:cursor-not-allowed text-sm flex items-center justify-center gap-2 shadow-[0_1px_3px_rgba(0,0,0,0.1),0_4px_12px_rgba(0,0,0,0.08)] hover:shadow-[0_2px_6px_rgba(0,0,0,0.15),0_8px_24px_rgba(0,0,0,0.12)] active:scale-[0.98]"
-            >
-              {loading ? (
-                <>
-                  <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" /></svg>
-                  Signing in...
-                </>
-              ) : (
-                <>
-                  <LogIn className="w-4 h-4" />
-                  Sign in
-                </>
+              <div className="flex items-start gap-2.5">
+                <input id="terms-checkbox" type="checkbox" checked={termsAccepted} onChange={(e) => setTermsAccepted(e.target.checked)} className="app-form-checkbox mt-0.5 h-4 w-4 shrink-0 rounded border-input cursor-pointer" />
+                <label htmlFor="terms-checkbox" className="text-xs text-muted-foreground leading-snug cursor-pointer select-none">
+                  Accept the{' '}
+                  <button type="button" onClick={() => setShowTermsModal(true)} className="text-primary underline underline-offset-2 hover:text-primary/80 font-medium focus:outline-none">
+                    terms & conditions
+                  </button>
+                  {' '}and end user license agreement
+                </label>
+              </div>
+
+              {error && (
+                <div className="flex items-center gap-2 text-destructive text-sm bg-destructive/10 border border-destructive/20 rounded-lg px-3.5 py-2.5">
+                  {error}
+                </div>
               )}
-            </button>
-          </form>
-        </div>
 
-        <p className="text-center text-xs text-gray-400 mt-5">
-          © {new Date().getFullYear()} OpenHRM · Human Resource Management System
-        </p>
+              <Button type="submit" size="lg" className="w-full group" disabled={loading}>
+                {loading ? <Loader2 className="size-4 animate-spin" /> : <>Sign in <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" /></>}
+              </Button>
+            </form>
+
+            <p className="text-center text-xs text-muted-foreground">© {new Date().getFullYear()} OpenHRM · Human Resource Management System</p>
+          </div>
+        </main>
       </div>
-    </div>
     </>
   )
 }

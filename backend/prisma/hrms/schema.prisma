@@ -126,6 +126,11 @@ model Branches {
   companyLogoUrl          String?                   @db.VarChar
   SignatureUrl            String?                   @db.VarChar
   branchType              String?                   @db.VarChar
+  
+  latitude                String?                   @db.VarChar
+  longitude               String?                   @db.VarChar
+  geofenchradius          String?                   @db.VarChar
+
   attendancePolicy        AttendancePolicy[]
   bankDetails             BankDetails[]
   bonusSetup              BonusSetup[]
@@ -162,6 +167,7 @@ model Branches {
   leavePolicyHoliday      leavePolicyHoliday[]
   contractorBranches      ContractorBranch[]
   bonusAllocation         BonusAllocation[]
+  taskCustomers           TaskCustomer[]
 }
 
 model Company {
@@ -233,8 +239,8 @@ model Company {
   taskCustomers                  TaskCustomer[]
   taskProjects                   TaskProject[]
   companyModules                 CompanyModule[]
-    userCompanies UserCompany[]
-
+  userCompanies                  UserCompany[]
+  subscriptions                  CompanySubscription[]
 }
 
 model Module {
@@ -246,6 +252,7 @@ model Module {
   sortOrder   Int             @default(0)
 
   companies   CompanyModule[]
+  subscriptionPlanModules SubscriptionPlanModule[]
 
   createdAt   DateTime        @default(now())
   updatedAt   DateTime        @updatedAt
@@ -891,10 +898,13 @@ model EmployeeTermination {
 }
 
 model EmployeeCredentials {
-  id                Int              @id @default(autoincrement())
-  employeeID        Int              @unique
-  username          String           @unique @db.VarChar
-  password          String           @db.VarChar
+  id                 Int              @id @default(autoincrement())
+  employeeID         Int              @unique
+  username           String           @unique @db.VarChar
+  password           String           @db.VarChar
+  mustChangePassword Boolean          @default(true)
+  passwordChangedAt  DateTime?
+  
   serviceProviderID Int?
   companyID         Int?
   branchesID        Int?
@@ -2128,6 +2138,7 @@ model TaskCustomer {
   id                Int                @id @default(autoincrement())
   serviceProviderID Int?
   companyID         Int?
+  branchesID        Int?
   customerCode      String             @unique @db.VarChar(32)
   customerName      String             @db.VarChar(255)
   address           String?
@@ -2140,6 +2151,7 @@ model TaskCustomer {
   createdAt         DateTime           @default(now())
   updatedAt         DateTime           @updatedAt
   company           Company?           @relation(fields: [companyID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  branches          Branches?          @relation(fields: [branchesID], references: [id], onDelete: NoAction, onUpdate: NoAction)
   serviceProvider   ServiceProvider?   @relation(fields: [serviceProviderID], references: [id], onDelete: NoAction, onUpdate: NoAction)
   sites             TaskCustomerSite[]
   tasks             TaskProject[]
@@ -2325,4 +2337,81 @@ model BackupRestoreLog {
 
   @@index([createdAt])
   @@index([username])
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  INACTIVE
+  EXPIRED
+  CANCELLED
+  RENEWED
+}
+
+model SubscriptionPlan {
+  id              Int                   @id @default(autoincrement())
+
+  planName        String
+  validityDays    Int  @default(30)
+  planAmount      Decimal               @db.Decimal(12, 2)
+
+  isActive        Boolean               @default(true)
+
+  assignedModules SubscriptionPlanModule[]
+  subscriptions   CompanySubscription[]
+
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+
+  @@unique([planName])
+  @@index([isActive])
+}
+
+model SubscriptionPlanModule {
+  id          Int              @id @default(autoincrement())
+
+  planID      Int
+  moduleID    Int
+
+  plan        SubscriptionPlan @relation(fields: [planID], references: [id], onDelete: Cascade)
+  module      Module           @relation(fields: [moduleID], references: [id], onDelete: Cascade)
+
+  createdAt   DateTime         @default(now())
+
+  @@unique([planID, moduleID])
+  @@index([planID])
+  @@index([moduleID])
+}
+
+model CompanySubscription {
+  id                Int                 @id @default(autoincrement())
+
+  companyID         Int
+  planID            Int
+
+  startDate         DateTime
+  endDate           DateTime
+
+  status            SubscriptionStatus  @default(ACTIVE)
+
+  isActive          Boolean             @default(true)
+
+  deactivatedAt     DateTime?
+  deactivationWef   DateTime?
+  deactivationReason String?
+
+  renewedFromID     Int?
+  renewedFrom       CompanySubscription? @relation("SubscriptionRenewal", fields: [renewedFromID], references: [id])
+  renewals          CompanySubscription[] @relation("SubscriptionRenewal")
+
+  company           Company             @relation(fields: [companyID], references: [id], onDelete: Cascade)
+  plan              SubscriptionPlan    @relation(fields: [planID], references: [id], onDelete: Restrict)
+
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+
+  @@index([companyID])
+  @@index([planID])
+  @@index([status])
+  @@index([startDate])
+  @@index([endDate])
 }

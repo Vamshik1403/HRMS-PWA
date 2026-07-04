@@ -1,17 +1,19 @@
 "use client";
-import { TableBodySkeleton } from "../components/ui/TableBodySkeleton";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 import { Textarea } from "../components/ui/textarea";
 import { FormDrawer } from "../components/ui/form-drawer";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../components/ui/table";
 import { Badge } from "../components/ui/badge";
-import { Icon } from "@iconify/react";
-import { Plus, Search, Edit, Trash2, Filter, RotateCcw, X } from "lucide-react";
+import { Plus, Wallet } from "lucide-react";
+import { PageHeader } from "../components/app/page-header";
+import { FilterBar, FilterSelect } from "../components/app/filter-bar";
+import { EntityListShell } from "../components/app/entity-list-shell";
+import type { DataTableColumn } from "../components/app/data-table";
+import { EntityRowActions } from "../components/app/entity-row-actions";
+import { useClientTable, sortRows } from "../hooks/use-client-table";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import { toast } from "sonner";
 import { getSidebarContext } from "../utils/sidebarContext";
@@ -76,12 +78,9 @@ type BR = { id: number; branchName?: string | null; companyID: number | null; br
 export function BonusSetupManagement() {
   const [listLoading, setListLoading] = useState(true);
   const [bonuses, setBonuses] = useState<BonusSetupUI[]>([]);
-const [searchTerm, setSearchTerm] = useState("");
-
-const [selectedFilterBranchIds, setSelectedFilterBranchIds] = useState<string[]>([]);
-const [showBranchFilterModal, setShowBranchFilterModal] = useState(false);
-const [branchFilterList, setBranchFilterList] = useState<any[]>([]);
-const [branchFilterLoading, setBranchFilterLoading] = useState(false);
+  const table = useClientTable("bonusName");
+  const [branchFilter, setBranchFilter] = useState("ALL");
+  const [branchFilterList, setBranchFilterList] = useState<any[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingBonus, setEditingBonus] = useState<BonusSetupUI | null>(null);
 
@@ -194,8 +193,6 @@ const handler = () => {
 
   const loadBranchFilterList = async () => {
   try {
-    setBranchFilterLoading(true);
-
     const res = await fetch(API.branches, { cache: "no-store" });
     const data = await res.json();
 
@@ -227,7 +224,7 @@ const handler = () => {
 
       if (branchID) {
         branches = branches.filter((b: any) => Number(b.id) === Number(branchID));
-        setSelectedFilterBranchIds([String(branchID)]);
+        setBranchFilter(String(branchID));
       }
     }
 
@@ -235,8 +232,6 @@ const handler = () => {
   } catch (e) {
     console.error("Failed to load branch filter list:", e);
     setBranchFilterList([]);
-  } finally {
-    setBranchFilterLoading(false);
   }
 };
 
@@ -507,30 +502,12 @@ const runFetchBR = debounce(async (val: string) => {
     setSpList([]); setCoList([]); setBrList([]);
   };
 
-  const toggleFilterBranch = (branchId: string) => {
-  setSelectedFilterBranchIds((prev) =>
-    prev.includes(branchId)
-      ? prev.filter((id) => id !== branchId)
-      : [...prev, branchId]
-  );
-};
-
-const selectAllFilterBranches = () => {
-  setSelectedFilterBranchIds(branchFilterList.map((b: any) => String(b.id)));
-};
-
-const clearFilterBranches = () => {
-  if (user?.role === "BRANCH_ADMIN") return;
-  setSelectedFilterBranchIds([]);
-};
-
   const filteredBonuses = useMemo(() => {
-    const q = searchTerm.toLowerCase();
+    const q = table.search.trim().toLowerCase();
 
-    return bonuses.filter((b) => {
+    let list = bonuses.filter((b) => {
       const matchesBranch =
-        selectedFilterBranchIds.length === 0 ||
-        selectedFilterBranchIds.includes(String(b.branchesID));
+        branchFilter === "ALL" || branchFilter === String(b.branchesID);
 
       const matchesSearch =
         !q ||
@@ -542,7 +519,93 @@ const clearFilterBranches = () => {
 
       return matchesBranch && matchesSearch;
     });
-  }, [bonuses, searchTerm, selectedFilterBranchIds]);
+
+    return sortRows(list, table.sortBy, table.sortDir, (row, key) => {
+      const b = row as BonusSetupUI;
+      if (key === "bonusName") return b.bonusName ?? "";
+      if (key === "branch") return b.branchName ?? "";
+      if (key === "bonusType") return b.bonusType ?? "";
+      if (key === "bonusBasedOn") return b.bonusBasedOn ?? "";
+      if (key === "percentageOfBonus") return b.percentageOfBonus ?? 0;
+      if (key === "createdAt") return b.createdAt ?? "";
+      return "";
+    });
+  }, [bonuses, table.search, table.sortBy, table.sortDir, branchFilter]);
+
+  const branchFilterOptions = useMemo(
+    () => [
+      { value: "ALL", label: "All branches" },
+      ...branchFilterList.map((b: any) => ({
+        value: String(b.id),
+        label: b.branchName || `Branch #${b.id}`,
+      })),
+    ],
+    [branchFilterList],
+  );
+
+  const bonusColumns = useMemo((): DataTableColumn<BonusSetupUI>[] => [
+    {
+      key: "branch",
+      header: "Branch",
+      sortable: true,
+      colSpan: 2,
+      cell: (b) => b.branchName || "—",
+    },
+    {
+      key: "bonusName",
+      header: "Bonus Name",
+      sortable: true,
+      colSpan: 2,
+      cell: (b) => <span className="font-medium">{b.bonusName || "—"}</span>,
+    },
+    {
+      key: "description",
+      header: "Description",
+      colSpan: 3,
+      cell: (b) => (
+        <span className="truncate max-w-[200px] block" title={b.description}>
+          {b.description || "—"}
+        </span>
+      ),
+    },
+    {
+      key: "bonusBasedOn",
+      header: "Based On",
+      sortable: true,
+      colSpan: 1,
+      cell: (b) => (
+        <Badge variant={b.bonusBasedOn === "Basic" ? "default" : "secondary"}>
+          {b.bonusBasedOn}
+        </Badge>
+      ),
+    },
+    {
+      key: "percentageOfBonus",
+      header: "Percentage",
+      sortable: true,
+      colSpan: 1,
+      cell: (b) => `${b.percentageOfBonus}%`,
+    },
+    {
+      key: "createdAt",
+      header: "Created",
+      sortable: true,
+      colSpan: 1,
+      cell: (b) => b.createdAt || "—",
+    },
+    {
+      key: "actions",
+      header: "Actions",
+      colSpan: 2,
+      align: "right",
+      cell: (b) => (
+        <EntityRowActions
+          onEdit={canManage ? () => handleEdit(b) : undefined}
+          onDelete={canManage ? () => handleDelete(b.id) : undefined}
+        />
+      ),
+    },
+  ], [canManage]);
 
   // Determine which fields to show based on bonus type
   const showFixedBonus = formData.bonusType === "Fixed";
@@ -550,7 +613,20 @@ const clearFilterBranches = () => {
 
   /* ---------------- UI ---------------- */
   return (
-    <div className="space-y-6 w-full max-w-6xl mx-auto px-4">
+    <div className="space-y-6 w-full max-w-none animate-fade-in page-content-enter">
+      <PageHeader
+        icon={Wallet}
+        title="Bonus Rule"
+        description="Manage bonus configurations and calculations"
+        actions={
+          !isDialogOpen && canManage ? (
+            <Button onClick={() => { resetForm(); setIsDialogOpen(true); }}>
+              <Plus className="w-4 h-4 mr-1" />
+              Add Bonus Rule
+            </Button>
+          ) : null
+        }
+      />
       {/* FormDrawer for Add/Edit */}
       <FormDrawer
         open={isDialogOpen}
@@ -855,251 +931,47 @@ const clearFilterBranches = () => {
             </form>
       </FormDrawer>
 
-      {/* Show list only when form is closed */}
       {!isDialogOpen && (
-      <>
-      {/* Header */}
-      <div className="flex items-center justify-between w-full">
-        <div className="min-w-0 flex-1">
-          <p className="text-gray-600 mt-1 text-sm">Manage bonus configurations and calculations</p>
-        </div>
-        {canManage && (
-          <Button
-            onClick={() => { resetForm(); setIsDialogOpen(true); }}
-            className="flex-shrink-0 text-sm px-3 py-2"
-          >
-            <Plus className="w-4 h-4 mr-1" />
-            Add Bonus Rule
-          </Button>
-        )}
-      </div>
-
-      {/* Search & count */}
-     <Card>
-        <CardContent className="p-6">
-          <div className="flex items-center gap-3 w-full">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => setShowBranchFilterModal(true)}
-              className="flex-shrink-0"
-              title="Filter by Branch"
-            >
-              <Filter className="w-4 h-4 mr-1" />
-              Filter
-              {selectedFilterBranchIds.length > 0 && (
-                <Badge variant="secondary" className="ml-2">
-                  {selectedFilterBranchIds.length}
-                </Badge>
-              )}
-            </Button>
-
-            <div className="relative flex-1 min-w-0">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-              <Input
-                placeholder="Search bonus setups..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10 w-full"
+        <>
+          <FilterBar
+            search={{
+              value: table.search,
+              onChange: table.setSearch,
+              placeholder: "Search bonus setups…",
+            }}
+            filters={
+              <FilterSelect
+                id="bonus-setup-branch"
+                value={branchFilter}
+                onChange={setBranchFilter}
+                options={branchFilterOptions}
+                width="w-56"
+                ariaLabel="Filter by branch"
               />
-            </div>
+            }
+          />
 
-            <Badge variant="secondary" className="px-3 py-1 flex-shrink-0">
-              {filteredBonuses.length} bonuses
-            </Badge>
-          </div>
-        </CardContent>
-      </Card>
-
-
-
-      {showBranchFilterModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-          <div className="w-full max-w-2xl rounded-xl bg-white shadow-xl border">
-            <div className="flex items-center justify-between border-b px-5 py-4">
-              <div className="flex items-center gap-2">
-                <div className="h-9 w-9 rounded-lg bg-indigo-50 flex items-center justify-center">
-                  <Filter className="w-4 h-4 text-indigo-600" />
-                </div>
-                <div>
-                  <h3 className="text-base font-semibold text-gray-900">
-                    Filter Bonus Setup by Branch
-                  </h3>
-                  <p className="text-xs text-gray-500">
-                    Select one or multiple branches
-                  </p>
-                </div>
-              </div>
-
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={() => setShowBranchFilterModal(false)}
-              >
-                <X className="w-4 h-4" />
-              </Button>
-            </div>
-
-            <div className="p-5 space-y-4 max-h-[70vh] overflow-y-auto">
-              <div className="flex items-center justify-between">
-                <Badge variant="secondary">
-                  {selectedFilterBranchIds.length} selected
-                </Badge>
-
-                <div className="flex gap-2">
-                  {user?.role !== "BRANCH_ADMIN" && (
-                    <>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={selectAllFilterBranches}
-                        disabled={branchFilterLoading || branchFilterList.length === 0}
-                      >
-                        Select All
-                      </Button>
-
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={clearFilterBranches}
-                      >
-                        <RotateCcw className="w-4 h-4 mr-1" />
-                        Clear
-                      </Button>
-                    </>
-                  )}
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                {branchFilterList.length === 0 ? (
-                  <p className="text-sm text-gray-500 col-span-full py-8 text-center">
-                    {branchFilterLoading ? "Loading branches..." : "No branches found"}
-                  </p>
-                ) : (
-                  branchFilterList.map((branch: any) => (
-                    <label
-                      key={branch.id}
-                      className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm hover:bg-gray-50 cursor-pointer"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={selectedFilterBranchIds.includes(String(branch.id))}
-                        disabled={user?.role === "BRANCH_ADMIN"}
-                        onChange={() => toggleFilterBranch(String(branch.id))}
-                      />
-                      <span className="truncate">{branch.branchName}</span>
-                    </label>
-                  ))
-                )}
-              </div>
-            </div>
-
-            <div className="flex justify-end gap-2 border-t px-5 py-4">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setShowBranchFilterModal(false)}
-              >
-                Cancel
-              </Button>
-
-              <Button
-                type="button"
-                onClick={() => setShowBranchFilterModal(false)}
-              >
-                Apply Filter
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      
-      {/* Table */}
-      <Card className="w-full">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Icon icon="mdi:trophy" className="w-5 h-5" />
-            Bonus Setup List
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="p-0 w-full">
-          <div className="overflow-x-auto w-full">
-            <Table className="w-full">
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-[120px]">Branch Name</TableHead>
-                  <TableHead className="w-[150px]">Bonus Name</TableHead>
-                  <TableHead className="w-[200px]">Description</TableHead>
-                  <TableHead className="w-[100px]">Based On</TableHead>
-                  <TableHead className="w-[100px]">Percentage</TableHead>
-                  <TableHead className="w-[100px]">Created</TableHead>
-                  <TableHead className="w-[80px] text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {listLoading ? (
-                      <TableBodySkeleton cols={7} />
-                    ) : filteredBonuses.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={7} className="text-center py-8 text-gray-500">
-                      <div className="flex flex-col items-center gap-2">
-                        <Icon icon="mdi:trophy" className="w-12 h-12 text-gray-300" />
-                        <p>No bonus setups found</p>
-                        <p className="text-sm">Try adjusting your search criteria</p>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  filteredBonuses.map((b) => (
-                    <TableRow key={b.id}>
-                      <TableCell className="whitespace-nowrap">{b.branchName}</TableCell>
-                      <TableCell className="font-medium whitespace-nowrap">{b.bonusName}</TableCell>
-                      <TableCell className="whitespace-nowrap max-w-[200px] truncate" title={b.description}>
-                        {b.description}
-                      </TableCell>
-                      <TableCell className="whitespace-nowrap">
-                        <Badge variant={b.bonusBasedOn === "Basic" ? "default" : "secondary"}>{b.bonusBasedOn}</Badge>
-                      </TableCell>
-                      <TableCell className="whitespace-nowrap text-center">{b.percentageOfBonus}%</TableCell>
-                      <TableCell className="whitespace-nowrap">{b.createdAt}</TableCell>
-                      {canManage && (
-                        <TableCell className="text-right whitespace-nowrap">
-                          <div className="flex items-center justify-end gap-1">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleEdit(b)}
-                              className="h-7 w-7 p-0"
-                            >
-                              <Edit className="w-3 h-3" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleDelete(b.id)}
-                              className="h-7 w-7 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
-                            >
-                              <Trash2 className="w-3 h-3" />
-                            </Button>
-                          </div>
-                        </TableCell>
-                      )}
-
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </div>
-        </CardContent>
-      </Card>
-      </>
+          <EntityListShell
+            title="All bonus rules"
+            columns={bonusColumns}
+            rows={filteredBonuses}
+            rowKey={(b) => b.id}
+            isLoading={listLoading}
+            sortBy={table.sortBy}
+            sortDir={table.sortDir}
+            onSort={table.setSort}
+            emptyIcon={Wallet}
+            emptyTitle="No bonus setups found"
+            emptyDescription="Try adjusting your search or branch filter."
+            emptyAction={
+              canManage ? (
+                <Button onClick={() => { resetForm(); setIsDialogOpen(true); }}>
+                  <Plus className="w-4 h-4 mr-1" /> Add Bonus Rule
+                </Button>
+              ) : undefined
+            }
+          />
+        </>
       )}
     </div>
   );

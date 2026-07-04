@@ -31,9 +31,14 @@ export class ManageEmployeeService {
     return bcrypt.hash(password, this.SALT_ROUNDS);
   }
 
-  // Helper method to verify password (useful for login functionality)
+  // Helper method to verify password
   async verifyPassword(plainPassword: string, hashedPassword: string): Promise<boolean> {
     return bcrypt.compare(plainPassword, hashedPassword);
+  }
+
+  private generateRandomPassword(length = 10): string {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789@#$%';
+    return Array.from({ length }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
   }
 
   // CREATE employee with nested rows AND credentials with hashed password
@@ -151,14 +156,14 @@ export class ManageEmployeeService {
             })),
           },
 
-            tokenDeviceMapping: {
+          tokenDeviceMapping: {
             create: tokenDevices.map((d) => ({
               deviceID: d.deviceID,
               deviceEmpCode: d.deviceEmpCode ?? null,
               authType: d.authType ?? null,
             })),
           },
-          
+
           employeeBankDetails: {
             create: bankDetails.map((b) => ({
               bankName: b.bankName ?? null,
@@ -245,19 +250,23 @@ export class ManageEmployeeService {
       });
 
 
-      if (scalars.employeeID && scalars.personalPhoneNo) {
+      let plainInitialPassword: string | null = null;
+
+      if (scalars.personalPhoneNo) {
         const existingCred = await tx.employeeCredentials.findUnique({
-          where: { employeeID: employee.id }, 
+          where: { employeeID: employee.id },
         });
 
         if (!existingCred) {
-          const hashedPassword = await this.hashPassword(scalars.personalPhoneNo);
+          plainInitialPassword = this.generateRandomPassword();
+          const hashedPassword = await this.hashPassword(plainInitialPassword);
 
           await tx.employeeCredentials.create({
             data: {
-              employeeID: employee.id,        
-              username: scalars.employeeID, 
+              employeeID: employee.id,
+              username: scalars.personalPhoneNo,
               password: hashedPassword,
+              mustChangePassword: true,
               isActive: true,
               serviceProviderID: serviceProviderID ?? undefined,
               companyID: companyID ?? undefined,
@@ -268,7 +277,7 @@ export class ManageEmployeeService {
       }
 
       // Return the employee with all relations including credentials
-      return tx.manageEmployee.findUnique({
+      const employeeWithRelations = await tx.manageEmployee.findUnique({
         where: { id: employee.id },
         include: {
           serviceProvider: true,
@@ -280,6 +289,7 @@ export class ManageEmployeeService {
               id: true,
               username: true,
               isActive: true,
+              mustChangePassword: true,
               createdAt: true,
               updatedAt: true,
             }
@@ -314,6 +324,11 @@ export class ManageEmployeeService {
           },
         },
       });
+
+      return {
+        ...employeeWithRelations,
+        initialPassword: plainInitialPassword,
+      };
     });
 
     await this.auditLog.logFromRequest(req, {
@@ -323,10 +338,10 @@ export class ManageEmployeeService {
       entityName: created ? this.employeeDisplayName(created) : undefined,
       newData: created
         ? {
-            employeeID: created.employeeID,
-            employeeFirstName: created.employeeFirstName,
-            employeeLastName: created.employeeLastName,
-          }
+          employeeID: created.employeeID,
+          employeeFirstName: created.employeeFirstName,
+          employeeLastName: created.employeeLastName,
+        }
         : undefined,
     });
 
@@ -528,47 +543,51 @@ export class ManageEmployeeService {
     });
   }
 
-  // Reset password to personal phone number
+  // Reset password to new random password
   async resetPassword(employeeID: number) {
-    const employee = await this.prisma.manageEmployee.findUnique({
-      where: { id: employeeID },
-      select: { personalPhoneNo: true, employeeID: true }
+    const credentials = await this.prisma.employeeCredentials.findUnique({
+      where: { employeeID },
     });
 
-    if (!employee) {
-      throw new Error('Employee not found');
+    if (!credentials) {
+      throw new Error('Employee credentials not found');
     }
 
-    if (!employee.personalPhoneNo) {
-      throw new Error('Personal phone number not set for this employee');
-    }
+    const plainPassword = this.generateRandomPassword();
+    const hashedPassword = await this.hashPassword(plainPassword);
 
-    const hashedPassword = await this.hashPassword(employee.personalPhoneNo);
-
-    return this.prisma.employeeCredentials.update({
+    const updated = await this.prisma.employeeCredentials.update({
       where: { employeeID },
       data: {
         password: hashedPassword,
+        mustChangePassword: true,
+        passwordChangedAt: null,
         updatedAt: new Date(),
       },
       select: {
         id: true,
         username: true,
         isActive: true,
+        mustChangePassword: true,
         createdAt: true,
         updatedAt: true,
-      }
+      },
     });
-  }
 
+    return {
+      ...updated,
+      initialPassword: plainPassword,
+    };
+  }
 
   // Method to update credentials separately with password hashing
   async updateCredentials(employeeID: number, data: { username?: string; password?: string; isActive?: boolean }) {
     const updateData: any = { ...data };
 
-    // Hash password if provided
     if (data.password) {
       updateData.password = await this.hashPassword(data.password);
+      updateData.mustChangePassword = true;
+      updateData.passwordChangedAt = null;
     }
 
     return this.prisma.employeeCredentials.update({
@@ -578,6 +597,7 @@ export class ManageEmployeeService {
         id: true,
         username: true,
         isActive: true,
+        mustChangePassword: true,
         createdAt: true,
         updatedAt: true,
       }
@@ -598,7 +618,11 @@ export class ManageEmployeeService {
     const hashed = await this.hashPassword(newPassword);
     await this.prisma.employeeCredentials.update({
       where: { employeeID },
-      data: { password: hashed },
+      data: {
+        password: hashed,
+        mustChangePassword: false,
+        passwordChangedAt: new Date(),
+      },
     });
     return { message: 'Password changed successfully' };
   }
@@ -635,121 +659,125 @@ export class ManageEmployeeService {
 
     // Return employee data without password
     const { password: _, ...credentialsWithoutPassword } = credentials;
-    return credentialsWithoutPassword;
+    return {
+      ...credentialsWithoutPassword,
+      mustChangePassword: credentials.mustChangePassword,
+    };
   }
 
-async findAllForList(status?: string) {
-  const whereCondition: any = {};
+  async findAllForList(status?: string) {
+    const whereCondition: any = {};
 
-  if (!status || status === 'ACTIVE') {
-    whereCondition.lifecycleStatus = 'ACTIVE';
-  }
+    if (!status || status === 'ACTIVE') {
+      whereCondition.lifecycleStatus = 'ACTIVE';
+    }
 
-  if (status === 'EXITED') {
-    whereCondition.lifecycleStatus = 'EXITED';
-  }
+    if (status === 'EXITED') {
+      whereCondition.lifecycleStatus = 'EXITED';
+    }
 
-  return this.prisma.manageEmployee.findMany({
-    where: whereCondition,
-    select: {
-      id: true,
-      employeeFirstName: true,
-      employeeLastName: true,
-      employeeID: true,
-      businessEmail: true,
-      companyID: true,
-      branchesID: true,
-      serviceProviderID: true,
-      departmentNameID: true,
-      designationID: true,
-      employmentType: true,
-      employmentStatus: true,
-      typeOfEmployee: true,
-      lifecycleStatus: true,
-      joiningDate: true,
-      departments: { select: { id: true, departmentName: true } },
-      designations: { select: { id: true, designation: true } },
-      branches: { select: { id: true, branchName: true } },
-      empDesignation: {
-        orderBy: { id: 'desc' },
-        take: 1,
-        include: { designation: { select: { designation: true } } },
-      },
-    },
-    orderBy: { id: 'desc' },
-  });
-}
-
-async findAll(status?: string) {
-  const whereCondition: any = {};
-
-  // Default → ACTIVE only
-  if (!status || status === 'ACTIVE') {
-    whereCondition.lifecycleStatus = 'ACTIVE';
-  }
-
-  // Fetch EXITED only
-  if (status === 'EXITED') {
-    whereCondition.lifecycleStatus = 'EXITED';
-  }
-
-
-
-  return this.prisma.manageEmployee.findMany({
-    where: whereCondition,
-    include: {
-      serviceProvider: true,
-      company: true,
-      branches: true,
-      contractors: true,
-      employeeCredentials: {
-        select: {
-          id: true,
-          username: true,
-          isActive: true,
-          createdAt: true,
-          updatedAt: true,
+    return this.prisma.manageEmployee.findMany({
+      where: whereCondition,
+      select: {
+        id: true,
+        employeeFirstName: true,
+        employeeLastName: true,
+        employeeID: true,
+        businessEmail: true,
+        companyID: true,
+        branchesID: true,
+        serviceProviderID: true,
+        departmentNameID: true,
+        designationID: true,
+        employmentType: true,
+        employmentStatus: true,
+        typeOfEmployee: true,
+        lifecycleStatus: true,
+        joiningDate: true,
+        departments: { select: { id: true, departmentName: true } },
+        designations: { select: { id: true, designation: true } },
+        branches: { select: { id: true, branchName: true } },
+        empDesignation: {
+          orderBy: { id: 'desc' },
+          take: 1,
+          include: { designation: { select: { designation: true } } },
         },
       },
-      departments: true,
-      designations: true,
-      workShift: true,
-      employeeBankDetails: true,
-      attendancePolicy: true,
-      leavePolicy: true,
-      monthlyPayGrade: true,
-      hourlyPayGrade: true,
-      empEduQualification: true,
-      empProfExprience: true,
-      empDesignation: { include: { designation: true } },
-      empDeviceMapping: { include: { device: true } },
+      orderBy: { id: 'desc' },
+    });
+  }
+
+  async findAll(status?: string) {
+    const whereCondition: any = {};
+
+    // Default → ACTIVE only
+    if (!status || status === 'ACTIVE') {
+      whereCondition.lifecycleStatus = 'ACTIVE';
+    }
+
+    // Fetch EXITED only
+    if (status === 'EXITED') {
+      whereCondition.lifecycleStatus = 'EXITED';
+    }
+
+
+
+    return this.prisma.manageEmployee.findMany({
+      where: whereCondition,
+      include: {
+        serviceProvider: true,
+        company: true,
+        branches: true,
+        contractors: true,
+        employeeCredentials: {
+          select: {
+            id: true,
+            username: true,
+            isActive: true,
+            mustChangePassword: true,
+            createdAt: true,
+            updatedAt: true,
+          },
+        },
+        departments: true,
+        designations: true,
+        workShift: true,
+        employeeBankDetails: true,
+        attendancePolicy: true,
+        leavePolicy: true,
+        monthlyPayGrade: true,
+        hourlyPayGrade: true,
+        empEduQualification: true,
+        empProfExprience: true,
+        empDesignation: { include: { designation: true } },
+        empDeviceMapping: { include: { device: true } },
         tokenDeviceMapping: { include: { device: true } },
-      empBranch: { include: { branch: true } },
-      empDepartment: { include: { department: true } },
-      empEmploymentType: true,
-      empEmploymentStatus: true,
-      empWorkShift: { include: { workShift: true } },
-      empAttendancePolicy: { include: { attendancePolicy: true } },
-      empFactualWorkShift: { include: { factualWorkShift: true } },
-      empFactualAttendancePolicy: { include: { factualAttendancePolicy: true } },
-      empLeavePolicy: { include: { leavePolicy: true } },
-      empContractor: { include: { contractor: true } },
-      empPromotion: {
-        orderBy: { id: 'desc' },
-        include: {
-          departments: true,
-          designations: true,
-          workShift: true,
-          attendancePolicy: true,
-          leavePolicy: true,
-          hourlyPayGrade: true,
-          monthlyPayGrade: true,
+        empBranch: { include: { branch: true } },
+        empDepartment: { include: { department: true } },
+        empEmploymentType: true,
+        empEmploymentStatus: true,
+        empWorkShift: { include: { workShift: true } },
+        empAttendancePolicy: { include: { attendancePolicy: true } },
+        empFactualWorkShift: { include: { factualWorkShift: true } },
+        empFactualAttendancePolicy: { include: { factualAttendancePolicy: true } },
+        empLeavePolicy: { include: { leavePolicy: true } },
+        empContractor: { include: { contractor: true } },
+        empPromotion: {
+          orderBy: { id: 'desc' },
+          include: {
+            departments: true,
+            designations: true,
+            workShift: true,
+            attendancePolicy: true,
+            leavePolicy: true,
+            hourlyPayGrade: true,
+            monthlyPayGrade: true,
+          },
         },
       },
-    },
-    orderBy: { id: 'desc' },
-  });
-}
+      orderBy: { id: 'desc' },
+    });
+  }
 
   async generateJoiningFormPdf(
     id: number,
@@ -767,65 +795,66 @@ async findAll(status?: string) {
     };
   }
 
-async findOne(id: number) {
-  return this.prisma.manageEmployee.findFirst({
-    where: {
-      id,
-      // optional: prevent fetching soft deleted
-      // isDeleted: false
-    },
-    include: {
-      serviceProvider: true,
-      company: true,
-      branches: true,
-      contractors: true,
-      employeeCredentials: {
-        select: {
-          id: true,
-          username: true,
-          isActive: true,
-          createdAt: true,
-          updatedAt: true,
+  async findOne(id: number) {
+    return this.prisma.manageEmployee.findFirst({
+      where: {
+        id,
+        // optional: prevent fetching soft deleted
+        // isDeleted: false
+      },
+      include: {
+        serviceProvider: true,
+        company: true,
+        branches: true,
+        contractors: true,
+        employeeCredentials: {
+          select: {
+            id: true,
+            username: true,
+            isActive: true,
+            mustChangePassword: true,
+            createdAt: true,
+            updatedAt: true,
+          },
+        },
+        departments: true,
+        designations: true,
+        employeeBankDetails: true,
+        workShift: true,
+        attendancePolicy: true,
+        leavePolicy: true,
+        monthlyPayGrade: true,
+        hourlyPayGrade: true,
+        empEduQualification: true,
+        empProfExprience: true,
+        empDesignation: { include: { designation: true } },
+        empDeviceMapping: { include: { device: true } },
+        tokenDeviceMapping: { include: { device: true } },
+        empBranch: { include: { branch: true } },
+        empDepartment: { include: { department: true } },
+        empEmploymentType: true,
+        empEmploymentStatus: true,
+        empWorkShift: { include: { workShift: true } },
+        empAttendancePolicy: { include: { attendancePolicy: true } },
+        empFactualWorkShift: { include: { factualWorkShift: true } },
+        empFactualAttendancePolicy: { include: { factualAttendancePolicy: true } },
+        empLeavePolicy: { include: { leavePolicy: true } },
+        empContractor: { include: { contractor: true } },
+        empPromotion: {
+          orderBy: { id: 'desc' },
+          include: {
+            departments: true,
+            designations: true,
+            workShift: true,
+            attendancePolicy: true,
+            leavePolicy: true,
+            hourlyPayGrade: true,
+            monthlyPayGrade: true,
+          },
         },
       },
-      departments: true,
-      designations: true,
-      employeeBankDetails: true,
-      workShift: true,
-      attendancePolicy: true,
-      leavePolicy: true,
-      monthlyPayGrade: true,
-      hourlyPayGrade: true,
-      empEduQualification: true,
-      empProfExprience: true,
-      empDesignation: { include: { designation: true } },
-      empDeviceMapping: { include: { device: true } },
-       tokenDeviceMapping: { include: { device: true } },
-      empBranch: { include: { branch: true } },
-      empDepartment: { include: { department: true } },
-      empEmploymentType: true,
-      empEmploymentStatus: true,
-      empWorkShift: { include: { workShift: true } },
-      empAttendancePolicy: { include: { attendancePolicy: true } },
-      empFactualWorkShift: { include: { factualWorkShift: true } },
-      empFactualAttendancePolicy: { include: { factualAttendancePolicy: true } },
-      empLeavePolicy: { include: { leavePolicy: true } },
-      empContractor: { include: { contractor: true } },
-      empPromotion: {
-        orderBy: { id: 'desc' },
-        include: {
-          departments: true,
-          designations: true,
-          workShift: true,
-          attendancePolicy: true,
-          leavePolicy: true,
-          hourlyPayGrade: true,
-          monthlyPayGrade: true,
-        },
-      },
-    },
-  });
-}
+    });
+  }
 
   async update(id: number, dto: UpdateManageEmployeeDto, req?: Request) {
     const {
@@ -886,6 +915,7 @@ async findOne(id: number) {
     if (!beforeUpdate) throw new NotFoundException(`Employee ${id} not found`);
 
     const updated = await this.prisma.$transaction(async (tx) => {
+      let plainInitialPassword: string | null = null;
 
       delete (scalars as any).bankDetailsIdsToDelete;
       delete (scalars as any).bankDetailIdsToDelete;
@@ -932,7 +962,7 @@ async findOne(id: number) {
           ...(scalars.weeklyOffPattern !== undefined ? { weeklyOffPattern: scalars.weeklyOffPattern } : {}),
           ...(scalars.noticePeriodDaysForResignation !== undefined ? { noticePeriodDaysForResignation: scalars.noticePeriodDaysForResignation } : {}),
           ...(scalars.noticePeriodDaysForTermination !== undefined ? { noticePeriodDaysForTermination: scalars.noticePeriodDaysForTermination } : {}),
-          
+
 
           // Foreign key fields
           serviceProviderID: serviceProviderID ?? undefined,
@@ -959,12 +989,9 @@ async findOne(id: number) {
         });
       }
 
-      // Update employee credentials if employeeID or personalPhoneNo changed
-      if (scalars.employeeID || scalars.personalPhoneNo) {
-        const existingEmployee = await tx.manageEmployee.findUnique({
-          where: { id },
-          select: { employeeID: true, personalPhoneNo: true }
-        });
+      // Update employee credentials username if personalPhoneNo changed
+      if (scalars.personalPhoneNo || serviceProviderID !== undefined || companyID !== undefined || branchesID !== undefined) {
+
 
         const currentCredentials = await tx.employeeCredentials.findUnique({
           where: { employeeID: id }
@@ -977,14 +1004,9 @@ async findOne(id: number) {
             branchesID: branchesID ?? undefined,
           };
 
-          // Update username if employeeID changed
-          if (scalars.employeeID) {
-            updateData.username = scalars.employeeID;
-          }
-
-          // Update password if personalPhoneNo changed (with hashing)
+          // Mobile number is employee username
           if (scalars.personalPhoneNo) {
-            updateData.password = await this.hashPassword(scalars.personalPhoneNo);
+            updateData.username = scalars.personalPhoneNo;
           }
 
           await tx.employeeCredentials.update({
@@ -992,15 +1014,17 @@ async findOne(id: number) {
             data: updateData,
           });
 
-        } else if (scalars.employeeID && scalars.personalPhoneNo) {
-          // Create credentials if they don't exist but now we have the required data
-          const hashedPassword = await this.hashPassword(scalars.personalPhoneNo);
+        } else if (scalars.personalPhoneNo) {
+          // Create credentials if they don't exist
+          plainInitialPassword = this.generateRandomPassword();
+          const hashedPassword = await this.hashPassword(plainInitialPassword);
 
           await tx.employeeCredentials.create({
             data: {
               employeeID: id,
-              username: scalars.employeeID,
+              username: scalars.personalPhoneNo,
               password: hashedPassword,
+              mustChangePassword: true,
               serviceProviderID: serviceProviderID ?? undefined,
               companyID: companyID ?? undefined,
               branchesID: branchesID ?? undefined,
@@ -1026,7 +1050,7 @@ async findOne(id: number) {
         });
       }
 
-         if (tokenDeviceMapIdsToDelete.length) {
+      if (tokenDeviceMapIdsToDelete.length) {
         await tx.tokenDeviceMapping.deleteMany({
           where: { id: { in: tokenDeviceMapIdsToDelete }, manageEmployeeID: id },
         });
@@ -1132,7 +1156,7 @@ async findOne(id: number) {
       }
 
 
-      
+
       // Upsert Token devices (TokenDeviceMapping)
       if (tokenDevices?.length) {
         const toUpdate = tokenDevices.filter((d) => !!d.id);
@@ -1428,7 +1452,7 @@ async findOne(id: number) {
       }
 
       // 7) return fresh data with credentials (excluding password)
-      return tx.manageEmployee.findUnique({
+      const employeeWithRelations = await tx.manageEmployee.findUnique({
         where: { id },
         include: {
           serviceProvider: true,
@@ -1440,6 +1464,7 @@ async findOne(id: number) {
               id: true,
               username: true,
               isActive: true,
+              mustChangePassword: true,
               createdAt: true,
               updatedAt: true,
             }
@@ -1482,6 +1507,10 @@ async findOne(id: number) {
           },
         },
       });
+      return {
+        ...employeeWithRelations,
+        initialPassword: plainInitialPassword,
+      };
     });
 
     await this.auditLog.logFromRequest(req, {
@@ -1502,120 +1531,120 @@ async findOne(id: number) {
 
 
 
-async remove(id: number, req?: Request) {
-  try {
-    const existing = await this.prisma.manageEmployee.findUnique({ where: { id } });
-    if (!existing) throw new NotFoundException(`Employee ${id} not found`);
+  async remove(id: number, req?: Request) {
+    try {
+      const existing = await this.prisma.manageEmployee.findUnique({ where: { id } });
+      if (!existing) throw new NotFoundException(`Employee ${id} not found`);
 
-    await this.prisma.$transaction([
-      // Delete employee credentials
-      this.prisma.employeeCredentials.deleteMany({
-        where: { employeeID: id },
-      }),
-      
-      // Delete AT devices (EmpDeviceMapping)
-      this.prisma.empDeviceMapping.deleteMany({
-        where: { manageEmployeeID: id },
-      }),
-      
-      // Delete Token devices (TokenDeviceMapping) - Add this
-      this.prisma.tokenDeviceMapping.deleteMany({
-        where: { manageEmployeeID: id },
-      }),
-      
-      // Delete other related records
-      this.prisma.empProfExprience.deleteMany({
-        where: { manageEmployeeID: id },
-      }),
-      this.prisma.empEduQualification.deleteMany({
-        where: { manageEmployeeID: id },
-      }),
-      this.prisma.empDesignation.deleteMany({
-        where: { manageEmployeeID: id },
-      }),
-      this.prisma.empBranch.deleteMany({
-        where: { manageEmployeeID: id },
-      }),
-      this.prisma.empDepartment.deleteMany({
-        where: { manageEmployeeID: id },
-      }),
-      this.prisma.empEmploymentType.deleteMany({
-        where: { manageEmployeeID: id },
-      }),
-      this.prisma.empEmploymentStatus.deleteMany({
-        where: { manageEmployeeID: id },
-      }),
-      this.prisma.empWorkShift.deleteMany({
-        where: { manageEmployeeID: id },
-      }),
-      this.prisma.empAttendancePolicy.deleteMany({
-        where: { manageEmployeeID: id },
-      }),
-      (this.prisma as any).empFactualWorkShift.deleteMany({
-        where: { manageEmployeeID: id },
-      }),
-      (this.prisma as any).empFactualAttendancePolicy.deleteMany({
-        where: { manageEmployeeID: id },
-      }),
-      this.prisma.empLeavePolicy.deleteMany({
-        where: { manageEmployeeID: id },
-      }),
-      this.prisma.empContractor.deleteMany({
-        where: { manageEmployeeID: id },
-      }),
-      this.prisma.empCurrentPosition.deleteMany({
-        where: { manageEmployeeID: id },
-      }),
-      this.prisma.promotionRequest.deleteMany({
-        where: { manageEmployeeID: id },
-      }),
-      this.prisma.empPromotion.deleteMany({
-        where: { manageEmployeeID: id },
-      }),
-      this.prisma.employeeBankDetails.deleteMany({
-        where: { employeeID: id },
-      }),
-      this.prisma.empAttendanceRegularise.deleteMany({
-        where: { manageEmployeeID: id },
-      }),
-      this.prisma.empFieldSiteAttendance.deleteMany({
-        where: { manageEmployeeID: id },
-      }),
-      this.prisma.genarateBonus.deleteMany({
-        where: { manageEmployeeID: id },
-      }),
-      this.prisma.leaveApplication.deleteMany({
-        where: { manageEmployeeID: id },
-      }),
-      this.prisma.bonusAllocation.deleteMany({ where: { employeeID: id } }),
-      this.prisma.employeeFieldHistory.deleteMany({ where: { employeeId: id } }),
-      
-      // Finally delete the ManageEmployee record
-      this.prisma.manageEmployee.delete({ where: { id } }),
-    ]);
+      await this.prisma.$transaction([
+        // Delete employee credentials
+        this.prisma.employeeCredentials.deleteMany({
+          where: { employeeID: id },
+        }),
 
-    await this.auditLog.logFromRequest(req, {
-      action: 'DELETE',
-      module: 'EMPLOYEE',
-      entityId: id,
-      entityName: this.employeeDisplayName(existing),
-      oldData: {
-        employeeID: existing.employeeID,
-        employeeFirstName: existing.employeeFirstName,
-        employeeLastName: existing.employeeLastName,
-      },
-    });
+        // Delete AT devices (EmpDeviceMapping)
+        this.prisma.empDeviceMapping.deleteMany({
+          where: { manageEmployeeID: id },
+        }),
 
-    return { success: true };
-  } catch (e: any) {
-    if (e?.code === 'P2003') {
-      throw new Error(
-        'Cannot delete employee: related records exist (education/experience/mappings/etc).',
-      );
+        // Delete Token devices (TokenDeviceMapping) - Add this
+        this.prisma.tokenDeviceMapping.deleteMany({
+          where: { manageEmployeeID: id },
+        }),
+
+        // Delete other related records
+        this.prisma.empProfExprience.deleteMany({
+          where: { manageEmployeeID: id },
+        }),
+        this.prisma.empEduQualification.deleteMany({
+          where: { manageEmployeeID: id },
+        }),
+        this.prisma.empDesignation.deleteMany({
+          where: { manageEmployeeID: id },
+        }),
+        this.prisma.empBranch.deleteMany({
+          where: { manageEmployeeID: id },
+        }),
+        this.prisma.empDepartment.deleteMany({
+          where: { manageEmployeeID: id },
+        }),
+        this.prisma.empEmploymentType.deleteMany({
+          where: { manageEmployeeID: id },
+        }),
+        this.prisma.empEmploymentStatus.deleteMany({
+          where: { manageEmployeeID: id },
+        }),
+        this.prisma.empWorkShift.deleteMany({
+          where: { manageEmployeeID: id },
+        }),
+        this.prisma.empAttendancePolicy.deleteMany({
+          where: { manageEmployeeID: id },
+        }),
+        (this.prisma as any).empFactualWorkShift.deleteMany({
+          where: { manageEmployeeID: id },
+        }),
+        (this.prisma as any).empFactualAttendancePolicy.deleteMany({
+          where: { manageEmployeeID: id },
+        }),
+        this.prisma.empLeavePolicy.deleteMany({
+          where: { manageEmployeeID: id },
+        }),
+        this.prisma.empContractor.deleteMany({
+          where: { manageEmployeeID: id },
+        }),
+        this.prisma.empCurrentPosition.deleteMany({
+          where: { manageEmployeeID: id },
+        }),
+        this.prisma.promotionRequest.deleteMany({
+          where: { manageEmployeeID: id },
+        }),
+        this.prisma.empPromotion.deleteMany({
+          where: { manageEmployeeID: id },
+        }),
+        this.prisma.employeeBankDetails.deleteMany({
+          where: { employeeID: id },
+        }),
+        this.prisma.empAttendanceRegularise.deleteMany({
+          where: { manageEmployeeID: id },
+        }),
+        this.prisma.empFieldSiteAttendance.deleteMany({
+          where: { manageEmployeeID: id },
+        }),
+        this.prisma.genarateBonus.deleteMany({
+          where: { manageEmployeeID: id },
+        }),
+        this.prisma.leaveApplication.deleteMany({
+          where: { manageEmployeeID: id },
+        }),
+        this.prisma.bonusAllocation.deleteMany({ where: { employeeID: id } }),
+        this.prisma.employeeFieldHistory.deleteMany({ where: { employeeId: id } }),
+
+        // Finally delete the ManageEmployee record
+        this.prisma.manageEmployee.delete({ where: { id } }),
+      ]);
+
+      await this.auditLog.logFromRequest(req, {
+        action: 'DELETE',
+        module: 'EMPLOYEE',
+        entityId: id,
+        entityName: this.employeeDisplayName(existing),
+        oldData: {
+          employeeID: existing.employeeID,
+          employeeFirstName: existing.employeeFirstName,
+          employeeLastName: existing.employeeLastName,
+        },
+      });
+
+      return { success: true };
+    } catch (e: any) {
+      if (e?.code === 'P2003') {
+        throw new Error(
+          'Cannot delete employee: related records exist (education/experience/mappings/etc).',
+        );
+      }
+      throw e;
     }
-    throw e;
   }
-}
 
   // ── Employee Field History ──
 

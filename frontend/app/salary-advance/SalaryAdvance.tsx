@@ -1,7 +1,6 @@
 "use client"
 
 import { useEffect, useState, useMemo, useCallback } from "react"
-import { Card, CardContent } from "../components/ui/card"
 import { Button } from "../components/ui/button"
 import { Input } from "../components/ui/input"
 import { Label } from "../components/ui/label"
@@ -10,16 +9,18 @@ import {
   DialogHeader, DialogTitle, DialogTrigger,
 } from "../components/ui/dialog"
 import { FormDrawer } from "../components/ui/form-drawer"
-import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
-} from "../components/ui/table"
 import { Badge } from "../components/ui/badge"
-import { Search, Edit, Trash2, Check, X, Plus, Settings, PlusCircle, MinusCircle, AlertCircle, Loader2 } from "lucide-react"
+import { Edit, Trash2, Check, X, Plus, Settings, PlusCircle, MinusCircle, AlertCircle, Loader2, Wallet } from "lucide-react"
+import { PageHeader } from "../components/app/page-header";
+import { FilterBar } from "../components/app/filter-bar"
+import { EntityListShell } from "../components/app/entity-list-shell"
+import type { DataTableColumn } from "../components/app/data-table"
+import { EntityRowActions } from "../components/app/entity-row-actions"
+import { useClientTable, sortRows } from "../hooks/use-client-table"
 import { SearchSuggestInput } from "../components/SearchSuggestInput"
 import { useCurrentUser } from "../hooks/useCurrentUser"
 import { toast } from "sonner"
 import { getSidebarContext } from "../utils/sidebarContext"
-import { TableBodySkeleton } from "../components/ui/TableBodySkeleton"
 
 // ============ Type Definitions ============
 type AdvanceStatus = "Pending" | "Approved" | "Rejected" | "Paid"
@@ -103,8 +104,7 @@ const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "/backend"
 
 export function SalaryAdvanceManagement() {
   const [advances, setAdvances] = useState<SalaryAdvance[]>([])
-  const [searchTerm, setSearchTerm] = useState("")
-  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("")
+  const table = useClientTable("employeeName")
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editingAdvance, setEditingAdvance] = useState<SalaryAdvance | null>(null)
   const [loading, setLoading] = useState(false)
@@ -195,15 +195,6 @@ const resolvedBranchID = formData.branchesID;
       loadManagerData()
     }
   }, [user])
-
-  // ============ Debounced Search ============
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setDebouncedSearchTerm(searchTerm)
-    }, 300)
-    
-    return () => clearTimeout(timer)
-  }, [searchTerm])
 
   // ============ API helpers ============
   const robustGet = useCallback(async <T = any>(url: string): Promise<T> => {
@@ -702,14 +693,24 @@ const fetchCompanies = useCallback(
     }
   }, [robustFetch, loadAdvances])
 
-  // ============ Filtered Advances ============
   const filteredAdvances = useMemo(() => {
-    return advances.filter(a =>
-      (a.companyName || "").toLowerCase().includes(debouncedSearchTerm.toLowerCase()) ||
-      (a.employeeName || "").toLowerCase().includes(debouncedSearchTerm.toLowerCase()) ||
-      (a.advanceAmount || "").toLowerCase().includes(debouncedSearchTerm.toLowerCase())
+    const t = table.search.trim().toLowerCase()
+    let list = advances.filter((a) =>
+      !t ||
+      (a.companyName || "").toLowerCase().includes(t) ||
+      (a.employeeName || "").toLowerCase().includes(t) ||
+      (a.advanceAmount || "").toLowerCase().includes(t)
     )
-  }, [advances, debouncedSearchTerm])
+    return sortRows(list, table.sortBy, table.sortDir, (row, key) => {
+      const a = row as SalaryAdvance
+      if (key === "employeeName") return a.employeeName ?? ""
+      if (key === "previousAdvancesDue") return a.previousAdvancesDue ?? ""
+      if (key === "advanceAmount") return a.advanceAmount ?? ""
+      if (key === "reason") return a.reason ?? ""
+      if (key === "status") return a.status ?? ""
+      return ""
+    })
+  }, [advances, table.search, table.sortBy, table.sortDir])
 
   // ============ Repayment API ============
   const loadRepaymentsForAdvance = useCallback(async (advanceId: number) => {
@@ -863,9 +864,107 @@ const fetchCompanies = useCallback(
     }
   }, [isRepaymentFormValid, repaymentAdvance, saveRepaymentPlan, approvedAmount, repaymentRows, robustFetch, loadAdvances])
 
+  const advanceColumns = useMemo((): DataTableColumn<SalaryAdvance>[] => [
+    {
+      key: "employeeName",
+      header: "Employee",
+      sortable: true,
+      colSpan: 3,
+      cell: (a) => <span className="font-medium">{a.employeeName || "—"}</span>,
+    },
+    {
+      key: "previousAdvancesDue",
+      header: "Prev Due",
+      sortable: true,
+      colSpan: 2,
+      cell: (a) => a.previousAdvancesDue || "0",
+    },
+    {
+      key: "advanceAmount",
+      header: "Amount",
+      sortable: true,
+      colSpan: 2,
+      cell: (a) => a.advanceAmount || "—",
+    },
+    {
+      key: "reason",
+      header: "Reason",
+      sortable: true,
+      colSpan: 3,
+      cell: (a) => a.reason || "—",
+    },
+    {
+      key: "status",
+      header: "Status",
+      sortable: true,
+      colSpan: 2,
+      cell: (a) => (
+        <Badge
+          className={
+            a.status === "Approved" ? "bg-green-600 hover:bg-green-600" :
+            a.status === "Rejected" ? "bg-red-600 hover:bg-red-600" :
+            "bg-yellow-500 hover:bg-yellow-500"
+          }
+        >
+          {a.status}
+        </Badge>
+      ),
+    },
+    {
+      key: "actions",
+      header: "Actions",
+      colSpan: 3,
+      align: "right",
+      cell: (a) => {
+        const extras: { icon: typeof Settings; title: string; onClick: () => void; className?: string }[] = []
+        if (canManage) {
+          extras.push({
+            icon: Settings,
+            title: "Restructure Repayment",
+            onClick: () => openRepaymentModal(a),
+          })
+          if (a.status === "Pending") {
+            extras.push(
+              { icon: Check, title: "Approve", onClick: () => handleApprove(a), className: "text-green-600" },
+              { icon: X, title: "Reject", onClick: () => handleReject(a.id), className: "text-destructive" },
+            )
+          }
+        }
+        return (
+          <EntityRowActions
+            onEdit={
+              (canManage || (isEmployee && a.status !== "Approved"))
+                ? () => handleEdit(a)
+                : undefined
+            }
+            onDelete={
+              (canManage || (isEmployee && a.status !== "Approved"))
+                ? () => handleDelete(a.id)
+                : undefined
+            }
+            extra={extras.length > 0 ? extras : undefined}
+          />
+        )
+      },
+    },
+  ], [canManage, isEmployee, handleApprove, handleReject, openRepaymentModal, handleEdit, handleDelete])
+
   // ===================== UI =====================
   return (
-    <div className="space-y-6 w-full max-w-6xl mx-auto px-4">
+    <div className="space-y-6 w-full max-w-none animate-fade-in page-content-enter">
+      <PageHeader
+        icon={Wallet}
+        title="Salary Advances"
+        description="Track advances, approvals, and repayments for your organization"
+        actions={
+          !isDialogOpen ? (
+            <Button onClick={() => { resetForm(); setIsDialogOpen(true); }}>
+              <Plus className="w-4 h-4 mr-1" />
+              Add Salary Advance
+            </Button>
+          ) : null
+        }
+      />
       {/* FormDrawer for Add/Edit */}
       <FormDrawer
         open={isDialogOpen}
@@ -1017,156 +1116,33 @@ const fetchCompanies = useCallback(
 
       {!isDialogOpen && (
       <>
-      {/* Header */}
-      <div className="flex items-center justify-between w-full flex-wrap gap-4">
-        <p className="text-gray-600 text-sm min-w-0 flex-1">
-          Track advances, approvals, and repayments for your organization.
-        </p>
-        <Button onClick={() => { resetForm(); setIsDialogOpen(true); }}>
-          <Plus className="w-4 h-4 mr-1" />
-          Add Salary Advance
-        </Button>
-      </div>
+      <FilterBar
+        search={{
+          value: table.search,
+          onChange: table.setSearch,
+          placeholder: "Search advances…",
+        }}
+      />
 
-      {/* Search + Table */}
-      <Card>
-        <CardContent className="pt-6">
-          <div className="flex items-center mb-4">
-            <Search className="w-4 h-4 mr-2 text-gray-400" />
-            <Input 
-              placeholder="Search advances..." 
-              value={searchTerm} 
-              onChange={e => setSearchTerm(e.target.value)} 
-            />
-            <Badge variant="secondary" className="ml-3">
-              {filteredAdvances.length} advances
-            </Badge>
-          </div>
-          
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Employee</TableHead>
-                  <TableHead>Prev Due</TableHead>
-                  <TableHead>Amount</TableHead>
-                  <TableHead>Reason</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {loading ? (
-                  <TableBodySkeleton cols={6} />
-                ) : filteredAdvances.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={6} className="text-center py-8 text-gray-500">
-                      No salary advances found
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  filteredAdvances.map(a => (
-                    <TableRow key={a.id}>
-                      <TableCell>{a.employeeName}</TableCell>
-                      <TableCell>{a.previousAdvancesDue}</TableCell>
-                      <TableCell>{a.advanceAmount}</TableCell>
-                      <TableCell>{a.reason}</TableCell>
-                      <TableCell>
-                        <Badge
-                          className={
-                            a.status === "Approved" ? "bg-green-600 hover:bg-green-600" :
-                            a.status === "Rejected" ? "bg-red-600 hover:bg-red-600" :
-                            "bg-yellow-500 hover:bg-yellow-500"
-                          }
-                        >
-                          {a.status}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="flex gap-1">
-                        {/* SUPERADMIN / MANAGER actions */}
-                        {canManage && (
-                          <>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => openRepaymentModal(a)}
-                              title="Restructure Repayment"
-                            >
-                              <Settings className="w-4 h-4" />
-                            </Button>
-
-                            {a.status === "Pending" && (
-                              <>
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  className="text-green-600 hover:text-green-800"
-                                  onClick={() => handleApprove(a)}
-                                  title="Approve"
-                                >
-                                  <Check className="w-4 h-4" />
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  className="text-red-600 hover:text-red-800"
-                                  onClick={() => handleReject(a.id)}
-                                  title="Reject"
-                                >
-                                  <X className="w-4 h-4" />
-                                </Button>
-                              </>
-                            )}
-
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => handleEdit(a)}
-                              title="Edit"
-                            >
-                              <Edit className="w-4 h-4" />
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              className="text-red-600 hover:text-red-800"
-                              onClick={() => handleDelete(a.id)}
-                              title="Delete"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </Button>
-                          </>
-                        )}
-
-                        {/* Normal Employee: can edit/delete only if not approved */}
-                        {isEmployee && a.status !== "Approved" && (
-                          <>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => handleEdit(a)}
-                              title="Edit"
-                            >
-                              <Edit className="w-4 h-4" />
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              className="text-red-600 hover:text-red-800"
-                              onClick={() => handleDelete(a.id)}
-                              title="Delete"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </Button>
-                          </>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-        </CardContent>
-      </Card>
+      <EntityListShell
+        title="Salary advances"
+        columns={advanceColumns}
+        rows={filteredAdvances}
+        rowKey={(a) => a.id}
+        isLoading={loading}
+        sortBy={table.sortBy}
+        sortDir={table.sortDir}
+        onSort={table.setSort}
+        emptyIcon={Wallet}
+        emptyTitle="No salary advances found"
+        emptyDescription="Add a salary advance request to get started."
+        emptyAction={
+          <Button onClick={() => { resetForm(); setIsDialogOpen(true); }}>
+            <Plus className="w-4 h-4 mr-1" />
+            Add Salary Advance
+          </Button>
+        }
+      />
       </>
       )}
 

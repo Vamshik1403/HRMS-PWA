@@ -1,18 +1,17 @@
 "use client";
-import { TableBodySkeleton } from "../components/ui/TableBodySkeleton";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 import { FormDrawer } from "../components/ui/form-drawer";
-import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
-} from "../components/ui/table";
-import { Badge } from "../components/ui/badge";
-import { Icon } from "@iconify/react";
-import { Plus, Search, Edit, Trash2, Play, Filter, RotateCcw, X } from "lucide-react";
+import { Plus, Wallet } from "lucide-react";
+import { PageHeader } from "../components/app/page-header";
+import { FilterBar, FilterSelect } from "../components/app/filter-bar";
+import { EntityListShell } from "../components/app/entity-list-shell";
+import type { DataTableColumn } from "../components/app/data-table";
+import { EntityRowActions } from "../components/app/entity-row-actions";
+import { useClientTable, sortRows } from "../hooks/use-client-table";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import { toast } from "sonner";
 import { getSidebarContext } from "../utils/sidebarContext";
@@ -214,16 +213,13 @@ function parseSalaryPeriodLabelToMonth(label: string): number | null {
 export function BonusAllocationsManagement() {
   const [listLoading, setListLoading] = useState(true);
   const [allocations, setAllocations] = useState<BonusAllocationUI[]>([]);
-const [searchTerm, setSearchTerm] = useState("");
-const [branchList, setBranchList] = useState<any[]>([]);
-const [departmentList, setDepartmentList] = useState<any[]>([]);
-const [selectedBranchID, setSelectedBranchID] = useState("");
-const [selectedDepartmentID, setSelectedDepartmentID] = useState("");
-
-const [selectedFilterBranchIds, setSelectedFilterBranchIds] = useState<string[]>([]);
-const [selectedFilterDepartmentIds, setSelectedFilterDepartmentIds] = useState<string[]>([]);
-const [showFilterModal, setShowFilterModal] = useState(false);
-const [filterLoading, setFilterLoading] = useState(false);
+  const table = useClientTable("bonusName");
+  const [branchList, setBranchList] = useState<any[]>([]);
+  const [departmentList, setDepartmentList] = useState<any[]>([]);
+  const [selectedBranchID, setSelectedBranchID] = useState("");
+  const [selectedDepartmentID, setSelectedDepartmentID] = useState("");
+  const [branchFilter, setBranchFilter] = useState("ALL");
+  const [departmentFilter, setDepartmentFilter] = useState("ALL");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingAllocation, setEditingAllocation] = useState<BonusAllocationUI | null>(null);
 
@@ -305,8 +301,6 @@ financialYearLabel: "",
 
   const loadBranchDepartmentLookups = async () => {
   try {
-    setFilterLoading(true);
-
     const [brRes, deptRes] = await Promise.all([
       fetch(API.branches, { cache: "no-store" }),
       fetch(API.departments, { cache: "no-store" }),
@@ -341,7 +335,7 @@ financialYearLabel: "",
         branches = branches.filter((b: any) => Number(b.id) === Number(branchID));
         departments = departments.filter((d: any) => Number(d.branchesID) === Number(branchID));
         setSelectedBranchID(String(branchID));
-        setSelectedFilterBranchIds([String(branchID)]);
+        setBranchFilter(String(branchID));
       }
     }
 
@@ -351,8 +345,6 @@ financialYearLabel: "",
     console.error("Failed to load branch/department filters", e);
     setBranchList([]);
     setDepartmentList([]);
-  } finally {
-    setFilterLoading(false);
   }
 };
 
@@ -719,63 +711,28 @@ if (user?.role !== "BRANCH_ADMIN") setSelectedBranchID("");
 );
 
 const visibleFilterDepartments = departmentList.filter((d: any) =>
-  selectedFilterBranchIds.length === 0 ||
-  selectedFilterBranchIds.includes(String(d.branchesID))
+  branchFilter === "ALL" || branchFilter === String(d.branchesID)
 );
 
-const toggleFilterBranch = (branchId: string) => {
-  setSelectedFilterBranchIds((prev) => {
-    const next = prev.includes(branchId)
-      ? prev.filter((id) => id !== branchId)
-      : [...prev, branchId];
-
-    if (next.length > 0) {
-      setSelectedFilterDepartmentIds((deptPrev) =>
-        deptPrev.filter((deptId) => {
-          const dept = departmentList.find((d: any) => String(d.id) === String(deptId));
-          return dept && next.includes(String(dept.branchesID));
-        })
-      );
+const handleBranchFilterChange = (value: string) => {
+  setBranchFilter(value);
+  if (departmentFilter !== "ALL") {
+    const dept = departmentList.find((d: any) => String(d.id) === departmentFilter);
+    if (dept && value !== "ALL" && String(dept.branchesID) !== value) {
+      setDepartmentFilter("ALL");
     }
-
-    return next;
-  });
+  }
 };
-
-const toggleFilterDepartment = (departmentId: string) => {
-  setSelectedFilterDepartmentIds((prev) =>
-    prev.includes(departmentId)
-      ? prev.filter((id) => id !== departmentId)
-      : [...prev, departmentId]
-  );
-};
-
-const selectAllFilterBranches = () => {
-  setSelectedFilterBranchIds(branchList.map((b: any) => String(b.id)));
-};
-
-const selectAllFilterDepartments = () => {
-  setSelectedFilterDepartmentIds(visibleFilterDepartments.map((d: any) => String(d.id)));
-};
-
-const clearAllFilters = () => {
-  if (user?.role === "BRANCH_ADMIN") return;
-  setSelectedFilterBranchIds([]);
-  setSelectedFilterDepartmentIds([]);
-};
-
 
 const filteredAllocations = useMemo(() => {
-    const q = searchTerm.toLowerCase();
+    const q = table.search.trim().toLowerCase();
 
-    return allocations.filter((a) => {
+    let list = allocations.filter((a) => {
       const matchesBranch =
-        selectedFilterBranchIds.length === 0 ||
-        selectedFilterBranchIds.includes(String(a.branchesID));
+        branchFilter === "ALL" || branchFilter === String(a.branchesID);
 
       const matchesDepartment =
-        selectedFilterDepartmentIds.length === 0 ||
-        selectedFilterDepartmentIds.includes(String(a.departmentID));
+        departmentFilter === "ALL" || departmentFilter === String(a.departmentID);
 
       const matchesSearch =
         !q ||
@@ -789,10 +746,129 @@ const filteredAllocations = useMemo(() => {
 
       return matchesBranch && matchesDepartment && matchesSearch;
     });
-  }, [allocations, searchTerm, selectedFilterBranchIds, selectedFilterDepartmentIds]);
+
+    return sortRows(list, table.sortBy, table.sortDir, (row, key) => {
+      const a = row as BonusAllocationUI;
+      if (key === "bonusName") return a.bonusName ?? "";
+      if (key === "financialYearLabel") return a.financialYearLabel ?? "";
+      if (key === "salaryPeriodLabel") return a.salaryPeriodLabel ?? "";
+      if (key === "branch") return a.branchName ?? "";
+      if (key === "department") return a.departmentName ?? "";
+      if (key === "employeeName") return a.employeeName ?? "";
+      if (key === "employeeCode") return a.employeeCode ?? "";
+      if (key === "createdAt") return a.createdAt ?? "";
+      return "";
+    });
+  }, [allocations, table.search, table.sortBy, table.sortDir, branchFilter, departmentFilter]);
+
+  const branchFilterOptions = useMemo(
+    () => [
+      { value: "ALL", label: "All branches" },
+      ...branchList.map((b: any) => ({
+        value: String(b.id),
+        label: b.branchName || `Branch #${b.id}`,
+      })),
+    ],
+    [branchList],
+  );
+
+  const departmentFilterOptions = useMemo(
+    () => [
+      { value: "ALL", label: "All departments" },
+      ...visibleFilterDepartments.map((d: any) => ({
+        value: String(d.id),
+        label: d.departmentName || `Department #${d.id}`,
+      })),
+    ],
+    [visibleFilterDepartments],
+  );
+
+  const allocationColumns = useMemo((): DataTableColumn<BonusAllocationUI>[] => [
+    {
+      key: "bonusName",
+      header: "Bonus Name",
+      sortable: true,
+      colSpan: 2,
+      cell: (a) => <span className="font-medium">{a.bonusName || "—"}</span>,
+    },
+    {
+      key: "financialYearLabel",
+      header: "Financial Year",
+      sortable: true,
+      colSpan: 1,
+      cell: (a) => a.financialYearLabel || "—",
+    },
+    {
+      key: "salaryPeriodLabel",
+      header: "Salary Period",
+      sortable: true,
+      colSpan: 2,
+      cell: (a) => a.salaryPeriodLabel || "—",
+    },
+    {
+      key: "branch",
+      header: "Branch",
+      sortable: true,
+      colSpan: 1,
+      cell: (a) => a.branchName || "—",
+    },
+    {
+      key: "department",
+      header: "Department",
+      sortable: true,
+      colSpan: 1,
+      cell: (a) => a.departmentName || "—",
+    },
+    {
+      key: "employeeName",
+      header: "Employee",
+      sortable: true,
+      colSpan: 2,
+      cell: (a) => a.employeeName || "—",
+    },
+    {
+      key: "employeeCode",
+      header: "Employee ID",
+      sortable: true,
+      colSpan: 1,
+      cell: (a) => a.employeeCode || "—",
+    },
+    {
+      key: "createdAt",
+      header: "Created",
+      sortable: true,
+      colSpan: 1,
+      cell: (a) => a.createdAt || "—",
+    },
+    {
+      key: "actions",
+      header: "Actions",
+      colSpan: 1,
+      align: "right",
+      cell: (a) => (
+        <EntityRowActions
+          onEdit={canManage ? () => handleEdit(a) : undefined}
+          onDelete={canManage ? () => handleDelete(a.id) : undefined}
+        />
+      ),
+    },
+  ], [canManage]);
 
   return (
-    <div className="space-y-6 w-full max-w-6xl mx-auto px-4">
+    <div className="space-y-6 w-full max-w-none animate-fade-in page-content-enter">
+      <PageHeader
+        icon={Wallet}
+        title="Bonus Allocations"
+        description="Manage bonus allocations"
+        actions={
+          !isDialogOpen && canManage ? (
+            <Button onClick={() => { resetForm(); setIsDialogOpen(true); }}>
+              <Plus className="w-4 h-4 mr-1" />
+              Add Bonus Allocation
+            </Button>
+          ) : null
+        }
+      />
       <FormDrawer
         open={isDialogOpen}
         onOpenChange={(o) => { setIsDialogOpen(o); if (!o) resetForm(); }}
@@ -1001,223 +1077,56 @@ const filteredAllocations = useMemo(() => {
       </FormDrawer>
 
       {!isDialogOpen && (
-      <>
-      <div className="flex items-center justify-between w-full">
-        <div className="min-w-0 flex-1">
-          <p className="text-gray-600 mt-1 text-sm">Manage bonus allocations</p>
-        </div>
-        {canManage && (
-          <Button
-            onClick={() => { resetForm(); setIsDialogOpen(true); }}
-            className="flex-shrink-0 text-sm px-3 py-2"
-          >
-            <Plus className="w-4 h-4 mr-1" />
-            Add Bonus Allocation
-          </Button>
-        )}
-      </div>
-
-      <Card>
-        <CardContent className="p-6">
-<div className="flex items-center gap-3 w-full">
-  <Button
-    type="button"
-    variant="outline"
-    size="sm"
-    onClick={() => setShowFilterModal(true)}
-    className="flex-shrink-0"
-  >
-    <Filter className="w-4 h-4 mr-1" />
-    Filter
-    {(selectedFilterBranchIds.length + selectedFilterDepartmentIds.length) > 0 && (
-      <Badge variant="secondary" className="ml-2">
-        {selectedFilterBranchIds.length + selectedFilterDepartmentIds.length}
-      </Badge>
-    )}
-  </Button>
-  
-  {showFilterModal && (
-  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-    <div className="w-full max-w-3xl rounded-xl bg-white shadow-xl border">
-      <div className="flex items-center justify-between border-b px-5 py-4">
-        <div className="flex items-center gap-2">
-          <Filter className="w-4 h-4 text-indigo-600" />
-          <div>
-            <h3 className="text-base font-semibold text-gray-900">Filter Bonus Allocations</h3>
-            <p className="text-xs text-gray-500">Select branches and departments</p>
-          </div>
-        </div>
-        <Button type="button" variant="ghost" size="sm" onClick={() => setShowFilterModal(false)}>
-          <X className="w-4 h-4" />
-        </Button>
-      </div>
-
-      <div className="p-5 space-y-6 max-h-[70vh] overflow-y-auto">
-        <div className="flex items-center justify-between">
-          <Badge variant="secondary">
-            {selectedFilterBranchIds.length} branches, {selectedFilterDepartmentIds.length} departments selected
-          </Badge>
-          <Button type="button" variant="outline" size="sm" onClick={clearAllFilters}>
-            <RotateCcw className="w-4 h-4 mr-1" />
-            Clear
-          </Button>
-        </div>
-
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <Label>Branches</Label>
-            {user?.role !== "BRANCH_ADMIN" && (
-              <Button type="button" variant="outline" size="sm" onClick={selectAllFilterBranches}>
-                Select All Branches
-              </Button>
-            )}
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            {branchList.map((b: any) => (
-              <label key={b.id} className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm hover:bg-gray-50 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={selectedFilterBranchIds.includes(String(b.id))}
-                  disabled={user?.role === "BRANCH_ADMIN"}
-                  onChange={() => toggleFilterBranch(String(b.id))}
+        <>
+          <FilterBar
+            search={{
+              value: table.search,
+              onChange: table.setSearch,
+              placeholder: "Search bonus allocations…",
+            }}
+            filters={
+              <>
+                <FilterSelect
+                  id="bonus-allocations-branch"
+                  value={branchFilter}
+                  onChange={handleBranchFilterChange}
+                  options={branchFilterOptions}
+                  width="w-56"
+                  ariaLabel="Filter by branch"
                 />
-                <span className="truncate">{b.branchName}</span>
-              </label>
-            ))}
-          </div>
-        </div>
-
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <Label>Departments</Label>
-            <Button type="button" variant="outline" size="sm" onClick={selectAllFilterDepartments}>
-              Select All Departments
-            </Button>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            {visibleFilterDepartments.map((d: any) => (
-              <label key={d.id} className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm hover:bg-gray-50 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={selectedFilterDepartmentIds.includes(String(d.id))}
-                  onChange={() => toggleFilterDepartment(String(d.id))}
+                <FilterSelect
+                  id="bonus-allocations-department"
+                  value={departmentFilter}
+                  onChange={setDepartmentFilter}
+                  options={departmentFilterOptions}
+                  width="w-56"
+                  ariaLabel="Filter by department"
                 />
-                <span className="truncate">{d.departmentName}</span>
-              </label>
-            ))}
-          </div>
-        </div>
-      </div>
+              </>
+            }
+          />
 
-      <div className="flex justify-end gap-2 border-t px-5 py-4">
-        <Button type="button" variant="outline" onClick={() => setShowFilterModal(false)}>Cancel</Button>
-        <Button type="button" onClick={() => setShowFilterModal(false)}>Apply Filter</Button>
-      </div>
-    </div>
-  </div>
-)}
-
-            <div className="relative flex-1 min-w-0">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-              <Input
-                placeholder="Search bonus allocations..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10 w-full"
-              />
-            </div>
-            <Badge variant="secondary" className="px-3 py-1 flex-shrink-0">
-              {filteredAllocations.length} allocations
-            </Badge>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card className="w-full">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Icon icon="mdi:trophy-outline" className="w-5 h-5" />
-            Bonus Allocations List
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="p-0 w-full">
-          <div className="overflow-x-auto w-full">
-            <Table className="w-full">
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-[150px]">Bonus Name</TableHead>
-                  <TableHead className="w-[120px]">Financial Year</TableHead>
-                  <TableHead className="w-[160px]">Salary Period</TableHead>
-<TableHead className="w-[120px]">Branch</TableHead>
-<TableHead className="w-[120px]">Department</TableHead>
-<TableHead className="w-[150px]">Employee Name</TableHead>
-                  <TableHead className="w-[100px]">Employee ID</TableHead>
-                  <TableHead className="w-[100px]">Created</TableHead>
-                  <TableHead className="w-[80px] text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {listLoading ? (
-                      <TableBodySkeleton cols={9} />
-                    ) : filteredAllocations.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={9} className="text-center py-8 text-gray-500">
-                      <div className="flex flex-col items-center gap-2">
-                        <Icon icon="mdi:trophy-outline" className="w-12 h-12 text-gray-300" />
-                        <p>No bonus allocations found</p>
-                        <p className="text-sm">Try adjusting your search criteria</p>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  filteredAllocations.map((a) => (
-                    <TableRow key={a.id}>
-                      <TableCell className="font-medium whitespace-nowrap">{a.bonusName}</TableCell>
-                      <TableCell className="whitespace-nowrap">{a.financialYearLabel}</TableCell>
-                      <TableCell className="whitespace-nowrap">{a.salaryPeriodLabel}</TableCell>
-<TableCell className="whitespace-nowrap">
-  {a.branchName ||  "—"}
-</TableCell>
-
-<TableCell className="whitespace-nowrap">
-  {a.departmentName ||  "—"}
-</TableCell>
-
-<TableCell className="whitespace-nowrap">{a.employeeName}</TableCell>
-                      <TableCell className="whitespace-nowrap">{a.employeeCode}</TableCell>
-                      <TableCell className="whitespace-nowrap">{a.createdAt}</TableCell>
-                      {canManage && (
-                        <TableCell className="text-right whitespace-nowrap">
-                          <div className="flex items-center justify-end gap-1">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleEdit(a)}
-                              className="h-7 w-7 p-0"
-                            >
-                              <Edit className="w-3 h-3" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleDelete(a.id)}
-                              className="h-7 w-7 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
-                            >
-                              <Trash2 className="w-3 h-3" />
-                            </Button>
-                          </div>
-                        </TableCell>
-                      )}
-
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </div>
-        </CardContent>
-      </Card>
-      </>
+          <EntityListShell
+            title="All bonus allocations"
+            columns={allocationColumns}
+            rows={filteredAllocations}
+            rowKey={(a) => a.id}
+            isLoading={listLoading}
+            sortBy={table.sortBy}
+            sortDir={table.sortDir}
+            onSort={table.setSort}
+            emptyIcon={Wallet}
+            emptyTitle="No bonus allocations found"
+            emptyDescription="Try adjusting your search or filters."
+            emptyAction={
+              canManage ? (
+                <Button onClick={() => { resetForm(); setIsDialogOpen(true); }}>
+                  <Plus className="w-4 h-4 mr-1" /> Add Bonus Allocation
+                </Button>
+              ) : undefined
+            }
+          />
+        </>
       )}
     </div>
   );

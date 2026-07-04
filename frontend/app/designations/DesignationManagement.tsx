@@ -23,9 +23,16 @@ import {
 } from "../components/ui/table";
 import { Badge } from "../components/ui/badge";
 import { Icon } from "@iconify/react";
-import { Plus, Search, Edit, Trash2, Eye, X, Save, RotateCcw, Filter } from "lucide-react";
+import { Plus, Search, Edit, Trash2, Eye, X, Save, RotateCcw, Filter, BadgeCheck } from "lucide-react";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import { FormDrawer } from "../components/ui/form-drawer";
+import { NoticeBanner } from "../components/ui/notice-banner";
+import { PageHeader } from "../components/app/page-header";
+import { FilterBar, FilterSelect } from "../components/app/filter-bar";
+import { EntityListShell } from "../components/app/entity-list-shell";
+import type { DataTableColumn } from "../components/app/data-table";
+import { EntityRowActions } from "../components/app/entity-row-actions";
+import { useClientTable, sortRows } from "../hooks/use-client-table";
 import { toast } from "sonner";
 import { getSidebarContext } from "../utils/sidebarContext";
 import {
@@ -143,13 +150,12 @@ export function DesignationManagement() {
   const isEmployee = user?.role === "EMPLOYEE";
 
   // UI
-const [searchTerm, setSearchTerm] = useState("");
+const table = useClientTable("designation");
+const [branchFilter, setBranchFilter] = useState("ALL");
+const [departmentFilter, setDepartmentFilter] = useState("ALL");
 
 const [branchFilterList, setBranchFilterList] = useState<Branch[]>([]);
 const [departmentFilterList, setDepartmentFilterList] = useState<Department[]>([]);
-const [selectedFilterBranchIds, setSelectedFilterBranchIds] = useState<string[]>([]);
-const [selectedFilterDepartmentIds, setSelectedFilterDepartmentIds] = useState<string[]>([]);
-const [showFilterModal, setShowFilterModal] = useState(false);
 const [filterLoading, setFilterLoading] = useState(false);
   const [isAddingNew, setIsAddingNew] = useState(false);
   const [isViewing, setIsViewing] = useState(false);
@@ -335,7 +341,7 @@ const [filterLoading, setFilterLoading] = useState(false);
           (d) => Number(d.branchesID) === Number(branchID)
         );
 
-        setSelectedFilterBranchIds([String(branchID)]);
+        setBranchFilter(String(branchID));
       }
     }
 
@@ -355,9 +361,22 @@ const [filterLoading, setFilterLoading] = useState(false);
       setLoading(true);
       const all = await fetchJSONSafe<DesignationRead[]>(API.designationsList);
 
-      const mapping = await resolveScopeUserMapping(user);
-      if (mapping) setCurrentUserMapping(mapping);
-      setRows(await filterCompanyScopedRecords(all, user));
+const mapping = await resolveScopeUserMapping(user);
+if (mapping) setCurrentUserMapping(mapping);
+
+const ctx = getSidebarContext();
+
+const activeCompanyID =
+  ctx?.companyID ??
+  mapping?.companyID ??
+  user?.companyID;
+
+const filteredRows = (all || []).filter((r: any) => {
+  if (!activeCompanyID) return true;
+  return Number(r.companyID) === Number(activeCompanyID);
+});
+
+setRows(filteredRows);
 
     } catch (e: any) {
       console.error("Failed to load designations:", e);
@@ -430,14 +449,18 @@ const [filterLoading, setFilterLoading] = useState(false);
     let coAutocomplete = ctx?.companyName ?? "";
     let brAutocomplete = "";
 
-    if ((user?.role === "COMPANY_ADMIN" || user?.role === "ADMIN") && currentUserMapping) {
-      serviceProviderID = currentUserMapping.serviceProviderID ?? null;
-      companyID = currentUserMapping.companyID ?? null;
-      branchesID = null;
-      spAutocomplete = currentUserMapping.serviceProvider?.companyName ?? "";
-      coAutocomplete = currentUserMapping.company?.companyName ?? "";
-      brAutocomplete = "";
-    } else if (user?.role === "BRANCH_ADMIN" && currentUserMapping) {
+if (
+  !ctx &&
+  (user?.role === "COMPANY_ADMIN" || user?.role === "ADMIN") &&
+  currentUserMapping
+) {
+  serviceProviderID = currentUserMapping.serviceProviderID ?? null;
+  companyID = currentUserMapping.companyID ?? null;
+  branchesID = null;
+  spAutocomplete = currentUserMapping.serviceProvider?.companyName ?? "";
+  coAutocomplete = currentUserMapping.company?.companyName ?? "";
+  brAutocomplete = "";
+} else if (user?.role === "BRANCH_ADMIN" && currentUserMapping) {
       serviceProviderID = currentUserMapping.serviceProviderID ?? null;
       companyID = currentUserMapping.companyID ?? null;
       branchesID = currentUserMapping.branchesID ?? null;
@@ -544,18 +567,20 @@ const [filterLoading, setFilterLoading] = useState(false);
     setSaving(true);
     setError(null);
 
-    const payload: any = {
-      serviceProviderID:
-        user?.role === "SUPERADMIN"
-          ? formData.serviceProviderID
-          : currentUserMapping?.serviceProviderID,
+  const ctx = getSidebarContext();
 
-      companyID:
-        user?.role === "SUPERADMIN"
-          ? formData.companyID
-          : currentUserMapping?.companyID,
+const payload: any = {
+  serviceProviderID:
+    ctx?.serviceProviderID ??
+    formData.serviceProviderID ??
+    currentUserMapping?.serviceProviderID,
 
-      branchesID: formData.branchesID,
+  companyID:
+    ctx?.companyID ??
+    formData.companyID ??
+    currentUserMapping?.companyID,
+
+  branchesID: formData.branchesID,
       departmentID: formData.departmentID,
       designation: formData.designation,
       
@@ -707,76 +732,11 @@ const handleCancel = () => {
   };
 
   // ---------------------------
-  // Search
+  // Search / filters
   // ---------------------------
 
-  const toggleFilterBranch = (branchId: string) => {
-  setSelectedFilterBranchIds((prev) => {
-    const next = prev.includes(branchId)
-      ? prev.filter((id) => id !== branchId)
-      : [...prev, branchId];
-
-    // remove selected departments that do not belong to selected branch list
-    if (next.length > 0) {
-      setSelectedFilterDepartmentIds((deptPrev) =>
-        deptPrev.filter((deptId) => {
-          const dept = departmentFilterList.find(
-            (d) => String(d.id) === String(deptId)
-          );
-          return dept && next.includes(String(dept.branchesID));
-        })
-      );
-    }
-
-    return next;
-  });
-};
-
-const toggleFilterDepartment = (departmentId: string) => {
-  setSelectedFilterDepartmentIds((prev) =>
-    prev.includes(departmentId)
-      ? prev.filter((id) => id !== departmentId)
-      : [...prev, departmentId]
-  );
-};
-
-const selectAllFilterBranches = () => {
-  setSelectedFilterBranchIds(branchFilterList.map((b) => String(b.id)));
-};
-
-const selectAllFilterDepartments = () => {
-  const allowedDepartments = departmentFilterList.filter((d) => {
-    return (
-      selectedFilterBranchIds.length === 0 ||
-      selectedFilterBranchIds.includes(String(d.branchesID))
-    );
-  });
-
-  setSelectedFilterDepartmentIds(allowedDepartments.map((d) => String(d.id)));
-};
-
-const clearAllFilters = () => {
-  if (user?.role === "BRANCH_ADMIN") {
-    const branchID = currentUserMapping?.branchesID ?? user?.branchesID;
-    setSelectedFilterBranchIds(branchID ? [String(branchID)] : []);
-    setSelectedFilterDepartmentIds([]);
-    return;
-  }
-
-  setSelectedFilterBranchIds([]);
-  setSelectedFilterDepartmentIds([]);
-};
-
-const visibleDepartmentFilterList = departmentFilterList.filter((d) => {
-  return (
-    selectedFilterBranchIds.length === 0 ||
-    selectedFilterBranchIds.includes(String(d.branchesID))
-  );
-});
-
-
 const filtered = useMemo(() => {
-  const t = searchTerm.trim().toLowerCase();
+  const t = table.search.trim().toLowerCase();
 
   const spNameOf = (r: DesignationRead) =>
     r.serviceProvider?.companyName ??
@@ -798,14 +758,14 @@ const filtered = useMemo(() => {
     r.departmentName ??
     (r.departmentID != null ? deptMap[r.departmentID] : "");
 
-  return rows.filter((r) => {
+  let list = rows.filter((r) => {
     const matchesBranch =
-      selectedFilterBranchIds.length === 0 ||
-      selectedFilterBranchIds.includes(String(r.branchesID ?? r.branches?.id ?? ""));
+      branchFilter === "ALL" ||
+      branchFilter === String(r.branchesID ?? r.branches?.id ?? "");
 
     const matchesDepartment =
-      selectedFilterDepartmentIds.length === 0 ||
-      selectedFilterDepartmentIds.includes(String(r.departmentID ?? r.departments?.id ?? ""));
+      departmentFilter === "ALL" ||
+      departmentFilter === String(r.departmentID ?? r.departments?.id ?? "");
 
     const matchesSearch =
       !t ||
@@ -815,12 +775,6 @@ const filtered = useMemo(() => {
         coNameOf(r),
         brNameOf(r),
         deptNameOf(r),
-        r.shiftEligibility,
-        r.nightShiftEligibility,
-        r.maxHoursPerDay,
-        r.weeklyOffPattern,
-        r.noticePeriodDaysForResignation,
-        r.noticePeriodDaysForTermination,
       ]
         .filter(Boolean)
         .map((x) => String(x ?? "").toLowerCase())
@@ -828,16 +782,93 @@ const filtered = useMemo(() => {
 
     return matchesBranch && matchesDepartment && matchesSearch;
   });
+
+  return sortRows(list, table.sortBy, table.sortDir, (row, key) => {
+    const r = row as DesignationRead;
+    if (key === "designation") return r.designation ?? "";
+    if (key === "branch") return brNameOf(r);
+    if (key === "department") return deptNameOf(r);
+    return "";
+  });
 }, [
   rows,
-  searchTerm,
+  table.search,
+  table.sortBy,
+  table.sortDir,
+  branchFilter,
+  departmentFilter,
   spMap,
   coMap,
   brMap,
   deptMap,
-  selectedFilterBranchIds,
-  selectedFilterDepartmentIds,
 ]);
+
+  const branchFilterOptions = useMemo(
+    () => [
+      { value: "ALL", label: "All branches" },
+      ...branchFilterList.map((b) => ({
+        value: String(b.id),
+        label: b.branchName || `Branch #${b.id}`,
+      })),
+    ],
+    [branchFilterList],
+  );
+
+  const visibleDepartmentFilterList = useMemo(
+    () =>
+      departmentFilterList.filter((d) =>
+        branchFilter === "ALL" || String(d.branchesID) === branchFilter,
+      ),
+    [departmentFilterList, branchFilter],
+  );
+
+  const departmentFilterOptions = useMemo(
+    () => [
+      { value: "ALL", label: "All departments" },
+      ...visibleDepartmentFilterList.map((d) => ({
+        value: String(d.id),
+        label: d.departmentName || `Dept #${d.id}`,
+      })),
+    ],
+    [visibleDepartmentFilterList],
+  );
+
+  const designationColumns = useMemo((): DataTableColumn<DesignationRead>[] => [
+    {
+      key: "designation",
+      header: "Name",
+      sortable: true,
+      colSpan: 4,
+      cell: (r) => <span className="font-medium">{r.designation || "—"}</span>,
+    },
+    {
+      key: "branch",
+      header: "Branch",
+      sortable: true,
+      colSpan: 3,
+      cell: (r) => brName(r),
+    },
+    {
+      key: "department",
+      header: "Department",
+      sortable: true,
+      colSpan: 3,
+      cell: (r) => deptName(r),
+    },
+    {
+      key: "actions",
+      header: "Actions",
+      colSpan: 2,
+      align: "right",
+      cell: (r) => (
+        <EntityRowActions
+          onView={() => handleView(r)}
+          onEdit={canManage ? () => handleEdit(r) : undefined}
+          onDelete={canManage ? () => handleDelete(r.id) : undefined}
+        />
+      ),
+    },
+  ], [canManage]);
 
   // ---------------------------
   // Name helpers for table
@@ -863,24 +894,19 @@ const filtered = useMemo(() => {
     ?? (r.departmentID != null ? (deptMap[r.departmentID] ?? "—") : "—");
 
   return (
-    <div className="space-y-6 w-full max-w-7xl mx-auto px-4">
-      {/* Header */}
-      <div className="flex items-center justify-between w-full">
-        <div className="min-w-0 flex-1">
-          <p className="text-gray-600 mt-1 text-sm">Manage designation records</p>
-        </div>
-
-        <div className="flex items-center gap-3">
-          {!isAddingNew && !isViewing && canManage && (
-            <Button
-              onClick={() => { resetForm(); setIsAddingNew(true); }}
-              className="text-sm px-3 py-2"
-            >
+    <div className="space-y-6 w-full max-w-none animate-fade-in page-content-enter">
+      <PageHeader
+        icon={BadgeCheck}
+        title="Designations"
+        description="Job titles for your organisation. Level helps build org-charts and feeds future pay-band logic."
+        actions={
+          !isAddingNew && !isViewing && canManage ? (
+            <Button onClick={() => { resetForm(); setIsAddingNew(true); }}>
               <Plus className="w-4 h-4 mr-1" /> Add Designation
             </Button>
-          )}
-        </div>
-      </div>
+          ) : null
+        }
+      />
 
       {/* Add/Edit Form - Drawer */}
       <FormDrawer
@@ -890,9 +916,9 @@ const filtered = useMemo(() => {
       >
         <div>
             {error && (
-              <div className="rounded-md border border-red-200 bg-red-50 text-red-700 px-3 py-2 text-sm mb-4">
+              <NoticeBanner variant="error" compact className="mb-4">
                 {error}
-              </div>
+              </NoticeBanner>
             )}
 
             <form onSubmit={handleSubmit} className="space-y-4">
@@ -912,12 +938,12 @@ const filtered = useMemo(() => {
                     required
                   />
                   {spList.length > 0 && (
-                    <div className="absolute z-10 bg-white border rounded w-full shadow max-h-48 overflow-y-auto">
+                    <div className="absolute z-10 bg-popover text-popover-foreground border border-border rounded w-full shadow max-h-48 overflow-y-auto">
                       {spLoading && <div className="px-3 py-2 text-sm text-gray-500">Loading…</div>}
                       {spList.map((sp) => (
                         <div
                           key={sp.id}
-                          className="px-3 py-2 hover:bg-gray-100 cursor-pointer"
+                          className="px-3 py-2 hover:bg-accent cursor-pointer"
                           onMouseDown={(e) => e.preventDefault()}
                           onClick={() => {
                             setFormData((p) => ({
@@ -960,12 +986,12 @@ const filtered = useMemo(() => {
                     disabled={!formData.serviceProviderID}
                   />
                   {suggestedCompanies.length > 0 && !editing && (
-                    <div className="absolute z-10 bg-white border rounded w-full shadow max-h-48 overflow-y-auto">
+                    <div className="absolute z-10 bg-popover text-popover-foreground border border-border rounded w-full shadow max-h-48 overflow-y-auto">
                       {loadingCompanies && <div className="px-3 py-2 text-sm text-gray-500">Loading…</div>}
                       {suggestedCompanies.map((co) => (
                         <div
                           key={co.id}
-                          className="px-3 py-2 hover:bg-gray-100 cursor-pointer"
+                          className="px-3 py-2 hover:bg-accent cursor-pointer"
                           onMouseDown={(e) => e.preventDefault()}
                           onClick={() => {
                             setFormData((p) => ({
@@ -1013,12 +1039,12 @@ const filtered = useMemo(() => {
                     disabled={!formData.serviceProviderID || !formData.companyID}
                   />
                   {suggestedBranches.length > 0 && !editing && (
-                    <div className="absolute z-10 bg-white border rounded w-full shadow max-h-48 overflow-y-auto">
+                    <div className="absolute z-10 bg-popover text-popover-foreground border border-border rounded w-full shadow max-h-48 overflow-y-auto">
                       {loadingBranches && <div className="px-3 py-2 text-sm text-gray-500">Loading…</div>}
                       {suggestedBranches.map((br) => (
                         <div
                           key={br.id}
-                          className="px-3 py-2 hover:bg-gray-100 cursor-pointer"
+                          className="px-3 py-2 hover:bg-accent cursor-pointer"
                           onMouseDown={(e) => e.preventDefault()}
                           onClick={() => {
                             setFormData((p) => ({
@@ -1067,12 +1093,12 @@ const filtered = useMemo(() => {
                     disabled={!formData.serviceProviderID || !formData.companyID || !formData.branchesID}
                   />
                   {suggestedDepartments.length > 0 && !editing && (
-                    <div className="absolute z-10 bg-white border rounded w-full shadow max-h-48 overflow-y-auto">
+                    <div className="absolute z-10 bg-popover text-popover-foreground border border-border rounded w-full shadow max-h-48 overflow-y-auto">
                       {loadingDepartments && <div className="px-3 py-2 text-sm text-gray-500">Loading…</div>}
                       {suggestedDepartments.map((dept) => (
                         <div
                           key={dept.id}
-                          className="px-3 py-2 hover:bg-gray-100 cursor-pointer"
+                          className="px-3 py-2 hover:bg-accent cursor-pointer"
                           onMouseDown={(e) => e.preventDefault()}
                           onClick={() => {
                             setFormData((p) => ({
@@ -1186,269 +1212,54 @@ const filtered = useMemo(() => {
       </FormDrawer>
 
       {!isAddingNew && !isViewing && (<>
-         <Card>
-  <CardContent className="p-6">
-    <div className="flex items-center gap-3 w-full">
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        onClick={() => setShowFilterModal(true)}
-        className="flex-shrink-0"
-        title="Filter by Branch / Department"
-      >
-        <Filter className="w-4 h-4 mr-1" />
-        Filter
-        {(selectedFilterBranchIds.length + selectedFilterDepartmentIds.length) > 0 && (
-          <Badge variant="secondary" className="ml-2">
-            {selectedFilterBranchIds.length + selectedFilterDepartmentIds.length}
-          </Badge>
-        )}
-      </Button>
-
-      <div className="relative flex-1 min-w-0">
-        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-        <Input
-          placeholder="Search designations..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="pl-10 w-full"
+        <FilterBar
+          search={{
+            value: table.search,
+            onChange: table.setSearch,
+            placeholder: "Search code, name or grade…",
+          }}
+          filters={
+            <>
+              <FilterSelect
+                id="designations-branch"
+                value={branchFilter}
+                onChange={(v) => { setBranchFilter(v); setDepartmentFilter("ALL"); }}
+                options={branchFilterOptions}
+                width="w-56"
+                ariaLabel="Filter by branch"
+              />
+              <FilterSelect
+                id="designations-department"
+                value={departmentFilter}
+                onChange={setDepartmentFilter}
+                options={departmentFilterOptions}
+                width="w-56"
+                ariaLabel="Filter by department"
+              />
+            </>
+          }
         />
-      </div>
 
-      <Badge variant="secondary" className="px-3 py-1 flex-shrink-0">
-        {filtered.length} designations
-      </Badge>
-    </div>
-  </CardContent>
-</Card>
-
-{showFilterModal && (
-  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-    <div className="w-full max-w-3xl rounded-xl bg-white shadow-xl border">
-      <div className="flex items-center justify-between border-b px-5 py-4">
-        <div className="flex items-center gap-2">
-          <div className="h-9 w-9 rounded-lg bg-indigo-50 flex items-center justify-center">
-            <Filter className="w-4 h-4 text-indigo-600" />
-          </div>
-          <div>
-            <h3 className="text-base font-semibold text-gray-900">
-              Filter Designations
-            </h3>
-            <p className="text-xs text-gray-500">
-              Select branch and department filters
-            </p>
-          </div>
-        </div>
-
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          onClick={() => setShowFilterModal(false)}
-        >
-          <X className="w-4 h-4" />
-        </Button>
-      </div>
-
-      <div className="p-5 space-y-6 max-h-[70vh] overflow-y-auto">
-        <div className="flex items-center justify-between">
-          <Badge variant="secondary">
-            {selectedFilterBranchIds.length} branches, {selectedFilterDepartmentIds.length} departments selected
-          </Badge>
-
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={clearAllFilters}
-          >
-            <RotateCcw className="w-4 h-4 mr-1" />
-            Clear
-          </Button>
-        </div>
-
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <Label>Branches</Label>
-
-            {user?.role !== "BRANCH_ADMIN" && (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={selectAllFilterBranches}
-                disabled={filterLoading || branchFilterList.length === 0}
-              >
-                Select All Branches
+        <EntityListShell
+          title="All designations"
+          columns={designationColumns}
+          rows={filtered}
+          rowKey={(r) => String(r.id)}
+          isLoading={loading}
+          sortBy={table.sortBy}
+          sortDir={table.sortDir}
+          onSort={table.setSort}
+          emptyIcon={BadgeCheck}
+          emptyTitle="No designations yet"
+          emptyDescription="Define the job titles in use across your company."
+          emptyAction={
+            canManage ? (
+              <Button onClick={() => { resetForm(); setIsAddingNew(true); }}>
+                <Plus className="w-4 h-4 mr-1" /> Add Designation
               </Button>
-            )}
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            {branchFilterList.length === 0 ? (
-              <p className="text-sm text-gray-500 col-span-full py-4 text-center">
-                {filterLoading ? "Loading branches..." : "No branches found"}
-              </p>
-            ) : (
-              branchFilterList.map((b) => (
-                <label
-                  key={b.id}
-                  className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm hover:bg-gray-50 cursor-pointer"
-                >
-                  <input
-                    type="checkbox"
-                    checked={selectedFilterBranchIds.includes(String(b.id))}
-                    disabled={user?.role === "BRANCH_ADMIN"}
-                    onChange={() => toggleFilterBranch(String(b.id))}
-                  />
-                  <span className="truncate">{b.branchName}</span>
-                </label>
-              ))
-            )}
-          </div>
-        </div>
-
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <Label>Departments</Label>
-
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={selectAllFilterDepartments}
-              disabled={filterLoading || visibleDepartmentFilterList.length === 0}
-            >
-              Select All Departments
-            </Button>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            {visibleDepartmentFilterList.length === 0 ? (
-              <p className="text-sm text-gray-500 col-span-full py-4 text-center">
-                {filterLoading ? "Loading departments..." : "No departments found"}
-              </p>
-            ) : (
-              visibleDepartmentFilterList.map((d) => (
-                <label
-                  key={d.id}
-                  className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm hover:bg-gray-50 cursor-pointer"
-                >
-                  <input
-                    type="checkbox"
-                    checked={selectedFilterDepartmentIds.includes(String(d.id))}
-                    onChange={() => toggleFilterDepartment(String(d.id))}
-                  />
-                  <span className="truncate">{d.departmentName}</span>
-                </label>
-              ))
-            )}
-          </div>
-        </div>
-      </div>
-
-      <div className="flex justify-end gap-2 border-t px-5 py-4">
-        <Button
-          type="button"
-          variant="outline"
-          onClick={() => setShowFilterModal(false)}
-        >
-          Cancel
-        </Button>
-
-        <Button
-          type="button"
-          onClick={() => setShowFilterModal(false)}
-        >
-          Apply Filter
-        </Button>
-      </div>
-    </div>
-  </div>
-)}
-          <Card className="w-full">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Icon icon="mdi:id-card" className="w-5 h-5" /> Designation List
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-0">
-                <div className="overflow-x-auto">
-                  <Table className="w-full">
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Designation</TableHead>
-                        <TableHead>Branch</TableHead>
-                        <TableHead>Department</TableHead>
-                        
-                        <TableHead className="text-right">Actions</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {loading ? (
-                        <TableBodySkeleton cols={4} />
-                      ) : filtered.length === 0 ? (
-                        <TableRow>
-                          <TableCell colSpan={4} className="text-center py-8 text-gray-500">
-                            <div className="flex flex-col items-center gap-2">
-                              <Icon icon="mdi:account-search" className="w-12 h-12 text-gray-300" />
-                              <p>No designations found</p>
-                              <p className="text-sm">Try adjusting your search criteria</p>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ) : (
-                        filtered.map((r) => (
-                          <TableRow key={r.id}>
-                            <TableCell className="whitespace-nowrap">{r.designation || "—"}</TableCell>
-                            <TableCell className="whitespace-nowrap">{brName(r)}</TableCell>
-                            <TableCell className="whitespace-nowrap">{deptName(r)}</TableCell>
-                            <TableCell className="text-right whitespace-nowrap">
-                              <div className="flex items-center justify-end gap-1">
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => handleView(r)}
-                                  className="h-7 w-7 p-0"
-                                  title="View"
-                                >
-                                  <Eye className="w-3 h-3" />
-                                </Button>
-
-                                {canManage && (
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => handleEdit(r)}
-                                    className="h-7 w-7 p-0"
-                                    title="Edit"
-                                  >
-                                    <Edit className="w-3 h-3" />
-                                  </Button>
-                                )}
-
-                                {canManage && (
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => handleDelete(r.id)}
-                                    className="h-7 w-7 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
-                                    title="Delete"
-                                  >
-                                    <Trash2 className="w-3 h-3" />
-                                  </Button>
-                                )}
-                              </div>
-                            </TableCell>
-                          </TableRow>
-                        ))
-                      )}
-                    </TableBody>
-                  </Table>
-                </div>
-            </CardContent>
-          </Card>
+            ) : undefined
+          }
+        />
       </>)}
     </div>
   );

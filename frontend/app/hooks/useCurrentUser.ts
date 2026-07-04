@@ -6,6 +6,9 @@ import { useEffect, useState } from 'react'
 export interface CurrentUser {
   id: number
   username: string
+  firstName?: string
+  lastName?: string
+  email?: string
   role: "SUPERADMIN" | "SERVICE_PROVIDER" | "COMPANY_ADMIN" | "ADMIN" | "BRANCH_ADMIN" | "EMPLOYEE"
 
   serviceProviderID?: number

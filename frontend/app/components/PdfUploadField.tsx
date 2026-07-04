@@ -1,9 +1,10 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { Button } from "./ui/button";
 import { uploadPdfFile } from "../utils/uploadPdf";
 import { normalizeUploadPath, resolveUploadUrl } from "../utils/uploadUrl";
+import { FileDropzone } from "./ui/file-dropzone";
+import { Button } from "./ui/button";
 
 type Props = {
   label?: string;
@@ -13,11 +14,13 @@ type Props = {
 };
 
 export function PdfUploadField({ label = "PDF", value, onChange, disabled }: Props) {
-  const inputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
 
   const pick = async (file: File | null) => {
-    if (!file) return;
+    if (!file) {
+      onChange(null);
+      return;
+    }
     if (!file.name.toLowerCase().endsWith(".pdf")) {
       alert("Please select a PDF file");
       return;
@@ -33,49 +36,38 @@ export function PdfUploadField({ label = "PDF", value, onChange, disabled }: Pro
     }
   };
 
-  return (
-    <div className="space-y-1">
-      {label ? <span className="text-xs text-gray-500">{label}</span> : null}
-      <div className="flex flex-wrap items-center gap-2">
-        <input
-          ref={inputRef}
-          type="file"
-          accept="application/pdf,.pdf"
-          className="hidden"
-          disabled={disabled || uploading}
-          onChange={(e) => {
-            const f = e.target.files?.[0] ?? null;
-            void pick(f);
-            e.target.value = "";
-          }}
-        />
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          disabled={disabled || uploading}
-          onClick={() => inputRef.current?.click()}
-        >
-          {uploading ? "Uploading…" : "Upload PDF"}
-        </Button>
-        {value ? (
-          <>
-            <a
-              href={resolveUploadUrl(value)}
-              target="_blank"
-              rel="noreferrer"
-              className="text-xs text-blue-600 underline"
-            >
-              View PDF
-            </a>
-            <Button type="button" variant="ghost" size="sm" onClick={() => onChange(null)}>
-              Remove
-            </Button>
-          </>
-        ) : (
-          <span className="text-xs text-gray-400">No file</span>
-        )}
+  if (value) {
+    return (
+      <div className="space-y-2">
+        {label ? <p className="text-sm font-medium text-foreground">{label}</p> : null}
+        <div className="flex items-center justify-between gap-3 rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] px-4 py-3">
+          <a
+            href={resolveUploadUrl(value)}
+            target="_blank"
+            rel="noreferrer"
+            className="text-sm font-medium text-primary hover:underline truncate"
+          >
+            View uploaded PDF
+          </a>
+          <Button type="button" variant="ghost" size="sm" onClick={() => onChange(null)}>
+            Remove
+          </Button>
+        </div>
       </div>
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      <FileDropzone
+        label={label}
+        accept="application/pdf,.pdf"
+        hint="PDF only"
+        variant="document"
+        disabled={disabled || uploading}
+        onChange={(file) => void pick(file)}
+      />
+      {uploading && <p className="text-xs text-muted-foreground">Uploading…</p>}
     </div>
   );
 }

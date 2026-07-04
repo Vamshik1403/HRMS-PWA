@@ -28,6 +28,7 @@ import { Plus, Search, Edit, Trash2, Eye, CheckCircle, History, X } from "lucide
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "../components/ui/select";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import { FormDrawer } from "../components/ui/form-drawer";
+import { NoticeBanner } from "../components/ui/notice-banner";
 import { toast } from "sonner";
 import { getSidebarContext } from "../utils/sidebarContext";
 
@@ -1705,7 +1706,7 @@ const runFetchBR = (query: string) => {
   };
 
   return (
-    <div className="space-y-6 w-full max-w-7xl mx-auto px-4 page-content-enter">
+    <div className="space-y-6 w-full max-w-none animate-fade-in page-content-enter">
       {/* Header */}
       <div className="flex items-center justify-between w-full">
         <div className="min-w-0 flex-1">
@@ -1728,9 +1729,9 @@ const runFetchBR = (query: string) => {
         description={editingRow ? "Update both 'Current Position' and 'Promotion Request' below." : "Fill in details below to create both records."}>
 
             {error && (
-              <div className="rounded-md border border-red-200 bg-red-50 text-red-700 px-3 py-2 text-sm">
+              <NoticeBanner variant="error" compact className="mb-4">
                 {error}
-              </div>
+              </NoticeBanner>
             )}
 
             <form onSubmit={handleSubmit} className="space-y-6">

@@ -3,21 +3,34 @@
 import * as React from "react"
 
 import { cn } from "@/app/utils/cn"
+import { formTextareaClass } from "./form-control-styles"
 
 export interface TextareaProps
-  extends React.TextareaHTMLAttributes<HTMLTextAreaElement> {}
+  extends React.TextareaHTMLAttributes<HTMLTextAreaElement> {
+  showCount?: boolean;
+  maxLength?: number;
+}
 
 const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(
-  ({ className, ...props }, ref) => {
+  ({ className, showCount, maxLength, value, onChange, ...props }, ref) => {
+    const length = typeof value === "string" ? value.length : 0;
+
     return (
-      <textarea
-        className={cn(
-          "flex min-h-[88px] w-full rounded-[3px] border border-[#cbd5e1] bg-[#f9fafb] px-3 py-2.5 text-[13px] text-gray-900 ring-offset-background transition-all duration-150 placeholder:text-[#9ca3af] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4f46e5]/25 focus-visible:border-[#4f46e5] focus-visible:bg-white disabled:cursor-not-allowed disabled:opacity-50",
-          className
+      <div className="space-y-1.5">
+        <textarea
+          className={cn(formTextareaClass, className)}
+          ref={ref}
+          value={value}
+          onChange={onChange}
+          maxLength={maxLength}
+          {...props}
+        />
+        {showCount && maxLength && (
+          <p className="text-right text-xs text-muted-foreground tabular-nums">
+            {length} / {maxLength}
+          </p>
         )}
-        ref={ref}
-        {...props}
-      />
+      </div>
     )
   }
 )

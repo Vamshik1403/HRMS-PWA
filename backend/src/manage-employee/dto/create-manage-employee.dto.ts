@@ -155,25 +155,27 @@ export class TokenDeviceMapCreateDto  {
 // ---------- Employee Credentials DTO ----------
 export class EmployeeCredentialsCreateDto {
   @IsOptional() @IsString()
-  @Matches(/^[a-zA-Z0-9_-]+$/, {
-    message: 'Username can only contain letters, numbers, underscores, and hyphens'
-  })
-  username?: string;
+@Matches(/^[0-9+\-\s()]+$/, {
+  message: 'Username must be a valid mobile number'
+})
+username?: string;
 
   @IsOptional() @IsString()
-  @Matches(/^[0-9+\-\s()]+$/, {
-    message: 'Password must be a valid phone number'
-  })
-  password?: string;
+@Length(6, 100, { message: 'Password must be at least 6 characters long' })
+password?: string;
 
   @IsOptional() @IsBoolean() isActive?: boolean;
+
+  @IsOptional() @IsBoolean() mustChangePassword?: boolean;
+
+  @IsOptional() @IsString() passwordChangedAt?: string;
 }
 
 export class EmployeeCredentialsUpdateDto {
   @IsOptional() @IsString()
-  @Matches(/^[a-zA-Z0-9_-]+$/, {
-    message: 'Username can only contain letters, numbers, underscores, and hyphens'
-  })
+@Matches(/^[0-9+\-\s()]+$/, {
+  message: 'Username must be a valid mobile number'
+})
   username?: string;
 
   @IsOptional() @IsString()
@@ -182,14 +184,18 @@ export class EmployeeCredentialsUpdateDto {
 
   @IsOptional() @IsBoolean()
   isActive?: boolean;
+
+  @IsOptional() @IsBoolean() mustChangePassword?: boolean;
+
+  @IsOptional() @IsString() passwordChangedAt?: string;
 }
 
 // ---------- Login DTO ----------
 export class EmployeeLoginDto {
   @IsString()
-  @Matches(/^[a-zA-Z0-9_-]+$/, {
-    message: 'Username can only contain letters, numbers, underscores, and hyphens'
-  })
+@Matches(/^[0-9+\-\s()]+$/, {
+  message: 'Username must be a valid mobile number'
+})
 
   username!: string;
 
@@ -210,10 +216,6 @@ export class CreateManageEmployeeDto {
   @IsOptional() @IsString() employeeFirstName?: string;
   @IsOptional() @IsString() employeeLastName?: string;
 
-
-
-
-  // Add validation for employeeID since it's used as username
   @IsOptional()
   @IsString()
   employeeID?: string;
@@ -254,7 +256,6 @@ export class CreateManageEmployeeDto {
   @IsOptional() @IsString() employeeMotherName?: string;
   @IsOptional() @IsString() employeeSpouseName?: string;
 
-  // Basic position fields (stored directly on ManageEmployee)
   @IsOptional() @IsInt() departmentNameID?: number;
   @IsOptional() @IsInt() designationID?: number;
   @IsOptional() @IsString() employmentType?: string;
@@ -391,165 +392,3 @@ export class CreateManageEmployeeDto {
   empContractors?: EmpContractorCreateDto[];
 }
 
-// ---------- Update Employee DTO ----------
-export class UpdateManageEmployeeDto {
-  // FKs
-  @IsOptional() @IsInt() serviceProviderID?: number;
-  @IsOptional() @IsInt() companyID?: number;
-  @IsOptional() @IsInt() branchesID?: number;
-  @IsOptional() @IsInt() contractorID?: number;
-
-  // Scalars
-  @IsOptional() @IsString() employeeFirstName?: string;
-  @IsOptional() @IsString() employeeLastName?: string;
-
-  @IsOptional()
-  @IsString()
-  employeeID?: string;
-
-  @IsOptional() @IsString() joiningDate?: string;
-
-  @IsOptional() @IsString() businessPhoneNo?: string;
-  @IsOptional() @IsEmail() businessEmail?: string;
-
-  @IsOptional()
-  @IsString()
-  @Matches(/^[0-9+\-\s()]+$/, {
-    message: 'Personal phone number must be a valid phone number'
-  })
-  personalPhoneNo?: string;
-
-  @IsOptional() @IsEmail() personalEmail?: string;
-  @IsOptional() @IsString() emergancyContact?: string;
-
-  @IsOptional() @IsString() presentAddress?: string;
-  @IsOptional() @IsString() permenantAddress?: string;
-
-  @IsOptional() @IsString() employeePhotoUrl?: string;
-  @IsOptional() @IsString() gender?: string;
-  @IsOptional() @IsString() dateOfBirth?: string;
-  @IsOptional() @IsString() bloodGroup?: string;
-  @IsOptional() @IsString() maritalStatus?: string;
-  @IsOptional() @IsString() employeeFatherName?: string;
-  @IsOptional() @IsString() employeeMotherName?: string;
-  @IsOptional() @IsString() employeeSpouseName?: string;
-
-  // Basic position fields (stored directly on ManageEmployee)
-  @IsOptional() @IsInt() departmentNameID?: number;
-  @IsOptional() @IsInt() designationID?: number;
-  @IsOptional() @IsString() employmentType?: string;
-  @IsOptional() @IsString() typeOfEmployee?: string;
-  @IsOptional() @IsString() employmentStatus?: string;
-  @IsOptional() @IsString() probationPeriod?: string;
-  @IsOptional() @IsInt() workShiftID?: number;
-  @IsOptional() @IsInt() attendancePolicyID?: number;
-  @IsOptional() @IsInt() leavePolicyID?: number;
-  @IsOptional() @IsString() salaryPayGradeType?: string;
-  @IsOptional() @IsInt() monthlyPayGradeID?: number;
-  @IsOptional() @IsInt() hourlyPayGradeID?: number;
-
-  // Nested arrays
-  @IsOptional() @IsArray()
-  @ValidateNested({ each: true })
-  @Type(() => EduCreateDto)
-  edu?: EduCreateDto[];
-
-  @IsOptional() @IsArray()
-  @ValidateNested({ each: true })
-  @Type(() => BankDetailsCreateDto)
-  bankDetails?: BankDetailsCreateDto[];
-
-  @IsOptional() @IsArray()
-  @ValidateNested({ each: true })
-  @Type(() => ExpCreateDto)
-  exp?: ExpCreateDto[];
-
-  @IsOptional() @IsArray()
-  @ValidateNested({ each: true })
-  @Type(() => DevMapCreateDto)
-  devices?: DevMapCreateDto[];
-
-  @IsOptional() @IsArray()
-  @ValidateNested({ each: true })
-  @Type(() => EmpDesignationCreateDto)
-  empDesignations?: EmpDesignationCreateDto[];
-
-    @IsOptional() @IsArray()
-  @ValidateNested({ each: true })
-  @Type(() => TokenDeviceMapCreateDto)
-  tokenDevices?: TokenDeviceMapCreateDto[];
-
-  @IsOptional()
-  @ValidateNested()
-  @Type(() => PromotionCreateDto)
-  promotion?: PromotionCreateDto;
-
-  // Multi-value junction table arrays
-  @IsOptional() @IsArray()
-  @ValidateNested({ each: true })
-  @Type(() => EmpBranchCreateDto)
-  empBranches?: EmpBranchCreateDto[];
-
-  @IsOptional() @IsArray()
-  @ValidateNested({ each: true })
-  @Type(() => EmpDepartmentCreateDto)
-  empDepartments?: EmpDepartmentCreateDto[];
-
-  @IsOptional() @IsArray()
-  @ValidateNested({ each: true })
-  @Type(() => EmpEmploymentTypeCreateDto)
-  empEmploymentTypes?: EmpEmploymentTypeCreateDto[];
-
-  @IsOptional() @IsArray()
-  @ValidateNested({ each: true })
-  @Type(() => EmpEmploymentStatusCreateDto)
-  empEmploymentStatuses?: EmpEmploymentStatusCreateDto[];
-
-  @IsOptional() @IsArray()
-  @ValidateNested({ each: true })
-  @Type(() => EmpWorkShiftCreateDto)
-  empWorkShifts?: EmpWorkShiftCreateDto[];
-
-  @IsOptional() @IsArray()
-  @ValidateNested({ each: true })
-  @Type(() => EmpAttendancePolicyCreateDto)
-  empAttendancePolicies?: EmpAttendancePolicyCreateDto[];
-
-  @IsOptional() @IsArray()
-  @ValidateNested({ each: true })
-  @Type(() => EmpFactualWorkShiftCreateDto)
-  empFactualWorkShifts?: EmpFactualWorkShiftCreateDto[];
-
-  @IsOptional() @IsArray()
-  @ValidateNested({ each: true })
-  @Type(() => EmpFactualAttendancePolicyCreateDto)
-  empFactualAttendancePolicies?: EmpFactualAttendancePolicyCreateDto[];
-
-  @IsOptional() @IsArray()
-  @ValidateNested({ each: true })
-  @Type(() => EmpLeavePolicyCreateDto)
-  empLeavePolicies?: EmpLeavePolicyCreateDto[];
-
-  @IsOptional() @IsArray()
-  @ValidateNested({ each: true })
-  @Type(() => EmpContractorCreateDto)
-  empContractors?: EmpContractorCreateDto[];
-
-  // For deletion tracking
-  @IsOptional() @IsArray() @IsInt({ each: true }) eduIdsToDelete?: number[];
-  @IsOptional() @IsArray() @IsInt({ each: true }) expIdsToDelete?: number[];
-  @IsOptional() @IsArray() @IsInt({ each: true }) deviceMapIdsToDelete?: number[];
-    @IsOptional() @IsArray() @IsInt({ each: true }) tokenDeviceMapIdsToDelete?: number[];
-  @IsOptional() @IsArray() @IsInt({ each: true }) bankDetailsIdsToDelete?: number[];
-  @IsOptional() @IsArray() @IsInt({ each: true }) empDesignationIdsToDelete?: number[];
-  @IsOptional() @IsArray() @IsInt({ each: true }) empBranchIdsToDelete?: number[];
-  @IsOptional() @IsArray() @IsInt({ each: true }) empDepartmentIdsToDelete?: number[];
-  @IsOptional() @IsArray() @IsInt({ each: true }) empEmploymentTypeIdsToDelete?: number[];
-  @IsOptional() @IsArray() @IsInt({ each: true }) empEmploymentStatusIdsToDelete?: number[];
-  @IsOptional() @IsArray() @IsInt({ each: true }) empWorkShiftIdsToDelete?: number[];
-  @IsOptional() @IsArray() @IsInt({ each: true }) empAttendancePolicyIdsToDelete?: number[];
-  @IsOptional() @IsArray() @IsInt({ each: true }) empFactualWorkShiftIdsToDelete?: number[];
-  @IsOptional() @IsArray() @IsInt({ each: true }) empFactualAttendancePolicyIdsToDelete?: number[];
-  @IsOptional() @IsArray() @IsInt({ each: true }) empLeavePolicyIdsToDelete?: number[];
-  @IsOptional() @IsArray() @IsInt({ each: true }) empContractorIdsToDelete?: number[];
-}

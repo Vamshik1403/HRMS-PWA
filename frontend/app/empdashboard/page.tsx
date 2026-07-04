@@ -18,6 +18,10 @@ import { taskFetch } from "../utils/taskApi";
 import { syncAppBadge } from "@/lib/appBadge";
 import { TASK_MANAGEMENT_ENABLED } from "../config/featureFlags";
 import { isDesktopBrowser, isDesktopManagerFlagSet } from "@/lib/desktopManager";
+import { Dialog, DialogContent, DialogTitle, DialogHeader } from "../components/ui/dialog";
+import { Button } from "../components/ui/button";
+import { Input } from "../components/ui/input";
+import { Label } from "../components/ui/label";
 
 // ─── Ambient Greeting Accent ───────────────────────────────────────────────────
 const _ambientCss = `
@@ -93,16 +97,13 @@ function AmbientAccent() {
   const m = now.getMinutes();
   const totalMin = h * 60 + m + now.getSeconds() / 60;
 
-  // Day: 5:00 AM → 8:00 PM  |  Night: 8:00 PM → 5:00 AM
   const isDay = h >= 5 && h < 20;
 
-  // Sun arc — rises from horizon at 5 AM, peaks ~12:30 PM, sets at 8 PM
   const SUN_R = 11;
   const dayProgress = Math.max(0, Math.min(1, (totalMin - 300) / 900));
   const sun = celestialPosition(dayProgress, SUN_R);
   const sunClipW = SUN_R * 2 + 24;
 
-  // Moon arc — rises from horizon at 8 PM, peaks ~12:30 AM, sets at 5 AM
   const MOON_R = 9;
   const nightMin = h >= 20 ? totalMin - 1200 : totalMin + 240;
   const nightProgress = Math.max(0, Math.min(1, nightMin / 540));
@@ -214,6 +215,7 @@ export default function EmpDashboardPage() {
   }, [router]);
 
   const [empUser, setEmpUser] = useState<any>(null);
+  const [mustChangePassword, setMustChangePassword] = useState(false);
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   const [todayStatus, setTodayStatus] = useState<TodayStatus | null>(() => getPageCache<TodayStatus>("todayAttendance"));
   const [loadingStatus, setLoadingStatus] = useState(() => getPageCache<TodayStatus>("todayAttendance") === null);
@@ -222,6 +224,14 @@ export default function EmpDashboardPage() {
   const [reimbBadge, setReimbBadge] = useState(0);
   const [leaveBadge, setLeaveBadge] = useState(0);
 
+  const [forcePasswordModalOpen, setForcePasswordModalOpen] = useState(false);
+  const [passwordSaving, setPasswordSaving] = useState(false);
+  const [passwordForm, setPasswordForm] = useState({
+    currentPassword: "",
+    newPassword: "",
+    confirmPassword: "",
+  });
+
   useEffect(() => {
     clearLegacyEmpPhoto();
     try {
@@ -229,11 +239,64 @@ export default function EmpDashboardPage() {
       if (s) {
         const u = JSON.parse(s);
         setEmpUser(u);
+        console.log("Employee user from localStorage:", u);
+
+        // Check if mustChangePassword exists in the user object
+        const mustChange = u?.mustChangePassword === true;
+        console.log("mustChangePassword from user object:", mustChange);
+
+        if (mustChange) {
+          setMustChangePassword(true);
+          setForcePasswordModalOpen(true);
+        }
+
         const empId = u?.employee?.id;
         setPhotoUrl(resolveEmpPhoto(empId, u?.employee?.employeePhotoUrl));
       }
-    } catch {}
+    } catch (error) {
+      console.error("Error loading user data:", error);
+    }
   }, []);
+
+  // Fetch employee credentials separately to check mustChangePassword
+  useEffect(() => {
+    const fetchEmployeeCredentials = async () => {
+      try {
+        const token = localStorage.getItem("token");
+        if (!token) return;
+
+        const empId = empUser?.employee?.id || empUser?.id;
+        if (!empId) return;
+
+        console.log("Fetching employee credentials for ID:", empId);
+
+        const response = await fetch(`${BACKEND}/manage-emp/${empId}`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          console.log("Employee data from API:", data);
+          
+          const mustChange = data?.employeeCredentials?.mustChangePassword === true;
+          console.log("mustChangePassword from API:", mustChange);
+
+          if (mustChange) {
+            setMustChangePassword(true);
+            setForcePasswordModalOpen(true);
+          }
+        }
+      } catch (error) {
+        console.error("Error fetching employee credentials:", error);
+      }
+    };
+
+    if (empUser) {
+      fetchEmployeeCredentials();
+    }
+  }, [empUser]);
 
   // Fetch badge counts — wrapped in useCallback so polling can reuse it
   const fetchBadges = useCallback(() => {
@@ -318,7 +381,6 @@ export default function EmpDashboardPage() {
     if (!empUser?.employee?.id) return;
     fetchBadges();
 
-    // Poll every 30 s + refresh on visibility change
     const interval = setInterval(() => {
       if (document.visibilityState === "visible") fetchBadges();
     }, 30000);
@@ -383,8 +445,160 @@ export default function EmpDashboardPage() {
     return 0;
   };
 
+  const submitPasswordChange = async () => {
+    const currentPassword = passwordForm.currentPassword.trim();
+    const newPassword = passwordForm.newPassword.trim();
+    const confirmPassword = passwordForm.confirmPassword.trim();
+
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      alert("All password fields are required");
+      return;
+    }
+
+    if (newPassword.length < 8) {
+      alert("New password must be at least 8 characters");
+      return;
+    }
+
+    if (!/[A-Z]/.test(newPassword) || !/[a-z]/.test(newPassword) || !/[0-9]/.test(newPassword) || !/[^A-Za-z0-9]/.test(newPassword)) {
+      alert("Password must contain uppercase, lowercase, number and special character");
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      alert("New password and confirm password do not match");
+      return;
+    }
+
+    if (currentPassword === newPassword) {
+      alert("New password cannot be same as current password");
+      return;
+    }
+
+    try {
+      setPasswordSaving(true);
+
+      const token = localStorage.getItem("token") || localStorage.getItem("accessToken");
+      const empId = empUser?.employee?.id || empUser?.id;
+
+      console.log("Changing password for employee ID:", empId);
+
+      const res = await fetch(`${BACKEND}/manage-emp/${empId}/change-password`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          oldPassword: currentPassword,
+          newPassword,
+        }),
+      });
+
+      if (!res.ok) {
+        const msg = await res.text();
+        throw new Error(msg || "Password change failed");
+      }
+
+      // Update user data in localStorage to reflect mustChangePassword = false
+      const userStr = localStorage.getItem("user");
+      if (userStr) {
+        const userData = JSON.parse(userStr);
+        // Update both possible locations
+        userData.mustChangePassword = false;
+        if (userData.employeeCredentials) {
+          userData.employeeCredentials.mustChangePassword = false;
+        }
+        localStorage.setItem("user", JSON.stringify(userData));
+        setEmpUser(userData);
+        setMustChangePassword(false);
+      }
+
+      // Close modal
+      setForcePasswordModalOpen(false);
+      
+      alert("Password changed successfully! Please login again.");
+      
+      // Clear tokens and redirect to login
+      localStorage.removeItem("token");
+      localStorage.removeItem("accessToken");
+      router.replace("/login");
+      
+    } catch (e: any) {
+      alert(e?.message || "Password change failed");
+    } finally {
+      setPasswordSaving(false);
+    }
+  };
+
   return (
     <EmpMobileLayout>
+      {/* Force Password Change Modal */}
+      <Dialog 
+        open={forcePasswordModalOpen} 
+        onOpenChange={(open) => {
+          // Prevent closing the modal if mustChangePassword is true
+          if (!open && mustChangePassword) {
+            return;
+          }
+          setForcePasswordModalOpen(open);
+        }}
+      >
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold">Change Password Required</DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            <p className="text-sm text-gray-600">
+              You must change your temporary password before using the employee portal.
+            </p>
+
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Current Password</Label>
+              <Input
+                type="password"
+                placeholder="Enter current password"
+                value={passwordForm.currentPassword}
+                onChange={(e) => setPasswordForm((p) => ({ ...p, currentPassword: e.target.value }))}
+                autoComplete="current-password"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">New Password</Label>
+              <Input
+                type="password"
+                placeholder="Enter new password"
+                value={passwordForm.newPassword}
+                onChange={(e) => setPasswordForm((p) => ({ ...p, newPassword: e.target.value }))}
+                autoComplete="new-password"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Confirm New Password</Label>
+              <Input
+                type="password"
+                placeholder="Confirm new password"
+                value={passwordForm.confirmPassword}
+                onChange={(e) => setPasswordForm((p) => ({ ...p, confirmPassword: e.target.value }))}
+                autoComplete="new-password"
+              />
+            </div>
+
+            <Button
+              type="button"
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+              disabled={passwordSaving}
+              onClick={submitPasswordChange}
+            >
+              {passwordSaving ? "Updating..." : "Update Password"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <div className="px-4 pt-4 pb-2">
         {/* Header — greeting block and avatar share one vertical center line */}
         <div className="flex items-center justify-between gap-3 mb-3">

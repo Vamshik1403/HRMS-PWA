@@ -1,53 +1,78 @@
 "use client";
 
-import { Icon } from "@iconify/react";
+import Link from "next/link";
+import { cn } from "@/app/utils/cn";
 
-export interface Activity {
-  id: number;
-  name: string;
-  action: string;
+export interface ActivityItem {
+  id: string;
+  headline: string;
+  body?: string;
   time: string;
   avatarInitial: string;
-  avatarBg: string;
+  avatarBg?: string;
+  href?: string;
 }
 
-interface ActivityFeedProps {
-  activities: Activity[];
-}
+export function ActivityFeed({
+  items,
+  emptyTitle = "No recent activity",
+  emptyDescription = "Activity from check-ins, leave, and updates will appear here.",
+  fillHeight = false,
+}: {
+  items: ActivityItem[];
+  emptyTitle?: string;
+  emptyDescription?: string;
+  fillHeight?: boolean;
+}) {
+  if (items.length === 0) {
+    return (
+      <div
+        className={cn(
+          "text-center",
+          fillHeight ? "flex-1 flex flex-col items-center justify-center py-6" : "py-8",
+        )}
+      >
+        <p className="text-sm font-medium text-foreground">{emptyTitle}</p>
+        <p className="text-xs text-muted-foreground mt-1 max-w-[220px]">{emptyDescription}</p>
+      </div>
+    );
+  }
 
-export default function ActivityFeed({ activities }: ActivityFeedProps) {
   return (
-    <div className="bg-white rounded-2xl border border-[#e5e7eb] p-6">
-      <h3 className="text-sm font-semibold text-gray-900 mb-4">
-        Recent Activities
-      </h3>
-      {activities.length === 0 ? (
-        <p className="text-sm text-gray-400 text-center py-8">
-          No recent activities
-        </p>
-      ) : (
-        <div className="space-y-1">
-          {activities.map((a) => (
+    <ul className={cn("space-y-1", fillHeight && "flex-1 overflow-y-auto min-h-0")}>
+      {items.map((item) => {
+        const content = (
+          <div className="flex gap-3 rounded-xl px-3 py-3 hover:bg-muted/50 transition-colors duration-150">
             <div
-              key={a.id}
-              className="flex items-center gap-3 px-2 py-2.5 rounded-xl hover:bg-[#f8fafc] transition-colors duration-150"
+              className={cn(
+                "size-9 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0",
+                item.avatarBg ?? "bg-primary",
+              )}
             >
-              <div
-                className={`w-8 h-8 rounded-full ${a.avatarBg} flex items-center justify-center text-white font-semibold text-xs shrink-0`}
-              >
-                {a.avatarInitial}
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm text-gray-700 truncate">
-                  <span className="font-semibold">{a.name}</span>{" "}
-                  <span className="text-gray-400">{a.action}</span>
-                </p>
-              </div>
-              <span className="text-xs text-gray-300 whitespace-nowrap">{a.time}</span>
+              {item.avatarInitial}
             </div>
-          ))}
-        </div>
-      )}
-    </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-medium text-foreground leading-snug">{item.headline}</p>
+              {item.body && (
+                <p className="text-xs text-muted-foreground mt-1 leading-relaxed line-clamp-2">{item.body}</p>
+              )}
+              <p className="text-[11px] text-muted-foreground/80 mt-1.5">{item.time}</p>
+            </div>
+          </div>
+        );
+
+        return (
+          <li key={item.id}>
+            {item.href ? (
+              <Link href={item.href} className="block">
+                {content}
+              </Link>
+            ) : (
+              content
+            )}
+          </li>
+        );
+      })}
+    </ul>
   );
 }

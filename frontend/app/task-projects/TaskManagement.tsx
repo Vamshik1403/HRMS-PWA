@@ -6,8 +6,7 @@ import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 import { Textarea } from "../components/ui/textarea";
 import { FormDrawer } from "../components/ui/form-drawer";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../components/ui/table";
-import { Filter, MessageCircle, Pencil, Plus, Search, Trash2, Eye, AlertTriangle, UserPlus, FileDown } from "lucide-react";
+import { MessageCircle, Plus, AlertTriangle, UserPlus, FileDown, ClipboardList } from "lucide-react";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import { isDesktopManagerFlagSet } from "@/lib/desktopManager";
 import { toast } from "sonner";
@@ -28,6 +27,13 @@ import { downloadTaskReportForId } from "../utils/taskReportPdf";
 import { dispatchAppRefresh } from "../utils/appRefresh";
 import { useAppRefresh } from "../hooks/useAppRefresh";
 import { useTaskChatPolling } from "../hooks/useTaskChatPolling";
+import { getSidebarContext } from "../utils/sidebarContext";
+import { PageHeader } from "../components/app/page-header";
+import { FilterBar, FilterSelect } from "../components/app/filter-bar";
+import { EntityListShell } from "../components/app/entity-list-shell";
+import type { DataTableColumn } from "../components/app/data-table";
+import { EntityRowActions } from "../components/app/entity-row-actions";
+import { useClientTable, sortRows } from "../hooks/use-client-table";
 
 const STATUSES = TASK_STATUSES;
 const PRIORITIES = ["Urgent", "Medium", "Low"];
@@ -48,7 +54,13 @@ interface Task {
   activities?: { id: number; action: string; oldValue?: string; newValue?: string; remark?: string; actorName?: string; createdAt: string }[];
 }
 
-interface Dept { id: number; departmentName?: string | null; }
+interface Dept {
+  id: number;
+  departmentName?: string | null;
+  companyID?: number | null;
+  serviceProviderID?: number | null;
+}
+
 interface Employee { id: number; employeeFirstName?: string; employeeLastName?: string; employeeID?: string; }
 
 function engineerNames(task: Task) {
@@ -82,14 +94,13 @@ export default function TaskManagement() {
     user?.role === "SUPERADMIN" ||
     user?.role === "COMPANY_ADMIN" ||
     desktopManager;
+  const table = useClientTable("taskCode");
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<string>("");
-  const [priorityFilter, setPriorityFilter] = useState<string>("");
-  const [taskTypeFilter, setTaskTypeFilter] = useState<string>("");
-  const [filterOpen, setFilterOpen] = useState(false);
-  const filterRef = useRef<HTMLDivElement>(null);
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("ALL");
+  const [priorityFilter, setPriorityFilter] = useState("ALL");
+  const [taskTypeFilter, setTaskTypeFilter] = useState("ALL");
   const customerIdRef = useRef("");
   const [formOpen, setFormOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
@@ -121,17 +132,11 @@ export default function TaskManagement() {
     customerIdRef.current = form.customerID;
   }, [form.customerID]);
 
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (filterRef.current && !filterRef.current.contains(e.target as Node)) {
-        setFilterOpen(false);
-      }
-    };
-    if (filterOpen) document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [filterOpen]);
 
-  const activeFilterCount = [statusFilter, priorityFilter, taskTypeFilter].filter(Boolean).length;
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(table.search), 300);
+    return () => clearTimeout(t);
+  }, [table.search]);
 
   const searchCustomers = useCallback(async (q: string) => {
     const data = await taskFetch<any[]>("/task-customers/dropdown", user, undefined, { q, limit: 20 });
@@ -150,29 +155,51 @@ export default function TaskManagement() {
     }));
   }, [user]);
 
-  const searchDepartments = useCallback(async (q: string) => {
-    try {
-      const depts = await fetch("/backend/departments").then((r) => r.json());
-      const list: Dept[] = Array.isArray(depts) ? depts : [];
-      const term = q.trim().toLowerCase();
-      return list.filter((d) => !term || (d.departmentName || "").toLowerCase().includes(term))
-        .slice(0, 20).map((d) => ({ ...d, label: d.departmentName || `Dept #${d.id}` }));
-    } catch { return []; }
-  }, []);
+const searchDepartments = useCallback(async (q: string) => {
+  try {
+    const depts = await fetch("/backend/departments", { cache: "no-store" }).then((r) => r.json());
+    let list: Dept[] = Array.isArray(depts) ? depts : [];
+
+    const ctx = getSidebarContext();
+
+    const activeCompanyID =
+      ctx?.companyID ??
+      user?.companyID ??
+      null;
+
+    if (activeCompanyID) {
+      list = list.filter(
+        (d: any) => Number(d.companyID) === Number(activeCompanyID)
+      );
+    }
+
+    const term = q.trim().toLowerCase();
+
+    return list
+      .filter((d) => !term || (d.departmentName || "").toLowerCase().includes(term))
+      .slice(0, 20)
+      .map((d) => ({
+        ...d,
+        label: d.departmentName || `Dept #${d.id}`,
+      }));
+  } catch {
+    return [];
+  }
+}, [user?.companyID]);
 
   const loadTasks = useCallback(async () => {
     if (!user) return;
     setLoading(true);
     try {
-      const params: Record<string, string | number> = { limit: 200, search };
-      if (statusFilter) params.status = statusFilter;
-      if (priorityFilter) params.priority = priorityFilter;
-      if (taskTypeFilter) params.taskType = taskTypeFilter;
+      const params: Record<string, string | number> = { limit: 200, search: debouncedSearch };
+      if (statusFilter !== "ALL") params.status = statusFilter;
+      if (priorityFilter !== "ALL") params.priority = priorityFilter;
+      if (taskTypeFilter !== "ALL") params.taskType = taskTypeFilter;
       const data = await taskFetch<{ items: Task[] }>("/task-projects", user, undefined, params);
       setTasks(data.items);
     } catch (e: any) { toast.error(e.message || "Failed to load tasks"); }
     finally { setLoading(false); }
-  }, [user, search, statusFilter, priorityFilter, taskTypeFilter]);
+  }, [user, debouncedSearch, statusFilter, priorityFilter, taskTypeFilter]);
 
 useEffect(() => {
   const load = () => {
@@ -188,11 +215,31 @@ useEffect(() => {
     }
   };
 
-  window.addEventListener("sidebar-main-page-click", sidebarPageClickHandler);
+const sidebarCompanyChangeHandler = () => {
+  setForm((p) => ({
+    ...p,
+    departmentID: "",
+    siteID: "",
+    customerID: "",
+  }));
 
-  return () => {
-    window.removeEventListener("sidebar-main-page-click", sidebarPageClickHandler);
-  };
+  customerIdRef.current = "";
+  setDepartmentLabel("");
+  setCustomerLabel("");
+  setBranchLabel("");
+
+  load();
+};
+
+window.addEventListener("sidebar-main-page-click", sidebarPageClickHandler);
+window.addEventListener("sidebar-context-changed", sidebarCompanyChangeHandler);
+window.addEventListener("app-data-refresh", sidebarCompanyChangeHandler);
+
+return () => {
+  window.removeEventListener("sidebar-main-page-click", sidebarPageClickHandler);
+  window.removeEventListener("sidebar-context-changed", sidebarCompanyChangeHandler);
+  window.removeEventListener("app-data-refresh", sidebarCompanyChangeHandler);
+};
 }, [user, loadTasks]);
 
 useAppRefresh(() => {
@@ -248,7 +295,6 @@ useAppRefresh(() => {
   setChatTask(null);
   setChatMsg("");
 
-  setFilterOpen(false);
 };
 
   const openAssign = async (t: Task) => {
@@ -444,161 +490,266 @@ useAppRefresh(() => {
     chatOpen && !!chatTask,
   );
 
+  const sortedTasks = useMemo(
+    () =>
+      sortRows(tasks, table.sortBy, table.sortDir, (row, key) => {
+        const t = row as Task;
+        if (key === "taskCode") return t.taskCode ?? "";
+        if (key === "department") return t.department?.departmentName ?? "";
+        if (key === "customer") return t.customer?.customerName ?? "";
+        if (key === "site") return t.site?.branchName ?? "";
+        if (key === "engineer") return engineerNames(t);
+        if (key === "status") return t.status ?? "";
+        if (key === "createdAt") return t.createdAt ?? "";
+        if (key === "updatedAt") return t.updatedAt ?? "";
+        return "";
+      }),
+    [tasks, table.sortBy, table.sortDir],
+  );
+
+  const statusFilterOptions = useMemo(
+    () => [
+      { value: "ALL", label: "All statuses" },
+      ...STATUSES.map((s) => ({
+        value: s,
+        label: s === "Closed" ? "Completed" : s === "WIP" ? "Work In Progress" : s === "Reopen" ? "Reopened" : s,
+      })),
+    ],
+    [],
+  );
+
+  const priorityFilterOptions = useMemo(
+    () => [
+      { value: "ALL", label: "All priorities" },
+      ...PRIORITIES.map((p) => ({ value: p, label: p })),
+    ],
+    [],
+  );
+
+  const taskTypeFilterOptions = useMemo(
+    () => [
+      { value: "ALL", label: "All types" },
+      ...TASK_TYPES.map((t) => ({ value: t, label: t })),
+    ],
+    [],
+  );
+
+  const taskColumns = useMemo((): DataTableColumn<Task>[] => [
+    {
+      key: "taskCode",
+      header: "Task ID",
+      sortable: true,
+      colSpan: 2,
+      cell: (t) => {
+        const overdue = isOverdue24h(t);
+        const overdueHours = overdue ? Math.floor((Date.now() - getLastActivityTime(t)) / (1000 * 60 * 60)) : 0;
+        return (
+          <div className="font-mono text-xs whitespace-nowrap">
+            <div className="flex items-center gap-1.5">
+              {overdue && <AlertTriangle className="w-3.5 h-3.5 text-red-500 shrink-0" />}
+              <span className={overdue ? "text-red-700 font-semibold" : ""}>{t.taskCode}</span>
+            </div>
+            {overdue && (
+              <span className="text-[10px] text-red-500 font-medium">
+                {t.status} &gt; {overdueHours}h
+              </span>
+            )}
+          </div>
+        );
+      },
+    },
+    {
+      key: "department",
+      header: "Department",
+      sortable: true,
+      colSpan: 2,
+      cell: (t) => <span className="text-sm">{t.department?.departmentName || "—"}</span>,
+    },
+    {
+      key: "customer",
+      header: "Customer",
+      sortable: true,
+      colSpan: 2,
+      cell: (t) => (
+        <span className="text-sm line-clamp-2">{t.customer?.customerName || "—"}</span>
+      ),
+    },
+    {
+      key: "site",
+      header: "Site",
+      sortable: true,
+      colSpan: 1,
+      cell: (t) => <span className="text-sm">{t.site?.branchName || "—"}</span>,
+    },
+    {
+      key: "engineer",
+      header: "Engineer",
+      sortable: true,
+      colSpan: 2,
+      cell: (t) => <span className="text-sm">{engineerNames(t)}</span>,
+    },
+    {
+      key: "status",
+      header: "Status",
+      sortable: true,
+      colSpan: 1,
+      cell: (t) => <TaskStatusBadge status={t.status} size="xs" />,
+    },
+    {
+      key: "createdAt",
+      header: "Created At",
+      sortable: true,
+      colSpan: 1,
+      cell: (t) => (
+        <span className="text-xs text-gray-500 whitespace-nowrap">{formatTaskDate(t.createdAt)}</span>
+      ),
+    },
+    {
+      key: "updatedAt",
+      header: "Updated At",
+      sortable: true,
+      colSpan: 1,
+      cell: (t) => (
+        <span className="text-xs text-gray-500 whitespace-nowrap">{formatTaskDate(t.updatedAt)}</span>
+      ),
+    },
+    {
+      key: "actions",
+      header: "Actions",
+      colSpan: 2,
+      align: "right",
+      cell: (t) => (
+        <EntityRowActions
+          onView={() => openDetail(t)}
+          onEdit={() => openEdit(t)}
+          onDelete={() => removeTask(t.id)}
+          extra={[
+            {
+              icon: UserPlus,
+              title: "Assign Employees",
+              onClick: () => openAssign(t),
+              className: "text-violet-600",
+            },
+            {
+              icon: MessageCircle,
+              title: "Remarks",
+              onClick: () => openChat(t),
+              className: "text-emerald-600",
+            },
+            {
+              icon: FileDown,
+              title: "Download report",
+              onClick: () => downloadReport(t),
+              className: "text-slate-600",
+            },
+          ]}
+        />
+      ),
+    },
+  ], []);
+
   if (!user) return <div className="p-6"><TaskBoardSkeleton /></div>;
   if (!canManage) return <div className="p-6 text-gray-500">Access denied. Use My Tasks on mobile for assigned tasks.</div>;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6 w-full max-w-none animate-fade-in page-content-enter">
       {!formOpen && !detailOpen && (
         <>
-          <div className="flex flex-wrap items-center gap-2">
-            <Button
-  size="sm"
-  onClick={() => {
-    closeTaskPagePanels();
-    setFormOpen(true);
-  }}
->
-  <Plus className="w-4 h-4 mr-1" /> Create Task
-</Button>
-            <div className="relative" ref={filterRef}>
+          <PageHeader
+            icon={ClipboardList}
+            title="Tasks / Projects"
+            description="Manage tasks and project assignments"
+            actions={
               <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setFilterOpen((v) => !v)}
-                className={activeFilterCount > 0 ? "border-blue-400 bg-blue-50" : ""}
+                onClick={() => {
+                  closeTaskPagePanels();
+                  setFormOpen(true);
+                }}
               >
-                <Filter className="w-4 h-4 mr-1" /> Filter
-                {activeFilterCount > 0 && (
-                  <span className="ml-1.5 inline-flex items-center justify-center w-4 h-4 rounded-full bg-blue-600 text-white text-[10px] font-bold">
-                    {activeFilterCount}
-                  </span>
-                )}
+                <Plus className="w-4 h-4 mr-1" /> Create Task
               </Button>
-              {filterOpen && (
-                <div className="absolute left-0 top-full mt-1 z-30 w-72 rounded-lg border border-gray-200 bg-white shadow-lg p-4 space-y-3">
-                  <p className="text-sm font-semibold text-gray-900">Filter Tasks</p>
-                  <div className="space-y-2">
-                    <Label className="text-xs text-gray-500">Status</Label>
-                    <select
-                      className="app-select w-full h-9 text-sm"
-                      value={statusFilter}
-                      onChange={(e) => setStatusFilter(e.target.value)}
-                    >
-                      <option value="">All statuses</option>
-                      {STATUSES.map((s) => (
-                        <option key={s} value={s}>
-                          {s === "Closed" ? "Completed" : s === "WIP" ? "Work In Progress" : s === "Reopen" ? "Reopened" : s}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label className="text-xs text-gray-500">Priority</Label>
-                    <select
-                      className="app-select w-full h-9 text-sm"
-                      value={priorityFilter}
-                      onChange={(e) => setPriorityFilter(e.target.value)}
-                    >
-                      <option value="">All priorities</option>
-                      {PRIORITIES.map((p) => <option key={p} value={p}>{p}</option>)}
-                    </select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label className="text-xs text-gray-500">Task Type</Label>
-                    <select
-                      className="app-select w-full h-9 text-sm"
-                      value={taskTypeFilter}
-                      onChange={(e) => setTaskTypeFilter(e.target.value)}
-                    >
-                      <option value="">All types</option>
-                      {TASK_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
-                    </select>
-                  </div>
-                  <div className="flex gap-2 pt-1">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="flex-1"
-                      onClick={() => { setStatusFilter(""); setPriorityFilter(""); setTaskTypeFilter(""); setFilterOpen(false); }}
-                    >
-                      Clear
-                    </Button>
-                    <Button type="button" size="sm" className="flex-1" onClick={() => setFilterOpen(false)}>
-                      Apply
-                    </Button>
-                  </div>
-                </div>
-              )}
-            </div>
-            {[
-              { label: "Completed", status: "Closed", value: stats.Closed, cls: "bg-emerald-50 text-emerald-700 border-emerald-200" },
-              { label: "Open", status: "Open", value: stats.Open, cls: "bg-slate-50 text-slate-700 border-slate-200" },
-              { label: "Work In Progress", status: "WIP", value: stats.WIP, cls: "bg-amber-50 text-amber-800 border-amber-200" },
-              { label: "Reopened", status: "Reopen", value: stats.Reopen, cls: "bg-violet-50 text-violet-800 border-violet-200" },
-            ].map((s) => (
-              <button key={s.status} type="button"
-                onClick={() => setStatusFilter(statusFilter === s.status ? "" : s.status)}
-                className={`text-xs font-medium px-3 py-1.5 rounded-full border transition-colors ${s.cls} ${statusFilter === s.status ? "ring-2 ring-offset-1 ring-blue-400" : ""}`}>
-                {s.label} <span className="font-bold">{s.value}</span>
-              </button>
-            ))}
-            <div className="relative ml-auto w-full sm:w-64">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-              <Input className="pl-9 h-9" placeholder="Search tasks…" value={search} onChange={(e) => setSearch(e.target.value)} />
-            </div>
-          </div>
+            }
+          />
 
-          {loading ? <TaskBoardSkeleton /> : (
-            <div className="rounded-lg border border-gray-200 bg-white overflow-x-auto shadow-sm">
-              <Table>
-                <TableHeader>
-                  <TableRow className="bg-gray-50/80 hover:bg-gray-50/80">
-                    {["Task ID", "Department", "Customer", "Site", "Engineer", "Status", "Created At", "Updated At", "Actions"].map((h) => (
-                      <TableHead key={h} className={`text-[11px] uppercase tracking-wide font-semibold text-gray-500 ${h === "Actions" ? "text-right" : ""}`}>{h}</TableHead>
-                    ))}
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {tasks.length === 0 ? (
-                    <TableRow><TableCell colSpan={9} className="text-center py-12 text-gray-400">No tasks found</TableCell></TableRow>
-                  ) : tasks.map((t) => {
-                    const overdue = isOverdue24h(t);
-                    const overdueHours = overdue ? Math.floor((Date.now() - getLastActivityTime(t)) / (1000 * 60 * 60)) : 0;
-                    return (
-                      <TableRow key={t.id} className={overdue ? "bg-red-50/70 border-l-4 border-l-red-500" : ""}>
-                        <TableCell className="font-mono text-xs whitespace-nowrap">
-                          <div className="flex items-center gap-1.5">
-                            {overdue && <AlertTriangle className="w-3.5 h-3.5 text-red-500 shrink-0" />}
-                            <span className={overdue ? "text-red-700 font-semibold" : ""}>{t.taskCode}</span>
-                          </div>
-                          {overdue && <span className="text-[10px] text-red-500 font-medium">{t.status} &gt; {overdueHours}h</span>}
-                        </TableCell>
-                        <TableCell className="text-sm">{t.department?.departmentName || "—"}</TableCell>
-                        <TableCell className="text-sm max-w-[160px]"><div className="line-clamp-2">{t.customer?.customerName || "—"}</div></TableCell>
-                        <TableCell className="text-sm">{t.site?.branchName || "—"}</TableCell>
-                        <TableCell className="text-sm">{engineerNames(t)}</TableCell>
-                        <TableCell><TaskStatusBadge status={t.status} size="xs" /></TableCell>
-                        <TableCell className="text-xs text-gray-500 whitespace-nowrap">{formatTaskDate(t.createdAt)}</TableCell>
-                        <TableCell className="text-xs text-gray-500 whitespace-nowrap">{formatTaskDate(t.updatedAt)}</TableCell>
-                        <TableCell className="text-right">
-                          <div className="inline-flex items-center gap-0.5">
-                            <Button variant="ghost" size="icon" className="h-8 w-8 text-blue-600" onClick={() => openDetail(t)} title="View"><Eye className="w-4 h-4" /></Button>
-                            <Button variant="ghost" size="icon" className="h-8 w-8 text-blue-600" onClick={() => openEdit(t)} title="Edit"><Pencil className="w-4 h-4" /></Button>
-                            <Button variant="ghost" size="icon" className="h-8 w-8 text-violet-600" onClick={() => openAssign(t)} title="Assign Employees"><UserPlus className="w-4 h-4" /></Button>
-                            <Button variant="ghost" size="icon" className="h-8 w-8 text-emerald-600" onClick={() => openChat(t)} title="Remarks"><MessageCircle className="w-4 h-4" /></Button>
-                            <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-600" onClick={() => downloadReport(t)} title="Download report"><FileDown className="w-4 h-4" /></Button>
-                            <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500" onClick={() => removeTask(t.id)} title="Delete"><Trash2 className="w-4 h-4" /></Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </div>
-          )}
+          <FilterBar
+            search={{
+              value: table.search,
+              onChange: table.setSearch,
+              placeholder: "Search tasks…",
+            }}
+            filters={
+              <>
+                <FilterSelect
+                  id="tasks-status"
+                  value={statusFilter}
+                  onChange={setStatusFilter}
+                  options={statusFilterOptions}
+                  width="w-44"
+                  ariaLabel="Filter by status"
+                />
+                <FilterSelect
+                  id="tasks-priority"
+                  value={priorityFilter}
+                  onChange={setPriorityFilter}
+                  options={priorityFilterOptions}
+                  width="w-40"
+                  ariaLabel="Filter by priority"
+                />
+                <FilterSelect
+                  id="tasks-type"
+                  value={taskTypeFilter}
+                  onChange={setTaskTypeFilter}
+                  options={taskTypeFilterOptions}
+                  width="w-44"
+                  ariaLabel="Filter by task type"
+                />
+              </>
+            }
+            trailing={
+              <div className="hidden lg:flex items-center gap-2 shrink-0">
+                {[
+                  { label: "Completed", status: "Closed", value: stats.Closed, cls: "bg-emerald-50 text-emerald-700 border-emerald-200" },
+                  { label: "Open", status: "Open", value: stats.Open, cls: "bg-slate-50 text-slate-700 border-slate-200" },
+                  { label: "Work In Progress", status: "WIP", value: stats.WIP, cls: "bg-amber-50 text-amber-800 border-amber-200" },
+                  { label: "Reopened", status: "Reopen", value: stats.Reopen, cls: "bg-violet-50 text-violet-800 border-violet-200" },
+                ].map((s) => (
+                  <button
+                    key={s.status}
+                    type="button"
+                    onClick={() => setStatusFilter(statusFilter === s.status ? "ALL" : s.status)}
+                    className={`text-xs font-medium px-3 py-1.5 rounded-full border transition-colors whitespace-nowrap ${s.cls} ${statusFilter === s.status ? "ring-2 ring-offset-1 ring-blue-400" : ""}`}
+                  >
+                    {s.label} <span className="font-bold">{s.value}</span>
+                  </button>
+                ))}
+              </div>
+            }
+          />
+
+          <EntityListShell
+            title="All tasks"
+            totalLabel={() => `${tasks.length} tasks`}
+            columns={taskColumns}
+            rows={sortedTasks}
+            rowKey={(t) => String(t.id)}
+            isLoading={loading}
+            sortBy={table.sortBy}
+            sortDir={table.sortDir}
+            onSort={table.setSort}
+            emptyIcon={ClipboardList}
+            emptyTitle="No tasks found"
+            emptyDescription="Create a task to start tracking work."
+            emptyAction={
+              <Button
+                onClick={() => {
+                  closeTaskPagePanels();
+                  setFormOpen(true);
+                }}
+              >
+                <Plus className="w-4 h-4 mr-1" /> Create Task
+              </Button>
+            }
+          />
         </>
       )}
 

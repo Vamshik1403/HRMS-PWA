@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { PageLayout } from "@/app/components/layout/PageLayout";
+import { HrmsAppShell } from "@/app/components/layout/HrmsAppShell";
 import { getAccessToken } from "@/lib/auth";
 import { isJwtExpired } from "@/lib/jwtUtils";
 
@@ -26,6 +26,12 @@ export function AdminShellProvider({
 
   useEffect(() => {
     if (!shouldUseAdminShell(pathname)) return;
+    document.documentElement.classList.add("hrms-admin-shell");
+    return () => document.documentElement.classList.remove("hrms-admin-shell");
+  }, [pathname]);
+
+  useEffect(() => {
+    if (!shouldUseAdminShell(pathname)) return;
     const token = getAccessToken();
     if (!token || isJwtExpired(token)) {
       localStorage.removeItem("accessToken");
@@ -39,5 +45,5 @@ export function AdminShellProvider({
     return <>{children}</>;
   }
 
-  return <PageLayout>{children}</PageLayout>;
+  return <HrmsAppShell>{children}</HrmsAppShell>;
 }

@@ -7,7 +7,6 @@ import { UpdateBranchesDto } from './dto/update-branch.dto';
 export class BranchesService {
   constructor(private prisma: PrismaService) {}
 
-  // CREATE branch + nested bank rows
   create(dto: CreateBranchesDto) {
     const { bankDetails = [], serviceProviderID, companyID, ...branch } = dto;
 
@@ -46,7 +45,6 @@ export class BranchesService {
     });
   }
 
-  // UPDATE branch + (update/create/delete) bank rows
   async update(id: number, dto: UpdateBranchesDto) {
     const { bankDetails, idsToDelete, serviceProviderID, companyID, ...branch } = dto;
 
@@ -96,7 +94,7 @@ export class BranchesService {
         if (toCreate.length) {
           await tx.bankDetails.createMany({
             data: toCreate.map((b) => ({
-              branchesID: id, // unchecked path for createMany is fine
+              branchesID: id, 
               bankName: b.bankName ?? null,
               bankBranchName: b.bankBranchName ?? null,
               accountNo: b.accountNo ?? null,
@@ -117,4 +115,5 @@ export class BranchesService {
   remove(id: number) {
     return this.prisma.branches.delete({ where: { id } });
   }
+
 }

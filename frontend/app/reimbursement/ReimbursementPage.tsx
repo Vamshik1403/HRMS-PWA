@@ -1,28 +1,30 @@
 "use client"
 
-import { useEffect, useState, useRef } from "react"
-import { Card, CardContent } from "../components/ui/card"
+import { useEffect, useState, useRef, useMemo } from "react"
 import { Button } from "../components/ui/button"
 import { Input } from "../components/ui/input"
 import { Label } from "../components/ui/label"
+import { NoticeBanner } from "../components/ui/notice-banner"
 import {
   Dialog, DialogContent, DialogFooter,
   DialogHeader, DialogTitle,
 } from "../components/ui/dialog"  
 import { FormDrawer } from "../components/ui/form-drawer"
 import { FormModal } from "../components/ui/form-modal"
-import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
-} from "../components/ui/table"
 import { Badge } from "../components/ui/badge"
-import { Search, Edit, Trash2, Check, X, Plus, PlusCircle, MinusCircle, Settings, Download, CreditCard, User, Building, MapPin, Calendar, Loader2, Eye } from "lucide-react"
+import { Edit, Trash2, Check, X, Plus, PlusCircle, MinusCircle, Settings, Download, CreditCard, User, MapPin, Calendar, Loader2, Eye, Wallet } from "lucide-react"
 import { SearchSuggestInput } from "../components/SearchSuggestInput"
+import { PageHeader } from "../components/app/page-header"
+import { FilterBar } from "../components/app/filter-bar"
+import { EntityListShell } from "../components/app/entity-list-shell"
+import type { DataTableColumn } from "../components/app/data-table"
+import { EntityRowActions } from "../components/app/entity-row-actions"
+import { useClientTable, sortRows } from "../hooks/use-client-table"
 import jsPDF from "jspdf"
 import html2canvas from "html2canvas"
 import { useCurrentUser } from "../hooks/useCurrentUser"
 import { toast } from "sonner"
 import { getSidebarContext } from "../utils/sidebarContext"
-import { TableBodySkeleton } from "../components/ui/TableBodySkeleton"
 import { displayStatusLabel, isPartiallyApprovedStatus } from "../utils/statusDisplay"
 
 
@@ -426,7 +428,7 @@ function SummaryCell({
 export function ReimbursementManagement() {
   const [reimbursements, setReimbursements] = useState<Reimbursement[]>([])
   const [listLoading, setListLoading] = useState(true)
-  const [searchTerm, setSearchTerm] = useState("")
+  const table = useClientTable("employeeName")
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [isSettingsDialogOpen, setIsSettingsDialogOpen] = useState(false)
   const [isViewDrawerOpen, setIsViewDrawerOpen] = useState(false)
@@ -1384,251 +1386,223 @@ const handleSubmit = async (e: React.FormEvent) => {
     toast.success("Item rejected")
   }
 
-  const filteredReimbursements = reimbursements.filter((r) =>
-    Object.values(r).some((val) =>
-      String(val).toLowerCase().includes(searchTerm.toLowerCase())
+  const filteredReimbursements = useMemo(() => {
+    const t = table.search.trim().toLowerCase()
+    let list = reimbursements.filter((r) =>
+      !t ||
+      Object.values(r).some((val) => String(val).toLowerCase().includes(t))
     )
-  )
+    return sortRows(list, table.sortBy, table.sortDir, (row, key) => {
+      const r = row as Reimbursement
+      if (key === "employeeName") return r.employeeName ?? ""
+      if (key === "branchName") return r.branchName ?? ""
+      if (key === "date") return r.date ?? ""
+      if (key === "amount") return getPayableAmount(r)
+      if (key === "status") return r.status ?? ""
+      return ""
+    })
+  }, [reimbursements, table.search, table.sortBy, table.sortDir])
+
+  const reimbursementColumns = useMemo((): DataTableColumn<Reimbursement>[] => [
+    {
+      key: "employeeName",
+      header: "Employee",
+      sortable: true,
+      colSpan: 3,
+      cell: (r) => (
+        <div className="flex items-center gap-2">
+          <User className="w-4 h-4 text-gray-400" />
+          <span className="font-medium">{r.employeeName || "—"}</span>
+        </div>
+      ),
+    },
+    {
+      key: "branchName",
+      header: "Branch",
+      sortable: true,
+      colSpan: 2,
+      cell: (r) => (
+        <div className="flex items-center gap-2">
+          <MapPin className="w-4 h-4 text-gray-400" />
+          {r.branchName || "—"}
+        </div>
+      ),
+    },
+    {
+      key: "date",
+      header: "Date/Period",
+      sortable: true,
+      colSpan: 2,
+      cell: (r) => (
+        <div className="flex items-center gap-2">
+          <Calendar className="w-4 h-4 text-gray-400" />
+          {r.date || "—"}
+        </div>
+      ),
+    },
+    {
+      key: "amount",
+      header: "Amount",
+      sortable: true,
+      colSpan: 2,
+      cell: (r) => (
+        <span className="font-semibold text-green-700 tabular-nums">
+          ₹{getPayableAmount(r).toFixed(2)}
+        </span>
+      ),
+    },
+    {
+      key: "status",
+      header: "Status",
+      sortable: true,
+      colSpan: 2,
+      cell: (r) => (
+        <Badge
+          variant="secondary"
+          className={
+            r.status === "Paid"
+              ? "bg-green-100 text-green-800 border-green-200"
+              : r.status === "Approved"
+              ? "bg-blue-100 text-blue-800 border-blue-200"
+              : isPartiallyApprovedStatus(r.status)
+              ? "bg-amber-100 text-amber-800 border-amber-200"
+              : r.status === "Rejected"
+              ? "bg-red-100 text-red-800 border-red-200"
+              : "bg-yellow-100 text-yellow-800 border-yellow-200"
+          }
+        >
+          {displayStatusLabel(r.status)}
+        </Badge>
+      ),
+    },
+    {
+      key: "actions",
+      header: "Actions",
+      colSpan: 3,
+      align: "right",
+      cell: (r) => {
+        const extras: { icon: typeof Download; title: string; onClick: () => void; className?: string }[] = [
+          {
+            icon: Download,
+            title: "Download PDF",
+            onClick: () => generatePDF(r),
+          },
+        ]
+        if (canManage) {
+          if (r.status === "Pending" || isPartiallyApprovedStatus(r.status) || r.status === "Approved") {
+            extras.unshift({
+              icon: Eye,
+              title: "View & approve items",
+              onClick: () => openViewReimbursement(r),
+            })
+          }
+          if (canPayReimbursement(r)) {
+            extras.unshift({
+              icon: CreditCard,
+              title: "Pay approved amount",
+              onClick: () => handlePayment(r),
+              className: "text-green-600",
+            })
+          }
+        }
+        return (
+          <EntityRowActions
+            onEdit={isEmployee && r.status !== "Approved" ? () => handleEdit(r) : undefined}
+            onDelete={isEmployee && r.status !== "Approved" ? () => handleDelete(r.id) : undefined}
+            extra={extras}
+          />
+        )
+      },
+    },
+  ], [canManage, isEmployee])
 
 const getTotalAmount = (reimbursement: Reimbursement) => getPayableAmount(reimbursement)
 
 return (
-    <div className="space-y-6 p-6 bg-[#f8fafc] min-h-screen">
+    <div className="space-y-6 w-full max-w-none animate-fade-in page-content-enter">
       {!isDialogOpen && (<>
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <p className="text-gray-600 mt-2">Manage employee reimbursements and approvals efficiently</p>
-        </div>
-        <Button 
-onClick={async () => {
-  resetForm();
+      <PageHeader
+        icon={Wallet}
+        title="Reimbursements"
+        description="Manage employee reimbursements and approvals"
+        actions={
+          <Button
+            onClick={async () => {
+              resetForm();
 
-  // === MANAGER AUTO-FILL ===
-  if (user?.role === "SERVICE_PROVIDER") {
-    const users = await robustGet<any[]>(`${BACKEND_URL}/users`);
-    const me = users.find((u: any) => u.username === user.username);
-    if (me) {
-      setFormData((p) => ({
-        ...p,
-        serviceProviderID: me.serviceProviderID,
-        companyID: me.companyID,
-        branchesID: me.branchesID,
-        branchName: me.branchName ?? "",
-      }));
-    }
-  }
+              if (user?.role === "SERVICE_PROVIDER") {
+                const users = await robustGet<any[]>(`${BACKEND_URL}/users`);
+                const me = users.find((u: any) => u.username === user.username);
+                if (me) {
+                  setFormData((p) => ({
+                    ...p,
+                    serviceProviderID: me.serviceProviderID,
+                    companyID: me.companyID,
+                    branchesID: me.branchesID,
+                    branchName: me.branchName ?? "",
+                  }));
+                }
+              }
 
-  // === COMPANY_ADMIN / BRANCH_ADMIN AUTO-FILL ===
-  if (user?.role === "COMPANY_ADMIN" || user?.role === "BRANCH_ADMIN") {
-    const ctx = getSidebarContext();
-    const companyID = ctx?.companyID ?? user?.companyID;
-    setFormData((p) => ({
-      ...p,
-      serviceProviderID: ctx?.serviceProviderID ?? undefined,
-      companyID: companyID ?? undefined,
-      companyName: ctx?.companyName ?? "",
-    }));
-  }
+              if (user?.role === "COMPANY_ADMIN" || user?.role === "BRANCH_ADMIN") {
+                const ctx = getSidebarContext();
+                const companyID = ctx?.companyID ?? user?.companyID;
+                setFormData((p) => ({
+                  ...p,
+                  serviceProviderID: ctx?.serviceProviderID ?? undefined,
+                  companyID: companyID ?? undefined,
+                  companyName: ctx?.companyName ?? "",
+                }));
+              }
 
-  // === EMPLOYEE AUTO-FILL ===
-  if (user?.role === "EMPLOYEE") {
-    const creds = await robustGet<any[]>(
-      `${BACKEND_URL}/manage-emp/credentials/all`
-    );
-    const emp = creds.find((c) => c.username === user?.username);
+              if (user?.role === "EMPLOYEE") {
+                const creds = await robustGet<any[]>(
+                  `${BACKEND_URL}/manage-emp/credentials/all`
+                );
+                const emp = creds.find((c) => c.username === user?.username);
 
-    if (emp) {
-      setFormData((p) => ({
-        ...p,
-        serviceProviderID: emp.serviceProviderID,
-        companyID: emp.companyID,
-        branchesID: emp.branchesID,
-        manageEmployeeID: emp.employeeID,
-        branchName: emp.branchName,
-      }));
-    }
-  }
+                if (emp) {
+                  setFormData((p) => ({
+                    ...p,
+                    serviceProviderID: emp.serviceProviderID,
+                    companyID: emp.companyID,
+                    branchesID: emp.branchesID,
+                    manageEmployeeID: emp.employeeID,
+                    branchName: emp.branchName,
+                  }));
+                }
+              }
 
-  setIsDialogOpen(true);
-}}
-          className="bg-[#4f46e5] hover:bg-[#4338ca] px-6 py-2 rounded-lg shadow-sm"
-        >
-          <Plus className="w-4 h-4 mr-2" />
-          Create Reimbursement
-        </Button>
-      </div>
+              setIsDialogOpen(true);
+            }}
+          >
+            <Plus className="w-4 h-4 mr-1" />
+            Create Reimbursement
+          </Button>
+        }
+      />
 
-      {/* Search and Stats */}
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-        <Card className="lg:col-span-3">
-          <CardContent className="pt-6">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-              <Input
-                placeholder="Search reimbursements by employee, company, branch, or status..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10 py-2 rounded-lg border-gray-300 focus:border-blue-500"
-              />
-            </div>
-          </CardContent>
-        </Card>
-        
-        {/* Stats Card */}
-        <Card className="bg-[#eef2ff] border-[#d1d5db]">
-          <CardContent className="pt-6">
-            <div className="text-center">
-              <div className="text-2xl font-bold text-[#4f46e5]">{filteredReimbursements.length}</div>
-              <div className="text-sm text-[#4338ca] mt-1">Total Reimbursements</div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+      <FilterBar
+        search={{
+          value: table.search,
+          onChange: table.setSearch,
+          placeholder: "Search reimbursements by employee, company, branch, or status…",
+        }}
+      />
 
-      {/* Table */}
-      <Card className="shadow-sm border-gray-200">
-        <CardContent className="pt-6">
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow className="bg-[#eef2ff]/50 hover:bg-[#eef2ff]/50">
-                  <TableHead className="font-semibold text-gray-900">Employee</TableHead>
-                  <TableHead className="font-semibold text-gray-900">Branch</TableHead>
-                  <TableHead className="font-semibold text-gray-900">Date/Period</TableHead>
-                  <TableHead className="font-semibold text-gray-900">Amount</TableHead>
-                  <TableHead className="font-semibold text-gray-900">Status</TableHead>
-                  <TableHead className="font-semibold text-gray-900 text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {listLoading ? (
-                  <TableBodySkeleton cols={6} />
-                ) : filteredReimbursements.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={6} className="text-center py-8 text-gray-500">
-                      No reimbursements found
-                    </TableCell>
-                  </TableRow>
-                ) : filteredReimbursements.map((r) => {
-                  const totalAmount = getTotalAmount(r)
-                  return (
-                    <TableRow key={r.id} className="hover:bg-[#eef2ff]/40 border-b border-[#e5e7eb]">
-                      <TableCell className="font-medium">
-                        <div className="flex items-center gap-2">
-                          <User className="w-4 h-4 text-gray-400" />
-                          {r.employeeName}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          <MapPin className="w-4 h-4 text-gray-400" />
-                          {r.branchName}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          <Calendar className="w-4 h-4 text-gray-400" />
-                          {r.date}
-                        </div>
-                      </TableCell>
-                      <TableCell className="font-semibold text-green-700">
-                        ₹{totalAmount.toFixed(2)}
-                      </TableCell>
-                      <TableCell>
-                        <Badge
-                          variant="secondary"
-                          className={
-                            r.status === "Paid"
-                              ? "bg-green-100 text-green-800 border-green-200"
-                              : r.status === "Approved"
-                              ? "bg-blue-100 text-blue-800 border-blue-200"
-                              : isPartiallyApprovedStatus(r.status)
-                              ? "bg-amber-100 text-amber-800 border-amber-200"
-                              : r.status === "Rejected"
-                              ? "bg-red-100 text-red-800 border-red-200"
-                              : "bg-yellow-100 text-yellow-800 border-yellow-200"
-                          }
-                        >
-                          {displayStatusLabel(r.status)}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex justify-end gap-1">
-  {/* ✅ SUPERADMIN / MANAGER actions */}
-      {canManage && (
-    <>
-      {(r.status === "Pending" || isPartiallyApprovedStatus(r.status) || r.status === "Approved") && (
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => openViewReimbursement(r)}
-          className="h-8 w-8 text-gray-600 hover:text-[#4f46e5] hover:bg-[#eef2ff] rounded-lg"
-          title="View & approve items"
-        >
-          <Eye className="h-4 w-4" />
-        </Button>
-      )}
-
-      {canPayReimbursement(r) && (
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => handlePayment(r)}
-          className="h-8 w-8 text-green-600 hover:text-green-800 hover:bg-green-50 rounded-lg"
-          title="Pay approved amount"
-        >
-          <CreditCard className="h-4 w-4" />
-        </Button>
-      )}
-    </>
-  )}
-
-  {/* ✅ All roles can download */}
-  <Button
-    variant="ghost"
-    size="icon"
-    onClick={() => generatePDF(r)}
-    className="h-8 w-8 text-gray-600 hover:text-[#4f46e5] hover:bg-[#eef2ff] rounded-lg"
-    title="Download PDF"
-  >
-    <Download className="h-4 w-4" />
-  </Button>
-
-  {/* ✅ Normal Employee (cannot approve/reject/make payment) */}
-  {isEmployee && r.status !== "Approved" && (
-    <>
-      <Button
-        variant="ghost"
-        size="icon"
-        onClick={() => handleEdit(r)}
-        className="h-8 w-8 text-gray-600 hover:text-[#4f46e5] hover:bg-[#eef2ff] rounded-lg"
-        title="Edit"
-      >
-        <Edit className="h-4 w-4" />
-      </Button>
-      <Button
-        variant="ghost"
-        size="icon"
-        onClick={() => handleDelete(r.id)}
-        className="h-8 w-8 text-red-600 hover:text-red-800 hover:bg-red-50 rounded-lg"
-        title="Delete"
-      >
-        <Trash2 className="h-4 w-4" />
-      </Button>
-    </>
-  )}
-</div>
-
-                      </TableCell>
-                    </TableRow>
-                  )
-                })}
-              </TableBody>
-            </Table>
-          </div>
-        </CardContent>
-      </Card>
+      <EntityListShell
+        title="All reimbursements"
+        columns={reimbursementColumns}
+        rows={filteredReimbursements}
+        rowKey={(r) => r.id}
+        isLoading={listLoading}
+        sortBy={table.sortBy}
+        sortDir={table.sortDir}
+        onSort={table.setSort}
+        emptyIcon={Wallet}
+        emptyTitle="No reimbursements found"
+        emptyDescription="Create a reimbursement request to get started."
+      />
       </>)}
 
       {/* Create/Edit Dialog */}
@@ -2376,11 +2350,9 @@ fetchData={(q) => fetchBranches(q)}
 
                   {/* No Bank Details Found */}
                   {paymentMode === "Bank" && !isLoadingBankDetails && !employeeBankDetails && (
-                    <div className="p-4 bg-yellow-50 rounded-lg border border-yellow-200">
-                      <p className="text-sm text-yellow-800">
-                        No bank details found for this employee. Please contact the employee to update their bank information.
-                      </p>
-                    </div>
+                    <NoticeBanner variant="warning" compact>
+                      No bank details found for this employee. Please contact the employee to update their bank information.
+                    </NoticeBanner>
                   )}
 
                   {/* Payment Proof */}

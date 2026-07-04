@@ -1,16 +1,12 @@
 "use client";
-import { TableBodySkeleton } from "../components/ui/TableBodySkeleton";
 
-import { useCallback, useEffect, useState } from "react";
-import { Card, CardContent } from "../components/ui/card";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 import { Textarea } from "../components/ui/textarea";
 import { FormDrawer } from "../components/ui/form-drawer";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../components/ui/table";
-import { Badge } from "../components/ui/badge";
-import { Plus, Search, Edit, Trash2, Eye, ChevronLeft, ChevronRight } from "lucide-react";
+import { Plus, ChevronLeft, ChevronRight, GitBranch } from "lucide-react";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import { toast } from "sonner";
 import { LocationFields } from "../components/ui/location-fields";
@@ -18,6 +14,12 @@ import { taskFetch } from "../utils/taskApi";
 import { useListAutoRefresh } from "../hooks/useListAutoRefresh";
 import { SearchSuggestInput } from "../components/SearchSuggestInput";
 import { TaskContactsRepeater, sanitizeContacts, type TaskContactRow } from "../components/task/TaskContactsRepeater";
+import { PageHeader } from "../components/app/page-header";
+import { FilterBar, FilterSelect } from "../components/app/filter-bar";
+import { EntityListShell } from "../components/app/entity-list-shell";
+import type { DataTableColumn } from "../components/app/data-table";
+import { EntityRowActions } from "../components/app/entity-row-actions";
+import { useClientTable, sortRows } from "../hooks/use-client-table";
 
 interface CustomerOpt { id: number; customerCode: string; customerName: string; address?: string | null; city?: string | null; state?: string | null; pincode?: string | null; country?: string | null; }
 interface Contact { id?: number; contactPerson: string; contactNumber: string; designation?: string | null; email?: string | null; }
@@ -33,12 +35,13 @@ const emptyForm = { customerID: "", branchName: "", address: "", city: "", state
 export default function SiteManagement() {
   const user = useCurrentUser();
   const canManage = user?.role === "SUPERADMIN" || user?.role === "COMPANY_ADMIN";
+  const table = useClientTable("branchName");
   const [rows, setRows] = useState<Site[]>([]);
   const [customers, setCustomers] = useState<CustomerOpt[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
-  const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [filterCustomer, setFilterCustomer] = useState("");
   const [loading, setLoading] = useState(false);
   const [formOpen, setFormOpen] = useState(false);
@@ -51,6 +54,15 @@ export default function SiteManagement() {
   const [sameAsCustomer, setSameAsCustomer] = useState(false);
   const [contacts, setContacts] = useState<TaskContactRow[]>([]);
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(table.search), 300);
+    return () => clearTimeout(t);
+  }, [table.search]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedSearch, filterCustomer]);
 
   const searchCustomers = useCallback(async (q: string) => {
     const data = await taskFetch<CustomerOpt[]>("/task-customers/dropdown", user, undefined, { q, limit: 20 });
@@ -66,13 +78,13 @@ export default function SiteManagement() {
     if (!canManage) return;
     setLoading(true);
     try {
-      const extra: Record<string, string | number> = { page, limit: 10, search };
+      const extra: Record<string, string | number> = { page, limit: 10, search: debouncedSearch };
       if (filterCustomer) extra.customerID = filterCustomer;
       const data = await taskFetch<{ items: Site[]; total: number; totalPages: number }>("/task-customer-sites", user, undefined, extra);
       setRows(data.items); setTotal(data.total); setTotalPages(data.totalPages || 1);
     } catch (e: any) { toast.error(e.message || "Failed to load sites"); }
     finally { setLoading(false); }
-  }, [canManage, user, page, search, filterCustomer]);
+  }, [canManage, user, page, debouncedSearch, filterCustomer]);
 
   const closeSitePagePanels = () => {
   setFormOpen(false);
@@ -159,62 +171,132 @@ export default function SiteManagement() {
     catch (err: any) { toast.error(err.message || "Delete failed"); }
   };
 
+  const sortedRows = useMemo(
+    () =>
+      sortRows(rows, table.sortBy, table.sortDir, (row, key) => {
+        const s = row as Site;
+        if (key === "customer") return s.customer?.customerName ?? String(s.customerID);
+        if (key === "branchName") return s.branchName ?? "";
+        if (key === "city") return s.city ?? "";
+        if (key === "coordinates") return `${s.latitude ?? ""}/${s.longitude ?? ""}`;
+        return "";
+      }),
+    [rows, table.sortBy, table.sortDir],
+  );
+
+  const customerFilterOptions = useMemo(
+    () => [
+      { value: "ALL", label: "All customers" },
+      ...customers.map((c) => ({
+        value: String(c.id),
+        label: c.customerName || `Customer #${c.id}`,
+      })),
+    ],
+    [customers],
+  );
+
+  const siteColumns = useMemo((): DataTableColumn<Site>[] => [
+    {
+      key: "customer",
+      header: "Customer",
+      sortable: true,
+      colSpan: 3,
+      cell: (r) => r.customer?.customerName || `#${r.customerID}`,
+    },
+    {
+      key: "branchName",
+      header: "Branch",
+      sortable: true,
+      colSpan: 3,
+      cell: (r) => <span className="font-medium">{r.branchName}</span>,
+    },
+    {
+      key: "city",
+      header: "City",
+      sortable: true,
+      colSpan: 2,
+      cell: (r) => r.city || "—",
+    },
+    {
+      key: "coordinates",
+      header: "Lat / Long",
+      sortable: true,
+      colSpan: 2,
+      cell: (r) => (
+        <span className="text-xs">{r.latitude || "—"} / {r.longitude || "—"}</span>
+      ),
+    },
+    {
+      key: "actions",
+      header: "Actions",
+      colSpan: 2,
+      align: "right",
+      cell: (r) => (
+        <EntityRowActions
+          onView={() => openView(r)}
+          onEdit={() => openEdit(r)}
+          onDelete={() => remove(r.id)}
+        />
+      ),
+    },
+  ], []);
+
   if (!canManage) return <div className="p-6 text-gray-500">Access denied.</div>;
 
   return (
-    <div className="space-y-6">
-      {!formOpen && !viewOpen && (
-        <div className="flex items-center justify-end">
-          {canManage && <Button onClick={openCreate}><Plus className="w-4 h-4 mr-1" /> Add Site</Button>}
-        </div>
-      )}
+    <div className="space-y-6 w-full max-w-none animate-fade-in page-content-enter">
+      <PageHeader
+        icon={GitBranch}
+        title="Sites / Branches"
+        description="Manage customer sites and branch locations"
+        actions={
+          !formOpen && !viewOpen && canManage ? (
+            <Button onClick={openCreate}><Plus className="w-4 h-4 mr-1" /> Add Site</Button>
+          ) : null
+        }
+      />
       {!formOpen && !viewOpen && (
         <>
-          <Card>
-            <CardContent className="p-4 flex flex-wrap gap-3 items-center">
-              <div className="relative flex-1 min-w-[200px]">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                <Input className="pl-10" placeholder="Search sites…" value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} />
-              </div>
-              <select className="app-select w-auto min-w-[160px]" value={filterCustomer} onChange={(e) => { setFilterCustomer(e.target.value); setPage(1); }}>
-                <option value="">All customers</option>
-                {customers.map((c) => <option key={c.id} value={c.id}>{c.customerName}</option>)}
-              </select>
-              <Badge variant="secondary">{total} sites</Badge>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-0 overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Customer</TableHead><TableHead>Branch</TableHead>
-                    <TableHead>City</TableHead><TableHead>Lat / Long</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {loading ? (
-                    <TableBodySkeleton cols={5} />
-                  ) : rows.length === 0 ? (
-                    <TableRow><TableCell colSpan={5} className="text-center py-8">No sites found</TableCell></TableRow>
-                  ) : rows.map((r) => (
-                    <TableRow key={r.id}>
-                      <TableCell>{r.customer?.customerName || `#${r.customerID}`}</TableCell>
-                      <TableCell className="font-medium">{r.branchName}</TableCell>
-                      <TableCell>{r.city || "—"}</TableCell>
-                      <TableCell className="text-xs">{r.latitude || "—"} / {r.longitude || "—"}</TableCell>
-                      <TableCell className="text-right space-x-1">
-                        <Button variant="ghost" size="sm" onClick={() => openView(r)}><Eye className="w-4 h-4" /></Button>
-                        <Button variant="ghost" size="sm" onClick={() => openEdit(r)}><Edit className="w-4 h-4" /></Button>
-                        <Button variant="ghost" size="sm" onClick={() => remove(r.id)}><Trash2 className="w-4 h-4 text-red-500" /></Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
+          <FilterBar
+            search={{
+              value: table.search,
+              onChange: table.setSearch,
+              placeholder: "Search sites…",
+            }}
+            filters={
+              <FilterSelect
+                id="sites-customer"
+                value={filterCustomer || "ALL"}
+                onChange={(v) => setFilterCustomer(v === "ALL" ? "" : v)}
+                options={customerFilterOptions}
+                width="w-56"
+                ariaLabel="Filter by customer"
+              />
+            }
+          />
+
+          <EntityListShell
+            title="All sites"
+            totalLabel={() => `${total} sites`}
+            columns={siteColumns}
+            rows={sortedRows}
+            rowKey={(r) => String(r.id)}
+            isLoading={loading}
+            sortBy={table.sortBy}
+            sortDir={table.sortDir}
+            onSort={table.setSort}
+            emptyIcon={GitBranch}
+            emptyTitle="No sites found"
+            emptyDescription="Add a site or branch location for a customer."
+            emptyAction={
+              canManage ? (
+                <Button onClick={openCreate}>
+                  <Plus className="w-4 h-4 mr-1" /> Add Site
+                </Button>
+              ) : undefined
+            }
+          />
+
           <div className="flex items-center justify-between">
             <span className="text-sm text-gray-500">Page {page} of {totalPages}</span>
             <div className="flex gap-2">

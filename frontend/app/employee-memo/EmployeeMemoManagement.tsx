@@ -1,17 +1,12 @@
 "use client";
-import { TableBodySkeleton } from "../components/ui/TableBodySkeleton";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Card, CardContent } from "../components/ui/card";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 import { Textarea } from "../components/ui/textarea";
-import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
-} from "../components/ui/table";
 import { Badge } from "../components/ui/badge";
-import { Plus, Search, Edit, Trash2, Eye, X, MessageSquare } from "lucide-react";
+import { Plus, X, MessageSquare } from "lucide-react";
 import { MemoChatbox, type MemoChatMessage } from "../components/employee-memo/MemoChatbox";
 import { useMemoChatPolling } from "../hooks/useMemoChatPolling";
 import {
@@ -21,6 +16,12 @@ import { useCurrentUser } from "../hooks/useCurrentUser";
 import { getSidebarContext } from "../utils/sidebarContext";
 import { toast } from "sonner";
 import { FormDrawer } from "../components/ui/form-drawer";
+import { PageHeader } from "../components/app/page-header";
+import { FilterBar } from "../components/app/filter-bar";
+import { EntityListShell } from "../components/app/entity-list-shell";
+import type { DataTableColumn } from "../components/app/data-table";
+import { EntityRowActions } from "../components/app/entity-row-actions";
+import { useClientTable, sortRows } from "../hooks/use-client-table";
 import { isDesktopManagerFlagSet } from "@/lib/desktopManager";
 import { resolveAttachmentUrl, uploadAttachmentFile } from "../utils/uploadFile";
 
@@ -82,7 +83,7 @@ export function EmployeeMemoManagement() {
   const [rows, setRows] = useState<MemoRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [searchTerm, setSearchTerm] = useState("");
+  const table = useClientTable("subject");
   const [isAddingNew, setIsAddingNew] = useState(false);
   const [editingRow, setEditingRow] = useState<MemoRow | null>(null);
   const [viewRow, setViewRow] = useState<MemoRow | null>(null);
@@ -458,28 +459,122 @@ const handleCancel = () => {
   };
 
   const filteredRows = useMemo(() => {
-    const t = searchTerm.trim().toLowerCase();
-    if (!t) return rows;
-    return rows.filter((r) => {
-      const name = `${r.manageEmployee?.employeeFirstName ?? ""} ${r.manageEmployee?.employeeLastName ?? ""}`.toLowerCase();
-      const eid = (r.manageEmployee?.employeeID ?? "").toLowerCase();
-      const subj = (r.subject ?? "").toLowerCase();
-      const type = (r.memoType ?? "").toLowerCase();
-      return [name, eid, subj, type].some((x) => x.includes(t));
+    const t = table.search.trim().toLowerCase();
+
+    let list = rows;
+    if (t) {
+      list = rows.filter((r) => {
+        const name = `${r.manageEmployee?.employeeFirstName ?? ""} ${r.manageEmployee?.employeeLastName ?? ""}`.toLowerCase();
+        const eid = (r.manageEmployee?.employeeID ?? "").toLowerCase();
+        const subj = (r.subject ?? "").toLowerCase();
+        const type = (r.memoType ?? "").toLowerCase();
+        return [name, eid, subj, type].some((x) => x.includes(t));
+      });
+    }
+
+    return sortRows(list, table.sortBy, table.sortDir, (row, key) => {
+      const r = row as MemoRow;
+      if (key === "employee") return formatRecipientNames(r);
+      if (key === "memoType") return r.memoType ?? "";
+      if (key === "subject") return r.subject ?? "";
+      if (key === "issuedDate") return r.issuedDate ?? "";
+      if (key === "issuedBy") return r.issuedBy ?? "";
+      return "";
     });
-  }, [rows, searchTerm]);
+  }, [rows, table.search, table.sortBy, table.sortDir]);
+
+  const memoColumns = useMemo((): DataTableColumn<MemoRow>[] => {
+    const cols: DataTableColumn<MemoRow>[] = [
+      {
+        key: "employee",
+        header: "Employee",
+        sortable: true,
+        colSpan: 3,
+        cell: (r) => (
+          <div>
+            <div className="font-medium">{formatRecipientNames(r)}</div>
+            {(r.recipients?.length === 1 || (!r.recipients?.length && r.manageEmployee)) && (
+              <div className="text-xs text-gray-500">
+                {r.recipients?.[0]?.employeeID ?? r.manageEmployee?.employeeID ?? ""}
+              </div>
+            )}
+          </div>
+        ),
+      },
+      {
+        key: "memoType",
+        header: "Type",
+        sortable: true,
+        colSpan: 2,
+        cell: (r) => (
+          <Badge variant={r.memoType === "Warning" ? "destructive" : "secondary"}>
+            {r.memoType || "—"}
+          </Badge>
+        ),
+      },
+      {
+        key: "subject",
+        header: "Subject",
+        sortable: true,
+        colSpan: 3,
+        cell: (r) => r.subject || "—",
+      },
+      {
+        key: "issuedDate",
+        header: "Issued Date",
+        sortable: true,
+        colSpan: 2,
+        cell: (r) =>
+          r.issuedDate ? new Date(r.issuedDate).toLocaleDateString() : "—",
+      },
+      {
+        key: "issuedBy",
+        header: "Issued By",
+        sortable: true,
+        colSpan: 2,
+        cell: (r) => r.issuedBy || "—",
+      },
+    ];
+
+    if (canManage) {
+      cols.push({
+        key: "actions",
+        header: "Actions",
+        colSpan: 2,
+        align: "right",
+        cell: (r) => (
+          <EntityRowActions
+            onView={() => void openView(r)}
+            onEdit={() => handleEdit(r)}
+            onDelete={() => handleDelete(r.id)}
+            extra={[{
+              icon: MessageSquare,
+              title: "Open chat",
+              onClick: () => void openChat(r),
+            }]}
+          />
+        ),
+      });
+    }
+
+    return cols;
+  }, [canManage]);
 
   // ── JSX ────────────────────────────────────────────────────────────────────
   return (
-    <div className="space-y-6 w-full max-w-7xl mx-auto px-4">
-      <div className="flex items-center justify-between w-full">
-        <p className="text-gray-600 text-sm">Internal Messaging (IM) — official messages to colleagues</p>
-        {!isAddingNew && canManage && (
-          <Button onClick={() => { resetForm(); setIsAddingNew(true); }} className="text-sm px-3 py-2">
-            <Plus className="w-4 h-4 mr-1" /> Create IM
-          </Button>
-        )}
-      </div>
+    <div className="space-y-6 w-full max-w-none animate-fade-in page-content-enter">
+      <PageHeader
+        icon={MessageSquare}
+        title="Internal Messaging"
+        description="Official messages to colleagues"
+        actions={
+          !isAddingNew && canManage ? (
+            <Button onClick={() => { resetForm(); setIsAddingNew(true); }}>
+              <Plus className="w-4 h-4 mr-1" /> Create IM
+            </Button>
+          ) : null
+        }
+      />
 
       {/* ── Add / Edit drawer ─────────────────────────────────────────────── */}
       <FormDrawer
@@ -742,102 +837,36 @@ const handleCancel = () => {
         />
       )}
 
-      {/* ── Table listing ─────────────────────────────────────────────────── */}
       {!isAddingNew && (
         <>
-          <div className="flex items-center gap-2 bg-white rounded-lg border px-3 py-2 max-w-sm">
-            <Search className="w-4 h-4 text-gray-400" />
-            <Input
-              placeholder="Search memos…"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="border-0 bg-transparent shadow-none focus-visible:ring-0 h-8 px-0 text-sm"
-            />
-          </div>
+          <FilterBar
+            search={{
+              value: table.search,
+              onChange: table.setSearch,
+              placeholder: "Search memos…",
+            }}
+          />
 
-          <Card>
-            <CardContent className="p-0">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Employee</TableHead>
-                    <TableHead>Type</TableHead>
-                    <TableHead>Subject</TableHead>
-                    <TableHead>Issued Date</TableHead>
-                    <TableHead>Issued By</TableHead>
-                    {canManage && <TableHead className="text-right">Actions</TableHead>}
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {loading ? (
-                    <TableBodySkeleton cols={canManage ? 6 : 5} />
-                  ) : filteredRows.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={6} className="text-center py-8 text-gray-400">
-                        No memos found
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    filteredRows.map((r) => (
-                      <TableRow key={r.id}>
-                        <TableCell>
-                          <div className="font-medium">{formatRecipientNames(r)}</div>
-                          {(r.recipients?.length === 1 || (!r.recipients?.length && r.manageEmployee)) && (
-                            <div className="text-xs text-gray-500">
-                              {r.recipients?.[0]?.employeeID ?? r.manageEmployee?.employeeID ?? ""}
-                            </div>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant={r.memoType === "Warning" ? "destructive" : "secondary"}>
-                            {r.memoType || "—"}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>{r.subject || "—"}</TableCell>
-                        <TableCell>
-                          {r.issuedDate ? new Date(r.issuedDate).toLocaleDateString() : "—"}
-                        </TableCell>
-                        <TableCell>{r.issuedBy || "—"}</TableCell>
-                        {canManage && (
-                          <TableCell className="text-right">
-                            <div className="flex justify-end gap-1">
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => void openView(r)}
-                                title="View details"
-                              >
-                                <Eye className="w-4 h-4" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => void openChat(r)}
-                                title="Open chat"
-                              >
-                                <MessageSquare className="w-4 h-4" />
-                              </Button>
-                              <Button variant="ghost" size="sm" onClick={() => handleEdit(r)}>
-                                <Edit className="w-4 h-4" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleDelete(r.id)}
-                                className="text-red-500 hover:text-red-700"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </Button>
-                            </div>
-                          </TableCell>
-                        )}
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
+          <EntityListShell
+            title="All messages"
+            columns={memoColumns}
+            rows={filteredRows}
+            rowKey={(r) => String(r.id)}
+            isLoading={loading}
+            sortBy={table.sortBy}
+            sortDir={table.sortDir}
+            onSort={table.setSort}
+            emptyIcon={MessageSquare}
+            emptyTitle="No memos found"
+            emptyDescription="Internal messages you send or receive will appear here."
+            emptyAction={
+              canManage ? (
+                <Button onClick={() => { resetForm(); setIsAddingNew(true); }}>
+                  <Plus className="w-4 h-4 mr-1" /> Create IM
+                </Button>
+              ) : undefined
+            }
+          />
         </>
       )}
     </div>

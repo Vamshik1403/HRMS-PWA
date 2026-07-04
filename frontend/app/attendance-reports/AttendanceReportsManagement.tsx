@@ -128,6 +128,7 @@ interface LeaveApplication {
   fromDate: string;
   toDate: string;
   status: string;
+  dayStatuses?: { date: string; status: string }[];
 }
 
 interface RosterEmployee {
@@ -516,8 +517,6 @@ const MultiSelect = ({ options, selectedValues, onChange, placeholder, disabled 
 
 // ==================== DATE CELL COMPONENT ====================
 
-// ==================== DATE CELL COMPONENT (UPDATED) ====================
-
 const DateCell = ({ punches, date, employeeID, formData, reportData, selectedCompanyID, selectedBranchID, getComprehensiveStatus }: any) => {
   const punchesKey = punches.join(',');
   const cacheKey = `${date}-${employeeID}-${punchesKey}`;
@@ -560,9 +559,11 @@ const DateCell = ({ punches, date, employeeID, formData, reportData, selectedCom
               </span>
             ))}
           </div>
-        ) : (
-          <div className="text-[10px] font-medium text-red-600">Absent</div>
-        )}
+       ) : status.type === "LEAVE" ? (
+  <div className="text-[10px] font-medium text-pink-700">{status.label}</div>
+) : (
+  <div className="text-[10px] font-medium text-red-600">Absent</div>
+)}
       </td>
     );
   }
@@ -576,9 +577,15 @@ const DateCell = ({ punches, date, employeeID, formData, reportData, selectedCom
         </td>
       );
     }
-    if (punches.length === 0) {
-      return <td className="px-2 py-1 border-b min-w-[100px] text-center align-top"><div className="text-[10px] font-medium text-red-600">Absent</div></td>;
-    }
+   if (punches.length === 0) {
+  return (
+    <td className="px-2 py-1 border-b min-w-[100px] text-center align-top">
+      <div className={`text-[10px] font-medium ${status.type === "LEAVE" ? "text-pink-700" : "text-red-600"}`}>
+        {status.type === "LEAVE" ? status.label : "Absent"}
+      </div>
+    </td>
+  );
+}
     const firstPunch = punches[0];
     const lastPunch = punches.length >= 2 ? punches[punches.length - 1] : null;
     return (
@@ -1497,14 +1504,34 @@ const employeeOptions = filteredEmployees.map((e: Employee) => ({
     };
 
     // Leave check
-    const isLeaveDay = (): LeaveApplication | undefined => {
-      return leaveApplications.find(leave => 
-        leave.manageEmployeeID === employeeID &&
-        leave.status === "Approved" &&
-        date >= new Date(leave.fromDate).toISOString().split('T')[0] &&
-        date <= new Date(leave.toDate).toISOString().split('T')[0]
-      );
-    };
+// Leave check - supports dayStatuses also
+const getLeaveDay = (): { leave: LeaveApplication; leaveLabel: string } | null => {
+  const leave = leaveApplications.find((leave) => {
+    if (
+      Number(leave.manageEmployeeID) !== Number(employeeID) ||
+      leave.status !== "Approved"
+    ) {
+      return false;
+    }
+
+    const dayStatusMatch = leave.dayStatuses?.find((d) => d.date === date);
+    if (dayStatusMatch) return true;
+
+    const from = new Date(leave.fromDate).toISOString().split("T")[0];
+    const to = new Date(leave.toDate).toISOString().split("T")[0];
+
+    return date >= from && date <= to;
+  });
+
+  if (!leave) return null;
+
+  const dayStatus = leave.dayStatuses?.find((d) => d.date === date);
+
+  return {
+    leave,
+    leaveLabel: dayStatus?.status || leave.appliedLeaveType || "Leave",
+  };
+};
 
     // PRIORITY 2: Week Off
     if (isWeekOff()) {
@@ -1521,9 +1548,20 @@ const employeeOptions = filteredEmployees.map((e: Employee) => ({
       return { type: "HOLIDAY", label: hasPunches ? "PH-P" : "PH", hasPunches, workedMinutes: workedMinutes || defaultWorkedMinutes };
     }
 
-    // PRIORITY 4: Calculate based on punches
-    // Use effectivePunchesForDate (includes next-day punches for night shifts) for presence check.
-    if (!hasPunchesEffective) return { type: "ABSENT", label: "Absent", hasPunches: false };
+ // PRIORITY 4: Approved Leave
+const approvedLeave = getLeaveDay();
+if (approvedLeave) {
+  return {
+    type: "LEAVE",
+    label: hasPunchesEffective ? `${approvedLeave.leaveLabel}-P` : approvedLeave.leaveLabel,
+    hasPunches: hasPunchesEffective,
+    workedMinutes: hasPunchesEffective ? undefined : defaultWorkedMinutes,
+  };
+}
+
+// PRIORITY 5: Calculate based on punches
+// Use effectivePunchesForDate (includes next-day punches for night shifts) for presence check.
+if (!hasPunchesEffective) return { type: "ABSENT", label: "Absent", hasPunches: false };
     
     let policy = attendancePolicy;
     if (!policy) {

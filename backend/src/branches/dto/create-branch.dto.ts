@@ -36,6 +36,9 @@ export class CreateBranchesDto {
   @IsOptional() @IsEmail()  emailAdd?: string;
   @IsOptional() @IsString() companyLogoUrl?: string;
   @IsOptional() @IsString() SignatureUrl?: string;
+  @IsOptional() @IsString() latitude?: string;
+  @IsOptional() @IsString() longitude?: string;
+  @IsOptional() @IsString() geofenchradius?: string;
 
   @IsOptional()
   @IsArray()

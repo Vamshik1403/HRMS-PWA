@@ -36,33 +36,11 @@ async getAllCredentials() {
   return data;
 }
 
-
-
-
    // 1. Get credentials by employee ID
   @Get(':id/credentials')
   getEmployeeCredentials(@Param('id') id: string) {
     return this.service.getEmployeeCredentials(+id);
   }
-
-  // 2. Get credentials by username
-  @Get('credentials/:username')
-  getCredentialsByUsername(@Param('username') username: string) {
-    return this.service.getCredentialsByUsername(username);
-  }
-
-  // 3. Update employee credentials
-  @Patch(':id/credentials')
-  updateCredentials(
-    @Param('id') id: string,
-    @Body() updateCredentialDto: EmployeeCredentialsUpdateDto,
-  ) {
-    return this.service.updateCredentials(+id, updateCredentialDto);
-  }
-
-
-
-
 
   // Add this to your controller
 @Get('credentials/search')
@@ -82,6 +60,23 @@ searchCredentials(
   });
 }
 
+
+  // 2. Get credentials by username
+  @Get('credentials/:username')
+  getCredentialsByUsername(@Param('username') username: string) {
+    return this.service.getCredentialsByUsername(username);
+  }
+
+  // 3. Update employee credentials
+  @Patch(':id/credentials')
+  updateCredentials(
+    @Param('id') id: string,
+    @Body() updateCredentialDto: EmployeeCredentialsUpdateDto,
+  ) {
+    return this.service.updateCredentials(+id, updateCredentialDto);
+  }
+
+  
   // 4. Employee login endpoint
   @Post('login')
   employeeLogin(@Body() loginDto: EmployeeLoginDto) {
@@ -95,8 +90,9 @@ searchCredentials(
   }
 
   // 5b. Employee changes own password
-  @Post(':id/change-password')
-  async changePassword(
+@Post(':id/change-password')
+@UseGuards(AuthGuard('jwt'))
+async changePassword(
     @Param('id') id: string,
     @Body() body: { oldPassword: string; newPassword: string },
   ) {

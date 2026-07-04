@@ -1,28 +1,18 @@
 "use client";
-import { TableBodySkeleton } from "../components/ui/TableBodySkeleton";
 
-import { useState, useEffect } from "react";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "../components/ui/card";
+import { useState, useEffect, useMemo } from "react";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 import { FormDrawer } from "../components/ui/form-drawer";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "../components/ui/table";
 import { Badge } from "../components/ui/badge";
-import { Icon } from "@iconify/react";
-import { Plus, Search, Edit, Trash2, Filter, RotateCcw, X } from "lucide-react";
+import { Plus, CalendarCheck2 } from "lucide-react";
+import { PageHeader } from "../components/app/page-header";
+import { FilterBar, FilterSelect } from "../components/app/filter-bar";
+import { EntityListShell } from "../components/app/entity-list-shell";
+import type { DataTableColumn } from "../components/app/data-table";
+import { EntityRowActions } from "../components/app/entity-row-actions";
+import { useClientTable, sortRows } from "../hooks/use-client-table";
 import { SearchSuggestInput } from "../components/SearchSuggestInput";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import { toast } from "sonner";
@@ -84,11 +74,9 @@ const DAYS_OF_WEEK = [
 export function WorkShiftsManagement() {
   const [listLoading, setListLoading] = useState(true);
   const [workShifts, setWorkShifts] = useState<WorkShift[]>([]);
-const [searchTerm, setSearchTerm] = useState("");
-
-const [selectedFilterBranchIds, setSelectedFilterBranchIds] = useState<string[]>([]);
-const [showBranchFilterModal, setShowBranchFilterModal] = useState(false);
-const [branchFilterList, setBranchFilterList] = useState<any[]>([]);
+  const table = useClientTable("workShiftName");
+  const [branchFilter, setBranchFilter] = useState("ALL");
+  const [branchFilterList, setBranchFilterList] = useState<any[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingWorkShift, setEditingWorkShift] = useState<WorkShift | null>(
     null
@@ -221,44 +209,71 @@ const [branchFilterList, setBranchFilterList] = useState<any[]>([]);
   };
 
 
-  const fetchBranches = async (query: string) => {
-    try {
-      const companyID =
-        user?.role === "SERVICE_PROVIDER"
-          ? currentUserMapping?.companyID
-          : formData.companyID;
+ const fetchBranches = async (query: string) => {
+  try {
+    const ctx = getSidebarContext();
 
-      if (!companyID) return [];
+    const activeCompanyID =
+      ctx?.companyID ??
+      formData.companyID ??
+      currentUserMapping?.companyID ??
+      user?.companyID ??
+      null;
 
-      const res = await fetch(`${BACKEND_URL}/branches`, { cache: "no-store" });
-      const data = await res.json();
-      const q = query.toLowerCase();
+    if (!activeCompanyID) return [];
 
-      return Array.isArray(data)
-        ? data.filter(
-          (item: any) =>
-            item.companyID === companyID &&
-            (user?.role !== "BRANCH_ADMIN" || Number(item.id) === Number(currentUserMapping?.branchesID ?? user?.branchesID)) &&
-            (item.branchName || "").toLowerCase().includes(q)
-        )
-        : [];
-    } catch (error) {
-      console.error("Error fetching branches:", error);
-      toast.error("Failed to load data.");
-      return [];
+    const res = await fetch(`${BACKEND_URL}/branches`, { cache: "no-store" });
+    const data = await res.json();
+    const q = query.toLowerCase();
+
+    let filtered = Array.isArray(data) ? data : [];
+
+    filtered = filtered.filter(
+      (item: any) => Number(item.companyID) === Number(activeCompanyID)
+    );
+
+    if (user?.role === "BRANCH_ADMIN") {
+      const branchID = currentUserMapping?.branchesID ?? user?.branchesID;
+
+      if (branchID) {
+        filtered = filtered.filter(
+          (item: any) => Number(item.id) === Number(branchID)
+        );
+      }
     }
-  };
 
+    return filtered.filter((item: any) =>
+      (item.branchName || "").toLowerCase().includes(q)
+    );
+  } catch (error) {
+    console.error("Error fetching branches:", error);
+    toast.error("Failed to load data.");
+    return [];
+  }
+};
 
   // Load work shifts on component mount
   useEffect(() => {
-    if (user) loadWorkShifts();
+    if (user) {
+      loadWorkShifts();
+      loadBranchFilterList();
+    }
   }, [user]);
 
   useEffect(() => {
-  const handler = () => {
-    if (user) loadWorkShifts();
-  };
+const handler = () => {
+  setBranchFilter(user?.role === "BRANCH_ADMIN" ? String(user?.branchesID ?? "ALL") : "ALL");
+  setFormData((p) => ({
+    ...p,
+    branchName: "",
+    branchesID: undefined,
+  }));
+
+  if (user) {
+    loadWorkShifts();
+    loadBranchFilterList();
+  }
+};
 
   const sidebarPageClickHandler = (e: any) => {
     if (e.detail?.path === "/work-shifts") {
@@ -280,25 +295,40 @@ const [branchFilterList, setBranchFilterList] = useState<any[]>([]);
 
   const loadBranchFilterList = async () => {
   try {
-    const res = await fetch(`${BACKEND_URL}/branches`);
+    const res = await fetch(`${BACKEND_URL}/branches`, { cache: "no-store" });
     const data = await res.json();
 
-    if (user?.role === "SUPERADMIN") {
-      setBranchFilterList(data);
-      return;
+    const mapping = await resolveScopeUserMapping(user!);
+    if (mapping) setCurrentUserMapping(mapping);
+
+    const ctx = getSidebarContext();
+
+    const activeCompanyID =
+      ctx?.companyID ??
+      mapping?.companyID ??
+      user?.companyID ??
+      null;
+
+    let filtered = Array.isArray(data) ? data : [];
+
+    if (activeCompanyID) {
+      filtered = filtered.filter(
+        (b: any) => Number(b.companyID) === Number(activeCompanyID)
+      );
     }
 
-    const companyID =
-      currentUserMapping?.companyID ??
-      user?.companyID ??
-      formData.companyID;
+    if (user?.role === "BRANCH_ADMIN") {
+      const branchID = mapping?.branchesID ?? user?.branchesID;
 
-    setBranchFilterList(
-      data.filter(
-        (b: any) =>
-          Number(b.companyID) === Number(companyID)
-      )
-    );
+      if (branchID) {
+        filtered = filtered.filter(
+          (b: any) => Number(b.id) === Number(branchID)
+        );
+        setBranchFilter(String(branchID));
+      }
+    }
+
+    setBranchFilterList(filtered);
   } catch (e) {
     console.error(e);
     setBranchFilterList([]);
@@ -362,9 +392,36 @@ const [branchFilterList, setBranchFilterList] = useState<any[]>([]);
         };
       });
 
-      const mapping = await resolveScopeUserMapping(user!);
-      if (mapping) setCurrentUserMapping(mapping);
-      setWorkShifts(await filterCompanyScopedRecords(mapped, user!));
+ const mapping = await resolveScopeUserMapping(user!);
+if (mapping) setCurrentUserMapping(mapping);
+
+const ctx = getSidebarContext();
+
+const activeCompanyID =
+  ctx?.companyID ??
+  mapping?.companyID ??
+  user?.companyID ??
+  null;
+
+let filtered = mapped;
+
+if (activeCompanyID) {
+  filtered = filtered.filter(
+    (w: any) => Number(w.companyID) === Number(activeCompanyID)
+  );
+}
+
+if (user?.role === "BRANCH_ADMIN") {
+  const branchID = mapping?.branchesID ?? user?.branchesID;
+
+  if (branchID) {
+    filtered = filtered.filter(
+      (w: any) => Number(w.branchesID) === Number(branchID)
+    );
+  }
+}
+
+setWorkShifts(filtered);
 
     } catch (error) {
       console.error("Error loading work shifts:", error);
@@ -377,37 +434,56 @@ const [branchFilterList, setBranchFilterList] = useState<any[]>([]);
 
 
 
-  const filteredWorkShifts = workShifts.filter((workShift) => {
-  const matchesBranch =
-    selectedFilterBranchIds.length === 0 ||
-    selectedFilterBranchIds.includes(
-      String(workShift.branchesID)
-    );
+  const filteredWorkShifts = useMemo(() => {
+    const q = table.search.trim().toLowerCase();
 
-  const matchesSearch =
-    workShift.workShiftName
-      .toLowerCase()
-      .includes(searchTerm.toLowerCase()) ||
-    workShift.isFlexible ===
-      (searchTerm.toLowerCase() === "flexible") ||
-    workShift.isRotating ===
-      (searchTerm.toLowerCase() === "rotating") ||
-    workShift.workShiftType
-      ?.toLowerCase()
-      .includes(searchTerm.toLowerCase()) ||
-    (workShift.serviceProvider || "")
-      .toLowerCase()
-      .includes(searchTerm.toLowerCase()) ||
-    (workShift.companyName || "")
-      .toLowerCase()
-      .includes(searchTerm.toLowerCase()) ||
-    (workShift.branchName || "")
-      .toLowerCase()
-      .includes(searchTerm.toLowerCase());
+    let list = workShifts.filter((workShift) => {
+      const matchesBranch =
+        branchFilter === "ALL" || branchFilter === String(workShift.branchesID ?? "");
 
-  return matchesBranch && matchesSearch;
-});
+      const matchesSearch =
+        !q ||
+        [
+          workShift.workShiftName,
+          workShift.workShiftType,
+          workShift.serviceProvider,
+          workShift.companyName,
+          workShift.branchName,
+          workShift.isFlexible ? "flexible" : "",
+          workShift.isRotating ? "rotating" : "",
+        ]
+          .filter(Boolean)
+          .map((f) => String(f ?? "").toLowerCase())
+          .some((f) => f.includes(q));
 
+      return matchesBranch && matchesSearch;
+    });
+
+    return sortRows(list, table.sortBy, table.sortDir, (row, key) => {
+      const ws = row as WorkShift;
+      if (key === "workShiftName") return ws.workShiftName ?? "";
+      if (key === "branchName") return ws.branchName ?? "";
+      if (key === "shiftType") {
+        return getWorkShiftTypeLabel(ws.isFlexible, ws.isRotating);
+      }
+      if (key === "weeklyOff") {
+        return ws.weeklySchedule.filter((d) => d.isWeeklyOff).map((d) => d.day).join(", ");
+      }
+      if (key === "createdAt") return ws.createdAt ?? "";
+      return "";
+    });
+  }, [workShifts, table.search, table.sortBy, table.sortDir, branchFilter]);
+
+  const branchFilterOptions = useMemo(
+    () => [
+      { value: "ALL", label: "All branches" },
+      ...branchFilterList.map((b: any) => ({
+        value: String(b.id),
+        label: b.branchName || `Branch #${b.id}`,
+      })),
+    ],
+    [branchFilterList],
+  );
 
   const calcMinutes = (start: string, end: string): number => {
     if (!start || !end) return 0;
@@ -506,20 +582,33 @@ const [branchFilterList, setBranchFilterList] = useState<any[]>([]);
         }
       });
 
-      const workShiftData = {
-        serviceProviderID:
-          user?.role === "SERVICE_PROVIDER"
-            ? currentUserMapping?.serviceProviderID
-            : formData.serviceProviderID,
-        companyID:
-          user?.role === "SERVICE_PROVIDER"
-            ? currentUserMapping?.companyID
-            : formData.companyID,
-        branchesID:
-          user?.role === "SERVICE_PROVIDER"
-            ? currentUserMapping?.branchesID
-            : formData.branchesID,
-        workShiftName: formData.workShiftName,
+      const ctx = getSidebarContext();
+
+const finalServiceProviderID =
+  ctx?.serviceProviderID ??
+  formData.serviceProviderID ??
+  currentUserMapping?.serviceProviderID ??
+  user?.serviceProviderID ??
+  null;
+
+const finalCompanyID =
+  ctx?.companyID ??
+  formData.companyID ??
+  currentUserMapping?.companyID ??
+  user?.companyID ??
+  null;
+
+const finalBranchesID =
+  user?.role === "BRANCH_ADMIN"
+    ? formData.branchesID ?? currentUserMapping?.branchesID ?? user?.branchesID ?? null
+    : formData.branchesID ?? null;
+
+const workShiftData = {
+  serviceProviderID: finalServiceProviderID,
+  companyID: finalCompanyID,
+  branchesID: finalBranchesID,
+  
+  workShiftName: formData.workShiftName,
         isFlexible: formData.isFlexible === true,
         isRotating: formData.isRotating === true,
         workShiftType: formData.workShiftType,
@@ -582,8 +671,6 @@ await loadBranchFilterList();
 
   setIsDialogOpen(false);
   setEditingWorkShift(null);
-
-  setShowBranchFilterModal(false);
 };
 
   const handleServiceProviderSelect = (selected: SelectedItem) => {
@@ -650,25 +737,64 @@ await loadBranchFilterList();
     }
   };
 
+  const workShiftColumns = useMemo((): DataTableColumn<WorkShift>[] => [
+    {
+      key: "workShiftName",
+      header: "Name",
+      sortable: true,
+      colSpan: 3,
+      cell: (ws) => <span className="font-medium">{ws.workShiftName || "—"}</span>,
+    },
+    { key: "branchName", header: "Branch", sortable: true, colSpan: 2, cell: (ws) => ws.branchName || "—" },
+    {
+      key: "shiftType",
+      header: "Shift Type",
+      sortable: true,
+      colSpan: 2,
+      cell: (ws) => (
+        <Badge variant="outline">
+          {getWorkShiftTypeLabel(ws.isFlexible, ws.isRotating)}
+        </Badge>
+      ),
+    },
+    {
+      key: "weeklyOff",
+      header: "Weekly Off",
+      sortable: true,
+      colSpan: 3,
+      cell: (ws) =>
+        ws.weeklySchedule.filter((d) => d.isWeeklyOff).map((d) => d.day).join(", ") || "—",
+    },
+    { key: "createdAt", header: "Created", sortable: true, colSpan: 2, cell: (ws) => ws.createdAt || "—" },
+    {
+      key: "actions",
+      header: "Actions",
+      colSpan: 2,
+      align: "right",
+      cell: (ws) => (
+        <EntityRowActions
+          onEdit={canManage ? () => handleEdit(ws) : undefined}
+          onDelete={canManage ? () => handleDelete(ws.id) : undefined}
+        />
+      ),
+    },
+  ], [canManage]);
+
   return (
-    <div className="space-y-6 w-full max-w-6xl mx-auto px-4">
-      {/* Header */}
-      <div className="flex items-center justify-between w-full">
-        <div className="min-w-0 flex-1">
-          <p className="text-gray-600 mt-1 text-sm">
-            Manage work shifts and schedules
-          </p>
-        </div>
-        {canManage && !isDialogOpen && (
-          <Button
-onClick={() => { closeWorkShiftPagePanels(); setIsDialogOpen(true); }}
-            className="flex-shrink-0 text-sm px-3 py-2"
-          >
-            <Plus className="w-4 h-4 mr-1" />
-            Add Work Shift
-          </Button>
-        )}
-      </div>
+    <div className="space-y-6 w-full max-w-none animate-fade-in page-content-enter">
+      <PageHeader
+        icon={CalendarCheck2}
+        title="Work Shifts"
+        description="Manage work shifts and schedules"
+        actions={
+          canManage && !isDialogOpen ? (
+            <Button onClick={() => { closeWorkShiftPagePanels(); setIsDialogOpen(true); }}>
+              <Plus className="w-4 h-4 mr-1" />
+              Add Work Shift
+            </Button>
+          ) : null
+        }
+      />
 
       <FormDrawer
         open={isDialogOpen}
@@ -721,7 +847,8 @@ onClick={() => { closeWorkShiftPagePanels(); setIsDialogOpen(true); }}
 
                 {/* MANAGER → Only Branch input */}
 {(user?.role === "SERVICE_PROVIDER" ||
-  user?.role === "COMPANY_ADMIN") && (
+  user?.role === "COMPANY_ADMIN" ||
+  user?.role === "BRANCH_ADMIN") && (
                   <SearchSuggestInput
                     label="Branch Name"
                     placeholder="Select Branch"
@@ -736,27 +863,7 @@ onClick={() => { closeWorkShiftPagePanels(); setIsDialogOpen(true); }}
                         branchesID: selected.value,
                       }))
                     }
-                   fetchData={async (query) => {
-  const res = await fetch(`${BACKEND_URL}/branches`);
-  const data = await res.json();
-
-  const q = query.toLowerCase();
-
-  return data.filter((b: any) => {
-    const matchesCompany =
-      Number(b.companyID) ===
-      Number(
-        currentUserMapping?.companyID ??
-        user?.companyID ??
-        formData.companyID
-      );
-
-    const matchesSearch =
-      (b.branchName || "").toLowerCase().includes(q);
-
-    return matchesCompany && matchesSearch;
-  });
-}}
+               fetchData={fetchBranches}
                     displayField="branchName"
                     valueField="id"
                     required
@@ -766,18 +873,24 @@ onClick={() => { closeWorkShiftPagePanels(); setIsDialogOpen(true); }}
                 {/* SUPERADMIN → Branch input */}
                 {user?.role === "SUPERADMIN" && (
                   <SearchSuggestInput
-                    label="Branch Name"
-                    placeholder="Select Branch"
-                    value={formData.branchName}
-                    onChange={(value) =>
-                      setFormData((prev) => ({ ...prev, branchName: value }))
-                    }
-                    onSelect={handleBranchSelect}
-                    fetchData={fetchBranches}
-                    displayField="branchName"
-                    valueField="id"
-                    required
-                  />
+  label="Branch Name"
+  placeholder="Select Branch"
+  value={formData.branchName}
+  onChange={(value) =>
+    setFormData((prev) => ({ ...prev, branchName: value }))
+  }
+  onSelect={(selected) =>
+    setFormData((p) => ({
+      ...p,
+      branchName: selected.display,
+      branchesID: selected.value,
+    }))
+  }
+  fetchData={fetchBranches}
+  displayField="branchName"
+  valueField="id"
+  required
+/>
                 )}
               </div>
 
@@ -998,210 +1111,44 @@ onClick={closeWorkShiftPagePanels}
       </FormDrawer>
 
       {!isDialogOpen && (<>
-      {/* Search and Filters */}
-      <Card>
-        <CardContent>
-<div className="flex items-center gap-3 w-full">
-  <Button
-    variant="outline"
-    size="sm"
-    onClick={() => setShowBranchFilterModal(true)}
-  >
-    <Filter className="w-4 h-4 mr-1" />
-    Filter
-    {selectedFilterBranchIds.length > 0 && (
-      <Badge className="ml-2">
-        {selectedFilterBranchIds.length}
-      </Badge>
-    )}
-  </Button>
-  
-  {showBranchFilterModal && (
-  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-    <div className="bg-white rounded-xl shadow-xl w-full max-w-xl p-5">
-      <div className="flex justify-between items-center mb-4">
-        <h3 className="font-semibold">
-          Filter Work Shifts by Branch
-        </h3>
-
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => setShowBranchFilterModal(false)}
-        >
-          <X className="w-4 h-4" />
-        </Button>
-      </div>
-
-      <div className="space-y-2 max-h-80 overflow-y-auto">
-        {branchFilterList.map((branch) => (
-          <label
-            key={branch.id}
-            className="flex items-center gap-2 border rounded p-2"
-          >
-            <input
-              type="checkbox"
-              checked={selectedFilterBranchIds.includes(
-                String(branch.id)
-              )}
-              onChange={() => {
-                setSelectedFilterBranchIds((prev) =>
-                  prev.includes(String(branch.id))
-                    ? prev.filter(
-                        (x) => x !== String(branch.id)
-                      )
-                    : [...prev, String(branch.id)]
-                );
-              }}
+        <FilterBar
+          search={{
+            value: table.search,
+            onChange: table.setSearch,
+            placeholder: "Search code or name…",
+          }}
+          filters={
+            <FilterSelect
+              id="work-shifts-branch"
+              value={branchFilter}
+              onChange={setBranchFilter}
+              options={branchFilterOptions}
+              width="w-56"
+              ariaLabel="Filter by branch"
             />
-            {branch.branchName}
-          </label>
-        ))}
-      </div>
+          }
+        />
 
-      <div className="flex justify-end gap-2 mt-4">
-        <Button
-          variant="outline"
-          onClick={() => setSelectedFilterBranchIds([])}
-        >
-          <RotateCcw className="w-4 h-4 mr-1" />
-          Clear
-        </Button>
-
-        <Button
-          onClick={() => setShowBranchFilterModal(false)}
-        >
-          Apply
-        </Button>
-      </div>
-    </div>
-  </div>
-)}
-
-            <div className="relative flex-1 min-w-0">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-              <Input
-                placeholder="Search work shifts..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10 w-full"
-              />
-            </div>
-            <Badge variant="secondary" className="px-3 py-1 flex-shrink-0">
-              {filteredWorkShifts.length} work shifts
-            </Badge>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Work Shifts Table */}
-      <Card className="w-full">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Icon icon="mdi:clock-outline" className="w-5 h-5" />
-            Work Shifts List
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="p-0 w-full">
-          <div className="overflow-x-auto w-full">
-            <Table className="w-full">
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-[200px]">Work Shift Name</TableHead>
-                  <TableHead className="w-[120px]">Shift Type</TableHead>
-                  <TableHead className="w-[150px]">Weekly Off</TableHead>
-                  <TableHead className="w-[80px] text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {listLoading ? (
-                      <TableBodySkeleton cols={4} />
-                    ) : filteredWorkShifts.length === 0 ? (
-                  <TableRow>
-                    <TableCell
-                      colSpan={4}
-                      className="text-center py-8 text-gray-500"
-                    >
-                      <div className="flex flex-col items-center gap-2">
-                        <Icon
-                          icon="mdi:clock-outline"
-                          className="w-12 h-12 text-gray-300"
-                        />
-                        <p>No work shifts found</p>
-                        <p className="text-sm">
-                          Try adjusting your search criteria
-                        </p>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  filteredWorkShifts.map((workShift) => {
-                    const totalWeeklyMin = workShift.weeklySchedule
-                      .filter((day) => !day.isWeeklyOff)
-                      .reduce((sum, day) => {
-                        const workSpan = calcMinutes(day.work.startTime, day.work.endTime);
-                        const workBrk = calcMinutes(day.work.breakStart, day.work.breakEnd);
-                        const otSpan = (day.ot.startTime && day.ot.endTime) ? calcMinutes(day.ot.startTime, day.ot.endTime) : 0;
-                        const otBrk = (day.ot.startTime && day.ot.endTime) ? calcMinutes(day.ot.breakStart, day.ot.breakEnd) : 0;
-                        return sum + Math.max(0, workSpan - workBrk) + Math.max(0, otSpan - otBrk);
-                      }, 0);
-
-                    const scheduleSummary = workShift.weeklySchedule
-                      .filter((day) => !day.isWeeklyOff)
-                      .map((day) => `${day.day}: ${day.work.startTime}-${day.work.endTime}`)
-                      .join(", ");
-
-                    const shiftTypeDisplay = getWorkShiftTypeLabel(
-                      workShift.isFlexible,
-                      workShift.isRotating,
-                    );
-
-                    return (
-                      <TableRow key={workShift.id}>
-                        <TableCell className="font-medium whitespace-nowrap">
-                          {workShift.workShiftName}
-                        </TableCell>
-                        <TableCell className="whitespace-nowrap">
-                          <Badge variant="outline">{shiftTypeDisplay}</Badge>
-                        </TableCell>
-                        <TableCell className="whitespace-nowrap">
-                          {workShift.weeklySchedule.filter(d => d.isWeeklyOff).map(d => d.day).join(", ") || "—"}
-                        </TableCell>
-                        <TableCell className="text-right whitespace-nowrap">
-                          <div className="flex items-center justify-end gap-1">
-                            {canManage && (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleEdit(workShift)}
-                                className="h-7 w-7 p-0"
-                                title="Edit"
-                              >
-                                <Edit className="w-3 h-3" />
-                              </Button>
-                            )}
-                            {canManage && (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleDelete(workShift.id)}
-                                className="h-7 w-7 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
-                                title="Delete"
-                              >
-                                <Trash2 className="w-3 h-3" />
-                              </Button>
-                            )}
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })
-                )}
-              </TableBody>
-            </Table>
-          </div>
-        </CardContent>
-      </Card>
+        <EntityListShell
+          title="All work shifts"
+          columns={workShiftColumns}
+          rows={filteredWorkShifts}
+          rowKey={(ws) => String(ws.id)}
+          isLoading={listLoading}
+          sortBy={table.sortBy}
+          sortDir={table.sortDir}
+          onSort={table.setSort}
+          emptyIcon={CalendarCheck2}
+          emptyTitle="No work shifts yet"
+          emptyDescription="Create your first work shift to define default schedules."
+          emptyAction={
+            canManage ? (
+              <Button onClick={() => { closeWorkShiftPagePanels(); setIsDialogOpen(true); }}>
+                <Plus className="w-4 h-4 mr-1" /> Add Work Shift
+              </Button>
+            ) : undefined
+          }
+        />
       </>)}
     </div>
   );

@@ -3,13 +3,19 @@ import { cva, type VariantProps } from "class-variance-authority"
 import { cn } from "@/lib/utils"
 
 const alertVariants = cva(
-  "relative w-full rounded-lg border p-4 [&>svg~*]:pl-7 [&>svg+div]:translate-y-[-3px] [&>svg]:absolute [&>svg]:left-4 [&>svg]:top-4 [&>svg]:text-foreground",
+  "relative w-full rounded-lg p-4 shadow-[0_1px_2px_rgba(0,0,0,0.04)] [&>svg~*]:pl-8 [&>svg+div]:translate-y-[-3px] [&>svg]:absolute [&>svg]:left-4 [&>svg]:top-4 [&>svg]:text-foreground",
   {
     variants: {
       variant: {
-        default: "bg-background text-foreground",
+        default: "bg-background text-foreground ring-1 ring-border",
         destructive:
-          "border-destructive/50 text-destructive dark:border-destructive [&>svg]:text-destructive",
+          "bg-destructive/[0.06] text-destructive ring-1 ring-destructive/20 dark:bg-destructive/10 [&>svg]:text-destructive",
+        warning:
+          "bg-amber-500/[0.08] text-foreground ring-1 ring-amber-500/20 dark:bg-amber-500/10 [&>svg]:text-amber-600 dark:[&>svg]:text-amber-400",
+        info:
+          "bg-primary/[0.06] text-foreground ring-1 ring-primary/15 dark:bg-primary/10 [&>svg]:text-primary",
+        success:
+          "bg-emerald-500/[0.08] text-foreground ring-1 ring-emerald-500/20 dark:bg-emerald-500/10 [&>svg]:text-emerald-600 dark:[&>svg]:text-emerald-400",
       },
     },
     defaultVariants: {

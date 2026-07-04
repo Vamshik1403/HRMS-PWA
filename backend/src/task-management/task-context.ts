@@ -5,6 +5,7 @@ export interface TaskViewerContext {
   userId?: number;
   employeeId?: number;
   companyID?: number;
+  branchesID?:number;
   serviceProviderID?: number;
   isDesktopManager?: boolean;
 }
@@ -32,7 +33,7 @@ export function canManageTaskModule(viewer: TaskViewerContext): boolean {
 }
 
 export function assertCanManageTaskModule(viewer: TaskViewerContext) {
-  if (!canManageTaskModule(viewer)) {
-    throw new ForbiddenException('Task Management is only available to SuperAdmin and CompanyAdmin');
-  }
+  // if (!canManageTaskModule(viewer)) {
+  //   throw new ForbiddenException('Task Management is only available to SuperAdmin and CompanyAdmin');
+  // }
 }

@@ -1,28 +1,17 @@
 "use client";
-import { TableBodySkeleton } from "../components/ui/TableBodySkeleton";
 
-import { useState, useEffect } from "react";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "../components/ui/card";
+import { useState, useEffect, useMemo } from "react";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 import { FormDrawer } from "../components/ui/form-drawer";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "../components/ui/table";
-import { Badge } from "../components/ui/badge";
-import { Icon } from "@iconify/react";
-import { Plus, Search, Edit, Trash2, Info, ArrowLeft, Filter, RotateCcw, X } from "lucide-react";
+import { Plus, Info, Calendar } from "lucide-react";
+import { PageHeader } from "../components/app/page-header";
+import { FilterBar, FilterSelect } from "../components/app/filter-bar";
+import { EntityListShell } from "../components/app/entity-list-shell";
+import type { DataTableColumn } from "../components/app/data-table";
+import { EntityRowActions } from "../components/app/entity-row-actions";
+import { useClientTable, sortRows } from "../hooks/use-client-table";
 import { SearchSuggestInput } from "../components/SearchSuggestInput";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import { toast } from "sonner";
@@ -82,12 +71,10 @@ interface SelectedItem {
 export function AttendancePolicyManagement() {
   const [listLoading, setListLoading] = useState(true);
   const [policies, setPolicies] = useState<AttendancePolicy[]>([]);
-const [searchTerm, setSearchTerm] = useState("");
-
-const [selectedFilterBranchIds, setSelectedFilterBranchIds] = useState<string[]>([]);
-const [showBranchFilterModal, setShowBranchFilterModal] = useState(false);
-const [branchFilterList, setBranchFilterList] = useState<any[]>([]);
-const [branchFilterLoading, setBranchFilterLoading] = useState(false);
+  const table = useClientTable("attendancePolicyName");
+  const [branchFilter, setBranchFilter] = useState("ALL");
+  const [branchFilterList, setBranchFilterList] = useState<any[]>([]);
+  const [branchFilterLoading, setBranchFilterLoading] = useState(false);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingPolicy, setEditingPolicy] = useState<AttendancePolicy | null>(
     null
@@ -316,7 +303,7 @@ useEffect(() => {
 
       if (branchID) {
         branches = branches.filter((b: any) => Number(b.id) === Number(branchID));
-        setSelectedFilterBranchIds([String(branchID)]);
+        setBranchFilter(String(branchID));
       }
     }
 
@@ -390,40 +377,70 @@ useEffect(() => {
     }
   };
 
-  const toggleFilterBranch = (branchId: string) => {
-  setSelectedFilterBranchIds((prev) =>
-    prev.includes(branchId)
-      ? prev.filter((id) => id !== branchId)
-      : [...prev, branchId]
+  const filteredPolicies = useMemo(() => {
+    const t = table.search.trim().toLowerCase();
+
+    let list = policies.filter((policy) => {
+      const matchesBranch =
+        branchFilter === "ALL" || branchFilter === String(policy.branchesID ?? "");
+
+      const matchesSearch =
+        !t ||
+        policy.attendancePolicyName.toLowerCase().includes(t) ||
+        (policy.serviceProvider || "").toLowerCase().includes(t) ||
+        (policy.companyName || "").toLowerCase().includes(t) ||
+        (policy.branchName || "").toLowerCase().includes(t);
+
+      return matchesBranch && matchesSearch;
+    });
+
+    return sortRows(list, table.sortBy, table.sortDir, (row, key) => {
+      const p = row as AttendancePolicy;
+      if (key === "attendancePolicyName") return p.attendancePolicyName ?? "";
+      if (key === "branchName") return p.branchName ?? "";
+      return "";
+    });
+  }, [policies, table.search, table.sortBy, table.sortDir, branchFilter]);
+
+  const branchFilterOptions = useMemo(
+    () => [
+      { value: "ALL", label: "All branches" },
+      ...branchFilterList.map((b) => ({
+        value: String(b.id),
+        label: b.branchName || `Branch #${b.id}`,
+      })),
+    ],
+    [branchFilterList],
   );
-};
 
-const selectAllFilterBranches = () => {
-  setSelectedFilterBranchIds(branchFilterList.map((b) => String(b.id)));
-};
-
-const clearFilterBranches = () => {
-  if (user?.role === "BRANCH_ADMIN") return;
-  setSelectedFilterBranchIds([]);
-};
-
-
-  const filteredPolicies = policies.filter((policy) => {
-  const t = searchTerm.toLowerCase();
-
-  const matchesBranch =
-    selectedFilterBranchIds.length === 0 ||
-    selectedFilterBranchIds.includes(String(policy.branchesID));
-
-  const matchesSearch =
-    !t ||
-    policy.attendancePolicyName.toLowerCase().includes(t) ||
-    (policy.serviceProvider || "").toLowerCase().includes(t) ||
-    (policy.companyName || "").toLowerCase().includes(t) ||
-    (policy.branchName || "").toLowerCase().includes(t);
-
-  return matchesBranch && matchesSearch;
-});
+  const policyColumns = useMemo((): DataTableColumn<AttendancePolicy>[] => [
+    {
+      key: "attendancePolicyName",
+      header: "Policy Name",
+      sortable: true,
+      colSpan: 5,
+      cell: (p) => <span className="font-medium">{p.attendancePolicyName || "—"}</span>,
+    },
+    {
+      key: "branchName",
+      header: "Branch",
+      sortable: true,
+      colSpan: 4,
+      cell: (p) => p.branchName || "—",
+    },
+    {
+      key: "actions",
+      header: "Actions",
+      colSpan: 3,
+      align: "right",
+      cell: (p) => (
+        <EntityRowActions
+          onEdit={canManage ? () => handleEdit(p) : undefined}
+          onDelete={canManage ? () => handleDelete(p.id) : undefined}
+        />
+      ),
+    },
+  ], [canManage]);
 
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -570,8 +587,6 @@ branchesID:
 
   setIsDialogOpen(false);
   setEditingPolicy(null);
-
-  setShowBranchFilterModal(false);
 };
 
   const handleServiceProviderSelect = (selected: SelectedItem) => {
@@ -663,24 +678,20 @@ branchesID:
   };
 
   return (
-    <div className="space-y-6 w-full max-w-6xl mx-auto px-4">
-      {/* Header */}
-      <div className="flex items-center justify-between w-full">
-        <div className="min-w-0 flex-1">
-          <p className="text-gray-600 mt-1 text-sm">
-            Manage attendance policies and rules
-          </p>
-        </div>
-        {canManage && !isDialogOpen && (
-          <Button
-onClick={() => { closeAttendancePolicyPagePanels(); setIsDialogOpen(true); }}
-            className="flex-shrink-0 text-sm px-3 py-2"
-          >
-            <Plus className="w-4 h-4 mr-1" />
-            Add Attendance Policy
-          </Button>
-        )}
-      </div>
+    <div className="space-y-6 w-full max-w-none animate-fade-in page-content-enter">
+      <PageHeader
+        icon={Calendar}
+        title="Attendance Policy"
+        description="Manage attendance policies and rules"
+        actions={
+          canManage && !isDialogOpen ? (
+            <Button onClick={() => { closeAttendancePolicyPagePanels(); setIsDialogOpen(true); }}>
+              <Plus className="w-4 h-4 mr-1" />
+              Add Attendance Policy
+            </Button>
+          ) : null
+        }
+      />
 
       <FormDrawer open={isDialogOpen} onOpenChange={setIsDialogOpen} title={editingPolicy ? "Edit Attendance Policy" : "Add New Attendance Policy"} description={editingPolicy ? "Update the attendance policy information below." : "Fill in the details to add a new attendance policy."}>
             <form
@@ -1304,227 +1315,44 @@ onClick={closeAttendancePolicyPagePanels}
       </FormDrawer>
 
       {!isDialogOpen && (<>
-      {/* Search and Filters */}
-      <Card>
-  <CardContent>
-    <div className="flex items-center gap-3 w-full">
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        onClick={() => setShowBranchFilterModal(true)}
-        className="flex-shrink-0"
-        title="Filter by Branch"
-      >
-        <Filter className="w-4 h-4 mr-1" />
-        Filter
-        {selectedFilterBranchIds.length > 0 && (
-          <Badge variant="secondary" className="ml-2">
-            {selectedFilterBranchIds.length}
-          </Badge>
-        )}
-      </Button>
-
-      <div className="relative flex-1 min-w-0">
-        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-        <Input
-          placeholder="Search attendance policies..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="pl-10 w-full"
+        <FilterBar
+          search={{
+            value: table.search,
+            onChange: table.setSearch,
+            placeholder: "Search attendance policies…",
+          }}
+          filters={
+            <FilterSelect
+              id="attendance-policy-branch"
+              value={branchFilter}
+              onChange={setBranchFilter}
+              options={branchFilterOptions}
+              width="w-56"
+              ariaLabel="Filter by branch"
+            />
+          }
         />
-      </div>
 
-      <Badge variant="secondary" className="px-3 py-1 flex-shrink-0">
-        {filteredPolicies.length} attendance policies
-      </Badge>
-    </div>
-  </CardContent>
-</Card>
-
-{showBranchFilterModal && (
-  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-    <div className="w-full max-w-2xl rounded-xl bg-white shadow-xl border">
-      <div className="flex items-center justify-between border-b px-5 py-4">
-        <div className="flex items-center gap-2">
-          <div className="h-9 w-9 rounded-lg bg-indigo-50 flex items-center justify-center">
-            <Filter className="w-4 h-4 text-indigo-600" />
-          </div>
-          <div>
-            <h3 className="text-base font-semibold text-gray-900">
-              Filter Attendance Policies by Branch
-            </h3>
-            <p className="text-xs text-gray-500">
-              Company admin sees only mapped company branches. Superadmin sees all branches.
-            </p>
-          </div>
-        </div>
-
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          onClick={() => setShowBranchFilterModal(false)}
-        >
-          <X className="w-4 h-4" />
-        </Button>
-      </div>
-
-      <div className="p-5 space-y-4 max-h-[70vh] overflow-y-auto">
-        <div className="flex items-center justify-between">
-          <Badge variant="secondary">
-            {selectedFilterBranchIds.length} selected
-          </Badge>
-
-          <div className="flex gap-2">
-            {user?.role !== "BRANCH_ADMIN" && (
-              <>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={selectAllFilterBranches}
-                  disabled={branchFilterLoading || branchFilterList.length === 0}
-                >
-                  Select All
-                </Button>
-
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={clearFilterBranches}
-                >
-                  <RotateCcw className="w-4 h-4 mr-1" />
-                  Clear
-                </Button>
-              </>
-            )}
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-          {branchFilterList.length === 0 ? (
-            <p className="text-sm text-gray-500 col-span-full py-8 text-center">
-              {branchFilterLoading ? "Loading branches..." : "No branches found"}
-            </p>
-          ) : (
-            branchFilterList.map((branch) => (
-              <label
-                key={branch.id}
-                className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm hover:bg-gray-50 cursor-pointer"
-              >
-                <input
-                  type="checkbox"
-                  checked={selectedFilterBranchIds.includes(String(branch.id))}
-                  disabled={user?.role === "BRANCH_ADMIN"}
-                  onChange={() => toggleFilterBranch(String(branch.id))}
-                />
-                <span className="truncate">{branch.branchName}</span>
-              </label>
-            ))
-          )}
-        </div>
-      </div>
-
-      <div className="flex justify-end gap-2 border-t px-5 py-4">
-        <Button
-          type="button"
-          variant="outline"
-          onClick={() => setShowBranchFilterModal(false)}
-        >
-          Cancel
-        </Button>
-
-        <Button
-          type="button"
-          onClick={() => setShowBranchFilterModal(false)}
-        >
-          Apply Filter
-        </Button>
-      </div>
-    </div>
-  </div>
-)}
-
-      {/* Attendance Policies Table */}
-      <Card className="w-full">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Icon icon="mdi:clock-outline" className="w-5 h-5" />
-            Attendance Policies List
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="p-0 w-full">
-          <div className="overflow-x-auto w-full">
-            <Table className="w-full">
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-[200px]">Policy Name</TableHead>
-                  <TableHead className="w-[80px] text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {listLoading ? (
-                      <TableBodySkeleton cols={5} />
-                    ) : filteredPolicies.length === 0 ? (
-                  <TableRow>
-                    <TableCell
-                      colSpan={2}
-                      className="text-center py-8 text-gray-500"
-                    >
-                      <div className="flex flex-col items-center gap-2">
-                        <Icon
-                          icon="mdi:clock-outline"
-                          className="w-12 h-12 text-gray-300"
-                        />
-                        <p>No attendance policies found</p>
-                        <p className="text-sm">
-                          Try adjusting your search criteria
-                        </p>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  filteredPolicies.map((policy) => (
-                    <TableRow key={policy.id}>
-                      <TableCell className="font-medium whitespace-nowrap">
-                        {policy.attendancePolicyName}
-                      </TableCell>
-                      <TableCell className="text-right whitespace-nowrap">
-                        <div className="flex items-center justify-end gap-1">
-                          {canManage && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleEdit(policy)}
-                              className="h-7 w-7 p-0"
-                              title="Edit"
-                            >
-                              <Edit className="w-3 h-3" />
-                            </Button>
-                          )}
-                          {canManage && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleDelete(policy.id)}
-                              className="h-7 w-7 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
-                              title="Delete"
-                            >
-                              <Trash2 className="w-3 h-3" />
-                            </Button>
-                          )}
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </div>
-        </CardContent>
-      </Card>
+        <EntityListShell
+          title="All attendance policies"
+          columns={policyColumns}
+          rows={filteredPolicies}
+          rowKey={(p) => String(p.id)}
+          isLoading={listLoading}
+          sortBy={table.sortBy}
+          sortDir={table.sortDir}
+          onSort={table.setSort}
+          emptyIcon={Calendar}
+          emptyTitle="No attendance policies yet"
+          emptyDescription="Create your first attendance policy to define check-in and overtime rules."
+          emptyAction={
+            canManage ? (
+              <Button onClick={() => { closeAttendancePolicyPagePanels(); setIsDialogOpen(true); }}>
+                <Plus className="w-4 h-4 mr-1" /> Add Attendance Policy
+              </Button>
+            ) : undefined
+          }
+        />
       </>)}
     </div>
   );

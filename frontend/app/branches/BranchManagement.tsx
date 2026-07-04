@@ -10,11 +10,31 @@ import { Textarea } from "../components/ui/textarea";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../components/ui/table";
 import { Badge } from "../components/ui/badge";
 import { Icon } from "@iconify/react";
-import { Plus, Search, Edit, Trash2, Eye, ArrowLeft, X, Save, ChevronDown, FileText, Shield, UserPlus } from "lucide-react";
+import { Plus, Search, Edit, Trash2, Eye, ArrowLeft, X, Save, ChevronDown, FileText, Shield, UserPlus, Building2, Store, Factory, GitBranch } from "lucide-react";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import { useRouter } from "next/navigation";
 
 import { FormDrawer } from "../components/ui/form-drawer";
+import { FormSection } from "../components/ui/form-section";
+import { FormField } from "../components/ui/form-field";
+import { OptionCardGroup } from "../components/ui/option-card-group";
+import { FileDropzone } from "../components/ui/file-dropzone";
+import { Checkbox } from "../components/ui/checkbox";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../components/ui/select";
+import { PageHeader } from "../components/app/page-header";
+import { FilterBar } from "../components/app/filter-bar";
+import { EntityListShell } from "../components/app/entity-list-shell";
+import type { DataTableColumn } from "../components/app/data-table";
+import { EntityRowActions } from "../components/app/entity-row-actions";
+import { useClientTable, sortRows } from "../hooks/use-client-table";
+import { FINANCIAL_YEAR_EMPTY } from "../utils/companyFormPayload";
+import { NoticeBanner } from "../components/ui/notice-banner";
 import { TimezoneSelect } from "../components/ui/timezone-select";
 import { LocationFields } from "../components/ui/location-fields";
 import { SearchSuggestInput } from "../components/SearchSuggestInput";
@@ -56,6 +76,11 @@ interface BranchRead {
   companyID?: ID | null;
   branchName?: string | null;
   branchType?: string | null;
+
+  latitude?: string | null;  
+  longitude?: string | null;
+  geofenchradius?: string | null;
+
   address?: string | null;
   country?: string | null;
   state?: string | null;
@@ -180,6 +205,7 @@ export function BranchManagement() {
   const [selectedBranch, setSelectedBranch] = useState<BranchRead | null>(null);
   const [branchAdmins, setBranchAdmins] = useState<any[]>([]);
   const [editingBranchAdmin, setEditingBranchAdmin] = useState<any | null>(null);
+  const [branchAdminFormOpen, setBranchAdminFormOpen] = useState(false);
   const [branchAdminSaving, setBranchAdminSaving] = useState(false);
   const [branchAdminForm, setBranchAdminForm] = useState({
     username: "",
@@ -224,6 +250,9 @@ export function BranchManagement() {
 
     branchName: "",
     branchType: "",
+    latitude  :"",    
+longitude     :"",
+geofenchradius:"",
     address: "",
     country: "",
     state: "",
@@ -294,25 +323,25 @@ export function BranchManagement() {
   }, [user]);
 
   useEffect(() => {
-  const handler = () => { if (user) fetchBranches(); };
+    const handler = () => { if (user) fetchBranches(); };
 
-  const sidebarPageClickHandler = (e: any) => {
-    if (e.detail?.path === "/branches") {
-      closeBranchPagePanels();
-      if (user) fetchBranches();
-    }
-  };
+    const sidebarPageClickHandler = (e: any) => {
+      if (e.detail?.path === "/branches") {
+        closeBranchPagePanels();
+        if (user) fetchBranches();
+      }
+    };
 
-  window.addEventListener("sidebar-context-changed", handler);
-  window.addEventListener("app-data-refresh", handler);
-  window.addEventListener("sidebar-main-page-click", sidebarPageClickHandler);
+    window.addEventListener("sidebar-context-changed", handler);
+    window.addEventListener("app-data-refresh", handler);
+    window.addEventListener("sidebar-main-page-click", sidebarPageClickHandler);
 
-  return () => {
-    window.removeEventListener("sidebar-context-changed", handler);
-    window.removeEventListener("app-data-refresh", handler);
-    window.removeEventListener("sidebar-main-page-click", sidebarPageClickHandler);
-  };
-}, [user]);
+    return () => {
+      window.removeEventListener("sidebar-context-changed", handler);
+      window.removeEventListener("app-data-refresh", handler);
+      window.removeEventListener("sidebar-main-page-click", sidebarPageClickHandler);
+    };
+  }, [user]);
 
   // ---------------------------
   // Debounced suggestions
@@ -484,20 +513,20 @@ export function BranchManagement() {
   };
 
 
- const handleEditBranchAdmin = (admin: any) => {
-  setEditingBranchAdmin(admin);
-
-  setBranchAdminForm({
-    username: admin.username || "",
-    password: "",
-    firstName: admin.firstName || "",
-    lastName: admin.lastName || "",
-    contactNo: admin.contactNo || "",
-    email: admin.email || "",
-    role: "BRANCH_ADMIN",
-    isActive: admin.isActive ?? true,
-  });
-};
+  const handleEditBranchAdmin = (admin: any) => {
+    setEditingBranchAdmin(admin);
+    setBranchAdminFormOpen(true);
+    setBranchAdminForm({
+      username: admin.username || "",
+      password: "",
+      firstName: admin.firstName || "",
+      lastName: admin.lastName || "",
+      contactNo: admin.contactNo || "",
+      email: admin.email || "",
+      role: "BRANCH_ADMIN",
+      isActive: admin.isActive ?? true,
+    });
+  };
 
   // ---------------------------
   // Form helpers
@@ -550,6 +579,9 @@ export function BranchManagement() {
       companyID: null as ID | null,
       branchName: "",
       branchType: "",
+      latitude:"",      
+longitude     :"",
+geofenchradius:"",
       address: "",
       country: "",
       state: "",
@@ -681,6 +713,9 @@ export function BranchManagement() {
       companyID: finalCompanyID ?? undefined, // Use the final IDs
       branchName: formData.branchName || undefined,
       branchType: formData.branchType || undefined,
+      latitude: formData.latitude || undefined,      
+longitude     : formData.longitude || undefined,
+geofenchradius: formData.geofenchradius || undefined,
       address: formData.address || undefined,
       country: formData.country || undefined,
       state: formData.state || undefined,
@@ -811,6 +846,9 @@ export function BranchManagement() {
 
       branchName: b.branchName ?? "",
       branchType: b.branchType ?? "",
+      latitude:  b.latitude ?? "",      
+longitude     :  b.longitude ?? "",
+geofenchradius:  b.geofenchradius ?? "",
       address: b.address ?? "",
       country: b.country ?? "",
       state: b.state ?? "",
@@ -867,40 +905,41 @@ export function BranchManagement() {
     }
   };
 
- const closeBranchPagePanels = () => {
-  resetForm();
+  const closeBranchPagePanels = () => {
+    resetForm();
 
-  setIsAddingNew(false);
-  setIsViewing(false);
-  setEditingBranch(null);
-  setViewBranch(null);
-
-  setShowBranchAdminPanel(false);
-  setSelectedBranch(null);
-  setBranchAdmins([]);
-  setEditingBranchAdmin(null);
-
-  setBranchAdminForm({
-    username: "",
-    password: "",
-    firstName: "",
-    lastName: "",
-    contactNo: "",
-    email: "",
-    role: "BRANCH_ADMIN",
-    isActive: true,
-  });
-};
-
-const handleCancel = () => {
-  closeBranchPagePanels();
-};
-  const openBranchAdminPanel = async (branch: BranchRead) => {
-    setSelectedBranch(branch);
-    setShowBranchAdminPanel(true);
-    setEditingBranchAdmin(null);
     setIsAddingNew(false);
     setIsViewing(false);
+    setEditingBranch(null);
+    setViewBranch(null);
+
+    setShowBranchAdminPanel(false);
+    setSelectedBranch(null);
+    setBranchAdmins([]);
+    setEditingBranchAdmin(null);
+
+    setBranchAdminForm({
+      username: "",
+      password: "",
+      firstName: "",
+      lastName: "",
+      contactNo: "",
+      email: "",
+      role: "BRANCH_ADMIN",
+      isActive: true,
+    });
+  };
+
+  const handleCancel = () => {
+    closeBranchPagePanels();
+  };
+  const openBranchAdminPanel = async (branch: BranchRead) => {
+   setSelectedBranch(branch);
+setShowBranchAdminPanel(true);
+setBranchAdminFormOpen(false);
+setEditingBranchAdmin(null);
+setIsAddingNew(false);
+setIsViewing(false);
 
     setBranchAdminForm({
       username: "",
@@ -950,95 +989,98 @@ const handleCancel = () => {
   };
 
   const saveBranchAdmin = async (e: React.FormEvent) => {
-  e.preventDefault();
+    e.preventDefault();
 
-  if (branchAdminSaving) return;
+    if (branchAdminSaving) return;
 
-  if (!selectedBranch?.id) {
-    toast.error("Branch not selected");
-    return;
-  }
-
-  if (!branchAdminForm.username.trim()) {
-    toast.error("Username is required");
-    return;
-  }
-
-  if (!editingBranchAdmin && !branchAdminForm.password.trim()) {
-    toast.error("Password is required");
-    return;
-  }
-
-  if (branchAdminForm.password && branchAdminForm.password.length < 6) {
-    toast.error("Password must be at least 6 characters");
-    return;
-  }
-
-  setBranchAdminSaving(true);
-
-  try {
-    const isEdit = Boolean(editingBranchAdmin);
-
-    const payload: any = {
-      username: branchAdminForm.username.trim(),
-      role: "BRANCH_ADMIN",
-      firstName: branchAdminForm.firstName?.trim() || "",
-      lastName: branchAdminForm.lastName?.trim() || "",
-      contactNo: branchAdminForm.contactNo?.trim() || "",
-      email: branchAdminForm.email?.trim() || "",
-      branchesID: selectedBranch.id,
-      companyID: selectedBranch.companyID,
-      serviceProviderID: selectedBranch.serviceProviderID,
-      isActive: branchAdminForm.isActive,
-    };
-
-    if (branchAdminForm.password.trim()) {
-      payload.password = branchAdminForm.password;
+    if (!selectedBranch?.id) {
+      toast.error("Branch not selected");
+      return;
     }
 
-    const res = await fetch(
-      isEdit ? `${API.users}/${editingBranchAdmin.id}` : API.users,
-      {
-        method: isEdit ? "PATCH" : "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+    if (!branchAdminForm.username.trim()) {
+      toast.error("Username is required");
+      return;
+    }
+
+    if (!editingBranchAdmin && !branchAdminForm.password.trim()) {
+      toast.error("Password is required");
+      return;
+    }
+
+    if (branchAdminForm.password && branchAdminForm.password.length < 6) {
+      toast.error("Password must be at least 6 characters");
+      return;
+    }
+
+    setBranchAdminSaving(true);
+
+    try {
+      const isEdit = Boolean(editingBranchAdmin);
+
+      const payload: any = {
+        username: branchAdminForm.username.trim(),
+        role: "BRANCH_ADMIN",
+        firstName: branchAdminForm.firstName?.trim() || "",
+        lastName: branchAdminForm.lastName?.trim() || "",
+        contactNo: branchAdminForm.contactNo?.trim() || "",
+        email: branchAdminForm.email?.trim() || "",
+        branchesID: selectedBranch.id,
+        companyID: selectedBranch.companyID,
+        serviceProviderID: selectedBranch.serviceProviderID,
+        isActive: branchAdminForm.isActive,
+      };
+
+      if (branchAdminForm.password.trim()) {
+        payload.password = branchAdminForm.password;
       }
-    );
 
-    if (!res.ok) throw new Error(await res.text());
+      const res = await fetch(
+        isEdit ? `${API.users}/${editingBranchAdmin.id}` : API.users,
+        {
+          method: isEdit ? "PATCH" : "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        }
+      );
 
-    toast.success(
-      isEdit
-        ? "Branch admin user updated successfully"
-        : "Branch admin user created successfully"
-    );
+      if (!res.ok) throw new Error(await res.text());
 
-    setBranchAdminForm({
-      username: "",
-      password: "",
-      role: "BRANCH_ADMIN",
-      firstName: "",
-      lastName: "",
-      contactNo: "",
-      email: "",
-      isActive: true,
-    });
+      toast.success(
+        isEdit
+          ? "Branch admin user updated successfully"
+          : "Branch admin user created successfully"
+      );
 
-    setEditingBranchAdmin(null);
-    await openBranchAdminPanel(selectedBranch);
-  } catch (e: any) {
-    console.error(e);
-    toast.error(e?.message || "Failed to save branch admin");
-  } finally {
-    setBranchAdminSaving(false);
-  }
-};
+      setBranchAdminForm({
+        username: "",
+        password: "",
+        role: "BRANCH_ADMIN",
+        firstName: "",
+        lastName: "",
+        contactNo: "",
+        email: "",
+        isActive: true,
+      });
+
+      setEditingBranchAdmin(null);
+      setBranchAdminFormOpen(false);
+      await openBranchAdminPanel(selectedBranch);
+    } catch (e: any) {
+      console.error(e);
+      toast.error(e?.message || "Failed to save branch admin");
+    } finally {
+      setBranchAdminSaving(false);
+    }
+  };
 
 
   const closeBranchAdminPanel = () => {
     setShowBranchAdminPanel(false);
     setSelectedBranch(null);
     setBranchAdmins([]);
+    setBranchAdminFormOpen(false);
+    setEditingBranchAdmin(null);
     setBranchAdminForm({
       username: "",
       password: "",
@@ -1051,49 +1093,115 @@ const handleCancel = () => {
     });
   };
 
-
   // ---------------------------
   // Search
   // ---------------------------
+  const table = useClientTable("branchName");
+
   const filteredBranches = useMemo(() => {
-    const t = searchTerm.trim().toLowerCase();
-    if (!t) return branches;
-    return branches.filter((b) =>
-      [
-        b.branchName,
-        b.branchType,
-        b.address,
-        b.country,
-        b.state,
-        b.emailAdd,
-        b.gstNo,
-      ]
-        .filter(Boolean)
-        .map((x) => (x ?? "").toLowerCase())
-        .some((f) => f.includes(t))
-    );
-  }, [branches, searchTerm]);
+    const t = table.search.trim().toLowerCase();
+    let list = branches;
+    if (t) {
+      list = branches.filter((b) =>
+        [
+          b.branchName,
+          b.branchType,
+          b.city,
+          b.address,
+          b.country,
+          b.state,
+          b.pincode,
+          b.emailAdd,
+          b.gstNo,
+        ]
+          .filter(Boolean)
+          .map((x) => (x ?? "").toLowerCase())
+          .some((f) => f.includes(t))
+      );
+    }
+    return sortRows(list, table.sortBy, table.sortDir, (row, key) => {
+      const r = row as BranchRead;
+      if (key === "branchName") return r.branchName ?? "";
+      if (key === "city") return r.city ?? "";
+      if (key === "pincode") return r.pincode ?? "";
+      if (key === "state") return r.state ?? "";
+      if (key === "country") return r.country ?? "";
+      return "";
+    });
+  }, [branches, table.search, table.sortBy, table.sortDir]);
 
-
+  const branchColumns = useMemo((): DataTableColumn<BranchRead>[] => [
+    {
+      key: "branchName",
+      header: "Name",
+      sortable: true,
+      colSpan: 3,
+      cell: (b) => <span className="font-medium">{b.branchName || "—"}</span>,
+    },
+    {
+      key: "city",
+      header: "City",
+      sortable: true,
+      colSpan: 2,
+      cell: (b) => b.city || "—",
+    },
+    {
+      key: "pincode",
+      header: "Pin",
+      sortable: true,
+      colSpan: 1,
+      cell: (b) => b.pincode || "—",
+    },
+    {
+      key: "state",
+      header: "State",
+      sortable: true,
+      colSpan: 2,
+      cell: (b) => b.state || "—",
+    },
+    {
+      key: "country",
+      header: "Country",
+      sortable: true,
+      colSpan: 2,
+      cell: (b) => b.country || "—",
+    },
+    {
+      key: "actions",
+      header: "Actions",
+      colSpan: 2,
+      align: "right",
+      cell: (b) => (
+        <EntityRowActions
+          onEdit={canManage ? () => handleEdit(b) : undefined}
+          onDelete={() => handleDelete(b.id)}
+          extra={
+            canManageBranchAdmins
+              ? [{
+                  icon: UserPlus,
+                  title: "Manage Branch Admin Users",
+                  onClick: () => openBranchAdminPanel(b),
+                }]
+              : undefined
+          }
+        />
+      ),
+    },
+  ], [canManage, canManageBranchAdmins]);
 
   return (
-    <div className="space-y-6 w-full max-w-7xl mx-auto px-4 page-content-enter">
+    <div className="space-y-6 w-full max-w-none animate-fade-in page-content-enter">
 
-
-      {/* Header */}
-      <div className="flex items-center justify-between w-full">
-        <div className="min-w-0 flex-1">
-          <p className="text-gray-600 mt-1 text-sm">Manage branch records</p>
-        </div>
-
-        <div className="flex items-center gap-3">
-          {!isAddingNew && !isViewing && !showBranchAdminPanel && canCreate && (
+      <PageHeader
+        icon={GitBranch}
+        title="Branches"
+        description="Locations where your company operates. Branches anchor departments and attendance devices."
+        actions={
+          !isAddingNew && !isViewing && !showBranchAdminPanel && canCreate ? (
             <Button
               onClick={() => {
                 resetForm();
-
                 const activeCtx = getActiveBranchContext();
-
                 setFormData((p) => ({
                   ...p,
                   serviceProviderID: activeCtx.serviceProviderID,
@@ -1101,16 +1209,14 @@ const handleCancel = () => {
                   spAutocomplete: activeCtx.serviceProviderName,
                   coAutocomplete: activeCtx.companyName,
                 }));
-
                 setIsAddingNew(true);
               }}
-              className="text-sm px-3 py-2"
             >
               <Plus className="w-4 h-4 mr-1" /> Add Branch
             </Button>
-          )}
-        </div>
-      </div>
+          ) : null
+        }
+      />
 
       {/* Add/Edit Form - Drawer */}
       <FormDrawer
@@ -1121,9 +1227,9 @@ const handleCancel = () => {
         <div>
           <div>
             {error && (
-              <div className="rounded-md border border-red-200 bg-red-50 text-red-700 px-3 py-2 text-sm mb-4">
+              <NoticeBanner variant="error" compact className="mb-4">
                 {error}
-              </div>
+              </NoticeBanner>
             )}
 
             <form onSubmit={handleSubmit} className="space-y-4">
@@ -1223,74 +1329,59 @@ const handleCancel = () => {
                 </div>
               )}
 
-              {/* Core fields */}
-              {/* Core fields */}
-              <div className="flex items-center gap-2 rounded-md border p-3 bg-gray-50">
-                <input
-                  id="sameAsCompany"
-                  type="checkbox"
-                  checked={sameAsCompany}
-                  disabled={companyFillLoading}
-                  onChange={async (e) => {
-                    const checked = e.target.checked;
-                    setSameAsCompany(checked);
-
-                    if (checked) {
-                      await fillBranchFromCompany();
-                    }
-                  }}
-                  className="w-4 h-4"
-                />
-                <Label htmlFor="sameAsCompany" className="cursor-pointer">
-                  Same as Company
-                  {companyFillLoading ? " loading..." : ""}
-                </Label>
-              </div>
-
-              <div className="space-y-2">
-                <Label>Branch Name</Label>
-                <Input
-                  value={formData.branchName}
-                  onChange={(e) => setFormData((p) => ({ ...p, branchName: e.target.value }))}
-                  required
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label>Branch Type</Label>
-                <div className="flex flex-wrap gap-3">
-                  {["office", "shop", "factory"].map((type) => {
-                    const selected = (formData.branchType || "").split(",").map(s => s.trim()).filter(Boolean);
-                    const isChecked = selected.includes(type);
-                    return (
-                      <label key={type} className="flex items-center gap-2 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={isChecked}
-                          onChange={(e) => {
-                            const current = (formData.branchType || "").split(",").map(s => s.trim()).filter(Boolean);
-                            const updated = e.target.checked
-                              ? [...current, type]
-                              : current.filter(v => v !== type);
-                            setFormData((p) => ({ ...p, branchType: updated.join(", ") }));
-                          }}
-                          className="w-4 h-4"
-                        />
-                        <span className="capitalize">{type}</span>
-                      </label>
-                    );
-                  })}
+              <FormSection
+                title="Branch information"
+                description="Core branch details and classification."
+              >
+                <div className="flex items-center gap-2.5 rounded-lg border border-[#E2E8F0] bg-[#F8FAFC] p-3">
+                  <Checkbox
+                    id="sameAsCompany"
+                    checked={sameAsCompany}
+                    disabled={companyFillLoading}
+                    onCheckedChange={async (checked) => {
+                      const isChecked = checked === true;
+                      setSameAsCompany(isChecked);
+                      if (isChecked) {
+                        await fillBranchFromCompany();
+                      }
+                    }}
+                  />
+                  <Label htmlFor="sameAsCompany" className="cursor-pointer font-normal">
+                    Same as Company
+                    {companyFillLoading ? " loading..." : ""}
+                  </Label>
                 </div>
-              </div>
 
-              <div className="space-y-2">
-                <Label>Branch Address</Label>
-                <Textarea
-                  value={formData.address}
-                  onChange={(e) => setFormData((p) => ({ ...p, address: e.target.value }))}
-                  rows={3}
-                />
-              </div>
+                <FormField label="Branch Name" required>
+                  <Input
+                    value={formData.branchName}
+                    onChange={(e) => setFormData((p) => ({ ...p, branchName: e.target.value }))}
+                    placeholder="Enter branch name"
+                    required
+                  />
+                </FormField>
+
+                <FormField label="Branch Type" description="Select all types that apply to this branch.">
+                  <OptionCardGroup
+                    options={[
+                      { value: "office", label: "Office", description: "Corporate HQ", icon: Building2 },
+                      { value: "shop", label: "Shop", description: "Retail outlet", icon: Store },
+                      { value: "factory", label: "Factory", description: "Manufacturing", icon: Factory },
+                    ]}
+                    value={(formData.branchType || "").split(",").map((s) => s.trim()).filter(Boolean)}
+                    onChange={(types) => setFormData((p) => ({ ...p, branchType: types.join(", ") }))}
+                  />
+                </FormField>
+
+                <FormField label="Branch Address">
+                  <Textarea
+                    value={formData.address}
+                    onChange={(e) => setFormData((p) => ({ ...p, address: e.target.value }))}
+                    placeholder="Street, area, landmark…"
+                    rows={3}
+                  />
+                </FormField>
+              </FormSection>
 
               <LocationFields
                 values={{
@@ -1303,6 +1394,36 @@ const handleCancel = () => {
                 onChange={(patch) => setFormData((p) => ({ ...p, ...patch }))}
                 showCurrency={false}
               />
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <Label>Latitude</Label>
+                  <Input
+                    type="text"
+                    value={formData.latitude}
+                    onChange={(e) => setFormData((p) => ({ ...p, latitude: e.target.value }))}
+                    placeholder="Enter latitude"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Longitude</Label>
+                  <Input
+                    type="text"
+                    value={formData.longitude}
+                    onChange={(e) => setFormData((p) => ({ ...p, longitude: e.target.value }))}
+                    placeholder="Enter longitude"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Geofence Radius (meters)</Label>
+                  <Input
+                    type="number"
+                    value={ formData.geofenchradius}
+                    onChange={(e) => setFormData((p) => ({ ...p, geofenchradius: e.target.value }))}
+                    placeholder="Enter geofence radius"
+                  />
+                </div>
+              </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
@@ -1426,49 +1547,54 @@ const handleCancel = () => {
                   <Label>Contact Number</Label>
                   <Input value={formData.contactNo} onChange={(e) => setFormData((p) => ({ ...p, contactNo: e.target.value }))} />
                 </div>
+
                 <div className="space-y-2">
                   <Label>Email Address</Label>
                   <Input type="email" value={formData.emailAdd} onChange={(e) => setFormData((p) => ({ ...p, emailAdd: e.target.value }))} />
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {/* Logo & Signature Upload */}
+              <FormSection title="Branding" description="Logo and signature used on documents and payslips.">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label>Company Logo</Label>
-                    <Input
-                      type="file"
-                      accept="image/*"
-                      onChange={(e) => setLogoFile(e.target.files?.[0] || null)}
-                    />
-                    {logoFile && <p className="text-sm text-gray-500">{logoFile.name}</p>}
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label>Signature Upload</Label>
-                    <Input
-                      type="file"
-                      accept="image/*"
-                      onChange={(e) => setSignatureFile(e.target.files?.[0] || null)}
-                    />
-                    {signatureFile && <p className="text-sm text-gray-500">{signatureFile.name}</p>}
-                  </div>
+                  <FileDropzone
+                    label="Company Logo"
+                    accept="image/*"
+                    hint="PNG or JPG"
+                    value={logoFile}
+                    onChange={setLogoFile}
+                    variant="image"
+                  />
+                  <FileDropzone
+                    label="Signature Upload"
+                    accept="image/*"
+                    hint="PNG or JPG"
+                    value={signatureFile}
+                    onChange={setSignatureFile}
+                    variant="image"
+                  />
                 </div>
-              </div>
+              </FormSection>
 
-              <div className="space-y-2">
-                <Label>Financial Year Start</Label>
-                <select
-                  className="w-full rounded-md border px-3 py-2"
-                  value={formData.financialYearStart || ""}
-                  onChange={(e) => setFormData((p) => ({ ...p, financialYearStart: e.target.value }))}
+              <FormField label="Financial Year Start">
+                <Select
+                  value={formData.financialYearStart || FINANCIAL_YEAR_EMPTY}
+                  onValueChange={(value) =>
+                    setFormData((p) => ({
+                      ...p,
+                      financialYearStart: value === FINANCIAL_YEAR_EMPTY ? "" : value,
+                    }))
+                  }
                 >
-                  <option value="">-- Select Start Date --</option>
-                  <option value="1st Jan">1st Jan</option>
-                  <option value="1st April">1st April</option>
-                </select>
-              </div>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select start date" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={FINANCIAL_YEAR_EMPTY}>Select start date</SelectItem>
+                    <SelectItem value="1st Jan">1st January</SelectItem>
+                    <SelectItem value="1st April">1st April</SelectItem>
+                  </SelectContent>
+                </Select>
+              </FormField>
 
               {/* Bank Details repeater - hidden for ADMIN and COMPANY_ADMIN */}
               {!(user?.role === "ADMIN" || user?.role === "COMPANY_ADMIN") && <div className="space-y-4">
@@ -1539,7 +1665,8 @@ const handleCancel = () => {
                     </div>
                   ))
                 )}
-              </div>}
+              </div>
+              }
 
               <div className="flex justify-end gap-2 pt-4 border-t border-gray-200">
                 <Button type="button" variant="outline" onClick={handleCancel}>
@@ -1567,6 +1694,9 @@ const handleCancel = () => {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="p-3 bg-gray-50 rounded-lg"><strong>Name:</strong> {viewBranch.branchName}</div>
                 <div className="p-3 bg-gray-50 rounded-lg"><strong>Type:</strong> {viewBranch.branchType}</div>
+                <div className="p-3 bg-gray-50 rounded-lg"><strong>Latitude:</strong> {viewBranch.latitude}</div>
+                <div className="p-3 bg-gray-50 rounded-lg"><strong>Longitude:</strong> {viewBranch.longitude}</div>
+                <div className="p-3 bg-gray-50 rounded-lg"><strong>Geofence Radius:</strong> {viewBranch.geofenchradius}</div>
                 <div className="p-3 bg-gray-50 rounded-lg"><strong>Address:</strong> {viewBranch.address}</div>
                 <div className="p-3 bg-gray-50 rounded-lg"><strong>Country:</strong> {viewBranch.country}</div>
                 <div className="p-3 bg-gray-50 rounded-lg"><strong>State:</strong> {viewBranch.state}</div>
@@ -1621,301 +1751,277 @@ const handleCancel = () => {
                 Branch Admin Users - {selectedBranch.branchName}
               </span>
 
-              <Button variant="outline" size="sm" onClick={closeBranchAdminPanel}>
-                Back
-              </Button>
+              <div className="flex gap-2">
+                {!branchAdminFormOpen ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={() => {
+                      setEditingBranchAdmin(null);
+                      setBranchAdminForm({
+                        username: "",
+                        password: "",
+                        firstName: "",
+                        lastName: "",
+                        contactNo: "",
+                        email: "",
+                        role: "BRANCH_ADMIN",
+                        isActive: true,
+                      });
+                      setBranchAdminFormOpen(true);
+                    }}
+                  >
+                    <Plus className="w-4 h-4 mr-1" />
+                    Add User
+                  </Button>
+                ) : (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setEditingBranchAdmin(null);
+                      setBranchAdminFormOpen(false);
+                    }}
+                  >
+                    <ArrowLeft className="w-4 h-4 mr-1" />
+                    Back to Users
+                  </Button>
+                )}
+
+                <Button variant="outline" size="sm" onClick={closeBranchAdminPanel}>
+                  Back
+                </Button>
+              </div>
             </CardTitle>
           </CardHeader>
 
           <CardContent className="space-y-6">
-            <form onSubmit={saveBranchAdmin} className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Username *</Label>
-                <Input
-                  value={branchAdminForm.username}
-                  autoComplete="off"
-                  name={`branch-admin-username-${selectedBranch?.id || "new"}`}
-                  onChange={(e) =>
-                    setBranchAdminForm((p) => ({ ...p, username: e.target.value }))
-                  }
-                  required
-                />
-              </div>
-
-              <div className="space-y-2">
-  <Label>
-    Password {editingBranchAdmin ? "(leave blank to keep old password)" : "*"}
-  </Label>
-  <Input
-    type="password"
-    value={branchAdminForm.password}
-    autoComplete="new-password"
-    name={`branch-admin-password-${selectedBranch?.id || "new"}`}
-    placeholder={editingBranchAdmin ? "Leave blank to keep old password" : "Minimum 6 characters"}
-    onChange={(e) =>
-      setBranchAdminForm((p) => ({ ...p, password: e.target.value }))
-    }
-    required={!editingBranchAdmin}
-  />
-</div>
-
-
-              <div className="space-y-2">
-                <Label>First Name</Label>
-                <Input
-                  value={branchAdminForm.firstName}
-                  onChange={(e) =>
-                    setBranchAdminForm((p) => ({ ...p, firstName: e.target.value }))
-                  }
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label>Last Name</Label>
-                <Input
-                  value={branchAdminForm.lastName}
-                  onChange={(e) =>
-                    setBranchAdminForm((p) => ({ ...p, lastName: e.target.value }))
-                  }
-                />
-              </div>
-
-
-              <div className="space-y-2">
-
-                <Label>Contact No</Label>
-                <Input
-                  value={branchAdminForm.contactNo}
-                  onChange={(e) =>
-                    setBranchAdminForm((p) => ({ ...p, contactNo: e.target.value }))
-                  }
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label>Email</Label>
-                <Input
-                  type="email"
-                  value={branchAdminForm.email}
-                  onChange={(e) =>
-                    setBranchAdminForm((p) => ({ ...p, email: e.target.value }))
-                  }
-                />
-              </div>
-
-
-
-              <div className="space-y-2">
-                <Label>Role</Label>
-                <Input value="BRANCH_ADMIN" readOnly className="bg-gray-50" />
-              </div>
-
-              <div className="space-y-2">
-                <Label>Status</Label>
-                <label className="flex h-10 items-center gap-2 rounded-md border px-3 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={branchAdminForm.isActive}
+            {branchAdminFormOpen ? (
+              <form onSubmit={saveBranchAdmin} className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Username *</Label>
+                  <Input
+                    value={branchAdminForm.username}
+                    autoComplete="off"
+                    name={`branch-admin-username-${selectedBranch?.id || "new"}`}
                     onChange={(e) =>
-                      setBranchAdminForm((p) => ({ ...p, isActive: e.target.checked }))
+                      setBranchAdminForm((p) => ({ ...p, username: e.target.value }))
+                    }
+                    required
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label>
+                    Password {editingBranchAdmin ? "(leave blank to keep old password)" : "*"}
+                  </Label>
+                  <Input
+                    type="password"
+                    value={branchAdminForm.password}
+                    autoComplete="new-password"
+                    name={`branch-admin-password-${selectedBranch?.id || "new"}`}
+                    placeholder={editingBranchAdmin ? "Leave blank to keep old password" : "Minimum 6 characters"}
+                    onChange={(e) =>
+                      setBranchAdminForm((p) => ({ ...p, password: e.target.value }))
+                    }
+                    required={!editingBranchAdmin}
+                  />
+                </div>
+
+
+                <div className="space-y-2">
+                  <Label>First Name</Label>
+                  <Input
+                    value={branchAdminForm.firstName}
+                    onChange={(e) =>
+                      setBranchAdminForm((p) => ({ ...p, firstName: e.target.value }))
                     }
                   />
-                  Active
-                </label>
-              </div>
+                </div>
 
-              <div className="sm:col-span-2 flex justify-end">
-<Button type="submit" disabled={branchAdminSaving}>
-                    <Save className="w-4 h-4 mr-1" />
-{branchAdminSaving
-  ? editingBranchAdmin
-    ? "Updating..."
-    : "Creating..."
-  : editingBranchAdmin
-    ? "Update Branch Admin"
-    : "Create Branch Admin"}
+                <div className="space-y-2">
+                  <Label>Last Name</Label>
+                  <Input
+                    value={branchAdminForm.lastName}
+                    onChange={(e) =>
+                      setBranchAdminForm((p) => ({ ...p, lastName: e.target.value }))
+                    }
+                  />
+                </div>
 
-                </Button>
-              </div>
-            </form>
 
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Username</TableHead>
-                  <TableHead>Role</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
+                <div className="space-y-2">
 
-              <TableBody>
-                {branchAdmins.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={4} className="text-center py-6 text-gray-500">
-                      No branch admin users found for this branch
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  branchAdmins.map((admin) => (
-                    <TableRow
-                      key={admin.id}
-                      className={
-                        editingBranchAdmin?.id === admin.id
-                          ? "bg-indigo-50"
-                          : ""
+                  <Label>Contact No</Label>
+                  <Input
+                    value={branchAdminForm.contactNo}
+                    onChange={(e) =>
+                      setBranchAdminForm((p) => ({ ...p, contactNo: e.target.value }))
+                    }
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Email</Label>
+                  <Input
+                    type="email"
+                    value={branchAdminForm.email}
+                    onChange={(e) =>
+                      setBranchAdminForm((p) => ({ ...p, email: e.target.value }))
+                    }
+                  />
+                </div>
+
+
+
+                <div className="space-y-2">
+                  <Label>Role</Label>
+                  <Input value="BRANCH_ADMIN" readOnly className="bg-gray-50" />
+                </div>
+
+                <FormField label="Status">
+                  <label className="flex h-10 items-center gap-2.5 rounded-lg border border-[#E2E8F0] px-3 text-sm">
+                    <Checkbox
+                      checked={branchAdminForm.isActive}
+                      onCheckedChange={(checked) =>
+                        setBranchAdminForm((p) => ({ ...p, isActive: checked === true }))
                       }
-                    >
-                      <TableCell>{admin.username}</TableCell>
+                    />
+                    Active
+                  </label>
+                </FormField>
 
-                      <TableCell>
-                        <Badge variant="secondary">
-                          {admin.role}
-                        </Badge>
-                      </TableCell>
+                <div className="sm:col-span-2 flex justify-end">
+                  <Button type="submit" disabled={branchAdminSaving}>
+                    <Save className="w-4 h-4 mr-1" />
+                    {branchAdminSaving
+                      ? editingBranchAdmin
+                        ? "Updating..."
+                        : "Creating..."
+                      : editingBranchAdmin
+                        ? "Update Branch Admin"
+                        : "Create Branch Admin"}
 
-                      <TableCell>
-                        <Badge variant={admin.isActive ? "default" : "secondary"}>
-                          {admin.isActive ? "Active" : "Inactive"}
-                        </Badge>
-                      </TableCell>
+                  </Button>
+                </div>
+              </form>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Username</TableHead>
+                    <TableHead>Role</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
 
-                      <TableCell className="text-right">
-                        <div className="flex justify-end gap-1">
-
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleEditBranchAdmin(admin)}
-                          >
-                            <Edit className="w-3 h-3" />
-                          </Button>
-
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleDeleteBranchAdmin(admin.id)}
-                            className="text-red-600"
-                          >
-                            <Trash2 className="w-3 h-3" />
-                          </Button>
-
-                        </div>
+                <TableBody>
+                  {branchAdmins.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={4} className="text-center py-6 text-gray-500">
+                        No branch admin users found for this branch
                       </TableCell>
                     </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
+                  ) : (
+                    branchAdmins.map((admin) => (
+                      <TableRow
+                        key={admin.id}
+                        className={
+                          editingBranchAdmin?.id === admin.id
+                            ? "bg-indigo-50"
+                            : ""
+                        }
+                      >
+                        <TableCell>{admin.username}</TableCell>
+
+                        <TableCell>
+                          <Badge variant="secondary">
+                            {admin.role}
+                          </Badge>
+                        </TableCell>
+
+                        <TableCell>
+                          <Badge variant={admin.isActive ? "default" : "secondary"}>
+                            {admin.isActive ? "Active" : "Inactive"}
+                          </Badge>
+                        </TableCell>
+
+                        <TableCell className="text-right">
+                          <div className="flex justify-end gap-1">
+
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleEditBranchAdmin(admin)}
+                            >
+                              <Edit className="w-3 h-3" />
+                            </Button>
+
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleDeleteBranchAdmin(admin.id)}
+                              className="text-red-600"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </Button>
+
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            )}
           </CardContent>
         </Card>
       )}
 
       {!isAddingNew && !isViewing && !showBranchAdminPanel && (<>
-        {/* Search & Table */}
-        <Card>
-          <CardContent className="p-6 flex items-center space-x-4">
-            <div className="relative flex-1 min-w-0">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-              <Input
-                placeholder="Search branches..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10 w-full"
-              />
-            </div>
-            <Badge variant="secondary" className="px-3 py-1 flex-shrink-0">
-              {filteredBranches.length} branches
-            </Badge>
-          </CardContent>
-        </Card>
+        <FilterBar
+          search={{
+            value: table.search,
+            onChange: table.setSearch,
+            placeholder: "Search code, name, city, state, pincode…",
+          }}
+        />
 
-        <Card className="w-full">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Icon icon="mdi:office-building-multiple" className="w-5 h-5" /> Branch List
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-0 w-full overflow-x-auto">
-            <Table className="w-full">
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Branch Name</TableHead>
-                  <TableHead>City</TableHead>
-                  <TableHead>Pin</TableHead>
-                  <TableHead>State</TableHead>
-                  <TableHead>Country</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {loading ? (
-                  <TableBodySkeleton cols={6} />
-                ) : filteredBranches.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={6} className="text-center py-8 text-gray-500">
-                      <div className="flex flex-col items-center gap-2">
-                        <Icon icon="mdi:account-search" className="w-12 h-12 text-gray-300" />
-                        <p>No branches found</p>
-                        <p className="text-sm">Try adjusting your search criteria</p>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  filteredBranches.map((b) => (
-                    <TableRow key={b.id}>
-                      <TableCell>{b.branchName || "—"}</TableCell>
-                      <TableCell>{b.city || "—"}</TableCell>
-                      <TableCell>{b.pincode || "—"}</TableCell>
-                      <TableCell>{b.state || "—"}</TableCell>
-                      <TableCell>{b.country || "—"}</TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex items-center justify-end gap-1">
-                          {canManageBranchAdmins && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => openBranchAdminPanel(b)}
-                              className="h-7 w-7 p-0 text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50"
-                              title="Manage Branch Admin Users"
-                            >
-                              <UserPlus className="w-3 h-3" />
-                            </Button>
-                          )}
-                          {/* ✏️ Only SUPERADMIN and MANAGER can edit */}
-                          {canManage && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleEdit(b)}
-                              className="h-7 w-7 p-0"
-                              title="Edit"
-                            >
-                              <Edit className="w-3 h-3" />
-                            </Button>
-                          )}
-
-                          {/* 🗑️ Only SUPERADMIN can delete */}
-                          {user?.role === "SUPERADMIN" && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleDelete(b.id)}
-                              className="h-7 w-7 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
-                              title="Delete"
-                            >
-                              <Trash2 className="w-3 h-3" />
-                            </Button>
-                          )}
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
+        <EntityListShell
+          title="All branches"
+          columns={branchColumns}
+          rows={filteredBranches}
+          rowKey={(b) => String(b.id)}
+          isLoading={loading}
+          sortBy={table.sortBy}
+          sortDir={table.sortDir}
+          onSort={table.setSort}
+          emptyIcon={GitBranch}
+          emptyTitle="No branches yet"
+          emptyDescription="Add your first branch to start organising your workforce."
+          emptyAction={
+            canCreate ? (
+              <Button
+                onClick={() => {
+                  resetForm();
+                  const activeCtx = getActiveBranchContext();
+                  setFormData((p) => ({
+                    ...p,
+                    serviceProviderID: activeCtx.serviceProviderID,
+                    companyID: activeCtx.companyID,
+                    spAutocomplete: activeCtx.serviceProviderName,
+                    coAutocomplete: activeCtx.companyName,
+                  }));
+                  setIsAddingNew(true);
+                }}
+              >
+                <Plus className="w-4 h-4 mr-1" /> Add Branch
+              </Button>
+            ) : undefined
+          }
+        />
       </>)}
     </div>
   );

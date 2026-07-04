@@ -1,32 +1,19 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card"
+import { useState, useEffect, useMemo } from "react"
 import { useCurrentUser } from "../hooks/useCurrentUser"
 import { Button } from "../components/ui/button"
 import { Input } from "../components/ui/input"
 import { Label } from "../components/ui/label"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "../components/ui/dialog"
 import { FormDrawer } from "../components/ui/form-drawer"
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "../components/ui/table"
-import { Badge } from "../components/ui/badge"
 import { Icon } from "@iconify/react"
-import { Plus, Search, Edit, Trash2, Filter, RotateCcw, X } from "lucide-react"
+import { Plus, Calendar } from "lucide-react"
+import { PageHeader } from "../components/app/page-header";
+import { FilterBar, FilterSelect } from "../components/app/filter-bar";
+import { EntityListShell } from "../components/app/entity-list-shell";
+import type { DataTableColumn } from "../components/app/data-table";
+import { EntityRowActions } from "../components/app/entity-row-actions";
+import { useClientTable, sortRows } from "../hooks/use-client-table";
 import { SearchSuggestInput } from "../components/SearchSuggestInput"
 import { toast } from "sonner";
 import { getSidebarContext } from "../utils/sidebarContext";
@@ -93,12 +80,9 @@ function buildFinancialYearOptions(fyStart:string|null|undefined, monthStartDay:
 
 export function PublicHolidayManagement() {
   const [publicHolidays, setPublicHolidays] = useState<PublicHoliday[]>([])
-const [searchTerm, setSearchTerm] = useState("")
-
-const [selectedFilterBranchIds, setSelectedFilterBranchIds] = useState<string[]>([])
-const [showBranchFilterModal, setShowBranchFilterModal] = useState(false)
-const [branchFilterList, setBranchFilterList] = useState<any[]>([])
-const [branchFilterLoading, setBranchFilterLoading] = useState(false)
+  const table = useClientTable("holidayName")
+  const [branchFilter, setBranchFilter] = useState("ALL")
+  const [branchFilterList, setBranchFilterList] = useState<any[]>([])
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editingHoliday, setEditingHoliday] = useState<PublicHoliday | null>(null)
   const [holidayOptions, setHolidayOptions] = useState<any[]>([])
@@ -322,8 +306,6 @@ window.addEventListener("sidebar-context-changed", handler);
 
   const loadBranchFilterList = async () => {
   try {
-    setBranchFilterLoading(true)
-
     const data = await robustGet<any[]>(`${BACKEND_URL}/branches`)
     const ctx = getSidebarContext()
 
@@ -353,7 +335,7 @@ window.addEventListener("sidebar-context-changed", handler);
 
       if (branchID) {
         branches = branches.filter((b: any) => Number(b.id) === Number(branchID))
-        setSelectedFilterBranchIds([String(branchID)])
+        setBranchFilter(String(branchID))
       }
     }
 
@@ -361,8 +343,6 @@ window.addEventListener("sidebar-context-changed", handler);
   } catch (e) {
     console.error("Failed to load branch filter list:", e)
     setBranchFilterList([])
-  } finally {
-    setBranchFilterLoading(false)
   }
 }
 
@@ -710,43 +690,111 @@ window.addEventListener("sidebar-context-changed", handler);
     }
   }
 
-  const toggleFilterBranch = (branchId: string) => {
-  setSelectedFilterBranchIds((prev) =>
-    prev.includes(branchId)
-      ? prev.filter((id) => id !== branchId)
-      : [...prev, branchId]
+  const filtered = useMemo(() => {
+    const t = table.search.trim().toLowerCase()
+
+    let list = publicHolidays.filter((h) => {
+      const matchesBranch =
+        branchFilter === "ALL" || branchFilter === String(h.branchesID)
+
+      const matchesSearch =
+        !t ||
+        (h.serviceProvider || "").toLowerCase().includes(t) ||
+        (h.companyName || "").toLowerCase().includes(t) ||
+        (h.branchName || "").toLowerCase().includes(t) ||
+        (h.holidayName || "").toLowerCase().includes(t) ||
+        (h.financialYear || "").toLowerCase().includes(t)
+
+      return matchesBranch && matchesSearch
+    })
+
+    return sortRows(list, table.sortBy, table.sortDir, (row, key) => {
+      const h = row as PublicHoliday
+      if (key === "branch") return h.branchName ?? ""
+      if (key === "holidayName") return h.holidayName ?? ""
+      if (key === "financialYear") return h.financialYear ?? ""
+      if (key === "startDate") return h.startDate ?? ""
+      if (key === "endDate") return h.endDate ?? ""
+      return ""
+    })
+  }, [publicHolidays, table.search, table.sortBy, table.sortDir, branchFilter])
+
+  const branchFilterOptions = useMemo(
+    () => [
+      { value: "ALL", label: "All branches" },
+      ...branchFilterList.map((b: any) => ({
+        value: String(b.id),
+        label: b.branchName || `Branch #${b.id}`,
+      })),
+    ],
+    [branchFilterList],
   )
-}
 
-const selectAllFilterBranches = () => {
-  setSelectedFilterBranchIds(branchFilterList.map((b: any) => String(b.id)))
-}
-
-const clearFilterBranches = () => {
-  if (user?.role === "BRANCH_ADMIN") return
-  setSelectedFilterBranchIds([])
-}
-
- const filtered = publicHolidays.filter((h) => {
-  const t = searchTerm.toLowerCase()
-
-  const matchesBranch =
-    selectedFilterBranchIds.length === 0 ||
-    selectedFilterBranchIds.includes(String(h.branchesID))
-
-  const matchesSearch =
-    !t ||
-    (h.serviceProvider || "").toLowerCase().includes(t) ||
-    (h.companyName || "").toLowerCase().includes(t) ||
-    (h.branchName || "").toLowerCase().includes(t) ||
-    (h.holidayName || "").toLowerCase().includes(t) ||
-    (h.financialYear || "").toLowerCase().includes(t)
-
-  return matchesBranch && matchesSearch
-})
+  const publicHolidayColumns = useMemo((): DataTableColumn<PublicHoliday>[] => [
+    {
+      key: "branch",
+      header: "Branch",
+      sortable: true,
+      colSpan: 2,
+      cell: (h) => h.branchName || "—",
+    },
+    {
+      key: "holidayName",
+      header: "Holiday",
+      sortable: true,
+      colSpan: 2,
+      cell: (h) => <span className="font-medium">{h.holidayName || "—"}</span>,
+    },
+    {
+      key: "financialYear",
+      header: "Year",
+      sortable: true,
+      colSpan: 1,
+      cell: (h) => h.financialYear || "—",
+    },
+    {
+      key: "startDate",
+      header: "Start Date",
+      sortable: true,
+      colSpan: 2,
+      cell: (h) => h.startDate ? new Date(h.startDate).toLocaleDateString("en-GB") : "—",
+    },
+    {
+      key: "endDate",
+      header: "End Date",
+      sortable: true,
+      colSpan: 2,
+      cell: (h) => h.endDate ? new Date(h.endDate).toLocaleDateString("en-GB") : "—",
+    },
+    {
+      key: "actions",
+      header: "Actions",
+      colSpan: 2,
+      align: "right",
+      cell: (h) => (
+        <EntityRowActions
+          onEdit={canManage ? () => handleEdit(h) : undefined}
+          onDelete={canManage ? () => handleDelete(h.id) : undefined}
+        />
+      ),
+    },
+  ], [canManage])
 
   return (
-    <div className="space-y-6 w-full max-w-6xl mx-auto px-4 page-content-enter">
+    <div className="space-y-6 w-full max-w-none animate-fade-in page-content-enter">
+      <PageHeader
+        icon={Calendar}
+        title="Public Holiday"
+        description="Manage public holidays for companies and branches"
+        actions={
+          !isDialogOpen && canManage ? (
+            <Button onClick={() => { resetForm(); setIsDialogOpen(true); }}>
+              <Plus className="w-4 h-4 mr-2" />
+              Add Public Holiday
+            </Button>
+          ) : null
+        }
+      />
       {/* FormDrawer for Add/Edit */}
       <FormDrawer
         open={isDialogOpen}
@@ -896,255 +944,46 @@ const clearFilterBranches = () => {
       </FormDrawer>
 
       {!isDialogOpen && (
-      <>
-      {/* Header */}
-  {/* Header */}
-<div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 w-full">
-  <div className="min-w-0 flex-1">
-    <p className="text-gray-600 mt-1 text-sm">
-      Manage public holidays for companies and branches
-    </p>
-  </div>
+        <>
+          <FilterBar
+            search={{
+              value: table.search,
+              onChange: table.setSearch,
+              placeholder: "Search public holidays…",
+            }}
+            filters={
+              <FilterSelect
+                id="public-holiday-branch"
+                value={branchFilter}
+                onChange={setBranchFilter}
+                options={branchFilterOptions}
+                width="w-56"
+                ariaLabel="Filter by branch"
+              />
+            }
+          />
 
-  {canManage && (
-    <Button
-      onClick={() => {
-        resetForm()
-        setIsDialogOpen(true)
-      }}
-      className="w-full sm:w-auto"
-    >
-      <Plus className="w-4 h-4 mr-2" />
-      Add Public Holiday
-    </Button>
-  )}
-</div>
-
-
-      {/* Search and Table */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Icon icon="mdi:calendar-multiple" className="w-5 h-5" />
-            Public Holidays
-            {isLoading && <span className="text-sm text-gray-500">Loading...</span>}
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-        <div className="flex flex-col lg:flex-row lg:items-center gap-3 mb-6">
-  <Button
-    type="button"
-    variant="outline"
-    size="sm"
-    onClick={() => setShowBranchFilterModal(true)}
-    className="w-full sm:w-auto flex-shrink-0 justify-center"
-    title="Filter by Branch"
-  >
-    <Filter className="w-4 h-4 mr-1" />
-    Filter
-    {selectedFilterBranchIds.length > 0 && (
-      <Badge variant="secondary" className="ml-2">
-        {selectedFilterBranchIds.length}
-      </Badge>
-    )}
-  </Button>
-
-  <div className="relative flex-1 min-w-0">
-    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-    <Input
-      placeholder="Search public holidays..."
-      value={searchTerm}
-      onChange={(e) => setSearchTerm(e.target.value)}
-      className="pl-10 w-full"
-    />
-  </div>
-
-  <Badge variant="secondary" className="px-3 py-1 flex-shrink-0 w-fit">
-    {filtered.length} {filtered.length === 1 ? "holiday" : "holidays"}
-  </Badge>
-</div>
-
-{showBranchFilterModal && (
-  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-    <div className="w-full max-w-2xl rounded-xl bg-white shadow-xl border">
-      <div className="flex items-center justify-between border-b px-5 py-4">
-        <div className="flex items-center gap-2">
-          <div className="h-9 w-9 rounded-lg bg-indigo-50 flex items-center justify-center">
-            <Filter className="w-4 h-4 text-indigo-600" />
-          </div>
-          <div>
-            <h3 className="text-base font-semibold text-gray-900">
-              Filter Public Holidays by Branch
-            </h3>
-            <p className="text-xs text-gray-500">
-              Select one or multiple branches
-            </p>
-          </div>
-        </div>
-
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          onClick={() => setShowBranchFilterModal(false)}
-        >
-          <X className="w-4 h-4" />
-        </Button>
-      </div>
-
-      <div className="p-5 space-y-4 max-h-[70vh] overflow-y-auto">
-        <div className="flex items-center justify-between">
-          <Badge variant="secondary">
-            {selectedFilterBranchIds.length} selected
-          </Badge>
-
-          <div className="flex gap-2">
-            {user?.role !== "BRANCH_ADMIN" && (
-              <>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={selectAllFilterBranches}
-                  disabled={branchFilterLoading || branchFilterList.length === 0}
-                >
-                  Select All
+          <EntityListShell
+            title="All public holidays"
+            columns={publicHolidayColumns}
+            rows={filtered}
+            rowKey={(h) => h.id}
+            isLoading={isLoading}
+            sortBy={table.sortBy}
+            sortDir={table.sortDir}
+            onSort={table.setSort}
+            emptyIcon={Calendar}
+            emptyTitle="No public holidays found"
+            emptyDescription="Try adjusting your search or branch filter."
+            emptyAction={
+              canManage ? (
+                <Button onClick={() => { resetForm(); setIsDialogOpen(true); }}>
+                  <Plus className="w-4 h-4 mr-2" /> Add Public Holiday
                 </Button>
-
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={clearFilterBranches}
-                >
-                  <RotateCcw className="w-4 h-4 mr-1" />
-                  Clear
-                </Button>
-              </>
-            )}
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-          {branchFilterList.length === 0 ? (
-            <p className="text-sm text-gray-500 col-span-full py-8 text-center">
-              {branchFilterLoading ? "Loading branches..." : "No branches found"}
-            </p>
-          ) : (
-            branchFilterList.map((branch: any) => (
-              <label
-                key={branch.id}
-                className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm hover:bg-gray-50 cursor-pointer"
-              >
-                <input
-                  type="checkbox"
-                  checked={selectedFilterBranchIds.includes(String(branch.id))}
-                  disabled={user?.role === "BRANCH_ADMIN"}
-                  onChange={() => toggleFilterBranch(String(branch.id))}
-                />
-                <span className="truncate">{branch.branchName}</span>
-              </label>
-            ))
-          )}
-        </div>
-      </div>
-
-      <div className="flex justify-end gap-2 border-t px-5 py-4">
-        <Button
-          type="button"
-          variant="outline"
-          onClick={() => setShowBranchFilterModal(false)}
-        >
-          Cancel
-        </Button>
-
-        <Button
-          type="button"
-          onClick={() => setShowBranchFilterModal(false)}
-        >
-          Apply Filter
-        </Button>
-      </div>
-    </div>
-  </div>
-)}
-          
-          <div className="rounded-md border overflow-hidden">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Branch</TableHead>
-                  <TableHead>Holiday</TableHead>
-                  <TableHead>Year</TableHead>
-                  <TableHead>Start Date</TableHead>
-                  <TableHead>End Date</TableHead>
-                  {canManage && <TableHead className="text-right">Actions</TableHead>}
-                </TableRow>
-              </TableHeader>
-
-              <TableBody>
-                {isLoading ? (
-                  Array.from({ length: 8 }).map((_, i) => (
-                    <TableRow key={i}>
-                      {Array.from({ length: canManage ? 6 : 5 }).map((__, c) => (
-                        <TableCell key={c}>
-                          <div className={`h-3.5 rounded-full skeleton-shimmer ${c === 1 ? "w-36" : "w-24"}`} />
-                        </TableCell>
-                      ))}
-                    </TableRow>
-                  ))
-                ) : filtered.length > 0 ? (
-                  filtered.map(h => (
-                    <TableRow key={h.id}>
-                      <TableCell>{h.branchName || "N/A"}</TableCell>
-                      <TableCell>{h.holidayName}</TableCell>
-                      <TableCell>{h.financialYear}</TableCell>
-                      <TableCell>{h.startDate ? new Date(h.startDate).toLocaleDateString('en-GB') : "-"}</TableCell>
-                      <TableCell>{h.endDate ? new Date(h.endDate).toLocaleDateString('en-GB') : "-"}</TableCell>
-
-                      {canManage && (
-                        <TableCell className="text-right">
-                          <div className="flex items-center justify-end gap-1">
-                            <Button 
-                              size="sm" 
-                              variant="ghost" 
-                              onClick={() => handleEdit(h)}
-                              className="h-7 w-7 p-0"
-                              title="Edit"
-                            >
-                              <Edit className="w-3 h-3" />
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => handleDelete(h.id)}
-                              className="h-7 w-7 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
-                              title="Delete"
-                            >
-                              <Trash2 className="w-3 h-3" />
-                            </Button>
-                          </div>
-                        </TableCell>
-                      )}
-                    </TableRow>
-                  ))
-                ) : (
-                  <TableRow>
-                    <TableCell colSpan={canManage ? 7 : 6} className="text-center py-8 text-gray-500">
-                      <div className="flex flex-col items-center gap-2">
-                        <Icon icon="mdi:calendar-multiple" className="w-12 h-12 text-gray-300" />
-                        <p>No holidays found</p>
-                        <p className="text-sm">Try adjusting your search criteria</p>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </div>
-        </CardContent>
-      </Card>
-      </>
+              ) : undefined
+            }
+          />
+        </>
       )}
     </div>
   )

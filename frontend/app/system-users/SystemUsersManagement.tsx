@@ -36,7 +36,10 @@ interface UserRow {
   id: number;
   username: string;
   role: string;
-  
+  firstName?: string | null;
+  lastName?: string | null;
+  contactNo?: string | null;
+  email?: string | null;
   isActive: boolean;
   serviceProviderID?: number | null;
   companyID?: number | null;
@@ -50,8 +53,9 @@ interface UserRow {
 }
 
 // Roles available based on the current user's role
-const SUPERADMIN_ROLES = ["SUPERADMIN", "SERVICE_PROVIDER", "COMPANY_ADMIN", "ADMIN", "BRANCH_ADMIN"];
-const SERVICE_PROVIDER_ROLES = ["SERVICE_PROVIDER", "COMPANY_ADMIN", "ADMIN", "BRANCH_ADMIN"];
+const SUPERADMIN_ROLES = ["SUPERADMIN", "COMPANY_ADMIN"];
+const SERVICE_PROVIDER_ROLES = ["SERVICE_PROVIDER", "COMPANY_ADMIN"];
+
 const ADMIN_ROLES = ["BRANCH_ADMIN"];
 
 const ROLE_DISPLAY: Record<string, string> = {
@@ -64,6 +68,10 @@ const ROLE_DISPLAY: Record<string, string> = {
 };
 
 const emptyUserForm = {
+  firstName: "",
+  lastName: "",
+  contactNo: "",
+  email: "",
   username: "",
   password: "",
   role: "",
@@ -80,7 +88,7 @@ export function SystemUsersManagement() {
   const isServiceProvider = user?.role === "SERVICE_PROVIDER";
   const isCompanyAdmin = user?.role === "COMPANY_ADMIN";
   const isAdmin = user?.role === "ADMIN";
-  const canAccess = isSuperAdmin || isAdmin;
+const canAccess = isSuperAdmin || isServiceProvider || isAdmin;
 
   const [rows, setRows] = useState<UserRow[]>([]);
   const [loading, setLoading] = useState(false);
@@ -144,11 +152,20 @@ export function SystemUsersManagement() {
     setCompanyDropdownOpen(false);
   };
 
-  const filteredCompanies = useMemo(() => {
-    const spId = isServiceProvider && user?.serviceProviderID ? user.serviceProviderID : form.serviceProviderID ? Number(form.serviceProviderID) : null;
-    if (!spId) return companyList;
-    return companyList.filter((c: any) => c.serviceProviderID === Number(spId));
-  }, [companyList, form.serviceProviderID, isServiceProvider, user?.serviceProviderID]);
+const filteredCompanies = useMemo(() => {
+  const spId =
+    isServiceProvider && user?.serviceProviderID
+      ? Number(user.serviceProviderID)
+      : form.serviceProviderID
+        ? Number(form.serviceProviderID)
+        : null;
+
+  if (!spId) return companyList;
+
+  return companyList.filter(
+    (c: any) => Number(c.serviceProviderID) === Number(spId)
+  );
+}, [companyList, form.serviceProviderID, isServiceProvider, user?.serviceProviderID]);
 
   const selectedCompanies = useMemo(() => {
     return companyList.filter((c: any) =>
@@ -207,8 +224,8 @@ export function SystemUsersManagement() {
     e.preventDefault();
     if (!form.username) { toast.error("Username is required"); return; }
     if (!editingRow && !form.password) { toast.error("Password is required"); return; }
-    if (form.role === "COMPANY_ADMIN" && form.companyIDs.length === 0) {
-      toast.error("Select at least one company");
+if ((form.role === "COMPANY_ADMIN" || form.role === "SUPERADMIN") && form.companyIDs.length === 0) {
+        toast.error("Select at least one company");
       return;
     }
 
@@ -225,12 +242,21 @@ export function SystemUsersManagement() {
     setSaving(true);
     
     try {
-      const payload: any = {
+     const payload: any = {
+        firstName: form.firstName.trim() || null,
+        lastName: form.lastName.trim() || null,
+        contactNo: form.contactNo.trim() || null,
+        email: form.email.trim() || null,
         username: form.username.trim(),
         role: form.role || undefined,
-        serviceProviderID: form.serviceProviderID ? Number(form.serviceProviderID) : undefined,
-        companyID: form.companyID ? Number(form.companyID) : undefined,
-        companyIDs: form.role === "COMPANY_ADMIN" ? form.companyIDs : undefined,
+serviceProviderID: isServiceProvider
+  ? Number(user?.serviceProviderID)
+  : form.serviceProviderID
+    ? Number(form.serviceProviderID)
+    : undefined,
+    
+    companyID: form.companyID ? Number(form.companyID) : undefined,
+companyIDs: form.role === "COMPANY_ADMIN" || form.role === "SUPERADMIN" ? form.companyIDs : undefined,
         branchesID: form.branchesID ? Number(form.branchesID) : undefined,
         isActive: form.isActive,
       };
@@ -263,7 +289,11 @@ export function SystemUsersManagement() {
           : [];
 
     setEditingRow(row);
-    setForm({
+ setForm({
+      firstName: row.firstName || "",
+      lastName: row.lastName || "",
+      contactNo: row.contactNo || "",
+      email: row.email || "",
       username: row.username,
       password: "",
       role: row.role ?? "",
@@ -300,9 +330,17 @@ export function SystemUsersManagement() {
   const filteredRows = useMemo(() => {
     let data = rows;
     // ADMIN can only see users in their own company, and cannot see COMPANY_ADMIN accounts
-    if (isAdmin && user?.companyID) {
-      data = data.filter((r) => r.companyID === user.companyID && r.role !== "COMPANY_ADMIN");
-    }
+   if (isServiceProvider && user?.serviceProviderID) {
+  data = data.filter(
+    (r) =>
+      Number(r.serviceProviderID) === Number(user.serviceProviderID) &&
+      (r.role === "SERVICE_PROVIDER" || r.role === "COMPANY_ADMIN")
+  );
+}
+
+if (isAdmin && user?.companyID) {
+  data = data.filter((r) => r.companyID === user.companyID && r.role !== "COMPANY_ADMIN");
+}
     const t = searchTerm.trim().toLowerCase();
     if (!t) return data;
     return data.filter((r) => {
@@ -321,7 +359,7 @@ export function SystemUsersManagement() {
   }
 
   return (
-    <div className="space-y-6 w-full max-w-7xl mx-auto px-4">
+    <div className="space-y-6 w-full max-w-none animate-fade-in page-content-enter">
       <div className="flex items-center justify-between w-full">
         <p className="text-gray-600 text-sm">Manage system users and access</p>
         {!isAddingNew && !isViewing && (
@@ -329,13 +367,20 @@ export function SystemUsersManagement() {
             onClick={() => {
               resetForm();
 
-              if (isAdmin && user?.companyID) {
-                setForm((p) => ({
-                  ...p,
-                  companyID: user.companyID as number,
-                  companyIDs: [Number(user.companyID)],
-                }));
-              }
+            if (isServiceProvider && user?.serviceProviderID) {
+  setForm((p) => ({
+    ...p,
+    serviceProviderID: user.serviceProviderID as number,
+  }));
+}
+
+if (isAdmin && user?.companyID) {
+  setForm((p) => ({
+    ...p,
+    companyID: user.companyID as number,
+    companyIDs: [Number(user.companyID)],
+  }));
+}
 
               setIsAddingNew(true);
             }}
@@ -350,8 +395,47 @@ export function SystemUsersManagement() {
       <FormDrawer open={isAddingNew} onOpenChange={(v) => { if (!v) handleCancel(); }}
         title={editingRow ? "Edit User" : "Add User"}>
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-2">
-            <Label>Username *</Label>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+  <div className="space-y-2">
+    <Label>First Name</Label>
+    <Input
+      value={form.firstName}
+      onChange={(e) => setForm((p) => ({ ...p, firstName: e.target.value }))}
+      placeholder="First name"
+    />
+  </div>
+
+  <div className="space-y-2">
+    <Label>Last Name</Label>
+    <Input
+      value={form.lastName}
+      onChange={(e) => setForm((p) => ({ ...p, lastName: e.target.value }))}
+      placeholder="Last name"
+    />
+  </div>
+
+  <div className="space-y-2">
+    <Label>Contact No</Label>
+    <Input
+      value={form.contactNo}
+      onChange={(e) => setForm((p) => ({ ...p, contactNo: e.target.value }))}
+      placeholder="Contact number"
+    />
+  </div>
+
+  <div className="space-y-2">
+    <Label>Email</Label>
+    <Input
+      type="email"
+      value={form.email}
+      onChange={(e) => setForm((p) => ({ ...p, email: e.target.value }))}
+      placeholder="Email address"
+    />
+  </div>
+</div>
+
+<div className="space-y-2">
+  <Label>Username *</Label>
             <Input
   autoComplete="new-username"
   name="new-user-username"
@@ -378,18 +462,23 @@ export function SystemUsersManagement() {
             <Select
               value={form.role}
               onValueChange={(v) =>
-                setForm((p) => ({
-                  ...p,
-                  role: v,
-                  companyID: "",
-                  companyIDs: [],
-                  branchesID: "",
-                }))
-              }
+  setForm((p) => ({
+    ...p,
+    role: v,
+    serviceProviderID: isServiceProvider ? user?.serviceProviderID ?? "" : p.serviceProviderID,
+    companyID: "",
+    companyIDs: [],
+    branchesID: "",
+  }))
+}
             >
                 <SelectTrigger><SelectValue placeholder="Select role…" /></SelectTrigger>
               <SelectContent>
-                {(isSuperAdmin ? SUPERADMIN_ROLES : isAdmin ? ADMIN_ROLES : SERVICE_PROVIDER_ROLES).map((r) => <SelectItem key={r} value={r}>{r === "SERVICE_PROVIDER" ? "SERVICE PROVIDER" : r === "BRANCH_ADMIN" ? "BRANCH ADMIN" : r === "COMPANY_ADMIN" ? "COMPANY ADMIN" : r}</SelectItem>)}
+{(isSuperAdmin ? SUPERADMIN_ROLES : isServiceProvider ? SERVICE_PROVIDER_ROLES : isAdmin ? ADMIN_ROLES : []).map((r) => (
+  <SelectItem key={r} value={r}>
+    {ROLE_DISPLAY[r] || r}
+  </SelectItem>
+))}
               </SelectContent>
             </Select>
           </div>
@@ -419,42 +508,25 @@ export function SystemUsersManagement() {
           )}
 
                    {/* Company field */}
-          {(form.role === "COMPANY_ADMIN" || form.role === "ADMIN" || form.role === "BRANCH_ADMIN") && (
+{(form.role === "SUPERADMIN" || form.role === "COMPANY_ADMIN" || form.role === "ADMIN" || form.role === "BRANCH_ADMIN") && (
             <div className="space-y-2">
               <Label>
-                {form.role === "COMPANY_ADMIN" ? "Companies" : "Company"}
+{form.role === "COMPANY_ADMIN" || form.role === "SUPERADMIN" ? "Companies" : "Company"}
               </Label>
 
-              {form.role === "COMPANY_ADMIN" ? (
+{form.role === "COMPANY_ADMIN" || form.role === "SUPERADMIN" ? (
                 <div className="space-y-3">
                   <div className="relative">
-                    <div className="flex gap-2">
-                      <Input
-                        value={companySearch}
-                        onFocus={() => setCompanyDropdownOpen(true)}
-                        onChange={(e) => {
-                          setCompanySearch(e.target.value);
-                          setCompanyDropdownOpen(true);
-                        }}
-                        placeholder="Search company and add..."
-                        autoComplete="off"
-                      />
-
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={() => {
-                          if (companySuggestions.length > 0) {
-                            addCompanyToUser(companySuggestions[0]);
-                          }
-                        }}
-                        disabled={companySuggestions.length === 0}
-                        title="Add company"
-                      >
-                        <Plus className="w-4 h-4" />
-                      </Button>
-                    </div>
-
+                  <Input
+  value={companySearch}
+  onFocus={() => setCompanyDropdownOpen(true)}
+  onChange={(e) => {
+    setCompanySearch(e.target.value);
+    setCompanyDropdownOpen(true);
+  }}
+  placeholder="Search and select company..."
+  autoComplete="off"
+/>
                     {companyDropdownOpen && companySuggestions.length > 0 && (
                       <div className="absolute z-50 mt-1 w-full rounded-md border bg-white shadow-lg max-h-56 overflow-auto">
                         {companySuggestions.map((company: any) => (
@@ -515,8 +587,7 @@ export function SystemUsersManagement() {
 
                   {selectedCompanies.length === 0 && (
                     <p className="text-xs text-gray-500">
-                      Add at least one company. First selected company becomes primary.
-                    </p>
+Select at least one company from dropdown. First selected company becomes primary.                    </p>
                   )}
                 </div>
               ) : (
@@ -578,7 +649,11 @@ export function SystemUsersManagement() {
         title="User Details">
         {viewRow && (
           <div className="space-y-3 text-sm">
-            <p><strong>Username:</strong> {viewRow.username}</p>
+<p><strong>First Name:</strong> {viewRow.firstName ?? "—"}</p>
+<p><strong>Last Name:</strong> {viewRow.lastName ?? "—"}</p>
+<p><strong>Contact No:</strong> {viewRow.contactNo ?? "—"}</p>
+<p><strong>Email:</strong> {viewRow.email ?? "—"}</p>
+<p><strong>Username:</strong> {viewRow.username}</p>
             <p><strong>Role:</strong> {ROLE_DISPLAY[viewRow.role] || viewRow.role}</p>
             <p><strong>Service Provider:</strong> {viewRow.serviceProvider?.companyName ?? "—"}</p>
             <p>
@@ -613,8 +688,10 @@ export function SystemUsersManagement() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Username</TableHead>
-                    <TableHead>Role</TableHead>
+                   <TableHead>Name</TableHead>
+<TableHead>Username</TableHead>
+<TableHead>Email</TableHead>
+<TableHead>Role</TableHead>
                     <TableHead>Company</TableHead>
                     <TableHead>Branch</TableHead>
                     <TableHead>Status</TableHead>
@@ -623,14 +700,19 @@ export function SystemUsersManagement() {
                 </TableHeader>
                 <TableBody>
                   {loading ? (
-                    <TableBodySkeleton cols={6} />
+                    <TableBodySkeleton cols={8} />
                   ) : filteredRows.length === 0 ? (
-                    <TableRow><TableCell colSpan={6} className="text-center py-8 text-gray-400">No users found</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={8} className="text-center py-8 text-gray-400">No users found</TableCell></TableRow>
                   ) : (
                     filteredRows.map((r) => (
                       <TableRow key={r.id}>
-                        <TableCell className="font-medium">{r.username}</TableCell>
-                        <TableCell><Badge variant="secondary">{ROLE_DISPLAY[r.role] || r.role}</Badge></TableCell>
+                      <TableCell className="font-medium">
+  {[r.firstName, r.lastName].filter(Boolean).join(" ") || "—"}
+</TableCell>
+<TableCell>{r.username}</TableCell>
+<TableCell>{r.email || "—"}</TableCell>
+<TableCell><Badge variant="secondary">{ROLE_DISPLAY[r.role] || r.role}</Badge></TableCell>
+
                         <TableCell>
                           {r.userCompanies?.length
                             ? r.userCompanies

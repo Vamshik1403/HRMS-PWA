@@ -1,5 +1,4 @@
 "use client";
-import { TableBodySkeleton } from "../components/ui/TableBodySkeleton";
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
@@ -8,6 +7,13 @@ import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 import { Textarea } from "../components/ui/textarea";
 import { FormDrawer } from "../components/ui/form-drawer";
+import { PageHeader } from "../components/app/page-header";
+import { FilterBar, FilterSelect } from "../components/app/filter-bar";
+import { EntityListShell } from "../components/app/entity-list-shell";
+import type { DataTableColumn } from "../components/app/data-table";
+import { EntityRowActions } from "../components/app/entity-row-actions";
+import { useClientTable, sortRows } from "../hooks/use-client-table";
+import { NoticeBanner } from "../components/ui/notice-banner";
 import {
   Table,
   TableBody,
@@ -17,8 +23,7 @@ import {
   TableRow,
 } from "../components/ui/table";
 import { Badge } from "../components/ui/badge";
-import { Icon } from "@iconify/react";
-import { Plus, Search, Edit, Trash2, Eye, Save, UserPlus, RotateCcw, Filter } from "lucide-react";
+import { Plus, Edit, Trash2, Save, UserPlus, Briefcase } from "lucide-react";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import { toast } from "sonner";
 import { PdfUploadField } from "../components/PdfUploadField";
@@ -33,7 +38,6 @@ import { TimezoneSelect } from "../components/ui/timezone-select";
 import { SearchSuggestInput } from "../components/SearchSuggestInput";
 import { fetchCurrencies } from "../utils/geoApi";
 
-
 // ---------------------------
 // Types aligned to backend
 // ---------------------------
@@ -43,7 +47,6 @@ interface ContractorRead {
   id: ID;
   serviceProviderID?: ID | null;
   companyID?: ID | null;
-
   contractorName?: string | null;
   contractorType?: string | null;
   address?: string | null;
@@ -113,7 +116,6 @@ interface ContractorRateCard {
   perDayRate: string;
   perMonthRate: string;
 }
-
 
 // ---------------------------
 // Config & helpers
@@ -241,12 +243,10 @@ export function ContractorManagement() {
 
 
   // UI
-  const [searchTerm, setSearchTerm] = useState("");
-
+  const table = useClientTable("contractorName");
+  const [branchFilter, setBranchFilter] = useState("ALL");
   const [branchFilterList, setBranchFilterList] = useState<Branch[]>([]);
-  const [selectedFilterBranchIds, setSelectedFilterBranchIds] = useState<string[]>([]);
   const [branchFilterLoading, setBranchFilterLoading] = useState(false);
-  const [showBranchFilterModal, setShowBranchFilterModal] = useState(false);
 
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
@@ -353,6 +353,16 @@ export function ContractorManagement() {
         );
       }
 
+      if (user?.role === "BRANCH_ADMIN") {
+        const branchesID = currentUserMapping?.branchesID ?? user?.branchesID;
+        if (branchesID) {
+          filtered = filtered.filter(
+            (b) => Number(b.id) === Number(branchesID)
+          );
+          setBranchFilter(String(branchesID));
+        }
+      }
+
       setBranchFilterList(filtered);
     } catch (e) {
       console.error("Failed to load branch filter list:", e);
@@ -434,8 +444,6 @@ export function ContractorManagement() {
   setIsRateCardOpen(false);
   setRateCardContractor(null);
   setRateCards([]);
-
-  setShowBranchFilterModal(false);
 
   setSpList([]);
   setCoList([]);
@@ -1084,27 +1092,11 @@ export function ContractorManagement() {
   };
 
   // ---------------------------
-  // Search
+  // Search / filters
   // ---------------------------
 
-  const toggleFilterBranch = (branchId: string) => {
-    setSelectedFilterBranchIds((prev) =>
-      prev.includes(branchId)
-        ? prev.filter((id) => id !== branchId)
-        : [...prev, branchId]
-    );
-  };
-
-  const selectAllFilterBranches = () => {
-    setSelectedFilterBranchIds(branchFilterList.map((b) => String(b.id)));
-  };
-
-  const clearFilterBranches = () => {
-    setSelectedFilterBranchIds([]);
-  };
-
   const filtered = useMemo(() => {
-    const t = searchTerm.trim().toLowerCase();
+    const t = table.search.trim().toLowerCase();
 
     const spNameOf = (r: ContractorRead) =>
       r.serviceProvider?.companyName ?? r.serviceProviderName ?? "";
@@ -1112,7 +1104,7 @@ export function ContractorManagement() {
     const coNameOf = (r: ContractorRead) =>
       r.company?.companyName ?? r.companyName ?? "";
 
-    return rows.filter((r) => {
+    let list = rows.filter((r) => {
       const contractorBranchIds = Array.isArray((r as any).contractorBranches)
         ? (r as any).contractorBranches
           .map((cb: any) => String(cb.branchID ?? cb.branch?.id ?? ""))
@@ -1120,10 +1112,8 @@ export function ContractorManagement() {
         : [];
 
       const matchesBranch =
-        selectedFilterBranchIds.length === 0 ||
-        contractorBranchIds.some((id: string) =>
-          selectedFilterBranchIds.includes(id)
-        );
+        branchFilter === "ALL" ||
+        contractorBranchIds.includes(branchFilter);
 
       const matchesSearch =
         !t ||
@@ -1152,7 +1142,104 @@ export function ContractorManagement() {
 
       return matchesBranch && matchesSearch;
     });
-  }, [rows, searchTerm, selectedFilterBranchIds]);
+
+    return sortRows(list, table.sortBy, table.sortDir, (row, key) => {
+      const r = row as ContractorRead;
+      if (key === "contractorName") return r.contractorName ?? "";
+      if (key === "contractorType") return r.contractorType ?? "";
+      if (key === "emailAdd") return r.emailAdd ?? "";
+      if (key === "contactNo") return r.contactNo ?? "";
+      if (key === "gstNo") return r.gstNo ?? "";
+      return "";
+    });
+  }, [rows, table.search, table.sortBy, table.sortDir, branchFilter]);
+
+  const branchFilterOptions = useMemo(
+    () => [
+      { value: "ALL", label: "All branches" },
+      ...branchFilterList.map((b) => ({
+        value: String(b.id),
+        label: b.branchName || `Branch #${b.id}`,
+      })),
+    ],
+    [branchFilterList],
+  );
+
+  const contractorTypeLabels: Record<string, string> = {
+    MSP: "MSP",
+    CA: "Commission Agent",
+    MPC: "ManPower",
+  };
+
+  const contractorColumns = useMemo((): DataTableColumn<ContractorRead>[] => [
+    {
+      key: "contractorName",
+      header: "Contractor",
+      sortable: true,
+      colSpan: 3,
+      cell: (r) => <span className="font-medium">{r.contractorName || "—"}</span>,
+    },
+    {
+      key: "contractorType",
+      header: "Type",
+      sortable: true,
+      colSpan: 2,
+      cell: (r) => (
+        <>
+          {(r.contractorType || "").split(",").filter(Boolean).map((t) => (
+            <Badge key={t} variant="secondary" className="mr-1 text-xs">
+              {contractorTypeLabels[t] || t}
+            </Badge>
+          ))}
+          {!r.contractorType && "—"}
+        </>
+      ),
+    },
+    {
+      key: "emailAdd",
+      header: "Email",
+      sortable: true,
+      colSpan: 3,
+      cell: (r) => r.emailAdd || "—",
+    },
+    {
+      key: "contactNo",
+      header: "Contact",
+      sortable: true,
+      colSpan: 2,
+      cell: (r) => r.contactNo || "—",
+    },
+    {
+      key: "gstNo",
+      header: "GST",
+      sortable: true,
+      colSpan: 2,
+      cell: (r) => r.gstNo || "—",
+    },
+    {
+      key: "actions",
+      header: "Actions",
+      colSpan: 2,
+      align: "right",
+      cell: (r) => (
+        <EntityRowActions
+          onView={() => handleView(r)}
+          onEdit={canManage ? () => handleEdit(r) : undefined}
+          onDelete={canManage ? () => handleDelete(r.id) : undefined}
+          extra={
+            canManageContractorAdmins
+              ? [{
+                  icon: UserPlus,
+                  title: "Manage Contractor Admin Users",
+                  onClick: () => openContractorAdminPanel(r),
+                  className: "text-indigo-600",
+                }]
+              : undefined
+          }
+        />
+      ),
+    },
+  ], [canManage, canManageContractorAdmins]);
 
   // ---------------------------
   // Helpers for table names
@@ -1161,38 +1248,19 @@ export function ContractorManagement() {
   const coName = (r: ContractorRead) => r.company?.companyName ?? r.companyName ?? "—";
 
   return (
-    <div className="space-y-6 w-full max-w-7xl mx-auto px-4">
-      {/* Header */}
-      <div className="flex items-center justify-between w-full">
-        <div className="min-w-0 flex-1">
-          <div className="flex justify-end mr-3">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => setShowBranchFilterModal(true)}
-              className="flex items-center gap-2"
-            >
-              <Filter className="w-4 h-4" />
-              Branch Filter
-              {selectedFilterBranchIds.length > 0 && (
-                <Badge variant="secondary" className="ml-1">
-                  {selectedFilterBranchIds.length}
-                </Badge>
-              )}
+    <div className="space-y-6 w-full max-w-none animate-fade-in page-content-enter">
+      <PageHeader
+        icon={Briefcase}
+        title="Contractors"
+        description="Manage contractor records"
+        actions={
+          canManage && !isDialogOpen && !isViewDialogOpen && !showContractorAdminPanel ? (
+            <Button onClick={() => { resetForm(); setIsDialogOpen(true); }}>
+              <Plus className="w-4 h-4 mr-1" /> Add Contractor
             </Button>
-          </div>
-        </div>
-
-        {canManage && !isDialogOpen && !isViewDialogOpen && !showContractorAdminPanel && (
-          <Button
-            onClick={() => { resetForm(); setIsDialogOpen(true); }}
-            className="text-sm px-3 py-2"
-          >
-            <Plus className="w-4 h-4 mr-1" /> Add Contractor
-          </Button>
-        )}
-      </div>
+          ) : null
+        }
+      />
 
       <FormDrawer
   open={isDialogOpen}
@@ -1204,9 +1272,9 @@ export function ContractorManagement() {
   description={editing ? "Update contractor details below." : "Fill in details to add a new contractor."}
 >
         {error && (
-          <div className="rounded-md border border-red-200 bg-red-50 text-red-700 px-3 py-2 text-sm">
+          <NoticeBanner variant="error" compact className="mb-4">
             {error}
-          </div>
+          </NoticeBanner>
         )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -1751,333 +1819,44 @@ export function ContractorManagement() {
       )}
 
       {!isDialogOpen && !isViewDialogOpen && !showContractorAdminPanel && (<>
-        {/* Search */}
+        <FilterBar
+          search={{
+            value: table.search,
+            onChange: table.setSearch,
+            placeholder: "Search contractors…",
+          }}
+          filters={
+            <FilterSelect
+              id="contractors-branch"
+              value={branchFilter}
+              onChange={setBranchFilter}
+              options={branchFilterOptions}
+              width="w-56"
+              ariaLabel="Filter by branch"
+            />
+          }
+        />
 
-        {showBranchFilterModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-            <div className="w-full max-w-2xl rounded-xl bg-white shadow-xl border">
-              <div className="flex items-center justify-between border-b px-5 py-4">
-                <div className="flex items-center gap-2">
-                  <div className="h-9 w-9 rounded-lg bg-indigo-50 flex items-center justify-center">
-                    <Filter className="w-4 h-4 text-indigo-600" />
-                  </div>
-                  <div>
-                    <h3 className="text-base font-semibold text-gray-900">
-                      Filter Contractors by Branch
-                    </h3>
-                    <p className="text-xs text-gray-500">
-                      Showing branches only from selected company
-                    </p>
-                  </div>
-                </div>
-
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setShowBranchFilterModal(false)}
-                >
-                  ×
-                </Button>
-              </div>
-
-              <div className="p-5 space-y-4 max-h-[70vh] overflow-y-auto">
-                <div className="flex items-center justify-between gap-3">
-                  <Badge variant="secondary">
-                    {selectedFilterBranchIds.length} selected
-                  </Badge>
-
-                  <div className="flex gap-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={selectAllFilterBranches}
-                      disabled={branchFilterLoading || branchFilterList.length === 0}
-                    >
-                      Select All
-                    </Button>
-
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={clearFilterBranches}
-                    >
-                      <RotateCcw className="w-4 h-4 mr-1" />
-                      Clear
-                    </Button>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  {branchFilterList.length === 0 ? (
-                    <p className="text-sm text-gray-500 col-span-full py-8 text-center">
-                      {branchFilterLoading ? "Loading branches..." : "No branches found"}
-                    </p>
-                  ) : (
-                    branchFilterList.map((b) => (
-                      <label
-                        key={b.id}
-                        className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm hover:bg-gray-50 cursor-pointer"
-                      >
-                        <input
-                          type="checkbox"
-                          checked={selectedFilterBranchIds.includes(String(b.id))}
-                          onChange={() => toggleFilterBranch(String(b.id))}
-                        />
-                        <span className="truncate">{b.branchName}</span>
-                      </label>
-                    ))
-                  )}
-                </div>
-              </div>
-
-              <div className="flex justify-end gap-2 border-t px-5 py-4">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setShowBranchFilterModal(false)}
-                >
-                  Cancel
-                </Button>
-
-                <Button
-                  type="button"
-                  onClick={() => setShowBranchFilterModal(false)}
-                >
-                  Apply Filter
-                </Button>
-              </div>
-            </div>
-          </div>
-        )}
-
-
-        {showBranchFilterModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-            <div className="w-full max-w-2xl rounded-xl bg-white shadow-xl border">
-              <div className="flex items-center justify-between border-b px-5 py-4">
-                <div className="flex items-center gap-2">
-                  <div className="h-9 w-9 rounded-lg bg-indigo-50 flex items-center justify-center">
-                    <Filter className="w-4 h-4 text-indigo-600" />
-                  </div>
-                  <div>
-                    <h3 className="text-base font-semibold text-gray-900">
-                      Filter Contractors by Branch
-                    </h3>
-                    <p className="text-xs text-gray-500">
-                      Showing branches only from selected company
-                    </p>
-                  </div>
-                </div>
-
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setShowBranchFilterModal(false)}
-                >
-                  ×
-                </Button>
-              </div>
-
-              <div className="p-5 space-y-4 max-h-[70vh] overflow-y-auto">
-                <div className="flex items-center justify-between gap-3">
-                  <Badge variant="secondary">
-                    {selectedFilterBranchIds.length} selected
-                  </Badge>
-
-                  <div className="flex gap-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={selectAllFilterBranches}
-                      disabled={branchFilterLoading || branchFilterList.length === 0}
-                    >
-                      Select All
-                    </Button>
-
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={clearFilterBranches}
-                    >
-                      <RotateCcw className="w-4 h-4 mr-1" />
-                      Clear
-                    </Button>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  {branchFilterList.length === 0 ? (
-                    <p className="text-sm text-gray-500 col-span-full py-8 text-center">
-                      {branchFilterLoading ? "Loading branches..." : "No branches found"}
-                    </p>
-                  ) : (
-                    branchFilterList.map((b) => (
-                      <label
-                        key={b.id}
-                        className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm hover:bg-gray-50 cursor-pointer"
-                      >
-                        <input
-                          type="checkbox"
-                          checked={selectedFilterBranchIds.includes(String(b.id))}
-                          onChange={() => toggleFilterBranch(String(b.id))}
-                        />
-                        <span className="truncate">{b.branchName}</span>
-                      </label>
-                    ))
-                  )}
-                </div>
-              </div>
-
-              <div className="flex justify-end gap-2 border-t px-5 py-4">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setShowBranchFilterModal(false)}
-                >
-                  Cancel
-                </Button>
-
-                <Button
-                  type="button"
-                  onClick={() => setShowBranchFilterModal(false)}
-                >
-                  Apply Filter
-                </Button>
-              </div>
-            </div>
-          </div>
-        )}
-        {/* Search */}
-        <Card>
-          <CardContent>
-            <div className="flex items-center gap-4 flex-wrap">
-              <div className="relative flex-1 min-w-0">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-                <Input
-                  placeholder="Search contractors..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10 w-full"
-                />
-              </div>
-              <Badge variant="secondary" className="px-3 py-1 flex-shrink-0">
-                {filtered.length} contractors
-              </Badge>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Table */}
-        <Card className="w-full">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Icon icon="mdi:account-hard-hat" className="w-5 h-5" /> Contractor List
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-0 w-full overflow-x-auto">
-            <Table className="w-full">
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Contractor</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead>Email</TableHead>
-                  <TableHead>Contact</TableHead>
-                  <TableHead>GST</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {loading ? (
-                  <TableBodySkeleton cols={6} />
-                ) : filtered.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={6} className="text-center py-8 text-gray-500">
-                      <div className="flex flex-col items-center gap-2">
-                        <Icon icon="mdi:account-search" className="w-12 h-12 text-gray-300" />
-                        <p>No contractors found</p>
-                        <p className="text-sm">Try adjusting your search criteria</p>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  filtered.map((r) => (
-                    <TableRow key={r.id}>
-                      <TableCell className="whitespace-nowrap">{r.contractorName || "—"}</TableCell>
-                      <TableCell className="whitespace-nowrap">
-                        {(r.contractorType || "").split(",").filter(Boolean).map((t) => {
-                          const labels: Record<string, string> = { MSP: "MSP", CA: "Commission Agent", MPC: "ManPower" };
-                          return <Badge key={t} variant="secondary" className="mr-1 text-xs">{labels[t] || t}</Badge>;
-                        })}
-                        {!(r.contractorType) && "—"}
-                      </TableCell>
-                      <TableCell className="whitespace-nowrap">{r.emailAdd || "—"}</TableCell>
-                      <TableCell className="whitespace-nowrap">{r.contactNo || "—"}</TableCell>
-                      <TableCell className="whitespace-nowrap">{r.gstNo || "—"}</TableCell>
-                      <TableCell className="text-right whitespace-nowrap">
-                        <div className="flex items-center justify-end gap-1">
-                          {/*  Everyone can view */}
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleView(r)}
-                            className="h-7 w-7 p-0"
-                            title="View"
-                          >
-                            <Eye className="w-3 h-3" />
-                          </Button>
-
-                          {canManageContractorAdmins && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => openContractorAdminPanel(r)}
-                              className="h-7 w-7 p-0 text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50"
-                              title="Manage Contractor Admin Users"
-                            >
-                              <UserPlus className="w-3 h-3" />
-                            </Button>
-                          )}
-
-                          {/* ✏️ Only SUPERADMIN and MANAGER can edit */}
-                          {canManage && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleEdit(r)}
-                              className="h-7 w-7 p-0"
-                              title="Edit"
-                            >
-                              <Edit className="w-3 h-3" />
-                            </Button>
-                          )}
-
-                          {/* 🗑️ Only SUPERADMIN and MANAGER can delete */}
-                          {canManage && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleDelete(r.id)}
-                              className="h-7 w-7 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
-                              title="Delete"
-                            >
-                              <Trash2 className="w-3 h-3" />
-                            </Button>
-                          )}
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
+        <EntityListShell
+          title="All contractors"
+          columns={contractorColumns}
+          rows={filtered}
+          rowKey={(r) => String(r.id)}
+          isLoading={loading}
+          sortBy={table.sortBy}
+          sortDir={table.sortDir}
+          onSort={table.setSort}
+          emptyIcon={Briefcase}
+          emptyTitle="No contractors found"
+          emptyDescription="Try adjusting your search or branch filter."
+          emptyAction={
+            canManage ? (
+              <Button onClick={() => { resetForm(); setIsDialogOpen(true); }}>
+                <Plus className="w-4 h-4 mr-1" /> Add Contractor
+              </Button>
+            ) : undefined
+          }
+        />
       </>)}
     </div>
   );

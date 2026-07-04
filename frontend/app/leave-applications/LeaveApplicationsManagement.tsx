@@ -1,24 +1,21 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { TableBodySkeleton } from "../components/ui/TableBodySkeleton"
-import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card"
+import { useState, useEffect, useMemo } from "react"
 import { Button } from "../components/ui/button"
 import { Input } from "../components/ui/input"
 import { Label } from "../components/ui/label"
 import { FormDrawer } from "../components/ui/form-drawer";
+import { NoticeBanner } from "../components/ui/notice-banner";
 import { FormModal } from "../components/ui/form-modal";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "../components/ui/table"
 import { Badge } from "../components/ui/badge"
 import { Icon } from "@iconify/react"
-import { Plus, Search, Edit, Trash2, Check, X, Eye } from "lucide-react"
+import { Plus, Check, X, Calendar, RotateCcw } from "lucide-react"
+import { PageHeader } from "../components/app/page-header";
+import { FilterBar, FilterSelect } from "../components/app/filter-bar";
+import { EntityListShell } from "../components/app/entity-list-shell";
+import type { DataTableColumn } from "../components/app/data-table";
+import { EntityRowActions } from "../components/app/entity-row-actions";
+import { useClientTable, sortRows } from "../hooks/use-client-table";
 import { formatDateShort, getDisplayLeaveStatus } from "../utils/leaveDisplay"
 import { useCurrentUser } from "../hooks/useCurrentUser"
 import { SearchSuggestInput } from "../components/SearchSuggestInput"
@@ -90,7 +87,12 @@ const BALANCE_LIMITED_LEAVE_TYPES: Record<string, keyof LeaveBalance> = {
 export function LeaveApplicationsManagement() {
   const [leaveApplications, setLeaveApplications] = useState<LeaveApplication[]>([])
   const [listLoading, setListLoading] = useState(true)
-  const [searchTerm, setSearchTerm] = useState("")
+  const table = useClientTable("employeeName")
+  const [branchFilter, setBranchFilter] = useState("ALL")
+  const [statusFilter, setStatusFilter] = useState("ALL")
+  const [leaveTypeFilter, setLeaveTypeFilter] = useState("ALL")
+  const [branchFilterList, setBranchFilterList] = useState<any[]>([])
+  const [branchFilterLoading, setBranchFilterLoading] = useState(false)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editingApplication, setEditingApplication] = useState<LeaveApplication | null>(null)
   const [viewingApplication, setViewingApplication] = useState<LeaveApplication | null>(null)
@@ -1022,6 +1024,51 @@ export function LeaveApplicationsManagement() {
     return entries;
   };
 
+  const loadBranchFilterList = async () => {
+  try {
+    setBranchFilterLoading(true)
+
+    const res = await fetch(`${BACKEND_URL}/branches`, { cache: "no-store" })
+    const data = await res.json()
+
+    const ctx = getSidebarContext()
+    const activeCompanyID =
+      ctx?.companyID ??
+      user?.companyID ??
+      managerData?.companyID ??
+      empCreds?.companyID ??
+      null
+
+    let branches = Array.isArray(data) ? data : []
+
+    if (user?.role !== "SUPERADMIN" && activeCompanyID) {
+      branches = branches.filter(
+        (b: any) => Number(b.companyID) === Number(activeCompanyID)
+      )
+    }
+
+    if (user?.role === "SUPERADMIN" && ctx?.companyID) {
+      branches = branches.filter(
+        (b: any) => Number(b.companyID) === Number(ctx.companyID)
+      )
+    }
+
+    if (user?.role === "BRANCH_ADMIN" && user?.branchesID) {
+      branches = branches.filter(
+        (b: any) => Number(b.id) === Number(user.branchesID)
+      )
+      setBranchFilter(String(user.branchesID))
+    }
+
+    setBranchFilterList(branches)
+  } catch (e) {
+    console.error("Failed to load branch filter list:", e)
+    setBranchFilterList([])
+  } finally {
+    setBranchFilterLoading(false)
+  }
+}
+
   const loadLeaveApplications = async () => {
     try {
       setListLoading(true)
@@ -1157,17 +1204,19 @@ export function LeaveApplicationsManagement() {
     }
   }
 
-  useEffect(() => {
-    if (user) loadLeaveApplications()
+useEffect(() => {
+    if (user) {
+      loadLeaveApplications()
+      loadBranchFilterList()
+    }
   }, [user, managerData, empCreds])
 
   useEffect(() => {
-    const handler = () => { if (user) loadLeaveApplications(); };
-    window.addEventListener("sidebar-context-changed", handler);
-    window.addEventListener("app-data-refresh", handler);
-    return () => {
-      window.removeEventListener("sidebar-context-changed", handler);
-      window.removeEventListener("app-data-refresh", handler);
+    const handler = () => {
+      if (user) {
+        loadLeaveApplications()
+        loadBranchFilterList()
+      }
     };
   }, [user, managerData, empCreds]);
 
@@ -1181,15 +1230,6 @@ export function LeaveApplicationsManagement() {
       }))
     }
   }, [user, managerData])
-
-  const filteredApplications = leaveApplications.filter(application =>
-    (application.serviceProvider || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (application.companyName || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (application.branchName || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (application.employeeName || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (application.employeeId || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (application.appliedLeaveType || "").toLowerCase().includes(searchTerm.toLowerCase())
-  )
 
   useEffect(() => {
     if (user?.role === "SUPERADMIN" && formData.serviceProviderID) {
@@ -1304,7 +1344,6 @@ export function LeaveApplicationsManagement() {
     } catch (error) {
       console.error("Error selecting employee:", error);
       toast.error("Operation failed. Please try again.");
-      // Fallback to only LoP if there's an error
       setAvailableLeaveTypes(["LoP"]);
     }
   }
@@ -1558,7 +1597,6 @@ export function LeaveApplicationsManagement() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     
-    // Auto-populate serviceProviderID and companyID for MANAGER/EMPLOYEE
     const ctx = getSidebarContext();
     const serviceProviderID = user?.role === "SUPERADMIN"
       ? (formData.serviceProviderID ?? ctx?.serviceProviderID)
@@ -1647,7 +1685,7 @@ export function LeaveApplicationsManagement() {
       maternity: { used: 0, total: 0, remaining: 0 },
       paternity: { used: 0, total: 0, remaining: 0 },
     })
-    setIsEmployeeSelected(isNormalUser) // For normal users, employee is pre-selected
+    setIsEmployeeSelected(isNormalUser) 
   }
 
   const openViewModal = (application: LeaveApplication) => {
@@ -1704,8 +1742,174 @@ export function LeaveApplicationsManagement() {
     }
   }
 
+  const filteredApplications = useMemo(() => {
+    const t = table.search.trim().toLowerCase()
+
+    let list = leaveApplications.filter((application) => {
+      const matchesBranch =
+        branchFilter === "ALL" || branchFilter === String(application.branchesID ?? "")
+
+      const matchesStatus =
+        statusFilter === "ALL" || application.status === statusFilter
+
+      const matchesLeaveType =
+        leaveTypeFilter === "ALL" || application.appliedLeaveType === leaveTypeFilter
+
+      const matchesSearch =
+        !t ||
+        (application.serviceProvider || "").toLowerCase().includes(t) ||
+        (application.companyName || "").toLowerCase().includes(t) ||
+        (application.branchName || "").toLowerCase().includes(t) ||
+        (application.employeeName || "").toLowerCase().includes(t) ||
+        (application.employeeId || "").toLowerCase().includes(t) ||
+        (application.appliedLeaveType || "").toLowerCase().includes(t)
+
+      return matchesBranch && matchesStatus && matchesLeaveType && matchesSearch
+    })
+
+    return sortRows(list, table.sortBy, table.sortDir, (row, key) => {
+      const a = row as LeaveApplication
+      if (key === "employeeName") return a.employeeName ?? ""
+      if (key === "fromDate") return a.fromDate ?? ""
+      if (key === "toDate") return a.toDate ?? ""
+      if (key === "days") return calculateDays(a.fromDate, a.toDate)
+      if (key === "purpose") return a.purpose ?? ""
+      if (key === "status") return a.status ?? ""
+      return ""
+    })
+  }, [leaveApplications, table.search, table.sortBy, table.sortDir, branchFilter, statusFilter, leaveTypeFilter])
+
+  const branchFilterOptions = useMemo(
+    () => [
+      { value: "ALL", label: "All branches" },
+      ...branchFilterList.map((b: any) => ({
+        value: String(b.id),
+        label: b.branchName || `Branch #${b.id}`,
+      })),
+    ],
+    [branchFilterList],
+  )
+
+  const statusFilterOptions = useMemo(
+    () => [
+      { value: "ALL", label: "All statuses" },
+      { value: "Pending", label: "Pending" },
+      { value: "Approved", label: "Approved" },
+      { value: "Rejected", label: "Rejected" },
+      { value: "RevokePending", label: "Revoke Pending" },
+      { value: "Revoked", label: "Revoked" },
+      { value: "Accepted", label: "Accepted" },
+      { value: "Partially Approved", label: "Partially Approved" },
+    ],
+    [],
+  )
+
+  const leaveTypeFilterOptions = useMemo(() => {
+    const types = new Set(
+      leaveApplications.map((a) => a.appliedLeaveType).filter(Boolean) as string[],
+    )
+    return [
+      { value: "ALL", label: "All leave types" },
+      ...Array.from(types).sort().map((type) => ({
+        value: type,
+        label: leaveTypeLabel(type),
+      })),
+    ]
+  }, [leaveApplications])
+
+  const statusBadgeVariant = (status?: LeaveApplication["status"]) => {
+    if (status === "Approved") return "default" as const
+    if (status === "Rejected") return "destructive" as const
+    if (status === "RevokePending") return "outline" as const
+    return "secondary" as const
+  }
+
+  const applicationColumns = useMemo((): DataTableColumn<LeaveApplication>[] => [
+    {
+      key: "employeeName",
+      header: "Employee",
+      sortable: true,
+      colSpan: 2,
+      cell: (a) => <span className="font-medium truncate" title={a.employeeName}>{a.employeeName || "—"}</span>,
+    },
+    { key: "fromDate", header: "From", sortable: true, colSpan: 1, cell: (a) => a.fromDate || "—" },
+    { key: "toDate", header: "To", sortable: true, colSpan: 1, cell: (a) => a.toDate || "—" },
+    {
+      key: "days",
+      header: "Days",
+      sortable: true,
+      colSpan: 1,
+      cell: (a) => calculateDays(a.fromDate, a.toDate),
+    },
+    {
+      key: "purpose",
+      header: "Purpose",
+      sortable: true,
+      colSpan: 2,
+      cell: (a) => <span className="truncate" title={a.purpose}>{a.purpose || "—"}</span>,
+    },
+    {
+      key: "status",
+      header: "Status",
+      sortable: true,
+      colSpan: 2,
+      cell: (a) => (
+        <Badge variant={statusBadgeVariant(a.status)}>
+          {a.status === "RevokePending"
+            ? "Revoke Pending"
+            : getDisplayLeaveStatus(a.status, (a as any).dayStatuses)}
+        </Badge>
+      ),
+    },
+    {
+      key: "actions",
+      header: "Actions",
+      colSpan: 2,
+      align: "right",
+      cell: (a) => {
+        if (canManage) {
+          return (
+            <EntityRowActions
+              onView={() => openViewModal(a)}
+              onDelete={() => handleDelete(a)}
+            />
+          )
+        }
+        const extra =
+          a.status === "Approved"
+            ? [{
+                icon: RotateCcw,
+                title: "Request Revoke",
+                onClick: () => openRevokeModal(a),
+                className: "text-yellow-600",
+              }]
+            : undefined
+        return (
+          <EntityRowActions
+            onEdit={a.status === "Pending" ? () => handleEdit(a) : undefined}
+            onDelete={a.status === "Pending" ? () => handleDelete(a) : undefined}
+            extra={extra}
+          />
+        )
+      },
+    },
+  ], [canManage])
+
   return (
-    <div className="space-y-6 w-full max-w-full mx-auto px-4 overflow-hidden">
+    <div className="space-y-6 w-full max-w-none animate-fade-in page-content-enter overflow-hidden">
+      <PageHeader
+        icon={Calendar}
+        title="Leave Applications"
+        description="Manage employee leave applications and approvals"
+        actions={
+          !isDialogOpen ? (
+            <Button onClick={() => { resetForm(); setIsDialogOpen(true); }}>
+              <Plus className="w-4 h-4 mr-1" />
+              Add Leave Application
+            </Button>
+          ) : null
+        }
+      />
       {/* FormDrawer for Add/Edit */}
       <FormDrawer open={isDialogOpen} onOpenChange={setIsDialogOpen} title={editingApplication ? "Edit Leave Application" : "Submit Leave Application"} description={editingApplication 
                     ? "Update the leave application information below." 
@@ -1854,9 +2058,9 @@ export function LeaveApplicationsManagement() {
 
                   {/* Children Count Warning */}
                   {childrenCountWarning && (
-                    <div className="p-3 bg-yellow-50 rounded-md border border-yellow-200">
-                      <p className="text-sm text-yellow-700">⚠️ {childrenCountWarning}</p>
-                    </div>
+                    <NoticeBanner variant="warning" compact>
+                      {childrenCountWarning}
+                    </NoticeBanner>
                   )}
 
                   {/* Child Event - shown for MtL/PtL */}
@@ -1952,24 +2156,7 @@ export function LeaveApplicationsManagement() {
                   </Button>
                 </div>
               </form>
-            
           </FormDrawer>
-
-      {/* Header - shown when form is closed */}
-      {!isDialogOpen && (
-        <div className="flex items-center justify-between w-full">
-          <div className="min-w-0 flex-1">
-            <p className="text-gray-600 mt-1 text-sm">Manage employee leave applications and approvals</p>
-          </div>
-          <Button
-            onClick={() => { resetForm(); setIsDialogOpen(true); }}
-            className="flex-shrink-0 text-sm px-3 py-2"
-          >
-            <Plus className="w-4 h-4 mr-1" />
-            Add Leave Application
-          </Button>
-        </div>
-      )}
 
       {/* Revoke Leave Modal */}
       <FormDrawer open={isRevokeDialogOpen} onOpenChange={setIsRevokeDialogOpen} title={"Revoke Leave Application"} description={"Please provide a reason for revoking this leave. It will go for manager approval."}>
@@ -2193,25 +2380,29 @@ export function LeaveApplicationsManagement() {
 
                 {SHOW_LEAVE_APPROVAL_NOTICES && (
                   <>
-                    <div className="p-3 bg-yellow-50 rounded-md">
-                      <p className="text-sm text-yellow-700">
-                        <strong>Available Leave Types:</strong>{" "}
-                        {currentAvailableTypes.map((t) => leaveTypeLabel(t)).join(", ")}
-                      </p>
-                      <p className="text-sm text-yellow-700 mt-2">
-                        Pick a <strong>from</strong> and <strong>to</strong> date, choose a leave type, then click Apply.
-                        Unassigned days are not approved. Use <strong>LoP</strong> when balance is zero.
-                      </p>
-                    </div>
-                    {tenureWarning && (
-                      <div className="p-3 bg-orange-50 rounded-md border border-orange-200">
-                        <p className="text-sm text-orange-700">⚠️ {tenureWarning}</p>
+                    <NoticeBanner
+                      variant="warning"
+                      title="Available leave types"
+                    >
+                      <div className="space-y-2 text-[13px] text-muted-foreground">
+                        <p>
+                          <strong className="text-foreground">{currentAvailableTypes.map((t) => leaveTypeLabel(t)).join(", ")}</strong>
+                        </p>
+                        <p>
+                          Pick a <strong className="text-foreground">from</strong> and <strong className="text-foreground">to</strong> date, choose a leave type, then click Apply.
+                          Unassigned days are not approved. Use <strong className="text-foreground">LoP</strong> when balance is zero.
+                        </p>
                       </div>
+                    </NoticeBanner>
+                    {tenureWarning && (
+                      <NoticeBanner variant="warning" compact>
+                        {tenureWarning}
+                      </NoticeBanner>
                     )}
                     {childrenCountWarning && (
-                      <div className="p-3 bg-yellow-50 rounded-md border border-yellow-200">
-                        <p className="text-sm text-yellow-700">⚠️ {childrenCountWarning}</p>
-                      </div>
+                      <NoticeBanner variant="warning" compact>
+                        {childrenCountWarning}
+                      </NoticeBanner>
                     )}
                   </>
                 )}
@@ -2232,6 +2423,7 @@ export function LeaveApplicationsManagement() {
                       onChange={(e) => setRangeAssignFrom(e.target.value)}
                     />
                   </div>
+
                   <div className="space-y-2">
                     <Label>To Date</Label>
                     <Input
@@ -2242,6 +2434,7 @@ export function LeaveApplicationsManagement() {
                       onChange={(e) => setRangeAssignTo(e.target.value)}
                     />
                   </div>
+
                   <div className="space-y-2">
                     <Label>Leave Type</Label>
                     <select
@@ -2276,6 +2469,7 @@ export function LeaveApplicationsManagement() {
                     </div>
                   )}
                 </div>
+
                 <div className="flex flex-wrap gap-2">
                   <Button type="button" size="sm" onClick={handleApplyRangeAssignment} disabled={!rangeAssignType}>
                     Apply to range
@@ -2354,6 +2548,7 @@ export function LeaveApplicationsManagement() {
               </div>
             )}
           </div>
+
           <div className="flex justify-end gap-3 border-t border-gray-100 pt-4 mt-2">
             <Button variant="outline" onClick={() => setIsManagerApprovalDialogOpen(false)}>
               Cancel
@@ -2369,169 +2564,62 @@ export function LeaveApplicationsManagement() {
       </FormModal>
 
       {!isDialogOpen && (<>
-      {/* Search and Filters */}
-      <Card>
-        <CardContent>
-          <div className="flex items-center gap-4 flex-wrap">
-            <div className="relative flex-1 min-w-0">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-              <Input
-                placeholder="Search leave applications..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10 w-full"
+        <FilterBar
+          search={{
+            value: table.search,
+            onChange: table.setSearch,
+            placeholder: "Search leave applications…",
+          }}
+          filters={
+            <>
+              <FilterSelect
+                id="leave-applications-branch"
+                value={branchFilter}
+                onChange={setBranchFilter}
+                options={branchFilterOptions}
+                width="w-56"
+                ariaLabel="Filter by branch"
               />
-            </div>
-            <Badge variant="secondary" className="px-3 py-1 flex-shrink-0">
-              {filteredApplications.length} applications
-            </Badge>
-          </div>
-        </CardContent>
-      </Card>
+              <FilterSelect
+                id="leave-applications-status"
+                value={statusFilter}
+                onChange={setStatusFilter}
+                options={statusFilterOptions}
+                width="w-44"
+                ariaLabel="Filter by status"
+              />
+              <FilterSelect
+                id="leave-applications-leave-type"
+                value={leaveTypeFilter}
+                onChange={setLeaveTypeFilter}
+                options={leaveTypeFilterOptions}
+                width="w-48"
+                ariaLabel="Filter by leave type"
+              />
+            </>
+          }
+        />
 
-      {/* Leave Applications Table */}
-      <Card className="w-full">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Icon icon="mdi:calendar-clock" className="w-5 h-5" />
-            Leave Application Request
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="p-0">
-          <div className="overflow-x-auto max-w-full">
-            <Table className="w-full table-fixed">
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-[100px]">Employee Name</TableHead>
-                  <TableHead className="w-[70px]">From Date</TableHead>
-                  <TableHead className="w-[70px]">To Date</TableHead>
-                  <TableHead className="w-[60px]">No of Days</TableHead>
-                  <TableHead className="w-[80px]">Purpose</TableHead>
-                  <TableHead className="w-[70px]">Status</TableHead>
-                  <TableHead className="w-[80px] text-right">Action</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {listLoading ? (
-                  <TableBodySkeleton cols={7} />
-                ) : filteredApplications.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={7} className="text-center py-8 text-gray-500">
-                      <div className="flex flex-col items-center gap-2">
-                        <Icon icon="mdi:calendar-clock" className="w-12 h-12 text-gray-300" />
-                        <p>No leave applications found</p>
-                        <p className="text-sm">Try adjusting your search criteria</p>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  filteredApplications.map((application, index) => (
-                    <TableRow key={`${application.id}-${index}`}>
-                      <TableCell className="truncate" title={application.employeeName}>{application.employeeName}</TableCell>
-                      <TableCell className="truncate">{application.fromDate}</TableCell>
-                      <TableCell className="truncate">{application.toDate}</TableCell>
-                      <TableCell className="truncate text-center">{calculateDays(application.fromDate, application.toDate)}</TableCell>
-                      <TableCell className="truncate" title={application.purpose}>{application.purpose}</TableCell>
-                      <TableCell className="whitespace-nowrap">
-                        <Badge
-                          variant={
-                            application.status === "Approved"
-                              ? "default"
-                              : application.status === "Rejected"
-                              ? "destructive"
-                              : application.status === "Accepted"
-                              ? "secondary"
-                              : application.status === "RevokePending"
-                              ? "outline"
-                              : application.status === "Revoked"
-                              ? "secondary"
-                              : "secondary"
-                          }
-                        >
-                          {application.status === "RevokePending"
-                            ? "Revoke Pending"
-                            : getDisplayLeaveStatus(application.status, (application as any).dayStatuses)}
-                        </Badge>
-                      </TableCell>
-
-                      {/* === Action Buttons Section - FIXED REVOKE FLOW === */}
-                      <TableCell className="text-right whitespace-nowrap">
-                        <div className="flex items-center justify-end gap-1">
-                          {/* --- For SUPERADMIN and MANAGER --- */}
-                          {canManage ? (
-                            <>
-                              {/* Pending approval flow */}
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => openViewModal(application)}
-                                className="h-7 w-7 p-0 text-gray-600 hover:text-gray-800 hover:bg-gray-50"
-                                title="View"
-                              >
-                                <Eye className="w-3 h-3" />
-                              </Button>
-
-                              {/* Delete for managers */}
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleDelete(application)}
-                                className="h-7 w-7 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
-                                title="Delete"
-                              >
-                                <Trash2 className="w-3 h-3" />
-                              </Button>
-                            </>
-                          ) : (
-                            <>
-                              {/* Normal Employee actions */}
-                              {application.status === "Pending" && (
-                                <>
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => handleEdit(application)}
-                                    className="h-7 w-7 p-0"
-                                    title="Edit"
-                                  >
-                                    <Edit className="w-3 h-3" />
-                                  </Button>
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => handleDelete(application)}
-                                    className="h-7 w-7 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
-                                    title="Delete"
-                                  >
-                                    <Trash2 className="w-3 h-3" />
-                                  </Button>
-                                </>
-                              )}
-
-                              {/* Revoke option for approved leaves */}
-                              {application.status === "Approved" && (
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => openRevokeModal(application)}
-                                  className="h-7 w-7 p-0 text-yellow-600 hover:text-yellow-700 hover:bg-yellow-50"
-                                  title="Request Revoke"
-                                >
-                                  <Icon icon="mdi:rotate-left" className="w-3 h-3" />
-                                </Button>
-                              )}
-                            </>
-                          )}
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </div>
-        </CardContent>
-      </Card>
+        <EntityListShell
+          title="Leave application requests"
+          columns={applicationColumns}
+          rows={filteredApplications}
+          rowKey={(a) => a.recordId || a.id}
+          isLoading={listLoading}
+          sortBy={table.sortBy}
+          sortDir={table.sortDir}
+          onSort={table.setSort}
+          emptyIcon={Calendar}
+          emptyTitle="No leave applications yet"
+          emptyDescription="Submit or review leave requests for your team."
+          emptyAction={
+            !isDialogOpen ? (
+              <Button onClick={() => { resetForm(); setIsDialogOpen(true); }}>
+                <Plus className="w-4 h-4 mr-1" /> Add Leave Application
+              </Button>
+            ) : undefined
+          }
+        />
       </>)}
     </div>
   )

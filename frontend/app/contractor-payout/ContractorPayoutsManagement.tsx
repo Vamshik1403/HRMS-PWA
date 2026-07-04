@@ -17,6 +17,7 @@ import { Search, Trash2, IndianRupee, X } from "lucide-react";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import { toast } from "sonner";
 import { TableBodySkeleton } from "../components/ui/TableBodySkeleton";
+import { NoticeBanner } from "../components/ui/notice-banner";
 import { getSidebarContext } from "../utils/sidebarContext";
 
 // ─── Types ──────────────────────────────────────────────────
@@ -44,6 +45,8 @@ interface Designation {
 }
 interface Employee {
   id: number;
+  companyID?: number | null;
+  branchesID?: number | null;
   employeeFirstName?: string | null;
   employeeLastName?: string | null;
   employeeID?: string | null;
@@ -435,15 +438,23 @@ export function ContractorPayoutsManagement() {
           filteredBranches = filteredBranches.filter((b) => (b as any).serviceProviderID === spID);
         }
 
-        // Filter employees only by contractor set (company scoping via contractor)
-        // The contractorID scalar is often null; use empContractor junction array instead
-        const contractorIDSet = new Set(filteredContractors.map((c) => c.id));
-        const filteredEmps = (employees as Employee[]).filter(
-          (e) =>
-            (e.contractorID != null && contractorIDSet.has(e.contractorID)) ||
-            (e.empContractor ?? []).some((ec) => contractorIDSet.has(ec.contractorID))
-        );
+const activeCompanyID = companyID ? Number(companyID) : null;
+const contractorIDSet = new Set(filteredContractors.map((c) => Number(c.id)));
 
+const filteredEmps = (employees as Employee[]).filter((e: any) => {
+  const belongsToActiveCompany =
+    !activeCompanyID || Number(e.companyID) === Number(activeCompanyID);
+
+  const belongsToContractor =
+    (e.contractorID != null && contractorIDSet.has(Number(e.contractorID))) ||
+    (e.empContractor ?? []).some((ec: any) =>
+      contractorIDSet.has(Number(ec.contractorID))
+    );
+
+  // If contractor mapping exists, use it.
+  // If not, still keep employee if company matches.
+return belongsToActiveCompany;
+});
         // Keep departments, designations, and workshifts unfiltered — they are scoped
         // naturally by the cascade (branch → dept → desig → emp) and pre-filtering
         // them breaks employee lookup when designation records don't perfectly trace
@@ -468,6 +479,40 @@ export function ContractorPayoutsManagement() {
   }, []);
 
   useEffect(() => { loadPayoutRecords(); }, [loadPayoutRecords]);
+
+  useEffect(() => {
+  const handler = () => {
+    setSelectedContractor(null);
+    setSelectedBranch(null);
+    setSelectedDepts([]);
+    setSelectedDesigs([]);
+    setSelectedEmps([]);
+    setSelectedShifts([]);
+
+    setAllDeptsSelected(false);
+    setAllDesigSelected(false);
+    setAllEmpsSelected(false);
+    setAllShiftsSelected(false);
+
+    setBranchOptions([]);
+    setDeptOptions([]);
+    setDesigOptions([]);
+    setEmpOptions([]);
+    setShiftOptions([]);
+    setRateCards([]);
+
+    contrSuggest.setQuery("");
+    branchSuggest.setQuery("");
+  };
+
+  window.addEventListener("sidebar-context-changed", handler);
+  window.addEventListener("app-data-refresh", handler);
+
+  return () => {
+    window.removeEventListener("sidebar-context-changed", handler);
+    window.removeEventListener("app-data-refresh", handler);
+  };
+}, []);
 
   // ── Reset helpers ──
   const resetFromBranch = () => {
@@ -515,8 +560,11 @@ export function ContractorPayoutsManagement() {
     branchSuggest.setOpen(false);
     resetFromDept();
     // Deduplicate departments by name — multiple DB records can share the same name
-    const raw = allDepartments.filter((d) => d.branchesID === b.id);
-    const seen = new Set<string>();
+const raw = allDepartments.filter(
+  (d: any) => Number(d.branchesID) === Number(b.id)
+);
+
+const seen = new Set<string>();
     setDeptOptions(
       raw.filter((d) => {
         const key = (d.departmentName || "").toLowerCase().trim();
@@ -582,21 +630,62 @@ export function ContractorPayoutsManagement() {
     );
     if (!selectedNames.size) return;
     // Expand: find ALL desig IDs with matching names (handles duplicate DB records)
-    const allMatchingDesigIDs = allDesignations
-      .filter((d) => selectedNames.has((d.designation || "").toLowerCase().trim()))
-      .map((d) => d.id);
+  const selectedDeptNames = new Set(
+  getEffectiveDeptIDs()
+    .map((id) => allDepartments.find((d) => Number(d.id) === Number(id))?.departmentName)
+    .filter(Boolean)
+    .map((name) => String(name).toLowerCase().trim())
+);
+
+const branchID = selectedBranch?.id;
+
+const branchDeptIDs = allDepartments
+  .filter(
+    (d: any) =>
+      Number(d.branchesID) === Number(branchID) &&
+      selectedDeptNames.has(String(d.departmentName || "").toLowerCase().trim())
+  )
+  .map((d) => Number(d.id));
+
+const allMatchingDesigIDs = allDesignations
+  .filter(
+    (d: any) =>
+      d.departmentID != null &&
+      branchDeptIDs.includes(Number(d.departmentID)) &&
+      selectedNames.has(String(d.designation || "").toLowerCase().trim())
+  )
+  .map((d) => Number(d.id));
     const selectedContractorID = selectedContractor?.id;
-  setEmpOptions(
-      allEmployees.filter(
-        (e) =>
-          e.designationID != null &&
-          allMatchingDesigIDs.includes(e.designationID) &&
-          (
-            e.contractorID === selectedContractorID ||
-            (e.empContractor ?? []).some((ec) => ec.contractorID === selectedContractorID)
-          )
-      )
-    );
+const ctx = getSidebarContext();
+const activeCompanyID = ctx?.companyID ?? null;
+const activeBranchID = selectedBranch?.id ?? null;
+
+setEmpOptions(
+  allEmployees.filter((e: any) => {
+    const companyOk =
+      !activeCompanyID || Number(e.companyID) === Number(activeCompanyID);
+
+    const branchOk =
+      !activeBranchID || Number(e.branchesID) === Number(activeBranchID);
+
+    const designationOk =
+  allMatchingDesigIDs.length === 0 ||
+  (
+    e.designationID != null &&
+    allMatchingDesigIDs.includes(Number(e.designationID))
+  );
+
+const contractorOk =
+  !selectedContractorID ||
+  Number(e.contractorID) === Number(selectedContractorID) ||
+  (e.empContractor ?? []).some(
+    (ec: any) => Number(ec.contractorID) === Number(selectedContractorID)
+  ) ||
+  e.contractorID == null;
+
+return companyOk && branchOk && designationOk && contractorOk;
+  })
+);
   };
   const handleAddDesig = (d: Designation) => {
     if (!selectedDesigs.find((x) => x.id === d.id)) applyDesigChange([...selectedDesigs, d], false);
@@ -915,9 +1004,9 @@ export function ContractorPayoutsManagement() {
               </div>
             )}
             {!rateCardLoading && rateCards.length === 0 && hasShiftSelected && (
-              <div className="mt-4 rounded-md border border-yellow-200 bg-yellow-50 px-4 py-3 text-sm text-yellow-700">
+              <NoticeBanner variant="warning" compact className="mt-4">
                 No matching rate card found for the selected combination.
-              </div>
+              </NoticeBanner>
             )}
 
             <div className="mt-5 flex justify-end">

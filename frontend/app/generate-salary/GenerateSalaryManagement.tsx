@@ -5,12 +5,17 @@ import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card"
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
+import { NoticeBanner } from "../components/ui/notice-banner";
 import { FormDrawer } from "../components/ui/form-drawer";
 import { FormModal } from "../components/ui/form-modal";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../components/ui/table";
 import { Badge } from "../components/ui/badge";
-import { Icon } from "@iconify/react";
-import { Plus, Search, Edit, Trash2, Download } from "lucide-react";
+import { Plus, Edit, Trash2, Download, Wallet, Eye, CreditCard, Loader2, CheckCircle } from "lucide-react";
+import { PageHeader } from "../components/app/page-header";
+import { FilterBar, FilterSelect } from "../components/app/filter-bar";
+import { EntityListShell } from "../components/app/entity-list-shell";
+import type { DataTableColumn } from "../components/app/data-table";
+import { EntityRowActions } from "../components/app/entity-row-actions";
+import { useClientTable, sortRows } from "../hooks/use-client-table";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { useCurrentUser } from "../hooks/useCurrentUser"
@@ -19,7 +24,6 @@ import { getSidebarContext } from "../utils/sidebarContext";
 import { formatPayslipPeriodLabel } from "../utils/payslipPeriodLabel";
 import { dispatchAppRefresh, registerDataCacheClearer } from "../utils/appRefresh";
 import { useListAutoRefresh } from "../hooks/useListAutoRefresh";
-import { TableBodySkeleton } from "../components/ui/TableBodySkeleton";
 
 /* =======================
    Types (aligned to API)
@@ -1559,7 +1563,8 @@ export async function computeSalarySlipForRow(
    ======================= */
 
 export function GenerateSalaryManagement() {
-  const [searchTerm, setSearchTerm] = useState("");
+  const table = useClientTable("monthPeriod");
+  const [branchFilter, setBranchFilter] = useState("ALL");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editing, setEditing] = useState<GenerateSalaryRow | null>(null);
   const [salaryPeriod, setSalaryPeriod] = useState("");
@@ -2283,16 +2288,43 @@ export function GenerateSalaryManagement() {
   }
 
   const filtered = useMemo(() => {
-    const q = searchTerm.trim().toLowerCase();
-    if (!q) return items;
-    return items.filter((g) =>
-      (g.serviceProvider?.companyName ?? "").toLowerCase().includes(q) ||
-      (g.company?.companyName ?? "").toLowerCase().includes(q) ||
-      (g.branches?.branchName ?? "").toLowerCase().includes(q) ||
-      empName(g.manageEmployee).toLowerCase().includes(q) ||
-      (g.monthPeriod ?? "").toLowerCase().includes(q)
-    );
-  }, [items, searchTerm]);
+    const q = table.search.trim().toLowerCase();
+    let list = items.filter((g) => {
+      const matchesBranch =
+        branchFilter === "ALL" || branchFilter === String(g.branchesID ?? "");
+      const matchesSearch =
+        !q ||
+        (g.serviceProvider?.companyName ?? "").toLowerCase().includes(q) ||
+        (g.company?.companyName ?? "").toLowerCase().includes(q) ||
+        (g.branches?.branchName ?? "").toLowerCase().includes(q) ||
+        empName(g.manageEmployee).toLowerCase().includes(q) ||
+        (g.monthPeriod ?? "").toLowerCase().includes(q);
+      return matchesBranch && matchesSearch;
+    });
+    return sortRows(list, table.sortBy, table.sortDir, (row, key) => {
+      const g = row as GenerateSalaryRow;
+      if (key === "branch") return g.branches?.branchName ?? "";
+      if (key === "employee") {
+        return g.manageEmployee ? `${empName(g.manageEmployee)} (${g.manageEmployee.employeeID ?? ""})` : "";
+      }
+      if (key === "monthPeriod") return g.monthPeriod ?? "";
+      if (key === "status") return g.status ?? "";
+      return "";
+    });
+  }, [items, table.search, table.sortBy, table.sortDir, branchFilter]);
+
+  const branchFilterOptions = useMemo(() => {
+    const branches = new Map<string, string>();
+    items.forEach((row) => {
+      const id = row.branchesID;
+      const name = row.branches?.branchName;
+      if (id != null) branches.set(String(id), name || `Branch #${id}`);
+    });
+    return [
+      { value: "ALL", label: "All branches" },
+      ...Array.from(branches.entries()).map(([value, label]) => ({ value, label })),
+    ];
+  }, [items]);
 
   function SalarySlipPreview({ data }: { data: SalarySlipComputed }) {
     const actualPaidDays = data.paidUnits
@@ -2461,17 +2493,16 @@ export function GenerateSalaryManagement() {
         </div>
 
         {/* Verification Calculation */}
-        <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-          <h3 className="font-semibold text-yellow-800 mb-2">✅ CALCULATION VERIFICATION</h3>
-          <div className="text-xs space-y-1">
-            <p>Full Month Gross: <span className="font-medium">₹ {data.gross.toLocaleString()}</span></p>
-            <p>Paid days ratio: <span className="font-medium">{actualPaidDays.toFixed(2)} / {fullMonthDays} = {(proRateRatio * 100).toFixed(1)}%</span></p>
-            <p>All salary components pro-rated by: <span className="font-medium">{(proRateRatio * 100).toFixed(1)}%</span></p>
-            <p>Per-day rate for LOP: <span className="font-medium">₹ {data.gross.toLocaleString()} ÷ {fullMonthDays} = ₹ {perDayRateForLop.toFixed(2)}</span></p>
-            <p>LOP deduction: <span className="font-medium">₹ {perDayRateForLop.toFixed(2)} × {data.lopDays.toFixed(2)} = ₹ {data.lopAmount}</span></p>
-            <p className="font-bold text-green-700">Final Net Pay: ₹ {data.netPay} ✅</p>
+        <NoticeBanner variant="info" title="Calculation verification">
+          <div className="text-xs space-y-1 text-muted-foreground">
+            <p>Full Month Gross: <span className="font-medium text-foreground">₹ {data.gross.toLocaleString()}</span></p>
+            <p>Paid days ratio: <span className="font-medium text-foreground">{actualPaidDays.toFixed(2)} / {fullMonthDays} = {(proRateRatio * 100).toFixed(1)}%</span></p>
+            <p>All salary components pro-rated by: <span className="font-medium text-foreground">{(proRateRatio * 100).toFixed(1)}%</span></p>
+            <p>Per-day rate for LOP: <span className="font-medium text-foreground">₹ {data.gross.toLocaleString()} ÷ {fullMonthDays} = ₹ {perDayRateForLop.toFixed(2)}</span></p>
+            <p>LOP deduction: <span className="font-medium text-foreground">₹ {perDayRateForLop.toFixed(2)} × {data.lopDays.toFixed(2)} = ₹ {data.lopAmount}</span></p>
+            <p className="font-semibold text-emerald-600 dark:text-emerald-400">Final Net Pay: ₹ {data.netPay}</p>
           </div>
-        </div>
+        </NoticeBanner>
 
         <p className="text-xs text-gray-500 text-center">
           This is a system generated salary slip.
@@ -2479,6 +2510,71 @@ export function GenerateSalaryManagement() {
       </div>
     )
   }
+
+  const salaryColumns = useMemo((): DataTableColumn<GenerateSalaryRow>[] => [
+    {
+      key: "branch",
+      header: "Branch",
+      sortable: true,
+      colSpan: 2,
+      cell: (row) => row.branches?.branchName ?? "—",
+    },
+    {
+      key: "employee",
+      header: "Employee",
+      sortable: true,
+      colSpan: 3,
+      cell: (row) =>
+        row.manageEmployee
+          ? `${empName(row.manageEmployee)} (${row.manageEmployee.employeeID ?? ""})`
+          : "—",
+    },
+    {
+      key: "monthPeriod",
+      header: "Month Period",
+      sortable: true,
+      colSpan: 3,
+      cell: (row) => row.monthPeriod || "—",
+    },
+    {
+      key: "status",
+      header: "Status",
+      sortable: true,
+      colSpan: 2,
+      cell: (row) => (
+        <Badge variant={row.status === "Paid" ? "default" : "secondary"}>
+          {row.status || "Pending"}
+        </Badge>
+      ),
+    },
+    {
+      key: "actions",
+      header: "Actions",
+      colSpan: 4,
+      align: "right",
+      cell: (row) => {
+        const extras: { icon: typeof Download; title: string; onClick: () => void; className?: string }[] = [
+          { icon: Eye, title: "View salary slip", onClick: () => handleViewSalarySlip(row) },
+          { icon: Download, title: "Download salary slip", onClick: () => handleDownloadSalarySlipForRow(row) },
+        ];
+        if (canManage) {
+          extras.unshift({
+            icon: CreditCard,
+            title: "Record payment",
+            onClick: () => openPaymentDialog(row),
+            className: "text-green-600",
+          });
+        }
+        return (
+          <EntityRowActions
+            onEdit={canManage ? () => beginEdit(row) : undefined}
+            onDelete={canManage ? () => handleDelete(row.id) : undefined}
+            extra={extras}
+          />
+        );
+      },
+    },
+  ], [canManage]);
 
   return (
     <>
@@ -2598,15 +2694,15 @@ export function GenerateSalaryManagement() {
 
             {paymentMode === "Bank" && isLoadingBankDetails && (
               <div className="p-4 bg-gray-50 rounded-lg border border-gray-200 text-center">
-                <Icon icon="mdi:loading" className="w-5 h-5 animate-spin mx-auto text-blue-600" />
+                <Loader2 className="w-5 h-5 animate-spin mx-auto text-blue-600" />
                 <p className="text-sm text-gray-600 mt-2">Loading employee bank details...</p>
               </div>
             )}
 
             {paymentMode === "Bank" && !isLoadingBankDetails && !employeeBankDetails && (
-              <div className="p-4 bg-yellow-50 rounded-lg border border-yellow-200 text-sm text-yellow-800">
+              <NoticeBanner variant="warning" compact>
                 No bank details found for this employee. Please contact HR to update.
-              </div>
+              </NoticeBanner>
             )}
 
             {paymentMode === "Bank" && employeeBankDetails && (
@@ -2711,13 +2807,26 @@ export function GenerateSalaryManagement() {
             className="flex-1 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
             disabled={paymentMode === "Bank" && !employeeBankDetails}
           >
-            <Icon icon="mdi:check-circle" className="w-4 h-4 mr-2" />
+            <CheckCircle className="w-4 h-4 mr-2" />
             Mark as Paid
           </Button>
         </div>
       </FormModal>
 
-      <div className="space-y-6 w-full max-w-7xl mx-auto px-4">
+      <div className="space-y-6 w-full max-w-none animate-fade-in page-content-enter">
+        <PageHeader
+          icon={Wallet}
+          title="Run Payroll"
+          description="Generate and manage employee salary payments"
+          actions={
+            !isDialogOpen && canManage ? (
+              <Button onClick={() => { resetForm(); setIsDialogOpen(true); }}>
+                <Plus className="w-4 h-4 mr-1" />
+                Add Run Payroll
+              </Button>
+            ) : null
+          }
+        />
         <FormDrawer open={isDialogOpen} onOpenChange={(o) => { setIsDialogOpen(o); if (!o) resetForm(); }} title={editing ? "Edit Salary Generation" : "Add New Salary Generation"} description={editing ? "Update the salary generation information below." : "Fill in the details to add a new salary generation."}>
 
               <form onSubmit={handleSubmit} className="space-y-6">
@@ -2991,142 +3100,39 @@ export function GenerateSalaryManagement() {
           </FormDrawer>
 
         {!isDialogOpen && (<>
-        <div className="mt-6 flex items-center justify-between w-full">
-          <div className="min-w-0 flex-1">
-            <p className="text-gray-600 mt-1 text-sm">Generate and manage employee salary payments</p>
-          </div>
-          {canManage && (
-            <Button onClick={() => { resetForm(); setIsDialogOpen(true); }} className="flex-shrink-0 text-sm px-3 py-2">
-              <Plus className="w-4 h-4 mr-1" />
-              Add Run Payroll
-            </Button>
-          )}
-        </div>
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center space-x-4 w-full">
-              <div className="relative flex-1 min-w-0">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
-                <Input
-                  placeholder="Search generated salaries…"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10 w-full"
-                />
-              </div>
-              <Badge variant="secondary" className="px-3 py-1 flex-shrink-0">
-                {filtered.length} records
-              </Badge>
-            </div>
-          </CardContent>
-        </Card>
+        <FilterBar
+          search={{
+            value: table.search,
+            onChange: table.setSearch,
+            placeholder: "Search generated salaries…",
+          }}
+          filters={
+            branchFilterOptions.length > 1 ? (
+              <FilterSelect
+                id="generate-salary-branch"
+                value={branchFilter}
+                onChange={setBranchFilter}
+                options={branchFilterOptions}
+                width="w-56"
+                ariaLabel="Filter by branch"
+              />
+            ) : undefined
+          }
+        />
 
-        <Card className="w-full">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Icon icon="mdi:cash-check" className="w-5 h-5" />
-              Salary Generation List
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-0 w-full">
-            <div className="overflow-x-auto w-full">
-              <Table className="w-full">
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-[160px]">Branch</TableHead>
-                    <TableHead className="w-[180px]">Employee</TableHead>
-                    <TableHead className="w-[160px]">Month Period</TableHead>
-                    <TableHead className="w-[100px] text-center">Status</TableHead>
-                    <TableHead className="w-[140px] text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {listLoading ? (
-                    <TableBodySkeleton cols={5} />
-                  ) : filtered.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={5} className="text-center py-8 text-gray-500">
-                        <div className="flex flex-col items-center gap-2">
-                          <Icon icon="mdi:cash-check" className="w-12 h-12 text-gray-300" />
-                          <p>No records found</p>
-                          <p className="text-sm">Try adjusting your search criteria</p>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    filtered.map((row) => (
-                      <TableRow key={row.id}>
-                        <TableCell className="whitespace-nowrap">{row.branches?.branchName ?? "-"}</TableCell>
-                        <TableCell className="whitespace-nowrap">
-                          {row.manageEmployee ? `${empName(row.manageEmployee)} (${row.manageEmployee.employeeID ?? ""})` : "-"}
-                        </TableCell>
-                        <TableCell className="whitespace-nowrap">{row.monthPeriod}</TableCell>
-                        <TableCell className="text-center">
-                          <Badge variant={row.status === "Paid" ? "default" : "secondary"}>
-                            {row.status || "Pending"}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-right whitespace-nowrap">
-                          <div className="flex items-center justify-end gap-1">
-                            {canManage && (
-                              <>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => openPaymentDialog(row)}
-                                  className="h-7 w-7 p-0 text-green-600 hover:text-green-700 hover:bg-green-50"
-                                >
-                                  <Icon icon="mdi:credit-card-outline" className="w-4 h-4" />
-                                </Button>
-
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => beginEdit(row)}
-                                  className="h-7 w-7 p-0"
-                                >
-                                  <Edit className="w-3 h-3" />
-                                </Button>
-
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => handleDelete(row.id)}
-                                  className="h-7 w-7 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
-                                >
-                                  <Trash2 className="w-3 h-3" />
-                                </Button>
-                              </>
-                            )}
-
-                            <Button
-                              onClick={() => handleViewSalarySlip(row)}
-                              variant="ghost"
-                              size="sm"
-                              className="h-7 w-7 p-0"
-                            >
-                              <Icon icon="mdi:eye-outline" className="w-4 h-4" />
-                            </Button>
-
-                            <Button
-                              onClick={() => handleDownloadSalarySlipForRow(row)}
-                              variant="ghost"
-                              size="sm"
-                              className="h-7 w-7 p-0"
-                            >
-                              <Download className="w-3 h-3" />
-                            </Button>
-
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
-            </div>
-          </CardContent>
-        </Card>
+        <EntityListShell
+          title="Salary generation list"
+          columns={salaryColumns}
+          rows={filtered}
+          rowKey={(row) => String(row.id)}
+          isLoading={listLoading}
+          sortBy={table.sortBy}
+          sortDir={table.sortDir}
+          onSort={table.setSort}
+          emptyIcon={Wallet}
+          emptyTitle="No records found"
+          emptyDescription="Try adjusting your search criteria."
+        />
         </>)}
       </div>
     </>
