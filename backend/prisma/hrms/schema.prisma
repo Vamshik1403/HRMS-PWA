@@ -168,6 +168,8 @@ model Branches {
   contractorBranches      ContractorBranch[]
   bonusAllocation         BonusAllocation[]
   taskCustomers           TaskCustomer[]
+    employeeDocuments EmployeeDocument[]
+
 }
 
 model Company {
@@ -241,6 +243,8 @@ model Company {
   companyModules                 CompanyModule[]
   userCompanies                  UserCompany[]
   subscriptions                  CompanySubscription[]
+    employeeDocuments EmployeeDocument[]
+
 }
 
 model Module {
@@ -815,7 +819,6 @@ model ManageEmployee {
   rosterEmployee                 RosterEmployee[]
   salaryAdvance                  SalaryAdvance[]
   tokenDeviceMapping             TokenDeviceMapping[]
-  employeeBankDetails            EmployeeBankDetails[]
   leaveApplication               leaveApplication[]
   employeeFieldHistory           EmployeeFieldHistory[]
   employeeLinks                  EmployeeLink[]            @relation("EmployeeLinks")
@@ -839,9 +842,52 @@ model ManageEmployee {
   absentDeclarations             EmpAbsentDeclaration[]
   empLeaveBalance                EmpLeaveBalance?
   taskAssignments                TaskAssignment[]
+  employeeBankDetails            EmployeeBankDetails[]
+employeeDocuments              EmployeeDocument[]
   tasksCreated                   TaskProject[]         @relation("TaskCreatorEmployee")
 
   @@unique([employeeID, companyID], name: "unique_employee_id_per_company")
+}
+
+
+model EmployeeDocument {
+  id                Int      @id @default(autoincrement())
+
+  employeeID        Int
+
+  serviceProviderID Int?
+  companyID         Int?
+  branchesID        Int?
+
+  documentName      String   @db.VarChar(200)
+  documentCategory  String   @db.VarChar(100)
+
+  description       String?  @db.VarChar(500)
+
+  issuedDate        DateTime?
+  expiryDate        DateTime?
+
+  fileName          String?  @db.VarChar(255)
+  fileUrl           String?  @db.VarChar(500)
+  fileType          String?  @db.VarChar(100)
+  fileSize          Int?
+
+  isActive          Boolean  @default(true)
+
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  employee          ManageEmployee @relation(fields: [employeeID], references: [id], onDelete: Cascade)
+
+  serviceProvider   ServiceProvider? @relation(fields: [serviceProviderID], references: [id])
+  company           Company? @relation(fields: [companyID], references: [id])
+  branches          Branches? @relation(fields: [branchesID], references: [id])
+
+  @@index([employeeID])
+  @@index([companyID])
+  @@index([branchesID])
+  @@index([documentCategory])
+  @@map("employee_documents")
 }
 
 model EmployeeFieldHistory {
@@ -1331,6 +1377,8 @@ model ServiceProvider {
   leavePolicyHoliday      leavePolicyHoliday[]
   taskCustomers           TaskCustomer[]
   taskProjects            TaskProject[]
+    employeeDocuments EmployeeDocument[]
+
 }
 
 model WorkShift {

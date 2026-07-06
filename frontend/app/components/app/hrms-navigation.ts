@@ -18,6 +18,7 @@ import {
   Database,
   CreditCard,
   type LucideIcon,
+  Building,
 } from "lucide-react";
 import { TASK_MANAGEMENT_ENABLED } from "@/app/config/featureFlags";
 
@@ -111,7 +112,7 @@ export const HRMS_NAVIGATION: NavGroup[] = [
     items: [
       { label: "Tenants", href: "/company", icon: Building2, show: (c) => !c.isCompanyAdmin },
       { label: "Branches", href: "/branches", icon: GitBranch, show: always },
-      { label: "Departments", href: "/departments", icon: Users, show: always },
+      { label: "Departments", href: "/departments", icon: Building, show: always },
       { label: "Designations", href: "/designations", icon: BadgeCheck, show: always },
       { label: "Attendance Devices", href: "/devices", icon: Fingerprint, show: always },
     ],

@@ -32,6 +32,9 @@ import { FilterBar } from "../components/app/filter-bar";
 import { EntityListShell } from "../components/app/entity-list-shell";
 import type { DataTableColumn } from "../components/app/data-table";
 import { EntityRowActions } from "../components/app/entity-row-actions";
+import { DetailCard } from "../components/app/detail-card";
+import { EntityDetailHero, EntityDetailLayout } from "../components/app/entity-detail-layout";
+import { FormSectionNav } from "../components/app/form-section-nav";
 import { useClientTable, sortRows } from "../hooks/use-client-table";
 import { FINANCIAL_YEAR_EMPTY } from "../utils/companyFormPayload";
 import { NoticeBanner } from "../components/ui/notice-banner";
@@ -197,6 +200,7 @@ export function BranchManagement() {
   // UI
   const [searchTerm, setSearchTerm] = useState("");
   const [isAddingNew, setIsAddingNew] = useState(false);
+  const [branchFormTab, setBranchFormTab] = useState("basic");
   const [isViewing, setIsViewing] = useState(false);
   const [editingBranch, setEditingBranch] = useState<BranchRead | null>(null);
   const [viewBranch, setViewBranch] = useState<BranchRead | null>(null);
@@ -907,6 +911,7 @@ geofenchradius:  b.geofenchradius ?? "",
 
   const closeBranchPagePanels = () => {
     resetForm();
+    setBranchFormTab("basic");
 
     setIsAddingNew(false);
     setIsViewing(false);
@@ -1138,19 +1143,12 @@ setIsViewing(false);
       colSpan: 3,
       cell: (b) => <span className="font-medium">{b.branchName || "—"}</span>,
     },
-    {
-      key: "city",
-      header: "City",
+     {
+      key: "country",
+      header: "Country",
       sortable: true,
       colSpan: 2,
-      cell: (b) => b.city || "—",
-    },
-    {
-      key: "pincode",
-      header: "Pin",
-      sortable: true,
-      colSpan: 1,
-      cell: (b) => b.pincode || "—",
+      cell: (b) => b.country || "—",
     },
     {
       key: "state",
@@ -1160,12 +1158,16 @@ setIsViewing(false);
       cell: (b) => b.state || "—",
     },
     {
-      key: "country",
-      header: "Country",
+      key: "city",
+      header: "City",
       sortable: true,
       colSpan: 2,
-      cell: (b) => b.country || "—",
+      cell: (b) => b.city || "—",
     },
+    
+
+    
+   
     {
       key: "actions",
       header: "Actions",
@@ -1233,6 +1235,19 @@ setIsViewing(false);
             )}
 
             <form onSubmit={handleSubmit} className="space-y-4">
+              <FormSectionNav
+                active={branchFormTab}
+                onChange={setBranchFormTab}
+                sections={[
+                  { id: "basic", label: "Branch Information" },
+                  { id: "compliance", label: "Compliance & Tax" },
+                  { id: "contact", label: "Contact & Branding" },
+                  { id: "banking", label: "Bank Details" },
+                ]}
+              />
+
+              {branchFormTab === "basic" && (
+              <>
               {/* Service Provider - auto-filled from sidebar */}
               {false && (
                 <div ref={spRef} className="space-y-2 relative">
@@ -1385,10 +1400,10 @@ setIsViewing(false);
 
               <LocationFields
                 values={{
-                  city: formData.city,
+                   country: formData.country,
                   state: formData.state,
+                  city: formData.city,
                   pincode: formData.pincode,
-                  country: formData.country,
                   currency: formData.currency,
                 }}
                 onChange={(patch) => setFormData((p) => ({ ...p, ...patch }))}
@@ -1445,6 +1460,11 @@ setIsViewing(false);
                 />
               </div>
 
+              </>
+              )}
+
+              {branchFormTab === "compliance" && (
+              <>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2"><Label>PF No</Label><Input value={formData.pfNo} onChange={(e) => setFormData((p) => ({ ...p, pfNo: e.target.value }))} /></div>
                 <div className="space-y-2"><Label>TAN No</Label><Input value={formData.tanNo} onChange={(e) => setFormData((p) => ({ ...p, tanNo: e.target.value }))} /></div>
@@ -1542,6 +1562,32 @@ setIsViewing(false);
                 )}
               </div>
 
+              <FormField label="Financial Year Start">
+                <Select
+                  value={formData.financialYearStart || FINANCIAL_YEAR_EMPTY}
+                  onValueChange={(value) =>
+                    setFormData((p) => ({
+                      ...p,
+                      financialYearStart: value === FINANCIAL_YEAR_EMPTY ? "" : value,
+                    }))
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select start date" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={FINANCIAL_YEAR_EMPTY}>Select start date</SelectItem>
+                    <SelectItem value="1st Jan">1st January</SelectItem>
+                    <SelectItem value="1st April">1st April</SelectItem>
+                  </SelectContent>
+                </Select>
+              </FormField>
+
+              </>
+              )}
+
+              {branchFormTab === "contact" && (
+              <>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Contact Number</Label>
@@ -1575,27 +1621,11 @@ setIsViewing(false);
                 </div>
               </FormSection>
 
-              <FormField label="Financial Year Start">
-                <Select
-                  value={formData.financialYearStart || FINANCIAL_YEAR_EMPTY}
-                  onValueChange={(value) =>
-                    setFormData((p) => ({
-                      ...p,
-                      financialYearStart: value === FINANCIAL_YEAR_EMPTY ? "" : value,
-                    }))
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select start date" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value={FINANCIAL_YEAR_EMPTY}>Select start date</SelectItem>
-                    <SelectItem value="1st Jan">1st January</SelectItem>
-                    <SelectItem value="1st April">1st April</SelectItem>
-                  </SelectContent>
-                </Select>
-              </FormField>
+              </>
+              )}
 
+              {branchFormTab === "banking" && (
+              <>
               {/* Bank Details repeater - hidden for ADMIN and COMPANY_ADMIN */}
               {!(user?.role === "ADMIN" || user?.role === "COMPANY_ADMIN") && <div className="space-y-4">
                 <div className="flex items-center justify-between">
@@ -1668,6 +1698,9 @@ setIsViewing(false);
               </div>
               }
 
+              </>
+              )}
+
               <div className="flex justify-end gap-2 pt-4 border-t border-gray-200">
                 <Button type="button" variant="outline" onClick={handleCancel}>
                   Cancel
@@ -1687,58 +1720,76 @@ setIsViewing(false);
         open={Boolean(isViewing && viewBranch)}
         onOpenChange={function handleViewClose(v: boolean) { if (!v) handleCancel(); }}
         title="Branch Details"
+        showHeaderCancel
+        cancelLabel="Close"
       >
         {viewBranch && (
-          <div>
-            <div className="space-y-3">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="p-3 bg-gray-50 rounded-lg"><strong>Name:</strong> {viewBranch.branchName}</div>
-                <div className="p-3 bg-gray-50 rounded-lg"><strong>Type:</strong> {viewBranch.branchType}</div>
-                <div className="p-3 bg-gray-50 rounded-lg"><strong>Latitude:</strong> {viewBranch.latitude}</div>
-                <div className="p-3 bg-gray-50 rounded-lg"><strong>Longitude:</strong> {viewBranch.longitude}</div>
-                <div className="p-3 bg-gray-50 rounded-lg"><strong>Geofence Radius:</strong> {viewBranch.geofenchradius}</div>
-                <div className="p-3 bg-gray-50 rounded-lg"><strong>Address:</strong> {viewBranch.address}</div>
-                <div className="p-3 bg-gray-50 rounded-lg"><strong>Country:</strong> {viewBranch.country}</div>
-                <div className="p-3 bg-gray-50 rounded-lg"><strong>State:</strong> {viewBranch.state}</div>
-                <div className="p-3 bg-gray-50 rounded-lg"><strong>City:</strong> {viewBranch.city}</div>
-                <div className="p-3 bg-gray-50 rounded-lg"><strong>Pincode:</strong> {viewBranch.pincode}</div>
-                <div className="p-3 bg-gray-50 rounded-lg"><strong>GST No:</strong> {viewBranch.gstNo}</div>
-                <div className="p-3 bg-gray-50 rounded-lg"><strong>Contact:</strong> {viewBranch.contactNo}</div>
-                <div className="p-3 bg-gray-50 rounded-lg"><strong>Email:</strong> {viewBranch.emailAdd}</div>
-                <div className="p-3 bg-gray-50 rounded-lg"><strong>Currency:</strong> {viewBranch.currency}</div>
-                <div className="p-3 bg-gray-50 rounded-lg"><strong>TimeZone:</strong> {viewBranch.timeZone}</div>
-                <div className="p-3 bg-gray-50 rounded-lg"><strong>PF:</strong> {viewBranch.pfNo}</div>
-                <div className="p-3 bg-gray-50 rounded-lg"><strong>TAN:</strong> {viewBranch.tanNo}</div>
-                <div className="p-3 bg-gray-50 rounded-lg"><strong>ESI:</strong> {viewBranch.esiNo}</div>
-                <div className="p-3 bg-gray-50 rounded-lg"><strong>LIN:</strong> {viewBranch.linNo}</div>
-                <div className="p-3 bg-gray-50 rounded-lg"><strong>Shop Reg:</strong> {viewBranch.shopRegNo}
-                  {(viewBranch as any).shopRegCertHistory && Array.isArray((viewBranch as any).shopRegCertHistory) && (viewBranch as any).shopRegCertHistory.length > 0 && (
-                    <div className="mt-1 text-xs text-gray-500">
-                      {(viewBranch as any).shopRegCertHistory.map((h: any, i: number) => (
-                        <div key={i}>{h.certNo} — WEF {h.effectFrom || "—"}</div>
-                      ))}
+          <EntityDetailLayout
+            hero={
+              <EntityDetailHero
+                title={viewBranch.branchName}
+                subtitle={<span>{viewBranch.branchType}</span>}
+              />
+            }
+          >
+            <DetailCard
+              title="Overview"
+              subtitle="Core branch details"
+              rows={[
+                { label: "Branch name", value: viewBranch.branchName },
+                { label: "Branch type", value: viewBranch.branchType },
+                { label: "Address", value: viewBranch.address },
+              ]}
+            />
+            <DetailCard
+              title="Location"
+              subtitle="Regional address and geo details"
+              rows={[
+                { label: "Country", value: viewBranch.country },
+                { label: "State", value: viewBranch.state },
+                { label: "City", value: viewBranch.city },
+                { label: "Latitude", value: viewBranch.latitude },
+                { label: "Longitude", value: viewBranch.longitude },
+                { label: "Geofence radius (m)", value: viewBranch.geofenchradius },
+              ]}
+            />
+            <DetailCard
+              title="Contact"
+              subtitle="How to reach this branch"
+              rows={[
+                { label: "Contact number", value: viewBranch.contactNo },
+                { label: "Email", value: viewBranch.emailAdd },
+                { label: "Time zone", value: viewBranch.timeZone },
+                { label: "Currency", value: viewBranch.currency },
+              ]}
+            />
+            <DetailCard
+              title="Statutory"
+              subtitle="Government and legal identifiers"
+              rows={[
+                { label: "GST No", value: viewBranch.gstNo },
+                { label: "PF", value: viewBranch.pfNo },
+                { label: "TAN", value: viewBranch.tanNo },
+                { label: "ESI", value: viewBranch.esiNo },
+                { label: "LIN", value: viewBranch.linNo },
+                { label: "Shop registration", value: viewBranch.shopRegNo },
+                { label: "Financial year start", value: viewBranch.financialYearStart },
+              ]}
+            />
+            {viewBranch.bankDetails && viewBranch.bankDetails.length > 0 ? (
+              <DetailCard title="Bank accounts" subtitle="Linked bank details" className="lg:col-span-2">
+                <div className="divide-y divide-border">
+                  {viewBranch.bankDetails.map((bd) => (
+                    <div key={bd.id} className="py-3 text-sm">
+                      <div className="font-medium">{bd.bankName} — {bd.bankBranchName}</div>
+                      <div className="mt-1 text-muted-foreground">Account: {bd.accountNo}</div>
+                      <div className="text-muted-foreground">IFSC: {bd.ifscCode}</div>
                     </div>
-                  )}
+                  ))}
                 </div>
-                <div className="p-3 bg-gray-50 rounded-lg"><strong>FY Start:</strong> {viewBranch.financialYearStart}</div>
-              </div>
-
-              {viewBranch.bankDetails && viewBranch.bankDetails.length > 0 && (
-                <div className="mt-4">
-                  <p className="font-semibold mb-2">Bank Accounts:</p>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    {viewBranch.bankDetails.map((bd) => (
-                      <div key={bd.id} className="border rounded-lg p-3 bg-gray-50">
-                        <div><strong>{bd.bankName}</strong> — {bd.bankBranchName}</div>
-                        <div className="text-sm">Acct: {bd.accountNo}</div>
-                        <div className="text-sm">IFSC: {bd.ifscCode}</div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
+              </DetailCard>
+            ) : null}
+          </EntityDetailLayout>
         )}
       </FormDrawer>
 

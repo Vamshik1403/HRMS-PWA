@@ -32,6 +32,8 @@ import { FilterBar, FilterSelect } from "../components/app/filter-bar";
 import { EntityListShell } from "../components/app/entity-list-shell";
 import type { DataTableColumn } from "../components/app/data-table";
 import { EntityRowActions } from "../components/app/entity-row-actions";
+import { DetailCard } from "../components/app/detail-card";
+import { EntityDetailHero, EntityDetailLayout } from "../components/app/entity-detail-layout";
 import { useClientTable, sortRows } from "../hooks/use-client-table";
 import { toast } from "sonner";
 import { getSidebarContext } from "../utils/sidebarContext";
@@ -1194,20 +1196,39 @@ const filtered = useMemo(() => {
         open={!!(isViewing && viewRow)}
         onOpenChange={(v) => { if (!v) handleCancel(); }}
         title="Designation Details"
+        showHeaderCancel
+        cancelLabel="Close"
       >
         {viewRow && (
-        <div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="p-3 bg-gray-50 rounded-lg"><strong>Designation:</strong> {viewRow.designation || "—"}</div>
-              <div className="p-3 bg-gray-50 rounded-lg"><strong>Service Provider:</strong> {spName(viewRow)}</div>
-              <div className="p-3 bg-gray-50 rounded-lg"><strong>Company:</strong> {coName(viewRow)}</div>
-              <div className="p-3 bg-gray-50 rounded-lg"><strong>Branch:</strong> {brName(viewRow)}</div>
-              <div className="p-3 bg-gray-50 rounded-lg"><strong>Department:</strong> {deptName(viewRow)}</div>
-              <div className="p-3 bg-gray-50 rounded-lg"><strong>OT Applicable:</strong> {(viewRow as any).otApplicable || "—"}</div>
-              <div className="p-3 bg-gray-50 rounded-lg"><strong>Notice Period (Resignation):</strong> {viewRow.noticePeriodDaysForResignation || "—"}</div>
-              <div className="p-3 bg-gray-50 rounded-lg"><strong>Notice Period (Termination):</strong> {viewRow.noticePeriodDaysForTermination || "—"}</div>
-            </div>
-        </div>
+          <EntityDetailLayout
+            hero={
+              <EntityDetailHero
+                title={viewRow.designation || "Designation"}
+                subtitle={<span>{deptName(viewRow)} · {brName(viewRow)}</span>}
+              />
+            }
+          >
+            <DetailCard
+              title="Organisation"
+              subtitle="Where this designation applies"
+              rows={[
+                { label: "Designation", value: viewRow.designation },
+                { label: "Service Provider", value: spName(viewRow) },
+                { label: "Company", value: coName(viewRow) },
+                { label: "Branch", value: brName(viewRow) },
+                { label: "Department", value: deptName(viewRow) },
+              ]}
+            />
+            <DetailCard
+              title="Policies"
+              subtitle="Notice period and overtime settings"
+              rows={[
+                { label: "OT Applicable", value: (viewRow as any).otApplicable },
+                { label: "Notice Period (Resignation)", value: viewRow.noticePeriodDaysForResignation },
+                { label: "Notice Period (Termination)", value: viewRow.noticePeriodDaysForTermination },
+              ]}
+            />
+          </EntityDetailLayout>
         )}
       </FormDrawer>
 

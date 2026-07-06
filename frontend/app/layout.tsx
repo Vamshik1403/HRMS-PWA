@@ -127,7 +127,7 @@ export default function RootLayout({
         {/* PWA splash screen configuration */}
         <meta name="description" content="Comprehensive HR Management Dashboard" />
       </head>
-      <body className={sans.className}>
+      <body className={`${display.variable} ${sans.variable} ${mono.variable} min-h-screen bg-background font-sans antialiased`}>
         <Providers>
           <ServiceWorkerBootstrap />
           <FetchRefreshBootstrap />

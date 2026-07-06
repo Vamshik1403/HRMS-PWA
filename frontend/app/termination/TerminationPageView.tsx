@@ -2,16 +2,19 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { getSidebarContext } from "../utils/sidebarContext";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "../components/ui/card";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 import { Badge } from "../components/ui/badge";
+import { FormDrawer } from "../components/ui/form-drawer";
+import { FormField } from "../components/ui/form-field";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../components/ui/select";
 import {
   Plus,
   X,
@@ -737,204 +740,204 @@ setForm({
         }
       />
 
-      {/* Create Form */}
-      {isAdding && (
-        <Card className="border-2 border-blue-200">
-          <CardHeader>
-            <CardTitle>Initiate Exit</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleCreate} className="space-y-4">
-             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-  <div>
-    <Label>Branch *</Label>
-    <select
-      value={selectedBranchID}
-      disabled={user?.role === "BRANCH_ADMIN"}
-      onChange={(e) => {
-        const branchID = e.target.value;
-        setSelectedBranchID(branchID);
-        setSelectedDepartmentID("");
-        setEmpSearch("");
-        setEmpList([]);
-        setForm({ ...form, employeeId: "" });
-      }}
-      className="w-full border rounded p-2"
-      required
-    >
-      <option value="">Select Branch</option>
-      {branchList.map((b) => (
-        <option key={b.id} value={String(b.id)}>
-          {b.branchName || "Unnamed Branch"}
-        </option>
-      ))}
-    </select>
-  </div>
+      {/* Create Form - Drawer */}
+      <FormDrawer
+        open={isAdding}
+        onOpenChange={(v) => { if (!v) closeTerminationPagePanels(); }}
+        title="Initiate Exit"
+        showHeaderCancel
+      >
+        <form onSubmit={handleCreate} className="space-y-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <FormField label="Branch" required>
+              <Select
+                value={selectedBranchID || undefined}
+                disabled={user?.role === "BRANCH_ADMIN"}
+                onValueChange={(branchID) => {
+                  setSelectedBranchID(branchID);
+                  setSelectedDepartmentID("");
+                  setEmpSearch("");
+                  setEmpList([]);
+                  setForm({ ...form, employeeId: "" });
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select branch" />
+                </SelectTrigger>
+                <SelectContent>
+                  {branchList.map((b) => (
+                    <SelectItem key={b.id} value={String(b.id)}>
+                      {b.branchName || "Unnamed Branch"}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </FormField>
 
-  <div>
-    <Label>Department *</Label>
-    <select
-      value={selectedDepartmentID}
-      disabled={!selectedBranchID}
-      onChange={(e) => {
-        setSelectedDepartmentID(e.target.value);
-        setEmpSearch("");
-        setEmpList([]);
-        setForm({ ...form, employeeId: "" });
-      }}
-      className="w-full border rounded p-2"
-      required
-    >
-      <option value="">Select Department</option>
-      {visibleDepartments.map((d) => (
-        <option key={d.id} value={String(d.id)}>
-          {d.departmentName || "Unnamed Department"}
-        </option>
-      ))}
-    </select>
-  </div>
-</div>
-
-<div ref={empRef} className="relative">
-  <Label>Employee *</Label>
-  <Input
-    value={empSearch}
-    onChange={(e) => {
-      setEmpSearch(e.target.value);
-      setForm({ ...form, employeeId: "" });
-      runFetchEmp(e.target.value);
-    }}
-    onFocus={(e) => runFetchEmp(e.target.value)}
-    placeholder={
-      !selectedBranchID
-        ? "Select branch first"
-        : !selectedDepartmentID
-          ? "Select department first"
-          : "Type employee name or ID…"
-    }
-    autoComplete="off"
-    disabled={!selectedBranchID || !selectedDepartmentID}
-    required={!form.employeeId}
-  />
-
-  {empList.length > 0 && (
-    <div className="absolute z-10 bg-white border rounded w-full shadow max-h-48 overflow-y-auto">
-      {empList.map((e) => (
-        <div
-          key={e.id}
-          className="px-3 py-2 hover:bg-gray-100 cursor-pointer"
-          onMouseDown={(ev) => ev.preventDefault()}
-          onClick={() => {
-            setForm({ ...form, employeeId: String(e.id) });
-            setEmpSearch(
-              `${e.employeeFirstName ?? ""} ${e.employeeLastName ?? ""} - ${
-                e.employeeID ?? ""
-              }`.trim()
-            );
-            setEmpList([]);
-          }}
-        >
-          <div className="font-medium">
-            {e.employeeFirstName ?? ""} {e.employeeLastName ?? ""} -{" "}
-            {e.employeeID ?? ""}
+            <FormField label="Department" required>
+              <Select
+                value={selectedDepartmentID || undefined}
+                disabled={!selectedBranchID}
+                onValueChange={(departmentID) => {
+                  setSelectedDepartmentID(departmentID);
+                  setEmpSearch("");
+                  setEmpList([]);
+                  setForm({ ...form, employeeId: "" });
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select department" />
+                </SelectTrigger>
+                <SelectContent>
+                  {visibleDepartments.map((d) => (
+                    <SelectItem key={d.id} value={String(d.id)}>
+                      {d.departmentName || "Unnamed Department"}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </FormField>
           </div>
-          <div className="text-xs text-gray-500">
-            {e.branches?.branchName || "Branch"} /{" "}
-            {e.departments?.departmentName || "Department"}
-          </div>
-        </div>
-      ))}
-    </div>
-  )}
 
-  {selectedBranchID &&
-    selectedDepartmentID &&
-    visibleEmployeesForTermination.length === 0 && (
-      <p className="text-xs text-red-500 mt-1">
-        No active employees found for selected branch and department.
-      </p>
-    )}
-</div>
+          <div ref={empRef} className="relative">
+            <FormField label="Employee" required>
+              <Input
+                value={empSearch}
+                onChange={(e) => {
+                  setEmpSearch(e.target.value);
+                  setForm({ ...form, employeeId: "" });
+                  runFetchEmp(e.target.value);
+                }}
+                onFocus={(e) => runFetchEmp(e.target.value)}
+                placeholder={
+                  !selectedBranchID
+                    ? "Select branch first"
+                    : !selectedDepartmentID
+                      ? "Select department first"
+                      : "Type employee name or ID…"
+                }
+                autoComplete="off"
+                disabled={!selectedBranchID || !selectedDepartmentID}
+                required={!form.employeeId}
+              />
+            </FormField>
 
-              <div>
-                <Label>Exit Type *</Label>
-                <select
-                  value={form.exitType}
-                  onChange={(e) => {
-                    const exitType = e.target.value;
-                    setForm((prev) => ({
-                      ...prev,
-                      exitType,
-                      noticePeriod: EXIT_TYPES_WITHOUT_NOTICE.has(exitType)
-                        ? ""
-                        : prev.noticePeriod,
-                    }));
-                  }}
-                  className="w-full border rounded p-2"
-                  required
-                >
-                  <option value="">Select Type</option>
-                  <option value="RESIGNATION">Resignation</option>
-                  <option value="TERMINATION">Termination</option>
-                  <option value="RETRENCHMENT">Retrenchment</option>
-                  <option value="RETIREMENT">Retirement</option>
-                  <option value="DEATH">Death</option>
-                  <option value="ABSCONDING">Absconding</option>
-                  <option value="CONTRACT_END">Contract End</option>
-                </select>
+            {empList.length > 0 && (
+              <div className="absolute z-10 mt-1 w-full overflow-hidden rounded-xl border border-border bg-popover shadow-lg max-h-48 overflow-y-auto">
+                {empList.map((e) => (
+                  <div
+                    key={e.id}
+                    className="cursor-pointer px-3 py-2.5 text-sm transition-colors hover:bg-muted"
+                    onMouseDown={(ev) => ev.preventDefault()}
+                    onClick={() => {
+                      setForm({ ...form, employeeId: String(e.id) });
+                      setEmpSearch(
+                        `${e.employeeFirstName ?? ""} ${e.employeeLastName ?? ""} - ${
+                          e.employeeID ?? ""
+                        }`.trim()
+                      );
+                      setEmpList([]);
+                    }}
+                  >
+                    <div className="font-medium">
+                      {e.employeeFirstName ?? ""} {e.employeeLastName ?? ""} -{" "}
+                      {e.employeeID ?? ""}
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      {e.branches?.branchName || "Branch"} /{" "}
+                      {e.departments?.departmentName || "Department"}
+                    </div>
+                  </div>
+                ))}
               </div>
+            )}
 
-              <div>
-                <Label>Reason</Label>
-                <Input
-                  value={form.reasonCategory}
-                  onChange={(e) =>
-                    setForm({ ...form, reasonCategory: e.target.value })
-                  }
-                />
-              </div>
-
-              <div>
-                <Label>Initiated On</Label>
-                <Input
-                  type="date"
-                  value={form.initiatedOn}
-                  min={new Date().toISOString().split("T")[0]}
-                  onChange={(e) =>
-                    setForm({ ...form, initiatedOn: e.target.value })
-                  }
-                />
-              </div>
-
-              {exitTypeRequiresNotice(form.exitType) && (
-                <div>
-                  <Label>Notice Period (Days)</Label>
-                  <Input
-                    type="number"
-                    min="0"
-                    value={form.noticePeriod}
-                    onChange={(e) =>
-                      setForm({ ...form, noticePeriod: e.target.value })
-                    }
-                    placeholder="e.g. 30"
-                  />
-                </div>
+            {selectedBranchID &&
+              selectedDepartmentID &&
+              visibleEmployeesForTermination.length === 0 && (
+                <p className="text-xs text-destructive mt-1">
+                  No active employees found for selected branch and department.
+                </p>
               )}
+          </div>
 
-              <div className="flex gap-2">
-                <Button type="submit" disabled={saving}>
-                  <Save className="w-4 h-4 mr-1" />
-                  {saving ? "Saving..." : "Submit"}
-                </Button>
-                <Button variant="outline" onClick={() => setIsAdding(false)}>
-                  <X className="w-4 h-4 mr-1" />
-                  Cancel
-                </Button>
-              </div>
-            </form>
-          </CardContent>
-        </Card>
-      )}
+          <FormField label="Exit Type" required>
+            <Select
+              value={form.exitType || undefined}
+              onValueChange={(exitType) => {
+                setForm((prev) => ({
+                  ...prev,
+                  exitType,
+                  noticePeriod: EXIT_TYPES_WITHOUT_NOTICE.has(exitType)
+                    ? ""
+                    : prev.noticePeriod,
+                }));
+              }}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select type" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="RESIGNATION">Resignation</SelectItem>
+                <SelectItem value="TERMINATION">Termination</SelectItem>
+                <SelectItem value="RETRENCHMENT">Retrenchment</SelectItem>
+                <SelectItem value="RETIREMENT">Retirement</SelectItem>
+                <SelectItem value="DEATH">Death</SelectItem>
+                <SelectItem value="ABSCONDING">Absconding</SelectItem>
+                <SelectItem value="CONTRACT_END">Contract End</SelectItem>
+              </SelectContent>
+            </Select>
+          </FormField>
+
+          <FormField label="Reason">
+            <Input
+              value={form.reasonCategory}
+              onChange={(e) =>
+                setForm({ ...form, reasonCategory: e.target.value })
+              }
+              placeholder="Optional reason or category"
+            />
+          </FormField>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <FormField label="Initiated On">
+              <Input
+                type="date"
+                value={form.initiatedOn}
+                min={new Date().toISOString().split("T")[0]}
+                onChange={(e) =>
+                  setForm({ ...form, initiatedOn: e.target.value })
+                }
+              />
+            </FormField>
+
+            {exitTypeRequiresNotice(form.exitType) && (
+              <FormField label="Notice Period (Days)">
+                <Input
+                  type="number"
+                  min="0"
+                  value={form.noticePeriod}
+                  onChange={(e) =>
+                    setForm({ ...form, noticePeriod: e.target.value })
+                  }
+                  placeholder="e.g. 30"
+                />
+              </FormField>
+            )}
+          </div>
+
+          <div className="flex justify-end gap-2 border-t border-border pt-5">
+            <Button type="button" variant="outline" onClick={closeTerminationPagePanels}>
+              <X className="w-4 h-4 mr-1" />
+              Cancel
+            </Button>
+            <Button type="submit" disabled={saving}>
+              <Save className="w-4 h-4 mr-1" />
+              {saving ? "Saving..." : "Submit"}
+            </Button>
+          </div>
+        </form>
+      </FormDrawer>
 
       {!isAdding && (
         <>

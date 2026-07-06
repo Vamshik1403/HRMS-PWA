@@ -16,6 +16,8 @@ import { useCurrentUser } from "../hooks/useCurrentUser";
 import { getSidebarContext } from "../utils/sidebarContext";
 import { toast } from "sonner";
 import { FormDrawer } from "../components/ui/form-drawer";
+import { DetailCard } from "../components/app/detail-card";
+import { EntityDetailHero, EntityDetailLayout } from "../components/app/entity-detail-layout";
 import { PageHeader } from "../components/app/page-header";
 import { FilterBar } from "../components/app/filter-bar";
 import { EntityListShell } from "../components/app/entity-list-shell";
@@ -776,48 +778,53 @@ const handleCancel = () => {
         open={!!(isViewing && viewRow)}
         onOpenChange={(v) => { if (!v) handleCancel(); }}
         title="Internal Message"
+        showHeaderCancel
+        cancelLabel="Close"
       >
         {viewRow && (
-          <div className="space-y-4 text-sm">
-            <div className="space-y-2">
-              <p>
-                <strong>To:</strong>{" "}
-                {(viewRow.recipients && viewRow.recipients.length > 0
-                  ? viewRow.recipients
-                  : viewRow.manageEmployee
-                    ? [viewRow.manageEmployee]
-                    : []
-                )
-                  .map(
-                    (e) =>
-                      `${e.employeeFirstName ?? ""} ${e.employeeLastName ?? ""} (${e.employeeID ?? ""})`.trim()
+          <EntityDetailLayout
+            hero={
+              <EntityDetailHero
+                title={viewRow.subject || "Internal Message"}
+                subtitle={<span>{viewRow.memoType}</span>}
+              />
+            }
+            columns={1}
+          >
+            <DetailCard
+              title="Message"
+              subtitle="Internal memo details"
+              rows={[
+                {
+                  label: "To",
+                  value: (viewRow.recipients && viewRow.recipients.length > 0
+                    ? viewRow.recipients
+                    : viewRow.manageEmployee
+                      ? [viewRow.manageEmployee]
+                      : []
                   )
-                  .join(", ") || "—"}
-              </p>
-              <p><strong>IM Type:</strong> {viewRow.memoType ?? "—"}</p>
-              <p><strong>Sub:</strong> {viewRow.subject ?? "—"}</p>
-              <p><strong>Message:</strong> {viewRow.description ?? "—"}</p>
-              <p>
-                <strong>Sent:</strong>{" "}
-                {viewRow.createdAt ? new Date(viewRow.createdAt).toLocaleString() : "—"}
-              </p>
-              <p><strong>From:</strong> {viewRow.issuedBy ?? "—"}</p>
-              {viewRow.attachmentPath && (
-                <p>
-                  <strong>Attachment:</strong>{" "}
-                  <a
-                    href={resolveAttachmentUrl(viewRow.attachmentPath)}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-[#4f46e5] underline"
-                  >
-                    Open attachment
-                  </a>
-                </p>
-              )}
-            </div>
-
-          </div>
+                    .map(
+                      (e) =>
+                        `${e.employeeFirstName ?? ""} ${e.employeeLastName ?? ""} (${e.employeeID ?? ""})`.trim()
+                    )
+                    .join(", "),
+                },
+                { label: "IM type", value: viewRow.memoType },
+                { label: "Subject", value: viewRow.subject },
+                { label: "Message", value: viewRow.description },
+                {
+                  label: "Sent",
+                  value: viewRow.createdAt ? new Date(viewRow.createdAt).toLocaleString() : undefined,
+                },
+                { label: "From", value: viewRow.issuedBy },
+                {
+                  label: "Attachment",
+                  value: viewRow.attachmentPath ? "Open attachment" : undefined,
+                  href: viewRow.attachmentPath ? resolveAttachmentUrl(viewRow.attachmentPath) : undefined,
+                },
+              ]}
+            />
+          </EntityDetailLayout>
         )}
       </FormDrawer>
 

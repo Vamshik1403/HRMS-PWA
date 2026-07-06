@@ -23,8 +23,10 @@ import {
 } from "../components/ui/table";
 import { Badge } from "../components/ui/badge";
 import { Icon } from "@iconify/react";
-import { Plus, Edit, Trash2, Eye, X, Save, History, Download, Copy, Users, Key } from "lucide-react";
+import { Plus, Edit, Trash2, Eye, X, Save, History, Download, Copy, Users, Key, ExternalLink, FileText, Upload } from "lucide-react";
 import { PageHeader } from "../components/app/page-header";
+import { DetailCard } from "../components/app/detail-card";
+import { displayValue } from "../utils/display";
 import { FilterBar, FilterSelect } from "../components/app/filter-bar";
 import { EntityListShell } from "../components/app/entity-list-shell";
 import type { DataTableColumn } from "../components/app/data-table";
@@ -157,6 +159,21 @@ type BankDetailsForm = {
   upi: string;
 };
 
+type EmployeeDocumentForm = {
+  id?: ID;
+  _localId: string;
+  name: string;
+  category: string;
+  description: string;
+  issuedDate: string;
+  expiryDate: string;
+  fileUrl: string;
+  fileName: string;
+  fileMimeType: string;
+  fileSize: number;
+  file?: File | null;
+};
+
 interface BankDetailsRead {
   id: ID;
   bankName?: string | null;
@@ -253,6 +270,7 @@ interface ManageEmpRead {
   tokenDeviceMapping?: DevMapRead[];
   bankDetails?: BankDetailsRead[];
   employeeBankDetails?: BankDetailsRead[];
+  employeeDocuments?: EmployeeDocumentForm[];
 
   createdAt?: string | null;
 
@@ -273,6 +291,7 @@ const API = {
   companies: "/backend/company",
   branches: "/backend/branches",
   upload: "/backend/files/upload",
+  employeeDocuments: "/backend/manage-emp-documents",
 
   // NEW:
   departments: "/backend/departments",
@@ -691,7 +710,34 @@ export function ManageEmployeesManagement() {
 
   // Photo upload
   const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const [documentSaving, setDocumentSaving] = useState(false);
+  const [documentInputKey, setDocumentInputKey] = useState(0);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+
+  const documentCategories = [
+    "Identity proof",
+    "Address proof",
+    "Education",
+    "Past experience",
+    "Offer letter",
+    "Appointment letter",
+    "Contract",
+    "Resignation",
+    "Relieving letter",
+    "Payroll / Salary slip",
+    "Statutory",
+    "Certification",
+    "Other",
+  ];
+
+  const [documentForm, setDocumentForm] = useState({
+    name: "",
+    category: "Identity proof",
+    description: "",
+    issuedDate: "",
+    expiryDate: "",
+    file: null as File | null,
+  });
 
   // refs/lists/loaders for device suggestions
   const devRef = useRef<HTMLDivElement>(null);
@@ -1088,6 +1134,7 @@ export function ManageEmployeesManagement() {
     expForm: [] as ExpForm[],
     devMapForm: [] as DevMapForm[],
     bankDetailsForm: [] as BankDetailsForm[],
+    employeeDocuments: [] as EmployeeDocumentForm[],
     empDesignationForm: [] as EmpDesignationForm[],
     empDepartmentForm: [] as EmpDepartmentForm[],
     empBranchForm: [] as EmpBranchForm[],
@@ -2265,6 +2312,7 @@ export function ManageEmployeesManagement() {
       },
 
       eduForm: [],
+      employeeDocuments: [],
       expForm: [],
       devMapForm: [],
       bankDetailsForm: [],
@@ -2290,6 +2338,7 @@ export function ManageEmployeesManagement() {
     setPhotoFile(null);
     setPhotoFile(null);
     setPhotoPreview(null);
+    resetDocumentForm();
     setOriginalEduIds([]);
     setOriginalExpIds([]);
     setOriginalDevMapIds([]);
@@ -2563,6 +2612,122 @@ export function ManageEmployeesManagement() {
     }
   };
 
+  const resetDocumentForm = () => {
+    setDocumentForm({
+      name: "",
+      category: "Identity proof",
+      description: "",
+      issuedDate: "",
+      expiryDate: "",
+      file: null,
+    });
+    setDocumentInputKey((p) => p + 1);
+  };
+
+  const formatFileSize = (size?: number) => {
+    if (!size) return "—";
+    if (size < 1024) return `${size} B`;
+    if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
+    return `${(size / (1024 * 1024)).toFixed(2)} MB`;
+  };
+
+  const validateEmployeeDocument = () => {
+    if (!documentForm.name.trim()) {
+      toast.error("Document name is required");
+      return false;
+    }
+
+    if (!documentForm.category.trim()) {
+      toast.error("Document category is required");
+      return false;
+    }
+
+    if (!documentForm.file) {
+      toast.error("Please choose a file");
+      return false;
+    }
+
+    const allowedTypes = [
+      "application/pdf",
+      "image/jpeg",
+      "image/jpg",
+      "image/png",
+      "image/webp",
+    ];
+
+    if (!allowedTypes.includes(documentForm.file.type)) {
+      toast.error("Only PDF, JPG, JPEG, PNG and WEBP files are allowed");
+      return false;
+    }
+
+    if (documentForm.file.size > 5 * 1024 * 1024) {
+      toast.error("File size must be 5 MB or less");
+      return false;
+    }
+
+    return true;
+  };
+
+  const addEmployeeDocument = async () => {
+    if (!validateEmployeeDocument()) return;
+
+    try {
+      setDocumentSaving(true);
+
+      const fd = new FormData();
+      fd.append("file", documentForm.file!);
+
+      const uploadRes = await fetch(API.upload, {
+        method: "POST",
+        headers: authHeaders(),
+        body: fd,
+      });
+
+      if (!uploadRes.ok) throw new Error(await uploadRes.text());
+
+      const uploaded = await uploadRes.json();
+
+      const fileUrl = uploaded?.url?.startsWith("http")
+        ? uploaded.url
+        : `/backend${uploaded?.url ?? ""}`;
+
+      const doc: EmployeeDocumentForm = {
+        _localId: uid(),
+        name: documentForm.name.trim(),
+        category: documentForm.category,
+        description: documentForm.description.trim(),
+        issuedDate: documentForm.issuedDate,
+        expiryDate: documentForm.expiryDate,
+        fileUrl,
+        fileName: documentForm.file!.name,
+        fileMimeType: documentForm.file!.type,
+        fileSize: documentForm.file!.size,
+      };
+
+      setFormData((p) => ({
+        ...p,
+        employeeDocuments: [...p.employeeDocuments, doc],
+      }));
+
+      resetDocumentForm();
+      toast.success("Document added");
+    } catch (e: any) {
+      toast.error(e?.message || "Document upload failed");
+    } finally {
+      setDocumentSaving(false);
+    }
+  };
+
+  const removeEmployeeDocument = (localId: string) => {
+    const confirmed = window.confirm("Remove this document?");
+    if (!confirmed) return;
+
+    setFormData((p) => ({
+      ...p,
+      employeeDocuments: p.employeeDocuments.filter((d) => d._localId !== localId),
+    }));
+  };
+
   /* ===============
      CRUD submit
      =============== */
@@ -2821,6 +2986,18 @@ export function ManageEmployeesManagement() {
         devices,
         tokenDevices,
         bankDetails,
+        employeeDocuments: formData.employeeDocuments.map((d) => ({
+          id: d.id,
+          name: d.name,
+          category: d.category,
+          description: d.description,
+          issuedDate: d.issuedDate || undefined,
+          expiryDate: d.expiryDate || undefined,
+          fileUrl: d.fileUrl,
+          fileName: d.fileName,
+          fileMimeType: d.fileMimeType,
+          fileSize: d.fileSize,
+        })),
         empDesignations,
         empBranches,
         empDepartments,
@@ -2988,6 +3165,7 @@ export function ManageEmployeesManagement() {
         upi: b.upi ?? "",
       }));
 
+
       // Employee Designations
       const empDesignationForm: EmpDesignationForm[] = (freshData.empDesignation ?? []).map((d: any) => ({
         id: d.id,
@@ -2996,6 +3174,8 @@ export function ManageEmployeesManagement() {
         _desgAutocomplete: d.designation?.designation ?? "",
         effectFrom: d.effectFrom ?? "",
       }));
+
+
 
       const latestPromotion = (freshData as any).empPromotion && (freshData as any).empPromotion.length
         ? [...(freshData as any).empPromotion].sort((a: any, b: any) => (b.id ?? 0) - (a.id ?? 0))[0]
@@ -3130,6 +3310,19 @@ export function ManageEmployeesManagement() {
           ...(freshData.empWorkShift ?? []).map((d: any) => ({ id: d.id, _localId: uid(), workShiftID: d.workShiftID ?? null, _wsAutocomplete: d.workShift?.workShiftName ?? "", effectFrom: d.effectFrom ?? "", _isFactual: false })),
           ...(freshData.empFactualWorkShift ?? []).map((d: any) => ({ id: d.id, _localId: uid(), workShiftID: d.factualWorkShiftID ?? null, _wsAutocomplete: d.factualWorkShift?.workShiftName ?? '', effectFrom: d.effectFrom ?? "", _isFactual: true })),
         ],
+        employeeDocuments: (freshData.employeeDocuments ?? []).map((d: any) => ({
+          id: d.id,
+          _localId: String(d.id ?? uid()),
+          name: d.name ?? "",
+          category: d.category ?? "Other",
+          description: d.description ?? "",
+          issuedDate: d.issuedDate ?? "",
+          expiryDate: d.expiryDate ?? "",
+          fileUrl: d.fileUrl ?? "",
+          fileName: d.fileName ?? "",
+          fileMimeType: d.fileMimeType ?? "",
+          fileSize: Number(d.fileSize ?? 0),
+        })),
         empLeavePolicyForm: (freshData.empLeavePolicy ?? []).map((d: any) => ({ id: d.id, _localId: uid(), leavePolicyID: d.leavePolicyID ?? null, _lpAutocomplete: d.leavePolicy?.leavePolicyName ?? "", effectFrom: d.effectFrom ?? "" })),
         empAttendancePolicyForm: [
           ...(freshData.empAttendancePolicy ?? []).map((d: any) => ({ id: d.id, _localId: uid(), attendancePolicyID: d.attendancePolicyID ?? null, _apAutocomplete: d.attendancePolicy?.attendancePolicyName ?? "", effectFrom: d.effectFrom ?? "", _isFactual: false })),
@@ -3253,10 +3446,23 @@ export function ManageEmployeesManagement() {
     }
   };
 
-  const handleView = (r: ManageEmpRead) => {
-    setViewRow(r);
-    setIsViewing(true);
-    setIsAddingNew(false);
+  const handleView = async (r: ManageEmpRead) => {
+    try {
+      const res = await fetch(`${API.manageEmp}/${r.id}`, {
+        headers: authHeaders(),
+        cache: "no-store",
+      });
+
+      const fresh = res.ok ? await res.json() : r;
+
+      setViewRow(fresh?.data ?? fresh);
+      setIsViewing(true);
+      setIsAddingNew(false);
+    } catch {
+      setViewRow(r);
+      setIsViewing(true);
+      setIsAddingNew(false);
+    }
   };
 
   const handleDelete = async (id: ID) => {
@@ -3508,11 +3714,11 @@ export function ManageEmployeesManagement() {
           extra={[
             ...(canManage
               ? [{
-                  icon: Key,
-                  title: "Generate / Edit Credentials",
-                  onClick: () => openCredentialModal(r),
-                  className: "text-orange-600",
-                }]
+                icon: Key,
+                title: "Generate / Edit Credentials",
+                onClick: () => openCredentialModal(r),
+                className: "text-orange-600",
+              }]
               : []),
             {
               icon: History,
@@ -3525,6 +3731,27 @@ export function ManageEmployeesManagement() {
       ),
     },
   ], [canManage, terminationMap]);
+
+
+  const dash = displayValue;
+
+  const fullName = (r: ManageEmpRead) =>
+    [r.employeeFirstName, r.employeeLastName].filter(Boolean).join(" ") || "—";
+
+  const latestBranch = (r: any) =>
+    r.empBranch?.length
+      ? r.empBranch[r.empBranch.length - 1]?.branch?.branchName
+      : r.branches?.branchName ?? r.branchName;
+
+  const latestDepartment = (r: any) =>
+    r.empDepartment?.length
+      ? r.empDepartment[r.empDepartment.length - 1]?.department?.departmentName
+      : r.departments?.departmentName;
+
+  const latestDesignation = (r: any) =>
+    r.empDesignation?.length
+      ? r.empDesignation[r.empDesignation.length - 1]?.designation?.designation
+      : r.designations?.designation;
 
   return (
     <div className="space-y-6 w-full max-w-none animate-fade-in page-content-enter">
@@ -3734,6 +3961,7 @@ export function ManageEmployeesManagement() {
                   <div className="space-y-2">
                     <Label>Photo</Label>
                     <Input
+                      key={documentInputKey}
                       type="file"
                       accept="image/*"
                       onChange={(e) => onPickPhoto(e.target.files?.[0] ?? null)}
@@ -3886,6 +4114,200 @@ export function ManageEmployeesManagement() {
                     )}
                   </div>
                 </CollapsibleFormGroup>
+
+                {/* Documents */}
+                <CollapsibleFormGroup
+                  title="Documents"
+                  expanded={isGroupExpanded("basic-documents")}
+                  onToggle={() => toggleFormGroup("basic-documents")}
+                >
+                  {/* paste your full Documents block inner content here */}
+                  <CollapsibleFormGroup
+                    title="Documents"
+                    expanded={isGroupExpanded("basic-documents")}
+                    onToggle={() => toggleFormGroup("basic-documents")}
+                  >
+                    <div className="space-y-5">
+                      <div className="rounded-xl border border-border bg-muted/20 p-4">
+                        <div className="mb-4">
+                          <h3 className="text-base font-semibold">Upload document</h3>
+                          <p className="text-sm text-muted-foreground">
+                            Upload Aadhaar, PAN, address proof, certificates, experience letters or other employee documents. Max 5 MB each.
+                          </p>
+                        </div>
+
+                        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                          <div className="space-y-2">
+                            <Label>Name <span className="text-red-500">*</span></Label>
+                            <Input
+                              value={documentForm.name}
+                              onChange={(e) =>
+                                setDocumentForm((p) => ({ ...p, name: e.target.value }))
+                              }
+                              placeholder="Aadhaar card"
+                            />
+                          </div>
+
+                          <div className="space-y-2">
+                            <Label>Category <span className="text-red-500">*</span></Label>
+                            <Select
+                              value={documentForm.category}
+                              onValueChange={(value) =>
+                                setDocumentForm((p) => ({ ...p, category: value }))
+                              }
+                            >
+                              <SelectTrigger>
+                                <SelectValue placeholder="Select category" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {documentCategories.map((category) => (
+                                  <SelectItem key={category} value={category}>
+                                    {category}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+
+                          <div className="space-y-2 lg:col-span-2">
+                            <Label>Description</Label>
+                            <Textarea
+                              value={documentForm.description}
+                              onChange={(e) =>
+                                setDocumentForm((p) => ({ ...p, description: e.target.value }))
+                              }
+                              rows={2}
+                              placeholder="Optional note about this document"
+                            />
+                          </div>
+
+                          <div className="space-y-2">
+                            <Label>Issued date</Label>
+                            <Input
+                              type="date"
+                              value={documentForm.issuedDate}
+                              onChange={(e) =>
+                                setDocumentForm((p) => ({ ...p, issuedDate: e.target.value }))
+                              }
+                            />
+                          </div>
+
+                          <div className="space-y-2">
+                            <Label>Expiry date</Label>
+                            <Input
+                              type="date"
+                              value={documentForm.expiryDate}
+                              onChange={(e) =>
+                                setDocumentForm((p) => ({ ...p, expiryDate: e.target.value }))
+                              }
+                            />
+                          </div>
+
+                          <div className="space-y-2 lg:col-span-2">
+                            <Label>File <span className="text-red-500">*</span></Label>
+                            <Input
+                              type="file"
+                              accept=".pdf,.jpg,.jpeg,.png,.webp"
+                              onChange={(e) =>
+                                setDocumentForm((p) => ({
+                                  ...p,
+                                  file: e.target.files?.[0] ?? null,
+                                }))
+                              }
+                            />
+                            <p className="text-xs text-muted-foreground">
+                              Allowed: PDF, JPG, JPEG, PNG, WEBP. Max 5 MB.
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="mt-4 flex justify-end">
+                          <Button
+                            type="button"
+                            onClick={addEmployeeDocument}
+                            disabled={documentSaving}
+                          >
+                            <Upload className="mr-1 size-4" />
+                            {documentSaving ? "Uploading..." : "Add document"}
+                          </Button>
+                        </div>
+                      </div>
+
+                      <div className="rounded-xl border border-border">
+                        <div className="flex items-center justify-between border-b border-border px-4 py-3">
+                          <div>
+                            <h3 className="text-sm font-semibold">Uploaded documents</h3>
+                            <p className="text-xs text-muted-foreground">
+                              {formData.employeeDocuments.length} document(s) added
+                            </p>
+                          </div>
+                        </div>
+
+                        {formData.employeeDocuments.length === 0 ? (
+                          <div className="flex flex-col items-center justify-center gap-2 py-10 text-center text-muted-foreground">
+                            <FileText className="size-9" />
+                            <p className="text-sm">No documents uploaded yet.</p>
+                          </div>
+                        ) : (
+                          <div className="divide-y divide-border">
+                            {formData.employeeDocuments.map((doc) => (
+                              <div
+                                key={doc._localId}
+                                className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
+                              >
+                                <div className="min-w-0">
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <p className="font-medium text-foreground">{doc.name}</p>
+                                    <Badge variant="secondary">{doc.category}</Badge>
+                                  </div>
+
+                                  <p className="mt-1 text-xs text-muted-foreground">
+                                    {doc.fileName} · {formatFileSize(doc.fileSize)}
+                                  </p>
+
+                                  {doc.description ? (
+                                    <p className="mt-1 text-sm text-muted-foreground">
+                                      {doc.description}
+                                    </p>
+                                  ) : null}
+
+                                  <p className="mt-1 text-xs text-muted-foreground">
+                                    Issued: {doc.issuedDate || "—"} · Expiry: {doc.expiryDate || "—"}
+                                  </p>
+                                </div>
+
+                                <div className="flex shrink-0 gap-2">
+                                  {doc.fileUrl ? (
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => window.open(doc.fileUrl, "_blank")}
+                                    >
+                                      <ExternalLink className="mr-1 size-4" />
+                                      View
+                                    </Button>
+                                  ) : null}
+
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    className="text-red-600 hover:bg-red-50 hover:text-red-700"
+                                    onClick={() => removeEmployeeDocument(doc._localId)}
+                                  >
+                                    <Trash2 className="size-4" />
+                                  </Button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </CollapsibleFormGroup>
+
+                </CollapsibleFormGroup>
               </div>
             )}
 
@@ -3904,6 +4326,7 @@ export function ManageEmployeesManagement() {
                     </div>
                   </div>
                 )}
+
 
                 {/* Branch - Search & Add with History */}
                 <div className="space-y-3">
@@ -4607,6 +5030,8 @@ export function ManageEmployeesManagement() {
                       </div>}
                     </CollapsibleFormGroup>
 
+
+
                     <CollapsibleFormGroup
                       title="Salary payout & pay grade"
                       expanded={isGroupExpanded("employment-salary")}
@@ -4823,8 +5248,12 @@ export function ManageEmployeesManagement() {
                   </>
                 )}
 
+
+
               </div>
             )}
+
+
 
             {activeFormSection === "additional" && !isAdmin && (
               <div className="space-y-4">
@@ -5213,120 +5642,201 @@ export function ManageEmployeesManagement() {
       {/* View Details - Drawer */}
       <FormDrawer
         open={!!(isViewing && viewRow)}
-        onOpenChange={(v) => { if (!v) handleCancel(); }}
+        onOpenChange={(v) => {
+          if (!v) handleCancel();
+        }}
         title="Employee Details"
         showHeaderCancel
         cancelLabel="Close"
       >
         {viewRow && (
-          <div>
-            <div className="mb-4 flex justify-end">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="gap-1.5"
-                onClick={() => void downloadJoiningForm(viewRow)}
-              >
-                <Download className="w-4 h-4" />
-                Download joining form
-              </Button>
-            </div>
-            <div className="space-y-3">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="p-3 bg-gray-50 rounded-lg"><strong>Name:</strong> {viewRow.employeeFirstName} {viewRow.employeeLastName}</div>
-                <div className="p-3 bg-gray-50 rounded-lg"><strong>Employee ID:</strong> {viewRow.employeeID}</div>
-                <div className="p-3 bg-gray-50 rounded-lg"><strong>Service Provider:</strong> {spName(viewRow)}</div>
-                <div className="p-3 bg-gray-50 rounded-lg"><strong>Company:</strong> {coName(viewRow)}</div>
-                <div className="p-3 bg-gray-50 rounded-lg"><strong>Branch:</strong> {brName(viewRow)}</div>
-                <div className="p-3 bg-gray-50 rounded-lg"><strong>Business Email:</strong> {viewRow.businessEmail}</div>
-                <div className="p-3 bg-gray-50 rounded-lg"><strong>Business Phone:</strong> {viewRow.businessPhoneNo}</div>
-                <div className="p-3 bg-gray-50 rounded-lg"><strong>Mobile Number:</strong> {viewRow.personalPhoneNo}</div>
-                <div className="p-3 bg-gray-50 rounded-lg"><strong>Present Address:</strong> {viewRow.presentAddress}</div>
-                <div className="p-3 bg-gray-50 rounded-lg col-span-2"><strong>Permanent Address:</strong> {viewRow.permenantAddress}</div>
+          <div className="space-y-6">
+            <div className="flex flex-col gap-4 border-b border-border pb-5 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-start gap-4">
+                <div className="flex size-14 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-primary/10 text-primary">
+                  {viewRow.employeePhotoUrl ? (
+                    <img
+                      src={viewRow.employeePhotoUrl}
+                      alt={fullName(viewRow)}
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <Users className="size-7" />
+                  )}
+                </div>
+
+                <div>
+                  <h2 className="text-2xl font-semibold tracking-tight">
+                    {fullName(viewRow)}
+                  </h2>
+
+                  <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+                    <span>{dash(viewRow.employeeID)}</span>
+                    <span>·</span>
+                    <span>{dash(latestDesignation(viewRow as any))}</span>
+                    <span>·</span>
+                    <span>{dash(latestDepartment(viewRow as any))}</span>
+
+                    <Badge
+                      variant="secondary"
+                      className="ml-1 bg-emerald-50 text-emerald-700"
+                    >
+                      {dash(
+                        (viewRow as any).lifecycleStatus ??
+                        viewRow.employmentStatus ??
+                        "Active"
+                      )}
+                    </Badge>
+                  </div>
+                </div>
               </div>
 
-              {(viewRow.empEduQualification?.length ?? 0) > 0 && (
-                <div className="mt-4">
-                  <p className="font-semibold mb-2">Education:</p>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    {viewRow.empEduQualification!.map(e => (
-                      <div key={e.id} className="border rounded-lg p-3 bg-gray-50">
-                        <div><strong>{e.degree}</strong> — {e.instituteName}</div>
-                        <div className="text-sm">{e.pasingYear} • {e.class} • {e.gpaCgpa}</div>
+              <div className="flex gap-2">
+                {canManage ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={() => handleEdit(viewRow)}
+                  >
+                    <Edit className="mr-1 size-4" />
+                    Edit
+                  </Button>
+                ) : null}
+
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="gap-1.5"
+                  onClick={() => void downloadJoiningForm(viewRow)}
+                >
+                  <Download className="size-4" />
+                  Joining Form
+                </Button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+              <DetailCard
+                title="Identity"
+                subtitle="Personal identification details"
+                rows={[
+                  { label: "Employee code", value: viewRow.employeeID },
+                  { label: "Full name", value: fullName(viewRow) },
+                  { label: "Gender", value: viewRow.gender },
+                  { label: "Date of birth", value: viewRow.dateOfBirth },
+                  { label: "Blood group", value: viewRow.bloodGroup },
+                  { label: "Marital status", value: viewRow.maritalStatus },
+                  { label: "Father name", value: viewRow.employeeFatherName },
+                  { label: "Mother name", value: viewRow.employeeMotherName },
+                  { label: "Spouse name", value: viewRow.employeeSpouseName },
+                  { label: "Children", value: viewRow.numberOfChildren },
+                ]}
+              />
+
+              <DetailCard
+                title="Contact"
+                subtitle="How to reach the employee"
+                rows={[
+                  { label: "Business email", value: viewRow.businessEmail },
+                  { label: "Personal email", value: viewRow.personalEmail },
+                  { label: "Business phone", value: viewRow.businessPhoneNo },
+                  { label: "Mobile", value: viewRow.personalPhoneNo },
+                  { label: "Emergency contact", value: viewRow.emergancyContact },
+                  { label: "Present address", value: viewRow.presentAddress },
+                  { label: "Permanent address", value: viewRow.permenantAddress },
+                ]}
+              />
+
+              <DetailCard
+                title="Employment"
+                subtitle="Organisation mapping"
+                rows={[
+                  { label: "Service provider", value: spName(viewRow) },
+                  { label: "Company", value: coName(viewRow) },
+                  { label: "Branch", value: latestBranch(viewRow as any) },
+                  { label: "Department", value: latestDepartment(viewRow as any) },
+                  { label: "Designation", value: latestDesignation(viewRow as any) },
+                  { label: "Joining date", value: viewRow.joiningDate },
+                  { label: "Employment type", value: viewRow.employmentType ?? viewRow.typeOfEmployee },
+                  { label: "Employment status", value: viewRow.employmentStatus },
+                  { label: "Probation period", value: viewRow.probationPeriod },
+                  { label: "Contractor", value: contrName(viewRow) },
+                ]}
+              />
+
+              <DetailCard
+                title="Statutory"
+                subtitle="Government and legal identifiers"
+                rows={[
+                  { label: "PAN", value: viewRow.panNo },
+                  { label: "Aadhaar", value: viewRow.aadharNo },
+                  { label: "UAN", value: viewRow.uanNo },
+                  { label: "PF number", value: viewRow.pfNumber },
+                  { label: "PF member", value: viewRow.pfMemberStatus },
+                  { label: "ESIC", value: viewRow.esiNo },
+                ]}
+              />
+
+              <div className="xl:col-span-2 rounded-2xl border border-border bg-card p-6 shadow-sm">
+                <div className="mb-6 flex items-center justify-between">
+                  <div>
+                    <h3 className="text-lg font-semibold text-foreground">Documents</h3>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      Employee identity, statutory and supporting documents
+                    </p>
+                  </div>
+                </div>
+
+                {((viewRow as any).employeeDocuments ?? []).length === 0 ? (
+                  <div className="flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-border py-10 text-muted-foreground">
+                    <FileText className="size-9" />
+                    <p className="text-sm">No documents uploaded yet.</p>
+                  </div>
+                ) : (
+                  <div className="divide-y divide-border rounded-xl border border-border">
+                    {((viewRow as any).employeeDocuments ?? []).map((doc: any) => (
+                      <div
+                        key={doc.id ?? doc._localId}
+                        className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
+                      >
+                        <div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="font-medium">{doc.name}</p>
+                            <Badge variant="secondary">{doc.category}</Badge>
+                          </div>
+
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            {doc.fileName || "—"} · {formatFileSize(Number(doc.fileSize ?? 0))}
+                          </p>
+
+                          {doc.description ? (
+                            <p className="mt-1 text-sm text-muted-foreground">
+                              {doc.description}
+                            </p>
+                          ) : null}
+
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            Issued: {doc.issuedDate || "—"} · Expiry: {doc.expiryDate || "—"}
+                          </p>
+                        </div>
+
+                        {doc.fileUrl ? (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => window.open(doc.fileUrl, "_blank")}
+                          >
+                            <ExternalLink className="mr-1 size-4" />
+                            View
+                          </Button>
+                        ) : null}
                       </div>
                     ))}
                   </div>
-                </div>
-              )}
-
-              {(viewRow.empProfExprience?.length ?? 0) > 0 && (
-                <div className="mt-4">
-                  <p className="font-semibold mb-2">Experience:</p>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    {viewRow.empProfExprience!.map(x => (
-                      <div key={x.id} className="border rounded-lg p-3 bg-gray-50">
-                        <div><strong>{x.orgName}</strong> — {x.designation}</div>
-                        <div className="text-sm">{x.fromDate} → {x.toDate}</div>
-                        <div className="text-sm">{x.responsibility}</div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {(viewRow.empDeviceMapping?.length ?? 0) > 0 && (
-                <div className="mt-4">
-                  <p className="font-semibold mb-2">Attendance Device Mapping:</p>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    {viewRow.empDeviceMapping!.map(d => (
-                      <div key={d.id} className="border rounded-lg p-3 bg-gray-50">
-                        <div><strong>Device:</strong> {d.device?.deviceName ?? `#${d.deviceID}`}</div>
-                        <div className="text-sm"><strong>Emp Code:</strong> {d.deviceEmpCode ?? "—"}</div>
-                        <div className="text-sm"><strong>Auth Type:</strong> {(d as any).authType ?? "—"}</div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {(viewRow.tokenDeviceMapping?.length ?? 0) > 0 && (
-                <div className="mt-4">
-                  <p className="font-semibold mb-2">Token Device Mapping:</p>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    {viewRow.tokenDeviceMapping!.map(d => (
-                      <div key={d.id} className="border rounded-lg p-3 bg-gray-50">
-                        <div><strong>Device:</strong> {d.device?.deviceName ?? `#${d.deviceID}`}</div>
-                        <div className="text-sm"><strong>Type:</strong> {d.device?.deviceType === 'TV' ? 'Token Verifier' : 'Token Register'}</div>
-                        <div className="text-sm"><strong>Emp Code:</strong> {d.deviceEmpCode ?? "—"}</div>
-                        <div className="text-sm"><strong>Auth Type:</strong> {(d as any).authType ?? "—"}</div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {(((viewRow.employeeBankDetails?.length ?? 0) > 0) || ((viewRow.bankDetails?.length ?? 0) > 0)) && (
-                <div className="mt-4">
-                  <p className="font-semibold mb-2">Bank Details:</p>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    {((viewRow.employeeBankDetails ?? viewRow.bankDetails ?? []) as BankDetailsRead[]).map((b: BankDetailsRead) => (
-                      <div key={b.id} className="border rounded-lg p-3 bg-gray-50">
-                        <div><strong>{b.bankName}</strong> {b.bankBranchName ? `— ${b.bankBranchName}` : ""}</div>
-                        <div className="text-sm"><strong>Account:</strong> {b.accNumber ?? ""}</div>
-                        <div className="text-sm"><strong>IFSC:</strong> {b.ifscCode ?? ""}</div>
-                        <div className="text-sm"><strong>UPI:</strong> {b.upi ?? ""}</div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {viewRow.employeePhotoUrl && (
-                <div className="mt-4">
-                  <img src={viewRow.employeePhotoUrl} className="h-24 w-24 rounded object-cover border" alt="employee" />
-                </div>
-              )}
+                )}
+              </div>
             </div>
           </div>
         )}
@@ -5546,7 +6056,7 @@ export function ManageEmployeesManagement() {
 
       {/* History Dialog */}
       <Dialog open={historyOpen} onOpenChange={setHistoryOpen}>
-        <DialogContent className="overflow-hidden flex flex-col">
+        <DialogContent className="max-w-4xl max-h-[85vh] overflow-hidden flex flex-col">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <History className="w-5 h-5" />

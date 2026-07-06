@@ -26,6 +26,56 @@ export class ManageEmployeeService {
     return name || emp.employeeID || 'Employee';
   }
 
+  private normalizeEmployeeDocument(doc: any, employee: any) {
+  const documentName = doc.documentName ?? doc.name;
+  const documentCategory = doc.documentCategory ?? doc.category;
+
+  if (!documentName || !documentCategory || !doc.fileUrl) {
+    return null;
+  }
+
+  return {
+    employeeID: employee.id,
+    serviceProviderID: employee.serviceProviderID ?? null,
+    companyID: employee.companyID ?? null,
+    branchesID: employee.branchesID ?? null,
+
+    documentName,
+    documentCategory,
+    description: doc.description ?? null,
+
+    issuedDate: doc.issuedDate ? new Date(doc.issuedDate) : null,
+    expiryDate: doc.expiryDate ? new Date(doc.expiryDate) : null,
+
+    fileName: doc.fileName ?? null,
+    fileUrl: doc.fileUrl ?? null,
+    fileType: doc.fileType ?? doc.fileMimeType ?? null,
+    fileSize: doc.fileSize != null ? Number(doc.fileSize) : null,
+  };
+}
+
+private toEmployeeDocumentResponse(doc: any) {
+  return {
+    id: doc.id,
+    _localId: String(doc.id),
+    name: doc.documentName,
+    category: doc.documentCategory,
+    description: doc.description ?? "",
+    issuedDate: doc.issuedDate
+      ? doc.issuedDate.toISOString().slice(0, 10)
+      : "",
+    expiryDate: doc.expiryDate
+      ? doc.expiryDate.toISOString().slice(0, 10)
+      : "",
+    fileUrl: doc.fileUrl ?? "",
+    fileName: doc.fileName ?? "",
+    fileMimeType: doc.fileType ?? "",
+    fileSize: doc.fileSize ?? 0,
+    createdAt: doc.createdAt,
+    updatedAt: doc.updatedAt,
+  };
+}
+
   // Helper method to hash password
   private async hashPassword(password: string): Promise<string> {
     return bcrypt.hash(password, this.SALT_ROUNDS);
@@ -64,7 +114,8 @@ export class ManageEmployeeService {
       exp = [],
       devices = [],
       tokenDevices = [],
-      bankDetails = [],
+bankDetails = [],
+employeeDocuments = [],
       empDesignations = [],
       empBranches = [],
       empDepartments = [],
@@ -174,6 +225,33 @@ export class ManageEmployeeService {
             })),
           },
 
+          employeeDocuments: {
+  create: employeeDocuments
+    .map((doc: any) =>
+      this.normalizeEmployeeDocument(doc, {
+        id: 0,
+        serviceProviderID,
+        companyID,
+        branchesID,
+      }),
+    )
+    .filter(Boolean)
+    .map((doc: any) => ({
+      serviceProviderID: doc.serviceProviderID,
+      companyID: doc.companyID,
+      branchesID: doc.branchesID,
+      documentName: doc.documentName,
+      documentCategory: doc.documentCategory,
+      description: doc.description,
+      issuedDate: doc.issuedDate,
+      expiryDate: doc.expiryDate,
+      fileName: doc.fileName,
+      fileUrl: doc.fileUrl,
+      fileType: doc.fileType,
+      fileSize: doc.fileSize,
+    })),
+},
+
           empDesignation: {
             create: empDesignations
               .filter((d) => d.designationID != null)
@@ -246,8 +324,14 @@ export class ManageEmployeeService {
               .filter((c) => c.contractorID != null)
               .map((c) => ({ contractorID: c.contractorID!, effectFrom: c.effectFrom ?? null })),
           },
+
+
         } as any,
+
       });
+
+
+
 
 
       let plainInitialPassword: string | null = null;
@@ -297,6 +381,9 @@ export class ManageEmployeeService {
           empEduQualification: true,
           empProfExprience: true,
           employeeBankDetails: true,
+          employeeDocuments: {
+  orderBy: { createdAt: 'desc' },
+},
           empDesignation: { include: { designation: true } },
           empDeviceMapping: { include: { device: true } },
           tokenDeviceMapping: { include: { device: true } },
@@ -743,6 +830,9 @@ export class ManageEmployeeService {
         designations: true,
         workShift: true,
         employeeBankDetails: true,
+        employeeDocuments: {
+  orderBy: { createdAt: 'desc' },
+},
         attendancePolicy: true,
         leavePolicy: true,
         monthlyPayGrade: true,
@@ -820,6 +910,9 @@ export class ManageEmployeeService {
         departments: true,
         designations: true,
         employeeBankDetails: true,
+        employeeDocuments: {
+  orderBy: { createdAt: 'desc' },
+},
         workShift: true,
         attendancePolicy: true,
         leavePolicy: true,
@@ -867,7 +960,8 @@ export class ManageEmployeeService {
       designationID,
       employmentType,
       typeOfEmployee,
-      bankDetails,
+bankDetails,
+employeeDocuments,
       employmentStatus,
       probationPeriod,
       workShiftID,
@@ -1229,8 +1323,39 @@ export class ManageEmployeeService {
       }
 
       // Delete removed emp designations
-      if (empDesignationIdsToDelete.length) {
-        await tx.empDesignation.deleteMany({
+if (employeeDocuments !== undefined) {
+  const currentEmployee = await tx.manageEmployee.findUnique({
+    where: { id },
+    select: {
+      id: true,
+      serviceProviderID: true,
+      companyID: true,
+      branchesID: true,
+    },
+  });
+
+  if (!currentEmployee) {
+    throw new NotFoundException(`Employee ${id} not found`);
+  }
+
+  await tx.employeeDocument.deleteMany({
+    where: { employeeID: id },
+  });
+
+  const docsToCreate = employeeDocuments
+    .map((doc: any) => this.normalizeEmployeeDocument(doc, currentEmployee))
+    .filter(Boolean);
+
+  if (docsToCreate.length) {
+    await tx.employeeDocument.createMany({
+      data: docsToCreate as any[],
+    });
+  }
+}
+
+// Delete removed emp designations
+if (empDesignationIdsToDelete.length) {
+          await tx.empDesignation.deleteMany({
           where: { id: { in: empDesignationIdsToDelete }, manageEmployeeID: id },
         });
       }
@@ -1478,6 +1603,9 @@ export class ManageEmployeeService {
           monthlyPayGrade: true,
           hourlyPayGrade: true,
           employeeBankDetails: true,
+          employeeDocuments: {
+  orderBy: { createdAt: 'desc' },
+},
           empEduQualification: true,
           empProfExprience: true,
           empDesignation: { include: { designation: true } },
@@ -1529,7 +1657,129 @@ export class ManageEmployeeService {
     return updated;
   }
 
+async getEmployeeDocuments(employeeID: number) {
+  const employee = await this.prisma.manageEmployee.findUnique({
+    where: { id: employeeID },
+    select: { id: true },
+  });
 
+  if (!employee) {
+    throw new NotFoundException(`Employee ${employeeID} not found`);
+  }
+
+  const docs = await this.prisma.employeeDocument.findMany({
+    where: { employeeID },
+    orderBy: { createdAt: 'desc' },
+  });
+
+  return docs.map((doc) => this.toEmployeeDocumentResponse(doc));
+}
+
+async createEmployeeDocument(employeeID: number, body: any, req?: Request) {
+  const employee = await this.prisma.manageEmployee.findUnique({
+    where: { id: employeeID },
+  });
+
+  if (!employee) {
+    throw new NotFoundException(`Employee ${employeeID} not found`);
+  }
+
+  const data = this.normalizeEmployeeDocument(body, employee);
+
+  if (!data) {
+    throw new Error('Document name, category and fileUrl are required');
+  }
+
+  const created = await this.prisma.employeeDocument.create({
+    data,
+  });
+
+  await this.auditLog.logFromRequest(req, {
+    action: 'CREATE',
+    module: 'EMPLOYEE_DOCUMENT',
+    entityId: created.id,
+    entityName: created.documentName,
+    newData: created,
+  });
+
+  return this.toEmployeeDocumentResponse(created);
+}
+
+async updateEmployeeDocument(documentId: number, body: any, req?: Request) {
+  const existing = await this.prisma.employeeDocument.findUnique({
+    where: { id: documentId },
+  });
+
+  if (!existing) {
+    throw new NotFoundException(`Document ${documentId} not found`);
+  }
+
+  const updated = await this.prisma.employeeDocument.update({
+    where: { id: documentId },
+    data: {
+      documentName: body.documentName ?? body.name ?? existing.documentName,
+      documentCategory:
+        body.documentCategory ?? body.category ?? existing.documentCategory,
+      description:
+        body.description !== undefined ? body.description : existing.description,
+
+      issuedDate:
+        body.issuedDate !== undefined
+          ? body.issuedDate
+            ? new Date(body.issuedDate)
+            : null
+          : existing.issuedDate,
+
+      expiryDate:
+        body.expiryDate !== undefined
+          ? body.expiryDate
+            ? new Date(body.expiryDate)
+            : null
+          : existing.expiryDate,
+
+      fileName: body.fileName ?? existing.fileName,
+      fileUrl: body.fileUrl ?? existing.fileUrl,
+      fileType: body.fileType ?? body.fileMimeType ?? existing.fileType,
+      fileSize:
+        body.fileSize !== undefined ? Number(body.fileSize) : existing.fileSize,
+    },
+  });
+
+  await this.auditLog.logFromRequest(req, {
+    action: 'UPDATE',
+    module: 'EMPLOYEE_DOCUMENT',
+    entityId: updated.id,
+    entityName: updated.documentName,
+    oldData: existing,
+    newData: updated,
+  });
+
+  return this.toEmployeeDocumentResponse(updated);
+}
+
+async deleteEmployeeDocument(documentId: number, req?: Request) {
+  const existing = await this.prisma.employeeDocument.findUnique({
+    where: { id: documentId },
+  });
+
+  if (!existing) {
+    throw new NotFoundException(`Document ${documentId} not found`);
+  }
+
+  await this.prisma.employeeDocument.delete({
+    where: { id: documentId },
+  });
+
+  await this.auditLog.logFromRequest(req, {
+    action: 'DELETE',
+    module: 'EMPLOYEE_DOCUMENT',
+    entityId: existing.id,
+    entityName: existing.documentName,
+    oldData: existing,
+  });
+
+  return { success: true };
+}
 
   async remove(id: number, req?: Request) {
     try {
@@ -1604,6 +1854,9 @@ export class ManageEmployeeService {
         this.prisma.employeeBankDetails.deleteMany({
           where: { employeeID: id },
         }),
+        this.prisma.employeeDocument.deleteMany({
+  where: { employeeID: id },
+}),
         this.prisma.empAttendanceRegularise.deleteMany({
           where: { manageEmployeeID: id },
         }),

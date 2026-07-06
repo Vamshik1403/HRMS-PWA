@@ -18,6 +18,8 @@ import { useListAutoRefresh } from "../hooks/useListAutoRefresh";
 import { TableBodySkeleton } from "../components/ui/TableBodySkeleton";
 import { toast } from "sonner";
 import { FormDrawer } from "../components/ui/form-drawer";
+import { DetailCard } from "../components/app/detail-card";
+import { EntityDetailHero, EntityDetailLayout } from "../components/app/entity-detail-layout";
 
 const API = "/backend/users";
 
@@ -646,27 +648,51 @@ Select at least one company from dropdown. First selected company becomes primar
 
       {/* View Details FormDrawer */}
       <FormDrawer open={!!(isViewing && viewRow)} onOpenChange={(v) => { if (!v) handleCancel(); }}
-        title="User Details">
+        title="User Details"
+        showHeaderCancel
+        cancelLabel="Close">
         {viewRow && (
-          <div className="space-y-3 text-sm">
-<p><strong>First Name:</strong> {viewRow.firstName ?? "—"}</p>
-<p><strong>Last Name:</strong> {viewRow.lastName ?? "—"}</p>
-<p><strong>Contact No:</strong> {viewRow.contactNo ?? "—"}</p>
-<p><strong>Email:</strong> {viewRow.email ?? "—"}</p>
-<p><strong>Username:</strong> {viewRow.username}</p>
-            <p><strong>Role:</strong> {ROLE_DISPLAY[viewRow.role] || viewRow.role}</p>
-            <p><strong>Service Provider:</strong> {viewRow.serviceProvider?.companyName ?? "—"}</p>
-            <p>
-              <strong>Company:</strong>{" "}
-              {viewRow.userCompanies?.length
-                ? viewRow.userCompanies.map((x) => x.company?.companyName).filter(Boolean).join(", ")
-                : viewRow.company?.companyName ?? "—"}
-            </p>
-            
-            <p><strong>Branch:</strong> {viewRow.branches?.branchName ?? "—"}</p>
-            <p><strong>Status:</strong> {viewRow.isActive ? "Active" : "Inactive"}</p>
-            <p><strong>Created:</strong> {viewRow.createdAt ? new Date(viewRow.createdAt).toLocaleDateString() : "—"}</p>
-          </div>
+          <EntityDetailLayout
+            hero={
+              <EntityDetailHero
+                title={[viewRow.firstName, viewRow.lastName].filter(Boolean).join(" ") || viewRow.username}
+                subtitle={<span>{ROLE_DISPLAY[viewRow.role] || viewRow.role}</span>}
+                badge={viewRow.isActive ? "Active" : undefined}
+              />
+            }
+          >
+            <DetailCard
+              title="Identity"
+              subtitle="Personal account details"
+              rows={[
+                { label: "First name", value: viewRow.firstName },
+                { label: "Last name", value: viewRow.lastName },
+                { label: "Username", value: viewRow.username },
+                { label: "Role", value: ROLE_DISPLAY[viewRow.role] || viewRow.role },
+              ]}
+            />
+            <DetailCard
+              title="Contact & access"
+              subtitle="Contact details and organisation mapping"
+              rows={[
+                { label: "Contact no", value: viewRow.contactNo },
+                { label: "Email", value: viewRow.email },
+                { label: "Service provider", value: viewRow.serviceProvider?.companyName },
+                {
+                  label: "Company",
+                  value: viewRow.userCompanies?.length
+                    ? viewRow.userCompanies.map((x) => x.company?.companyName).filter(Boolean).join(", ")
+                    : viewRow.company?.companyName,
+                },
+                { label: "Branch", value: viewRow.branches?.branchName },
+                { label: "Status", value: viewRow.isActive ? "Active" : "Inactive" },
+                {
+                  label: "Created",
+                  value: viewRow.createdAt ? new Date(viewRow.createdAt).toLocaleDateString() : undefined,
+                },
+              ]}
+            />
+          </EntityDetailLayout>
         )}
       </FormDrawer>
 

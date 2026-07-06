@@ -30,6 +30,9 @@ import { FilterBar } from "../components/app/filter-bar"
 import { EntityListShell } from "../components/app/entity-list-shell"
 import type { DataTableColumn } from "../components/app/data-table"
 import { EntityRowActions } from "../components/app/entity-row-actions"
+import { DetailCard } from "../components/app/detail-card"
+import { EntityDetailHero, EntityDetailLayout } from "../components/app/entity-detail-layout"
+import { FormSectionNav } from "../components/app/form-section-nav"
 import { useClientTable, sortRows } from "../hooks/use-client-table"
 import {
   buildCompanyPayload,
@@ -156,6 +159,7 @@ export function CompanyManagement() {
   const [logoFile, setLogoFile] = useState<File | null>(null)
   const [signatureFile, setSignatureFile] = useState<File | null>(null)
   const [isAddingNew, setIsAddingNew] = useState(false)
+  const [companyFormTab, setCompanyFormTab] = useState("basic")
   const [isViewing, setIsViewing] = useState(false)
 
   const [isModuleDrawerOpen, setIsModuleDrawerOpen] = useState(false)
@@ -550,6 +554,7 @@ setEditingCompany(null);
     setEditingCompany(null)
     setServiceProviders([])
     setSpDropdownOpen(false)
+    setCompanyFormTab("basic")
   }
 
   const handleCancel = () => {
@@ -940,6 +945,19 @@ setEditingCompany(null);
           >
             <div>
               <form onSubmit={handleSubmit} className="space-y-8 pb-2">
+                <FormSectionNav
+                  active={companyFormTab}
+                  onChange={setCompanyFormTab}
+                  sections={[
+                    { id: "basic", label: "Company Information" },
+                    { id: "location", label: "Location & Settings" },
+                    { id: "compliance", label: "Compliance & Tax" },
+                    { id: "contact", label: "Contact & Branding" },
+                  ]}
+                />
+
+                {companyFormTab === "basic" && (
+                  <>
 {user?.role === "SUPERADMIN" && (
                     <FormSection title="Service provider" description="Link this company to a service provider account.">
                     <div ref={wrapperRef} className="relative">
@@ -1024,6 +1042,11 @@ setEditingCompany(null);
                   </FormField>
                 </FormSection>
 
+                  </>
+                )}
+
+                {companyFormTab === "location" && (
+                  <>
                 <FormSection title="Location" description="Regional address and geo details.">
                   <LocationFields
                     values={{
@@ -1059,6 +1082,10 @@ setEditingCompany(null);
                   </div>
                 </FormSection>
 
+                  </>
+                )}
+
+                {companyFormTab === "compliance" && (
                 <FormSection title="Compliance & tax" description="Statutory registration numbers for payroll compliance.">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <FormField label="PF No"><Input value={formData.pfNo || ""} onChange={(e) => setFormData((p) => ({ ...p, pfNo: e.target.value }))} /></FormField>
@@ -1096,7 +1123,10 @@ setEditingCompany(null);
                     </Select>
                   </FormField>
                 </FormSection>
+                )}
 
+                {companyFormTab === "contact" && (
+                  <>
                 <FormSection title="Contact" description="Primary contact details for this company.">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <FormField label="Contact Number">
@@ -1127,6 +1157,9 @@ setEditingCompany(null);
                   />
                 </FormSection>
 
+                  </>
+                )}
+
                 <div className="flex justify-end gap-2 border-t border-border pt-5">
                   <Button type="submit" disabled={saving}>
                     <Save className="w-4 h-4 mr-1" />
@@ -1142,53 +1175,80 @@ setEditingCompany(null);
             open={!!(isViewing && viewCompany)}
             onOpenChange={(v) => { if (!v) handleCancel(); }}
             title="Company Details"
+            showHeaderCancel
+            cancelLabel="Close"
           >
             {viewCompany && (
-              <div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div><strong>Name:</strong> {viewCompany.companyName}</div>
-                  <div><strong>Type:</strong> {viewCompany.companyType}</div>
-                  <div><strong>Address:</strong> {viewCompany.address}</div>
-                  <div><strong>Country:</strong> {viewCompany.country}</div>
-                  <div><strong>State:</strong> {viewCompany.state}</div>
-                  <div><strong>City:</strong> {viewCompany.city || "—"}</div>
-                  <div><strong>Pincode:</strong> {viewCompany.pincode || "—"}</div>
-                  <div><strong>GST No:</strong> {viewCompany.gstNo}</div>
-                  <div><strong>Contact:</strong> {viewCompany.contactNo}</div>
-                  <div><strong>Email:</strong> {viewCompany.emailAdd}</div>
-                  <div><strong>Currency:</strong> {viewCompany.currency}</div>
-                  <div><strong>TimeZone:</strong> {viewCompany.timeZone}</div>
-                  <div><strong>PF:</strong> {viewCompany.pfNo}</div>
-                  <div><strong>TAN:</strong> {viewCompany.tanNo}</div>
-                  <div><strong>PAN:</strong> {viewCompany.panNo}</div>
-                  <div><strong>ESI:</strong> {viewCompany.esiNo}</div>
-                  <div><strong>LIN:</strong> {viewCompany.linNo}</div>
-                  <div><strong>Shop Reg:</strong> {viewCompany.shopRegNo}
-                    {(viewCompany as any).shopRegCertHistory && Array.isArray((viewCompany as any).shopRegCertHistory) && (viewCompany as any).shopRegCertHistory.length > 0 && (
-                      <div className="mt-1 text-xs text-gray-500">
-                        {(viewCompany as any).shopRegCertHistory.map((h: any, i: number) => (
-                          <div key={i}>{h.certNo} — WEF {h.effectFrom || "—"}</div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                  <div><strong>FY Start:</strong> {viewCompany.financialYearStart}</div>
-                </div>
-                <div className="flex gap-4 mt-4">
-                  {viewCompany.companyLogoUrl && (
-                    <div>
-                      <strong>Logo:</strong>
-                      <img src={viewCompany.companyLogoUrl} alt="Company Logo" className="w-24 h-24 object-contain border rounded" />
+              <EntityDetailLayout
+                hero={
+                  <EntityDetailHero
+                    title={viewCompany.companyName}
+                    subtitle={<span>{viewCompany.companyType}</span>}
+                  />
+                }
+              >
+                <DetailCard
+                  title="Overview"
+                  subtitle="Core company details"
+                  rows={[
+                    { label: "Company name", value: viewCompany.companyName },
+                    { label: "Company type", value: viewCompany.companyType },
+                    { label: "Address", value: viewCompany.address },
+                  ]}
+                />
+                <DetailCard
+                  title="Location"
+                  subtitle="Regional address details"
+                  rows={[
+                    { label: "Country", value: viewCompany.country },
+                    { label: "State", value: viewCompany.state },
+                    { label: "City", value: viewCompany.city },
+                    { label: "Pincode", value: viewCompany.pincode },
+                  ]}
+                />
+                <DetailCard
+                  title="Contact"
+                  subtitle="Primary contact details"
+                  rows={[
+                    { label: "Contact number", value: viewCompany.contactNo },
+                    { label: "Email", value: viewCompany.emailAdd },
+                    { label: "Time zone", value: viewCompany.timeZone },
+                    { label: "Currency", value: viewCompany.currency },
+                  ]}
+                />
+                <DetailCard
+                  title="Statutory"
+                  subtitle="Government and legal identifiers"
+                  rows={[
+                    { label: "GST No", value: viewCompany.gstNo },
+                    { label: "PF", value: viewCompany.pfNo },
+                    { label: "TAN", value: viewCompany.tanNo },
+                    { label: "PAN", value: viewCompany.panNo },
+                    { label: "ESI", value: viewCompany.esiNo },
+                    { label: "LIN", value: viewCompany.linNo },
+                    { label: "Shop registration", value: viewCompany.shopRegNo },
+                    { label: "Financial year start", value: viewCompany.financialYearStart },
+                  ]}
+                />
+                {(viewCompany.companyLogoUrl || viewCompany.SignatureUrl) ? (
+                  <DetailCard title="Branding" subtitle="Logo and signature" className="lg:col-span-2">
+                    <div className="flex flex-wrap gap-6">
+                      {viewCompany.companyLogoUrl ? (
+                        <div>
+                          <p className="mb-2 text-sm text-muted-foreground">Company logo</p>
+                          <img src={viewCompany.companyLogoUrl} alt="Company Logo" className="h-24 w-24 rounded-lg border object-contain" />
+                        </div>
+                      ) : null}
+                      {viewCompany.SignatureUrl ? (
+                        <div>
+                          <p className="mb-2 text-sm text-muted-foreground">Signature</p>
+                          <img src={viewCompany.SignatureUrl} alt="Signature" className="h-24 w-24 rounded-lg border object-contain" />
+                        </div>
+                      ) : null}
                     </div>
-                  )}
-                  {viewCompany.SignatureUrl && (
-                    <div>
-                      <strong>Signature:</strong>
-                      <img src={viewCompany.SignatureUrl} alt="Signature" className="w-24 h-24 object-contain border rounded" />
-                    </div>
-                  )}
-                </div>
-              </div>
+                  </DetailCard>
+                ) : null}
+              </EntityDetailLayout>
             )}
           </FormDrawer>
 

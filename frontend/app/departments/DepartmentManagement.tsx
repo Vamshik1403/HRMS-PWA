@@ -16,7 +16,7 @@ import {
 } from "../components/ui/table";
 import { Badge } from "../components/ui/badge";
 import { Icon } from "@iconify/react";
-import { Plus, Edit, Trash2, Eye, X, Save, Filter, RotateCcw, Users } from "lucide-react";
+import { Plus, Edit, Trash2, Eye, X, Save, Filter, RotateCcw, Users, Building } from "lucide-react";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import { FormDrawer } from "../components/ui/form-drawer";
 import { NoticeBanner } from "../components/ui/notice-banner";
@@ -26,6 +26,8 @@ import { FilterBar, FilterSelect } from "../components/app/filter-bar";
 import { EntityListShell } from "../components/app/entity-list-shell";
 import type { DataTableColumn } from "../components/app/data-table";
 import { EntityRowActions } from "../components/app/entity-row-actions";
+import { DetailCard } from "../components/app/detail-card";
+import { EntityDetailHero, EntityDetailLayout } from "../components/app/entity-detail-layout";
 import { useClientTable, sortRows } from "../hooks/use-client-table";
 import { getSidebarContext } from "../utils/sidebarContext";
 import {
@@ -744,7 +746,7 @@ const handleCancel = () => {
   return (
     <div className="space-y-6 w-full max-w-none animate-fade-in page-content-enter">
       <PageHeader
-        icon={Users}
+        icon={Building}
         title="Departments"
         description="Functional teams across the organisation. Can be branch-scoped or company-wide."
         actions={
@@ -931,16 +933,29 @@ const handleCancel = () => {
         open={!!(isViewing && viewRow)}
         onOpenChange={(v) => { if (!v) handleCancel(); }}
         title="Department Details"
+        showHeaderCancel
+        cancelLabel="Close"
       >
         {viewRow && (
-        <div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="p-3 bg-gray-50 rounded-lg"><strong>Department:</strong> {viewRow.departmentName || "—"}</div>
-              <div className="p-3 bg-gray-50 rounded-lg"><strong>Service Provider:</strong> {spName(viewRow)}</div>
-              <div className="p-3 bg-gray-50 rounded-lg"><strong>Company:</strong> {coName(viewRow)}</div>
-              <div className="p-3 bg-gray-50 rounded-lg"><strong>Branch:</strong> {brName(viewRow)}</div>
-            </div>
-        </div>
+          <EntityDetailLayout
+            hero={
+              <EntityDetailHero
+                title={viewRow.departmentName || "Department"}
+                subtitle={<span>{coName(viewRow)} · {brName(viewRow)}</span>}
+              />
+            }
+            columns={1}
+          >
+            <DetailCard
+              title="Overview"
+              subtitle="Department organisation mapping"
+              rows={[
+                { label: "Department", value: viewRow.departmentName },
+                { label: "Company", value: coName(viewRow) },
+                { label: "Branch", value: brName(viewRow) },
+              ]}
+            />
+          </EntityDetailLayout>
         )}
       </FormDrawer>
 

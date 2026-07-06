@@ -20,25 +20,39 @@ export function PageHeader({
   className,
 }: PageHeaderProps) {
   return (
-    <div className={cn("flex items-end justify-between gap-4 flex-wrap", className)}>
+    <div
+      className={cn(
+        "flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between",
+        className
+      )}
+    >
       <div className="min-w-0">
-        {Icon && (
-          <div
-            className="mb-2.5 flex size-10 items-center justify-center rounded-lg bg-primary/10 text-primary"
-            aria-hidden="true"
-          >
-            <Icon className="size-5" />
-          </div>
-        )}
-        <h1 className="font-display text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
-          {title}
-        </h1>
+        <div className="flex items-center gap-3">
+          {Icon ? (
+            <span
+              className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary"
+              aria-hidden="true"
+            >
+              <Icon className="size-5" />
+            </span>
+          ) : null}
+
+          <h1 className="min-w-0 font-display text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
+            {title}
+          </h1>
+        </div>
+
         {description ? (
-          <p className="mt-1 text-sm text-muted-foreground max-w-3xl">{description}</p>
+          <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
+            {description}
+          </p>
         ) : null}
       </div>
+
       {actions ? (
-        <div className="flex items-center gap-2 flex-wrap shrink-0">{actions}</div>
+        <div className="flex shrink-0 items-center gap-2 sm:pt-1">
+          {actions}
+        </div>
       ) : null}
     </div>
   );

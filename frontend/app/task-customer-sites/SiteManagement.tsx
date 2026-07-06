@@ -19,6 +19,8 @@ import { FilterBar, FilterSelect } from "../components/app/filter-bar";
 import { EntityListShell } from "../components/app/entity-list-shell";
 import type { DataTableColumn } from "../components/app/data-table";
 import { EntityRowActions } from "../components/app/entity-row-actions";
+import { DetailCard } from "../components/app/detail-card";
+import { EntityDetailHero, EntityDetailLayout } from "../components/app/entity-detail-layout";
 import { useClientTable, sortRows } from "../hooks/use-client-table";
 
 interface CustomerOpt { id: number; customerCode: string; customerName: string; address?: string | null; city?: string | null; state?: string | null; pincode?: string | null; country?: string | null; }
@@ -350,26 +352,60 @@ export default function SiteManagement() {
         </form>
       </FormDrawer>
 
-      <FormDrawer open={viewOpen} onOpenChange={setViewOpen} title="Site Details">
+      <FormDrawer
+        open={viewOpen}
+        onOpenChange={setViewOpen}
+        title="Site Details"
+        showHeaderCancel
+        cancelLabel="Close"
+      >
         {viewRow && (
-          <div className="space-y-2 text-sm">
-            <div className="p-3 bg-gray-50 rounded-lg"><strong>Customer:</strong> {viewRow.customer?.customerName}</div>
-            <div className="p-3 bg-gray-50 rounded-lg"><strong>Branch:</strong> {viewRow.branchName}</div>
-            <div className="p-3 bg-gray-50 rounded-lg"><strong>Address:</strong> {viewRow.address || "—"}</div>
-            <div className="p-3 bg-gray-50 rounded-lg"><strong>Location:</strong> {[viewRow.city, viewRow.state, viewRow.pincode, viewRow.country].filter(Boolean).join(", ") || "—"}</div>
-            <div className="p-3 bg-gray-50 rounded-lg"><strong>Coordinates:</strong> {viewRow.latitude || "—"} / {viewRow.longitude || "—"}</div>
-            {viewRow.contacts && viewRow.contacts.length > 0 && (
-              <div className="space-y-2">
-                <p className="font-semibold">Site Contacts</p>
-                {viewRow.contacts.map((c, i) => (
-                  <div key={c.id ?? i} className="p-3 bg-gray-50 rounded-lg">
-                    <div>{c.contactPerson} · {c.contactNumber}</div>
-                    {(c.designation || c.email) && <div className="text-gray-500 text-xs mt-1">{[c.designation, c.email].filter(Boolean).join(" · ")}</div>}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+          <EntityDetailLayout
+            hero={
+              <EntityDetailHero
+                title={viewRow.branchName}
+                subtitle={<span>{viewRow.customer?.customerName}</span>}
+              />
+            }
+          >
+            <DetailCard
+              title="Overview"
+              subtitle="Site organisation mapping"
+              rows={[
+                { label: "Customer", value: viewRow.customer?.customerName },
+                { label: "Branch / site", value: viewRow.branchName },
+              ]}
+            />
+            <DetailCard
+              title="Location"
+              subtitle="Address and geo details"
+              rows={[
+                { label: "Address", value: viewRow.address },
+                { label: "City", value: viewRow.city },
+                { label: "State", value: viewRow.state },
+                { label: "Pincode", value: viewRow.pincode },
+                { label: "Country", value: viewRow.country },
+                { label: "Latitude", value: viewRow.latitude },
+                { label: "Longitude", value: viewRow.longitude },
+              ]}
+            />
+            {viewRow.contacts && viewRow.contacts.length > 0 ? (
+              <DetailCard title="Contacts" subtitle="Site contact persons" className="lg:col-span-2">
+                <div className="divide-y divide-border">
+                  {viewRow.contacts.map((c, i) => (
+                    <div key={c.id ?? i} className="py-3 text-sm">
+                      <div className="font-medium">{c.contactPerson} · {c.contactNumber}</div>
+                      {(c.designation || c.email) ? (
+                        <div className="mt-1 text-muted-foreground">
+                          {[c.designation, c.email].filter(Boolean).join(" · ")}
+                        </div>
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
+              </DetailCard>
+            ) : null}
+          </EntityDetailLayout>
         )}
       </FormDrawer>
     </div>

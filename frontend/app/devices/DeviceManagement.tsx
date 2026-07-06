@@ -123,8 +123,11 @@ export function DeviceManagement() {
   const user = useCurrentUser();
   const canManage = user?.role === "SUPERADMIN" || user?.role === "COMPANY_ADMIN" || user?.role === "ADMIN" || user?.role === "SERVICE_PROVIDER" || canDesktopManagerManage(user);
   const canAdd = user?.role === "SUPERADMIN" || user?.role === "COMPANY_ADMIN" || user?.role === "ADMIN" || canDesktopManagerManage(user);
-  const canDelete = user?.role === "SUPERADMIN";
-
+const canDelete =
+  user?.role === "SUPERADMIN" ||
+  user?.role === "COMPANY_ADMIN" ||
+  user?.role === "ADMIN" ||
+  canDesktopManagerManage(user);
   // UI
   const table = useClientTable("deviceName");
   const [branchFilter, setBranchFilter] = useState("ALL");
@@ -711,19 +714,31 @@ if (user?.role === "BRANCH_ADMIN") {
     });
   };
 
-  const handleDelete = async (id: ID) => {
-    if (!confirm("Delete this device?")) return;
-    try {
-      const res = await fetch(`${API.devices}/${id}`, { method: "DELETE" });
-      if (!res.ok) throw new Error(await res.text());
-      await fetchDevices();
-      toast.success("Device deleted successfully");
-    } catch (e: any) {
-      toast.error(e?.message || "Delete failed");
+ const handleDelete = async (device: DeviceRead) => {
+  const deviceName = device.deviceName || "this device";
+
+  const confirmed = window.confirm(
+    `Are you sure you want to delete "${deviceName}"?\n\nThis action cannot be undone.`
+  );
+
+  if (!confirmed) return;
+
+  try {
+    const res = await fetch(`${API.devices}/${device.id}`, {
+      method: "DELETE",
+    });
+
+    if (!res.ok) {
+      const msg = await res.text();
+      throw new Error(msg || "Delete failed");
     }
-  };
 
-
+    await fetchDevices();
+    toast.success("Device deleted successfully");
+  } catch (e: any) {
+    toast.error(e?.message || "Delete failed");
+  }
+};
 
 const closeDevicePagePanels = () => {
   resetForm();
@@ -840,7 +855,7 @@ const handleCancel = () => {
       cell: (d) => (
         <EntityRowActions
           onEdit={canManage ? () => handleEdit(d) : undefined}
-          onDelete={canDelete ? () => handleDelete(d.id) : undefined}
+onDelete={canDelete ? () => handleDelete(d) : undefined}
         />
       ),
     },

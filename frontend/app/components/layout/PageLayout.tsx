@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useMemo, useCallback } from "react"
+import { useState, useEffect, useMemo, useCallback, useTransition } from "react"
 import {
   SidebarProvider,
   Sidebar,
@@ -130,13 +130,17 @@ const ADMIN_PATHS = ["/system-users", "/subscription"];
 const SUPERADMIN_SYSTEM_PATHS = ["/service-providers", "/company"];
 const ALL_SECTION_PATHS = [...SETUP_PATHS, ...CONTRACTOR_MANAGEMENT_PATHS, ...EMPLOYEE_PATHS, ...IM_PATHS, ...TASK_MANAGEMENT_PATHS, ...PAYROLL_PATHS, ...SALARY_PATHS, ...PAYROLL_POLICY_PATHS, ...LEAVE_PATHS, ...LEAVE_MANAGEMENT_PATHS, ...ATTENDANCE_PATHS, ...REPORTS_PATHS, ...CANTEEN_PATHS, ...SETTINGS_PATHS];
 export function PageLayout({ children }: PageLayoutProps) {
-  const pathname = usePathname()
-  const router = useRouter()
+const pathname = usePathname()
+const router = useRouter()
+const [isNavigating, startNavigation] = useTransition()
+
  const handleSidebarNavigation = (
   e: React.MouseEvent<HTMLAnchorElement>,
   href: string
 ) => {
   e.preventDefault();
+
+  if (isNavigating) return;
 
   window.dispatchEvent(
     new CustomEvent("sidebar-main-page-click", {
@@ -144,12 +148,13 @@ export function PageLayout({ children }: PageLayoutProps) {
     })
   );
 
-  if (pathname === href) {
-    router.refresh();
-    return;
-  }
-
-  router.push(href);
+  startNavigation(() => {
+    if (pathname === href) {
+      router.refresh();
+    } else {
+      router.push(href);
+    }
+  });
 };
 
   const currentUser = useCurrentUser()
@@ -674,23 +679,24 @@ const canShowCompanySwitcher =
   const renderCompanySections = (companyId: number, spId: number, spName: string, companyName: string) => {
     const k = (s: string) => `c${companyId}_${s}`
 
-    const onNav = (e?: React.MouseEvent<HTMLAnchorElement>) => {
-setSidebarContext(spId, spName, companyId, companyName);
-setSidebarCtxState({
-  serviceProviderID: spId,
-  serviceProviderName: spName,
-  companyID: companyId,
-  companyName,
-});
-window.dispatchEvent(new Event("sidebar-context-changed"));
-window.dispatchEvent(new Event("app-data-refresh"));
-
-if (!e?.currentTarget?.href) return;
-
+   const onNav = (e: React.MouseEvent<HTMLAnchorElement>) => {
   e.preventDefault();
 
-  const url = new URL(e.currentTarget.href);
-  const href = url.pathname;
+  if (isNavigating) return;
+
+  const href = e.currentTarget.getAttribute("href") || "";
+
+  setSidebarContext(spId, spName, companyId, companyName);
+
+  setSidebarCtxState({
+    serviceProviderID: spId,
+    serviceProviderName: spName,
+    companyID: companyId,
+    companyName,
+  });
+
+  window.dispatchEvent(new Event("sidebar-context-changed"));
+  window.dispatchEvent(new Event("app-data-refresh"));
 
   window.dispatchEvent(
     new CustomEvent("sidebar-main-page-click", {
@@ -698,13 +704,15 @@ if (!e?.currentTarget?.href) return;
     })
   );
 
-  if (pathname === href) {
-    router.refresh();
-    return;
-  }
-
-  router.push(href);
+  startNavigation(() => {
+    if (pathname === href) {
+      router.refresh();
+    } else {
+      router.push(href);
+    }
+  });
 };
+
 
     const setupSectionActive = isSectionActiveForCompany(SETUP_PATHS, companyId);
     const contractorManagementSectionActive = isSectionActiveForCompany(CONTRACTOR_MANAGEMENT_PATHS, companyId);

@@ -6,6 +6,8 @@ import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 import { Textarea } from "../components/ui/textarea";
 import { FormDrawer } from "../components/ui/form-drawer";
+import { DetailCard } from "../components/app/detail-card";
+import { EntityDetailHero, EntityDetailLayout } from "../components/app/entity-detail-layout";
 import { MessageCircle, Plus, AlertTriangle, UserPlus, FileDown, ClipboardList } from "lucide-react";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import { isDesktopManagerFlagSet } from "@/lib/desktopManager";
@@ -14,7 +16,6 @@ import { taskFetch } from "../utils/taskApi";
 import { NEXT_TASK_STATUS } from "../utils/taskStatusFlow";
 import { SearchSuggestInput } from "../components/SearchSuggestInput";
 import { TaskDetailTabs } from "../components/task/TaskDetailTabs";
-import { TaskDetailSidebar } from "../components/task/TaskDetailSidebar";
 import { TaskRemarksChatbox } from "../components/task/TaskRemarksChatbox";
 import {
   TASK_STATUSES,
@@ -823,34 +824,74 @@ useAppRefresh(() => {
       </FormDrawer>
 
       <FormDrawer open={detailOpen} onOpenChange={(v) => { if (!v) { setDetailOpen(false); setDetail(null); } }}
-        title={detail?.taskName || "Task Details"} description={detail?.taskCode} showHeaderCancel>
+        title="Task Details" showHeaderCancel cancelLabel="Close">
         {detail && (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-            <div className="lg:col-span-2 space-y-4 min-w-0">
-              {detail.description && (
-                <div className="rounded-xl border border-gray-200/80 bg-white px-4 py-3">
-                  <p className="text-[10px] uppercase tracking-wider text-gray-400 font-medium mb-1.5">Description</p>
-                  <p className="text-[13px] text-gray-700 leading-relaxed whitespace-pre-wrap">{detail.description}</p>
-                </div>
-              )}
-              <TaskDetailTabs
-                key={detail.id}
-                chats={detail.chats || []}
-                activities={detail.activities || []}
-                currentUserName={user?.username}
-                message={detailChatMsg}
-                onMessageChange={setDetailChatMsg}
-                onSend={sendDetailChat}
-                sending={detailChatSending}
-                showComposer
+          <div className="space-y-6">
+            <EntityDetailLayout
+              hero={
+                <EntityDetailHero
+                  title={detail.taskName}
+                  subtitle={<span>{detail.taskCode}</span>}
+                />
+              }
+            >
+              <DetailCard
+                title="Overview"
+                subtitle="Task classification and status"
+                rows={[
+                  { label: "Task code", value: detail.taskCode },
+                  { label: "Task type", value: detail.taskType },
+                  { label: "Status", value: detail.status },
+                  { label: "Priority", value: detail.priority },
+                ]}
               />
-            </div>
-            <div className="lg:col-span-1">
-              <TaskDetailSidebar status={detail.status} priority={detail.priority} taskType={detail.taskType}
-                department={detail.department?.departmentName} customer={detail.customer?.customerName}
-                branch={detail.site?.branchName} schedule={formatTaskDate(detail.scheduleDateTime)}
-                due={formatTaskDate(detail.dueDateTime)} assignments={detail.assignments} />
-            </div>
+              <DetailCard
+                title="Assignment"
+                subtitle="Organisation and scheduling"
+                rows={[
+                  { label: "Department", value: detail.department?.departmentName },
+                  { label: "Customer", value: detail.customer?.customerName },
+                  { label: "Branch / site", value: detail.site?.branchName },
+                  { label: "Schedule", value: formatTaskDate(detail.scheduleDateTime) },
+                  { label: "Due date", value: formatTaskDate(detail.dueDateTime) },
+                ]}
+              />
+              {detail.description ? (
+                <DetailCard title="Description" subtitle="Task details" className="lg:col-span-2">
+                  <p className="text-sm leading-relaxed text-foreground whitespace-pre-wrap">{detail.description}</p>
+                </DetailCard>
+              ) : null}
+              <DetailCard title="Assignees" subtitle="Employees assigned to this task" className="lg:col-span-2">
+                {(detail.assignments || []).length === 0 ? (
+                  <p className="text-sm text-muted-foreground">Unassigned</p>
+                ) : (
+                  <div className="divide-y divide-border">
+                    {(detail.assignments || []).map((a) => {
+                      const name = [a.manageEmployee?.employeeFirstName, a.manageEmployee?.employeeLastName]
+                        .filter(Boolean)
+                        .join(" ");
+                      return (
+                        <div key={a.manageEmployeeID} className="py-2.5 text-sm font-medium">
+                          {name || "Employee"}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </DetailCard>
+            </EntityDetailLayout>
+
+            <TaskDetailTabs
+              key={detail.id}
+              chats={detail.chats || []}
+              activities={detail.activities || []}
+              currentUserName={user?.username}
+              message={detailChatMsg}
+              onMessageChange={setDetailChatMsg}
+              onSend={sendDetailChat}
+              sending={detailChatSending}
+              showComposer
+            />
           </div>
         )}
       </FormDrawer>

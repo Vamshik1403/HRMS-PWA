@@ -96,7 +96,6 @@ function AmbientAccent() {
   const h = now.getHours();
   const m = now.getMinutes();
   const totalMin = h * 60 + m + now.getSeconds() / 60;
-
   const isDay = h >= 5 && h < 20;
 
   const SUN_R = 11;
@@ -182,7 +181,6 @@ function AmbientAccent() {
     </>
   );
 }
-// ───────────────────────────────────────────────────────────────────────────────
 
 const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL || "/backend";
 
@@ -239,7 +237,6 @@ export default function EmpDashboardPage() {
       if (s) {
         const u = JSON.parse(s);
         setEmpUser(u);
-        console.log("Employee user from localStorage:", u);
 
         // Check if mustChangePassword exists in the user object
         const mustChange = u?.mustChangePassword === true;
@@ -267,8 +264,6 @@ export default function EmpDashboardPage() {
 
         const empId = empUser?.employee?.id || empUser?.id;
         if (!empId) return;
-
-        console.log("Fetching employee credentials for ID:", empId);
 
         const response = await fetch(`${BACKEND}/manage-emp/${empId}`, {
           headers: {

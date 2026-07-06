@@ -70,6 +70,29 @@ export class PromotionUpdateDto {
   @IsOptional() @IsInt() hourlyPayGradeID?: number | null;
 }
 
+export class EmployeeDocumentDto {
+
+  id?: number;
+
+  documentName: string;
+
+  documentCategory: string;
+
+  description?: string;
+
+  issuedDate?: Date;
+
+  expiryDate?: Date;
+
+  fileName?: string;
+
+  fileUrl?: string;
+
+  fileType?: string;
+
+  fileSize?: number;
+}
+
 export class UpdateManageEmployeeDto {
   // FKs
   @IsOptional() @IsInt() serviceProviderID?: number | null;
@@ -184,6 +207,8 @@ export class UpdateManageEmployeeDto {
 @ValidateNested({ each: true })
 @Type(() => BankDetailsCreateDto)
 bankDetails?: BankDetailsCreateDto[];
+
+employeeDocuments?: EmployeeDocumentDto[];
 
 @IsOptional() @IsArray()
 @ValidateNested({ each: true })

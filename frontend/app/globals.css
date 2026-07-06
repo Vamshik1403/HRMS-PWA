@@ -36,11 +36,6 @@
   --chart-4: 187 86% 43%;
   --chart-5: 0 84% 60%;
 
-  --font-sans: "Inter";
-  --font-heading: "Inter";
-  --font-serif: "Playfair Display";
-  --font-mono: "JetBrains Mono";
-
   --radius: 0.625rem;
 }
 
@@ -129,7 +124,18 @@
   }
   body {
     @apply bg-background text-foreground;
+    font-family: var(--font-sans), system-ui, sans-serif;
+    font-feature-settings: "rlig" 1, "calt" 1, "ss01" 1;
     overscroll-behavior: none;
+  }
+
+  h1, h2, h3, h4 {
+    font-family: var(--font-display), var(--font-sans), system-ui, sans-serif;
+    letter-spacing: -0.02em;
+  }
+
+  code, pre, kbd {
+    font-family: var(--font-mono), ui-monospace, monospace;
   }
   /* Restore natural scrolling on desktop — overscroll-behavior: none can block
      trackpad two-finger scrolling on Windows/macOS on desktop viewports */

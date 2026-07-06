@@ -12,6 +12,9 @@ import { FilterBar, FilterSelect } from "../components/app/filter-bar";
 import { EntityListShell } from "../components/app/entity-list-shell";
 import type { DataTableColumn } from "../components/app/data-table";
 import { EntityRowActions } from "../components/app/entity-row-actions";
+import { DetailCard } from "../components/app/detail-card";
+import { EntityDetailHero, EntityDetailLayout } from "../components/app/entity-detail-layout";
+import { FormSectionNav } from "../components/app/form-section-nav";
 import { useClientTable, sortRows } from "../hooks/use-client-table";
 import { NoticeBanner } from "../components/ui/notice-banner";
 import {
@@ -249,6 +252,7 @@ export function ContractorManagement() {
   const [branchFilterLoading, setBranchFilterLoading] = useState(false);
 
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [contractorFormTab, setContractorFormTab] = useState("basic");
   const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
 
   const [editing, setEditing] = useState<ContractorRead | null>(null);
@@ -600,6 +604,7 @@ export function ContractorManagement() {
   // Form helpers
   // ---------------------------
   const resetForm = () => {
+    setContractorFormTab("basic");
     const baseFormData = {
       serviceProviderID: null as ID | null,
       branchSearch: "",
@@ -1278,6 +1283,19 @@ export function ContractorManagement() {
         )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
+          <FormSectionNav
+            active={contractorFormTab}
+            onChange={setContractorFormTab}
+            sections={[
+              { id: "basic", label: "Basic Information" },
+              { id: "location", label: "Location & Settings" },
+              { id: "compliance", label: "Compliance & Tax" },
+              { id: "contact", label: "Contact & Branding" },
+            ]}
+          />
+
+          {contractorFormTab === "basic" && (
+          <>
           {/* Service Provider - auto-filled from sidebar */}
           {false && (
             <div ref={spRef} className="space-y-2 relative">
@@ -1479,6 +1497,11 @@ export function ContractorManagement() {
             />
           </div>
 
+          </>
+          )}
+
+          {contractorFormTab === "location" && (
+          <>
           <LocationFields
             values={{
               city: formData.city,
@@ -1511,6 +1534,11 @@ export function ContractorManagement() {
             />
           </div>
 
+          </>
+          )}
+
+          {contractorFormTab === "compliance" && (
+          <>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div className="space-y-2"><Label>PF No</Label><Input value={formData.pfNo} onChange={(e) => setFormData((p) => ({ ...p, pfNo: e.target.value }))} /></div>
             <div className="space-y-2"><Label>TAN No</Label><Input value={formData.tanNo} onChange={(e) => setFormData((p) => ({ ...p, tanNo: e.target.value }))} /></div>
@@ -1541,15 +1569,22 @@ export function ContractorManagement() {
                 <option value="1st April">1st April</option>
               </select>
             </div>
+          </div>
+
+          </>
+          )}
+
+          {contractorFormTab === "contact" && (
+          <>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>Contact Number</Label>
               <Input value={formData.contactNo} onChange={(e) => setFormData((p) => ({ ...p, contactNo: e.target.value }))} />
             </div>
-          </div>
-
-          <div className="space-y-2">
-            <Label>Email Address</Label>
-            <Input type="email" value={formData.emailAdd} onChange={(e) => setFormData((p) => ({ ...p, emailAdd: e.target.value }))} />
+            <div className="space-y-2">
+              <Label>Email Address</Label>
+              <Input type="email" value={formData.emailAdd} onChange={(e) => setFormData((p) => ({ ...p, emailAdd: e.target.value }))} />
+            </div>
           </div>
 
           {/* Uploads */}
@@ -1587,6 +1622,9 @@ export function ContractorManagement() {
             </div>
           </div>
 
+          </>
+          )}
+
           <div className="border-t border-gray-200 pt-4">
             <div className="flex items-center justify-end">
               <div className="flex gap-2">
@@ -1605,32 +1643,76 @@ export function ContractorManagement() {
         open={isViewDialogOpen}
         onOpenChange={setIsViewDialogOpen}
         title="Contractor Details"
-        description="Read-only details"
+        showHeaderCancel
+        cancelLabel="Close"
       >
         {viewRow && (
-          <div className="space-y-3">
-            <p><strong>Name:</strong> {viewRow.contractorName || "—"}</p>
-            <p><strong>Address:</strong> {viewRow.address || "—"}</p>
-            <p><strong>Country:</strong> {viewRow.country || "—"}</p>
-            <p><strong>State:</strong> {viewRow.state || "—"}</p>
-            <p><strong>TimeZone:</strong> {viewRow.timeZone || "—"}</p>
-            <p><strong>Currency:</strong> {viewRow.currency || "—"}</p>
-            <p><strong>PF:</strong> {viewRow.pfNo || "—"}</p>
-            <p><strong>TAN:</strong> {viewRow.tanNo || "—"}</p>
-            <p><strong>ESI:</strong> {viewRow.esiNo || "—"}</p>
-            <p><strong>LIN:</strong> {viewRow.linNo || "—"}</p>
-            <p><strong>GST:</strong> {viewRow.gstNo || "—"}</p>
-            <p><strong>Shop Reg:</strong> {viewRow.shopRegNo || "—"}</p>
-            <p><strong>FY Start:</strong> {viewRow.financialYearStart || "—"}</p>
-            <p><strong>Contact:</strong> {viewRow.contactNo || "—"}</p>
-            <p><strong>Email:</strong> {viewRow.emailAdd || "—"}</p>
-            {viewRow.companyLogoUrl && <p><strong>Logo:</strong> <a className="text-blue-600 underline" href={viewRow.companyLogoUrl} target="_blank">Open</a></p>}
-            {viewRow.SignatureUrl && <p><strong>Signature:</strong> <a className="text-blue-600 underline" href={viewRow.SignatureUrl} target="_blank">Open</a></p>}
-          </div>
+          <EntityDetailLayout
+            hero={
+              <EntityDetailHero
+                title={viewRow.contractorName || "Contractor"}
+                subtitle={<span>{viewRow.contractorType}</span>}
+              />
+            }
+          >
+            <DetailCard
+              title="Overview"
+              subtitle="Core contractor details"
+              rows={[
+                { label: "Contractor name", value: viewRow.contractorName },
+                { label: "Contractor type", value: viewRow.contractorType },
+                { label: "Address", value: viewRow.address },
+              ]}
+            />
+            <DetailCard
+              title="Location"
+              subtitle="Regional settings"
+              rows={[
+                { label: "Country", value: viewRow.country },
+                { label: "State", value: viewRow.state },
+                { label: "Time zone", value: viewRow.timeZone },
+                { label: "Currency", value: viewRow.currency },
+              ]}
+            />
+            <DetailCard
+              title="Contact"
+              subtitle="How to reach this contractor"
+              rows={[
+                { label: "Contact number", value: viewRow.contactNo },
+                { label: "Email", value: viewRow.emailAdd },
+              ]}
+            />
+            <DetailCard
+              title="Statutory"
+              subtitle="Government and legal identifiers"
+              rows={[
+                { label: "PF", value: viewRow.pfNo },
+                { label: "TAN", value: viewRow.tanNo },
+                { label: "ESI", value: viewRow.esiNo },
+                { label: "LIN", value: viewRow.linNo },
+                { label: "GST", value: viewRow.gstNo },
+                { label: "Shop registration", value: viewRow.shopRegNo },
+                { label: "Financial year start", value: viewRow.financialYearStart },
+              ]}
+            />
+            {(viewRow.companyLogoUrl || viewRow.SignatureUrl) ? (
+              <DetailCard title="Branding" subtitle="Logo and signature" className="lg:col-span-2">
+                <div className="flex flex-wrap gap-4">
+                  {viewRow.companyLogoUrl ? (
+                    <a href={viewRow.companyLogoUrl} target="_blank" rel="noopener noreferrer" className="text-primary underline-offset-2 hover:underline text-sm">
+                      View logo
+                    </a>
+                  ) : null}
+                  {viewRow.SignatureUrl ? (
+                    <a href={viewRow.SignatureUrl} target="_blank" rel="noopener noreferrer" className="text-primary underline-offset-2 hover:underline text-sm">
+                      View signature
+                    </a>
+                  ) : null}
+                </div>
+              </DetailCard>
+            ) : null}
+          </EntityDetailLayout>
         )}
-        <div className="flex justify-end pt-4">
-          <Button onClick={() => setIsViewDialogOpen(false)} variant="outline">Close</Button>
-        </div>
       </FormDrawer>
 
       {showContractorAdminPanel && selectedContractor && (

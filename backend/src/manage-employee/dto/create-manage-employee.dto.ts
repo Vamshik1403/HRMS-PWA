@@ -204,6 +204,30 @@ export class EmployeeLoginDto {
   password!: string;
 }
 
+
+export class EmployeeDocumentDto {
+
+  id?: number;
+
+  documentName: string;
+
+  documentCategory: string;
+
+  description?: string;
+
+  issuedDate?: Date;
+
+  expiryDate?: Date;
+
+  fileName?: string;
+
+  fileUrl?: string;
+
+  fileType?: string;
+
+  fileSize?: number;
+}
+
 // ---------- Create Employee DTO ----------
 export class CreateManageEmployeeDto {
   // FKs
@@ -314,6 +338,8 @@ export class CreateManageEmployeeDto {
   @ValidateNested({ each: true })
   @Type(() => BankDetailsCreateDto)
   bankDetails?: BankDetailsCreateDto[];
+
+  employeeDocuments?: EmployeeDocumentDto[];
 
   @IsOptional() @IsArray()
   @ValidateNested({ each: true })

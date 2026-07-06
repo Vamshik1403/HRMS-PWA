@@ -8,6 +8,8 @@ import { Label } from "../components/ui/label"
 import { PageHeader } from "../components/app/page-header"
 import { Textarea } from "../components/ui/textarea"
 import { FormDrawer } from "../components/ui/form-drawer"
+import { DetailCard } from "../components/app/detail-card"
+import { EntityDetailHero, EntityDetailLayout } from "../components/app/entity-detail-layout"
 import {
   Table,
   TableBody,
@@ -547,24 +549,52 @@ toast.success(editingSpUser ? "Service provider user updated successfully" : "Se
         open={isViewDialogOpen}
         onOpenChange={setIsViewDialogOpen}
         title="Service Provider Details"
-        description="All information is read-only."
+        showHeaderCancel
+        cancelLabel="Close"
       >
         {viewProvider && (
-          <div className="space-y-3">
-            <p><strong>Company:</strong> {viewProvider.companyName}</p>
-            <p><strong>Address:</strong> {viewProvider.companyAddress}</p>
-            <p><strong>Country:</strong> {viewProvider.country}</p>
-            <p><strong>State:</strong> {viewProvider.state}</p>
-            <p><strong>City:</strong> {viewProvider.city || "—"}</p>
-            <p><strong>Pincode:</strong> {viewProvider.pincode || "—"}</p>
-            <p><strong>GST No:</strong> {viewProvider.gstNo}</p>
-            <p><strong>Contact:</strong> {viewProvider.countryCode ? `${viewProvider.countryCode} ` : ""}{viewProvider.contactNo}</p>
-            <p><strong>Email:</strong> {viewProvider.emailAdd}</p>
-          </div>
+          <EntityDetailLayout
+            hero={
+              <EntityDetailHero
+                title={viewProvider.companyName}
+                subtitle={<span>{viewProvider.city || viewProvider.state}, {viewProvider.country}</span>}
+              />
+            }
+          >
+            <DetailCard
+              title="Overview"
+              subtitle="Core service provider details"
+              rows={[
+                { label: "Company name", value: viewProvider.companyName },
+                { label: "Address", value: viewProvider.companyAddress },
+                { label: "GST No", value: viewProvider.gstNo },
+              ]}
+            />
+            <DetailCard
+              title="Location"
+              subtitle="Regional address details"
+              rows={[
+                { label: "Country", value: viewProvider.country },
+                { label: "State", value: viewProvider.state },
+                { label: "City", value: viewProvider.city },
+                { label: "Pincode", value: viewProvider.pincode },
+              ]}
+            />
+            <DetailCard
+              title="Contact"
+              subtitle="How to reach this service provider"
+              rows={[
+                {
+                  label: "Contact",
+                  value: viewProvider.countryCode
+                    ? `${viewProvider.countryCode} ${viewProvider.contactNo}`
+                    : viewProvider.contactNo,
+                },
+                { label: "Email", value: viewProvider.emailAdd },
+              ]}
+            />
+          </EntityDetailLayout>
         )}
-        <div className="flex justify-end pt-4">
-          <Button onClick={() => setIsViewDialogOpen(false)} variant="outline">Close</Button>
-        </div>
       </FormDrawer>
 
 

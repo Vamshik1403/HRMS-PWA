@@ -28,6 +28,8 @@ import { Plus, Search, Edit, Trash2, Eye, CheckCircle, History, X } from "lucide
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "../components/ui/select";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import { FormDrawer } from "../components/ui/form-drawer";
+import { DetailCard } from "../components/app/detail-card";
+import { EntityDetailHero, EntityDetailLayout } from "../components/app/entity-detail-layout";
 import { NoticeBanner } from "../components/ui/notice-banner";
 import { toast } from "sonner";
 import { getSidebarContext } from "../utils/sidebarContext";
@@ -2735,16 +2737,31 @@ const runFetchBR = (query: string) => {
       {/* View Details FormDrawer */}
       <FormDrawer open={!!(isViewing && viewRow)} onOpenChange={(v) => { if (!v) { setIsViewing(false); setViewRow(null); } }}
         title="Promotion Request"
-        description="Read-only details">
+        showHeaderCancel
+        cancelLabel="Close">
           {viewRow && (
-            <div className="space-y-3 text-sm">
-              <p><strong>Employee ID:</strong> {viewRow.empID ?? "—"}</p>
-              <p><strong>Status:</strong> {viewRow.status ?? "—"}</p>
-              <p><strong>New Dept/Desg:</strong> {String(viewRow.newDepartmentID ?? "—")} / {String(viewRow.newDesignationID ?? "—")}</p>
-              <p><strong>Proposed Dept/Desg:</strong> {String(viewRow.proposedDepartmentID ?? "—")} / {String(viewRow.proposedDesignationID ?? "—")}</p>
-              <p><strong>Promotion Date:</strong> {viewRow.promotionDate ?? "—"}</p>
-              <p><strong>Description:</strong> {viewRow.description ?? "—"}</p>
-            </div>
+            <EntityDetailLayout
+              hero={
+                <EntityDetailHero
+                  title={`Employee ${viewRow.empID ?? "—"}`}
+                  subtitle={<span>{viewRow.status}</span>}
+                />
+              }
+              columns={1}
+            >
+              <DetailCard
+                title="Promotion details"
+                subtitle="Proposed changes and timeline"
+                rows={[
+                  { label: "Employee ID", value: viewRow.empID },
+                  { label: "Status", value: viewRow.status },
+                  { label: "New department / designation", value: `${viewRow.newDepartmentID ?? "—"} / ${viewRow.newDesignationID ?? "—"}` },
+                  { label: "Proposed department / designation", value: `${viewRow.proposedDepartmentID ?? "—"} / ${viewRow.proposedDesignationID ?? "—"}` },
+                  { label: "Promotion date", value: viewRow.promotionDate },
+                  { label: "Description", value: viewRow.description },
+                ]}
+              />
+            </EntityDetailLayout>
           )}
       </FormDrawer>
 

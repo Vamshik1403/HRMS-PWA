@@ -141,6 +141,41 @@ findAll(@Query('status') status?: string) {
     }
   }
 
+  @Get(':id/documents')
+@UseGuards(AuthGuard('jwt'))
+getEmployeeDocuments(@Param('id', ParseIntPipe) id: number) {
+  return this.service.getEmployeeDocuments(id);
+}
+
+@Post(':id/documents')
+@UseGuards(AuthGuard('jwt'))
+createEmployeeDocument(
+  @Param('id', ParseIntPipe) id: number,
+  @Body() body: any,
+  @Req() req: Request,
+) {
+  return this.service.createEmployeeDocument(id, body, req);
+}
+
+@Patch('documents/:documentId')
+@UseGuards(AuthGuard('jwt'))
+updateEmployeeDocument(
+  @Param('documentId', ParseIntPipe) documentId: number,
+  @Body() body: any,
+  @Req() req: Request,
+) {
+  return this.service.updateEmployeeDocument(documentId, body, req);
+}
+
+@Delete('documents/:documentId')
+@UseGuards(AuthGuard('jwt'))
+deleteEmployeeDocument(
+  @Param('documentId', ParseIntPipe) documentId: number,
+  @Req() req: Request,
+) {
+  return this.service.deleteEmployeeDocument(documentId, req);
+}
+
   @Get(':id')
   findOne(@Param('id', ParseIntPipe) id: number) {
     return this.service.findOne(id);

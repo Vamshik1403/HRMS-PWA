@@ -18,6 +18,8 @@ import { FilterBar, FilterSelect } from "../components/app/filter-bar";
 import { EntityListShell } from "../components/app/entity-list-shell";
 import type { DataTableColumn } from "../components/app/data-table";
 import { EntityRowActions } from "../components/app/entity-row-actions";
+import { DetailCard } from "../components/app/detail-card";
+import { EntityDetailHero, EntityDetailLayout } from "../components/app/entity-detail-layout";
 import { useClientTable, sortRows } from "../hooks/use-client-table";
 
 interface Contact { id?: number; contactPerson: string; contactNumber: string; designation?: string | null; email?: string | null; }
@@ -452,28 +454,58 @@ export default function CustomerManagement() {
         </form>
       </FormDrawer>
 
-      <FormDrawer open={viewOpen} onOpenChange={setViewOpen} title="Customer Details">
+      <FormDrawer
+        open={viewOpen}
+        onOpenChange={setViewOpen}
+        title="Customer Details"
+        showHeaderCancel
+        cancelLabel="Close"
+      >
         {viewRow && (
-          <div className="space-y-3 text-sm">
-            <div className="p-3 bg-gray-50 rounded-lg"><strong>ID:</strong> {viewRow.customerCode}</div>
-            <div className="p-3 bg-gray-50 rounded-lg"><strong>Name:</strong> {viewRow.customerName}</div>
-            <div className="p-3 bg-gray-50 rounded-lg"><strong>Address:</strong> {viewRow.address || "—"}</div>
-            <div className="p-3 bg-gray-50 rounded-lg"><strong>City:</strong> {viewRow.city || "—"}</div>
-            <div className="p-3 bg-gray-50 rounded-lg"><strong>State:</strong> {viewRow.state || "—"}</div>
-            <div className="p-3 bg-gray-50 rounded-lg"><strong>Pin:</strong> {viewRow.pincode || "—"}</div>
-            <div className="p-3 bg-gray-50 rounded-lg"><strong>Country:</strong> {viewRow.country || "—"}</div>
-            {viewRow.contacts && viewRow.contacts.length > 0 && (
-              <div className="space-y-2">
-                <p className="font-semibold">Contacts</p>
-                {viewRow.contacts.map((c, i) => (
-                  <div key={c.id ?? i} className="p-3 bg-gray-50 rounded-lg">
-                    <div>{c.contactPerson} · {c.contactNumber}</div>
-                    {(c.designation || c.email) && <div className="text-gray-500 text-xs mt-1">{[c.designation, c.email].filter(Boolean).join(" · ")}</div>}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+          <EntityDetailLayout
+            hero={
+              <EntityDetailHero
+                title={viewRow.customerName}
+                subtitle={<span>{viewRow.customerCode}</span>}
+              />
+            }
+          >
+            <DetailCard
+              title="Overview"
+              subtitle="Customer identification"
+              rows={[
+                { label: "Customer code", value: viewRow.customerCode },
+                { label: "Customer name", value: viewRow.customerName },
+              ]}
+            />
+            <DetailCard
+              title="Location"
+              subtitle="Address and regional details"
+              rows={[
+                { label: "Address", value: viewRow.address },
+                { label: "City", value: viewRow.city },
+                { label: "State", value: viewRow.state },
+                { label: "Pincode", value: viewRow.pincode },
+                { label: "Country", value: viewRow.country },
+              ]}
+            />
+            {viewRow.contacts && viewRow.contacts.length > 0 ? (
+              <DetailCard title="Contacts" subtitle="Customer contact persons" className="lg:col-span-2">
+                <div className="divide-y divide-border">
+                  {viewRow.contacts.map((c, i) => (
+                    <div key={c.id ?? i} className="py-3 text-sm">
+                      <div className="font-medium">{c.contactPerson} · {c.contactNumber}</div>
+                      {(c.designation || c.email) ? (
+                        <div className="mt-1 text-muted-foreground">
+                          {[c.designation, c.email].filter(Boolean).join(" · ")}
+                        </div>
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
+              </DetailCard>
+            ) : null}
+          </EntityDetailLayout>
         )}
       </FormDrawer>
     </div>
