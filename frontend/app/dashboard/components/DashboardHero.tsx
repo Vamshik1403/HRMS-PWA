@@ -57,10 +57,10 @@ export function DashboardHero({
           </Badge>
           <div>
             <h1 className="font-display text-[2.25rem] sm:text-4xl font-bold tracking-tight leading-tight">
-              {greeting}, {name} <span className="inline-block">👋</span>
+              {greeting}, {name} 
             </h1>
             <p className="text-muted-foreground text-[15px] mt-2 max-w-2xl leading-relaxed">
-              Welcome back, <span className="font-medium text-foreground">{displayRole}</span>.
+              Welcome back, 
               {" "}Here&apos;s what&apos;s happening in your workspace today.
             </p>
           </div>

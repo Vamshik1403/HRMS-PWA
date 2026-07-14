@@ -37,6 +37,7 @@ import {
   ChevronRight,
 } from "lucide-react";
 import { toast } from "sonner";
+import { FormDrawer } from "../components/ui/form-drawer";
 
 // ---------------------------
 // Types
@@ -439,6 +440,8 @@ export default function SubscriptionPage() {
   const totalPlanPages = Math.ceil(filteredPlans.length / PAGE_SIZE);
   const totalSubPages = Math.ceil(filteredSubscriptions.length / PAGE_SIZE);
 
+  const inlineFormOpen = showPlanForm || showSubForm;
+
   // Reset page when search changes
   useEffect(() => {
     setPlanPage(1);
@@ -450,6 +453,8 @@ export default function SubscriptionPage() {
   // ---------------------------
   return (
     <div className="space-y-6 w-full max-w-none animate-fade-in page-content-enter py-6">
+      {!inlineFormOpen && (
+        <>
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -546,17 +551,16 @@ export default function SubscriptionPage() {
           </Button>
         )}
       </div>
+        </>
+      )}
 
-      {/* ==================== PLANS TAB ==================== */}
-      {activeTab === "plans" && (
-        <div className="space-y-4">
-          {/* Plan Form - Inline */}
-          {showPlanForm && (
-            <Card>
-              <CardHeader>
-                <CardTitle>{editingPlan ? "Edit Plan" : "Create New Plan"}</CardTitle>
-              </CardHeader>
-              <CardContent>
+      {/* Plan form — inline shell */}
+      <FormDrawer
+        open={showPlanForm}
+        onOpenChange={(open) => { if (!open) resetPlanForm(); }}
+        title={editingPlan ? "Edit Plan" : "Create New Plan"}
+        description={editingPlan ? "Update subscription plan details." : "Fill in the details to create a new subscription plan."}
+      >
                 <form onSubmit={editingPlan ? handleUpdatePlan : handleCreatePlan} className="space-y-4">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-2">
@@ -637,10 +641,80 @@ export default function SubscriptionPage() {
                     </Button>
                   </div>
                 </form>
-              </CardContent>
-            </Card>
-          )}
+      </FormDrawer>
 
+      {/* Assign plan form — inline shell */}
+      <FormDrawer
+        open={showSubForm}
+        onOpenChange={(open) => { if (!open) resetSubForm(); }}
+        title="Assign Plan to Company"
+        description="Select a company and plan to create a new subscription assignment."
+      >
+                <form onSubmit={handleAssignPlan} className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="space-y-2">
+                      <Label>Company *</Label>
+                      <Select
+                        value={subForm.companyID.toString()}
+                        onValueChange={(v) => setSubForm({ ...subForm, companyID: parseInt(v) })}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select company" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {companies.map((company) => (
+                            <SelectItem key={company.id} value={company.id.toString()}>
+                              {company.companyName}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Plan *</Label>
+                      <Select
+                        value={subForm.planID.toString()}
+                        onValueChange={(v) => setSubForm({ ...subForm, planID: parseInt(v) })}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select plan" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {plans
+                            .filter((p) => p.isActive)
+                            .map((plan) => (
+                              <SelectItem key={plan.id} value={plan.id.toString()}>
+                                {plan.planName} (₹{plan.planAmount})
+                              </SelectItem>
+                            ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Start Date *</Label>
+                      <Input
+                        type="date"
+                        value={subForm.startDate}
+                        onChange={(e) => setSubForm({ ...subForm, startDate: e.target.value })}
+                        required
+                      />
+                    </div>
+                  </div>
+                  <div className="flex gap-2 pt-4 border-t">
+                    <Button type="submit" disabled={saving}>
+                      <Plus className="w-4 h-4 mr-2" />
+                      {saving ? "Assigning..." : "Assign Plan"}
+                    </Button>
+                    <Button type="button" variant="outline" onClick={resetSubForm}>
+                      Cancel
+                    </Button>
+                  </div>
+                </form>
+      </FormDrawer>
+
+      {/* ==================== PLANS TAB ==================== */}
+      {!inlineFormOpen && activeTab === "plans" && (
+        <div className="space-y-4">
           {/* Plans Table */}
           <Card>
             <CardHeader>
@@ -768,79 +842,8 @@ export default function SubscriptionPage() {
       )}
 
       {/* ==================== SUBSCRIPTIONS TAB ==================== */}
-      {activeTab === "subscriptions" && (
+      {!inlineFormOpen && activeTab === "subscriptions" && (
         <div className="space-y-4">
-          {/* Assign Form - Inline */}
-          {showSubForm && (
-            <Card>
-              <CardHeader>
-                <CardTitle>Assign Plan to Company</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <form onSubmit={handleAssignPlan} className="space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div className="space-y-2">
-                      <Label>Company *</Label>
-                      <Select
-                        value={subForm.companyID.toString()}
-                        onValueChange={(v) => setSubForm({ ...subForm, companyID: parseInt(v) })}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select company" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {companies.map((company) => (
-                            <SelectItem key={company.id} value={company.id.toString()}>
-                              {company.companyName}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Plan *</Label>
-                      <Select
-                        value={subForm.planID.toString()}
-                        onValueChange={(v) => setSubForm({ ...subForm, planID: parseInt(v) })}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select plan" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {plans
-                            .filter((p) => p.isActive)
-                            .map((plan) => (
-                              <SelectItem key={plan.id} value={plan.id.toString()}>
-                                {plan.planName} (₹{plan.planAmount})
-                              </SelectItem>
-                            ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Start Date *</Label>
-                      <Input
-                        type="date"
-                        value={subForm.startDate}
-                        onChange={(e) => setSubForm({ ...subForm, startDate: e.target.value })}
-                        required
-                      />
-                    </div>
-                  </div>
-                  <div className="flex gap-2 pt-4 border-t">
-                    <Button type="submit" disabled={saving}>
-                      <Plus className="w-4 h-4 mr-2" />
-                      {saving ? "Assigning..." : "Assign Plan"}
-                    </Button>
-                    <Button type="button" variant="outline" onClick={resetSubForm}>
-                      Cancel
-                    </Button>
-                  </div>
-                </form>
-              </CardContent>
-            </Card>
-          )}
-
           {/* Subscriptions Grid */}
           <div className="space-y-4">
             {loading ? (

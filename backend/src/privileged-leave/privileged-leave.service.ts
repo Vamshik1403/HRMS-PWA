@@ -3,6 +3,24 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CreatePrivilegedLeaveDto } from './dto/create-privileged-leave.dto';
 import { UpdatePrivilegedLeaveDto } from './dto/update-privileged-leave.dto';
 
+const APPROVED_LEAVE_STATUSES = ['Approved', 'Accepted', 'Partially Approved'] as const;
+const PAID_LEAVE_TYPES = ['Sick', 'Casual', 'Privileged', 'CompOff', 'Earn', 'PL', 'MtL', 'PtL'] as const;
+
+function addDateRangeToSet(
+  target: Set<string>,
+  start: Date,
+  end: Date,
+  fromDate?: string,
+  toDate?: string,
+) {
+  for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+    const key = d.toISOString().split('T')[0];
+    if (fromDate && key < fromDate) continue;
+    if (toDate && key > toDate) continue;
+    target.add(key);
+  }
+}
+
 @Injectable()
 export class PrivilegedLeaveService {
   constructor(private prisma: PrismaService) {}
@@ -293,32 +311,60 @@ export class PrivilegedLeaveService {
       const paidLeaves = await this.prisma.leaveApplication.findMany({
         where: {
           manageEmployeeID: employeeID,
-          status: 'Approved',
-          appliedLeaveType: { in: ['Sick', 'Casual', 'Earn', 'PL'] },
-          ...(fromDate || toDate ? {
-            fromDate: {
-              ...(fromDate ? { gte: new Date(fromDate) } : {}),
-              ...(toDate ? { lte: new Date(toDate) } : {}),
-            },
-          } : {}),
+          status: { in: [...APPROVED_LEAVE_STATUSES] },
+          appliedLeaveType: { in: [...PAID_LEAVE_TYPES] },
+          ...(fromDate || toDate
+            ? {
+                fromDate: {
+                  ...(fromDate ? { gte: new Date(fromDate) } : {}),
+                  ...(toDate ? { lte: new Date(toDate) } : {}),
+                },
+              }
+            : {}),
         },
-        select: { fromDate: true, toDate: true },
+        select: { fromDate: true, toDate: true, dayStatuses: true },
       });
       for (const lv of paidLeaves) {
-        if (lv.fromDate && lv.toDate) {
-          const start = new Date(lv.fromDate);
-          const end = new Date(lv.toDate);
-          for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-            workingDates.add(d.toISOString().split('T')[0]);
+        const ds = lv.dayStatuses as Array<{ date?: string; status?: string }> | null;
+        if (Array.isArray(ds) && ds.length > 0) {
+          for (const day of ds) {
+            if (!day?.date || !day?.status) continue;
+            const key = new Date(day.date).toISOString().split('T')[0];
+            if (fromDate && key < fromDate) continue;
+            if (toDate && key > toDate) continue;
+            workingDates.add(key);
           }
+        } else if (lv.fromDate && lv.toDate) {
+          addDateRangeToSet(
+            workingDates,
+            new Date(lv.fromDate),
+            new Date(lv.toDate),
+            fromDate,
+            toDate,
+          );
         }
+      }
+    }
+
+    // 4. If holidayConsideredInPL, count public holidays linked to this policy
+    if (policy.holidayConsideredInPL) {
+      const policyHolidays = await this.prisma.leavePolicyHoliday.findMany({
+        where: { leavePolicyID },
+        include: { publicHoliday: true },
+      });
+      for (const link of policyHolidays) {
+        const pub = link.publicHoliday;
+        if (!pub?.startDate) continue;
+        const start = new Date(pub.startDate);
+        const end = pub.endDate ? new Date(pub.endDate) : new Date(pub.startDate);
+        addDateRangeToSet(workingDates, start, end, fromDate, toDate);
       }
     }
 
     const totalWorkingDays = workingDates.size;
     const plEarned = Math.floor(totalWorkingDays / workDays) * plDays;
 
-    // 4. Get already credited PL from auto-credit entries
+    // 5. Get already credited PL from auto-credit entries
     const existingAuto = await this.prisma.privilegedLeaveLedger.aggregate({
       where: {
         employeeID,
@@ -356,7 +402,7 @@ export class PrivilegedLeaveService {
       };
     }
 
-    // 5. Credit the difference
+    // 6. Credit the difference
     const entry = await this.prisma.privilegedLeaveLedger.create({
       data: {
         serviceProviderID: policy.serviceProviderID,

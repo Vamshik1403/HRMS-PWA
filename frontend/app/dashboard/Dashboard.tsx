@@ -1378,20 +1378,20 @@ export default function DashboardPage() {
 
           {!isHrDesktopView && (
           <section className={`${cardShell} p-5 shrink-0`}>
-            <h2 className="text-sm font-bold text-gray-900 tracking-tight mb-3">
+            <h2 className="text-sm font-bold text-foreground tracking-tight mb-3">
               Today&apos;s summary
             </h2>
             <div className="space-y-2.5">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2.5">
-                  <div className="w-8 h-8 rounded-lg bg-emerald-50 flex items-center justify-center">
-                    <Icon icon="mdi:chart-line" className="w-4 h-4 text-emerald-600" />
+                  <div className="w-8 h-8 rounded-lg bg-emerald-500/10 dark:bg-emerald-500/15 flex items-center justify-center">
+                    <Icon icon="mdi:chart-line" className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
                   </div>
-                  <p className="text-sm font-medium text-gray-700">Attendance rate</p>
+                  <p className="text-sm font-medium text-muted-foreground">Attendance rate</p>
                 </div>
-                <span className="text-sm font-bold text-gray-900 tabular-nums">{attRate}%</span>
+                <span className="text-sm font-bold text-foreground tabular-nums">{attRate}%</span>
               </div>
-              <div className="h-px bg-[#f0f0f0]" />
+              <div className="h-px bg-border" />
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2.5">
                   <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center">

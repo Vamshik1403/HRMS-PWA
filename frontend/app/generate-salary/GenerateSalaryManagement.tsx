@@ -2576,6 +2576,8 @@ export function GenerateSalaryManagement() {
     },
   ], [canManage]);
 
+  const showMainPayrollPage = !viewSlipOpen && !isPaymentDialogOpen;
+
   return (
     <>
       <FormDrawer open={viewSlipOpen} onOpenChange={setViewSlipOpen} title={"Salary Slip Preview"} description={""}>
@@ -2813,6 +2815,7 @@ export function GenerateSalaryManagement() {
         </div>
       </FormModal>
 
+      {showMainPayrollPage && (
       <div className="space-y-6 w-full max-w-none animate-fade-in page-content-enter">
         <PageHeader
           icon={Wallet}
@@ -3135,6 +3138,7 @@ export function GenerateSalaryManagement() {
         />
         </>)}
       </div>
+      )}
     </>
   );
 }

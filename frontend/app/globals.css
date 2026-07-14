@@ -897,12 +897,29 @@ html[data-emp-theme="dark"] .emp-pwa-shell .emp-mobile-date-field input[type="da
   color: hsl(var(--foreground));
 }
 
-/* Emergent-style list page: white search/filter controls on grey page canvas */
+/* Emergent-style list page: theme-aware search/filter controls */
 .hrms-admin-content [data-hrms-list-control] {
-  background-color: #ffffff !important;
+  background-color: hsl(var(--background)) !important;
   border-color: hsl(var(--input)) !important;
   border-radius: calc(var(--radius) - 2px);
   box-shadow: none !important;
+  color: hsl(var(--foreground)) !important;
+}
+
+html.dark .hrms-admin-content [data-hrms-list-control] {
+  background-color: hsl(var(--card)) !important;
+  border-color: hsl(var(--input)) !important;
+  color: hsl(var(--foreground)) !important;
+}
+
+html.dark .hrms-admin-content [data-hrms-table-header] {
+  background-color: hsl(var(--muted) / 0.45) !important;
+  color: hsl(var(--muted-foreground)) !important;
+}
+
+html.dark .hrms-admin-content [data-hrms-table-header] .hover\:text-foreground:hover,
+html.dark .hrms-admin-content [data-hrms-table-header] [class*="hover:text-foreground"]:hover {
+  color: hsl(var(--foreground)) !important;
 }
 
 /* ── Admin content UI consistency ── */

@@ -80,7 +80,7 @@ function SkeletonRows<T>({ columns, spans }: { columns: Array<DataTableColumn<T>
   return (
     <>
       {SKELETON_KEYS.map((k) => (
-        <div key={k} className="px-4 py-3 grid grid-cols-12 gap-3 items-center bg-white">
+        <div key={k} className="px-4 py-3 grid grid-cols-12 gap-3 items-center bg-card">
           {columns.map((c, i) => (
             <div key={`${k}-${c.key}`} className={colClass(spans[i])}>
               <Skeleton className="h-4 w-3/4" />
@@ -108,15 +108,18 @@ export function DataTable<T>({
   const spans = resolveColSpans(columns);
 
   return (
-    <div className="rounded-lg border border-border divide-y overflow-hidden bg-white w-full">
-      <div className="px-4 py-2.5 grid grid-cols-12 gap-3 text-[11px] uppercase tracking-wider text-muted-foreground font-semibold bg-[#F8FAFC]">
+    <div className="rounded-lg border border-border divide-y divide-border overflow-hidden bg-card w-full">
+      <div
+        data-hrms-table-header
+        className="px-4 py-2.5 grid grid-cols-12 gap-3 text-[11px] uppercase tracking-wider text-muted-foreground font-semibold bg-muted/70 dark:bg-muted/40"
+      >
         {columns.map((c, i) => {
           const isSorted = sortBy === c.key;
           const Indicator = sortIndicator(isSorted, sortDir);
           return (
             <div
               key={c.key}
-              className={`${colClass(spans[i])} ${c.align === "right" ? "text-right" : ""} ${c.sortable ? "cursor-pointer select-none hover:text-foreground transition-colors" : ""}`}
+              className={`${colClass(spans[i])} ${c.align === "right" ? "text-right" : ""} ${c.sortable ? "cursor-pointer select-none hover:text-foreground dark:hover:text-foreground transition-colors" : ""}`}
               onClick={() => c.sortable && onSort?.(c.key)}
               role={c.sortable ? "button" : undefined}
             >
@@ -146,7 +149,7 @@ export function DataTable<T>({
         rows.map((row) => (
           <div
             key={rowKey(row)}
-            className="px-4 py-3 grid grid-cols-12 gap-3 items-center text-sm bg-white hover:bg-[#F8FAFC]/80 transition-colors"
+            className="px-4 py-3 grid grid-cols-12 gap-3 items-center text-sm bg-card hover:bg-muted/50 dark:hover:bg-muted/30 transition-colors"
           >
             {columns.map((c, i) => (
               <div

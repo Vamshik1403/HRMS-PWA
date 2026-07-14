@@ -5,15 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card"
 import { Button } from "../components/ui/button"
 import { Input } from "../components/ui/input"
 import { Label } from "../components/ui/label"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "../components/ui/dialog"
+import { FormDrawer } from "../components/ui/form-drawer"
 import {
   Table,
   TableBody,
@@ -151,19 +143,20 @@ export function EmployeeWeeklyOffManagement() {
         <div className="min-w-0 flex-1">
           <p className="text-gray-600 mt-1 text-sm">Track and manage employee weekly off days</p>
         </div>
-        {canManage && (
-          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-            <DialogTrigger asChild>
-              <Button className="text-sm px-3 py-2">
-                <Plus className="w-4 h-4 mr-1" />
-                Add Weekly Off
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Add Weekly Off</DialogTitle>
-                <DialogDescription>Assign a weekly off day to an employee</DialogDescription>
-              </DialogHeader>
+        {canManage && !isDialogOpen && (
+          <Button onClick={() => setIsDialogOpen(true)} className="text-sm px-3 py-2">
+            <Plus className="w-4 h-4 mr-1" />
+            Add Weekly Off
+          </Button>
+        )}
+      </div>
+
+      <FormDrawer
+        open={isDialogOpen}
+        onOpenChange={setIsDialogOpen}
+        title="Add Weekly Off"
+        description="Assign a weekly off day to an employee"
+      >
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="space-y-2">
                   <Label>Employee</Label>
@@ -190,16 +183,14 @@ export function EmployeeWeeklyOffManagement() {
                     required
                   />
                 </div>
-                <DialogFooter>
+                <div className="flex justify-end gap-2 pt-4 border-t border-gray-200">
                   <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
                   <Button type="submit" className="">Add Weekly Off</Button>
-                </DialogFooter>
+                </div>
               </form>
-            </DialogContent>
-          </Dialog>
-        )}
-      </div>
+      </FormDrawer>
 
+      {!isDialogOpen && (<>
       <Card>
         <CardContent className="p-6">
           <div className="flex items-center space-x-4 w-full">
@@ -276,6 +267,7 @@ export function EmployeeWeeklyOffManagement() {
           </div>
         </CardContent>
       </Card>
+      </>)}
     </div>
   )
 }

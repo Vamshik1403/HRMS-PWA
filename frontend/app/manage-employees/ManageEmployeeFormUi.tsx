@@ -2,14 +2,14 @@
 
 import type { ReactNode } from "react";
 import { ChevronDown, ChevronUp } from "lucide-react";
-import { cn } from "../../lib/utils";
 import { FormSectionNav, type FormSectionTab } from "../components/app/form-section-nav";
 
-export type EmpFormSectionId = "basic" | "employment" | "additional" | "attendance" | "roles&permissions";
+export type EmpFormSectionId = "basic" | "employment" | "documents" | "additional" | "attendance" | "roles&permissions";
 
 export const EMPLOYEE_FORM_SECTIONS: FormSectionTab[] = [
   { id: "basic", label: "Basic Information" },
   { id: "employment", label: "Employment Information" },
+  { id: "documents", label: "Documents" },
   { id: "additional", label: "Additional Information" },
   { id: "attendance", label: "Attendance & Selfcare Setup" },
   { id: "roles&permissions", label: "Roles & Permissions" },

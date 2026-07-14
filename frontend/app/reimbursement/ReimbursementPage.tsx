@@ -6,8 +6,6 @@ import { Input } from "../components/ui/input"
 import { Label } from "../components/ui/label"
 import { NoticeBanner } from "../components/ui/notice-banner"
 import {
-  Dialog, DialogContent, DialogFooter,
-  DialogHeader, DialogTitle,
 } from "../components/ui/dialog"  
 import { FormDrawer } from "../components/ui/form-drawer"
 import { FormModal } from "../components/ui/form-modal"
@@ -1518,9 +1516,15 @@ const handleSubmit = async (e: React.FormEvent) => {
 
 const getTotalAmount = (reimbursement: Reimbursement) => getPayableAmount(reimbursement)
 
+const inlineFormOpen =
+  isDialogOpen ||
+  isViewDrawerOpen ||
+  isSettingsDialogOpen ||
+  isPaymentDialogOpen;
+
 return (
     <div className="space-y-6 w-full max-w-none animate-fade-in page-content-enter">
-      {!isDialogOpen && (<>
+      {!inlineFormOpen && (<>
       <PageHeader
         icon={Wallet}
         title="Reimbursements"
@@ -1844,7 +1848,7 @@ fetchData={(q) => fetchBranches(q)}
               </div>
             </form>
           </div>
-          <DialogFooter className="px-6 py-4 border-t bg-[#f8fafc] sticky bottom-0">
+          <div className="flex gap-3 w-full px-0 py-4 border-t bg-[#f8fafc] sticky bottom-0">
             <div className="flex gap-3 w-full">
               <Button 
                 type="button" 
@@ -1862,7 +1866,7 @@ fetchData={(q) => fetchBranches(q)}
                 {editing ? "Update Reimbursement" : "Create Reimbursement"}
               </Button>
             </div>
-          </DialogFooter>
+          </div>
       </FormDrawer>
 
       {/* View & per-item approval */}

@@ -409,12 +409,8 @@ export default function CustomerManagement() {
             <Input value={form.customerCode} onChange={(e) => setForm((p) => ({ ...p, customerCode: e.target.value }))}
               placeholder="Enter customer ID" required disabled={!!editing} />
           </div>
-          <div className="space-y-2">
-            <Label>Customer Name *</Label>
-            <Input value={form.customerName} onChange={(e) => setForm((p) => ({ ...p, customerName: e.target.value }))} required />
-          </div>
 
-          <SearchSuggestInput
+              <SearchSuggestInput
             label="Branch *"
             placeholder="Search branch..."
             value={form.branchName}
@@ -437,6 +433,13 @@ export default function CustomerManagement() {
             valueField="id"
             required
           />
+          
+          <div className="space-y-2">
+            <Label>Customer Name *</Label>
+            <Input value={form.customerName} onChange={(e) => setForm((p) => ({ ...p, customerName: e.target.value }))} required />
+          </div>
+
+      
 
           <div className="space-y-2">
             <Label>Address</Label>

@@ -1895,6 +1895,12 @@ useEffect(() => {
     },
   ], [canManage])
 
+  const inlineFormOpen =
+    isDialogOpen ||
+    isViewDrawerOpen ||
+    isRevokeDialogOpen ||
+    isManagerApprovalDialogOpen;
+
   return (
     <div className="space-y-6 w-full max-w-none animate-fade-in page-content-enter overflow-hidden">
       <PageHeader
@@ -1902,7 +1908,7 @@ useEffect(() => {
         title="Leave Applications"
         description="Manage employee leave applications and approvals"
         actions={
-          !isDialogOpen ? (
+          !inlineFormOpen ? (
             <Button onClick={() => { resetForm(); setIsDialogOpen(true); }}>
               <Plus className="w-4 h-4 mr-1" />
               Add Leave Application
@@ -2195,7 +2201,6 @@ useEffect(() => {
         onOpenChange={setIsViewDrawerOpen}
         title="View Leave Application"
         description="Leave application details (read-only)."
-        size="lg"
       >
         {viewingApplication && (
           <div className="space-y-4">
@@ -2318,7 +2323,6 @@ useEffect(() => {
         onOpenChange={setIsManagerApprovalDialogOpen}
         title="Manage Leave Approval"
         description={`Assign leave types by date range (from–to). Unassigned days will not be approved. ${pendingDaysCount} day(s) not yet assigned.`}
-        size="xl"
         closeLabel="Cancel"
       >
           <div className="space-y-4">
@@ -2563,7 +2567,7 @@ useEffect(() => {
           </div>
       </FormModal>
 
-      {!isDialogOpen && (<>
+      {!inlineFormOpen && (<>
         <FilterBar
           search={{
             value: table.search,
@@ -2613,7 +2617,7 @@ useEffect(() => {
           emptyTitle="No leave applications yet"
           emptyDescription="Submit or review leave requests for your team."
           emptyAction={
-            !isDialogOpen ? (
+            !inlineFormOpen ? (
               <Button onClick={() => { resetForm(); setIsDialogOpen(true); }}>
                 <Plus className="w-4 h-4 mr-1" /> Add Leave Application
               </Button>

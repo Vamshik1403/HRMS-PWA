@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { cn } from "@/app/utils/cn";
 import { Badge } from "@/app/components/ui/badge";
 import type { NavItem } from "./hrms-navigation";
@@ -18,6 +19,7 @@ function isRouteActive(itemHref: string, pathname: string): boolean {
 }
 
 export function NavLink({ item, pathname, collapsed, onNavigate }: NavLinkProps) {
+  const router = useRouter();
   const active = isRouteActive(item.href, pathname);
   const disabled = !!item.comingSoon;
 
@@ -58,24 +60,20 @@ export function NavLink({ item, pathname, collapsed, onNavigate }: NavLinkProps)
 
   if (disabled) return <div>{content}</div>;
 
-return (
-  <Link
-    href={item.href}
-    onClick={(e) => {
-      e.preventDefault();
+  return (
+    <Link
+      href={item.href}
+      onClick={(e) => {
+        dispatchSidebarMainPageClick(item.href);
+        onNavigate?.();
 
-      dispatchSidebarMainPageClick(item.href);
-
-      onNavigate?.();
-
-      if (pathname === item.href) {
-        window.location.reload();
-      } else {
-        window.location.href = item.href;
-      }
-    }}
-  >
-    {content}
-  </Link>
-);
+        if (pathname === item.href) {
+          e.preventDefault();
+          router.refresh();
+        }
+      }}
+    >
+      {content}
+    </Link>
+  );
 }

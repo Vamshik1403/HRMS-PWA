@@ -27,7 +27,7 @@ export function StatCard({ stat }: { stat: StatCardData }) {
   const trendUp = (stat.trend ?? 0) >= 0;
 
   return (
-    <Card className="overflow-hidden relative group border-0 shadow-[0_1px_3px_rgba(0,0,0,0.05),0_8px_24px_rgba(0,0,0,0.04)] hover:-translate-y-0.5 hover:shadow-[0_12px_32px_rgba(0,0,0,0.1)] transition-all duration-200">
+    <Card className="overflow-hidden relative group border-0 shadow-[0_1px_3px_rgba(0,0,0,0.05),0_8px_24px_rgba(0,0,0,0.04)] dark:shadow-[0_1px_2px_rgba(0,0,0,0.35)] hover:-translate-y-0.5 hover:shadow-[0_12px_32px_rgba(0,0,0,0.1)] dark:hover:shadow-[0_0_0_1px_hsl(var(--border))] transition-all duration-200">
       <CardContent className="p-6 sm:p-7">
         <div className="flex items-start justify-between gap-4 mb-5">
           <div

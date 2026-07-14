@@ -5,15 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card"
 import { Button } from "../components/ui/button"
 import { Input } from "../components/ui/input"
 import { Label } from "../components/ui/label"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "../components/ui/dialog"
+import { FormDrawer } from "../components/ui/form-drawer"
 import {
   Table,
   TableBody,
@@ -403,25 +395,25 @@ createdAt: schedule.createdAt
           <p className="text-gray-600 mt-1 text-sm">Manage field attendance schedules and site assignments</p>
         </div>
         <div className="flex items-center gap-3">
-          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-            <DialogTrigger asChild>
-              <Button onClick={resetForm} className="flex-shrink-0 text-sm px-3 py-2">
-                <Plus className="w-4 h-4 mr-1" />
-                Add Field Schedule
-              </Button>
-            </DialogTrigger>
-                      <DialogContent onOpenAutoFocus={(e) => e.preventDefault()}>
-              <DialogHeader>
-                <DialogTitle>
-                  {editingSchedule ? "Edit Field Attendance Schedule" : "Add New Field Attendance Schedule"}
-                </DialogTitle>
-                <DialogDescription>
-                  {editingSchedule
-                    ? "Update the field attendance schedule information below."
-                    : "Fill in the details to add a new field attendance schedule."
-                  }
-                </DialogDescription>
-              </DialogHeader>
+          {!isDialogOpen && (
+            <Button onClick={() => { resetForm(); setIsDialogOpen(true); }} className="flex-shrink-0 text-sm px-3 py-2">
+              <Plus className="w-4 h-4 mr-1" />
+              Add Field Schedule
+            </Button>
+          )}
+        </div>
+      </div>
+
+      <FormDrawer
+        open={isDialogOpen}
+        onOpenChange={setIsDialogOpen}
+        title={editingSchedule ? "Edit Field Attendance Schedule" : "Add New Field Attendance Schedule"}
+        description={
+          editingSchedule
+            ? "Update the field attendance schedule information below."
+            : "Fill in the details to add a new field attendance schedule."
+        }
+      >
               <form onSubmit={handleSubmit} className="space-y-6">
                 {/* Organization Selection */}
                 <div className="space-y-4">
@@ -604,21 +596,18 @@ createdAt: schedule.createdAt
                   </div>
                 </div>
 
-                <DialogFooter>
+                <div className="flex justify-end gap-2 pt-4 border-t border-gray-200">
                   <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
                     Cancel
                   </Button>
                   <Button type="submit" className="">
                     {editingSchedule ? "Update Field Schedule" : "Add Field Schedule"}
                   </Button>
-                </DialogFooter>
+                </div>
               </form>
-            </DialogContent>
-          </Dialog>
-        </div>
-      </div>
+      </FormDrawer>
 
-      {/* Search and Filters */}
+      {!isDialogOpen && (<>
       <Card>
         <CardContent className="p-6">
           <div className="flex items-center space-x-4 w-full">
@@ -748,6 +737,7 @@ createdAt: schedule.createdAt
           </div>
         </CardContent>
       </Card>
+      </>)}
     </div>
   )
 }

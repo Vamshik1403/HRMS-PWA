@@ -652,9 +652,15 @@ export function ManageEmployeesManagement() {
     setExpandedGroups((p) => ({ ...p, [key]: !(p[key] ?? false) }));
   const isGroupExpanded = (key: string) => expandedGroups[key] ?? false;
   const formSections = useMemo(
-    () => (isAdmin ? EMPLOYEE_FORM_SECTIONS.filter((s) => s.id !== "additional") : EMPLOYEE_FORM_SECTIONS),
+    () =>
+      isAdmin
+        ? EMPLOYEE_FORM_SECTIONS.filter(
+          (s) => s.id !== "additional" && s.id !== "documents"
+        )
+        : EMPLOYEE_FORM_SECTIONS,
     [isAdmin],
   );
+
   const [isViewing, setIsViewing] = useState(false);
   const [editingRow, setEditingRow] = useState<ManageEmpRead | null>(null);
   const [viewRow, setViewRow] = useState<ManageEmpRead | null>(null);
@@ -4115,199 +4121,6 @@ export function ManageEmployeesManagement() {
                   </div>
                 </CollapsibleFormGroup>
 
-                {/* Documents */}
-                <CollapsibleFormGroup
-                  title="Documents"
-                  expanded={isGroupExpanded("basic-documents")}
-                  onToggle={() => toggleFormGroup("basic-documents")}
-                >
-                  {/* paste your full Documents block inner content here */}
-                  <CollapsibleFormGroup
-                    title="Documents"
-                    expanded={isGroupExpanded("basic-documents")}
-                    onToggle={() => toggleFormGroup("basic-documents")}
-                  >
-                    <div className="space-y-5">
-                      <div className="rounded-xl border border-border bg-muted/20 p-4">
-                        <div className="mb-4">
-                          <h3 className="text-base font-semibold">Upload document</h3>
-                          <p className="text-sm text-muted-foreground">
-                            Upload Aadhaar, PAN, address proof, certificates, experience letters or other employee documents. Max 5 MB each.
-                          </p>
-                        </div>
-
-                        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-                          <div className="space-y-2">
-                            <Label>Name <span className="text-red-500">*</span></Label>
-                            <Input
-                              value={documentForm.name}
-                              onChange={(e) =>
-                                setDocumentForm((p) => ({ ...p, name: e.target.value }))
-                              }
-                              placeholder="Aadhaar card"
-                            />
-                          </div>
-
-                          <div className="space-y-2">
-                            <Label>Category <span className="text-red-500">*</span></Label>
-                            <Select
-                              value={documentForm.category}
-                              onValueChange={(value) =>
-                                setDocumentForm((p) => ({ ...p, category: value }))
-                              }
-                            >
-                              <SelectTrigger>
-                                <SelectValue placeholder="Select category" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {documentCategories.map((category) => (
-                                  <SelectItem key={category} value={category}>
-                                    {category}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-
-                          <div className="space-y-2 lg:col-span-2">
-                            <Label>Description</Label>
-                            <Textarea
-                              value={documentForm.description}
-                              onChange={(e) =>
-                                setDocumentForm((p) => ({ ...p, description: e.target.value }))
-                              }
-                              rows={2}
-                              placeholder="Optional note about this document"
-                            />
-                          </div>
-
-                          <div className="space-y-2">
-                            <Label>Issued date</Label>
-                            <Input
-                              type="date"
-                              value={documentForm.issuedDate}
-                              onChange={(e) =>
-                                setDocumentForm((p) => ({ ...p, issuedDate: e.target.value }))
-                              }
-                            />
-                          </div>
-
-                          <div className="space-y-2">
-                            <Label>Expiry date</Label>
-                            <Input
-                              type="date"
-                              value={documentForm.expiryDate}
-                              onChange={(e) =>
-                                setDocumentForm((p) => ({ ...p, expiryDate: e.target.value }))
-                              }
-                            />
-                          </div>
-
-                          <div className="space-y-2 lg:col-span-2">
-                            <Label>File <span className="text-red-500">*</span></Label>
-                            <Input
-                              type="file"
-                              accept=".pdf,.jpg,.jpeg,.png,.webp"
-                              onChange={(e) =>
-                                setDocumentForm((p) => ({
-                                  ...p,
-                                  file: e.target.files?.[0] ?? null,
-                                }))
-                              }
-                            />
-                            <p className="text-xs text-muted-foreground">
-                              Allowed: PDF, JPG, JPEG, PNG, WEBP. Max 5 MB.
-                            </p>
-                          </div>
-                        </div>
-
-                        <div className="mt-4 flex justify-end">
-                          <Button
-                            type="button"
-                            onClick={addEmployeeDocument}
-                            disabled={documentSaving}
-                          >
-                            <Upload className="mr-1 size-4" />
-                            {documentSaving ? "Uploading..." : "Add document"}
-                          </Button>
-                        </div>
-                      </div>
-
-                      <div className="rounded-xl border border-border">
-                        <div className="flex items-center justify-between border-b border-border px-4 py-3">
-                          <div>
-                            <h3 className="text-sm font-semibold">Uploaded documents</h3>
-                            <p className="text-xs text-muted-foreground">
-                              {formData.employeeDocuments.length} document(s) added
-                            </p>
-                          </div>
-                        </div>
-
-                        {formData.employeeDocuments.length === 0 ? (
-                          <div className="flex flex-col items-center justify-center gap-2 py-10 text-center text-muted-foreground">
-                            <FileText className="size-9" />
-                            <p className="text-sm">No documents uploaded yet.</p>
-                          </div>
-                        ) : (
-                          <div className="divide-y divide-border">
-                            {formData.employeeDocuments.map((doc) => (
-                              <div
-                                key={doc._localId}
-                                className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
-                              >
-                                <div className="min-w-0">
-                                  <div className="flex flex-wrap items-center gap-2">
-                                    <p className="font-medium text-foreground">{doc.name}</p>
-                                    <Badge variant="secondary">{doc.category}</Badge>
-                                  </div>
-
-                                  <p className="mt-1 text-xs text-muted-foreground">
-                                    {doc.fileName} · {formatFileSize(doc.fileSize)}
-                                  </p>
-
-                                  {doc.description ? (
-                                    <p className="mt-1 text-sm text-muted-foreground">
-                                      {doc.description}
-                                    </p>
-                                  ) : null}
-
-                                  <p className="mt-1 text-xs text-muted-foreground">
-                                    Issued: {doc.issuedDate || "—"} · Expiry: {doc.expiryDate || "—"}
-                                  </p>
-                                </div>
-
-                                <div className="flex shrink-0 gap-2">
-                                  {doc.fileUrl ? (
-                                    <Button
-                                      type="button"
-                                      variant="outline"
-                                      size="sm"
-                                      onClick={() => window.open(doc.fileUrl, "_blank")}
-                                    >
-                                      <ExternalLink className="mr-1 size-4" />
-                                      View
-                                    </Button>
-                                  ) : null}
-
-                                  <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="sm"
-                                    className="text-red-600 hover:bg-red-50 hover:text-red-700"
-                                    onClick={() => removeEmployeeDocument(doc._localId)}
-                                  >
-                                    <Trash2 className="size-4" />
-                                  </Button>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </CollapsibleFormGroup>
-
-                </CollapsibleFormGroup>
               </div>
             )}
 
@@ -5253,7 +5066,183 @@ export function ManageEmployeesManagement() {
               </div>
             )}
 
+            {activeFormSection === "documents" && !isAdmin && (
+              <div className="space-y-5">
+                <div className="rounded-xl border border-border bg-muted/20 p-4">
+                  <div className="mb-4">
+                    <h3 className="text-base font-semibold">Upload document</h3>
+                    <p className="text-sm text-muted-foreground">
+                      Upload Aadhaar, PAN, address proof, certificates, experience letters or other employee documents. Max 5 MB each.
+                    </p>
+                  </div>
 
+                  <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label>Name <span className="text-red-500">*</span></Label>
+                      <Input
+                        value={documentForm.name}
+                        onChange={(e) =>
+                          setDocumentForm((p) => ({ ...p, name: e.target.value }))
+                        }
+                        placeholder="Aadhaar card"
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label>Category <span className="text-red-500">*</span></Label>
+                      <Select
+                        value={documentForm.category}
+                        onValueChange={(value) =>
+                          setDocumentForm((p) => ({ ...p, category: value }))
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select category" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {documentCategories.map((category) => (
+                            <SelectItem key={category} value={category}>
+                              {category}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-2 lg:col-span-2">
+                      <Label>Description</Label>
+                      <Textarea
+                        value={documentForm.description}
+                        onChange={(e) =>
+                          setDocumentForm((p) => ({ ...p, description: e.target.value }))
+                        }
+                        rows={2}
+                        placeholder="Optional note about this document"
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label>Issued date</Label>
+                      <Input
+                        type="date"
+                        value={documentForm.issuedDate}
+                        onChange={(e) =>
+                          setDocumentForm((p) => ({ ...p, issuedDate: e.target.value }))
+                        }
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label>Expiry date</Label>
+                      <Input
+                        type="date"
+                        value={documentForm.expiryDate}
+                        onChange={(e) =>
+                          setDocumentForm((p) => ({ ...p, expiryDate: e.target.value }))
+                        }
+                      />
+                    </div>
+
+                    <div className="space-y-2 lg:col-span-2">
+                      <Label>File <span className="text-red-500">*</span></Label>
+                      <Input
+                        key={documentInputKey}
+                        type="file"
+                        accept=".pdf,.jpg,.jpeg,.png,.webp"
+                        onChange={(e) =>
+                          setDocumentForm((p) => ({
+                            ...p,
+                            file: e.target.files?.[0] ?? null,
+                          }))
+                        }
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Allowed: PDF, JPG, JPEG, PNG, WEBP. Max 5 MB.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 flex justify-end">
+                    <Button type="button" onClick={addEmployeeDocument} disabled={documentSaving}>
+                      <Upload className="mr-1 size-4" />
+                      {documentSaving ? "Uploading..." : "Add document"}
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-border">
+                  <div className="flex items-center justify-between border-b border-border px-4 py-3">
+                    <div>
+                      <h3 className="text-sm font-semibold">Uploaded documents</h3>
+                      <p className="text-xs text-muted-foreground">
+                        {formData.employeeDocuments.length} document(s) added
+                      </p>
+                    </div>
+                  </div>
+
+                  {formData.employeeDocuments.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center gap-2 py-10 text-center text-muted-foreground">
+                      <FileText className="size-9" />
+                      <p className="text-sm">No documents uploaded yet.</p>
+                    </div>
+                  ) : (
+                    <div className="divide-y divide-border">
+                      {formData.employeeDocuments.map((doc) => (
+                        <div
+                          key={doc._localId}
+                          className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
+                        >
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <p className="font-medium text-foreground">{doc.name}</p>
+                              <Badge variant="secondary">{doc.category}</Badge>
+                            </div>
+
+                            <p className="mt-1 text-xs text-muted-foreground">
+                              {doc.fileName} · {formatFileSize(doc.fileSize)}
+                            </p>
+
+                            {doc.description ? (
+                              <p className="mt-1 text-sm text-muted-foreground">
+                                {doc.description}
+                              </p>
+                            ) : null}
+
+                            <p className="mt-1 text-xs text-muted-foreground">
+                              Issued: {doc.issuedDate || "—"} · Expiry: {doc.expiryDate || "—"}
+                            </p>
+                          </div>
+
+                          <div className="flex shrink-0 gap-2">
+                            {doc.fileUrl ? (
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() => window.open(doc.fileUrl, "_blank")}
+                              >
+                                <ExternalLink className="mr-1 size-4" />
+                                View
+                              </Button>
+                            ) : null}
+
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="text-red-600 hover:bg-red-50 hover:text-red-700"
+                              onClick={() => removeEmployeeDocument(doc._localId)}
+                            >
+                              <Trash2 className="size-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
 
             {activeFormSection === "additional" && !isAdmin && (
               <div className="space-y-4">
