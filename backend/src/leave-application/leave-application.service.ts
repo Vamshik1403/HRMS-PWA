@@ -21,9 +21,19 @@ export class LeaveApplicationService {
     private managerScope: EmpManagerScopeService,
   ) {}
 
+  private parsePayload(data: Record<string, unknown>) {
+    const payload = { ...data };
+    for (const key of ['fromDate', 'toDate', 'revokedAt'] as const) {
+      if (payload[key] != null && payload[key] !== '') {
+        payload[key] = new Date(String(payload[key]));
+      }
+    }
+    return payload;
+  }
+
   async create(createLeaveApplicationDto: CreateLeaveApplicationDto) {
     const created = await this.prisma.leaveApplication.create({
-      data: createLeaveApplicationDto,
+      data: this.parsePayload(createLeaveApplicationDto as Record<string, unknown>) as any,
       include: {
         serviceProvider: true,
         company: true,
@@ -282,7 +292,7 @@ export class LeaveApplicationService {
       );
     }
 
-    const prismaData: Record<string, unknown> = { ...leaveData };
+    const prismaData = this.parsePayload({ ...leaveData } as Record<string, unknown>);
     if (Array.isArray(ds) && ds.length > 0) {
       prismaData.dayStatuses = ds;
     }

@@ -8,7 +8,14 @@ export class PublicHolidayService {
   constructor(private prisma: PrismaService) {}
 
   create(data: CreatePublicHolidayDto) {
-    return this.prisma.publicHoliday.create({ data });
+    const payload: Record<string, unknown> = { ...data };
+    if (payload.startDate) {
+      payload.startDate = new Date(String(payload.startDate));
+    }
+    if (payload.endDate) {
+      payload.endDate = new Date(String(payload.endDate));
+    }
+    return this.prisma.publicHoliday.create({ data: payload as any });
   }
 
   findAll() {

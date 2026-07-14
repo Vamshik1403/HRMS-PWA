@@ -7,11 +7,31 @@ import { UpdateEmpAttendanceRegulariseDto } from './dto/update-emp-attendance-re
 export class EmpAttendanceRegulariseService {
   constructor(private prisma: PrismaService) {}
 
+  private parsePayload(data: Record<string, unknown>) {
+    const payload = { ...data };
+    for (const key of ['attendanceDate', 'checkInTime', 'checkOutTime'] as const) {
+      if (payload[key] != null && payload[key] !== '') {
+        payload[key] =
+          key === 'attendanceDate'
+            ? this.normalizeAttendanceDay(String(payload[key]))
+            : new Date(String(payload[key]));
+      }
+    }
+    return payload;
+  }
+
+  private normalizeAttendanceDay(dateInput: string | Date): Date {
+    const raw =
+      typeof dateInput === 'string'
+        ? dateInput.trim().slice(0, 10)
+        : dateInput.toISOString().slice(0, 10);
+    return new Date(`${raw}T12:00:00.000Z`);
+  }
+
   async fetchAttendanceStatus(employeeId: number, date: string) {
-    const targetDate = new Date(date);
-    targetDate.setHours(0, 0, 0, 0);
+    const targetDate = this.normalizeAttendanceDay(date);
     const nextDay = new Date(targetDate);
-    nextDay.setDate(nextDay.getDate() + 1);
+    nextDay.setUTCDate(nextDay.getUTCDate() + 1);
 
     // Check if there's already an approved regularization for this employee+date
     const existingRegularization = await this.prisma.empAttendanceRegularise.findFirst({
@@ -193,17 +213,16 @@ export class EmpAttendanceRegulariseService {
   }
 
   async create(createEmpAttendanceRegulariseDto: CreateEmpAttendanceRegulariseDto) {
-    const data = { ...createEmpAttendanceRegulariseDto } as any;
+    const data = this.parsePayload(createEmpAttendanceRegulariseDto as Record<string, unknown>) as any;
 
     // Rule: Only past dates allowed — no future regularisation
     if (data.attendanceDate) {
-      const reqDate = new Date(data.attendanceDate);
-      reqDate.setHours(0, 0, 0, 0);
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
+      const reqDate = this.normalizeAttendanceDay(data.attendanceDate);
+      const today = this.normalizeAttendanceDay(new Date());
       if (reqDate > today) {
         throw new BadRequestException('Attendance regularisation is only allowed for past dates');
       }
+      data.attendanceDate = reqDate;
     }
 
     // Rule: No duplicate request for the same employee + date (with PENDING status)
@@ -211,7 +230,7 @@ export class EmpAttendanceRegulariseService {
       const existing = await this.prisma.empAttendanceRegularise.findFirst({
         where: {
           manageEmployeeID: data.manageEmployeeID,
-          attendanceDate: new Date(data.attendanceDate),
+          attendanceDate: data.attendanceDate,
           status: 'Pending',
         },
       });
@@ -263,7 +282,7 @@ export class EmpAttendanceRegulariseService {
   }
 
   async update(id: number, updateEmpAttendanceRegulariseDto: UpdateEmpAttendanceRegulariseDto) {
-    const data = { ...updateEmpAttendanceRegulariseDto } as any;
+    const data = this.parsePayload(updateEmpAttendanceRegulariseDto as Record<string, unknown>) as any;
     return this.prisma.empAttendanceRegularise.update({
       where: { id },
       data,

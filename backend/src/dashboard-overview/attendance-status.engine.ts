@@ -311,6 +311,14 @@ export function computeDayStatus(input: ComputeDayStatusInput): DayStatusResult 
   }
 
   if (!hasPunchesEffective) {
+    if (isPublicHolidayDay()) {
+      return {
+        type: 'HOLIDAY',
+        label: 'PH',
+        hasPunches: false,
+        workedMinutes: defaultWorkedMinutes,
+      };
+    }
     return { type: 'ABSENT', label: 'Absent', hasPunches: false };
   }
 
