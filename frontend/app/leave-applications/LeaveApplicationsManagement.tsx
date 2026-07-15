@@ -1725,7 +1725,6 @@ useEffect(() => {
       toast.error("Cannot delete this row — invalid leave record id.")
       return
     }
-    if (!window.confirm("Delete this leave application permanently?")) return
     try {
       const res = await fetch(`${BACKEND_URL}/leave-application/${dbId}`, {
         method: "DELETE",

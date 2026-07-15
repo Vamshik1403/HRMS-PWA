@@ -898,10 +898,12 @@ geofenchradius:  b.geofenchradius ?? "",
   };
 
   const handleDelete = async (id: ID) => {
-    if (!confirm("Delete this branch?")) return;
     try {
       const res = await fetch(`${API.branches}/${id}`, { method: "DELETE" });
-      if (!res.ok) throw new Error(await res.text());
+      if (!res.ok) {
+        const { readApiErrorMessage } = await import("../utils/api-error");
+        throw new Error(await readApiErrorMessage(res, "Delete failed"));
+      }
       await fetchBranches();
       toast.success("Branch deleted successfully");
     } catch (e: any) {

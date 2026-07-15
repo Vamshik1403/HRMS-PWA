@@ -450,7 +450,6 @@ const handleCancel = () => {
   };
 
   const handleDelete = async (id: number) => {
-    if (!confirm("Delete this message?")) return;
     try {
       await fetch(`${API}/${id}`, { method: "DELETE" });
       toast.success("Deleted");

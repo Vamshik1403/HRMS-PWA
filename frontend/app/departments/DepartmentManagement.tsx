@@ -525,7 +525,6 @@ if (ctx) {
   };
 
   const handleDelete = async (id: ID) => {
-    if (!confirm("Delete this department?")) return;
     try {
       const res = await fetch(`${API.departments}/${id}`, { method: "DELETE" });
       if (!res.ok) throw new Error(await res.text());

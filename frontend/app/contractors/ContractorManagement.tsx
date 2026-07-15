@@ -739,7 +739,6 @@ export function ContractorManagement() {
   };
 
   const handleDelete = async (id: ID) => {
-    if (!confirm("Delete this contractor?")) return;
     try {
       const res = await fetch(`${API.contractors}/${id}`, { method: "DELETE" });
       if (!res.ok) throw new Error(await res.text());

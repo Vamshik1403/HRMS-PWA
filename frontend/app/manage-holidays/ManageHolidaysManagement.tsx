@@ -525,8 +525,6 @@ const handler = () => {
   }
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Are you sure you want to delete this holiday?")) return;
-    
     try {
       const res = await fetch(`${BACKEND_URL}/manage-holiday/${id}`, { method: "DELETE" })
       if (!res.ok) throw new Error(`Failed to delete holiday: ${res.status}`)

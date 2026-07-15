@@ -1,6 +1,7 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { RawListenerModule } from './raw-listener/raw-listener.module';
+import { PrismaClientExceptionFilter } from './common/prisma-exception.filter';
 import * as bodyParser from 'body-parser';
 import * as dns from 'dns';
 import * as fs from 'fs';
@@ -35,6 +36,7 @@ async function bootstrap() {
     verify: (req: any, _res, buf) => { req._raw = buf?.toString('utf8') ?? ''; },
   }));
   app.use(bodyParser.urlencoded({ extended: true, limit: '5mb' }));
+  app.useGlobalFilters(new PrismaClientExceptionFilter());
   const port = parseInt(process.env.PORT || '8000', 10);
   await app.listen(port, '0.0.0.0');
   console.log(`API listening on 0.0.0.0:${port}`);

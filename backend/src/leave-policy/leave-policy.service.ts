@@ -179,6 +179,19 @@ export class LeavePolicyService {
   async remove(id: number) {
     const leavePolicy = await this.findOne(id);
 
+    // Prevent deletion if assigned to employees
+    const employeeCount = await this.prisma.manageEmployee.count({
+      where: { leavePolicyID: id, isDeleted: false },
+    });
+    const empLeavePolicyCount = await this.prisma.empLeavePolicy.count({
+      where: { leavePolicyID: id },
+    });
+    if (employeeCount > 0 || empLeavePolicyCount > 0) {
+      throw new BadRequestException(
+        'Cannot delete this leave policy because it is assigned to one or more employees. Reassign those employees first.',
+      );
+    }
+
     // Prevent deletion if the leave policy is referenced by privileged leave entries
     const plLedgerCount = await this.prisma.privilegedLeaveLedger.count({
       where: { leavePolicyID: id },

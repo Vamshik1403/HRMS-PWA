@@ -1217,7 +1217,6 @@ const handleSubmit = async (e: React.FormEvent) => {
   }
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Are you sure you want to delete this reimbursement?")) return
     await robustFetch(`${BACKEND_URL}/reimbursement/${id}`, { method: "DELETE" })
     await loadReimbursements()
   }

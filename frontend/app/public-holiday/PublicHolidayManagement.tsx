@@ -682,11 +682,14 @@ window.addEventListener("sidebar-context-changed", handler);
     setIsDialogOpen(true)
   }
 
-  const handleDelete = async (id: string) => { 
-    if (confirm("Are you sure you want to delete this holiday?")) {
+  const handleDelete = async (id: string) => {
+    try {
       await fetch(`${BACKEND_URL}/public-holiday/${id}`, { method: "DELETE" })
       await loadPublicHolidays()
       toast.success("Public holiday deleted successfully")
+    } catch (error) {
+      console.error("Error deleting public holiday:", error)
+      toast.error("Failed to delete. Please try again.")
     }
   }
 

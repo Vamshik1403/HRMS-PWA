@@ -168,7 +168,6 @@ export default function SiteManagement() {
   };
 
   const remove = async (id: number) => {
-    if (!confirm("Delete this site?")) return;
     try { await taskFetch(`/task-customer-sites/${id}`, user, { method: "DELETE" }); toast.success("Site deleted"); load(); }
     catch (err: any) { toast.error(err.message || "Delete failed"); }
   };

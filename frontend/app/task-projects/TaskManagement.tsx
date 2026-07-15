@@ -385,7 +385,6 @@ useAppRefresh(() => {
   };
 
   const removeTask = async (id: number) => {
-    if (!confirm("Delete this task?")) return;
     try {
       await taskFetch(`/task-projects/${id}`, user, { method: "DELETE" });
       toast.success("Task deleted");

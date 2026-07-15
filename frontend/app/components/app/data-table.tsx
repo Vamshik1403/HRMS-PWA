@@ -143,7 +143,6 @@ export function DataTable<T>({
           icon={emptyIcon ?? ArrowUpDown}
           title={emptyTitle ?? "No records"}
           description={emptyDescription}
-          action={emptyAction}
         />
       ) : (
         rows.map((row) => (

@@ -12,6 +12,9 @@ interface EntityRowActionsProps {
   viewTitle?: string;
   editTitle?: string;
   deleteTitle?: string;
+  /** Set false when the parent handler already asks for confirmation. */
+  confirmDelete?: boolean;
+  deleteConfirmMessage?: string;
   extra?: { icon: LucideIcon; title: string; onClick: () => void; className?: string }[];
 }
 
@@ -22,8 +25,16 @@ export function EntityRowActions({
   viewTitle = "View",
   editTitle = "Edit",
   deleteTitle = "Delete",
+  confirmDelete: shouldConfirmDelete = true,
+  deleteConfirmMessage = "Are you sure you want to delete this record?",
   extra,
 }: EntityRowActionsProps) {
+  const handleDeleteClick = () => {
+    if (!onDelete) return;
+    if (shouldConfirmDelete && !window.confirm(deleteConfirmMessage)) return;
+    onDelete();
+  };
+
   return (
     <div className="flex items-center justify-end gap-0.5 flex-nowrap">
       {extra?.map(({ icon: Icon, title, onClick, className }) => (
@@ -42,7 +53,7 @@ export function EntityRowActions({
         </Button>
       )}
       {onDelete && (
-        <Button variant="ghost" size="icon" className="size-8" title={deleteTitle} onClick={onDelete}>
+        <Button variant="ghost" size="icon" className="size-8" title={deleteTitle} onClick={handleDeleteClick}>
           <Trash2 className={`${ICON} text-destructive`} />
         </Button>
       )}

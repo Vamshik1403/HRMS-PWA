@@ -657,10 +657,6 @@ const fetchCompanies = useCallback(
   }, [])
 
   const handleDelete = useCallback(async (id: string) => {
-    if (!confirm("Are you sure you want to delete this salary advance?")) {
-      return
-    }
-
     try {
       await robustFetch(`${BACKEND_URL}/salary-advance/${id}`, { method: "DELETE" })
       await loadAdvances()

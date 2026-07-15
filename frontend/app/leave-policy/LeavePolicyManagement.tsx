@@ -16,6 +16,7 @@ import { useClientTable, sortRows } from "../hooks/use-client-table"
 import { SearchSuggestInput } from "../components/SearchSuggestInput"
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import { toast } from "sonner";
+import { readApiErrorMessage } from "../utils/api-error";
 import { getSidebarContext } from "../utils/sidebarContext";
 import {
   canDesktopManagerManage,
@@ -648,6 +649,7 @@ setPolicies(filteredPolicies);
         <EntityRowActions
           onEdit={canManage ? () => handleEdit(p) : undefined}
           onDelete={canManage ? () => handleDelete(p.id) : undefined}
+          deleteConfirmMessage="Are you sure you want to delete this leave policy?"
         />
       ),
     },
@@ -833,7 +835,11 @@ const payload = {
       if (response.ok) {
         await loadLeavePolicies()
         toast.success("Leave policy deleted successfully");
+        return;
       }
+
+      const message = await readApiErrorMessage(response, "Failed to delete leave policy.");
+      toast.error(message);
     } catch (error) {
       console.error('Error deleting leave policy:', error)
       toast.error("Operation failed. Please try again.");

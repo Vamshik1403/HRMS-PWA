@@ -273,7 +273,6 @@ export default function CustomerManagement() {
   };
 
   const remove = async (id: number) => {
-    if (!confirm("Delete this customer?")) return;
     try { await taskFetch(`/task-customers/${id}`, user, { method: "DELETE" }); toast.success("Customer deleted"); load(); }
     catch (err: any) { toast.error(err.message || "Delete failed"); }
   };
