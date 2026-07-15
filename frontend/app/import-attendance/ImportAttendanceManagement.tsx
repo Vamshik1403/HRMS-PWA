@@ -141,7 +141,8 @@ export function ImportAttendanceManagement() {
       <div>
         <p><strong>Required columns:</strong></p>
         <ul className="list-disc list-inside ml-4 space-y-1 mt-1">
-          <li><code className="bg-gray-100 px-1.5 py-0.5 rounded">user_id</code> - Employee ID</li>
+          <li><code className="bg-gray-100 px-1.5 py-0.5 rounded">emp_id</code> - Employee ID (device punch code)</li>
+          <li className="text-xs text-muted-foreground list-none ml-4">Legacy column name <code className="bg-gray-100 px-1 rounded">user_id</code> is still accepted.</li>
           <li><code className="bg-gray-100 px-1.5 py-0.5 rounded">log_time</code> - Punch time</li>
           <li><code className="bg-gray-100 px-1.5 py-0.5 rounded">device_sn</code> - Device serial number</li>
         </ul>

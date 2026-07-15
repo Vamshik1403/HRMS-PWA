@@ -2,9 +2,153 @@ import { Injectable, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import * as XLSX from 'xlsx';
 
+type ResolvedImportEmployee = {
+  manageEmployeeID: number;
+  username: string;
+  companyName: string | null;
+  branchName: string | null;
+  departmentName: string | null;
+  deviceID: number;
+  deviceName: string | null;
+  deviceType: string | null;
+};
+
+type ImportContext = {
+  deviceBySn: Map<
+    string,
+    { id: number; deviceSN: string; deviceName: string | null; deviceType: string | null }
+  >;
+  empMap: Map<string, ResolvedImportEmployee>;
+  empByCode: Map<string, ResolvedImportEmployee>;
+};
+
 @Injectable()
 export class ImportAttendanceService {
   constructor(private prisma: PrismaService) { }
+
+  private empCodeVariants(code: string): string[] {
+    const c = String(code).trim();
+    const stripped = c.replace(/^0+/, '') || '0';
+    return stripped === c ? [c] : [c, stripped];
+  }
+
+  private mappingKeys(deviceSN: string, code: string): string[] {
+    return this.empCodeVariants(code).map((v) => `${deviceSN}:${v}`);
+  }
+
+  private async buildImportContext(): Promise<ImportContext> {
+    const devices = await this.prisma.devices.findMany({
+      select: {
+        id: true,
+        deviceSN: true,
+        deviceName: true,
+        deviceType: true,
+      },
+    });
+
+    const deviceBySn = new Map<
+      string,
+      { id: number; deviceSN: string; deviceName: string | null; deviceType: string | null }
+    >();
+    for (const d of devices) {
+      deviceBySn.set(d.deviceSN, d);
+    }
+
+    const empMap = new Map<string, ResolvedImportEmployee>();
+    const empRows = await this.prisma.empDeviceMapping.findMany({
+      where: { deviceEmpCode: { not: null } },
+      include: {
+        device: { select: { id: true, deviceSN: true, deviceName: true, deviceType: true } },
+        manageEmployee: {
+          include: {
+            company: { select: { companyName: true } },
+            branches: { select: { branchName: true } },
+            departments: { select: { departmentName: true } },
+          },
+        },
+      },
+    });
+
+    for (const row of empRows) {
+      if (!row.device?.deviceSN || !row.deviceEmpCode || !row.manageEmployee) continue;
+      const username =
+        `${row.manageEmployee.employeeFirstName || ''} ${row.manageEmployee.employeeLastName || ''}`.trim() ||
+        row.manageEmployee.employeeID ||
+        `Employee ${row.deviceEmpCode}`;
+      const info: ResolvedImportEmployee = {
+        manageEmployeeID: row.manageEmployee.id,
+        username,
+        companyName: row.manageEmployee.company?.companyName ?? null,
+        branchName: row.manageEmployee.branches?.branchName ?? null,
+        departmentName: row.manageEmployee.departments?.departmentName ?? null,
+        deviceID: row.device.id,
+        deviceName: row.device.deviceName,
+        deviceType: row.device.deviceType || 'AT',
+      };
+      for (const key of this.mappingKeys(row.device.deviceSN, row.deviceEmpCode)) {
+        empMap.set(key, info);
+      }
+    }
+
+    const empByCode = new Map<string, ResolvedImportEmployee>();
+    const employees = await this.prisma.manageEmployee.findMany({
+      where: { isDeleted: false },
+      include: {
+        company: { select: { companyName: true } },
+        branches: { select: { branchName: true } },
+        departments: { select: { departmentName: true } },
+      },
+    });
+
+    for (const emp of employees) {
+      if (!emp.employeeID) continue;
+      const username =
+        `${emp.employeeFirstName || ''} ${emp.employeeLastName || ''}`.trim() ||
+        emp.employeeID;
+      const codes = new Set(
+        [emp.employeeID, ...this.empCodeVariants(emp.employeeID)].map((c) => c.toLowerCase()),
+      );
+      for (const code of codes) {
+        empByCode.set(code, {
+          manageEmployeeID: emp.id,
+          username,
+          companyName: emp.company?.companyName ?? null,
+          branchName: emp.branches?.branchName ?? null,
+          departmentName: emp.departments?.departmentName ?? null,
+          deviceID: 0,
+          deviceName: null,
+          deviceType: 'AT',
+        });
+      }
+    }
+
+    return { deviceBySn, empMap, empByCode };
+  }
+
+  private resolveEmployee(
+    ctx: ImportContext,
+    deviceSn: string,
+    empIdStr: string,
+  ): ResolvedImportEmployee | null {
+    for (const key of this.mappingKeys(deviceSn, empIdStr)) {
+      const hit = ctx.empMap.get(key);
+      if (hit) return hit;
+    }
+
+    const device = ctx.deviceBySn.get(deviceSn);
+    const fallback =
+      ctx.empByCode.get(empIdStr.toLowerCase()) ||
+      ctx.empByCode.get(empIdStr.replace(/^0+/, '').toLowerCase());
+
+    if (!device || !fallback) return null;
+
+    return {
+      ...fallback,
+      deviceID: device.id,
+      deviceName: device.deviceName,
+      deviceType: device.deviceType || 'AT',
+    };
+  }
 
   async importFromBuffer(buffer: Buffer, originalName: string) {
     const ext = originalName.split('.').pop()?.toLowerCase();
@@ -43,21 +187,31 @@ export class ImportAttendanceService {
       );
     }
 
-    const requiredCols = ['user_id', 'device_sn'];
-    const missing = requiredCols.filter(c => !headers.includes(c));
-    if (missing.length) {
+    const hasEmpId = headers.includes('emp_id');
+    const hasUserId = headers.includes('user_id');
+    if (!hasEmpId && !hasUserId) {
       throw new BadRequestException(
-        `Missing required columns: ${missing.join(', ')}. Found columns: ${headers.join(', ')}`
+        `Missing required column: emp_id (Employee ID). Found columns: ${headers.join(', ')}`
       );
     }
 
+    if (!headers.includes('device_sn')) {
+      throw new BadRequestException(
+        `Missing required column: device_sn. Found columns: ${headers.join(', ')}`
+      );
+    }
+
+    const ctx = await this.buildImportContext();
     const esslRawAttlogRows: any[] = [];
     const processAttLogsRows: any[] = [];
     const errors: { row: number; error: string }[] = [];
+    let reportsReadyCount = 0;
 
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i];
       try {
+        const empId = row.emp_id ?? row.user_id;
+
         // Parse log_time to string format
         const timeValue = row.log_time || row.punch_time;
         const punchTimeString = this.parseDateTimeToString(timeValue);
@@ -69,8 +223,8 @@ export class ImportAttendanceService {
         }
 
         // Validate required fields
-        if (!row.user_id) {
-          errors.push({ row: i + 2, error: 'user_id is required' });
+        if (!empId) {
+          errors.push({ row: i + 2, error: 'emp_id is required' });
           continue;
         }
 
@@ -79,13 +233,35 @@ export class ImportAttendanceService {
           continue;
         }
 
+        const empIdStr = String(empId);
+        const deviceSn = String(row.device_sn);
+
+        if (!ctx.deviceBySn.has(deviceSn)) {
+          errors.push({
+            row: i + 2,
+            error: `device_sn "${deviceSn}" not found in Attendance Devices`,
+          });
+          continue;
+        }
+
+        const resolved = this.resolveEmployee(ctx, deviceSn, empIdStr);
+        if (!resolved) {
+          errors.push({
+            row: i + 2,
+            error:
+              `No employee match for emp_id "${empIdStr}" on device "${deviceSn}". ` +
+              'Link the employee in Attendance Devices or use the correct Employee ID.',
+          });
+          continue;
+        }
+
         // Build raw_body in ESSL format (matching device log format)
-        const rawBody = `IMPORTED ${row.user_id} ${punchTimeString} 1 1 ${row.auth_type || ''}`;
+        const rawBody = `IMPORTED ${empIdStr} ${punchTimeString} 1 1 ${row.auth_type || ''}`;
 
         // Build essl_raw_attlog row (string date)
         esslRawAttlogRows.push({
-          device_sn: String(row.device_sn),
-          user_id: String(row.user_id),
+          device_sn: deviceSn,
+          user_id: empIdStr,
           punch_time: punchTimeString,
           auth_type: row.auth_type ? String(row.auth_type) : null,
           raw_body: rawBody,
@@ -95,16 +271,26 @@ export class ImportAttendanceService {
           created_at: new Date(),
         });
 
-        // Build process_att_logs row (Date object)
+        // Build process_att_logs row with employee linkage for Attendance Reports
         processAttLogsRows.push({
-          device_sn: String(row.device_sn),
-          user_id: String(row.user_id),
+          device_sn: deviceSn,
+          user_id: empIdStr,
+          username: resolved.username,
           punch_time: punchTimeDate,
+          company_name: resolved.companyName,
+          branch_name: resolved.branchName,
+          department_name: resolved.departmentName,
+          device_emp_code: empIdStr,
+          manage_employee_id: resolved.manageEmployeeID,
+          device_id: resolved.deviceID,
+          device_name: resolved.deviceName,
+          device_type: resolved.deviceType,
           auth_type: row.auth_type ? String(row.auth_type) : null,
           raw_body: rawBody,
           status: '0',
           processed_at: new Date(),
         });
+        reportsReadyCount++;
 
       } catch (err) {
         errors.push({ row: i + 2, error: (err as Error).message });
@@ -134,6 +320,7 @@ export class ImportAttendanceService {
       totalRowsInFile: rows.length,
       recordsInserted: rawResult.count,
       recordsProcessed: processResult.count,
+      reportsReadyCount,
       errorsCount: errors.length,
       errors: errors.slice(0, 20),
     };
@@ -176,7 +363,7 @@ export class ImportAttendanceService {
 
   async downloadTemplate(): Promise<Buffer> {
     const headers = [
-      'user_id',
+      'emp_id',
       'log_time',
       'device_sn',
       'auth_type',
@@ -184,13 +371,13 @@ export class ImportAttendanceService {
 
     const sampleRows = [
       {
-        user_id: '101',
+        emp_id: 'emp_01',
         log_time: '01/02/2026 09:00:00', // 1st Feb 2026
         device_sn: 'CQZ7232160084',
         auth_type: 'FINGER',
       },
       {
-        user_id: '102',
+        emp_id: 'emp_02',
         log_time: '15/12/2026 20:00:00', // 15th Dec 2026
         device_sn: 'CQZ7232160084',
         auth_type: 'CARD',
@@ -200,7 +387,7 @@ export class ImportAttendanceService {
     const ws = XLSX.utils.json_to_sheet(sampleRows, { header: headers });
     
     ws['!cols'] = [
-      { wch: 12 }, // user_id
+      { wch: 12 }, // emp_id
       { wch: 22 }, // log_time
       { wch: 20 }, // device_sn
       { wch: 15 }, // auth_type
