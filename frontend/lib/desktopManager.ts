@@ -1,4 +1,4 @@
-/** Desktop manager = employee login with direct reportees, using admin shell on desktop (not PWA). */
+/** Desktop manager = employee login with direct reportees; uses employee portal with Team / My Company zones. */
 
 export const DESKTOP_MANAGER_KEY = "openhrmDesktopManager";
 

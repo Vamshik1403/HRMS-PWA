@@ -77,6 +77,8 @@ import { BackupModule } from './backup/backup.module';
 import { AuditLogModule } from './audit-log/audit-log.module';
 import { SubscriptionModule } from './subscription/subscription.module';
 import { SystemDashboardModule } from './system-dashboard/system-dashboard.module';
+import { CompanyModulesModule } from './company-modules/company-modules.module';
+import { ApprovalWorkflowModule } from './approval-workflow/approval-workflow.module';
 
 
 @Module({
@@ -159,6 +161,8 @@ import { SystemDashboardModule } from './system-dashboard/system-dashboard.modul
     AuditLogModule,
     SubscriptionModule,
     SystemDashboardModule,
+    CompanyModulesModule,
+    ApprovalWorkflowModule,
   ],
   providers: [AuthService],
   controllers: [AuthController],

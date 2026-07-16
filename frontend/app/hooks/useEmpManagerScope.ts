@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { setDesktopManagerFlag } from "@/lib/desktopManager";
 import type { EmpManagerScope } from "../utils/empManagerDisplay";
 
 const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL || "/backend";
@@ -20,9 +21,15 @@ const EMPTY: EmpManagerScope = {
   reportees: [],
 };
 
+let cachedScope: EmpManagerScope | null = null;
+
+export function clearEmpManagerScopeCache() {
+  cachedScope = null;
+}
+
 export function useEmpManagerScope(enabled = true) {
-  const [scope, setScope] = useState<EmpManagerScope | null>(null);
-  const [loading, setLoading] = useState(enabled);
+  const [scope, setScope] = useState<EmpManagerScope | null>(enabled ? cachedScope : null);
+  const [loading, setLoading] = useState(enabled && !cachedScope);
 
   useEffect(() => {
     if (!enabled) {
@@ -30,27 +37,42 @@ export function useEmpManagerScope(enabled = true) {
       setLoading(false);
       return;
     }
+    if (cachedScope) {
+      setScope(cachedScope);
+      setLoading(false);
+    }
     let cancelled = false;
-    setLoading(true);
+    if (!cachedScope) setLoading(true);
     fetch(`${BACKEND}/emp-manager-scope/reportees`, {
       headers: authHeaders(),
       cache: "no-store",
     })
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
-        if (cancelled || !data) {
-          if (!cancelled) setScope(EMPTY);
+        if (cancelled) return;
+        if (!data) {
+          setDesktopManagerFlag(false);
+          cachedScope = EMPTY;
+          setScope(EMPTY);
           return;
         }
-        setScope({
+        const hasReportees = !!data.hasReportees;
+        setDesktopManagerFlag(hasReportees);
+        const nextScope: EmpManagerScope = {
           employeeId: Number(data.employeeId) || 0,
           reporteeIds: Array.isArray(data.reporteeIds) ? data.reporteeIds.map(Number) : [],
-          hasReportees: !!data.hasReportees,
+          hasReportees,
           reportees: Array.isArray(data.reportees) ? data.reportees : [],
-        });
+        };
+        cachedScope = nextScope;
+        setScope(nextScope);
       })
       .catch(() => {
-        if (!cancelled) setScope(EMPTY);
+        if (!cancelled) {
+          setDesktopManagerFlag(false);
+          cachedScope = EMPTY;
+          setScope(EMPTY);
+        }
       })
       .finally(() => {
         if (!cancelled) setLoading(false);

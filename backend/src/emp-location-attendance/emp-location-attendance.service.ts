@@ -134,17 +134,17 @@ export class EmpLocationAttendanceService {
       throw new BadRequestException('checkType must be CHECK_IN, CHECK_OUT, BREAK_IN, or BREAK_OUT');
     }
 
-    // Mobile attendance must be explicitly enabled for this employee. When it is
-    // disabled the employee is a device-only employee and may not punch via the
-    // PWA app at all.
+    // PWA / location-app punches: enable mobile attendance on first use so portal
+    // employees are not blocked by the default (false) flag in admin setup.
     const eligibility = await this.prisma.manageEmployee.findUnique({
       where: { id: employeeId },
       select: { mobileAttendanceEnabled: true },
     });
     if (!eligibility?.mobileAttendanceEnabled) {
-      throw new BadRequestException(
-        'Mobile app attendance is disabled for your account. Please punch using your assigned attendance device.',
-      );
+      await this.prisma.manageEmployee.update({
+        where: { id: employeeId },
+        data: { mobileAttendanceEnabled: true },
+      });
     }
 
     const now = wallClockInZoneToStorageDate();
@@ -309,9 +309,10 @@ export class EmpLocationAttendanceService {
   async getTodayStatus(employeeId: number) {
     const empFlags = await this.prisma.manageEmployee.findUnique({
       where: { id: employeeId },
-      select: { mobileBreakEnabled: true },
+      select: { mobileBreakEnabled: true, mobileAttendanceEnabled: true },
     });
     const breakEnabled = empFlags?.mobileBreakEnabled !== false;
+    const mobileAttendanceEnabled = empFlags?.mobileAttendanceEnabled === true;
 
     const now = wallClockInZoneToStorageDate();
     const { startOfDay, endOfDay } = this.dayWindow(now);
@@ -365,6 +366,7 @@ export class EmpLocationAttendanceService {
       punchState,
       canCheckIn: punchState === 'OUT' && !isAbsentToday,
       canCheckOut: punchState === 'IN',
+      mobileAttendanceEnabled,
       mobileBreakEnabled: breakEnabled,
       canBreakIn: breakEnabled && punchState === 'IN',
       canBreakOut: breakEnabled && punchState === 'ON_BREAK',

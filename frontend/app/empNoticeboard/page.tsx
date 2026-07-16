@@ -3,8 +3,9 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { Icon } from "@iconify/react";
-import { Plus } from "lucide-react";
+import { Megaphone, Plus } from "lucide-react";
 import EmpMobileLayout from "../components/layout/EmpMobileLayout";
+import { useEmpPortalDesktop } from "../components/layout/EmpPortalShell";
 import { getPageCache, setPageCache } from "../utils/pageCache";
 import { useEmpManagerScope } from "../hooks/useEmpManagerScope";
 import { useCurrentUser } from "../hooks/useCurrentUser";
@@ -12,8 +13,11 @@ import { splitPreviewRecords } from "../utils/empListLimit";
 import { EmpRecordHistorySheet } from "../components/emp/EmpRecordHistorySheet";
 import { EmpListViewMoreButton } from "../components/emp/EmpListViewMoreButton";
 import { ManagerMemoComposeSheet } from "../components/emp/ManagerMemoComposeSheet";
+import { ManagerMemoComposeInline } from "../components/emp/ManagerMemoComposeInline";
+import { EmpDesktopPage } from "../components/emp/desktop/EmpDesktopPage";
 import { resolveAttachmentUrl } from "../utils/uploadFile";
 import { useMemoChatPolling } from "../hooks/useMemoChatPolling";
+import { Button } from "../components/ui/button";
 
 const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL || "/backend";
 
@@ -68,6 +72,7 @@ function memoColor(type: string | null) {
 
 export default function EmpNoticeboardPage() {
   const router = useRouter();
+  const isDesktop = useEmpPortalDesktop();
   const user = useCurrentUser();
   const { scope, isManagerView } = useEmpManagerScope();
   const [memos, setMemos] = useState<Memo[]>(() => getPageCache<Memo[]>("empMemos") ?? []);
@@ -373,43 +378,74 @@ export default function EmpNoticeboardPage() {
     );
   };
 
+  const sendNoticeAction =
+    isManagerView && directReportees.length > 0 && !composeOpen ? (
+      <Button type="button" onClick={() => setComposeOpen(true)}>
+        <Plus className="size-4" />
+        Send notice
+      </Button>
+    ) : null;
+
+  const memoListBody =
+    composeOpen && isDesktop ? (
+      <ManagerMemoComposeInline
+        open={composeOpen}
+        onOpenChange={setComposeOpen}
+        reportees={directReportees}
+        managerName={managerName || undefined}
+        onSent={() => {
+          if (employeeIDRef.current) void loadMemos(employeeIDRef.current);
+        }}
+      />
+    ) : loading ? (
+      <div className="flex flex-col items-center justify-center py-20 gap-3">
+        <Icon icon="solar:spinner-bold-duotone" className="w-8 h-8 text-gray-300 animate-spin" />
+        <p className="text-[13px] text-gray-400">Loading notices…</p>
+      </div>
+    ) : memos.length === 0 ? (
+      <div className="flex flex-col items-center justify-center py-20 gap-3">
+        <div className="w-16 h-16 rounded-2xl bg-amber-50 flex items-center justify-center">
+          <Icon icon="solar:bell-bold-duotone" className="w-8 h-8 text-amber-400" />
+        </div>
+        <p className="text-[15px] font-semibold text-gray-700">No notices yet</p>
+        <p className="text-[13px] text-gray-400 text-center">
+          {isManagerView ? "Send a notice or warning to your team" : "Notices from HR will appear here"}
+        </p>
+      </div>
+    ) : (
+      <>
+        <div className={isDesktop ? "space-y-3" : "space-y-3"}>{preview.map(renderMemo)}</div>
+        {hasHistory && (
+          <EmpListViewMoreButton count={history.length} onClick={() => setHistoryOpen(true)} />
+        )}
+      </>
+    );
+
   return (
     <EmpMobileLayout>
-      <div className="px-4 pt-5 pb-6 space-y-4">
-        <div className="flex items-center gap-3 mb-1">
-          <button
-            onClick={() => router.back()}
-            className="w-9 h-9 rounded-xl bg-white border border-gray-100 shadow-sm flex items-center justify-center active:scale-[0.92]"
-          >
-            <Icon icon="solar:arrow-left-linear" className="w-5 h-5 text-gray-600" />
-          </button>
-          <h1 className="text-[22px] font-bold text-gray-900">Internal Messaging (IM)</h1>
+      {isDesktop ? (
+        <EmpDesktopPage
+          title="Internal Messaging"
+          description="Notices, warnings, and conversations with your team"
+          icon={Megaphone}
+          actions={sendNoticeAction}
+        >
+          {memoListBody}
+        </EmpDesktopPage>
+      ) : (
+        <div className="px-4 pt-5 pb-6 space-y-4">
+          <div className="flex items-center gap-3 mb-1">
+            <button
+              onClick={() => router.back()}
+              className="w-9 h-9 rounded-xl bg-white border border-gray-100 shadow-sm flex items-center justify-center active:scale-[0.92]"
+            >
+              <Icon icon="solar:arrow-left-linear" className="w-5 h-5 text-gray-600" />
+            </button>
+            <h1 className="text-[22px] font-bold text-gray-900">Internal Messaging (IM)</h1>
+          </div>
+          {memoListBody}
         </div>
-
-        {loading ? (
-          <div className="flex flex-col items-center justify-center py-20 gap-3">
-            <Icon icon="solar:spinner-bold-duotone" className="w-8 h-8 text-gray-300 animate-spin" />
-            <p className="text-[13px] text-gray-400">Loading notices…</p>
-          </div>
-        ) : memos.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-20 gap-3">
-            <div className="w-16 h-16 rounded-2xl bg-amber-50 flex items-center justify-center">
-              <Icon icon="solar:bell-bold-duotone" className="w-8 h-8 text-amber-400" />
-            </div>
-            <p className="text-[15px] font-semibold text-gray-700">No notices yet</p>
-            <p className="text-[13px] text-gray-400 text-center">
-              {isManagerView ? "Send a notice or warning to your team" : "Notices from HR will appear here"}
-            </p>
-          </div>
-        ) : (
-          <>
-            <div className="space-y-3">{preview.map(renderMemo)}</div>
-            {hasHistory && (
-              <EmpListViewMoreButton count={history.length} onClick={() => setHistoryOpen(true)} />
-            )}
-          </>
-        )}
-      </div>
+      )}
 
       <EmpRecordHistorySheet
         open={historyOpen}
@@ -420,12 +456,12 @@ export default function EmpNoticeboardPage() {
         <div className="space-y-3">{history.map(renderMemo)}</div>
       </EmpRecordHistorySheet>
 
-      {isManagerView && directReportees.length > 0 && (
+      {isManagerView && directReportees.length > 0 && !isDesktop && (
         <>
           <button
             type="button"
             onClick={() => setComposeOpen(true)}
-            className="mobile-fab fixed right-4 z-40 w-14 h-14 rounded-full bg-[#2563eb] text-white shadow-lg flex items-center justify-center active:scale-90"
+            className="fixed right-4 z-40 w-14 h-14 rounded-full bg-[#2563eb] text-white shadow-lg flex items-center justify-center active:scale-90"
             style={{ bottom: "calc(64px + env(safe-area-inset-bottom))" }}
             aria-label="Send notice"
           >

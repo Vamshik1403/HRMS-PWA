@@ -1,8 +1,10 @@
 "use client";
 
-import { useEffect, useState, useRef, useCallback } from "react";
+import { Suspense, useEffect, useState, useRef, useCallback } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import EmpPortalShell, { useEmpPortalLayout } from "./EmpPortalShell";
+import { useInsideEmpPortalShell } from "./EmpPortalShellContext";
 import { Icon } from "@iconify/react";
 import {
   registerPushSubscription,
@@ -53,6 +55,25 @@ const navItems = [
 ];
 
 export default function EmpMobileLayout({ children, hideBottomNav = false }: EmpMobileLayoutProps) {
+  const insidePortalShell = useInsideEmpPortalShell();
+  const { desktop: isPortalDesktop, ready } = useEmpPortalLayout();
+  if (!ready) {
+    return <div className="min-h-screen bg-[#f1f5f9]" />;
+  }
+  if (isPortalDesktop) {
+    if (insidePortalShell) {
+      return <>{children}</>;
+    }
+    return (
+      <Suspense fallback={<div className="min-h-screen bg-[#f1f5f9]" />}>
+        <EmpPortalShell hideBottomNav={hideBottomNav}>{children}</EmpPortalShell>
+      </Suspense>
+    );
+  }
+  return <EmpMobileLayoutInner hideBottomNav={hideBottomNav}>{children}</EmpMobileLayoutInner>;
+}
+
+function EmpMobileLayoutInner({ children, hideBottomNav = false }: EmpMobileLayoutProps) {
   const pathname = usePathname();
   const router = useRouter();
   const [showInstallBanner, setShowInstallBanner] = useState(false);

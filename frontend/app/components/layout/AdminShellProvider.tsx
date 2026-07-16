@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { HrmsAppShell } from "@/app/components/layout/HrmsAppShell";
+import { EmpPortalDesktopBridge } from "@/app/components/layout/EmpPortalDesktopBridge";
 import { getAccessToken } from "@/lib/auth";
 import { isJwtExpired } from "@/lib/jwtUtils";
 
@@ -42,7 +43,7 @@ export function AdminShellProvider({
   }, [pathname, router]);
 
   if (!shouldUseAdminShell(pathname)) {
-    return <>{children}</>;
+    return <EmpPortalDesktopBridge>{children}</EmpPortalDesktopBridge>;
   }
 
   return <HrmsAppShell>{children}</HrmsAppShell>;

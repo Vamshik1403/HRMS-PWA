@@ -1,0 +1,23 @@
+"use client";
+
+import { useEmpManagerScope } from "@/app/hooks/useEmpManagerScope";
+import { EmpTeamApprovalsPanel } from "./EmpTeamApprovalsPanel";
+
+export function EmpWorkspaceApprovals() {
+  const { isManagerView } = useEmpManagerScope();
+
+  return (
+    <EmpTeamApprovalsPanel
+      title="Approvals"
+      description={
+        isManagerView
+          ? "Review pending requests from your team or your own submissions"
+          : "Track your pending leave and reimbursement requests"
+      }
+      emptyMessage="No pending approvals."
+      noAccessMessage="No pending leave or reimbursement requests."
+      includeOwnSubmissions
+      allowNewRequest
+    />
+  );
+}

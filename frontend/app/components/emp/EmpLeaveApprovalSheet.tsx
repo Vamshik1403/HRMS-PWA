@@ -36,6 +36,7 @@ export function EmpLeaveApprovalSheet({
   onClose,
   application,
   onDone,
+  embedded = false,
 }: {
   open: boolean;
   onClose: () => void;
@@ -47,6 +48,7 @@ export function EmpLeaveApprovalSheet({
     purpose?: string;
   } | null;
   onDone: () => void;
+  embedded?: boolean;
 }) {
   const [dayStatuses, setDayStatuses] = useState<LeaveDayStatus[]>([]);
   const [balance, setBalance] = useState<LeaveBalance | null>(null);
@@ -241,9 +243,14 @@ export function EmpLeaveApprovalSheet({
 
   const sheet = (
     <div
-      className="fixed inset-0 z-[200] flex flex-col bg-[#f8f9fb]"
-      style={{ paddingTop: "env(safe-area-inset-top)" }}
+      className={
+        embedded
+          ? "flex flex-col bg-[#f8f9fb] min-h-0"
+          : "fixed inset-0 z-[200] flex flex-col bg-[#f8f9fb]"
+      }
+      style={embedded ? undefined : { paddingTop: "env(safe-area-inset-top)" }}
     >
+      {!embedded && (
       <header className="shrink-0 bg-white border-b border-gray-100 px-4 py-3 flex items-center gap-2">
         <button type="button" onClick={onClose} className="w-9 h-9 rounded-full flex items-center justify-center">
           <Icon icon="solar:arrow-left-linear" className="w-5 h-5" />
@@ -255,6 +262,7 @@ export function EmpLeaveApprovalSheet({
           </p>
         </div>
       </header>
+      )}
 
       <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-4 py-4 space-y-4">
         {loading ? (
@@ -452,5 +460,6 @@ export function EmpLeaveApprovalSheet({
     </div>
   );
 
+  if (embedded) return sheet;
   return createPortal(sheet, document.body);
 }

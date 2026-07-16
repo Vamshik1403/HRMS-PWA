@@ -16,6 +16,7 @@ interface DashboardHeroProps {
   isSuperadmin: boolean;
   lastSyncMinutesAgo?: number | null;
   insights?: DashboardInsight[];
+  hideWorkspaceBadge?: boolean;
 }
 
 function getGreeting(): string {
@@ -38,6 +39,7 @@ export function DashboardHero({
   isSuperadmin,
   lastSyncMinutesAgo,
   insights = [],
+  hideWorkspaceBadge = false,
 }: DashboardHeroProps) {
   const greeting = getGreeting();
   const name = firstName || "there";
@@ -49,12 +51,14 @@ export function DashboardHero({
     <div className="space-y-5 pb-2">
       <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4">
         <div className="space-y-3">
-          <Badge
-            variant="secondary"
-            className="rounded-full px-3 py-1 text-[11px] font-medium tracking-wide"
-          >
-            {isSuperadmin ? "Superadmin · Platform" : "Workspace · HR"}
-          </Badge>
+          {!hideWorkspaceBadge ? (
+            <Badge
+              variant="secondary"
+              className="rounded-full px-3 py-1 text-[11px] font-medium tracking-wide"
+            >
+              {isSuperadmin ? "Superadmin · Platform" : "Workspace · HR"}
+            </Badge>
+          ) : null}
           <div>
             <h1 className="font-display text-[2.25rem] sm:text-4xl font-bold tracking-tight leading-tight">
               {greeting}, {name} 

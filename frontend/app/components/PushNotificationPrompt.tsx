@@ -8,6 +8,7 @@ import {
   resetPushClientStateIfNeeded,
 } from "@/lib/pushSubscribe";
 import { bootstrapServiceWorker } from "@/lib/serviceWorker";
+import { isDesktopBrowser } from "@/lib/desktopManager";
 
 type Props = {
   onSubscribed?: () => void;
@@ -78,6 +79,11 @@ export default function PushNotificationPrompt({
       !("PushManager" in window) ||
       !("serviceWorker" in navigator)
     ) {
+      return;
+    }
+
+    // Desktop/tablet browser layout — push prompt is mobile/PWA only
+    if (isDesktopBrowser()) {
       return;
     }
 

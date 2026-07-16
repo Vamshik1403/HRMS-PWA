@@ -28,11 +28,13 @@ export function EmpReimbursementApprovalSheet({
   onClose,
   reimbursementId,
   onDone,
+  embedded = false,
 }: {
   open: boolean;
   onClose: () => void;
   reimbursementId: string | null;
   onDone: () => void;
+  embedded?: boolean;
 }) {
   const [row, setRow] = useState<{
     status?: string;
@@ -140,9 +142,14 @@ export function EmpReimbursementApprovalSheet({
 
   const sheet = (
     <div
-      className="fixed inset-0 z-[200] flex flex-col bg-[#f8f9fb]"
-      style={{ paddingTop: "env(safe-area-inset-top)" }}
+      className={
+        embedded
+          ? "flex flex-col bg-[#f8f9fb] min-h-0"
+          : "fixed inset-0 z-[200] flex flex-col bg-[#f8f9fb]"
+      }
+      style={embedded ? undefined : { paddingTop: "env(safe-area-inset-top)" }}
     >
+      {!embedded && (
       <header className="shrink-0 bg-white border-b px-4 py-3 flex items-center gap-2">
         <button type="button" onClick={onClose} className="w-9 h-9 rounded-full flex items-center justify-center">
           <Icon icon="solar:arrow-left-linear" className="w-5 h-5" />
@@ -152,6 +159,7 @@ export function EmpReimbursementApprovalSheet({
           {teamName && <p className="text-[11px] text-[#2563eb]">Team · {teamName}</p>}
         </div>
       </header>
+      )}
       <div className="flex-1 min-h-0 overflow-y-auto px-4 py-4 space-y-3">
         <p className="text-[12px] text-amber-800 bg-amber-50 border border-amber-100 rounded-xl px-3 py-2 leading-relaxed">
           Approve or reject <strong>each expense line</strong> separately (partial approval). Parent status
@@ -192,5 +200,6 @@ export function EmpReimbursementApprovalSheet({
     </div>
   );
 
+  if (embedded) return sheet;
   return createPortal(sheet, document.body);
 }

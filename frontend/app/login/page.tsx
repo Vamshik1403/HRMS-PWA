@@ -12,11 +12,7 @@ import { clearLegacyEmpPhoto } from '../utils/empPhotoCache'
 import { clearInAppNotifications } from '../utils/empInAppNotifications'
 import { clearPageCache, clearPageCachesByPrefix } from '../utils/pageCache'
 import { registerPushSubscription } from '@/lib/pushSubscribe'
-import {
-  isDesktopBrowser,
-  isDesktopManagerFlagSet,
-  resolveDesktopManagerAfterLogin,
-} from '@/lib/desktopManager'
+import { resolveDesktopManagerAfterLogin } from '@/lib/desktopManager'
 import { isJwtExpired } from '@/lib/jwtUtils'
 
 const TERMS_AND_CONDITIONS = `TERMS AND CONDITIONS & END USER LICENSE AGREEMENT
@@ -168,11 +164,7 @@ export default function LoginPage() {
       const role = String(user?.role || '').toUpperCase()
 
       if (role === 'EMPLOYEE' || user?.type === 'employee') {
-        if (isDesktopManagerFlagSet() && isDesktopBrowser()) {
-          router.replace('/dashboard')
-        } else {
-          router.replace('/empdashboard')
-        }
+        router.replace('/empdashboard')
       } else if (role) {
   router.replace(role === 'SUPERADMIN' ? '/superdashboard' : '/dashboard')
 } else {
@@ -217,12 +209,8 @@ export default function LoginPage() {
       // Employee IDs can collide with user IDs in the Users table, so skip the fetch.
       if (basicUser.type === 'employee' || basicUser.role === 'EMPLOYEE') {
         localStorage.setItem('user', JSON.stringify(basicUser))
-        const desktopManager = await resolveDesktopManagerAfterLogin(accessToken)
-        if (desktopManager) {
-          router.push('/dashboard')
-        } else {
-          router.push('/empdashboard')
-        }
+        await resolveDesktopManagerAfterLogin(accessToken)
+        router.push('/empdashboard')
       } else {
         // For admin/manager users, fetch complete user details with all relations
         try {

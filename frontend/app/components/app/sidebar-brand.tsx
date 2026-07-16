@@ -7,16 +7,17 @@ import { Button } from "@/app/components/ui/button";
 
 interface SidebarBrandProps {
   collapsed: boolean;
+  homeHref?: string;
   onRefresh?: () => void;
   onToggle?: () => void;
 }
 
-export function SidebarBrand({ collapsed, onRefresh, onToggle }: SidebarBrandProps) {
+export function SidebarBrand({ collapsed, homeHref = "/dashboard", onRefresh, onToggle }: SidebarBrandProps) {
   if (collapsed) {
     return (
       <div className="border-b shrink-0 px-2 py-3 flex flex-col items-center gap-2">
         <Link
-          href="/dashboard"
+          href={homeHref}
           className="flex items-center justify-center w-full"
           title="OpenHRM"
         >
@@ -45,7 +46,7 @@ export function SidebarBrand({ collapsed, onRefresh, onToggle }: SidebarBrandPro
 
   return (
     <div className="h-16 px-3 flex items-center gap-1 border-b shrink-0 min-w-0">
-      <Link href="/dashboard" className="flex items-center gap-2 min-w-0 flex-1">
+      <Link href={homeHref} className="flex items-center gap-2 min-w-0 flex-1">
         <img
           src="/img/OpenHRM_Logo.png"
           alt="OpenHRM"

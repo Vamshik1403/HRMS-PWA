@@ -222,7 +222,7 @@ interface ActivityComment {
 }
 
 
-export default function DashboardPage() {
+export default function DashboardPage({ embeddedInEmpPortal = false }: { embeddedInEmpPortal?: boolean } = {}) {
   const user = useCurrentUser();
 
   const BACKEND_URL =
@@ -331,7 +331,9 @@ export default function DashboardPage() {
   const isDesktopManagerEmployee =
     desktopManager && user?.role === "EMPLOYEE";
   const isHrDesktopView =
-    user?.role === "COMPANY_ADMIN" || isDesktopManagerEmployee;
+    user?.role === "COMPANY_ADMIN" ||
+    user?.role === "ADMIN" ||
+    isDesktopManagerEmployee;
 
   useEffect(() => {
     if (!user) {
@@ -1009,10 +1011,17 @@ export default function DashboardPage() {
     <div className={`${sectionGap} animate-fade-in`}>
       <DashboardHero
         firstName={user?.firstName || user?.username}
-        roleLabel={user?.role === "COMPANY_ADMIN" ? "Company Admin" : user?.role?.replace(/_/g, " ")}
+        roleLabel={
+          user?.role === "COMPANY_ADMIN"
+            ? "Company Admin"
+            : user?.role === "ADMIN"
+              ? "Manager"
+              : user?.role?.replace(/_/g, " ")
+        }
         isSuperadmin={user?.role === "SUPERADMIN"}
         lastSyncMinutesAgo={overviewStatsReady ? 2 : null}
         insights={dashboardInsights}
+        hideWorkspaceBadge={embeddedInEmpPortal}
       />
       {probationAlerts.length > 0 && (
         <NoticeBanner

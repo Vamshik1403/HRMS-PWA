@@ -54,7 +54,18 @@ export class EmailTemplateService implements OnModuleInit {
   constructor(private readonly prisma: PrismaService) {}
 
   async onModuleInit() {
-    await this.migrateLegacyProductNameInTemplates();
+    try {
+      await this.migrateLegacyProductNameInTemplates();
+    } catch (err: unknown) {
+      const code = (err as { code?: string })?.code;
+      if (code === 'P2021') {
+        this.logger.warn(
+          'EmailTemplate table missing — run prisma migrate deploy. Skipping template migration.',
+        );
+        return;
+      }
+      this.logger.error('Email template startup migration failed', err);
+    }
   }
 
   /** Replace static OpenHRM branding in stored templates with {{companyName}}. */

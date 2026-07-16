@@ -46,6 +46,30 @@ export class EmpManagerScopeService {
     return name || e?.employeeID || `Employee #${employeeId}`;
   }
 
+  /** Manager may view direct reportees or colleagues in the same department. */
+  async canViewEmployee(managerEmployeeId: number, targetEmployeeId: number): Promise<boolean> {
+    if (managerEmployeeId === targetEmployeeId) return true;
+    const direct = await this.getDirectReporteeIds(managerEmployeeId);
+    if (direct.includes(targetEmployeeId)) return true;
+
+    const [manager, target] = await Promise.all([
+      this.prisma.manageEmployee.findUnique({
+        where: { id: managerEmployeeId },
+        select: { departmentNameID: true, companyID: true },
+      }),
+      this.prisma.manageEmployee.findUnique({
+        where: { id: targetEmployeeId },
+        select: { departmentNameID: true, companyID: true, isDeleted: true },
+      }),
+    ]);
+    if (!manager || !target || target.isDeleted) return false;
+    return (
+      manager.departmentNameID != null &&
+      manager.departmentNameID === target.departmentNameID &&
+      manager.companyID === target.companyID
+    );
+  }
+
   /** First-person employee notification → manager-facing copy. */
   managerNotificationBody(body: string, employeeName: string): string {
     return body

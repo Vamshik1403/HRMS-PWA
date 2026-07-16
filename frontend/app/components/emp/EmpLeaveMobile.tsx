@@ -21,6 +21,11 @@ import { EmpRecordHistorySheet } from "./EmpRecordHistorySheet";
 import { EmpListViewMoreButton } from "./EmpListViewMoreButton";
 import { EmpLeaveApprovalSheet } from "./EmpLeaveApprovalSheet";
 import { formatDateShort } from "../../utils/leaveDisplay";
+import { EmpPortalPage, empListClass, empPageRootClass } from "./EmpPortalPage";
+import { useEmpPortalDesktop } from "../layout/EmpPortalShell";
+import { EmpDesktopLeaveBalance, EmpDesktopLeaveTable } from "./desktop/EmpDesktopLeaveList";
+import { EmpDesktopPage } from "./desktop/EmpDesktopPage";
+import { Calendar } from "lucide-react";
 
 const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL || "/backend";
 
@@ -79,8 +84,10 @@ export interface LeaveAppRow {
   branchesID?: number;
 }
 
-export function EmpLeaveMobile() {
+export function EmpLeaveMobile({ desktopTab }: { desktopTab?: string } = {}) {
   const user = useCurrentUser();
+  const isPortalDesktop = useEmpPortalDesktop();
+  const inWorkspace = !!desktopTab;
   const { scope, isManagerView } = useEmpManagerScope();
   const { cards, loading: balanceLoading, load: loadBalance } = useEmpLeaveBalance();
   const [apps, setApps] = useState<LeaveAppRow[]>(() => getPageCache<LeaveAppRow[]>("empLeaveApps") ?? []);
@@ -297,9 +304,96 @@ export function EmpLeaveMobile() {
   };
 
   const balanceVisible = showLeaveBalance === true;
+  const showBalance = balanceVisible && (!inWorkspace || desktopTab === "overview" || desktopTab === "balance");
+  const showList = !inWorkspace || desktopTab === "overview" || desktopTab === "history" || desktopTab === "approvals";
+  const listApps = desktopTab === "approvals"
+    ? previewApps.filter((a) => isTeamMemberId(scope, a.manageEmployeeID))
+    : previewApps;
 
-  return (
-    <div className="flex flex-col min-h-full pb-24">
+  if (inWorkspace) {
+    const pageTitle =
+      desktopTab === "balance"
+        ? "Leave balance"
+        : desktopTab === "approvals"
+          ? "Leave approvals"
+          : desktopTab === "history"
+            ? "Leave history"
+            : "Leave overview";
+    const pageDesc =
+      isManagerView
+        ? "Review team leave requests and balances"
+        : "Your leave balance and application history";
+
+    return (
+      <EmpDesktopPage title={pageTitle} description={pageDesc} icon={Calendar}>
+        {showBalance ? (
+          <EmpDesktopLeaveBalance cards={cards} loading={balanceLoading} />
+        ) : null}
+        {showList ? (
+          <div className={showBalance ? "mt-6" : ""}>
+            <EmpDesktopLeaveTable
+              apps={listApps}
+              isManagerView={isManagerView}
+              employeeNameForRow={employeeNameForRow}
+              onApprove={(app) => setApprovalApp(app)}
+              onDelete={handleDelete}
+              title={desktopTab === "approvals" ? "Pending approvals" : "Leave requests"}
+            />
+            {hasHistory ? (
+              <EmpListViewMoreButton count={historyApps.length} onClick={() => setHistoryOpen(true)} />
+            ) : null}
+          </div>
+        ) : null}
+        <EmpRecordHistorySheet
+          open={historyOpen}
+          onClose={() => setHistoryOpen(false)}
+          title="Leave history"
+          subtitle={`${historyApps.length} older request(s)`}
+        >
+          <EmpDesktopLeaveTable
+            apps={historyApps}
+            isManagerView={isManagerView}
+            employeeNameForRow={employeeNameForRow}
+            onApprove={(app) => setApprovalApp(app)}
+            onDelete={handleDelete}
+          />
+        </EmpRecordHistorySheet>
+        <EmpLeaveApprovalSheet
+          open={!!approvalApp}
+          onClose={() => setApprovalApp(null)}
+          application={approvalApp}
+          onDone={() => {
+            if (employeeId) loadApps(employeeId, showLeaveBalance === true);
+          }}
+        />
+      </EmpDesktopPage>
+    );
+  }
+
+  const inner = (
+    <div className={inWorkspace ? "" : empPageRootClass(isPortalDesktop)}>
+      {!inWorkspace && isPortalDesktop ? (
+        <div className="emp-portal-header-row">
+          <div>
+            <h1>Leave</h1>
+            <p className="emp-portal-subtitle">
+              {isManagerView
+                ? "Team leave requests — approve or review"
+                : balanceVisible
+                  ? "Available balance and requests"
+                  : "Leave requests"}
+            </p>
+          </div>
+          <Link
+            href="/empLeaveApplication/new"
+            className="inline-flex items-center gap-2 rounded-lg bg-[#2563eb] px-4 py-2 text-sm font-semibold text-white hover:bg-[#1d4ed8]"
+          >
+            <Plus className="w-4 h-4" strokeWidth={2.5} />
+            New request
+          </Link>
+        </div>
+      ) : !inWorkspace ? (
+      <>
       <div className="px-4 pt-5 pb-3">
         <h1 className="text-[22px] font-bold text-gray-900">Leave</h1>
         <p className="text-[12px] text-gray-500 mt-0.5">
@@ -310,9 +404,11 @@ export function EmpLeaveMobile() {
               : "Leave requests"}
         </p>
       </div>
+      </>
+      ) : null}
 
-      {balanceVisible && (
-      <div className="px-4 grid grid-cols-3 gap-2 mb-4">
+      {showBalance && (
+      <div className={`${isPortalDesktop ? "" : "px-4"} grid grid-cols-3 gap-2 mb-4`}>
         {(cards.length ? cards : [
           { key: "sick", label: "Sick", remaining: 0, total: 0 },
           { key: "casual", label: "Casual", remaining: 0, total: 0 },
@@ -333,21 +429,23 @@ export function EmpLeaveMobile() {
       </div>
       )}
 
-      <div className="px-4 flex-1">
-        <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2">
+      {showList && (
+      <div className={`${isPortalDesktop && !inWorkspace ? "" : inWorkspace ? "" : "px-4"} flex-1`}>
+        <p className={`${isPortalDesktop ? "text-xs font-semibold text-gray-500 uppercase tracking-wide" : "text-[11px] font-bold text-gray-400 uppercase tracking-wider"} mb-2`}>
           {isManagerView ? "Team leave requests" : "Leave requests"}
         </p>
         {apps.length === 0 ? (
           <p className="text-[13px] text-gray-400 text-center py-10">No leave requests yet</p>
         ) : (
           <>
-            <div className="space-y-2">{previewApps.map(renderLeaveCard)}</div>
+            <div className={inWorkspace ? "emp-ws-table-list" : empListClass(isPortalDesktop)}>{listApps.map(renderLeaveCard)}</div>
             {hasHistory && (
               <EmpListViewMoreButton count={historyApps.length} onClick={() => setHistoryOpen(true)} />
             )}
           </>
         )}
       </div>
+      )}
 
       <EmpRecordHistorySheet
         open={historyOpen}
@@ -369,12 +467,15 @@ export function EmpLeaveMobile() {
 
       <Link
         href="/empLeaveApplication/new"
-        className="mobile-fab fixed right-4 z-40 w-14 h-14 rounded-full bg-[#2563eb] text-white shadow-lg flex items-center justify-center active:scale-90"
-        style={{ bottom: "calc(64px + env(safe-area-inset-bottom))" }}
+        className={`mobile-fab fixed right-4 z-40 w-14 h-14 rounded-full bg-[#2563eb] text-white shadow-lg flex items-center justify-center active:scale-90 ${isPortalDesktop ? "emp-portal-fab-hidden" : ""}`}
+        style={isPortalDesktop ? undefined : { bottom: "calc(64px + env(safe-area-inset-bottom))" }}
         aria-label="New leave request"
       >
         <Plus className="w-6 h-6" strokeWidth={2.5} />
       </Link>
     </div>
   );
+
+  if (inWorkspace) return inner;
+  return <EmpPortalPage>{inner}</EmpPortalPage>;
 }

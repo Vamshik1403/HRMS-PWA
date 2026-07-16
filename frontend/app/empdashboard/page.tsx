@@ -1,12 +1,15 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, Suspense } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Icon } from "@iconify/react";
 import EmpMobileLayout from "../components/layout/EmpMobileLayout";
+import { useEmpPortalDesktop } from "../components/layout/EmpPortalShell";
 import { getPageCache, setPageCache } from "../utils/pageCache";
 import { clearLegacyEmpPhoto, resolveEmpPhoto } from "../utils/empPhotoCache";
+import { EmpDesktopHomeOverview } from "../components/emp/desktop/EmpDesktopHomeOverview";
+import { EmpDesktopWorkspaceCalendar } from "../components/emp/desktop/EmpDesktopWorkspaceCalendar";
 import { EmpNotificationsPanel } from "../components/emp/EmpNotificationsPanel";
 import { EmpTodayStatusCard } from "../components/emp/EmpTodayStatusCard";
 import {
@@ -17,7 +20,6 @@ import type { TodayStatus } from "../hooks/useEmpPunch";
 import { taskFetch } from "../utils/taskApi";
 import { syncAppBadge } from "@/lib/appBadge";
 import { TASK_MANAGEMENT_ENABLED } from "../config/featureFlags";
-import { isDesktopBrowser, isDesktopManagerFlagSet } from "@/lib/desktopManager";
 import { Eye, EyeOff } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle, DialogHeader } from "../components/ui/dialog";
 import { Button } from "../components/ui/button";
@@ -205,15 +207,37 @@ const menuCards = [
 ];
 
 export default function EmpDashboardPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-[#f1f5f9]" />}>
+      <EmpDashboardPageInner />
+    </Suspense>
+  );
+}
+
+function EmpDashboardPageInner() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const isPortalDesktop = useEmpPortalDesktop();
+  const view = searchParams.get("view");
+  const tab = searchParams.get("tab");
+  const homeTab =
+    tab === "overview" ? "dashboard" : tab || (view === "dashboard" ? "dashboard" : null) || "dashboard";
 
   useEffect(() => {
-    if (isDesktopManagerFlagSet() && isDesktopBrowser()) {
-      router.replace("/dashboard");
+    if (!isPortalDesktop) return;
+    if (tab === "overview") {
+      router.replace("/empdashboard");
+      return;
     }
-  }, [router]);
+    const legacyProfileTabs = ["profile", "approvals", "leave", "attendance", "promotions"];
+    if (legacyProfileTabs.includes(homeTab)) {
+      const target = homeTab === "profile" ? "/empProfile" : `/empProfile?tab=${homeTab}`;
+      router.replace(target);
+    }
+  }, [isPortalDesktop, homeTab, router, tab]);
 
   const [empUser, setEmpUser] = useState<any>(null);
+  const [empProfileData, setEmpProfileData] = useState<any>(null);
   const [mustChangePassword, setMustChangePassword] = useState(false);
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   const [todayStatus, setTodayStatus] = useState<TodayStatus | null>(() => getPageCache<TodayStatus>("todayAttendance"));
@@ -259,7 +283,6 @@ export default function EmpDashboardPage() {
     }
   }, []);
 
-  // Fetch employee credentials separately to check mustChangePassword
   useEffect(() => {
     const fetchEmployeeCredentials = async () => {
       try {
@@ -277,10 +300,9 @@ export default function EmpDashboardPage() {
 
         if (response.ok) {
           const data = await response.json();
-          console.log("Employee data from API:", data);
-          
+          setEmpProfileData(data);
+
           const mustChange = data?.employeeCredentials?.mustChangePassword === true;
-          console.log("mustChangePassword from API:", mustChange);
 
           if (mustChange) {
             setMustChangePassword(true);
@@ -435,6 +457,18 @@ export default function EmpDashboardPage() {
   const empInitials = empFullName.split(" ").filter(Boolean).slice(0, 2)
     .map((w: string) => w[0].toUpperCase()).join("") || "E";
   const empPhoto = photoUrl || resolveEmpPhoto(empUser?.employee?.id, empUser?.employee?.employeePhotoUrl) || null;
+  const emp = empProfileData || empUser?.employee || null;
+  const designation =
+    emp?.designations?.designation ||
+    emp?.designations?.designationName ||
+    emp?.empDesignation?.[0]?.designation?.designation ||
+    emp?.designation ||
+    null;
+  const department =
+    emp?.departments?.departmentName ||
+    emp?.empDepartment?.[0]?.department?.departmentName ||
+    emp?.department ||
+    null;
 
   const badgeFor = (key: string) => {
     if (key === "tasks") return taskBadge;
@@ -634,7 +668,9 @@ export default function EmpDashboardPage() {
         </DialogContent>
       </Dialog>
 
-      <div className="px-4 pt-4 pb-2">
+      <div className={isPortalDesktop ? "" : "px-4 pt-4 pb-2"}>
+        {!isPortalDesktop && (
+        <>
         {/* Header — greeting block and avatar share one vertical center line */}
         <div className="flex items-center justify-between gap-3 mb-3">
           <div className="flex items-center gap-2.5 min-w-0 flex-1">
@@ -663,7 +699,37 @@ export default function EmpDashboardPage() {
             </div>
           </Link>
         </div>
+        </>
+        )}
 
+        {isPortalDesktop && homeTab === "dashboard" && (
+          <EmpDesktopHomeOverview
+            empFullName={empFullName}
+            empPhoto={empPhoto}
+            empInitials={empInitials}
+            designation={designation}
+            department={department}
+            todayStatus={todayStatus}
+            loadingStatus={loadingStatus}
+            onStatusUpdate={(d) => {
+              setTodayStatus(d);
+              setPageCache("todayAttendance", d);
+            }}
+            taskBadge={taskBadge}
+            noticeBadge={noticeBadge}
+            reimbBadge={reimbBadge}
+            leaveBadge={leaveBadge}
+            onNoticeClick={() => {
+              localStorage.setItem("_notice_last_viewed", Date.now().toString());
+              setNoticeBadge(0);
+            }}
+          />
+        )}
+
+        {isPortalDesktop && homeTab === "calendar" && <EmpDesktopWorkspaceCalendar />}
+
+        {!isPortalDesktop && (
+        <>
         <EmpTodayStatusCard
           todayStatus={todayStatus}
           loading={loadingStatus}
@@ -710,6 +776,9 @@ export default function EmpDashboardPage() {
         </div>
 
         <EmpNotificationsPanel />
+        </>
+        )}
+
       </div>
     </EmpMobileLayout>
   );

@@ -214,10 +214,10 @@ export function BonusAllocationsManagement() {
   const [listLoading, setListLoading] = useState(true);
   const [allocations, setAllocations] = useState<BonusAllocationUI[]>([]);
   const table = useClientTable("bonusName");
-  const [branchList, setBranchList] = useState<any[]>([]);
-  const [departmentList, setDepartmentList] = useState<any[]>([]);
-  const [selectedBranchID, setSelectedBranchID] = useState("");
-  const [selectedDepartmentID, setSelectedDepartmentID] = useState("");
+const [branchList, setBranchList] = useState<any[]>([]);
+const [departmentList, setDepartmentList] = useState<any[]>([]);
+const [selectedBranchID, setSelectedBranchID] = useState("");
+const [selectedDepartmentID, setSelectedDepartmentID] = useState("");
   const [branchFilter, setBranchFilter] = useState("ALL");
   const [departmentFilter, setDepartmentFilter] = useState("ALL");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -1077,7 +1077,7 @@ const filteredAllocations = useMemo(() => {
       </FormDrawer>
 
       {!isDialogOpen && (
-        <>
+      <>
           <FilterBar
             search={{
               value: table.search,
@@ -1122,11 +1122,11 @@ const filteredAllocations = useMemo(() => {
               canManage ? (
                 <Button onClick={() => { resetForm(); setIsDialogOpen(true); }}>
                   <Plus className="w-4 h-4 mr-1" /> Add Bonus Allocation
-                </Button>
+                            </Button>
               ) : undefined
             }
           />
-        </>
+      </>
       )}
     </div>
   );

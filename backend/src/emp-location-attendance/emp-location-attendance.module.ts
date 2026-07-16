@@ -20,5 +20,6 @@ import { JwtStrategy } from '../auth/strategies/jwt.strategy';
   ],
   controllers: [EmpLocationAttendanceController],
   providers: [EmpLocationAttendanceService, EmpMarkoutReminderService, JwtStrategy],
+  exports: [EmpLocationAttendanceService],
 })
 export class EmpLocationAttendanceModule {}

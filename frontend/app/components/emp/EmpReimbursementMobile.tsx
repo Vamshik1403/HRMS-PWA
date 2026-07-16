@@ -14,6 +14,12 @@ import { EmpRecordHistorySheet } from "./EmpRecordHistorySheet";
 import { EmpListViewMoreButton } from "./EmpListViewMoreButton";
 import { EmpReimbursementApprovalSheet } from "./EmpReimbursementApprovalSheet";
 import { displayStatusLabel, isPartiallyApprovedStatus } from "../../utils/statusDisplay";
+import { EmpPortalPage, empListClass, empPageRootClass } from "./EmpPortalPage";
+import { useEmpPortalDesktop } from "../layout/EmpPortalShell";
+import { EmpDesktopReimbursementTable } from "./desktop/EmpDesktopReimbursementTable";
+import { EmpDesktopPage } from "./desktop/EmpDesktopPage";
+import { Button } from "../ui/button";
+import { Wallet } from "lucide-react";
 
 const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL || "/backend";
 
@@ -63,8 +69,10 @@ function displayStatus(s: string) {
   return map[label] || label;
 }
 
-export function EmpReimbursementMobile() {
+export function EmpReimbursementMobile({ desktopTab }: { desktopTab?: string } = {}) {
   const user = useCurrentUser();
+  const isPortalDesktop = useEmpPortalDesktop();
+  const inWorkspace = !!desktopTab;
   const { scope, isManagerView } = useEmpManagerScope();
   const [rows, setRows] = useState<ReimbursementRow[]>(() => getPageCache<ReimbursementRow[]>("empReimbursements") ?? []);
   const [employeeId, setEmployeeId] = useState<number | null>(null);
@@ -238,27 +246,115 @@ export function EmpReimbursementMobile() {
     );
   };
 
-  return (
-    <div className="flex flex-col min-h-full pb-24">
+  const showList = !inWorkspace || desktopTab === "overview" || desktopTab === "history" || desktopTab === "approvals";
+  const listRows = desktopTab === "approvals"
+    ? previewRows.filter((r) => isTeamMemberId(scope, r.manageEmployeeID))
+    : previewRows;
+
+  if (inWorkspace) {
+    const pageTitle =
+      desktopTab === "approvals"
+        ? "Reimbursement approvals"
+        : desktopTab === "history"
+          ? "Reimbursement history"
+          : "Reimbursement overview";
+
+    return (
+      <EmpDesktopPage
+        title={pageTitle}
+        description={isManagerView ? "Review and approve team claims" : "Track your reimbursement claims"}
+        icon={Wallet}
+        actions={
+          <Button asChild>
+            <Link href="/empReimbursement/new">
+              <Plus className="w-4 h-4" />
+              New claim
+            </Link>
+          </Button>
+        }
+      >
+        {showList ? (
+          <>
+            <EmpDesktopReimbursementTable
+              rows={listRows}
+              isManagerView={isManagerView}
+              employeeNameForRow={employeeNameForRow}
+              onApprove={(id) => setApprovalId(id)}
+              onDelete={handleDelete}
+              title={desktopTab === "approvals" ? "Pending approvals" : "Claims"}
+            />
+            {hasHistory ? (
+              <EmpListViewMoreButton count={historyRows.length} onClick={() => setHistoryOpen(true)} />
+            ) : null}
+          </>
+        ) : null}
+        <EmpRecordHistorySheet
+          open={historyOpen}
+          onClose={() => setHistoryOpen(false)}
+          title="Reimbursement history"
+          subtitle={`${historyRows.length} older claim(s)`}
+        >
+          <EmpDesktopReimbursementTable
+            rows={historyRows}
+            isManagerView={isManagerView}
+            employeeNameForRow={employeeNameForRow}
+            onApprove={(id) => setApprovalId(id)}
+            onDelete={handleDelete}
+          />
+        </EmpRecordHistorySheet>
+        <EmpReimbursementApprovalSheet
+          open={!!approvalId}
+          onClose={() => setApprovalId(null)}
+          reimbursementId={approvalId}
+          onDone={() => {
+            if (employeeId) load(employeeId);
+          }}
+        />
+      </EmpDesktopPage>
+    );
+  }
+
+  const inner = (
+    <div className={inWorkspace ? "" : empPageRootClass(isPortalDesktop)}>
+      {!inWorkspace && isPortalDesktop ? (
+        <div className="emp-portal-header-row">
+          <div>
+            <h1>Reimbursement</h1>
+            <p className="emp-portal-subtitle">
+              {isManagerView ? "Team reimbursement claims — review and approve" : "Your submitted claims"}
+            </p>
+          </div>
+          <Link
+            href="/empReimbursement/new"
+            className="inline-flex items-center gap-2 rounded-lg bg-[#2563eb] px-4 py-2 text-sm font-semibold text-white hover:bg-[#1d4ed8]"
+          >
+            <Plus className="w-4 h-4" strokeWidth={2.5} />
+            New claim
+          </Link>
+        </div>
+      ) : !inWorkspace ? (
       <div className="px-4 pt-5 pb-3">
         <h1 className="text-[22px] font-bold text-gray-900">Reimbursement</h1>
         <p className="text-[12px] text-gray-500 mt-0.5">
           {isManagerView ? "Team reimbursement claims — review & approve" : "Your submitted claims"}
         </p>
       </div>
+      ) : null}
 
-      <div className="px-4 flex-1">
+      {showList && (
+      <div className={`${isPortalDesktop && !inWorkspace ? "" : inWorkspace ? "" : "px-4"} flex-1`}>
         {rows.length === 0 ? (
           <p className="text-[13px] text-gray-400 text-center py-12">No reimbursement requests</p>
         ) : (
           <>
-            <div className="space-y-2">{previewRows.map(renderRow)}</div>
+            <div className={inWorkspace ? "emp-ws-table-list" : empListClass(isPortalDesktop)}>{listRows.map(renderRow)}</div>
             {hasHistory && (
               <EmpListViewMoreButton count={historyRows.length} onClick={() => setHistoryOpen(true)} />
             )}
           </>
         )}
       </div>
+      )}
 
       <EmpRecordHistorySheet
         open={historyOpen}
@@ -280,14 +376,17 @@ export function EmpReimbursementMobile() {
 
       <Link
         href="/empReimbursement/new"
-        className="mobile-fab fixed right-4 z-40 w-14 h-14 rounded-full bg-[#2563eb] text-white shadow-lg flex items-center justify-center active:scale-90"
-        style={{ bottom: "calc(64px + env(safe-area-inset-bottom))" }}
+        className={`mobile-fab fixed right-4 z-40 w-14 h-14 rounded-full bg-[#2563eb] text-white shadow-lg flex items-center justify-center active:scale-90 ${isPortalDesktop ? "emp-portal-fab-hidden" : ""}`}
+        style={isPortalDesktop ? undefined : { bottom: "calc(64px + env(safe-area-inset-bottom))" }}
         aria-label="New reimbursement"
       >
         <Plus className="w-6 h-6" strokeWidth={2.5} />
       </Link>
     </div>
   );
+
+  if (inWorkspace) return inner;
+  return <EmpPortalPage>{inner}</EmpPortalPage>;
 }
 
 export { CATEGORIES };
