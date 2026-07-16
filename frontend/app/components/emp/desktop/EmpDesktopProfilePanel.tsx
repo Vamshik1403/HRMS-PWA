@@ -12,6 +12,7 @@ import {
   Heart,
   Mail,
   Phone,
+  Trash2,
   User,
   Users,
 } from "lucide-react";
@@ -128,6 +129,9 @@ export function EmpDesktopProfilePanel({
     viewEmployeeId ? null : getPageCache("empProfileData"),
   );
   const [loading, setLoading] = useState(viewEmployeeId ? true : !empData);
+  const [viewPhotoFailed, setViewPhotoFailed] = useState(false);
+
+  const isViewingOther = viewEmployeeId != null;
 
   const fetchEmpData = useCallback(
     async (u: any, token: string, targetId?: number) => {
@@ -147,6 +151,13 @@ export function EmpDesktopProfilePanel({
     },
     [],
   );
+
+  useEffect(() => {
+    if (!viewEmployeeId) return;
+    setEmpData(null);
+    setLoading(true);
+    setViewPhotoFailed(false);
+  }, [viewEmployeeId]);
 
   useEffect(() => {
     try {
@@ -169,8 +180,12 @@ export function EmpDesktopProfilePanel({
     }
   }, [fetchEmpData, viewEmployeeId]);
 
-  const emp = empData || empUser?.employee || null;
-  const empId = emp?.id || empUser?.employee?.id;
+  useEffect(() => {
+    setViewPhotoFailed(false);
+  }, [viewEmployeeId, empData?.employeePhotoUrl]);
+
+  const emp = isViewingOther ? empData : empData || empUser?.employee || null;
+  const empId = isViewingOther ? viewEmployeeId : emp?.id || empUser?.employee?.id;
 
   const displayName = emp
     ? `${emp.employeeFirstName || emp.firstName || ""} ${emp.employeeLastName || emp.lastName || ""}`.trim()
@@ -184,12 +199,11 @@ export function EmpDesktopProfilePanel({
       .map((w: string) => w[0].toUpperCase())
       .join("") || "E";
 
-  const photoUrl =
-    (readOnly || viewEmployeeId ? emp?.employeePhotoUrl : null) ||
-    photoProfile.photoUrl ||
-    emp?.employeePhotoUrl ||
-    getEmpPhoto(empId) ||
-    null;
+  const photoUrl = isViewingOther
+    ? empData?.employeePhotoUrl || null
+    : photoProfile.photoUrl || emp?.employeePhotoUrl || getEmpPhoto(String(empId)) || null;
+  const imgFailed = isViewingOther ? viewPhotoFailed : photoProfile.imgFailed;
+  const setImgFailed = isViewingOther ? setViewPhotoFailed : photoProfile.setImgFailed;
   const designation =
     emp?.designations?.designation ||
     emp?.designations?.designationName ||
@@ -283,23 +297,24 @@ export function EmpDesktopProfilePanel({
         <ProfileHeroSkeleton />
       ) : (
         <section className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
-          <div className="h-28 bg-gradient-to-r from-primary/15 via-primary/8 to-transparent" />
+          <div className="h-28 bg-gradient-to-r from-muted/50 via-muted/20 to-transparent" />
           <div className="px-6 pb-6">
             <div className="-mt-14 flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
               <div className="flex flex-col gap-4 sm:flex-row sm:items-end">
                 {readOnly ? (
                   <div
                     className={cn(
-                      "relative size-28 shrink-0 overflow-hidden rounded-full bg-primary ring-4 ring-card shadow-md",
+                      "relative size-28 shrink-0 overflow-hidden rounded-full ring-4 ring-card shadow-md",
                       "flex items-center justify-center",
+                      photoUrl && !imgFailed ? "bg-muted" : "bg-primary",
                     )}
                   >
-                    {photoUrl && !photoProfile.imgFailed ? (
+                    {photoUrl && !imgFailed ? (
                       <img
                         src={photoUrl}
                         alt={displayName}
                         className="size-full object-cover"
-                        onError={() => photoProfile.setImgFailed(true)}
+                        onError={() => setImgFailed(true)}
                       />
                     ) : (
                       <span className="text-3xl font-bold text-primary-foreground">{initials}</span>
@@ -310,17 +325,18 @@ export function EmpDesktopProfilePanel({
                     type="button"
                     onClick={photoProfile.handlePhotoClick}
                     className={cn(
-                      "group relative size-28 shrink-0 overflow-hidden rounded-full bg-primary ring-4 ring-card shadow-md",
+                      "group relative size-28 shrink-0 overflow-hidden rounded-full ring-4 ring-card shadow-md",
                       "flex items-center justify-center transition-transform hover:scale-[1.02]",
+                      photoUrl && !imgFailed ? "bg-muted" : "bg-primary",
                     )}
                     title="Change profile photo"
                   >
-                    {photoUrl && !photoProfile.imgFailed ? (
+                    {photoUrl && !imgFailed ? (
                       <img
                         src={photoUrl}
                         alt={displayName}
                         className="size-full object-cover"
-                        onError={() => photoProfile.setImgFailed(true)}
+                        onError={() => setImgFailed(true)}
                       />
                     ) : (
                       <span className="text-3xl font-bold text-primary-foreground">{initials}</span>
@@ -414,7 +430,7 @@ export function EmpDesktopProfilePanel({
             <DialogTitle>Profile picture</DialogTitle>
           </DialogHeader>
           <div className="space-y-2 pt-2">
-            {photoUrl && !photoProfile.imgFailed ? (
+            {photoUrl && !imgFailed ? (
               <Button variant="outline" className="w-full justify-start" onClick={photoProfile.handleViewPhotoFromActions}>
                 View profile picture
               </Button>
@@ -423,17 +439,28 @@ export function EmpDesktopProfilePanel({
               <Camera className="size-4" />
               Change image
             </Button>
+            {photoUrl && !imgFailed ? (
+              <Button
+                variant="outline"
+                className="w-full justify-start text-destructive hover:text-destructive"
+                onClick={() => void photoProfile.handleRemovePhoto()}
+                disabled={photoProfile.uploading}
+              >
+                <Trash2 className="size-4" />
+                Remove profile picture
+              </Button>
+            ) : null}
           </div>
         </DialogContent>
       </Dialog>
       <Dialog open={photoProfile.showPhotoViewer} onOpenChange={photoProfile.setShowPhotoViewer}>
         <DialogContent className="border-none bg-black/95 p-2 sm:max-w-2xl">
-          {photoUrl && !photoProfile.imgFailed ? (
+          {photoUrl && !imgFailed ? (
             <img
               src={photoUrl}
               alt={`${displayName} profile`}
               className="max-h-[80vh] w-full rounded-lg object-contain"
-              onError={() => photoProfile.setImgFailed(true)}
+              onError={() => setImgFailed(true)}
             />
           ) : null}
         </DialogContent>

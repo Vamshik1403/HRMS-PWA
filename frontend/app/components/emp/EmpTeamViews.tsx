@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { LayoutGrid, List, Users } from "lucide-react";
+import { LayoutGrid, List, Search, Users } from "lucide-react";
 import { useEmpManagerScope } from "@/app/hooks/useEmpManagerScope";
 import { reporteeDisplayName } from "@/app/utils/empManagerDisplay";
 import { formatPunchTime } from "@/app/utils/empAttendanceHistory";
@@ -12,6 +12,7 @@ import { EmpDesktopPage } from "./desktop/EmpDesktopPage";
 import { cn } from "@/app/utils/cn";
 import { fmtJoined } from "@/app/hooks/useEmpProfile";
 import { authHeaders } from "@/lib/auth";
+import { Input } from "@/app/components/ui/input";
 
 const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL || "/backend";
 
@@ -82,6 +83,8 @@ export function EmpTeamMyTeam() {
   const { loading, isManagerView } = useEmpManagerScope();
   const [scope, setScope] = useState<TeamScope>("reportees");
   const [viewMode, setViewMode] = useState<ViewMode>("grid");
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
   const [members, setMembers] = useState<TeamMemberRow[]>([]);
   const [statusLoading, setStatusLoading] = useState(false);
 
@@ -114,6 +117,27 @@ export function EmpTeamMyTeam() {
     [scope, members.length],
   );
 
+  const filteredMembers = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return members;
+    return members.filter((m) => {
+      const name = memberName(m).toLowerCase();
+      const id = (m.employeeID || String(m.id)).toLowerCase();
+      const email = (m.email || "").toLowerCase();
+      const designation = (m.designation || "").toLowerCase();
+      return (
+        name.includes(q) || id.includes(q) || email.includes(q) || designation.includes(q)
+      );
+    });
+  }, [members, searchQuery]);
+
+  const toggleSearch = () => {
+    setSearchOpen((open) => {
+      if (open) setSearchQuery("");
+      return !open;
+    });
+  };
+
   const openMember = (id: number) => {
     router.push(`/empTeam/member/${id}`);
   };
@@ -136,12 +160,27 @@ export function EmpTeamMyTeam() {
         <div>
           <h2 className={cn("font-bold text-foreground", isDesktop ? "text-xl" : "text-lg")}>My Team</h2>
           <p className="text-sm text-muted-foreground mt-0.5">
-            {members.length} employee{members.length === 1 ? "" : "s"} in{" "}
-            {scope === "reportees" ? "your direct reports" : "your department"}
+            {searchQuery.trim()
+              ? `${filteredMembers.length} of ${members.length} employee${members.length === 1 ? "" : "s"}`
+              : `${members.length} employee${members.length === 1 ? "" : "s"}`}{" "}
+            in {scope === "reportees" ? "your direct reports" : "your department"}
           </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          {searchOpen ? (
+            <div className="relative w-full sm:w-56">
+              <Search className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                autoFocus
+                placeholder="Search by name or ID…"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="h-9 pl-8"
+              />
+            </div>
+          ) : null}
+
           <div className="inline-flex rounded-lg border border-border bg-muted/30 p-1">
             <button
               type="button"
@@ -197,6 +236,22 @@ export function EmpTeamMyTeam() {
               <List className="size-4" />
             </button>
           </div>
+
+          <div className="inline-flex rounded-lg border border-border bg-muted/30 p-1">
+            <button
+              type="button"
+              aria-label="Search employees"
+              onClick={toggleSearch}
+              className={cn(
+                "rounded-md p-2 transition-colors",
+                searchOpen
+                  ? "bg-card text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              <Search className="size-4" />
+            </button>
+          </div>
         </div>
       </div>
 
@@ -208,9 +263,13 @@ export function EmpTeamMyTeam() {
             ? "No reportees linked yet. Assign team members from the employee form in admin."
             : "No other employees found in your department."}
         </div>
+      ) : filteredMembers.length === 0 ? (
+        <div className="rounded-xl border border-border bg-card p-8 text-center text-muted-foreground">
+          No employees match &ldquo;{searchQuery.trim()}&rdquo;.
+        </div>
       ) : viewMode === "grid" ? (
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-          {members.map((m) => {
+          {filteredMembers.map((m) => {
             const name = memberName(m);
             const statusLabel = m.statusLabel || "Yet to check-in";
             const checkInLabel =
@@ -265,7 +324,7 @@ export function EmpTeamMyTeam() {
                 </tr>
               </thead>
               <tbody>
-                {members.map((m) => {
+                {filteredMembers.map((m) => {
                   const name = memberName(m);
                   const statusLabel = m.statusLabel || "Yet to check-in";
                   return (

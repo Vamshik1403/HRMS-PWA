@@ -100,7 +100,12 @@ export function EmpDesktopHomeProfileHero({
     <div className="rounded-xl border border-border bg-card shadow-sm">
       <div className="px-6 py-6 sm:px-8 sm:py-7">
         <div className="flex items-start gap-5 sm:gap-6">
-          <div className="size-24 sm:size-28 rounded-full overflow-hidden bg-primary flex items-center justify-center shrink-0 ring-4 ring-muted shadow-sm">
+          <div
+            className={cn(
+              "size-24 sm:size-28 rounded-full overflow-hidden flex items-center justify-center shrink-0 ring-4 ring-muted shadow-sm",
+              empPhoto ? "bg-muted" : "bg-primary",
+            )}
+          >
             {empPhoto ? (
               <img src={empPhoto} alt={empFullName} className="size-full object-cover" />
             ) : (

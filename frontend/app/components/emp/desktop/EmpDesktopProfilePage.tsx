@@ -10,6 +10,7 @@ import {
   Mail,
   Palette,
   Phone,
+  Trash2,
   User,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
@@ -102,6 +103,7 @@ export function EmpDesktopProfilePage() {
     handlePhotoClick,
     handleChangePhotoFromActions,
     handleViewPhotoFromActions,
+    handleRemovePhoto,
     handlePhotoChange,
     handleLogout,
   } = profile;
@@ -135,7 +137,7 @@ export function EmpDesktopProfilePage() {
     <EmpDesktopPage title="Profile" description="Manage your account and preferences" icon={User}>
       <div className="space-y-6">
         <section className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
-          <div className="h-28 bg-gradient-to-r from-primary/15 via-primary/8 to-transparent" />
+          <div className="h-28 bg-gradient-to-r from-muted/50 via-muted/20 to-transparent" />
           <div className="px-6 pb-6">
             <div className="-mt-14 flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
               <div className="flex flex-col gap-4 sm:flex-row sm:items-end">
@@ -143,8 +145,9 @@ export function EmpDesktopProfilePage() {
                   type="button"
                   onClick={handlePhotoClick}
                   className={cn(
-                    "group relative size-28 shrink-0 overflow-hidden rounded-full bg-primary ring-4 ring-card shadow-md",
+                    "group relative size-28 shrink-0 overflow-hidden rounded-full ring-4 ring-card shadow-md",
                     "flex items-center justify-center transition-transform hover:scale-[1.02]",
+                    photoUrl && !imgFailed ? "bg-muted" : "bg-primary",
                   )}
                   title="Change profile photo"
                 >
@@ -282,6 +285,17 @@ export function EmpDesktopProfilePage() {
               <Camera className="size-4" />
               Change image
             </Button>
+            {photoUrl && !imgFailed ? (
+              <Button
+                variant="outline"
+                className="w-full justify-start text-destructive hover:text-destructive"
+                onClick={() => void handleRemovePhoto()}
+                disabled={uploading}
+              >
+                <Trash2 className="size-4" />
+                Remove profile picture
+              </Button>
+            ) : null}
           </div>
         </DialogContent>
       </Dialog>

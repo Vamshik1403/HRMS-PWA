@@ -131,6 +131,44 @@ export function useEmpProfile() {
     setShowPhotoViewer(true);
   };
 
+  const handleRemovePhoto = async () => {
+    setShowPhotoActions(false);
+    setUploadError(null);
+    setUploading(true);
+    try {
+      const token = localStorage.getItem("token") || localStorage.getItem("accessToken") || "";
+      const empId = empData?.id || empUser?.employee?.id || empUser?.employeeId;
+      if (!empId) throw new Error("Employee not found");
+      const res = await fetch(`${BACKEND}/manage-emp/${empId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ employeePhotoUrl: null }),
+      });
+      if (!res.ok) throw new Error("Failed to remove photo");
+      setImgFailed(false);
+      setPhotoUrl(null);
+      setEmpPhoto(empId, null);
+      if (empData) {
+        const next = { ...empData, employeePhotoUrl: null };
+        setEmpData(next);
+        setPageCache("empProfileData", next);
+      }
+      try {
+        const stored = localStorage.getItem("user");
+        if (stored) {
+          const u = JSON.parse(stored);
+          if (u.employee) u.employee.employeePhotoUrl = null;
+          localStorage.setItem("user", JSON.stringify(u));
+        }
+      } catch {}
+      window.dispatchEvent(new Event("emp-photo-updated"));
+    } catch (err: unknown) {
+      setUploadError(err instanceof Error ? err.message : "Failed to remove photo");
+    } finally {
+      setUploading(false);
+    }
+  };
+
   const handlePhotoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -170,6 +208,7 @@ export function useEmpProfile() {
           localStorage.setItem("user", JSON.stringify(u));
         }
       } catch {}
+      window.dispatchEvent(new Event("emp-photo-updated"));
     } catch (err: unknown) {
       setUploadError(err instanceof Error ? err.message : "Failed to upload photo");
     } finally {
@@ -218,6 +257,7 @@ export function useEmpProfile() {
     handlePhotoClick,
     handleChangePhotoFromActions,
     handleViewPhotoFromActions,
+    handleRemovePhoto,
     handlePhotoChange,
     handleLogout,
   };

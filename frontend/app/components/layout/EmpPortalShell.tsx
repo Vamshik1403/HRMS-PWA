@@ -21,6 +21,8 @@ import { toast } from "sonner";
 import { ensureFetchRefreshPatch } from "@/app/utils/patchFetchForRefresh";
 import { useEmpManagerScope } from "@/app/hooks/useEmpManagerScope";
 import { isDesktopBrowser } from "@/lib/desktopManager";
+import { resolveEmpPhoto } from "@/app/utils/empPhotoCache";
+import { getPageCache } from "@/app/utils/pageCache";
 import {
   Avatar,
   AvatarFallback,
@@ -170,12 +172,32 @@ export default function EmpPortalShell({ children, hideBottomNav = false }: EmpP
   }, [router]);
 
   useEffect(() => {
-    try {
-      const stored = localStorage.getItem("user");
-      if (stored) setEmpUser(JSON.parse(stored));
-    } catch {
-      /* ignore */
-    }
+    const syncUserFromStorage = () => {
+      try {
+        const stored = localStorage.getItem("user");
+        if (!stored) return;
+        const u = JSON.parse(stored);
+        const empId = u?.employee?.id;
+        const cached = getPageCache<any>("empProfileData");
+        const apiPhoto =
+          cached?.id === empId && cached?.employeePhotoUrl
+            ? cached.employeePhotoUrl
+            : u?.employee?.employeePhotoUrl;
+        if (apiPhoto && u.employee) {
+          u.employee.employeePhotoUrl = resolveEmpPhoto(empId, apiPhoto) ?? apiPhoto;
+        }
+        setEmpUser(u);
+      } catch {
+        /* ignore */
+      }
+    };
+    syncUserFromStorage();
+    window.addEventListener("emp-photo-updated", syncUserFromStorage);
+    window.addEventListener("storage", syncUserFromStorage);
+    return () => {
+      window.removeEventListener("emp-photo-updated", syncUserFromStorage);
+      window.removeEventListener("storage", syncUserFromStorage);
+    };
   }, []);
 
   const syncPushSubscription = useCallback(async (requestPermission = false) => {
@@ -261,6 +283,10 @@ export default function EmpPortalShell({ children, hideBottomNav = false }: EmpP
       .slice(0, 2)
       .map((w: string) => w[0].toUpperCase())
       .join("") || "E";
+  const headerPhotoUrl = resolveEmpPhoto(
+    empUser?.employee?.id,
+    empUser?.employee?.employeePhotoUrl,
+  );
 
   const handleChangePassword = async () => {
     if (!pwdForm.oldPassword || !pwdForm.newPassword) {
@@ -369,8 +395,8 @@ export default function EmpPortalShell({ children, hideBottomNav = false }: EmpP
                 <DropdownMenuTrigger asChild>
                   <button type="button" className="rounded-full focus:outline-none">
                     <Avatar className="w-8 h-8 ring-2 ring-border/60">
-                      <AvatarImage src={empUser?.employee?.employeePhotoUrl} />
-                      <AvatarFallback className="bg-[#4f46e5] text-white text-xs font-bold">
+                      <AvatarImage src={headerPhotoUrl ?? undefined} />
+                      <AvatarFallback className="bg-[#2563eb] text-white text-xs font-bold">
                         {empInitials}
                       </AvatarFallback>
                     </Avatar>

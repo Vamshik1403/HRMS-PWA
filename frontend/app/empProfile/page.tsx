@@ -33,6 +33,7 @@ function EmpProfileMobileContent() {
     handlePhotoClick,
     handleChangePhotoFromActions,
     handleViewPhotoFromActions,
+    handleRemovePhoto,
     handlePhotoChange,
     handleLogout,
   } = useEmpProfile();
@@ -202,6 +203,28 @@ function EmpProfileMobileContent() {
                   <Icon icon="solar:alt-arrow-right-linear" className="w-4 h-4 text-slate-400" />
                 </span>
               </button>
+
+              {photoUrl && !imgFailed && (
+                <button
+                  type="button"
+                  onClick={() => void handleRemovePhoto()}
+                  disabled={uploading}
+                  className="w-full rounded-2xl border border-red-200 bg-white px-4 py-3.5 text-left transition-colors hover:bg-red-50 active:scale-[0.995] disabled:opacity-50"
+                >
+                  <span className="flex items-center justify-between gap-3">
+                    <span className="flex items-center gap-3 min-w-0">
+                      <span className="w-9 h-9 rounded-xl bg-red-50 flex items-center justify-center shrink-0">
+                        <Icon icon="solar:trash-bin-trash-bold-duotone" className="w-5 h-5 text-red-600" />
+                      </span>
+                      <span className="min-w-0">
+                        <span className="block text-sm font-semibold text-red-600">Remove profile picture</span>
+                        <span className="block text-xs text-slate-500">Delete your current profile photo</span>
+                      </span>
+                    </span>
+                    <Icon icon="solar:alt-arrow-right-linear" className="w-4 h-4 text-slate-400" />
+                  </span>
+                </button>
+              )}
             </div>
 
             <button

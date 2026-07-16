@@ -284,6 +284,23 @@ function EmpDashboardPageInner() {
   }, []);
 
   useEffect(() => {
+    const refreshPhoto = () => {
+      try {
+        const s = localStorage.getItem("user");
+        if (!s) return;
+        const u = JSON.parse(s);
+        const empId = u?.employee?.id;
+        setEmpUser(u);
+        setPhotoUrl(resolveEmpPhoto(empId, u?.employee?.employeePhotoUrl));
+      } catch {
+        /* ignore */
+      }
+    };
+    window.addEventListener("emp-photo-updated", refreshPhoto);
+    return () => window.removeEventListener("emp-photo-updated", refreshPhoto);
+  }, []);
+
+  useEffect(() => {
     const fetchEmployeeCredentials = async () => {
       try {
         const token = localStorage.getItem("token");
@@ -301,6 +318,10 @@ function EmpDashboardPageInner() {
         if (response.ok) {
           const data = await response.json();
           setEmpProfileData(data);
+
+          if (data?.employeePhotoUrl) {
+            setPhotoUrl(resolveEmpPhoto(empId, data.employeePhotoUrl));
+          }
 
           const mustChange = data?.employeeCredentials?.mustChangePassword === true;
 
