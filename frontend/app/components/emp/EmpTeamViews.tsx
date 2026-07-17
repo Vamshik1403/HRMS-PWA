@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { LayoutGrid, List, Search, Users } from "lucide-react";
 import { useEmpManagerScope } from "@/app/hooks/useEmpManagerScope";
 import { reporteeDisplayName } from "@/app/utils/empManagerDisplay";
@@ -33,6 +33,13 @@ export type TeamMemberRow = {
 
 type TeamScope = "reportees" | "team";
 type ViewMode = "grid" | "list";
+
+const TEAM_VIEW_MODE_KEY = "emp-team-view-mode";
+
+function readTeamViewMode(): ViewMode {
+  if (typeof window === "undefined") return "grid";
+  return localStorage.getItem(TEAM_VIEW_MODE_KEY) === "list" ? "list" : "grid";
+}
 
 function statusTone(label: string) {
   if (label === "Checked in") return "text-emerald-600";
@@ -79,14 +86,29 @@ function MemberAvatar({ member, className }: { member: TeamMemberRow; className?
 
 export function EmpTeamMyTeam() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const isDesktop = useEmpPortalDesktop();
   const { loading, isManagerView } = useEmpManagerScope();
-  const [scope, setScope] = useState<TeamScope>("reportees");
-  const [viewMode, setViewMode] = useState<ViewMode>("grid");
+  const initialScope: TeamScope =
+    searchParams.get("scope") === "team" ? "team" : "reportees";
+  const [scope, setScope] = useState<TeamScope>(initialScope);
+  const [viewMode, setViewMode] = useState<ViewMode>(() => readTeamViewMode());
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [members, setMembers] = useState<TeamMemberRow[]>([]);
   const [statusLoading, setStatusLoading] = useState(false);
+
+  useEffect(() => {
+    const nextScope: TeamScope = searchParams.get("scope") === "team" ? "team" : "reportees";
+    setScope(nextScope);
+  }, [searchParams]);
+
+  const selectViewMode = (mode: ViewMode) => {
+    setViewMode(mode);
+    if (typeof window !== "undefined") {
+      localStorage.setItem(TEAM_VIEW_MODE_KEY, mode);
+    }
+  };
 
   useEffect(() => {
     if (!isManagerView) return;
@@ -212,7 +234,7 @@ export function EmpTeamMyTeam() {
             <button
               type="button"
               aria-label="Grid view"
-              onClick={() => setViewMode("grid")}
+              onClick={() => selectViewMode("grid")}
               className={cn(
                 "rounded-md p-2 transition-colors",
                 viewMode === "grid"
@@ -225,7 +247,7 @@ export function EmpTeamMyTeam() {
             <button
               type="button"
               aria-label="List view"
-              onClick={() => setViewMode("list")}
+              onClick={() => selectViewMode("list")}
               className={cn(
                 "rounded-md p-2 transition-colors",
                 viewMode === "list"

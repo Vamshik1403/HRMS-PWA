@@ -2,9 +2,10 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Icon } from "@iconify/react";
-import { Cake, CalendarCheck, Users, UserCheck } from "lucide-react";
+import { CalendarCheck, ClipboardList, Users, UserCheck } from "lucide-react";
 import { useCurrentUser } from "@/app/hooks/useCurrentUser";
 import { useEmpManagerScope } from "@/app/hooks/useEmpManagerScope";
+import { teamReportees } from "@/app/utils/empManagerDisplay";
 import { EmpDesktopPage } from "./desktop/EmpDesktopPage";
 import { EmpTeamPulsePanel } from "./desktop/EmpTeamPulsePanel";
 import { StatCard } from "@/app/dashboard/components/StatCard";
@@ -21,10 +22,11 @@ type HrWidgets = {
 
 export function EmpTeamOverview() {
   const user = useCurrentUser();
-  const { isManagerView, loading: scopeLoading } = useEmpManagerScope();
+  const { isManagerView, loading: scopeLoading, scope } = useEmpManagerScope();
   const [teamMembers, setTeamMembers] = useState<
     { id: number; statusLabel?: string }[]
   >([]);
+  const [apiReporteeCount, setApiReporteeCount] = useState<number | null>(null);
   const [hrWidgets, setHrWidgets] = useState<HrWidgets | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -44,14 +46,20 @@ export function EmpTeamOverview() {
         headers: authHeaders(),
         cache: "no-store",
       }).then((r) => (r.ok ? r.json() : { members: [] })),
+      fetch(`${BACKEND}/emp-manager-scope/reportees-today-status`, {
+        headers: authHeaders(),
+        cache: "no-store",
+      }).then((r) => (r.ok ? r.json() : { reportees: [] })),
       fetch(`${BACKEND}/dashboard-overview/hr-widgets${qs}`, {
         headers: authHeaders(),
         cache: "no-store",
       }).then((r) => (r.ok ? r.json() : null)),
     ])
-      .then(([teamData, widgets]) => {
+      .then(([teamData, reporteesData, widgets]) => {
         if (cancelled) return;
         setTeamMembers(Array.isArray(teamData.members) ? teamData.members : []);
+        const reportees = Array.isArray(reporteesData.reportees) ? reporteesData.reportees : [];
+        setApiReporteeCount(reportees.length);
         setHrWidgets(widgets);
       })
       .finally(() => {
@@ -63,14 +71,13 @@ export function EmpTeamOverview() {
     };
   }, [isManagerView, user?.companyID]);
 
-  const presentCount = useMemo(
-    () => teamMembers.filter((m) => m.statusLabel === "Checked in").length,
-    [teamMembers],
-  );
+  const reporteeCount = apiReporteeCount ?? teamReportees(scope).length;
+
   const pendingTotal = useMemo(() => {
     const p = hrWidgets?.pendingCounts;
     return (p?.leave ?? 0) + (p?.reimbursement ?? 0);
   }, [hrWidgets]);
+  const pendingTasks = hrWidgets?.pendingCounts?.tasks ?? 0;
   const upcomingBirthdays = useMemo(
     () => hrWidgets?.upcomingEvents?.filter((e) => e.kind === "birthday") ?? [],
     [hrWidgets],
@@ -106,10 +113,38 @@ export function EmpTeamOverview() {
     <EmpDesktopPage title="Team Overview" description="Team updates, attendance, and celebrations" icon={Users}>
       <div className={sectionGap}>
         <div className={`grid sm:grid-cols-2 lg:grid-cols-4 ${gridGap}`}>
-          <StatCard stat={{ label: "Team members", value: String(teamMembers.length), icon: Users }} />
-          <StatCard stat={{ label: "Present today", value: String(presentCount), icon: UserCheck }} />
-          <StatCard stat={{ label: "Pending approvals", value: String(pendingTotal), icon: CalendarCheck }} />
-          <StatCard stat={{ label: "Birthdays soon", value: String(upcomingBirthdays.length), icon: Cake }} />
+          <StatCard
+            stat={{
+              label: "My reportees",
+              value: String(reporteeCount),
+              icon: UserCheck,
+              href: "/empTeam/my-team?scope=reportees",
+            }}
+          />
+          <StatCard
+            stat={{
+              label: "My team members",
+              value: String(teamMembers.length),
+              icon: Users,
+              href: "/empTeam/my-team?scope=team",
+            }}
+          />
+          <StatCard
+            stat={{
+              label: "Pending approvals",
+              value: String(pendingTotal),
+              icon: CalendarCheck,
+              href: "/empTeam/approvals",
+            }}
+          />
+          <StatCard
+            stat={{
+              label: "Pending tasks",
+              value: String(pendingTasks),
+              icon: ClipboardList,
+              href: "/empMyTasks",
+            }}
+          />
         </div>
 
         <div className={`grid lg:grid-cols-2 ${gridGap}`}>

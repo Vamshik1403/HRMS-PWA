@@ -48,7 +48,7 @@ export function profileTabHref(tabId: string): string {
 
 export function resolveProfileWorkspaceTab(searchParams: URLSearchParams): string {
   const tab = searchParams.get("tab");
-  const allowed = ["profile", "approvals", "leave", "attendance", "promotions"];
+  const allowed = ["profile", "approvals", "leave", "attendance", "promotions", "delegation"];
   if (tab && allowed.includes(tab)) return tab;
   return "profile";
 }

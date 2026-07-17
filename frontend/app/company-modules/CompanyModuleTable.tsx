@@ -132,7 +132,8 @@ export function CompanyModulesManagement() {
 
   const canManage =
     user?.role === "SUPERADMIN" ||
-    user?.role === "SERVICE_PROVIDER";
+    user?.role === "SERVICE_PROVIDER" ||
+    user?.role === "COMPANY_ADMIN";
 
   const table = useClientTable("moduleName");
 

@@ -148,16 +148,32 @@ export function EmpCompanyOverviewDashboard() {
                   label: "Department size",
                   value: employeeCount != null ? String(employeeCount) : "—",
                   icon: Building2,
+                  href: "/empCompany/departments",
                 }}
               />
               <StatCard
-                stat={{ label: "Upcoming holidays", value: String(holidays.length), icon: CalendarDays }}
+                stat={{
+                  label: "Upcoming holidays",
+                  value: String(holidays.length),
+                  icon: CalendarDays,
+                  href: "/empHolidays",
+                }}
               />
               <StatCard
-                stat={{ label: "Noticeboard", value: String(noticeboard.length), icon: Bell }}
+                stat={{
+                  label: "Noticeboard",
+                  value: String(noticeboard.length),
+                  icon: Bell,
+                  href: "/empNoticeboard",
+                }}
               />
               <StatCard
-                stat={{ label: "Internal messages", value: String(messaging.length), icon: Megaphone }}
+                stat={{
+                  label: "Internal messages",
+                  value: String(messaging.length),
+                  icon: Megaphone,
+                  href: "/empNoticeboard",
+                }}
               />
             </div>
 

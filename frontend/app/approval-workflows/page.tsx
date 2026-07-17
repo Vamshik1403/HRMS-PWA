@@ -14,6 +14,7 @@ import {
   Save,
   Trash2,
   Workflow,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -66,6 +67,23 @@ interface BranchRead {
   serviceProviderID?: ID | null;
 }
 
+interface DepartmentRead {
+  id: ID;
+  departmentName?: string | null;
+  companyID?: ID | null;
+  branchesID?: ID | null;
+}
+
+interface EmployeeRead {
+  id: ID;
+  serviceProviderID?: ID | null;
+  companyID?: ID | null;
+  branchesID?: ID | null;
+  employeeFirstName?: string | null;
+  employeeLastName?: string | null;
+  employeeID?: string | null;
+}
+
 interface DesignationRead {
   id: ID;
   designation?: string | null;
@@ -88,6 +106,7 @@ interface DesignationRead {
 
 interface CompanyModuleRead {
   id: ID;
+  moduleKey?: string | null;
   moduleName: string;
   moduleDescription?: string | null;
   moduleStatus?: boolean | null;
@@ -105,22 +124,92 @@ interface WorkflowStepRead {
   approvalTimeout?: number | null;
 
   designation?: {
-  id: ID;
-  designation?: string | null;
-  branchesID?: ID | null;
+    id: ID;
+    designation?: string | null;
+    branchesID?: ID | null;
+    departmentID?: ID | null;
+    isManager?: boolean | null;
+
+    branches?: {
+      id: ID;
+      branchName?: string | null;
+    } | null;
+
+    departments?: {
+      id: ID;
+      departmentName?: string | null;
+    } | null;
+  } | null;
+}
+
+
+type ConditionMatchType = "ALL" | "ANY";
+
+type WorkflowConditionField =
+  | "DEPARTMENT"
+  | "DESIGNATION"
+  | "EMPLOYEE"
+  | "TOTAL_AMOUNT"
+  | "SALARY_AMOUNT"
+  | "LEAVE_TYPE"
+  | "LEAVE_DAYS"
+  | "EXIT_TYPE"
+  | "REGULARISATION_TYPE"
+  | "REGULARISATION_DAYS"
+  | "REQUEST_TEXT";
+
+type WorkflowConditionOperator =
+  | "EQUALS"
+  | "NOT_EQUALS"
+  | "GREATER_THAN"
+  | "GREATER_THAN_OR_EQUAL"
+  | "LESS_THAN"
+  | "LESS_THAN_OR_EQUAL"
+  | "IN"
+  | "NOT_IN"
+  | "CONTAINS"
+  | "NOT_CONTAINS"
+  | "BETWEEN"
+  | "IS_EMPTY"
+  | "IS_NOT_EMPTY";
+
+type WorkflowConditionValueType =
+  | "DEPARTMENT"
+  | "DESIGNATION"
+  | "EMPLOYEE_LIST"
+  | "NUMBER"
+  | "TEXT"
+  | "BOOLEAN"
+  | "DATE";
+
+interface WorkflowConditionEmployeeRead {
+  id?: ID;
+  manageEmployeeID: ID;
+  employee?: EmployeeRead | null;
+}
+
+interface WorkflowConditionRead {
+  id?: ID;
+  approvalWorkflowID?: ID;
+  conditionNo: number;
+
+  fieldKey: WorkflowConditionField;
+  operator: WorkflowConditionOperator;
+  valueType: WorkflowConditionValueType;
+
   departmentID?: ID | null;
-  isManager?: boolean | null;
+  designationID?: ID | null;
 
-  branches?: {
-    id: ID;
-    branchName?: string | null;
-  } | null;
+  numberValue?: string | number | null;
+  numberValueTo?: string | number | null;
+  textValue?: string | null;
+  booleanValue?: boolean | null;
+  dateValue?: string | null;
+  dateValueTo?: string | null;
 
-  departments?: {
-    id: ID;
-    departmentName?: string | null;
-  } | null;
-} | null;
+  department?: DepartmentRead | null;
+  designation?: DesignationRead | null;
+  employees?: WorkflowConditionEmployeeRead[];
 }
 
 interface ApprovalWorkflowRead {
@@ -134,6 +223,7 @@ interface ApprovalWorkflowRead {
   workflowDescription?: string | null;
   effectiveFrom: string;
 
+  conditionMatchType?: ConditionMatchType;
   allowAnySameDesignation?: boolean;
   workflowStatus?: boolean;
 
@@ -153,6 +243,7 @@ interface ApprovalWorkflowRead {
   companyModule?: CompanyModuleRead | null;
 
   steps: WorkflowStepRead[];
+  conditions?: WorkflowConditionRead[];
 }
 
 interface WorkflowStepForm {
@@ -181,22 +272,413 @@ interface WorkflowForm {
   workflowDescription: string;
   effectiveFrom: string;
 
+  conditionMatchType: ConditionMatchType;
   allowAnySameDesignation: boolean;
   workflowStatus: boolean;
 
   steps: WorkflowStepForm[];
+  conditions: WorkflowConditionForm[];
+}
+
+interface WorkflowConditionForm {
+  localID: string;
+  conditionNo: number;
+
+  fieldKey: WorkflowConditionField | "";
+  operator: WorkflowConditionOperator | "";
+  valueType: WorkflowConditionValueType | "";
+
+  departmentID: ID | null;
+  departmentName: string;
+
+  designationID: ID | null;
+  designationName: string;
+
+  employeeIDs: ID[];
+  selectedEmployees: EmployeeRead[];
+  employeeSearch: string;
+
+  numberValue: string;
+  numberValueTo: string;
+  textValue: string;
+
+  isActive: boolean;
 }
 
 const API = {
   workflows: "/backend/approval-workflows",
   companies: "/backend/company",
   branches: "/backend/branches",
+  departments: "/backend/departments",
   designations: "/backend/designations",
+  employees: "/backend/manage-emp/workflow-search",
   companyModules: "/backend/company-modules",
-};
+} as const;
+
+const COMMON_ORG_CONDITION_FIELDS: WorkflowConditionField[] = [
+  "DEPARTMENT",
+  "DESIGNATION",
+  "EMPLOYEE",
+];
+
+
+
+function resolveModuleConditionKey(
+  module: CompanyModuleRead,
+): string | null {
+  const rawKey =
+    module.moduleKey?.trim();
+
+  if (rawKey) {
+    const normalizedKey =
+      rawKey.toUpperCase();
+
+    if (
+      normalizedKey in
+      MODULE_CONDITION_FIELDS
+    ) {
+      return normalizedKey;
+    }
+  }
+
+  const normalizedName =
+    module.moduleName
+      .trim()
+      .toUpperCase()
+      .replace(/[^A-Z0-9]+/g, "_")
+      .replace(/^_+|_+$/g, "");
+
+  if (
+    normalizedName in
+    MODULE_CONDITION_FIELDS
+  ) {
+    return normalizedName;
+  }
+
+  if (
+    normalizedName.includes(
+      "REIMBURSE",
+    )
+  ) {
+    return "REIMBURSEMENT";
+  }
+
+  if (
+    normalizedName.includes(
+      "LEAVE",
+    )
+  ) {
+    return "LEAVE_MANAGEMENT";
+  }
+
+  if (
+    normalizedName.includes(
+      "PAYROLL",
+    ) ||
+    normalizedName.includes(
+      "SALARY",
+    )
+  ) {
+    return "SALARY_MANAGEMENT";
+  }
+
+  if (
+    normalizedName.includes(
+      "OFF_BOARD",
+    ) ||
+    normalizedName.includes(
+      "OFFBOARD",
+    ) ||
+    normalizedName.includes(
+      "TERMINATION",
+    )
+  ) {
+    return "OFF_BOARDING";
+  }
+
+  if (
+    normalizedName.includes(
+      "REGULAR",
+    ) ||
+    normalizedName.includes(
+      "ATTENDANCE",
+    )
+  ) {
+    return "ATTENDANCE_REGULARISATION";
+  }
+
+  return null;
+}
 
 const MIN_CHARS = 0;
 const DEBOUNCE_MS = 250;
+
+const MODULE_CONDITION_FIELDS: Record<
+  string,
+  WorkflowConditionField[]
+> = {
+
+  EMPLOYEE_ONBOARDING_MODULE: [
+    'DEPARTMENT',
+    'DESIGNATION',
+    'EMPLOYEE',
+  ],
+
+  REIMBURSEMENT_MODULE: [
+    'DEPARTMENT',
+    'DESIGNATION',
+    'EMPLOYEE',
+    'TOTAL_AMOUNT',
+  ],
+
+  LEAVE_MODULE: [
+    'DEPARTMENT',
+    'DESIGNATION',
+    'EMPLOYEE',
+    'LEAVE_TYPE',
+    'LEAVE_DAYS',
+  ],
+
+  PAYROLL_MODULE: [
+    'DEPARTMENT',
+    'DESIGNATION',
+    'EMPLOYEE',
+    'SALARY_AMOUNT',
+  ],
+
+  REIMBURSEMENT: [
+    "DEPARTMENT",
+    "DESIGNATION",
+    "EMPLOYEE",
+    "TOTAL_AMOUNT",
+  ],
+
+
+
+  PAYROLL: [
+    "DEPARTMENT",
+    "DESIGNATION",
+    "EMPLOYEE",
+    "SALARY_AMOUNT",
+  ],
+
+
+
+  SALARY_MANAGEMENT: [
+    "DEPARTMENT",
+    "DESIGNATION",
+    "EMPLOYEE",
+    "SALARY_AMOUNT",
+  ],
+
+  LEAVE: [
+    "DEPARTMENT",
+    "DESIGNATION",
+    "EMPLOYEE",
+    "LEAVE_TYPE",
+    "LEAVE_DAYS",
+  ],
+
+ 
+
+  LEAVE_MANAGEMENT: [
+    "DEPARTMENT",
+    "DESIGNATION",
+    "EMPLOYEE",
+    "LEAVE_TYPE",
+    "LEAVE_DAYS",
+  ],
+
+  OFF_BOARDING: [
+    "DEPARTMENT",
+    "DESIGNATION",
+    "EMPLOYEE",
+    "EXIT_TYPE",
+  ],
+
+  OFFBOARDING: [
+    "DEPARTMENT",
+    "DESIGNATION",
+    "EMPLOYEE",
+    "EXIT_TYPE",
+  ],
+
+  OFF_BOARDING_MODULE: [
+    "DEPARTMENT",
+    "DESIGNATION",
+    "EMPLOYEE",
+    "EXIT_TYPE",
+  ],
+
+  ATTENDANCE_REGULARISATION: [
+    "DEPARTMENT",
+    "DESIGNATION",
+    "EMPLOYEE",
+    "REGULARISATION_TYPE",
+    "REGULARISATION_DAYS",
+  ],
+
+  ATTENDANCE_REGULARIZATION: [
+    "DEPARTMENT",
+    "DESIGNATION",
+    "EMPLOYEE",
+    "REGULARISATION_TYPE",
+    "REGULARISATION_DAYS",
+  ],
+
+  ATTENDANCE_MODULE: [
+    "DEPARTMENT",
+    "DESIGNATION",
+    "EMPLOYEE",
+    "REGULARISATION_TYPE",
+    "REGULARISATION_DAYS",
+  ],
+};
+
+const CONDITION_FIELD_LABELS: Record<
+  WorkflowConditionField,
+  string
+> = {
+
+  DEPARTMENT: "Department",
+  DESIGNATION: "Designation",
+  EMPLOYEE: "Employee",
+  TOTAL_AMOUNT: "Total Amount",
+  SALARY_AMOUNT: "Salary Amount",
+  LEAVE_TYPE: "Leave Type",
+  LEAVE_DAYS: "Leave Days",
+  EXIT_TYPE: "Exit Type",
+  REGULARISATION_TYPE: "Regularisation Type",
+  REGULARISATION_DAYS: "Regularisation Days",
+  REQUEST_TEXT: "Request Text",
+};
+
+const CONDITION_OPERATOR_LABELS: Record<
+  WorkflowConditionOperator,
+  string
+> = {
+  EQUALS: "Equals",
+  NOT_EQUALS: "Not Equals",
+  GREATER_THAN: "Greater Than",
+  GREATER_THAN_OR_EQUAL:
+    "Greater Than or Equal",
+  LESS_THAN: "Less Than",
+  LESS_THAN_OR_EQUAL:
+    "Less Than or Equal",
+  IN: "In",
+  NOT_IN: "Not In",
+  CONTAINS: "Contains",
+  NOT_CONTAINS: "Does Not Contain",
+  BETWEEN: "Between",
+  IS_EMPTY: "Is Empty",
+  IS_NOT_EMPTY: "Is Not Empty",
+};
+
+const FIELD_OPERATOR_MAP: Record<
+  WorkflowConditionField,
+  WorkflowConditionOperator[]
+> = {
+  DEPARTMENT: [
+    "EQUALS",
+    "NOT_EQUALS",
+  ],
+
+  DESIGNATION: [
+    "EQUALS",
+    "NOT_EQUALS",
+  ],
+
+  EMPLOYEE: [
+    "IN",
+    "NOT_IN",
+  ],
+
+  TOTAL_AMOUNT: [
+    "EQUALS",
+    "NOT_EQUALS",
+    "GREATER_THAN",
+    "GREATER_THAN_OR_EQUAL",
+    "LESS_THAN",
+    "LESS_THAN_OR_EQUAL",
+    "BETWEEN",
+  ],
+
+  SALARY_AMOUNT: [
+    "EQUALS",
+    "NOT_EQUALS",
+    "GREATER_THAN",
+    "GREATER_THAN_OR_EQUAL",
+    "LESS_THAN",
+    "LESS_THAN_OR_EQUAL",
+    "BETWEEN",
+  ],
+
+  LEAVE_TYPE: [
+    "EQUALS",
+    "NOT_EQUALS",
+    "CONTAINS",
+    "NOT_CONTAINS",
+  ],
+
+  LEAVE_DAYS: [
+    "EQUALS",
+    "GREATER_THAN",
+    "GREATER_THAN_OR_EQUAL",
+    "LESS_THAN",
+    "LESS_THAN_OR_EQUAL",
+    "BETWEEN",
+  ],
+
+  EXIT_TYPE: [
+    "EQUALS",
+    "NOT_EQUALS",
+  ],
+
+  REGULARISATION_TYPE: [
+    "EQUALS",
+    "NOT_EQUALS",
+  ],
+
+  REGULARISATION_DAYS: [
+    "EQUALS",
+    "GREATER_THAN",
+    "GREATER_THAN_OR_EQUAL",
+    "LESS_THAN",
+    "LESS_THAN_OR_EQUAL",
+    "BETWEEN",
+  ],
+
+  REQUEST_TEXT: [
+    "EQUALS",
+    "NOT_EQUALS",
+    "CONTAINS",
+    "NOT_CONTAINS",
+  ],
+};
+
+function getConditionValueType(
+  fieldKey: WorkflowConditionField,
+): WorkflowConditionValueType {
+  switch (fieldKey) {
+    case "DEPARTMENT":
+      return "DEPARTMENT";
+
+    case "DESIGNATION":
+      return "DESIGNATION";
+
+    case "EMPLOYEE":
+      return "EMPLOYEE_LIST";
+
+    case "TOTAL_AMOUNT":
+    case "SALARY_AMOUNT":
+    case "LEAVE_DAYS":
+    case "REGULARISATION_DAYS":
+      return "NUMBER";
+
+    default:
+      return "TEXT";
+  }
+}
 
 function createLocalID() {
   return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -251,6 +733,35 @@ function createEmptyStep(stepNo: number): WorkflowStepForm {
   };
 }
 
+function createEmptyCondition(
+  conditionNo: number,
+): WorkflowConditionForm {
+  return {
+    localID: createLocalID(),
+    conditionNo,
+
+    fieldKey: "",
+    operator: "",
+    valueType: "",
+
+    departmentID: null,
+    departmentName: "",
+
+    designationID: null,
+    designationName: "",
+
+    employeeIDs: [],
+    selectedEmployees: [],
+    employeeSearch: "",
+
+    numberValue: "",
+    numberValueTo: "",
+    textValue: "",
+
+    isActive: true,
+  };
+}
+
 function createInitialForm(): WorkflowForm {
   return {
     serviceProviderID: null,
@@ -266,10 +777,13 @@ function createInitialForm(): WorkflowForm {
     workflowDescription: "",
     effectiveFrom: toDateTimeLocal(),
 
+    conditionMatchType: "ALL",
+
     allowAnySameDesignation: false,
     workflowStatus: true,
 
     steps: [createEmptyStep(1)],
+    conditions: [],
   };
 }
 
@@ -311,11 +825,11 @@ async function fetchJSONSafe<T>(
     const message = Array.isArray(responseBody?.message)
       ? responseBody.message.join(", ")
       : responseBody?.message ||
-        responseBody?.error ||
-        (responseText.startsWith("<!DOCTYPE")
-          ? `API returned HTML instead of JSON: ${url}`
-          : responseText) ||
-        `${response.status} ${response.statusText}`;
+      responseBody?.error ||
+      (responseText.startsWith("<!DOCTYPE")
+        ? `API returned HTML instead of JSON: ${url}`
+        : responseText) ||
+      `${response.status} ${response.statusText}`;
 
     throw new Error(message);
   }
@@ -429,6 +943,29 @@ export default function ApprovalWorkflowsPage() {
   const [allDesignations, setAllDesignations] =
     useState<DesignationRead[]>([]);
 
+  const [allDepartments, setAllDepartments] =
+    useState<DepartmentRead[]>([]);
+
+  const [
+    conditionDepartmentSuggestions,
+    setConditionDepartmentSuggestions,
+  ] = useState<Record<string, DepartmentRead[]>>({});
+
+  const [
+    conditionDesignationSuggestions,
+    setConditionDesignationSuggestions,
+  ] = useState<Record<string, DesignationRead[]>>({});
+
+  const [
+    conditionEmployeeSuggestions,
+    setConditionEmployeeSuggestions,
+  ] = useState<Record<string, EmployeeRead[]>>({});
+
+  const [
+    conditionEmployeeLoading,
+    setConditionEmployeeLoading,
+  ] = useState<Record<string, boolean>>({});
+
   const companyTimerRef =
     useRef<ReturnType<typeof setTimeout> | null>(
       null,
@@ -475,8 +1012,8 @@ export default function ApprovalWorkflowsPage() {
       const activeBranchID =
         user?.role === "BRANCH_ADMIN"
           ? mapping?.branchesID ??
-            user?.branchesID ??
-            null
+          user?.branchesID ??
+          null
           : null;
 
       let scopedRows = Array.isArray(all) ? all : [];
@@ -497,7 +1034,7 @@ export default function ApprovalWorkflowsPage() {
           (row) =>
             row.branchesID == null ||
             Number(row.branchesID) ===
-              Number(activeBranchID),
+            Number(activeBranchID),
         );
       }
 
@@ -512,7 +1049,7 @@ export default function ApprovalWorkflowsPage() {
 
       toast.error(
         err?.message ||
-          "Failed to load approval workflows",
+        "Failed to load approval workflows",
       );
     } finally {
       setLoading(false);
@@ -526,6 +1063,7 @@ export default function ApprovalWorkflowsPage() {
         branches,
         modules,
         designations,
+        departments,
       ] = await Promise.all([
         fetchJSONSafe<CompanyRead[]>(API.companies),
         fetchJSONSafe<BranchRead[]>(API.branches),
@@ -534,6 +1072,9 @@ export default function ApprovalWorkflowsPage() {
         ),
         fetchJSONSafe<DesignationRead[]>(
           API.designations,
+        ),
+        fetchJSONSafe<DepartmentRead[]>(
+          API.departments,
         ),
       ]);
 
@@ -554,6 +1095,11 @@ export default function ApprovalWorkflowsPage() {
       setAllDesignations(
         Array.isArray(designations)
           ? designations
+          : [],
+      );
+      setAllDepartments(
+        Array.isArray(departments)
+          ? departments
           : [],
       );
     } catch (err) {
@@ -647,9 +1193,29 @@ export default function ApprovalWorkflowsPage() {
         event.target as HTMLElement
       ).closest("[data-designation-autocomplete]");
 
-      if (!designationContainer) {
-        setDesignationSuggestionMap({});
-      }
+if (!designationContainer) {
+  setDesignationSuggestionMap({});
+}
+
+const conditionContainer = (
+  event.target as HTMLElement
+).closest(
+  "[data-condition-autocomplete]",
+);
+
+if (!conditionContainer) {
+  setConditionDepartmentSuggestions(
+    {},
+  );
+
+  setConditionDesignationSuggestions(
+    {},
+  );
+
+  setConditionEmployeeSuggestions(
+    {},
+  );
+}
     };
 
     document.addEventListener(
@@ -927,7 +1493,7 @@ export default function ApprovalWorkflowsPage() {
             (designation) =>
               Number(
                 designation.branchesID ??
-                  designation.branches?.id,
+                designation.branches?.id,
               ) === Number(branchID),
           );
         } else if (companyID) {
@@ -995,9 +1561,7 @@ export default function ApprovalWorkflowsPage() {
     setFormData((current) => ({
       ...current,
       steps: current.steps.map((step) =>
-        step.localID === localID
-          ? { ...step, ...patch }
-          : step,
+        step.localID === localID ? { ...step, ...patch } : step,
       ),
     }));
   };
@@ -1067,15 +1631,465 @@ export default function ApprovalWorkflowsPage() {
         nextSteps[index],
         nextSteps[targetIndex],
       ] = [
-        nextSteps[targetIndex],
-        nextSteps[index],
-      ];
+          nextSteps[targetIndex],
+          nextSteps[index],
+        ];
 
       return {
         ...current,
         steps: renumberSteps(nextSteps),
       };
     });
+  };
+
+  const renumberConditions = (
+    conditions: WorkflowConditionForm[],
+  ) =>
+    conditions.map((condition, index) => ({
+      ...condition,
+      conditionNo: index + 1,
+    }));
+
+  const addCondition = () => {
+    setFormData((current) => ({
+      ...current,
+      conditions: [
+        ...current.conditions,
+        createEmptyCondition(
+          current.conditions.length + 1,
+        ),
+      ],
+    }));
+  };
+
+  const removeCondition = (localID: string) => {
+    setFormData((current) => ({
+      ...current,
+      conditions: renumberConditions(
+        current.conditions.filter(
+          (condition) =>
+            condition.localID !== localID,
+        ),
+      ),
+    }));
+  };
+
+  const updateCondition = (
+    localID: string,
+    patch: Partial<WorkflowConditionForm>,
+  ) => {
+    setFormData((current) => ({
+      ...current,
+      conditions: current.conditions.map(
+        (condition) =>
+          condition.localID === localID
+            ? {
+              ...condition,
+              ...patch,
+            }
+            : condition,
+      ),
+    }));
+  };
+
+  const getSelectedModule = () =>
+    allModules.find(
+      (module) =>
+        Number(module.id) ===
+        Number(formData.companyModuleID),
+    );
+
+  const getAvailableConditionFields =
+  (): WorkflowConditionField[] => {
+    const selectedModule =
+      getSelectedModule();
+
+    if (!selectedModule) {
+      return [];
+    }
+
+    const resolvedModuleKey =
+      resolveModuleConditionKey(
+        selectedModule,
+      );
+
+    if (!resolvedModuleKey) {
+      return [
+        ...COMMON_ORG_CONDITION_FIELDS,
+        "REQUEST_TEXT",
+      ];
+    }
+
+    return (
+      MODULE_CONDITION_FIELDS[
+        resolvedModuleKey
+      ] ?? [
+        ...COMMON_ORG_CONDITION_FIELDS,
+        "REQUEST_TEXT",
+      ]
+    );
+  };
+
+
+  const runConditionDepartmentSuggestions = (
+  localID: string,
+  query: string,
+) => {
+  const normalized =
+    query.trim().toLowerCase();
+
+  const companyID =
+    getCurrentCompanyID();
+
+  const branchID =
+    getCurrentBranchID();
+
+  let filtered = [
+    ...allDepartments,
+  ];
+
+  if (branchID) {
+    filtered = filtered.filter(
+      (department) =>
+        Number(
+          department.branchesID,
+        ) === Number(branchID),
+    );
+  } else if (companyID) {
+    filtered = filtered.filter(
+      (department) => {
+        if (
+          department.companyID !=
+          null
+        ) {
+          return (
+            Number(
+              department.companyID,
+            ) === Number(companyID)
+          );
+        }
+
+        if (
+          department.branchesID ==
+          null
+        ) {
+          return false;
+        }
+
+        const branch =
+          allBranches.find(
+            (item) =>
+              Number(item.id) ===
+              Number(
+                department.branchesID,
+              ),
+          );
+
+        return (
+          Number(
+            branch?.companyID,
+          ) === Number(companyID)
+        );
+      },
+    );
+  }
+
+  if (normalized) {
+    filtered = filtered.filter(
+      (department) =>
+        String(
+          department.departmentName ??
+            "",
+        )
+          .toLowerCase()
+          .includes(normalized),
+    );
+  }
+
+  setConditionDepartmentSuggestions(
+    (current) => ({
+      ...current,
+      [localID]:
+        filtered.slice(0, 20),
+    }),
+  );
+};
+
+
+  const runConditionDesignationSuggestions = (
+  localID: string,
+  query: string,
+) => {
+  const normalized =
+    query.trim().toLowerCase();
+
+  const companyID =
+    getCurrentCompanyID();
+
+  const branchID =
+    getCurrentBranchID();
+
+  let filtered = [
+    ...allDesignations,
+  ];
+
+  if (branchID) {
+    filtered = filtered.filter(
+      (designation) =>
+        Number(
+          designation.branchesID ??
+            designation.branches?.id,
+        ) === Number(branchID),
+    );
+  } else if (companyID) {
+    filtered = filtered.filter(
+      (designation) => {
+        if (
+          designation.companyID !=
+          null
+        ) {
+          return (
+            Number(
+              designation.companyID,
+            ) === Number(companyID)
+          );
+        }
+
+        const designationBranchID =
+          designation.branchesID ??
+          designation.branches?.id;
+
+        if (
+          designationBranchID == null
+        ) {
+          return false;
+        }
+
+        const branch =
+          allBranches.find(
+            (item) =>
+              Number(item.id) ===
+              Number(
+                designationBranchID,
+              ),
+          );
+
+        return (
+          Number(
+            branch?.companyID,
+          ) === Number(companyID)
+        );
+      },
+    );
+  }
+
+  if (normalized) {
+    filtered = filtered.filter(
+      (designation) =>
+        String(
+          designation.designation ??
+            "",
+        )
+          .toLowerCase()
+          .includes(normalized) ||
+        String(
+          designation.departments
+            ?.departmentName ?? "",
+        )
+          .toLowerCase()
+          .includes(normalized),
+    );
+  }
+
+  setConditionDesignationSuggestions(
+    (current) => ({
+      ...current,
+      [localID]:
+        filtered.slice(0, 20),
+    }),
+  );
+};
+
+  const runConditionEmployeeSuggestions =
+    async (
+      localID: string,
+      query: string,
+    ) => {
+      const companyID =
+        getCurrentCompanyID();
+
+      if (!companyID) {
+        toast.error(
+          "Select a company before searching employees",
+        );
+        return;
+      }
+
+      try {
+        setConditionEmployeeLoading(
+          (current) => ({
+            ...current,
+            [localID]: true,
+          }),
+        );
+
+        const params =
+          new URLSearchParams();
+
+        params.set(
+          "companyID",
+          String(companyID),
+        );
+
+        const branchID =
+          getCurrentBranchID();
+
+        if (branchID) {
+          params.set(
+            "branchesID",
+            String(branchID),
+          );
+        }
+
+        if (query.trim()) {
+          params.set(
+            "search",
+            query.trim(),
+          );
+        }
+
+        const employees =
+          await fetchJSONSafe<EmployeeRead[]>(
+            `${API.employees}?${params.toString()}`,
+          );
+
+        setConditionEmployeeSuggestions(
+          (current) => ({
+            ...current,
+            [localID]: Array.isArray(
+              employees,
+            )
+              ? employees
+              : [],
+          }),
+        );
+      } catch (err: any) {
+        toast.error(
+          err?.message ||
+          "Failed to search employees",
+        );
+      } finally {
+        setConditionEmployeeLoading(
+          (current) => ({
+            ...current,
+            [localID]: false,
+          }),
+        );
+      }
+    };
+
+  const handleConditionFieldChange = (
+    localID: string,
+    fieldKey: WorkflowConditionField,
+  ) => {
+    const operators =
+      FIELD_OPERATOR_MAP[fieldKey];
+
+    updateCondition(localID, {
+      fieldKey,
+      valueType:
+        getConditionValueType(fieldKey),
+      operator:
+        operators[0] ?? "",
+
+      departmentID: null,
+      departmentName: "",
+
+      designationID: null,
+      designationName: "",
+
+      employeeIDs: [],
+      selectedEmployees: [],
+      employeeSearch: "",
+
+      numberValue: "",
+      numberValueTo: "",
+      textValue: "",
+    });
+  };
+
+  const selectConditionEmployee = (
+    localID: string,
+    employee: EmployeeRead,
+  ) => {
+    setFormData((current) => ({
+      ...current,
+      conditions: current.conditions.map(
+        (condition) => {
+          if (
+            condition.localID !== localID
+          ) {
+            return condition;
+          }
+
+          if (
+            condition.employeeIDs.includes(
+              employee.id,
+            )
+          ) {
+            return condition;
+          }
+
+          return {
+            ...condition,
+            employeeIDs: [
+              ...condition.employeeIDs,
+              employee.id,
+            ],
+            selectedEmployees: [
+              ...condition.selectedEmployees,
+              employee,
+            ],
+            employeeSearch: "",
+          };
+        },
+      ),
+    }));
+
+    setConditionEmployeeSuggestions(
+      (current) => ({
+        ...current,
+        [localID]: [],
+      }),
+    );
+  };
+
+  const removeConditionEmployee = (
+    localID: string,
+    employeeID: ID,
+  ) => {
+    setFormData((current) => ({
+      ...current,
+      conditions: current.conditions.map(
+        (condition) =>
+          condition.localID === localID
+            ? {
+              ...condition,
+              employeeIDs:
+                condition.employeeIDs.filter(
+                  (id) =>
+                    id !== employeeID,
+                ),
+              selectedEmployees:
+                condition.selectedEmployees.filter(
+                  (employee) =>
+                    employee.id !==
+                    employeeID,
+                ),
+            }
+            : condition,
+      ),
+    }));
   };
 
   const handleEdit = (
@@ -1086,65 +2100,226 @@ export default function ApprovalWorkflowsPage() {
     setViewRow(null);
     setError(null);
 
+    const mappedSteps: WorkflowStepForm[] =
+      [...(workflow.steps ?? [])]
+        .sort(
+          (a, b) =>
+            a.stepNo - b.stepNo,
+        )
+        .map((step, index) => ({
+          localID: createLocalID(),
+          stepNo: index + 1,
+
+          designationID:
+            step.designationID ?? null,
+
+          designationName:
+            step.designation?.designation ??
+            "",
+
+          stepName:
+            step.stepName ?? "",
+
+          isMandatory:
+            step.isMandatory !== false,
+
+          canReject:
+            step.canReject !== false,
+
+          canSendBack:
+            step.canSendBack === true,
+
+          approvalTimeout:
+            step.approvalTimeout != null
+              ? String(
+                step.approvalTimeout,
+              )
+              : "",
+        }));
+
+    const mappedConditions:
+      WorkflowConditionForm[] = [
+        ...(workflow.conditions ?? []),
+      ]
+        .sort(
+          (a, b) =>
+            a.conditionNo -
+            b.conditionNo,
+        )
+        .map((condition, index) => {
+          const selectedEmployees:
+            EmployeeRead[] = (
+              condition.employees ?? []
+            )
+              .map(
+                (item) =>
+                  item.employee,
+              )
+              .filter(
+                (
+                  employee,
+                ): employee is EmployeeRead =>
+                  employee != null,
+              );
+
+          return {
+            localID: createLocalID(),
+            conditionNo: index + 1,
+
+            fieldKey:
+              condition.fieldKey,
+
+            operator:
+              condition.operator,
+
+            valueType:
+              condition.valueType,
+
+            departmentID:
+              condition.departmentID ??
+              null,
+
+            departmentName:
+              condition.department
+                ?.departmentName ??
+              "",
+
+            designationID:
+              condition.designationID ??
+              null,
+
+            designationName:
+              condition.designation
+                ?.designation ??
+              "",
+
+            employeeIDs: (
+              condition.employees ?? []
+            ).map(
+              (item) =>
+                Number(
+                  item.manageEmployeeID,
+                ),
+            ),
+
+            selectedEmployees,
+            employeeSearch: "",
+
+            numberValue:
+              condition.numberValue != null
+                ? String(
+                  condition.numberValue,
+                )
+                : "",
+
+            numberValueTo:
+              condition.numberValueTo !=
+                null
+                ? String(
+                  condition.numberValueTo,
+                )
+                : "",
+
+            textValue:
+              condition.textValue ?? "",
+
+            isActive: true,
+          };
+        });
+
     setFormData({
       serviceProviderID:
-        workflow.serviceProviderID ?? null,
+        workflow.serviceProviderID ??
+        null,
 
-      companyID: workflow.companyID,
-      branchesID: workflow.branchesID ?? null,
+      companyID:
+        workflow.companyID,
+
+      branchesID:
+        workflow.branchesID ??
+        null,
 
       companyModuleID:
         workflow.companyModuleID,
 
       companyAutocomplete:
-        workflow.company?.companyName ?? "",
+        workflow.company
+          ?.companyName ??
+        "",
 
       branchAutocomplete:
-        workflow.branches?.branchName ?? "",
+        workflow.branches
+          ?.branchName ??
+        (workflow.branchesID
+          ? ""
+          : "All Branches"),
 
       moduleAutocomplete:
-        workflow.companyModule?.moduleName ?? "",
+        workflow.companyModule
+          ?.moduleName ??
+        "",
 
       workflowName:
-        workflow.workflowName ?? "",
+        workflow.workflowName ??
+        "",
 
       workflowDescription:
-        workflow.workflowDescription ?? "",
+        workflow.workflowDescription ??
+        "",
 
-      effectiveFrom: toDateTimeLocal(
-        workflow.effectiveFrom,
-      ),
+      effectiveFrom:
+        toDateTimeLocal(
+          workflow.effectiveFrom,
+        ),
+
+      conditionMatchType:
+        workflow.conditionMatchType ??
+        "ALL",
 
       allowAnySameDesignation:
         workflow.allowAnySameDesignation ??
         false,
 
       workflowStatus:
-        workflow.workflowStatus !== false,
+        workflow.workflowStatus !==
+        false,
 
-      steps: (workflow.steps || [])
-        .sort((a, b) => a.stepNo - b.stepNo)
-        .map((step, index) => ({
-          localID: createLocalID(),
-          stepNo: index + 1,
-          designationID:
-            step.designationID ?? null,
-          designationName:
-            step.designation?.designation ??
-            "",
-          stepName: step.stepName ?? "",
-          isMandatory:
-            step.isMandatory !== false,
-          canReject:
-            step.canReject !== false,
-          canSendBack:
-            step.canSendBack === true,
-          approvalTimeout:
-            step.approvalTimeout != null
-              ? String(step.approvalTimeout)
-              : "",
-        })),
+      steps:
+        mappedSteps.length > 0
+          ? mappedSteps
+          : [createEmptyStep(1)],
+
+      conditions:
+        mappedConditions,
     });
+
+    setCompanyList([]);
+    setBranchList([]);
+    setModuleList([]);
+    setDesignationSuggestionMap({});
+    setConditionDepartmentSuggestions(
+  {},
+);
+setConditionDesignationSuggestions(
+  {},
+);
+setConditionEmployeeSuggestions(
+  {},
+);
+setConditionEmployeeLoading({});
+    setConditionDepartmentSuggestions(
+  {},
+);
+setConditionDesignationSuggestions(
+  {},
+);
+setConditionEmployeeSuggestions(
+  {},
+);
+setConditionEmployeeLoading({});
+    setConditionDepartmentSuggestions({});
+    setConditionDesignationSuggestions({});
+    setConditionEmployeeSuggestions({});
 
     setIsFormOpen(true);
   };
@@ -1157,63 +2332,105 @@ export default function ApprovalWorkflowsPage() {
     setIsFormOpen(false);
   };
 
-  const validateForm = () => {
+  const validateForm = (): string[] => {
     const errors: string[] = [];
 
     if (!formData.companyID) {
-      errors.push("Company is required");
+      errors.push(
+        "Company is required",
+      );
     }
 
     if (!formData.companyModuleID) {
-      errors.push("Workflow module is required");
+      errors.push(
+        "Workflow module is required",
+      );
     }
 
-    if (!formData.workflowName.trim()) {
-      errors.push("Workflow name is required");
+    if (
+      !formData.workflowName.trim()
+    ) {
+      errors.push(
+        "Workflow name is required",
+      );
     }
 
     if (!formData.effectiveFrom) {
       errors.push(
         "Workflow effective date and time are required",
       );
+    } else {
+      const effectiveDate =
+        new Date(
+          formData.effectiveFrom,
+        );
+
+      if (
+        Number.isNaN(
+          effectiveDate.getTime(),
+        )
+      ) {
+        errors.push(
+          "Workflow effective date is invalid",
+        );
+      }
     }
 
-    if (!formData.steps.length) {
+    if (
+      formData.steps.length === 0
+    ) {
       errors.push(
         "At least one approval step is required",
       );
     }
 
-    formData.steps.forEach((step, index) => {
-      if (!step.designationID) {
-        errors.push(
-          `Designation is required for step ${
-            index + 1
-          }`,
+    formData.steps.forEach(
+      (step, index) => {
+        const stepNumber = index + 1;
+
+        if (!step.designationID) {
+          errors.push(
+            `Designation is required for step ${stepNumber}`,
+          );
+        }
+
+        if (
+          step.approvalTimeout !==
+          ""
+        ) {
+          const timeout = Number(
+            step.approvalTimeout,
+          );
+
+          if (
+            !Number.isFinite(
+              timeout,
+            ) ||
+            timeout <= 0
+          ) {
+            errors.push(
+              `Approval timeout for step ${stepNumber} must be greater than zero`,
+            );
+          }
+        }
+      },
+    );
+
+    const designationIDs =
+      formData.steps
+        .map(
+          (step) =>
+            step.designationID,
+        )
+        .filter(
+          (id): id is number =>
+            id != null,
         );
-      }
 
-      if (
-        step.approvalTimeout &&
-        Number(step.approvalTimeout) <= 0
-      ) {
-        errors.push(
-          `Approval timeout for step ${
-            index + 1
-          } must be greater than zero`,
-        );
-      }
-    });
-
-    const designationIDs = formData.steps
-      .map((step) => step.designationID)
-      .filter(Boolean);
-
-    /*
-     * Repeated designations are normally a configuration mistake.
-     */
     if (
-      new Set(designationIDs).size !==
+      new Set(
+        designationIDs,
+      ).size !==
       designationIDs.length
     ) {
       errors.push(
@@ -1221,30 +2438,206 @@ export default function ApprovalWorkflowsPage() {
       );
     }
 
+    formData.conditions.forEach(
+      (condition, index) => {
+        const conditionNumber =
+          index + 1;
+
+        if (!condition.fieldKey) {
+          errors.push(
+            `Condition field is required for condition ${conditionNumber}`,
+          );
+          return;
+        }
+
+        if (!condition.operator) {
+          errors.push(
+            `Operator is required for condition ${conditionNumber}`,
+          );
+        }
+
+        if (!condition.valueType) {
+          errors.push(
+            `Value type is required for condition ${conditionNumber}`,
+          );
+        }
+
+        if (
+          condition.fieldKey ===
+          "DEPARTMENT" &&
+          !condition.departmentID
+        ) {
+          errors.push(
+            `Department is required for condition ${conditionNumber}`,
+          );
+        }
+
+        if (
+          condition.fieldKey ===
+          "DESIGNATION" &&
+          !condition.designationID
+        ) {
+          errors.push(
+            `Designation is required for condition ${conditionNumber}`,
+          );
+        }
+
+        if (
+          condition.fieldKey ===
+          "EMPLOYEE"
+        ) {
+          if (
+            condition.employeeIDs
+              .length === 0
+          ) {
+            errors.push(
+              `At least one employee is required for condition ${conditionNumber}`,
+            );
+          }
+
+          if (
+            new Set(
+              condition.employeeIDs,
+            ).size !==
+            condition.employeeIDs
+              .length
+          ) {
+            errors.push(
+              `Duplicate employees are not allowed in condition ${conditionNumber}`,
+            );
+          }
+        }
+
+        const isNumericField = [
+          "TOTAL_AMOUNT",
+          "SALARY_AMOUNT",
+          "LEAVE_DAYS",
+          "REGULARISATION_DAYS",
+        ].includes(
+          condition.fieldKey,
+        );
+
+        if (isNumericField) {
+          if (
+            condition.numberValue ===
+            ""
+          ) {
+            errors.push(
+              `Numeric value is required for condition ${conditionNumber}`,
+            );
+          } else {
+            const lowerValue =
+              Number(
+                condition.numberValue,
+              );
+
+            if (
+              !Number.isFinite(
+                lowerValue,
+              ) ||
+              lowerValue < 0
+            ) {
+              errors.push(
+                `Condition ${conditionNumber} must have a valid non-negative numeric value`,
+              );
+            }
+          }
+
+          if (
+            condition.operator ===
+            "BETWEEN"
+          ) {
+            if (
+              condition.numberValueTo ===
+              ""
+            ) {
+              errors.push(
+                `Upper value is required for condition ${conditionNumber}`,
+              );
+            } else {
+              const lowerValue =
+                Number(
+                  condition.numberValue,
+                );
+
+              const upperValue =
+                Number(
+                  condition.numberValueTo,
+                );
+
+              if (
+                !Number.isFinite(
+                  upperValue,
+                ) ||
+                upperValue < 0
+              ) {
+                errors.push(
+                  `Condition ${conditionNumber} must have a valid upper value`,
+                );
+              } else if (
+                Number.isFinite(
+                  lowerValue,
+                ) &&
+                upperValue <
+                lowerValue
+              ) {
+                errors.push(
+                  `Upper value cannot be lower than the first value for condition ${conditionNumber}`,
+                );
+              }
+            }
+          }
+        }
+
+        const isTextField = [
+          "LEAVE_TYPE",
+          "EXIT_TYPE",
+          "REGULARISATION_TYPE",
+          "REQUEST_TEXT",
+        ].includes(
+          condition.fieldKey,
+        );
+
+        if (
+          isTextField &&
+          !condition.textValue.trim()
+        ) {
+          errors.push(
+            `Text value is required for condition ${conditionNumber}`,
+          );
+        }
+      },
+    );
+
     return errors;
   };
+
 
   const handleSubmit = async (
     event: React.FormEvent<HTMLFormElement>,
   ) => {
     event.preventDefault();
 
-    const validationErrors = validateForm();
+    const validationErrors =
+      validateForm();
 
-    if (validationErrors.length) {
-      validationErrors.forEach((message) =>
-        toast.error(message),
+    if (validationErrors.length > 0) {
+      validationErrors.forEach(
+        (message) =>
+          toast.error(message),
       );
 
       return;
     }
 
-    const context = getSidebarContext();
+    const context =
+      getSidebarContext();
 
     const serviceProviderID =
       context?.serviceProviderID ??
       formData.serviceProviderID ??
-      currentUserMapping?.serviceProviderID ??
+      currentUserMapping
+        ?.serviceProviderID ??
       user?.serviceProviderID ??
       undefined;
 
@@ -1254,44 +2647,98 @@ export default function ApprovalWorkflowsPage() {
       currentUserMapping?.companyID ??
       user?.companyID;
 
+    if (!companyID) {
+      toast.error(
+        "Company is required",
+      );
+      return;
+    }
+
+    if (!formData.companyModuleID) {
+      toast.error(
+        "Workflow module is required",
+      );
+      return;
+    }
+
+    const effectiveDate = new Date(
+      formData.effectiveFrom,
+    );
+
+    if (
+      Number.isNaN(
+        effectiveDate.getTime(),
+      )
+    ) {
+      toast.error(
+        "Effective date is invalid",
+      );
+      return;
+    }
+
     const payload = {
-      serviceProviderID,
-      companyID,
+      serviceProviderID:
+        serviceProviderID
+          ? Number(
+            serviceProviderID,
+          )
+          : undefined,
+
+      companyID:
+        Number(companyID),
+
       branchesID:
-        formData.branchesID ?? undefined,
+        formData.branchesID != null
+          ? Number(
+            formData.branchesID,
+          )
+          : null,
 
       companyModuleID:
-        formData.companyModuleID,
+        Number(
+          formData.companyModuleID,
+        ),
 
       workflowName:
         formData.workflowName.trim(),
 
       workflowDescription:
-        formData.workflowDescription.trim() ||
+        formData.workflowDescription
+          .trim() ||
         undefined,
 
-      effectiveFrom: new Date(
-        formData.effectiveFrom,
-      ).toISOString(),
+      effectiveFrom:
+        effectiveDate.toISOString(),
+
+      conditionMatchType:
+        formData.conditionMatchType,
 
       allowAnySameDesignation:
-        formData.allowAnySameDesignation,
+        formData
+          .allowAnySameDesignation,
 
       workflowStatus:
         formData.workflowStatus,
 
       createdByUserID:
-        user?.id ?? undefined,
+        user?.id != null
+          ? Number(user.id)
+          : undefined,
 
       steps: formData.steps.map(
         (step, index) => ({
           stepNo: index + 1,
+
           designationID:
-            step.designationID as number,
+            Number(
+              step.designationID,
+            ),
 
           stepName:
             step.stepName.trim() ||
-            `${step.designationName} Approval`,
+            `${step.designationName ||
+            "Approver"
+            } Approval`,
 
           isMandatory:
             step.isMandatory,
@@ -1304,10 +2751,107 @@ export default function ApprovalWorkflowsPage() {
 
           approvalTimeout:
             step.approvalTimeout
-              ? Number(step.approvalTimeout)
+              ? Number(
+                step.approvalTimeout,
+              )
               : undefined,
         }),
       ),
+
+      conditions:
+        formData.conditions.map(
+          (condition, index) => {
+            const isNumericField = [
+              "TOTAL_AMOUNT",
+              "SALARY_AMOUNT",
+              "LEAVE_DAYS",
+              "REGULARISATION_DAYS",
+            ].includes(
+              condition.fieldKey,
+            );
+
+            const isTextField = [
+              "LEAVE_TYPE",
+              "EXIT_TYPE",
+              "REGULARISATION_TYPE",
+              "REQUEST_TEXT",
+            ].includes(
+              condition.fieldKey,
+            );
+
+            return {
+              conditionNo:
+                index + 1,
+
+              fieldKey:
+                condition.fieldKey as
+                WorkflowConditionField,
+
+              operator:
+                condition.operator as
+                WorkflowConditionOperator,
+
+              valueType:
+                condition.valueType as
+                WorkflowConditionValueType,
+
+              departmentID:
+                condition.fieldKey ===
+                  "DEPARTMENT" &&
+                  condition.departmentID !=
+                  null
+                  ? Number(
+                    condition.departmentID,
+                  )
+                  : undefined,
+
+              designationID:
+                condition.fieldKey ===
+                  "DESIGNATION" &&
+                  condition.designationID !=
+                  null
+                  ? Number(
+                    condition.designationID,
+                  )
+                  : undefined,
+
+              employeeIDs:
+                condition.fieldKey ===
+                  "EMPLOYEE"
+                  ? condition.employeeIDs.map(
+                    (id) =>
+                      Number(id),
+                  )
+                  : undefined,
+
+              numberValue:
+                isNumericField &&
+                  condition.numberValue !==
+                  ""
+                  ? Number(
+                    condition.numberValue,
+                  )
+                  : undefined,
+
+              numberValueTo:
+                isNumericField &&
+                  condition.operator ===
+                  "BETWEEN" &&
+                  condition.numberValueTo !==
+                  ""
+                  ? Number(
+                    condition.numberValueTo,
+                  )
+                  : undefined,
+
+              textValue:
+                isTextField
+                  ? condition.textValue
+                    .trim()
+                  : undefined,
+            };
+          },
+        ),
     };
 
     try {
@@ -1319,7 +2863,9 @@ export default function ApprovalWorkflowsPage() {
           `${API.workflows}/${editing.id}`,
           {
             method: "PATCH",
-            body: JSON.stringify(payload),
+            body: JSON.stringify(
+              payload,
+            ),
           },
         );
 
@@ -1327,10 +2873,15 @@ export default function ApprovalWorkflowsPage() {
           "Approval workflow updated successfully",
         );
       } else {
-        await fetchJSONSafe(API.workflows, {
-          method: "POST",
-          body: JSON.stringify(payload),
-        });
+        await fetchJSONSafe(
+          API.workflows,
+          {
+            method: "POST",
+            body: JSON.stringify(
+              payload,
+            ),
+          },
+        );
 
         toast.success(
           "Approval workflow created successfully",
@@ -1339,10 +2890,11 @@ export default function ApprovalWorkflowsPage() {
 
       await fetchRows();
       closePanels();
-    } catch (err: any) {
+    } catch (err: unknown) {
       const message =
-        err?.message ||
-        "Failed to save approval workflow";
+        err instanceof Error
+          ? err.message
+          : "Failed to save approval workflow";
 
       setError(message);
       toast.error(message);
@@ -1370,9 +2922,9 @@ export default function ApprovalWorkflowsPage() {
         current.map((row) =>
           row.id === workflow.id
             ? {
-                ...row,
-                workflowStatus,
-              }
+              ...row,
+              workflowStatus,
+            }
             : row,
         ),
       );
@@ -1385,7 +2937,7 @@ export default function ApprovalWorkflowsPage() {
     } catch (err: any) {
       toast.error(
         err?.message ||
-          "Failed to update workflow status",
+        "Failed to update workflow status",
       );
     }
   };
@@ -1419,7 +2971,7 @@ export default function ApprovalWorkflowsPage() {
     } catch (err: any) {
       toast.error(
         err?.message ||
-          "Failed to delete approval workflow",
+        "Failed to delete approval workflow",
       );
     }
   };
@@ -1500,20 +3052,20 @@ export default function ApprovalWorkflowsPage() {
       const matchesCompany =
         companyFilter === "ALL" ||
         String(workflow.companyID) ===
-          companyFilter;
+        companyFilter;
 
       const matchesBranch =
         branchFilter === "ALL" ||
         (branchFilter === "COMPANY_WIDE"
           ? workflow.branchesID == null
           : String(
-              workflow.branchesID ?? "",
-            ) === branchFilter);
+            workflow.branchesID ?? "",
+          ) === branchFilter);
 
       const matchesModule =
         moduleFilter === "ALL" ||
         String(workflow.companyModuleID) ===
-          moduleFilter;
+        moduleFilter;
 
       const active =
         workflow.workflowStatus !== false;
@@ -1580,6 +3132,72 @@ export default function ApprovalWorkflowsPage() {
     allModules,
   ]);
 
+
+  const conditionValueLabel = (
+  condition: WorkflowConditionRead,
+): string => {
+  if (
+    condition.department
+      ?.departmentName
+  ) {
+    return condition.department
+      .departmentName;
+  }
+
+  if (
+    condition.designation
+      ?.designation
+  ) {
+    return condition.designation
+      .designation;
+  }
+
+  const employeeNames = (
+    condition.employees ?? []
+  )
+    .map((item) =>
+      [
+        item.employee
+          ?.employeeFirstName,
+        item.employee
+          ?.employeeLastName,
+      ]
+        .filter(Boolean)
+        .join(" "),
+    )
+    .filter(Boolean)
+    .join(", ");
+
+  if (employeeNames) {
+    return employeeNames;
+  }
+
+  if (
+    condition.numberValue != null
+  ) {
+    if (
+      condition.operator ===
+        "BETWEEN" &&
+      condition.numberValueTo !=
+        null
+    ) {
+      return `${condition.numberValue} and ${condition.numberValueTo}`;
+    }
+
+    return String(
+      condition.numberValue,
+    );
+  }
+
+  if (
+    condition.textValue?.trim()
+  ) {
+    return condition.textValue;
+  }
+
+  return "—";
+};
+
   const companyFilterOptions = useMemo(
     () => [
       {
@@ -1609,7 +3227,7 @@ export default function ApprovalWorkflowsPage() {
           (branch) =>
             companyFilter === "ALL" ||
             Number(branch.companyID) ===
-              Number(companyFilter),
+            Number(companyFilter),
         )
         .map((branch) => ({
           value: String(branch.id),
@@ -1759,13 +3377,13 @@ export default function ApprovalWorkflowsPage() {
             onEdit={
               canManage
                 ? () =>
-                    handleEdit(workflow)
+                  handleEdit(workflow)
                 : undefined
             }
             onDelete={
               canManage
                 ? () =>
-                    handleDelete(workflow)
+                  handleDelete(workflow)
                 : undefined
             }
           />
@@ -1788,8 +3406,8 @@ export default function ApprovalWorkflowsPage() {
         description="Configure module-based, company and branch-specific multi-step approval workflows."
         actions={
           !isFormOpen &&
-          !isViewing &&
-          canManage ? (
+            !isViewing &&
+            canManage ? (
             <Button onClick={openCreateForm}>
               <Plus className="mr-1 h-4 w-4" />
               Create Workflow
@@ -1883,6 +3501,8 @@ export default function ApprovalWorkflowsPage() {
                           designationName: "",
                         }),
                       ),
+
+                      conditions: [],
                     }));
 
                     runCompanySuggestions(value);
@@ -1895,7 +3515,7 @@ export default function ApprovalWorkflowsPage() {
                   placeholder="Search company..."
                   disabled={
                     user?.role !==
-                      "SUPERADMIN" &&
+                    "SUPERADMIN" &&
                     Boolean(getSidebarContext())
                   }
                   autoComplete="off"
@@ -1936,6 +3556,8 @@ export default function ApprovalWorkflowsPage() {
                                         "",
                                     }),
                                   ),
+
+                                conditions: [],
                               }),
                             );
 
@@ -1975,6 +3597,8 @@ export default function ApprovalWorkflowsPage() {
                           designationName: "",
                         }),
                       ),
+
+                      conditions: [],
                     }));
 
                     runBranchSuggestions(value);
@@ -1988,7 +3612,7 @@ export default function ApprovalWorkflowsPage() {
                   disabled={
                     !formData.companyID ||
                     user?.role ===
-                      "BRANCH_ADMIN"
+                    "BRANCH_ADMIN"
                   }
                   autoComplete="off"
                 />
@@ -2005,6 +3629,17 @@ export default function ApprovalWorkflowsPage() {
                             branchesID: null,
                             branchAutocomplete:
                               "All Branches",
+
+                            steps: current.steps.map(
+                              (step) => ({
+                                ...step,
+                                designationID: null,
+                                designationName: "",
+                              }),
+                            ),
+
+                            conditions: [],
+
                           }),
                         );
 
@@ -2040,6 +3675,8 @@ export default function ApprovalWorkflowsPage() {
                                       "",
                                   }),
                                 ),
+
+                              conditions: [],
                             }),
                           );
 
@@ -2104,6 +3741,7 @@ export default function ApprovalWorkflowsPage() {
                                 module.id,
                               moduleAutocomplete:
                                 module.moduleName,
+                              conditions: [],
                             }),
                           );
 
@@ -2235,6 +3873,621 @@ export default function ApprovalWorkflowsPage() {
             </div>
           </section>
 
+
+          <section className="space-y-4 border-t pt-6">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h3 className="text-sm font-semibold text-gray-900">
+                  Workflow Conditions
+                </h3>
+
+                <p className="mt-1 text-xs text-gray-500">
+                  Define which requests should use this
+                  workflow. Leave empty to apply it to every
+                  request in the selected scope.
+                </p>
+              </div>
+
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={addCondition}
+                disabled={!formData.companyModuleID}
+              >
+                <Plus className="mr-1 h-4 w-4" />
+                Add Condition
+              </Button>
+            </div>
+
+            {formData.conditions.length > 0 && (
+              <div className="flex items-center justify-between rounded-lg border bg-gray-50 p-4">
+                <div>
+                  <Label>Condition Matching</Label>
+
+                  <p className="mt-1 text-xs text-gray-500">
+                    Choose whether all conditions or any one
+                    condition must match.
+                  </p>
+                </div>
+
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={
+                      formData.conditionMatchType ===
+                        "ALL"
+                        ? "default"
+                        : "outline"
+                    }
+                    onClick={() =>
+                      setFormData((current) => ({
+                        ...current,
+                        conditionMatchType: "ALL",
+                      }))
+                    }
+                  >
+                    Match All
+                  </Button>
+
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={
+                      formData.conditionMatchType ===
+                        "ANY"
+                        ? "default"
+                        : "outline"
+                    }
+                    onClick={() =>
+                      setFormData((current) => ({
+                        ...current,
+                        conditionMatchType: "ANY",
+                      }))
+                    }
+                  >
+                    Match Any
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            <div className="space-y-4">
+              {formData.conditions.map(
+                (condition) => {
+                  const availableFields =
+                    getAvailableConditionFields();
+
+                  const availableOperators =
+                    condition.fieldKey
+                      ? FIELD_OPERATOR_MAP[
+                      condition.fieldKey
+                      ]
+                      : [];
+
+                  const departmentSuggestions =
+                    conditionDepartmentSuggestions[
+                    condition.localID
+                    ] ?? [];
+
+                  const designationSuggestions =
+                    conditionDesignationSuggestions[
+                    condition.localID
+                    ] ?? [];
+
+                  const employeeSuggestions =
+                    conditionEmployeeSuggestions[
+                    condition.localID
+                    ] ?? [];
+
+                  return (
+                    <div
+                      key={condition.localID}
+                      className="rounded-xl border border-gray-200 bg-gray-50/50 p-4"
+                    >
+                      <div className="mb-4 flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-2">
+                          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-sm font-semibold text-primary-foreground">
+                            {condition.conditionNo}
+                          </div>
+
+                          <div>
+                            <div className="text-sm font-semibold">
+                              Condition{" "}
+                              {condition.conditionNo}
+                            </div>
+
+                            <div className="text-xs text-gray-500">
+                              Request matching rule
+                            </div>
+                          </div>
+                        </div>
+
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="text-red-600 hover:bg-red-50 hover:text-red-700"
+                          onClick={() =>
+                            removeCondition(
+                              condition.localID,
+                            )
+                          }
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+
+                      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                        <div className="space-y-2">
+                          <Label>Condition Field *</Label>
+
+                          <select
+                            value={condition.fieldKey}
+                            onChange={(event) =>
+                              handleConditionFieldChange(
+                                condition.localID,
+                                event.target
+                                  .value as WorkflowConditionField,
+                              )
+                            }
+                            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                          >
+                            <option value="">
+                              Select condition field
+                            </option>
+
+                            {availableFields.map(
+                              (field) => (
+                                <option
+                                  key={field}
+                                  value={field}
+                                >
+                                  {
+                                    CONDITION_FIELD_LABELS[
+                                    field
+                                    ]
+                                  }
+                                </option>
+                              ),
+                            )}
+                          </select>
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label>Operator *</Label>
+
+                          <select
+                            value={condition.operator}
+                            onChange={(event) =>
+                              updateCondition(
+                                condition.localID,
+                                {
+                                  operator:
+                                    event.target
+                                      .value as WorkflowConditionOperator,
+                                  numberValueTo: "",
+                                },
+                              )
+                            }
+                            disabled={
+                              !condition.fieldKey
+                            }
+                            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm disabled:opacity-50"
+                          >
+                            <option value="">
+                              Select operator
+                            </option>
+
+                            {availableOperators.map(
+                              (operator) => (
+                                <option
+                                  key={operator}
+                                  value={operator}
+                                >
+                                  {
+                                    CONDITION_OPERATOR_LABELS[
+                                    operator
+                                    ]
+                                  }
+                                </option>
+                              ),
+                            )}
+                          </select>
+                        </div>
+
+                        {condition.fieldKey ===
+                          "DEPARTMENT" && (
+                            <div
+  className="relative space-y-2 md:col-span-2"
+  data-condition-autocomplete
+>
+  <Label>Department *</Label>
+
+                              <Input
+                                value={
+                                  condition.departmentName
+                                }
+                                onChange={(event) => {
+                                  const value =
+                                    event.target.value;
+
+                                  updateCondition(
+                                    condition.localID,
+                                    {
+                                      departmentID:
+                                        null,
+                                      departmentName:
+                                        value,
+                                    },
+                                  );
+
+                                  runConditionDepartmentSuggestions(
+                                    condition.localID,
+                                    value,
+                                  );
+                                }}
+                                onFocus={() =>
+                                  runConditionDepartmentSuggestions(
+                                    condition.localID,
+                                    condition.departmentName,
+                                  )
+                                }
+                                placeholder="Search department..."
+                              />
+
+                              {departmentSuggestions.length >
+                                0 && (
+                                  <div className="absolute z-40 max-h-52 w-full overflow-y-auto rounded-md border bg-white shadow-lg">
+                                    {departmentSuggestions.map(
+                                      (department) => (
+                                        <button
+                                          key={department.id}
+                                          type="button"
+                                          className="block w-full px-3 py-2 text-left text-sm hover:bg-gray-50"
+                                          onClick={() => {
+                                            updateCondition(
+                                              condition.localID,
+                                              {
+                                                departmentID:
+                                                  department.id,
+                                                departmentName:
+                                                  department.departmentName ??
+                                                  "",
+                                              },
+                                            );
+
+                                            setConditionDepartmentSuggestions(
+                                              (current) => ({
+                                                ...current,
+                                                [condition.localID]:
+                                                  [],
+                                              }),
+                                            );
+                                          }}
+                                        >
+                                          {department.departmentName}
+                                        </button>
+                                      ),
+                                    )}
+                                  </div>
+                                )}
+                            </div>
+                          )}
+
+                        {condition.fieldKey ===
+                          "DESIGNATION" && (
+                          <div
+  className="relative space-y-2 md:col-span-2"
+  data-condition-autocomplete
+>
+  <Label>Designation *</Label>
+
+                              <Input
+                                value={
+                                  condition.designationName
+                                }
+                                onChange={(event) => {
+                                  const value =
+                                    event.target.value;
+
+                                  updateCondition(
+                                    condition.localID,
+                                    {
+                                      designationID:
+                                        null,
+                                      designationName:
+                                        value,
+                                    },
+                                  );
+
+                                  runConditionDesignationSuggestions(
+                                    condition.localID,
+                                    value,
+                                  );
+                                }}
+                                onFocus={() =>
+                                  runConditionDesignationSuggestions(
+                                    condition.localID,
+                                    condition.designationName,
+                                  )
+                                }
+                                placeholder="Search designation..."
+                              />
+
+                              {designationSuggestions.length >
+                                0 && (
+                                  <div className="absolute z-40 max-h-52 w-full overflow-y-auto rounded-md border bg-white shadow-lg">
+                                    {designationSuggestions.map(
+                                      (designation) => (
+                                        <button
+                                          key={designation.id}
+                                          type="button"
+                                          className="block w-full px-3 py-2 text-left text-sm hover:bg-gray-50"
+                                          onClick={() => {
+                                            updateCondition(
+                                              condition.localID,
+                                              {
+                                                designationID:
+                                                  designation.id,
+                                                designationName:
+                                                  designation.designation ??
+                                                  "",
+                                              },
+                                            );
+
+                                            setConditionDesignationSuggestions(
+                                              (current) => ({
+                                                ...current,
+                                                [condition.localID]:
+                                                  [],
+                                              }),
+                                            );
+                                          }}
+                                        >
+                                          {designation.designation}
+                                        </button>
+                                      ),
+                                    )}
+                                  </div>
+                                )}
+                            </div>
+                          )}
+
+                        {condition.fieldKey ===
+                          "EMPLOYEE" && (
+                   <div
+  className="relative space-y-3 md:col-span-2"
+  data-condition-autocomplete
+>
+  <Label>Select Employees *</Label>
+
+                              {condition.selectedEmployees
+                                .length > 0 && (
+                                  <div className="flex flex-wrap gap-2">
+                                    {condition.selectedEmployees.map(
+                                      (employee) => (
+                                        <Badge
+                                          key={employee.id}
+                                          variant="secondary"
+                                          className="gap-1"
+                                        >
+                                          {[
+                                            employee.employeeFirstName,
+                                            employee.employeeLastName,
+                                          ]
+                                            .filter(Boolean)
+                                            .join(" ") ||
+                                            employee.employeeID}
+
+                                          <button
+                                            type="button"
+                                            onClick={() =>
+                                              removeConditionEmployee(
+                                                condition.localID,
+                                                employee.id,
+                                              )
+                                            }
+                                          >
+                                            <X className="h-3 w-3" />
+                                          </button>
+                                        </Badge>
+                                      ),
+                                    )}
+                                  </div>
+                                )}
+
+                              <Input
+                                value={
+                                  condition.employeeSearch
+                                }
+                                onChange={(event) => {
+                                  const value =
+                                    event.target.value;
+
+                                  updateCondition(
+                                    condition.localID,
+                                    {
+                                      employeeSearch:
+                                        value,
+                                    },
+                                  );
+
+                                  runConditionEmployeeSuggestions(
+                                    condition.localID,
+                                    value,
+                                  );
+                                }}
+                                onFocus={() =>
+                                  runConditionEmployeeSuggestions(
+                                    condition.localID,
+                                    condition.employeeSearch,
+                                  )
+                                }
+                                placeholder="Search employee by name or employee ID..."
+                              />
+
+                              {(employeeSuggestions.length >
+                                0 ||
+                                conditionEmployeeLoading[
+                                condition.localID
+                                ]) && (
+                                  <div className="absolute z-40 max-h-52 w-full overflow-y-auto rounded-md border bg-white shadow-lg">
+                                    {conditionEmployeeLoading[
+                                      condition.localID
+                                    ] && (
+                                        <div className="px-3 py-2 text-sm text-gray-500">
+                                          Loading…
+                                        </div>
+                                      )}
+
+                                    {employeeSuggestions.map(
+                                      (employee) => (
+                                        <button
+                                          key={employee.id}
+                                          type="button"
+                                          className="block w-full px-3 py-2 text-left hover:bg-gray-50"
+                                          onClick={() =>
+                                            selectConditionEmployee(
+                                              condition.localID,
+                                              employee,
+                                            )
+                                          }
+                                        >
+                                          <div className="text-sm font-medium">
+                                            {[
+                                              employee.employeeFirstName,
+                                              employee.employeeLastName,
+                                            ]
+                                              .filter(Boolean)
+                                              .join(" ")}
+                                          </div>
+
+                                          <div className="text-xs text-gray-500">
+                                            Employee ID:{" "}
+                                            {employee.employeeID ??
+                                              "—"}
+                                          </div>
+                                        </button>
+                                      ),
+                                    )}
+                                  </div>
+                                )}
+                            </div>
+                          )}
+
+                        {[
+                          "TOTAL_AMOUNT",
+                          "SALARY_AMOUNT",
+                          "LEAVE_DAYS",
+                          "REGULARISATION_DAYS",
+                        ].includes(
+                          condition.fieldKey,
+                        ) && (
+                            <>
+                              <div className="space-y-2">
+                                <Label>
+                                  {condition.operator ===
+                                    "BETWEEN"
+                                    ? "Minimum Value"
+                                    : "Value"}{" "}
+                                  *
+                                </Label>
+
+                                <Input
+                                  type="number"
+                                  min={0}
+                                  step="0.01"
+                                  value={
+                                    condition.numberValue
+                                  }
+                                  onChange={(event) =>
+                                    updateCondition(
+                                      condition.localID,
+                                      {
+                                        numberValue:
+                                          event.target
+                                            .value,
+                                      },
+                                    )
+                                  }
+                                />
+                              </div>
+
+                              {condition.operator ===
+                                "BETWEEN" && (
+                                  <div className="space-y-2">
+                                    <Label>
+                                      Maximum Value *
+                                    </Label>
+
+                                    <Input
+                                      type="number"
+                                      min={0}
+                                      step="0.01"
+                                      value={
+                                        condition.numberValueTo
+                                      }
+                                      onChange={(event) =>
+                                        updateCondition(
+                                          condition.localID,
+                                          {
+                                            numberValueTo:
+                                              event.target
+                                                .value,
+                                          },
+                                        )
+                                      }
+                                    />
+                                  </div>
+                                )}
+                            </>
+                          )}
+
+                        {[
+                          "LEAVE_TYPE",
+                          "EXIT_TYPE",
+                          "REGULARISATION_TYPE",
+                          "REQUEST_TEXT",
+                        ].includes(
+                          condition.fieldKey,
+                        ) && (
+                            <div className="space-y-2 md:col-span-2">
+                              <Label>Value *</Label>
+
+                              <Input
+                                value={
+                                  condition.textValue
+                                }
+                                onChange={(event) =>
+                                  updateCondition(
+                                    condition.localID,
+                                    {
+                                      textValue:
+                                        event.target.value,
+                                    },
+                                  )
+                                }
+                                placeholder="Enter condition value..."
+                              />
+                            </div>
+                          )}
+                      </div>
+                    </div>
+                  );
+                },
+              )}
+            </div>
+
+            {!formData.companyModuleID && (
+              <NoticeBanner variant="warning" compact>
+                Select a workflow module before adding
+                conditions.
+              </NoticeBanner>
+            )}
+          </section>
+
           <section className="space-y-4 border-t pt-6">
             <div className="flex items-center justify-between gap-3">
               <div>
@@ -2264,12 +4517,12 @@ export default function ApprovalWorkflowsPage() {
                 (step, index) => {
                   const suggestions =
                     designationSuggestionMap[
-                      step.localID
+                    step.localID
                     ] || [];
 
                   const loadingDesignation =
                     designationLoadingMap[
-                      step.localID
+                    step.localID
                     ];
 
                   return (
@@ -2288,7 +4541,7 @@ export default function ApprovalWorkflowsPage() {
                               Step {step.stepNo}
                             </div>
 
-                           
+
                           </div>
                         </div>
 
@@ -2384,71 +4637,71 @@ export default function ApprovalWorkflowsPage() {
 
                           {(suggestions.length > 0 ||
                             loadingDesignation) && (
-                            <div className="absolute z-40 max-h-52 w-full overflow-y-auto rounded-md border bg-white shadow-lg">
-                              {loadingDesignation && (
-                                <div className="px-3 py-2 text-sm text-gray-500">
-                                  Loading…
-                                </div>
-                              )}
+                              <div className="absolute z-40 max-h-52 w-full overflow-y-auto rounded-md border bg-white shadow-lg">
+                                {loadingDesignation && (
+                                  <div className="px-3 py-2 text-sm text-gray-500">
+                                    Loading…
+                                  </div>
+                                )}
 
-                              {suggestions.map(
-                                (designation) => (
-                                  <button
-                                    key={
-                                      designation.id
-                                    }
-                                    type="button"
-                                    className="block w-full px-3 py-2 text-left hover:bg-gray-50"
-                                    onMouseDown={(
-                                      event,
-                                    ) =>
-                                      event.preventDefault()
-                                    }
-                                    onClick={() => {
-                                      updateStep(
-                                        step.localID,
-                                        {
-                                          designationID:
-                                            designation.id,
-                                          designationName:
-  designation.designation ?? "",
-                                          stepName:
-                                            step.stepName ||
-                                            `${designation.designation} Approval`,
-                                        },
-                                      );
-
-                                      setDesignationSuggestionMap(
-                                        (current) => ({
-                                          ...current,
-                                          [step.localID]:
-                                            [],
-                                        }),
-                                      );
-                                    }}
-                                  >
-                                    <div className="text-sm font-medium">
-                                      {
-                                        designation.designation
+                                {suggestions.map(
+                                  (designation) => (
+                                    <button
+                                      key={
+                                        designation.id
                                       }
-                                    </div>
+                                      type="button"
+                                      className="block w-full px-3 py-2 text-left hover:bg-gray-50"
+                                      onMouseDown={(
+                                        event,
+                                      ) =>
+                                        event.preventDefault()
+                                      }
+                                      onClick={() => {
+                                        updateStep(
+                                          step.localID,
+                                          {
+                                            designationID:
+                                              designation.id,
+                                            designationName:
+                                              designation.designation ?? "",
+                                            stepName:
+                                              step.stepName ||
+                                              `${designation.designation} Approval`,
+                                          },
+                                        );
 
-                                    {designation
-                                      .departments
-                                      ?.departmentName && (
-                                      <div className="mt-0.5 text-xs text-gray-500">
+                                        setDesignationSuggestionMap(
+                                          (current) => ({
+                                            ...current,
+                                            [step.localID]:
+                                              [],
+                                          }),
+                                        );
+                                      }}
+                                    >
+                                      <div className="text-sm font-medium">
                                         {
-                                          designation
-                                            .departments
-                                            .departmentName
+                                          designation.designation
                                         }
                                       </div>
-                                    )}
-                                  </button>
-                                ),
-                              )}
-                            </div>
-                          )}
+
+                                      {designation
+                                        .departments
+                                        ?.departmentName && (
+                                          <div className="mt-0.5 text-xs text-gray-500">
+                                            {
+                                              designation
+                                                .departments
+                                                .departmentName
+                                            }
+                                          </div>
+                                        )}
+                                    </button>
+                                  ),
+                                )}
+                              </div>
+                            )}
                         </div>
 
                         <div className="space-y-2">
@@ -2473,8 +4726,8 @@ export default function ApprovalWorkflowsPage() {
                           />
                         </div>
 
-                      
-                        </div>
+
+                      </div>
                     </div>
                   );
                 },
@@ -2531,13 +4784,13 @@ export default function ApprovalWorkflowsPage() {
                     <Badge
                       className={
                         viewRow.workflowStatus !==
-                        false
+                          false
                           ? "bg-emerald-50 text-emerald-700 hover:bg-emerald-50"
                           : "bg-gray-100 text-gray-600 hover:bg-gray-100"
                       }
                     >
                       {viewRow.workflowStatus !==
-                      false
+                        false
                         ? "Active"
                         : "Inactive"}
                     </Badge>
@@ -2587,12 +4840,68 @@ export default function ApprovalWorkflowsPage() {
                   label: "Status",
                   value:
                     viewRow.workflowStatus !==
-                    false
+                      false
                       ? "Active"
                       : "Inactive",
                 },
               ]}
             />
+
+
+            {viewRow.conditions &&
+              viewRow.conditions.length > 0 && (
+                <div className="rounded-xl border bg-white p-5">
+                  <div className="mb-4">
+                    <h3 className="font-semibold">
+                      Workflow Conditions
+                    </h3>
+
+                    <p className="mt-1 text-sm text-gray-500">
+                      Match{" "}
+                      {viewRow.conditionMatchType ===
+                        "ANY"
+                        ? "any"
+                        : "all"}{" "}
+                      of the following conditions.
+                    </p>
+                  </div>
+
+                  <div className="space-y-3">
+                    {viewRow.conditions.map(
+                      (condition) => (
+                        <div
+                          key={
+                            condition.id ??
+                            condition.conditionNo
+                          }
+                          className="rounded-lg border p-3"
+                        >
+                          <div className="font-medium">
+                            Condition{" "}
+                            {condition.conditionNo}:{" "}
+                            {
+                              CONDITION_FIELD_LABELS[
+                              condition.fieldKey
+                              ]
+                            }
+                          </div>
+
+                          <div className="mt-1 text-sm text-gray-600">
+                            {
+                              CONDITION_OPERATOR_LABELS[
+                              condition.operator
+                              ]
+                            }{" "}
+                           {conditionValueLabel(
+  condition,
+)}
+                          </div>
+                        </div>
+                      ),
+                    )}
+                  </div>
+                </div>
+              )}
 
             <div className="rounded-xl border bg-white p-5">
               <div className="mb-4">
@@ -2626,9 +4935,9 @@ export default function ApprovalWorkflowsPage() {
 
                         {index <
                           viewRow.steps.length -
-                            1 && (
-                          <div className="mt-1 h-full min-h-8 w-px bg-gray-200" />
-                        )}
+                          1 && (
+                            <div className="mt-1 h-full min-h-8 w-px bg-gray-200" />
+                          )}
                       </div>
 
                       <div className="flex-1 rounded-lg border p-3">
@@ -2646,17 +4955,17 @@ export default function ApprovalWorkflowsPage() {
                         <div className="mt-2 flex flex-wrap gap-2">
                           {step.isMandatory !==
                             false && (
-                            <Badge variant="outline">
-                              Mandatory
-                            </Badge>
-                          )}
+                              <Badge variant="outline">
+                                Mandatory
+                              </Badge>
+                            )}
 
                           {step.canReject !==
                             false && (
-                            <Badge variant="outline">
-                              Can Reject
-                            </Badge>
-                          )}
+                              <Badge variant="outline">
+                                Can Reject
+                              </Badge>
+                            )}
 
                           {step.canSendBack && (
                             <Badge variant="outline">
@@ -2758,20 +5067,20 @@ export default function ApprovalWorkflowsPage() {
             emptyTitle="No approval workflows found"
             emptyDescription={
               table.search ||
-              companyFilter !== "ALL" ||
-              branchFilter !== "ALL" ||
-              moduleFilter !== "ALL" ||
-              statusFilter !== "ALL"
+                companyFilter !== "ALL" ||
+                branchFilter !== "ALL" ||
+                moduleFilter !== "ALL" ||
+                statusFilter !== "ALL"
                 ? "No workflows match the selected filters."
                 : "Create a workflow to define module approval levels."
             }
             emptyAction={
               canManage &&
-              !table.search &&
-              companyFilter === "ALL" &&
-              branchFilter === "ALL" &&
-              moduleFilter === "ALL" &&
-              statusFilter === "ALL" ? (
+                !table.search &&
+                companyFilter === "ALL" &&
+                branchFilter === "ALL" &&
+                moduleFilter === "ALL" &&
+                statusFilter === "ALL" ? (
                 <Button
                   onClick={openCreateForm}
                 >

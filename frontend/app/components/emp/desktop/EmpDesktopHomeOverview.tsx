@@ -10,7 +10,8 @@ import {
   MapPin,
   Wallet,
 } from "lucide-react";
-import { DashboardSection, actionTileClass, gridGap } from "../../../dashboard/components/dashboard-ui";
+import { gridGap } from "../../../dashboard/components/dashboard-ui";
+import { cn } from "../../../utils/cn";
 import { EmpDesktopHomeProfileHero } from "./EmpDesktopHomeProfileHero";
 import { EmpDesktopAttendancePanel } from "./EmpDesktopAttendancePanel";
 import { EmpDesktopTeamReportees } from "./EmpDesktopTeamReportees";
@@ -70,6 +71,13 @@ export function EmpDesktopHomeOverview({
     [taskBadge, noticeBadge, reimbBadge, leaveBadge],
   );
 
+  const quickAccessItems = [
+    ...quickLinks,
+    ...(TASK_MANAGEMENT_ENABLED
+      ? [{ key: "tasks", label: "Tasks", href: "/empMyTasks", icon: LayoutDashboard }]
+      : []),
+  ];
+
   return (
     <EmpDesktopPage>
       <div className="space-y-6">
@@ -86,6 +94,39 @@ export function EmpDesktopHomeOverview({
               onStatusUpdate={onStatusUpdate}
             />
 
+            <div className="rounded-lg border border-border/60 bg-card px-3 py-2 shadow-sm">
+              <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none">
+                <span className="shrink-0 pr-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  Quick access
+                </span>
+                {quickAccessItems.map((item) => {
+                  const badge = badgeFor(item.key);
+                  const Icon = item.icon;
+                  return (
+                    <Link
+                      key={item.key}
+                      href={item.href}
+                      onClick={item.key === "notice" ? onNoticeClick : undefined}
+                      className={cn(
+                        "inline-flex shrink-0 items-center gap-1.5 rounded-md border border-transparent px-2.5 py-1.5",
+                        "text-xs font-medium text-foreground hover:border-border hover:bg-muted/50 transition-colors",
+                      )}
+                    >
+                      <span className="grid size-6 place-items-center rounded-md bg-primary/10 text-primary">
+                        <Icon className="size-3.5" />
+                      </span>
+                      <span>{item.label}</span>
+                      {badge > 0 ? (
+                        <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary">
+                          {badge}
+                        </span>
+                      ) : null}
+                    </Link>
+                  );
+                })}
+              </div>
+            </div>
+
             <EmpDesktopAttendancePanel
               todayStatus={todayStatus}
               loading={loadingStatus}
@@ -99,48 +140,6 @@ export function EmpDesktopHomeOverview({
             {isManagerView ? <EmpDesktopTeamReportees /> : <EmpDesktopNotifications />}
           </div>
         </div>
-
-        <DashboardSection>
-          <h2 className="text-xl font-semibold tracking-tight">Quick access</h2>
-          <p className="text-sm text-muted-foreground mt-1 mb-5">Jump to your most-used modules</p>
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
-            {quickLinks.map((item) => {
-              const badge = badgeFor(item.key);
-              const Icon = item.icon;
-              return (
-                <Link
-                  key={item.key}
-                  href={item.href}
-                  className={actionTileClass}
-                  onClick={item.key === "notice" ? onNoticeClick : undefined}
-                >
-                  <span className="size-10 rounded-md bg-primary/10 text-primary grid place-items-center shrink-0">
-                    <Icon className="size-5" />
-                  </span>
-                  <span className="flex-1 min-w-0">
-                    <span className="block font-semibold">{item.label}</span>
-                    {badge > 0 ? (
-                      <span className="text-xs text-muted-foreground">{badge} pending</span>
-                    ) : null}
-                  </span>
-                </Link>
-              );
-            })}
-            {TASK_MANAGEMENT_ENABLED ? (
-              <Link href="/empMyTasks" className={actionTileClass}>
-                <span className="size-10 rounded-md bg-violet-500/10 text-violet-600 grid place-items-center shrink-0">
-                  <LayoutDashboard className="size-5" />
-                </span>
-                <span className="flex-1">
-                  <span className="block font-semibold">Tasks</span>
-                  {taskBadge > 0 ? (
-                    <span className="text-xs text-muted-foreground">{taskBadge} active</span>
-                  ) : null}
-                </span>
-              </Link>
-            ) : null}
-          </div>
-        </DashboardSection>
       </div>
     </EmpDesktopPage>
   );

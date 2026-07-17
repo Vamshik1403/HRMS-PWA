@@ -3,11 +3,12 @@
 import { useEmpManagerScope } from "@/app/hooks/useEmpManagerScope";
 import { EmpTeamApprovalsPanel } from "./EmpTeamApprovalsPanel";
 
-export function EmpWorkspaceApprovals() {
+export function EmpWorkspaceApprovals({ embedded = false }: { embedded?: boolean } = {}) {
   const { isManagerView } = useEmpManagerScope();
 
   return (
     <EmpTeamApprovalsPanel
+      embedded={embedded}
       title="Approvals"
       description={
         isManagerView

@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import type { Request } from 'express';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditLogService } from '../audit-log/audit-log.service';
@@ -578,6 +578,95 @@ employeeDocuments = [],
   }
 
 
+async workflowSearch(params: {
+  companyID: number;
+  branchesID?: number;
+  search?: string;
+}) {
+  if (
+    !Number.isInteger(params.companyID) ||
+    params.companyID <= 0
+  ) {
+    throw new BadRequestException(
+      'companyID must be a positive integer',
+    );
+  }
+
+  if (
+    params.branchesID !== undefined &&
+    (!Number.isInteger(
+      params.branchesID,
+    ) ||
+      params.branchesID <= 0)
+  ) {
+    throw new BadRequestException(
+      'branchesID must be a positive integer',
+    );
+  }
+
+  const search =
+    params.search?.trim();
+
+  return this.prisma.manageEmployee.findMany({
+    where: {
+      companyID:
+        params.companyID,
+
+      ...(params.branchesID
+        ? {
+            branchesID:
+              params.branchesID,
+          }
+        : {}),
+
+      ...(search
+        ? {
+            OR: [
+              {
+                employeeFirstName: {
+                  contains: search,
+                  mode: 'insensitive',
+                },
+              },
+              {
+                employeeLastName: {
+                  contains: search,
+                  mode: 'insensitive',
+                },
+              },
+              {
+                employeeID: {
+                  contains: search,
+                  mode: 'insensitive',
+                },
+              },
+            ],
+          }
+        : {}),
+    },
+
+    select: {
+      id: true,
+      serviceProviderID: true,
+      companyID: true,
+      branchesID: true,
+      employeeFirstName: true,
+      employeeLastName: true,
+      employeeID: true,
+    },
+
+    orderBy: [
+      {
+        employeeFirstName: 'asc',
+      },
+      {
+        employeeLastName: 'asc',
+      },
+    ],
+
+    take: 20,
+  });
+}
 
   async searchCredentials(filters: {
     username?: string;

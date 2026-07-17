@@ -11,15 +11,17 @@ import {
   Hash,
   Heart,
   Mail,
+  MapPin,
+  Pencil,
   Phone,
   Trash2,
   User,
+  UserCircle,
   Users,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { Icon } from "@iconify/react";
 import { EmpDesktopPage } from "./EmpDesktopPage";
-import { Badge } from "../../ui/badge";
 import { Button } from "../../ui/button";
 import {
   Dialog,
@@ -95,21 +97,156 @@ function ProfileDetailSection({ title, fields }: { title: string; fields: Profil
 
 function ProfileHeroSkeleton() {
   return (
-    <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm animate-pulse">
-      <div className="h-28 bg-muted/60" />
-      <div className="px-6 pb-6">
-        <div className="-mt-14 flex flex-col gap-4 sm:flex-row sm:items-end">
-          <div className="size-28 rounded-full bg-muted ring-4 ring-card" />
-          <div className="flex-1 space-y-3 pb-1">
-            <div className="h-7 w-48 rounded-lg bg-muted" />
-            <div className="h-4 w-64 rounded bg-muted" />
+    <div className="animate-pulse rounded-[20px] border border-black/[0.06] bg-white p-8 shadow-[0_8px_24px_rgba(0,0,0,0.05)]">
+      <div className="flex flex-col gap-8 lg:flex-row lg:items-center">
+        <div className="flex gap-5">
+          <div className="size-[88px] rounded-full bg-muted" />
+          <div className="space-y-3 pt-1">
+            <div className="h-8 w-52 rounded-lg bg-muted" />
+            <div className="h-4 w-36 rounded bg-muted" />
             <div className="flex gap-2">
-              <div className="h-6 w-20 rounded-full bg-muted" />
+              <div className="h-6 w-16 rounded-full bg-muted" />
               <div className="h-6 w-28 rounded-full bg-muted" />
             </div>
           </div>
         </div>
+        <div className="hidden lg:block h-[120px] w-px bg-muted" />
+        <div className="grid flex-1 grid-cols-2 gap-5">
+          {[1, 2, 3, 4, 5, 6].map((i) => (
+            <div key={i} className="flex gap-3">
+              <div className="size-9 rounded-lg bg-muted" />
+              <div className="flex-1 space-y-2">
+                <div className="h-3 w-20 rounded bg-muted" />
+                <div className="h-4 w-32 rounded bg-muted" />
+              </div>
+            </div>
+          ))}
+        </div>
+        <div className="hidden lg:block h-11 w-36 rounded-lg bg-muted" />
       </div>
+    </div>
+  );
+}
+
+function HeroInfoItem({
+  icon: Icon,
+  label,
+  value,
+  href,
+}: {
+  icon: LucideIcon;
+  label: string;
+  value: unknown;
+  href?: string;
+}) {
+  const text = displayValue(value);
+
+  return (
+    <div className="flex min-w-0 items-start gap-3">
+      <div className="flex size-9 shrink-0 items-center justify-center rounded-lg border border-[#E5E7EB] bg-[#F8FAFC]">
+        <Icon className="size-4 text-[#6B7280]" strokeWidth={1.75} />
+      </div>
+      <div className="min-w-0 flex-1">
+        <p className="text-xs font-medium uppercase tracking-wide text-[#6B7280]">{label}</p>
+        {href && text !== "—" ? (
+          <a
+            href={href}
+            className="mt-0.5 block truncate text-[15px] font-medium text-[#111827] hover:text-[#3B82F6]"
+          >
+            {text}
+          </a>
+        ) : (
+          <p className="mt-0.5 truncate text-[15px] font-medium text-[#111827]">{text}</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ProfileAvatar({
+  displayName,
+  initials,
+  photoUrl,
+  imgFailed,
+  setImgFailed,
+  readOnly,
+  uploading,
+  onPhotoClick,
+}: {
+  displayName: string;
+  initials: string;
+  photoUrl: string | null;
+  imgFailed: boolean;
+  setImgFailed: (v: boolean) => void;
+  readOnly: boolean;
+  uploading?: boolean;
+  onPhotoClick?: () => void;
+}) {
+  const avatarBody = (
+    <>
+      {photoUrl && !imgFailed ? (
+        <img
+          src={photoUrl}
+          alt={displayName}
+          className="size-full object-cover"
+          onError={() => setImgFailed(true)}
+        />
+      ) : (
+        <span className="text-2xl font-bold text-white">{initials}</span>
+      )}
+      {uploading ? (
+        <div className="absolute inset-0 flex items-center justify-center bg-black/40">
+          <Icon icon="solar:refresh-bold-duotone" className="size-6 animate-spin text-white" />
+        </div>
+      ) : null}
+    </>
+  );
+
+  return (
+    <div className="relative shrink-0">
+      {readOnly ? (
+        <div
+          className={cn(
+            "flex size-[88px] items-center justify-center overflow-hidden rounded-full shadow-sm",
+            photoUrl && !imgFailed
+              ? "bg-muted"
+              : "bg-gradient-to-br from-[#3B82F6] to-[#2563EB]",
+          )}
+        >
+          {avatarBody}
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={onPhotoClick}
+          className={cn(
+            "group relative flex size-[88px] items-center justify-center overflow-hidden rounded-full shadow-sm transition-transform hover:scale-[1.02]",
+            photoUrl && !imgFailed
+              ? "bg-muted"
+              : "bg-gradient-to-br from-[#3B82F6] to-[#2563EB]",
+          )}
+          title="Change profile photo"
+        >
+          {avatarBody}
+        </button>
+      )}
+
+      <span
+        className="absolute bottom-2 right-2 z-10 size-3 rounded-full border-2 border-white bg-emerald-500"
+        title="Active"
+        aria-hidden
+      />
+
+      {!readOnly && !uploading ? (
+        <button
+          type="button"
+          onClick={onPhotoClick}
+          className="absolute -bottom-0.5 -right-0.5 z-20 flex size-7 items-center justify-center rounded-full border border-[#E5E7EB] bg-white text-[#6B7280] shadow-md transition-colors hover:border-[#3B82F6] hover:bg-[#EFF6FF] hover:text-[#3B82F6]"
+          title="Change profile photo"
+        >
+          <Camera className="size-3.5" />
+        </button>
+      ) : null}
     </div>
   );
 }
@@ -130,6 +267,7 @@ export function EmpDesktopProfilePanel({
   );
   const [loading, setLoading] = useState(viewEmployeeId ? true : !empData);
   const [viewPhotoFailed, setViewPhotoFailed] = useState(false);
+  const [reportingManager, setReportingManager] = useState<string | null>(null);
 
   const isViewingOther = viewEmployeeId != null;
 
@@ -184,6 +322,31 @@ export function EmpDesktopProfilePanel({
     setViewPhotoFailed(false);
   }, [viewEmployeeId, empData?.employeePhotoUrl]);
 
+  useEffect(() => {
+    const targetId = viewEmployeeId ?? empData?.id ?? empUser?.employee?.id;
+    if (!targetId) {
+      setReportingManager(null);
+      return;
+    }
+    const token = localStorage.getItem("token") || localStorage.getItem("accessToken") || "";
+    if (!token) return;
+
+    fetch(`${BACKEND}/manage-emp/${targetId}/linked-employees`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((r) => (r.ok ? r.json() : []))
+      .then((managers: { employeeFirstName?: string; employeeLastName?: string }[]) => {
+        if (!Array.isArray(managers) || managers.length === 0) {
+          setReportingManager(null);
+          return;
+        }
+        const primary = managers[0];
+        const name = [primary.employeeFirstName, primary.employeeLastName].filter(Boolean).join(" ").trim();
+        setReportingManager(name || null);
+      })
+      .catch(() => setReportingManager(null));
+  }, [viewEmployeeId, empData?.id, empUser?.employee?.id]);
+
   const emp = isViewingOther ? empData : empData || empUser?.employee || null;
   const empId = isViewingOther ? viewEmployeeId : emp?.id || empUser?.employee?.id;
 
@@ -222,9 +385,35 @@ export function EmpDesktopProfilePanel({
     null;
   const branchName =
     emp?.empBranch?.[0]?.branch?.branchName || emp?.branches?.branchName || null;
+  const officeLocation = branchName || emp?.presentAddress || emp?.permenantAddress || null;
+  const workEmail = officialEmail || personalEmail;
+  const phoneNumber = officialPhone || personalPhone;
+  const employmentType = emp?.employmentType || emp?.empType || emp?.typeOfEmployee || null;
+  const roleSubtitle = designation || department || "Employee";
 
-  const subtitleParts = [designation, department].filter(Boolean);
-  const subtitle = subtitleParts.length > 0 ? subtitleParts.join(" · ") : null;
+  const heroInfoItems: {
+    icon: LucideIcon;
+    label: string;
+    value: unknown;
+    href?: string;
+  }[] = [
+    {
+      icon: Mail,
+      label: "Work email",
+      value: workEmail,
+      href: workEmail ? `mailto:${workEmail}` : undefined,
+    },
+    {
+      icon: Phone,
+      label: "Phone number",
+      value: phoneNumber,
+      href: phoneNumber ? `tel:${phoneNumber}` : undefined,
+    },
+    { icon: Building2, label: "Department", value: department },
+    { icon: MapPin, label: "Office location", value: officeLocation },
+    { icon: Briefcase, label: "Employment type", value: employmentType },
+    { icon: UserCircle, label: "Reporting manager", value: reportingManager },
+  ];
 
   const identityFields: ProfileField[] = [
     { label: "Aadhaar number", value: emp?.aadharNo, icon: Fingerprint },
@@ -296,105 +485,65 @@ export function EmpDesktopProfilePanel({
       {loading ? (
         <ProfileHeroSkeleton />
       ) : (
-        <section className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
-          <div className="h-28 bg-gradient-to-r from-muted/50 via-muted/20 to-transparent" />
-          <div className="px-6 pb-6">
-            <div className="-mt-14 flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-end">
-                {readOnly ? (
-                  <div
-                    className={cn(
-                      "relative size-28 shrink-0 overflow-hidden rounded-full ring-4 ring-card shadow-md",
-                      "flex items-center justify-center",
-                      photoUrl && !imgFailed ? "bg-muted" : "bg-primary",
-                    )}
-                  >
-                    {photoUrl && !imgFailed ? (
-                      <img
-                        src={photoUrl}
-                        alt={displayName}
-                        className="size-full object-cover"
-                        onError={() => setImgFailed(true)}
-                      />
-                    ) : (
-                      <span className="text-3xl font-bold text-primary-foreground">{initials}</span>
-                    )}
-                  </div>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={photoProfile.handlePhotoClick}
-                    className={cn(
-                      "group relative size-28 shrink-0 overflow-hidden rounded-full ring-4 ring-card shadow-md",
-                      "flex items-center justify-center transition-transform hover:scale-[1.02]",
-                      photoUrl && !imgFailed ? "bg-muted" : "bg-primary",
-                    )}
-                    title="Change profile photo"
-                  >
-                    {photoUrl && !imgFailed ? (
-                      <img
-                        src={photoUrl}
-                        alt={displayName}
-                        className="size-full object-cover"
-                        onError={() => setImgFailed(true)}
-                      />
-                    ) : (
-                      <span className="text-3xl font-bold text-primary-foreground">{initials}</span>
-                    )}
-                    {photoProfile.uploading ? (
-                      <div className="absolute inset-0 flex items-center justify-center bg-black/40">
-                        <Icon icon="solar:refresh-bold-duotone" className="size-6 animate-spin text-white" />
-                      </div>
-                    ) : (
-                      <div className="absolute inset-x-0 bottom-0 flex h-9 items-center justify-center bg-black/45 opacity-0 transition-opacity group-hover:opacity-100">
-                        <Camera className="size-4 text-white" />
-                      </div>
-                    )}
-                  </button>
-                )}
+        <section className="rounded-[20px] border border-black/[0.06] bg-white p-8 shadow-[0_8px_24px_rgba(0,0,0,0.05)]">
+          <div className="flex flex-col gap-8 xl:flex-row xl:items-center">
+            <div className="flex min-w-0 shrink-0 items-center gap-5">
+              <ProfileAvatar
+                displayName={displayName}
+                initials={initials}
+                photoUrl={photoUrl}
+                imgFailed={imgFailed}
+                setImgFailed={setImgFailed}
+                readOnly={readOnly}
+                uploading={!readOnly ? photoProfile.uploading : false}
+                onPhotoClick={readOnly ? undefined : photoProfile.handlePhotoClick}
+              />
 
-                <div className="min-w-0 pb-1">
-                  <h2 className="font-display text-2xl font-semibold tracking-tight text-foreground">
-                    {displayName}
-                  </h2>
-                  {subtitle ? (
-                    <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p>
-                  ) : (
-                    <p className="mt-1 text-sm text-muted-foreground">Employee profile</p>
-                  )}
-                  <div className="mt-3 flex flex-wrap items-center gap-2">
-                    {employeeCode ? (
-                      <Badge variant="secondary" className="font-mono text-[11px]">
-                        ID {employeeCode}
-                      </Badge>
-                    ) : null}
-                    {joinedOn ? (
-                      <Badge variant="outline" className="text-[11px]">
-                        Joined {fmtJoined(joinedOn)}
-                      </Badge>
-                    ) : null}
-                  </div>
+              <div className="min-w-0">
+                <h2 className="truncate text-[30px] font-bold leading-tight tracking-tight text-[#111827]">
+                  {displayName}
+                </h2>
+                <p className="mt-1 truncate text-base font-medium text-[#6B7280]">{roleSubtitle}</p>
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  {employeeCode ? (
+                    <span className="inline-flex items-center rounded-full bg-[#EFF6FF] px-3 py-1 text-xs font-semibold text-[#3B82F6]">
+                      ID {employeeCode}
+                    </span>
+                  ) : null}
+                  {joinedOn ? (
+                    <span className="inline-flex items-center rounded-full bg-[#F3F4F6] px-3 py-1 text-xs font-semibold text-[#6B7280]">
+                      Joined {fmtJoined(joinedOn)}
+                    </span>
+                  ) : null}
                 </div>
               </div>
+            </div>
 
-              {!readOnly ? (
+            <div className="hidden h-[120px] w-px shrink-0 bg-[#E5E7EB] xl:block" aria-hidden />
+
+            <div className="grid min-w-0 flex-1 grid-cols-1 gap-x-10 gap-y-5 sm:grid-cols-2">
+              {heroInfoItems.map((item) => (
+                <HeroInfoItem key={item.label} {...item} />
+              ))}
+            </div>
+
+            {!readOnly ? (
+              <div className="flex shrink-0 items-center xl:pl-2">
                 <Button
                   type="button"
                   variant="outline"
-                  size="sm"
-                  className="shrink-0 self-start sm:self-auto"
-                  onClick={photoProfile.handlePhotoClick}
+                  className="h-11 rounded-lg border-[#E5E7EB] px-5 text-[15px] font-medium text-[#111827] hover:border-[#3B82F6] hover:bg-[#EFF6FF] hover:text-[#3B82F6]"
                 >
-                  <Camera className="size-4" />
-                  Change photo
+                  <Pencil className="size-4" />
+                  Edit Profile
                 </Button>
-              ) : null}
-            </div>
-
-            {!readOnly && photoProfile.uploadError ? (
-              <p className="mt-4 text-sm text-destructive">{photoProfile.uploadError}</p>
+              </div>
             ) : null}
           </div>
+
+          {!readOnly && photoProfile.uploadError ? (
+            <p className="mt-4 text-sm text-destructive">{photoProfile.uploadError}</p>
+          ) : null}
         </section>
       )}
 

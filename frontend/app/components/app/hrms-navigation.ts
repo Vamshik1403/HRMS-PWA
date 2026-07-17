@@ -231,6 +231,22 @@ export const HRMS_NAVIGATION: NavGroup[] = [
         show: (c) => c.isSuperAdmin || c.isServiceProvider,
       },
 
+       {
+        label: "Company Modules",
+        href: "/company-modules",
+        icon: Database,
+        show: (c) => c.isSuperAdmin || c.isServiceProvider,
+      },
+
+       {
+        label: "Approval Workflows",
+        href: "/approval-workflows",
+        icon: ClipboardList,
+        show: (c) => c.isSuperAdmin || c.isServiceProvider,
+      },
+
+
+
     ],
   },
   {

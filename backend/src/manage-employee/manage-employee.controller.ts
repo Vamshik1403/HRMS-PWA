@@ -20,9 +20,7 @@ import { UpdateManageEmployeeDto } from './dto/update-manage-employee.dto';
 
 @Controller('manage-emp')
 export class ManageEmployeeController {
-  constructor(private readonly service: ManageEmployeeService) {}
-
-
+  constructor(private readonly service: ManageEmployeeService) { }
 
   @Post()
   @UseGuards(AuthGuard('jwt'))
@@ -31,34 +29,34 @@ export class ManageEmployeeController {
   }
 
   @Get('credentials/all')
-async getAllCredentials() {
-  const data = await this.service.getAllCredentials();
-  return data;
-}
+  async getAllCredentials() {
+    const data = await this.service.getAllCredentials();
+    return data;
+  }
 
-   // 1. Get credentials by employee ID
+  // 1. Get credentials by employee ID
   @Get(':id/credentials')
   getEmployeeCredentials(@Param('id') id: string) {
     return this.service.getEmployeeCredentials(+id);
   }
 
   // Add this to your controller
-@Get('credentials/search')
-searchCredentials(
-  @Query('username') username?: string,
-  @Query('isActive') isActive?: string,
-  @Query('serviceProviderID') serviceProviderID?: string,
-  @Query('companyID') companyID?: string,
-  @Query('branchesID') branchesID?: string,
-) {
-  return this.service.searchCredentials({
-    ...(username && { username }),
-    ...(isActive !== undefined && { isActive: isActive === 'true' }),
-    ...(serviceProviderID && { serviceProviderID: +serviceProviderID }),
-    ...(companyID && { companyID: +companyID }),
-    ...(branchesID && { branchesID: +branchesID }),
-  });
-}
+  @Get('credentials/search')
+  searchCredentials(
+    @Query('username') username?: string,
+    @Query('isActive') isActive?: string,
+    @Query('serviceProviderID') serviceProviderID?: string,
+    @Query('companyID') companyID?: string,
+    @Query('branchesID') branchesID?: string,
+  ) {
+    return this.service.searchCredentials({
+      ...(username && { username }),
+      ...(isActive !== undefined && { isActive: isActive === 'true' }),
+      ...(serviceProviderID && { serviceProviderID: +serviceProviderID }),
+      ...(companyID && { companyID: +companyID }),
+      ...(branchesID && { branchesID: +branchesID }),
+    });
+  }
 
 
   // 2. Get credentials by username
@@ -76,7 +74,7 @@ searchCredentials(
     return this.service.updateCredentials(+id, updateCredentialDto);
   }
 
-  
+
   // 4. Employee login endpoint
   @Post('login')
   employeeLogin(@Body() loginDto: EmployeeLoginDto) {
@@ -90,9 +88,9 @@ searchCredentials(
   }
 
   // 5b. Employee changes own password
-@Post(':id/change-password')
-@UseGuards(AuthGuard('jwt'))
-async changePassword(
+  @Post(':id/change-password')
+  @UseGuards(AuthGuard('jwt'))
+  async changePassword(
     @Param('id') id: string,
     @Body() body: { oldPassword: string; newPassword: string },
   ) {
@@ -109,15 +107,15 @@ async changePassword(
   }
 
 
-@Get('list')
-findAllForList(@Query('status') status?: string) {
-  return this.service.findAllForList(status);
-}
+  @Get('list')
+  findAllForList(@Query('status') status?: string) {
+    return this.service.findAllForList(status);
+  }
 
-@Get()
-findAll(@Query('status') status?: string) {
-  return this.service.findAll(status);
-}
+  @Get()
+  findAll(@Query('status') status?: string) {
+    return this.service.findAll(status);
+  }
 
 
 
@@ -142,39 +140,64 @@ findAll(@Query('status') status?: string) {
   }
 
   @Get(':id/documents')
-@UseGuards(AuthGuard('jwt'))
-getEmployeeDocuments(@Param('id', ParseIntPipe) id: number) {
-  return this.service.getEmployeeDocuments(id);
-}
+  @UseGuards(AuthGuard('jwt'))
+  getEmployeeDocuments(@Param('id', ParseIntPipe) id: number) {
+    return this.service.getEmployeeDocuments(id);
+  }
 
-@Post(':id/documents')
-@UseGuards(AuthGuard('jwt'))
-createEmployeeDocument(
-  @Param('id', ParseIntPipe) id: number,
-  @Body() body: any,
-  @Req() req: Request,
-) {
-  return this.service.createEmployeeDocument(id, body, req);
-}
+  @Post(':id/documents')
+  @UseGuards(AuthGuard('jwt'))
+  createEmployeeDocument(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() body: any,
+    @Req() req: Request,
+  ) {
+    return this.service.createEmployeeDocument(id, body, req);
+  }
 
-@Patch('documents/:documentId')
-@UseGuards(AuthGuard('jwt'))
-updateEmployeeDocument(
-  @Param('documentId', ParseIntPipe) documentId: number,
-  @Body() body: any,
-  @Req() req: Request,
-) {
-  return this.service.updateEmployeeDocument(documentId, body, req);
-}
+  @Patch('documents/:documentId')
+  @UseGuards(AuthGuard('jwt'))
+  updateEmployeeDocument(
+    @Param('documentId', ParseIntPipe) documentId: number,
+    @Body() body: any,
+    @Req() req: Request,
+  ) {
+    return this.service.updateEmployeeDocument(documentId, body, req);
+  }
 
-@Delete('documents/:documentId')
-@UseGuards(AuthGuard('jwt'))
-deleteEmployeeDocument(
-  @Param('documentId', ParseIntPipe) documentId: number,
-  @Req() req: Request,
-) {
-  return this.service.deleteEmployeeDocument(documentId, req);
-}
+  @Delete('documents/:documentId')
+  @UseGuards(AuthGuard('jwt'))
+  deleteEmployeeDocument(
+    @Param('documentId', ParseIntPipe) documentId: number,
+    @Req() req: Request,
+  ) {
+    return this.service.deleteEmployeeDocument(documentId, req);
+  }
+
+
+  @Get('workflow-search')
+  workflowSearch(
+    @Query('companyID', ParseIntPipe)
+    companyID: number,
+
+    @Query('branchesID')
+    branchesID?: string,
+
+    @Query('search')
+    search?: string,
+  ) {
+    return this.service.workflowSearch({
+      companyID,
+      branchesID:
+        branchesID != null &&
+          branchesID.trim() !== ''
+          ? Number(branchesID)
+          : undefined,
+
+      search:
+        search?.trim() || undefined,
+    });
+  }
 
   @Get(':id')
   findOne(@Param('id', ParseIntPipe) id: number) {

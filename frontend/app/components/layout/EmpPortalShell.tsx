@@ -449,7 +449,7 @@ export default function EmpPortalShell({ children, hideBottomNav = false }: EmpP
         {showZoneNav && activeZone === "company" && (
           <div className="shrink-0 bg-white border-b border-gray-100 px-4 flex gap-0.5 overflow-x-auto">
             {companyTabs.map((tab) => (
-              <NavTabLink key={tab.id} href={tab.href} active={pathnameMatches(tab.href, pathname, search)}>
+              <NavTabLink key={tab.id} href={tab.href} active={tab.match(pathname)}>
                 {tab.label}
               </NavTabLink>
             ))}

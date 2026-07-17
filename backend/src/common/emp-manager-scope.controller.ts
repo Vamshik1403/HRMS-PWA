@@ -1,5 +1,6 @@
-import { Controller, Get, Query, Req, UnauthorizedException, UseGuards, Param, ForbiddenException } from '@nestjs/common';
+import { Controller, Get, Post, Body, Query, Req, UnauthorizedException, UseGuards, Param, ForbiddenException, BadRequestException } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { EmpLocationAttendanceService } from '../emp-location-attendance/emp-location-attendance.service';
 import { EmpManagerScopeService } from './emp-manager-scope.service';
@@ -65,6 +66,7 @@ export class EmpManagerScopeController {
     employeePhotoUrl: true,
     businessEmail: true,
     joiningDate: true,
+    departmentNameID: true,
     designations: { select: { designation: true } },
   } as const;
 
@@ -156,6 +158,183 @@ export class EmpManagerScopeController {
     return { members, scope: mode };
   }
 
+  @Get('company-departments')
+  async companyDepartments(@Req() req: { user?: { employeeId?: number; sub?: number } }) {
+    const employeeId = this.getEmployeeId(req);
+    const me = await this.prisma.manageEmployee.findUnique({
+      where: { id: employeeId },
+      select: {
+        companyID: true,
+        branchesID: true,
+        serviceProviderID: true,
+        departmentNameID: true,
+        branches: { select: { companyID: true } },
+      },
+    });
+
+    if (!me) {
+      return { departments: [] };
+    }
+
+    let companyID = me.companyID ?? me.branches?.companyID ?? null;
+    let branchesID = me.branchesID ?? null;
+    const serviceProviderID = me.serviceProviderID ?? null;
+
+    if (!companyID && me.departmentNameID) {
+      const selfDept = await this.prisma.departments.findUnique({
+        where: { id: me.departmentNameID },
+        select: { companyID: true, branchesID: true },
+      });
+      if (selfDept) {
+        companyID = selfDept.companyID ?? companyID;
+        branchesID = selfDept.branchesID ?? branchesID;
+      }
+    }
+
+    const branchIds: number[] = [];
+    if (companyID) {
+      const branches = await this.prisma.branches.findMany({
+        where: { companyID },
+        select: { id: true },
+      });
+      branchIds.push(...branches.map((b) => b.id));
+    } else if (branchesID) {
+      branchIds.push(branchesID);
+    }
+
+    const employeeWhere: Prisma.ManageEmployeeWhereInput = {
+      isDeleted: false,
+      lifecycleStatus: 'ACTIVE',
+    };
+
+    if (companyID) {
+      const or: Prisma.ManageEmployeeWhereInput[] = [{ companyID }];
+      if (branchIds.length > 0) or.push({ branchesID: { in: branchIds } });
+      employeeWhere.OR = or;
+    } else if (branchesID) {
+      employeeWhere.branchesID = branchesID;
+    } else if (serviceProviderID) {
+      employeeWhere.serviceProviderID = serviceProviderID;
+    } else {
+      return { departments: [] };
+    }
+
+    const employees = await this.prisma.manageEmployee.findMany({
+      where: employeeWhere,
+      select: this.employeeSelect,
+      orderBy: [{ employeeFirstName: 'asc' }, { employeeLastName: 'asc' }],
+    });
+
+    const employeesWithStatus = await this.statusForEmployees(employees);
+    const statusById = new Map(employeesWithStatus.map((e) => [e.id, e]));
+
+    const grouped = new Map<number, typeof employeesWithStatus>();
+    const unassigned: typeof employeesWithStatus = [];
+
+    for (const emp of employees) {
+      const row = statusById.get(emp.id);
+      if (!row) continue;
+      if (!emp.departmentNameID) {
+        unassigned.push(row);
+        continue;
+      }
+      const list = grouped.get(emp.departmentNameID) ?? [];
+      list.push(row);
+      grouped.set(emp.departmentNameID, list);
+    }
+
+    const deptIds = [...grouped.keys()];
+
+    const departmentBelongsToOrg = (dept: {
+      companyID?: number | null;
+      branchesID?: number | null;
+      serviceProviderID?: number | null;
+    }) => {
+      if (companyID != null && dept.companyID === companyID) return true;
+      if (dept.branchesID != null && branchIds.includes(dept.branchesID)) return true;
+      if (
+        companyID == null &&
+        branchesID != null &&
+        dept.branchesID === branchesID
+      ) {
+        return true;
+      }
+      if (
+        companyID == null &&
+        branchesID == null &&
+        serviceProviderID != null &&
+        dept.serviceProviderID === serviceProviderID
+      ) {
+        return true;
+      }
+      return false;
+    };
+
+    const deptOr: Prisma.DepartmentsWhereInput[] = [];
+    if (companyID) {
+      deptOr.push({ companyID });
+      deptOr.push({ branches: { companyID } });
+    }
+    if (branchIds.length > 0) deptOr.push({ branchesID: { in: branchIds } });
+    else if (branchesID) deptOr.push({ branchesID });
+    if (serviceProviderID) deptOr.push({ serviceProviderID });
+
+    const allOrgDepartments =
+      deptOr.length > 0
+        ? await this.prisma.departments.findMany({
+            where: { OR: deptOr },
+            select: {
+              id: true,
+              departmentName: true,
+              companyID: true,
+              branchesID: true,
+              serviceProviderID: true,
+            },
+            orderBy: { departmentName: 'asc' },
+          })
+        : [];
+
+    const orgDeptById = new Map(allOrgDepartments.map((d) => [d.id, d]));
+
+    for (const id of deptIds) {
+      if (!orgDeptById.has(id)) {
+        const meta = await this.prisma.departments.findUnique({
+          where: { id },
+          select: {
+            id: true,
+            departmentName: true,
+            companyID: true,
+            branchesID: true,
+            serviceProviderID: true,
+          },
+        });
+        if (meta && departmentBelongsToOrg(meta)) {
+          orgDeptById.set(id, meta);
+        }
+      }
+    }
+
+    const result = [...orgDeptById.values()]
+      .map((dept) => ({
+        id: dept.id,
+        departmentName: dept.departmentName ?? 'Unnamed department',
+        employeeCount: grouped.get(dept.id)?.length ?? 0,
+        employees: grouped.get(dept.id) ?? [],
+      }))
+      .sort((a, b) => a.departmentName.localeCompare(b.departmentName));
+
+    if (unassigned.length > 0) {
+      result.push({
+        id: 0,
+        departmentName: 'Unassigned',
+        employeeCount: unassigned.length,
+        employees: unassigned,
+      });
+    }
+
+    return { departments: result };
+  }
+
   @Get('member/:id/attendance-history')
   async memberAttendanceHistory(
     @Req() req: { user?: { employeeId?: number; sub?: number } },
@@ -191,5 +370,203 @@ export class EmpManagerScopeController {
     }
 
     return { days: Array.from(byDay.values()).sort((a, b) => b.date.localeCompare(a.date)) };
+  }
+
+  private delegationSelect = {
+    id: true,
+    delegatorId: true,
+    delegateeId: true,
+    delegationType: true,
+    startDate: true,
+    endDate: true,
+    notification: true,
+    description: true,
+    status: true,
+    createdAt: true,
+    delegator: {
+      select: {
+        id: true,
+        employeeID: true,
+        employeeFirstName: true,
+        employeeLastName: true,
+        employeePhotoUrl: true,
+      },
+    },
+    delegatee: {
+      select: {
+        id: true,
+        employeeID: true,
+        employeeFirstName: true,
+        employeeLastName: true,
+        employeePhotoUrl: true,
+      },
+    },
+  } as const;
+
+  private formatDelegation(row: {
+    id: number;
+    delegatorId: number;
+    delegateeId: number;
+    delegationType: string;
+    startDate: Date | null;
+    endDate: Date | null;
+    notification: string;
+    description: string | null;
+    status: string;
+    createdAt: Date;
+    delegator: {
+      id: number;
+      employeeID: string | null;
+      employeeFirstName: string | null;
+      employeeLastName: string | null;
+      employeePhotoUrl: string | null;
+    };
+    delegatee: {
+      id: number;
+      employeeID: string | null;
+      employeeFirstName: string | null;
+      employeeLastName: string | null;
+      employeePhotoUrl: string | null;
+    };
+  }) {
+    const name = (e: { employeeFirstName: string | null; employeeLastName: string | null; employeeID: string | null }) =>
+      [e.employeeFirstName, e.employeeLastName].filter(Boolean).join(' ').trim() || e.employeeID || '';
+    return {
+      id: row.id,
+      delegatorId: row.delegatorId,
+      delegateeId: row.delegateeId,
+      delegationType: row.delegationType,
+      startDate: row.startDate ? row.startDate.toISOString().slice(0, 10) : null,
+      endDate: row.endDate ? row.endDate.toISOString().slice(0, 10) : null,
+      notification: row.notification,
+      description: row.description,
+      status: row.status,
+      createdAt: row.createdAt.toISOString(),
+      delegatorName: name(row.delegator),
+      delegateeName: name(row.delegatee),
+      delegatorPhotoUrl: row.delegator.employeePhotoUrl,
+      delegateePhotoUrl: row.delegatee.employeePhotoUrl,
+    };
+  }
+
+  @Get('delegation-colleagues')
+  async delegationColleagues(@Req() req: { user?: { employeeId?: number; sub?: number } }) {
+    const employeeId = this.getEmployeeId(req);
+    const self = await this.prisma.manageEmployee.findUnique({
+      where: { id: employeeId },
+      select: { companyID: true, branchesID: true, serviceProviderID: true },
+    });
+    if (!self?.companyID) return { colleagues: [] };
+
+    const colleagues = await this.prisma.manageEmployee.findMany({
+      where: {
+        id: { not: employeeId },
+        companyID: self.companyID,
+        isDeleted: false,
+        lifecycleStatus: 'ACTIVE',
+      },
+      select: {
+        id: true,
+        employeeID: true,
+        employeeFirstName: true,
+        employeeLastName: true,
+        employeePhotoUrl: true,
+      },
+      orderBy: [{ employeeFirstName: 'asc' }, { employeeLastName: 'asc' }],
+    });
+
+    return {
+      colleagues: colleagues.map((c) => ({
+        id: c.id,
+        employeeID: c.employeeID,
+        name: [c.employeeFirstName, c.employeeLastName].filter(Boolean).join(' ').trim() || c.employeeID || `Employee #${c.id}`,
+        employeePhotoUrl: c.employeePhotoUrl,
+      })),
+    };
+  }
+
+  @Get('delegations')
+  async delegations(@Req() req: { user?: { employeeId?: number; sub?: number } }) {
+    const employeeId = this.getEmployeeId(req);
+    const baseWhere = { isDeleted: false, status: 'ACTIVE' };
+
+    const [asDelegator, asDelegatee] = await Promise.all([
+      this.prisma.employeeDelegation.findMany({
+        where: { ...baseWhere, delegatorId: employeeId },
+        select: this.delegationSelect,
+        orderBy: { createdAt: 'desc' },
+      }),
+      this.prisma.employeeDelegation.findMany({
+        where: { ...baseWhere, delegateeId: employeeId },
+        select: this.delegationSelect,
+        orderBy: { createdAt: 'desc' },
+      }),
+    ]);
+
+    return {
+      asDelegator: asDelegator.map((r) => this.formatDelegation(r)),
+      asDelegatee: asDelegatee.map((r) => this.formatDelegation(r)),
+    };
+  }
+
+  @Post('delegations')
+  async createDelegation(
+    @Req() req: { user?: { employeeId?: number; sub?: number } },
+    @Body()
+    body: {
+      delegateeId?: number;
+      delegationType?: string;
+      startDate?: string;
+      endDate?: string;
+      notification?: string;
+      description?: string;
+    },
+  ) {
+    const employeeId = this.getEmployeeId(req);
+    const delegateeId = Number(body.delegateeId);
+    if (!delegateeId || delegateeId === employeeId) {
+      throw new BadRequestException('A valid delegatee is required');
+    }
+
+    const delegationType = (body.delegationType || 'TEMPORARY').toUpperCase();
+    if (!['TEMPORARY', 'PERMANENT'].includes(delegationType)) {
+      throw new BadRequestException('Invalid delegation type');
+    }
+
+    const notification = (body.notification || 'BOTH').toUpperCase();
+    if (!['BOTH', 'DELEGATEE_ONLY'].includes(notification)) {
+      throw new BadRequestException('Invalid notification option');
+    }
+
+    if (delegationType === 'TEMPORARY' && (!body.startDate || !body.endDate)) {
+      throw new BadRequestException('Start and end dates are required for temporary delegation');
+    }
+
+    const allowed = await this.scope.canViewEmployee(employeeId, delegateeId);
+    if (!allowed) throw new ForbiddenException('Cannot delegate to this employee');
+
+    const self = await this.prisma.manageEmployee.findUnique({
+      where: { id: employeeId },
+      select: { companyID: true, branchesID: true, serviceProviderID: true },
+    });
+    if (!self) throw new UnauthorizedException('Employee not found');
+
+    const created = await this.prisma.employeeDelegation.create({
+      data: {
+        delegatorId: employeeId,
+        delegateeId,
+        delegationType,
+        startDate: body.startDate ? new Date(body.startDate) : null,
+        endDate: body.endDate ? new Date(body.endDate) : null,
+        notification,
+        description: body.description?.trim() || null,
+        companyID: self.companyID,
+        branchesID: self.branchesID,
+        serviceProviderID: self.serviceProviderID,
+      },
+      select: this.delegationSelect,
+    });
+
+    return this.formatDelegation(created);
   }
 }

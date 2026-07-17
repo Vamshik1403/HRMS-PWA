@@ -267,6 +267,7 @@ model CompanyModule {
   companyID Int
   moduleID  Int
 
+
   isEnabled Boolean @default(false)
 
   company Company @relation(fields: [companyID], references: [id], onDelete: Cascade)
@@ -580,6 +581,26 @@ model PromotionRequest {
   monthlyPayGrade_promotionRequest_proposedMonthlyPayGradeIDTomonthlyPayGrade MonthlyPayGrade? @relation("promotionRequest_proposedMonthlyPayGradeIDTomonthlyPayGrade", fields: [proposedMonthlyPayGradeID], references: [id], onDelete: NoAction, onUpdate: NoAction)
 }
 
+model EmployeeDelegation {
+  id                Int             @id @default(autoincrement())
+  delegatorId       Int
+  delegateeId       Int
+  delegationType    String          @db.VarChar
+  startDate         DateTime?       @db.Date
+  endDate           DateTime?       @db.Date
+  notification      String          @db.VarChar
+  description       String?         @db.VarChar
+  status            String          @default("ACTIVE") @db.VarChar
+  isDeleted         Boolean         @default(false)
+  companyID         Int?
+  branchesID        Int?
+  serviceProviderID Int?
+  createdAt         DateTime        @default(now()) @db.Timestamptz(6)
+  updatedAt         DateTime        @updatedAt @db.Timestamptz(6)
+  delegator         ManageEmployee  @relation("DelegationDelegator", fields: [delegatorId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  delegatee         ManageEmployee  @relation("DelegationDelegatee", fields: [delegateeId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
+
 model EmpAttendanceLogs {
   id                Int      @id @default(autoincrement())
   serviceProviderID Int
@@ -817,6 +838,8 @@ model ManageEmployee {
   workShift                          WorkShift?                          @relation("EmployeeWorkShift", fields: [workShiftID], references: [id], onDelete: NoAction, onUpdate: NoAction)
   overtime                           Overtime[]
   promotionRequest                   PromotionRequest[]
+  delegationsAsDelegator             EmployeeDelegation[]                @relation("DelegationDelegator")
+  delegationsAsDelegatee             EmployeeDelegation[]                @relation("DelegationDelegatee")
   reimbursement                      Reimbursement[]
   rosterEmployee                     RosterEmployee[]
   salaryAdvance                      SalaryAdvance[]
@@ -2467,6 +2490,7 @@ model CompanySubscription {
 
 model CompanyModules {
   id                Int                @id @default(autoincrement())
+  moduleKey        String?
   moduleName        String
   moduleDescription String?
   moduleStatus      Boolean            @default(true)

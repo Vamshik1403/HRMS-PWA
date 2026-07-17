@@ -136,7 +136,7 @@ export function EmpDesktopTeamReportees() {
         <div>
           <CardTitle className="text-xl font-semibold tracking-tight flex items-center gap-2">
             <Users className="size-5 text-primary" />
-            Team notifications
+            Team Attendance
           </CardTitle>
           <CardDescription className="mt-1">
             {scope === "team"

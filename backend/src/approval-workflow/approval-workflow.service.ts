@@ -566,16 +566,25 @@ if (module.moduleStatus === false) {
       );
     }
 
-    const moduleConfig =
-      WORKFLOW_CONDITION_CONFIG[
-      module.moduleKey as keyof typeof WORKFLOW_CONDITION_CONFIG
-      ];
+    const moduleKey =
+  (module.moduleKey as string | null | undefined)?.trim().toUpperCase();
 
-    if (!moduleConfig) {
-      throw new BadRequestException(
-        `No workflow condition configuration exists for module key ${module.moduleKey}`,
-      );
-    }
+if (!moduleKey) {
+  throw new BadRequestException(
+    `Module "${module.moduleName}" does not have a moduleKey. Please configure the module before adding workflow conditions.`,
+  );
+}
+
+const moduleConfig =
+  WORKFLOW_CONDITION_CONFIG[
+    moduleKey as keyof typeof WORKFLOW_CONDITION_CONFIG
+  ];
+
+if (!moduleConfig) {
+  throw new BadRequestException(
+    `No workflow condition configuration exists for module key "${moduleKey}"`,
+  );
+}
 
     for (const condition of conditions) {
       if (

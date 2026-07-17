@@ -564,7 +564,7 @@ setForm({
     [branchList],
   );
 
-  const filtered = useMemo(() => {
+   const filtered = useMemo(() => {
     if (!Array.isArray(terminations)) return [];
 
     const q = table.search.trim().toLowerCase();
@@ -732,10 +732,10 @@ setForm({
         description="Manage employee exit and termination records"
         actions={
           canManage && !isAdding ? (
-            <Button onClick={() => setIsAdding(true)}>
-              <Plus className="w-4 h-4 mr-1" />
-              Initiate Off Boarding
-            </Button>
+          <Button onClick={() => setIsAdding(true)}>
+            <Plus className="w-4 h-4 mr-1" />
+            Initiate Off Boarding
+          </Button>
           ) : null
         }
       />
@@ -748,26 +748,26 @@ setForm({
         showHeaderCancel
       >
         <form onSubmit={handleCreate} className="space-y-6">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <FormField label="Branch" required>
               <Select
                 value={selectedBranchID || undefined}
-                disabled={user?.role === "BRANCH_ADMIN"}
+      disabled={user?.role === "BRANCH_ADMIN"}
                 onValueChange={(branchID) => {
-                  setSelectedBranchID(branchID);
-                  setSelectedDepartmentID("");
-                  setEmpSearch("");
-                  setEmpList([]);
-                  setForm({ ...form, employeeId: "" });
-                }}
-              >
+        setSelectedBranchID(branchID);
+        setSelectedDepartmentID("");
+        setEmpSearch("");
+        setEmpList([]);
+        setForm({ ...form, employeeId: "" });
+      }}
+    >
                 <SelectTrigger>
                   <SelectValue placeholder="Select branch" />
                 </SelectTrigger>
                 <SelectContent>
-                  {branchList.map((b) => (
+      {branchList.map((b) => (
                     <SelectItem key={b.id} value={String(b.id)}>
-                      {b.branchName || "Unnamed Branch"}
+          {b.branchName || "Unnamed Branch"}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -777,102 +777,102 @@ setForm({
             <FormField label="Department" required>
               <Select
                 value={selectedDepartmentID || undefined}
-                disabled={!selectedBranchID}
+      disabled={!selectedBranchID}
                 onValueChange={(departmentID) => {
                   setSelectedDepartmentID(departmentID);
-                  setEmpSearch("");
-                  setEmpList([]);
-                  setForm({ ...form, employeeId: "" });
-                }}
-              >
+        setEmpSearch("");
+        setEmpList([]);
+        setForm({ ...form, employeeId: "" });
+      }}
+    >
                 <SelectTrigger>
                   <SelectValue placeholder="Select department" />
                 </SelectTrigger>
                 <SelectContent>
-                  {visibleDepartments.map((d) => (
+      {visibleDepartments.map((d) => (
                     <SelectItem key={d.id} value={String(d.id)}>
-                      {d.departmentName || "Unnamed Department"}
+          {d.departmentName || "Unnamed Department"}
                     </SelectItem>
-                  ))}
+      ))}
                 </SelectContent>
               </Select>
             </FormField>
-          </div>
+</div>
 
-          <div ref={empRef} className="relative">
+<div ref={empRef} className="relative">
             <FormField label="Employee" required>
-              <Input
-                value={empSearch}
-                onChange={(e) => {
-                  setEmpSearch(e.target.value);
-                  setForm({ ...form, employeeId: "" });
-                  runFetchEmp(e.target.value);
-                }}
-                onFocus={(e) => runFetchEmp(e.target.value)}
-                placeholder={
-                  !selectedBranchID
-                    ? "Select branch first"
-                    : !selectedDepartmentID
-                      ? "Select department first"
-                      : "Type employee name or ID…"
-                }
-                autoComplete="off"
-                disabled={!selectedBranchID || !selectedDepartmentID}
-                required={!form.employeeId}
-              />
+  <Input
+    value={empSearch}
+    onChange={(e) => {
+      setEmpSearch(e.target.value);
+      setForm({ ...form, employeeId: "" });
+      runFetchEmp(e.target.value);
+    }}
+    onFocus={(e) => runFetchEmp(e.target.value)}
+    placeholder={
+      !selectedBranchID
+        ? "Select branch first"
+        : !selectedDepartmentID
+          ? "Select department first"
+          : "Type employee name or ID…"
+    }
+    autoComplete="off"
+    disabled={!selectedBranchID || !selectedDepartmentID}
+    required={!form.employeeId}
+  />
             </FormField>
 
-            {empList.length > 0 && (
+  {empList.length > 0 && (
               <div className="absolute z-10 mt-1 w-full overflow-hidden rounded-xl border border-border bg-popover shadow-lg max-h-48 overflow-y-auto">
-                {empList.map((e) => (
-                  <div
-                    key={e.id}
+      {empList.map((e) => (
+        <div
+          key={e.id}
                     className="cursor-pointer px-3 py-2.5 text-sm transition-colors hover:bg-muted"
-                    onMouseDown={(ev) => ev.preventDefault()}
-                    onClick={() => {
-                      setForm({ ...form, employeeId: String(e.id) });
-                      setEmpSearch(
-                        `${e.employeeFirstName ?? ""} ${e.employeeLastName ?? ""} - ${
-                          e.employeeID ?? ""
-                        }`.trim()
-                      );
-                      setEmpList([]);
-                    }}
-                  >
-                    <div className="font-medium">
-                      {e.employeeFirstName ?? ""} {e.employeeLastName ?? ""} -{" "}
-                      {e.employeeID ?? ""}
-                    </div>
-                    <div className="text-xs text-muted-foreground">
-                      {e.branches?.branchName || "Branch"} /{" "}
-                      {e.departments?.departmentName || "Department"}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {selectedBranchID &&
-              selectedDepartmentID &&
-              visibleEmployeesForTermination.length === 0 && (
-                <p className="text-xs text-destructive mt-1">
-                  No active employees found for selected branch and department.
-                </p>
-              )}
+          onMouseDown={(ev) => ev.preventDefault()}
+          onClick={() => {
+            setForm({ ...form, employeeId: String(e.id) });
+            setEmpSearch(
+              `${e.employeeFirstName ?? ""} ${e.employeeLastName ?? ""} - ${
+                e.employeeID ?? ""
+              }`.trim()
+            );
+            setEmpList([]);
+          }}
+        >
+          <div className="font-medium">
+            {e.employeeFirstName ?? ""} {e.employeeLastName ?? ""} -{" "}
+            {e.employeeID ?? ""}
           </div>
+                    <div className="text-xs text-muted-foreground">
+            {e.branches?.branchName || "Branch"} /{" "}
+            {e.departments?.departmentName || "Department"}
+          </div>
+        </div>
+      ))}
+    </div>
+  )}
+
+  {selectedBranchID &&
+    selectedDepartmentID &&
+    visibleEmployeesForTermination.length === 0 && (
+                <p className="text-xs text-destructive mt-1">
+        No active employees found for selected branch and department.
+      </p>
+    )}
+</div>
 
           <FormField label="Exit Type" required>
             <Select
               value={form.exitType || undefined}
               onValueChange={(exitType) => {
-                setForm((prev) => ({
-                  ...prev,
-                  exitType,
-                  noticePeriod: EXIT_TYPES_WITHOUT_NOTICE.has(exitType)
-                    ? ""
-                    : prev.noticePeriod,
-                }));
-              }}
+                    setForm((prev) => ({
+                      ...prev,
+                      exitType,
+                      noticePeriod: EXIT_TYPES_WITHOUT_NOTICE.has(exitType)
+                        ? ""
+                        : prev.noticePeriod,
+                    }));
+                  }}
             >
               <SelectTrigger>
                 <SelectValue placeholder="Select type" />
@@ -890,38 +890,38 @@ setForm({
           </FormField>
 
           <FormField label="Reason">
-            <Input
-              value={form.reasonCategory}
-              onChange={(e) =>
-                setForm({ ...form, reasonCategory: e.target.value })
-              }
+                <Input
+                  value={form.reasonCategory}
+                  onChange={(e) =>
+                    setForm({ ...form, reasonCategory: e.target.value })
+                  }
               placeholder="Optional reason or category"
-            />
+                />
           </FormField>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <FormField label="Initiated On">
-              <Input
-                type="date"
-                value={form.initiatedOn}
-                min={new Date().toISOString().split("T")[0]}
-                onChange={(e) =>
-                  setForm({ ...form, initiatedOn: e.target.value })
-                }
-              />
+                <Input
+                  type="date"
+                  value={form.initiatedOn}
+                  min={new Date().toISOString().split("T")[0]}
+                  onChange={(e) =>
+                    setForm({ ...form, initiatedOn: e.target.value })
+                  }
+                />
             </FormField>
 
-            {exitTypeRequiresNotice(form.exitType) && (
+              {exitTypeRequiresNotice(form.exitType) && (
               <FormField label="Notice Period (Days)">
-                <Input
-                  type="number"
-                  min="0"
-                  value={form.noticePeriod}
-                  onChange={(e) =>
-                    setForm({ ...form, noticePeriod: e.target.value })
-                  }
-                  placeholder="e.g. 30"
-                />
+                  <Input
+                    type="number"
+                    min="0"
+                    value={form.noticePeriod}
+                    onChange={(e) =>
+                      setForm({ ...form, noticePeriod: e.target.value })
+                    }
+                    placeholder="e.g. 30"
+                  />
               </FormField>
             )}
           </div>
@@ -931,12 +931,12 @@ setForm({
               <X className="w-4 h-4 mr-1" />
               Cancel
             </Button>
-            <Button type="submit" disabled={saving}>
-              <Save className="w-4 h-4 mr-1" />
-              {saving ? "Saving..." : "Submit"}
-            </Button>
-          </div>
-        </form>
+                <Button type="submit" disabled={saving}>
+                  <Save className="w-4 h-4 mr-1" />
+                  {saving ? "Saving..." : "Submit"}
+                </Button>
+              </div>
+            </form>
       </FormDrawer>
 
       {!isAdding && (
@@ -988,7 +988,7 @@ setForm({
               canManage ? (
                 <Button onClick={() => setIsAdding(true)}>
                   <Plus className="w-4 h-4 mr-1" /> Initiate Off Boarding
-                </Button>
+              </Button>
               ) : undefined
             }
           />

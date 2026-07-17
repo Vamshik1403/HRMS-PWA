@@ -1,4 +1,59 @@
 export const WORKFLOW_CONDITION_CONFIG = {
+
+  EMPLOYEE_ONBOARDING_MODULE: {
+    fields: [
+      'DEPARTMENT',
+      'DESIGNATION',
+      'EMPLOYEE',
+    ],
+  },
+   REIMBURSEMENT_MODULE: {
+    fields: [
+      'DEPARTMENT',
+      'DESIGNATION',
+      'EMPLOYEE',
+      'TOTAL_AMOUNT',
+    ],
+  },
+
+  LEAVE_MODULE: {
+    fields: [
+      'DEPARTMENT',
+      'DESIGNATION',
+      'EMPLOYEE',
+      'LEAVE_TYPE',
+      'LEAVE_DAYS',
+    ],
+  },
+
+   PAYROLL_MODULE: {
+    fields: [
+      'DEPARTMENT',
+      'DESIGNATION',
+      'EMPLOYEE',
+      'SALARY_AMOUNT',
+    ],
+  },
+
+  OFF_BOARDING_MODULE: {
+    fields: [
+      'DEPARTMENT',
+      'DESIGNATION',
+      'EMPLOYEE',
+      'EXIT_TYPE',
+    ],
+  },
+
+  ATTENDANCE_MODULE: {
+    fields: [
+      'DEPARTMENT',
+      'DESIGNATION',
+      'EMPLOYEE',
+      'REGULARISATION_TYPE',
+      'REGULARISATION_DAYS',
+    ],
+  },
+  
   SALARY_MANAGEMENT: {
     fields: [
       'DEPARTMENT',

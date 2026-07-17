@@ -29,7 +29,7 @@ import { splitPreviewRecords } from "../../../utils/empListLimit";
 
 const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL || "/backend";
 
-export function EmpAttendanceWorkspace() {
+export function EmpAttendanceWorkspace({ embedded = false }: { embedded?: boolean } = {}) {
   const searchParams = useSearchParams();
   const tab = searchParams.get("tab") || "overview";
 
@@ -133,6 +133,56 @@ export function EmpAttendanceWorkspace() {
 
   const detailHref = (day: AttendanceDaySummary) => `/empHistory/${encodeDateKey(day.dateKey)}`;
 
+  const overviewStats: StatCardData[] = [
+    { label: "Days present (week)", value: presentThisWeek, icon: Calendar },
+    { label: "Hours worked (week)", value: weekHours, icon: Clock, iconClassName: "text-emerald-600" },
+    { label: "Monthly attendance", value: `${monthPct}%`, icon: MapPin },
+    {
+      label: "Break today",
+      value: todayStatus?.breakMinutes != null ? `${todayStatus.breakMinutes}m` : "0m",
+      icon: Clock,
+      iconClassName: "text-amber-600",
+    },
+  ];
+
+  const overviewContent = (
+    <>
+      <div className={`grid sm:grid-cols-2 xl:grid-cols-4 ${gridGap}`}>
+        {overviewStats.map((s) => (
+          <StatCard key={s.label} stat={s} />
+        ))}
+      </div>
+
+      <div className={`grid lg:grid-cols-3 ${gridGap} items-start`}>
+        <div className="min-w-0 lg:col-span-2">
+          <EmpDesktopAttendancePanel
+            todayStatus={todayStatus}
+            loading={statusLoading}
+            onStatusUpdate={handleStatusUpdate}
+            compact
+          />
+        </div>
+        <DashboardSection className="min-w-0 lg:col-span-1">
+          <h2 className="text-xl font-semibold tracking-tight">Recent activity</h2>
+          <p className="text-sm text-muted-foreground mt-1 mb-4">Latest attendance records</p>
+          <EmpDesktopAttendanceTable
+            days={previewDays.slice(0, 5)}
+            loading={historyLoading}
+            detailHref={detailHref}
+            hideHeader
+          />
+          <Link href="/empAttendance?tab=history" className="inline-block mt-4 text-sm font-medium text-primary hover:underline">
+            View full history →
+          </Link>
+        </DashboardSection>
+      </div>
+    </>
+  );
+
+  if (embedded) {
+    return overviewContent;
+  }
+
   if (tab === "check-in") {
     return (
       <EmpWorkspaceContent>
@@ -213,50 +263,10 @@ export function EmpAttendanceWorkspace() {
     );
   }
 
-  const overviewStats: StatCardData[] = [
-    { label: "Days present (week)", value: presentThisWeek, icon: Calendar },
-    { label: "Hours worked (week)", value: weekHours, icon: Clock, iconClassName: "text-emerald-600" },
-    { label: "Monthly attendance", value: `${monthPct}%`, icon: MapPin },
-    {
-      label: "Break today",
-      value: todayStatus?.breakMinutes != null ? `${todayStatus.breakMinutes}m` : "0m",
-      icon: Clock,
-      iconClassName: "text-amber-600",
-    },
-  ];
-
   return (
     <EmpWorkspaceContent>
       <EmpDesktopPage title="Attendance overview" description="Today's status, weekly summary, and recent activity" icon={MapPin}>
-        <div className={`grid sm:grid-cols-2 xl:grid-cols-4 ${gridGap}`}>
-          {overviewStats.map((s) => (
-            <StatCard key={s.label} stat={s} />
-          ))}
-        </div>
-
-        <div className={`grid lg:grid-cols-3 ${gridGap} items-start`}>
-          <div className="lg:col-span-2">
-            <EmpDesktopAttendancePanel
-              todayStatus={todayStatus}
-              loading={statusLoading}
-              onStatusUpdate={handleStatusUpdate}
-              compact
-            />
-          </div>
-          <DashboardSection>
-            <h2 className="text-xl font-semibold tracking-tight">Recent activity</h2>
-            <p className="text-sm text-muted-foreground mt-1 mb-4">Latest attendance records</p>
-            <EmpDesktopAttendanceTable
-              days={previewDays.slice(0, 5)}
-              loading={historyLoading}
-              detailHref={detailHref}
-              hideHeader
-            />
-            <Link href="/empAttendance?tab=history" className="inline-block mt-4 text-sm font-medium text-primary hover:underline">
-              View full history →
-            </Link>
-          </DashboardSection>
-        </div>
+        {overviewContent}
       </EmpDesktopPage>
     </EmpWorkspaceContent>
   );

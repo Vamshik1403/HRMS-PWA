@@ -84,7 +84,7 @@ export interface LeaveAppRow {
   branchesID?: number;
 }
 
-export function EmpLeaveMobile({ desktopTab }: { desktopTab?: string } = {}) {
+export function EmpLeaveMobile({ desktopTab, embedded = false }: { desktopTab?: string; embedded?: boolean } = {}) {
   const user = useCurrentUser();
   const isPortalDesktop = useEmpPortalDesktop();
   const inWorkspace = !!desktopTab;
@@ -324,8 +324,8 @@ export function EmpLeaveMobile({ desktopTab }: { desktopTab?: string } = {}) {
         ? "Review team leave requests and balances"
         : "Your leave balance and application history";
 
-    return (
-      <EmpDesktopPage title={pageTitle} description={pageDesc} icon={Calendar}>
+    const inner = (
+      <>
         {showBalance ? (
           <EmpDesktopLeaveBalance cards={cards} loading={balanceLoading} />
         ) : null}
@@ -366,6 +366,16 @@ export function EmpLeaveMobile({ desktopTab }: { desktopTab?: string } = {}) {
             if (employeeId) loadApps(employeeId, showLeaveBalance === true);
           }}
         />
+      </>
+    );
+
+    if (embedded) {
+      return inner;
+    }
+
+    return (
+      <EmpDesktopPage title={pageTitle} description={pageDesc} icon={Calendar}>
+        {inner}
       </EmpDesktopPage>
     );
   }

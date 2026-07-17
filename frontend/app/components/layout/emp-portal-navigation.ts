@@ -153,7 +153,8 @@ export const EMP_TEAM_TABS = [
 ];
 
 export const EMP_COMPANY_TABS = [
-  { id: "overview", label: "Overview", href: "/empCompany", match: (p: string) => p === "/empCompany" },
+  { id: "overview", label: "Overview", href: "/empCompany", match: (p: string) => p === "/empCompany" || p === "/empCompany/" },
+  { id: "departments", label: "Departments", href: "/empCompany/departments", match: (p: string) => p.startsWith("/empCompany/departments") },
   { id: "holidays", label: "Holidays", href: "/empHolidays", match: (p: string) => p === "/empHolidays" },
   { id: "noticeboard", label: "Noticeboard", href: "/empNoticeboard", match: (p: string) => p === "/empNoticeboard" || p.startsWith("/empNoticeboard/") },
   { id: "public-holiday", label: "Public Holidays", href: "/empPublicHoliday", match: (p: string) => p === "/empPublicHoliday" },

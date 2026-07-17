@@ -42,6 +42,8 @@ export type EmpApprovalsPanelProps = {
   includeOwnSubmissions?: boolean;
   /** Show "New request" form modal for self leave / reimbursement / promotion requests */
   allowNewRequest?: boolean;
+  /** When true, omit nested page header (e.g. inside My Profile workspace). */
+  embedded?: boolean;
 };
 
 function authHeaders(): Record<string, string> {
@@ -59,6 +61,7 @@ export function EmpTeamApprovalsPanel({
   noAccessMessage = "You do not have team approval access.",
   includeOwnSubmissions = false,
   allowNewRequest = false,
+  embedded = false,
 }: EmpApprovalsPanelProps = {}) {
   const isDesktop = useEmpPortalDesktop();
   const user = useCurrentUser();
@@ -350,6 +353,10 @@ export function EmpTeamApprovalsPanel({
       />
     </div>
   );
+
+  if (embedded) {
+    return content;
+  }
 
   if (isDesktop) {
     return (

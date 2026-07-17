@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Calendar } from "lucide-react";
+import { Calendar, ChevronRight } from "lucide-react";
 import { Badge } from "../../ui/badge";
 import { Button } from "../../ui/button";
 import { EntityListShell } from "../../app/entity-list-shell";
@@ -56,6 +56,65 @@ export function EmpDesktopAttendanceTable({
     return d.dateKey;
   });
 
+  if (hideHeader) {
+    if (loading) {
+      return <p className="py-6 text-center text-sm text-muted-foreground">Loading records…</p>;
+    }
+
+    if (sorted.length === 0) {
+      return (
+        <p className="py-6 text-center text-sm text-muted-foreground">
+          Records will appear here once you start marking attendance.
+        </p>
+      );
+    }
+
+    return (
+      <div className="divide-y divide-border overflow-hidden rounded-lg border border-border">
+        {sorted.map((day) => {
+          const href = detailHref?.(day);
+          const status = statusFor(day);
+          const content = (
+            <>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-xs font-medium text-foreground">{fmtDate(day.dateKey)}</p>
+                <p className="mt-0.5 truncate text-[11px] tabular-nums text-muted-foreground">
+                  {fmt(day.checkIn)} – {fmt(day.checkOut)} · {day.workLabel}
+                </p>
+              </div>
+              <Badge variant={status.variant} className="shrink-0 text-[10px]">
+                {status.label}
+              </Badge>
+              {href ? (
+                <span className="inline-flex shrink-0 items-center gap-0.5 text-xs font-medium text-primary">
+                  View
+                  <ChevronRight className="size-3.5" />
+                </span>
+              ) : null}
+            </>
+          );
+
+          return href ? (
+            <Link
+              key={day.dateKey}
+              href={href}
+              className="flex min-w-0 items-center gap-2 px-3 py-2.5 text-sm transition-colors hover:bg-muted/50"
+            >
+              {content}
+            </Link>
+          ) : (
+            <div
+              key={day.dateKey}
+              className="flex min-w-0 items-center gap-2 px-3 py-2.5 text-sm"
+            >
+              {content}
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
+
   const columns: DataTableColumn<AttendanceDaySummary>[] = [
     {
       key: "dateKey",
@@ -107,20 +166,6 @@ export function EmpDesktopAttendanceTable({
       },
     },
   ];
-
-  if (hideHeader) {
-    return (
-      <DataTable
-        columns={columns}
-        rows={sorted}
-        isLoading={!!loading}
-        rowKey={(d) => d.dateKey}
-        emptyIcon={Calendar}
-        emptyTitle="No attendance records"
-        emptyDescription="Records will appear here once you start marking attendance."
-      />
-    );
-  }
 
   return (
     <EntityListShell

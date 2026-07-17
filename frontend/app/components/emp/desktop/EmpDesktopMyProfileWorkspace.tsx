@@ -9,6 +9,7 @@ import { EmpDesktopProfileSettings } from "./EmpDesktopProfileSettings";
 import { EmpProfileWorkspaceTabNav, profileTabHref, resolveProfileWorkspaceTab } from "./EmpProfileWorkspaceTabNav";
 import { EmpWorkspaceApprovals } from "../EmpWorkspaceApprovals";
 import { EmpWorkspacePromotions } from "../EmpWorkspacePromotions";
+import { EmpWorkspaceDelegation } from "../EmpWorkspaceDelegation";
 import { EmpLeaveMobile } from "../EmpLeaveMobile";
 import { EmpAttendanceWorkspace } from "../workspaces/EmpAttendanceWorkspace";
 import { useEmpManagerScope } from "../../../hooks/useEmpManagerScope";
@@ -25,8 +26,11 @@ function EmpDesktopMyProfileWorkspaceInner() {
     { id: "leave", label: "Leave", href: profileTabHref("leave") },
     { id: "attendance", label: "Attendance", href: profileTabHref("attendance") },
     ...(isManagerView
-      ? [{ id: "promotions", label: "Promotions & Transfer", href: profileTabHref("promotions") }]
-      : []),
+      ? [
+          { id: "promotions", label: "Promotions & Transfer", href: profileTabHref("promotions") },
+          { id: "delegation", label: "My Delegation", href: profileTabHref("delegation") },
+        ]
+      : [{ id: "delegation", label: "My Delegation", href: profileTabHref("delegation") }]),
   ];
 
   return (
@@ -41,10 +45,11 @@ function EmpDesktopMyProfileWorkspaceInner() {
           </div>
         )}
 
-        {activeTab === "approvals" && <EmpWorkspaceApprovals />}
-        {activeTab === "leave" && <EmpLeaveMobile desktopTab="overview" />}
-        {activeTab === "attendance" && <EmpAttendanceWorkspace />}
-        {activeTab === "promotions" && isManagerView && <EmpWorkspacePromotions />}
+        {activeTab === "approvals" && <EmpWorkspaceApprovals embedded />}
+        {activeTab === "leave" && <EmpLeaveMobile desktopTab="overview" embedded />}
+        {activeTab === "attendance" && <EmpAttendanceWorkspace embedded />}
+        {activeTab === "promotions" && isManagerView && <EmpWorkspacePromotions embedded />}
+        {activeTab === "delegation" && <EmpWorkspaceDelegation embedded />}
       </div>
     </EmpDesktopPage>
   );

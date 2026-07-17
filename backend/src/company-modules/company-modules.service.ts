@@ -11,33 +11,62 @@ import { UpdateCompanyModuleDto } from './dto/update-company-module.dto';
 export class CompanyModulesService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async create(createCompanyModuleDto: CreateCompanyModuleDto) {
-    const moduleName = createCompanyModuleDto.moduleName.trim();
+  private generateModuleKey(moduleName: string): string {
+  return `${moduleName
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')}_MODULE`;
+}
 
-    const existingModule = await this.prisma.companyModules.findFirst({
+  async create(
+  createCompanyModuleDto: CreateCompanyModuleDto,
+) {
+  const moduleName =
+    createCompanyModuleDto.moduleName.trim();
+
+  const moduleKey =
+    this.generateModuleKey(moduleName);
+
+  const existingModule =
+    await this.prisma.companyModules.findFirst({
       where: {
-        moduleName: {
-          equals: moduleName,
-          mode: 'insensitive',
-        },
+        OR: [
+          {
+            moduleName: {
+              equals: moduleName,
+              mode: 'insensitive',
+            },
+          },
+          {
+            moduleKey,
+          },
+        ],
       },
     });
 
-    if (existingModule) {
-      throw new ConflictException(
-        `Company module "${moduleName}" already exists`,
-      );
-    }
-
-    return this.prisma.companyModules.create({
-      data: {
-        moduleName,
-        moduleDescription:
-          createCompanyModuleDto.moduleDescription?.trim() || null,
-        moduleStatus: createCompanyModuleDto.moduleStatus ?? true,
-      },
-    });
+  if (existingModule) {
+    throw new ConflictException(
+      `Company module "${moduleName}" already exists`,
+    );
   }
+
+  return this.prisma.companyModules.create({
+    data: {
+      moduleKey,
+
+      moduleName,
+
+      moduleDescription:
+        createCompanyModuleDto.moduleDescription
+          ?.trim() || null,
+
+      moduleStatus:
+        createCompanyModuleDto.moduleStatus ??
+        true,
+    },
+  });
+}
 
   async findAll(moduleStatus?: boolean, search?: string) {
     return this.prisma.companyModules.findMany({
@@ -86,15 +115,27 @@ export class CompanyModulesService {
   }
 
   async update(
-    id: number,
-    updateCompanyModuleDto: UpdateCompanyModuleDto,
-  ) {
+  id: number,
+  updateCompanyModuleDto: UpdateCompanyModuleDto,
+) {
+  const existingModule =
     await this.findOne(id);
 
-    if (updateCompanyModuleDto.moduleName !== undefined) {
-      const moduleName = updateCompanyModuleDto.moduleName.trim();
+  if (
+    updateCompanyModuleDto.moduleName !==
+    undefined
+  ) {
+    const moduleName =
+      updateCompanyModuleDto.moduleName.trim();
 
-      const duplicateModule = await this.prisma.companyModules.findFirst({
+    if (!moduleName) {
+      throw new ConflictException(
+        'Module name cannot be empty',
+      );
+    }
+
+    const duplicateModule =
+      await this.prisma.companyModules.findFirst({
         where: {
           id: {
             not: id,
@@ -106,33 +147,46 @@ export class CompanyModulesService {
         },
       });
 
-      if (duplicateModule) {
-        throw new ConflictException(
-          `Company module "${moduleName}" already exists`,
-        );
-      }
+    if (duplicateModule) {
+      throw new ConflictException(
+        `Company module "${moduleName}" already exists`,
+      );
     }
-
-    return this.prisma.companyModules.update({
-      where: {
-        id,
-      },
-      data: {
-        ...(updateCompanyModuleDto.moduleName !== undefined && {
-          moduleName: updateCompanyModuleDto.moduleName.trim(),
-        }),
-
-        ...(updateCompanyModuleDto.moduleDescription !== undefined && {
-          moduleDescription:
-            updateCompanyModuleDto.moduleDescription?.trim() || null,
-        }),
-
-        ...(updateCompanyModuleDto.moduleStatus !== undefined && {
-          moduleStatus: updateCompanyModuleDto.moduleStatus,
-        }),
-      },
-    });
   }
+
+  return this.prisma.companyModules.update({
+    where: {
+      id,
+    },
+
+    data: {
+      /*
+       * moduleKey is intentionally not changed.
+       * It is a stable internal identifier.
+       */
+
+      ...(updateCompanyModuleDto.moduleName !==
+        undefined && {
+        moduleName:
+          updateCompanyModuleDto.moduleName.trim(),
+      }),
+
+      ...(updateCompanyModuleDto
+        .moduleDescription !== undefined && {
+        moduleDescription:
+          updateCompanyModuleDto
+            .moduleDescription?.trim() ||
+          null,
+      }),
+
+      ...(updateCompanyModuleDto.moduleStatus !==
+        undefined && {
+        moduleStatus:
+          updateCompanyModuleDto.moduleStatus,
+      }),
+    },
+  });
+}
 
   async updateStatus(id: number, moduleStatus: boolean) {
     await this.findOne(id);

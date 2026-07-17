@@ -46,7 +46,7 @@ export class EmpManagerScopeService {
     return name || e?.employeeID || `Employee #${employeeId}`;
   }
 
-  /** Manager may view direct reportees or colleagues in the same department. */
+  /** Manager may view direct reportees, colleagues in the same department, or same-company directory peers. */
   async canViewEmployee(managerEmployeeId: number, targetEmployeeId: number): Promise<boolean> {
     if (managerEmployeeId === targetEmployeeId) return true;
     const direct = await this.getDirectReporteeIds(managerEmployeeId);
@@ -63,6 +63,7 @@ export class EmpManagerScopeService {
       }),
     ]);
     if (!manager || !target || target.isDeleted) return false;
+    if (manager.companyID != null && manager.companyID === target.companyID) return true;
     return (
       manager.departmentNameID != null &&
       manager.departmentNameID === target.departmentNameID &&

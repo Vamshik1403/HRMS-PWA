@@ -4,7 +4,7 @@ import Link from "next/link";
 import { Icon } from "@iconify/react";
 import { useEmpManagerScope } from "@/app/hooks/useEmpManagerScope";
 
-export function EmpWorkspacePromotions() {
+export function EmpWorkspacePromotions({ embedded = false }: { embedded?: boolean } = {}) {
   const { isManagerView } = useEmpManagerScope();
 
   if (!isManagerView) {
@@ -17,10 +17,12 @@ export function EmpWorkspacePromotions() {
 
   return (
     <div className="space-y-4">
-      <div>
-        <h2 className="text-lg font-bold text-gray-900">Promotions & Transfer</h2>
-        <p className="text-sm text-gray-500 mt-0.5">Manage career movements for your team members</p>
-      </div>
+      {!embedded ? (
+        <div>
+          <h2 className="text-lg font-bold text-gray-900">Promotions & Transfer</h2>
+          <p className="text-sm text-gray-500 mt-0.5">Manage career movements for your team members</p>
+        </div>
+      ) : null}
       <Link
         href="/empTeam/promotions"
         className="inline-flex items-center gap-2 bg-[#4f46e5] text-white px-4 py-2.5 rounded-xl text-sm font-semibold hover:bg-[#4338ca] transition-colors"
