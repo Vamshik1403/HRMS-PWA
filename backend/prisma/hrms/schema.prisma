@@ -2678,3 +2678,43 @@ model ApprovalWorkflowStep {
   @@index([designationID])
   @@map("approval_workflow_steps")
 }
+
+
+enum ApprovalRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  SENT_BACK
+  CANCELLED
+}
+
+enum ApprovalStepStatus {
+  WAITING
+  PENDING
+  APPROVED
+  REJECTED
+  SENT_BACK
+  SKIPPED
+  CANCELLED
+}
+
+enum ApprovalApproverStatus {
+  WAITING
+  PENDING
+  APPROVED
+  REJECTED
+  SENT_BACK
+  SKIPPED
+  CANCELLED
+}
+
+enum ApprovalActionType {
+  SUBMITTED
+  APPROVED
+  REJECTED
+  SENT_BACK
+  STEP_ACTIVATED
+  STEP_COMPLETED
+  REQUEST_COMPLETED
+  CANCELLED
+}
