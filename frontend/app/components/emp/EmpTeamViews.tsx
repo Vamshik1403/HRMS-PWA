@@ -214,7 +214,7 @@ export function EmpTeamMyTeam() {
                   : "text-muted-foreground hover:text-foreground",
               )}
             >
-              Direct {scope === "reportees" && directCount != null ? directCount : ""}
+              My Reportees{scope === "reportees" && directCount != null ? ` ${directCount}` : ""}
             </button>
             <button
               type="button"
@@ -226,7 +226,7 @@ export function EmpTeamMyTeam() {
                   : "text-muted-foreground hover:text-foreground",
               )}
             >
-              All {scope === "team" ? members.length : ""}
+              My Team{scope === "team" ? ` ${members.length}` : ""}
             </button>
           </div>
 

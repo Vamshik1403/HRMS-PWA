@@ -195,6 +195,43 @@ export class ApprovalWorkflowService {
       conditions: dto.conditions,
     });
 
+        if (
+      dto.workflowStatus !== false &&
+      !dto.conditions?.length
+    ) {
+      const existingCatchAll =
+        await this.prisma.approvalWorkflow.findFirst({
+          where: {
+            companyID:
+              dto.companyID,
+
+            branchesID:
+              dto.branchesID ?? null,
+
+            companyModuleID:
+              dto.companyModuleID,
+
+            workflowStatus:
+              true,
+
+            conditions: {
+              none: {},
+            },
+          },
+
+          select: {
+            id: true,
+            workflowName: true,
+          },
+        });
+
+      if (existingCatchAll) {
+        throw new ConflictException(
+          `An active catch-all workflow already exists for this scope: "${existingCatchAll.workflowName}"`,
+        );
+      }
+    }
+
     const workflowName = dto.workflowName.trim();
 
     const duplicate =
@@ -340,47 +377,47 @@ export class ApprovalWorkflowService {
 
 
   private validateConditionValueType(
-  condition: any,
-) {
-  const expectedValueTypes:
-    Record<string, string> = {
-    DEPARTMENT: 'DEPARTMENT',
-    DESIGNATION: 'DESIGNATION',
-    EMPLOYEE: 'EMPLOYEE_LIST',
-
-    TOTAL_AMOUNT: 'NUMBER',
-    SALARY_AMOUNT: 'NUMBER',
-    LEAVE_DAYS: 'NUMBER',
-    REGULARISATION_DAYS:
-      'NUMBER',
-
-    LEAVE_TYPE: 'TEXT',
-    EXIT_TYPE: 'TEXT',
-    REGULARISATION_TYPE:
-      'TEXT',
-    REQUEST_TEXT: 'TEXT',
-  };
-
-  const expectedValueType =
-    expectedValueTypes[
-      condition.fieldKey
-    ];
-
-  if (!expectedValueType) {
-    throw new BadRequestException(
-      `Unsupported condition field ${condition.fieldKey}`,
-    );
-  }
-
-  if (
-    condition.valueType !==
-    expectedValueType
+    condition: any,
   ) {
-    throw new BadRequestException(
-      `Condition ${condition.conditionNo} must use valueType ${expectedValueType} for field ${condition.fieldKey}`,
-    );
+    const expectedValueTypes:
+      Record<string, string> = {
+      DEPARTMENT: 'DEPARTMENT',
+      DESIGNATION: 'DESIGNATION',
+      EMPLOYEE: 'EMPLOYEE_LIST',
+
+      TOTAL_AMOUNT: 'NUMBER',
+      SALARY_AMOUNT: 'NUMBER',
+      LEAVE_DAYS: 'NUMBER',
+      REGULARISATION_DAYS:
+        'NUMBER',
+
+      LEAVE_TYPE: 'TEXT',
+      EXIT_TYPE: 'TEXT',
+      REGULARISATION_TYPE:
+        'TEXT',
+      REQUEST_TEXT: 'TEXT',
+    };
+
+    const expectedValueType =
+      expectedValueTypes[
+      condition.fieldKey
+      ];
+
+    if (!expectedValueType) {
+      throw new BadRequestException(
+        `Unsupported condition field ${condition.fieldKey}`,
+      );
+    }
+
+    if (
+      condition.valueType !==
+      expectedValueType
+    ) {
+      throw new BadRequestException(
+        `Condition ${condition.conditionNo} must use valueType ${expectedValueType} for field ${condition.fieldKey}`,
+      );
+    }
   }
-}
 
   private validateConditionPayloadShape(
     condition: any,
@@ -560,31 +597,31 @@ export class ApprovalWorkflowService {
       );
     }
 
-if (module.moduleStatus === false) {
-        throw new BadRequestException(
+    if (module.moduleStatus === false) {
+      throw new BadRequestException(
         `Module "${module.moduleName}" is inactive`,
       );
     }
 
     const moduleKey =
-  (module.moduleKey as string | null | undefined)?.trim().toUpperCase();
+      (module.moduleKey as string | null | undefined)?.trim().toUpperCase();
 
-if (!moduleKey) {
-  throw new BadRequestException(
-    `Module "${module.moduleName}" does not have a moduleKey. Please configure the module before adding workflow conditions.`,
-  );
-}
+    if (!moduleKey) {
+      throw new BadRequestException(
+        `Module "${module.moduleName}" does not have a moduleKey. Please configure the module before adding workflow conditions.`,
+      );
+    }
 
-const moduleConfig =
-  WORKFLOW_CONDITION_CONFIG[
-    moduleKey as keyof typeof WORKFLOW_CONDITION_CONFIG
-  ];
+    const moduleConfig =
+      WORKFLOW_CONDITION_CONFIG[
+      moduleKey as keyof typeof WORKFLOW_CONDITION_CONFIG
+      ];
 
-if (!moduleConfig) {
-  throw new BadRequestException(
-    `No workflow condition configuration exists for module key "${moduleKey}"`,
-  );
-}
+    if (!moduleConfig) {
+      throw new BadRequestException(
+        `No workflow condition configuration exists for module key "${moduleKey}"`,
+      );
+    }
 
     for (const condition of conditions) {
       if (
@@ -612,13 +649,13 @@ if (!moduleConfig) {
         );
       }
 
-   this.validateConditionValueType(
-  condition,
-);
+      this.validateConditionValueType(
+        condition,
+      );
 
-this.validateConditionPayloadShape(
-  condition,
-);
+      this.validateConditionPayloadShape(
+        condition,
+      );
 
       await this.validateConditionValue({
         companyID,
@@ -771,147 +808,147 @@ this.validateConditionPayloadShape(
         break;
       }
 
-     case 'EMPLOYEE': {
-  const employeeIDs: number[] =
-    Array.isArray(
-      condition.employeeIDs,
-    )
-      ? condition.employeeIDs.map(
-          (id: unknown) => Number(id),
-        )
-      : [];
+      case 'EMPLOYEE': {
+        const employeeIDs: number[] =
+          Array.isArray(
+            condition.employeeIDs,
+          )
+            ? condition.employeeIDs.map(
+              (id: unknown) => Number(id),
+            )
+            : [];
 
-  if (!employeeIDs.length) {
-    throw new BadRequestException(
-      `At least one employee is required for condition ${condition.conditionNo}`,
-    );
-  }
+        if (!employeeIDs.length) {
+          throw new BadRequestException(
+            `At least one employee is required for condition ${condition.conditionNo}`,
+          );
+        }
 
-  const invalidEmployeeIDs =
-    employeeIDs.filter(
-      (id) =>
-        !Number.isInteger(id) ||
-        id <= 0,
-    );
+        const invalidEmployeeIDs =
+          employeeIDs.filter(
+            (id) =>
+              !Number.isInteger(id) ||
+              id <= 0,
+          );
 
-  if (invalidEmployeeIDs.length) {
-    throw new BadRequestException(
-      `Invalid employee IDs in condition ${condition.conditionNo}`,
-    );
-  }
+        if (invalidEmployeeIDs.length) {
+          throw new BadRequestException(
+            `Invalid employee IDs in condition ${condition.conditionNo}`,
+          );
+        }
 
-  const uniqueEmployeeIDs: number[] = [
-    ...new Set<number>(employeeIDs),
-  ];
+        const uniqueEmployeeIDs: number[] = [
+          ...new Set<number>(employeeIDs),
+        ];
 
-  if (
-    uniqueEmployeeIDs.length !==
-    employeeIDs.length
-  ) {
-    throw new BadRequestException(
-      `Duplicate employees are not allowed in condition ${condition.conditionNo}`,
-    );
-  }
+        if (
+          uniqueEmployeeIDs.length !==
+          employeeIDs.length
+        ) {
+          throw new BadRequestException(
+            `Duplicate employees are not allowed in condition ${condition.conditionNo}`,
+          );
+        }
 
-  const employees =
-    await this.prisma.manageEmployee.findMany({
-      where: {
-        id: {
-          in: uniqueEmployeeIDs,
-        },
+        const employees =
+          await this.prisma.manageEmployee.findMany({
+            where: {
+              id: {
+                in: uniqueEmployeeIDs,
+              },
 
-        companyID,
+              companyID,
 
-        ...(branchesID
-          ? {
-              branchesID,
-            }
-          : {}),
-      },
+              ...(branchesID
+                ? {
+                  branchesID,
+                }
+                : {}),
+            },
 
-      select: {
-        id: true,
-      },
-    });
+            select: {
+              id: true,
+            },
+          });
 
-  if (
-    employees.length !==
-    uniqueEmployeeIDs.length
-  ) {
-    throw new BadRequestException(
-      'One or more selected employees do not belong to the workflow company or branch',
-    );
-  }
+        if (
+          employees.length !==
+          uniqueEmployeeIDs.length
+        ) {
+          throw new BadRequestException(
+            'One or more selected employees do not belong to the workflow company or branch',
+          );
+        }
 
-  break;
-}
+        break;
+      }
       case 'TOTAL_AMOUNT':
-case 'SALARY_AMOUNT':
-case 'LEAVE_DAYS':
-case 'REGULARISATION_DAYS': {
-  if (
-    condition.numberValue ===
-      undefined ||
-    condition.numberValue === null
-  ) {
-    throw new BadRequestException(
-      `Numeric value is required for condition ${condition.conditionNo}`,
-    );
-  }
+      case 'SALARY_AMOUNT':
+      case 'LEAVE_DAYS':
+      case 'REGULARISATION_DAYS': {
+        if (
+          condition.numberValue ===
+          undefined ||
+          condition.numberValue === null
+        ) {
+          throw new BadRequestException(
+            `Numeric value is required for condition ${condition.conditionNo}`,
+          );
+        }
 
-  const numberValue = Number(
-    condition.numberValue,
-  );
+        const numberValue = Number(
+          condition.numberValue,
+        );
 
-  if (!Number.isFinite(numberValue)) {
-    throw new BadRequestException(
-      `Invalid numeric value for condition ${condition.conditionNo}`,
-    );
-  }
+        if (!Number.isFinite(numberValue)) {
+          throw new BadRequestException(
+            `Invalid numeric value for condition ${condition.conditionNo}`,
+          );
+        }
 
-  if (numberValue < 0) {
-    throw new BadRequestException(
-      `Numeric value cannot be negative for condition ${condition.conditionNo}`,
-    );
-  }
+        if (numberValue < 0) {
+          throw new BadRequestException(
+            `Numeric value cannot be negative for condition ${condition.conditionNo}`,
+          );
+        }
 
-  if (
-    condition.operator ===
-    'BETWEEN'
-  ) {
-    if (
-      condition.numberValueTo ===
-        undefined ||
-      condition.numberValueTo === null
-    ) {
-      throw new BadRequestException(
-        `Second numeric value is required for BETWEEN condition ${condition.conditionNo}`,
-      );
-    }
+        if (
+          condition.operator ===
+          'BETWEEN'
+        ) {
+          if (
+            condition.numberValueTo ===
+            undefined ||
+            condition.numberValueTo === null
+          ) {
+            throw new BadRequestException(
+              `Second numeric value is required for BETWEEN condition ${condition.conditionNo}`,
+            );
+          }
 
-    const numberValueTo = Number(
-      condition.numberValueTo,
-    );
+          const numberValueTo = Number(
+            condition.numberValueTo,
+          );
 
-    if (
-      !Number.isFinite(
-        numberValueTo,
-      )
-    ) {
-      throw new BadRequestException(
-        `Invalid upper numeric value for condition ${condition.conditionNo}`,
-      );
-    }
+          if (
+            !Number.isFinite(
+              numberValueTo,
+            )
+          ) {
+            throw new BadRequestException(
+              `Invalid upper numeric value for condition ${condition.conditionNo}`,
+            );
+          }
 
-    if (numberValueTo < numberValue) {
-      throw new BadRequestException(
-        `Upper value must be greater than or equal to lower value for condition ${condition.conditionNo}`,
-      );
-    }
-  }
+          if (numberValueTo < numberValue) {
+            throw new BadRequestException(
+              `Upper value must be greater than or equal to lower value for condition ${condition.conditionNo}`,
+            );
+          }
+        }
 
-  break;
-}
+        break;
+      }
 
       case 'LEAVE_TYPE':
       case 'EXIT_TYPE':
@@ -948,7 +985,31 @@ case 'REGULARISATION_DAYS': {
     id: number,
     dto: UpdateApprovalWorkflowDto,
   ) {
-    const existing = await this.findOne(id);
+      const existing = await this.findOne(id);
+
+    const structuralChangeRequested =
+      dto.steps !== undefined ||
+      dto.conditions !== undefined ||
+      dto.companyID !== undefined ||
+      dto.branchesID !== undefined ||
+      dto.companyModuleID !== undefined ||
+      dto.serviceProviderID !== undefined;
+
+    if (structuralChangeRequested) {
+      const pendingRequestCount =
+        await this.prisma.approvalRequest.count({
+          where: {
+            approvalWorkflowID: id,
+            status: 'PENDING',
+          },
+        });
+
+      if (pendingRequestCount > 0) {
+        throw new ConflictException(
+          `Workflow cannot be structurally changed because ${pendingRequestCount} approval request(s) are pending`,
+        );
+      }
+    }
 
     const finalCompanyID =
       dto.companyID ?? existing.companyID;
@@ -1236,12 +1297,12 @@ case 'REGULARISATION_DAYS': {
                   ...(condition.employeeIDs?.length && {
                     employees: {
                       create:
-                       condition.employeeIDs.map(
-  (manageEmployeeID) => ({
-    manageEmployeeID:
-      Number(manageEmployeeID),
-  }),
-)
+                        condition.employeeIDs.map(
+                          (manageEmployeeID) => ({
+                            manageEmployeeID:
+                              Number(manageEmployeeID),
+                          }),
+                        )
                     },
                   }),
                 })),
@@ -1304,11 +1365,27 @@ case 'REGULARISATION_DAYS': {
     });
   }
 
-  async remove(id: number) {
-    const workflow = await this.findOne(id);
+   async remove(id: number) {
+    const workflow =
+      await this.findOne(id);
+
+    const requestCount =
+      await this.prisma.approvalRequest.count({
+        where: {
+          approvalWorkflowID: id,
+        },
+      });
+
+    if (requestCount > 0) {
+      throw new ConflictException(
+        `Workflow cannot be deleted because it has ${requestCount} approval request record(s). Deactivate the workflow instead.`,
+      );
+    }
 
     await this.prisma.approvalWorkflow.delete({
-      where: { id },
+      where: {
+        id,
+      },
     });
 
     return {

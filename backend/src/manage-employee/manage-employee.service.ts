@@ -6,16 +6,18 @@ import { CreateManageEmployeeDto } from './dto/create-manage-employee.dto';
 import { UpdateManageEmployeeDto } from './dto/update-manage-employee.dto';
 import { JoiningFormService } from './joining-form.service';
 import * as bcrypt from 'bcrypt';
+import { ApprovalEngineService } from '../approval-workflow/approval-engine.service';
 
 @Injectable()
 export class ManageEmployeeService {
   private readonly SALT_ROUNDS = 12;
 
-  constructor(
-    private prisma: PrismaService,
-    private readonly joiningFormService: JoiningFormService,
-    private readonly auditLog: AuditLogService,
-  ) { }
+constructor(
+  private readonly prisma: PrismaService,
+  private readonly joiningFormService: JoiningFormService,
+  private readonly auditLog: AuditLogService,
+  private readonly approvalEngine: ApprovalEngineService,
+) {}
 
   private employeeDisplayName(emp: {
     employeeFirstName?: string | null;
@@ -27,54 +29,54 @@ export class ManageEmployeeService {
   }
 
   private normalizeEmployeeDocument(doc: any, employee: any) {
-  const documentName = doc.documentName ?? doc.name;
-  const documentCategory = doc.documentCategory ?? doc.category;
+    const documentName = doc.documentName ?? doc.name;
+    const documentCategory = doc.documentCategory ?? doc.category;
 
-  if (!documentName || !documentCategory || !doc.fileUrl) {
-    return null;
+    if (!documentName || !documentCategory || !doc.fileUrl) {
+      return null;
+    }
+
+    return {
+      employeeID: employee.id,
+      serviceProviderID: employee.serviceProviderID ?? null,
+      companyID: employee.companyID ?? null,
+      branchesID: employee.branchesID ?? null,
+
+      documentName,
+      documentCategory,
+      description: doc.description ?? null,
+
+      issuedDate: doc.issuedDate ? new Date(doc.issuedDate) : null,
+      expiryDate: doc.expiryDate ? new Date(doc.expiryDate) : null,
+
+      fileName: doc.fileName ?? null,
+      fileUrl: doc.fileUrl ?? null,
+      fileType: doc.fileType ?? doc.fileMimeType ?? null,
+      fileSize: doc.fileSize != null ? Number(doc.fileSize) : null,
+    };
   }
 
-  return {
-    employeeID: employee.id,
-    serviceProviderID: employee.serviceProviderID ?? null,
-    companyID: employee.companyID ?? null,
-    branchesID: employee.branchesID ?? null,
-
-    documentName,
-    documentCategory,
-    description: doc.description ?? null,
-
-    issuedDate: doc.issuedDate ? new Date(doc.issuedDate) : null,
-    expiryDate: doc.expiryDate ? new Date(doc.expiryDate) : null,
-
-    fileName: doc.fileName ?? null,
-    fileUrl: doc.fileUrl ?? null,
-    fileType: doc.fileType ?? doc.fileMimeType ?? null,
-    fileSize: doc.fileSize != null ? Number(doc.fileSize) : null,
-  };
-}
-
-private toEmployeeDocumentResponse(doc: any) {
-  return {
-    id: doc.id,
-    _localId: String(doc.id),
-    name: doc.documentName,
-    category: doc.documentCategory,
-    description: doc.description ?? "",
-    issuedDate: doc.issuedDate
-      ? doc.issuedDate.toISOString().slice(0, 10)
-      : "",
-    expiryDate: doc.expiryDate
-      ? doc.expiryDate.toISOString().slice(0, 10)
-      : "",
-    fileUrl: doc.fileUrl ?? "",
-    fileName: doc.fileName ?? "",
-    fileMimeType: doc.fileType ?? "",
-    fileSize: doc.fileSize ?? 0,
-    createdAt: doc.createdAt,
-    updatedAt: doc.updatedAt,
-  };
-}
+  private toEmployeeDocumentResponse(doc: any) {
+    return {
+      id: doc.id,
+      _localId: String(doc.id),
+      name: doc.documentName,
+      category: doc.documentCategory,
+      description: doc.description ?? "",
+      issuedDate: doc.issuedDate
+        ? doc.issuedDate.toISOString().slice(0, 10)
+        : "",
+      expiryDate: doc.expiryDate
+        ? doc.expiryDate.toISOString().slice(0, 10)
+        : "",
+      fileUrl: doc.fileUrl ?? "",
+      fileName: doc.fileName ?? "",
+      fileMimeType: doc.fileType ?? "",
+      fileSize: doc.fileSize ?? 0,
+      createdAt: doc.createdAt,
+      updatedAt: doc.updatedAt,
+    };
+  }
 
   // Helper method to hash password
   private async hashPassword(password: string): Promise<string> {
@@ -114,8 +116,8 @@ private toEmployeeDocumentResponse(doc: any) {
       exp = [],
       devices = [],
       tokenDevices = [],
-bankDetails = [],
-employeeDocuments = [],
+      bankDetails = [],
+      employeeDocuments = [],
       empDesignations = [],
       empBranches = [],
       empDepartments = [],
@@ -226,31 +228,31 @@ employeeDocuments = [],
           },
 
           employeeDocuments: {
-  create: employeeDocuments
-    .map((doc: any) =>
-      this.normalizeEmployeeDocument(doc, {
-        id: 0,
-        serviceProviderID,
-        companyID,
-        branchesID,
-      }),
-    )
-    .filter(Boolean)
-    .map((doc: any) => ({
-      serviceProviderID: doc.serviceProviderID,
-      companyID: doc.companyID,
-      branchesID: doc.branchesID,
-      documentName: doc.documentName,
-      documentCategory: doc.documentCategory,
-      description: doc.description,
-      issuedDate: doc.issuedDate,
-      expiryDate: doc.expiryDate,
-      fileName: doc.fileName,
-      fileUrl: doc.fileUrl,
-      fileType: doc.fileType,
-      fileSize: doc.fileSize,
-    })),
-},
+            create: employeeDocuments
+              .map((doc: any) =>
+                this.normalizeEmployeeDocument(doc, {
+                  id: 0,
+                  serviceProviderID,
+                  companyID,
+                  branchesID,
+                }),
+              )
+              .filter(Boolean)
+              .map((doc: any) => ({
+                serviceProviderID: doc.serviceProviderID,
+                companyID: doc.companyID,
+                branchesID: doc.branchesID,
+                documentName: doc.documentName,
+                documentCategory: doc.documentCategory,
+                description: doc.description,
+                issuedDate: doc.issuedDate,
+                expiryDate: doc.expiryDate,
+                fileName: doc.fileName,
+                fileUrl: doc.fileUrl,
+                fileType: doc.fileType,
+                fileSize: doc.fileSize,
+              })),
+          },
 
           empDesignation: {
             create: empDesignations
@@ -328,11 +330,85 @@ employeeDocuments = [],
 
         } as any,
 
-      });
+         });
 
+      /*
+       * Resolve employee onboarding approval inside the same database
+       * transaction. If workflow resolution or approver assignment fails,
+       * employee creation is rolled back completely.
+       */
+      const requestUser = (req as any)?.user ?? null;
 
+      const submittedByUserID =
+        requestUser?.id != null
+          ? Number(requestUser.id)
+          : requestUser?.userId != null
+            ? Number(requestUser.userId)
+            : requestUser?.sub != null
+              ? Number(requestUser.sub)
+              : null;
 
+            const effectiveDepartmentID =
+        employee.departmentNameID ??
+        empDepartments
+          .filter(
+            (item) =>
+              item.departmentNameID != null,
+          )
+          .at(-1)
+          ?.departmentNameID ??
+        null;
 
+      const effectiveDesignationID =
+        employee.designationID ??
+        empDesignations
+          .filter(
+            (item) =>
+              item.designationID != null,
+          )
+          .at(-1)
+          ?.designationID ??
+        null;
+
+      const effectiveBranchID =
+        employee.branchesID ??
+        empBranches
+          .filter(
+            (item) =>
+              item.branchesID != null,
+          )
+          .at(-1)
+          ?.branchesID ??
+        null;
+
+      const onboardingApproval =
+        await this.approvalEngine.submitEmployeeOnboarding(
+          tx,
+          {
+            id: employee.id,
+
+            serviceProviderID:
+              employee.serviceProviderID,
+
+            companyID:
+              employee.companyID,
+
+            branchesID:
+              effectiveBranchID,
+
+            departmentNameID:
+              effectiveDepartmentID,
+
+            designationID:
+              effectiveDesignationID,
+          },
+
+          Number.isInteger(
+            submittedByUserID,
+          )
+            ? submittedByUserID
+            : null,
+        );
 
       let plainInitialPassword: string | null = null;
 
@@ -345,13 +421,19 @@ employeeDocuments = [],
           plainInitialPassword = this.generateRandomPassword();
           const hashedPassword = await this.hashPassword(plainInitialPassword);
 
-          await tx.employeeCredentials.create({
+                   await tx.employeeCredentials.create({
             data: {
               employeeID: employee.id,
               username: scalars.personalPhoneNo,
               password: hashedPassword,
               mustChangePassword: true,
-              isActive: true,
+
+              /*
+               * The employee must not be able to log in until all mandatory
+               * onboarding approval steps are completed.
+               */
+              isActive: !onboardingApproval.approvalRequired,
+
               serviceProviderID: serviceProviderID ?? undefined,
               companyID: companyID ?? undefined,
               branchesID: branchesID ?? undefined,
@@ -382,8 +464,8 @@ employeeDocuments = [],
           empProfExprience: true,
           employeeBankDetails: true,
           employeeDocuments: {
-  orderBy: { createdAt: 'desc' },
-},
+            orderBy: { createdAt: 'desc' },
+          },
           empDesignation: { include: { designation: true } },
           empDeviceMapping: { include: { device: true } },
           tokenDeviceMapping: { include: { device: true } },
@@ -412,9 +494,19 @@ employeeDocuments = [],
         },
       });
 
-      return {
+           return {
         ...employeeWithRelations,
         initialPassword: plainInitialPassword,
+
+        approval: {
+          required: onboardingApproval.approvalRequired,
+          requestID: onboardingApproval.approvalRequestID,
+          workflowID: onboardingApproval.workflowID,
+          workflowName: onboardingApproval.workflowName,
+          currentStepNo: onboardingApproval.currentStepNo,
+          status: onboardingApproval.status,
+          credentialsActive: !onboardingApproval.approvalRequired,
+        },
       };
     });
 
@@ -541,7 +633,16 @@ employeeDocuments = [],
   // Fix getCredentialsByUsername
   async getCredentialsByUsername(username: string) {
     return this.prisma.employeeCredentials.findFirst({
-      where: { username },
+      where: {
+        username,
+        isActive: true,
+
+        employee: {
+          onboardingApprovalStatus: 'APPROVED',
+          lifecycleStatus: 'ACTIVE',
+          isDeleted: false,
+        },
+      },
       include: {
         employee: {
           select: {
@@ -578,49 +679,58 @@ employeeDocuments = [],
   }
 
 
-async workflowSearch(params: {
-  companyID: number;
-  branchesID?: number;
-  search?: string;
-}) {
-  if (
-    !Number.isInteger(params.companyID) ||
-    params.companyID <= 0
-  ) {
-    throw new BadRequestException(
-      'companyID must be a positive integer',
-    );
-  }
+  async workflowSearch(params: {
+    companyID: number;
+    branchesID?: number;
+    search?: string;
+  }) {
+    if (
+      !Number.isInteger(params.companyID) ||
+      params.companyID <= 0
+    ) {
+      throw new BadRequestException(
+        'companyID must be a positive integer',
+      );
+    }
 
-  if (
-    params.branchesID !== undefined &&
-    (!Number.isInteger(
-      params.branchesID,
-    ) ||
-      params.branchesID <= 0)
-  ) {
-    throw new BadRequestException(
-      'branchesID must be a positive integer',
-    );
-  }
+    if (
+      params.branchesID !== undefined &&
+      (!Number.isInteger(
+        params.branchesID,
+      ) ||
+        params.branchesID <= 0)
+    ) {
+      throw new BadRequestException(
+        'branchesID must be a positive integer',
+      );
+    }
 
-  const search =
-    params.search?.trim();
+    const search =
+      params.search?.trim();
 
-  return this.prisma.manageEmployee.findMany({
-    where: {
-      companyID:
-        params.companyID,
+    return this.prisma.manageEmployee.findMany({
+            where: {
+        companyID:
+          params.companyID,
 
-      ...(params.branchesID
-        ? {
+        lifecycleStatus:
+          'ACTIVE',
+
+        onboardingApprovalStatus:
+          'APPROVED',
+
+        isDeleted:
+          false,
+
+        ...(params.branchesID
+          ? {
             branchesID:
               params.branchesID,
           }
-        : {}),
+          : {}),
 
-      ...(search
-        ? {
+        ...(search
+          ? {
             OR: [
               {
                 employeeFirstName: {
@@ -642,31 +752,31 @@ async workflowSearch(params: {
               },
             ],
           }
-        : {}),
-    },
-
-    select: {
-      id: true,
-      serviceProviderID: true,
-      companyID: true,
-      branchesID: true,
-      employeeFirstName: true,
-      employeeLastName: true,
-      employeeID: true,
-    },
-
-    orderBy: [
-      {
-        employeeFirstName: 'asc',
+          : {}),
       },
-      {
-        employeeLastName: 'asc',
-      },
-    ],
 
-    take: 20,
-  });
-}
+      select: {
+        id: true,
+        serviceProviderID: true,
+        companyID: true,
+        branchesID: true,
+        employeeFirstName: true,
+        employeeLastName: true,
+        employeeID: true,
+      },
+
+      orderBy: [
+        {
+          employeeFirstName: 'asc',
+        },
+        {
+          employeeLastName: 'asc',
+        },
+      ],
+
+      take: 20,
+    });
+  }
 
   async searchCredentials(filters: {
     username?: string;
@@ -720,10 +830,41 @@ async workflowSearch(params: {
   }
 
   // Reset password to new random password
-  async resetPassword(employeeID: number) {
-    const credentials = await this.prisma.employeeCredentials.findUnique({
-      where: { employeeID },
-    });
+   async resetPassword(employeeID: number) {
+    const employee =
+      await this.prisma.manageEmployee.findUnique({
+        where: {
+          id: employeeID,
+        },
+
+        select: {
+          onboardingApprovalStatus: true,
+          lifecycleStatus: true,
+          isDeleted: true,
+        },
+      });
+
+    if (!employee) {
+      throw new NotFoundException(
+        `Employee ${employeeID} not found`,
+      );
+    }
+
+    if (
+      employee.onboardingApprovalStatus !==
+      'APPROVED'
+    ) {
+      throw new BadRequestException(
+        'Password cannot be reset before onboarding approval is completed',
+      );
+    }
+
+    const credentials =
+      await this.prisma.employeeCredentials.findUnique({
+        where: {
+          employeeID,
+        },
+      });
 
     if (!credentials) {
       throw new Error('Employee credentials not found');
@@ -757,18 +898,90 @@ async workflowSearch(params: {
   }
 
   // Method to update credentials separately with password hashing
-  async updateCredentials(employeeID: number, data: { username?: string; password?: string; isActive?: boolean }) {
-    const updateData: any = { ...data };
+    async updateCredentials(
+    employeeID: number,
+    data: {
+      username?: string;
+      password?: string;
+      isActive?: boolean;
+    },
+  ) {
+    const employee =
+      await this.prisma.manageEmployee.findUnique({
+        where: {
+          id: employeeID,
+        },
+
+        select: {
+          id: true,
+          onboardingApprovalStatus: true,
+          lifecycleStatus: true,
+          isDeleted: true,
+        },
+      });
+
+    if (!employee) {
+      throw new NotFoundException(
+        `Employee ${employeeID} not found`,
+      );
+    }
+
+    /*
+     * Do not allow pending/rejected onboarding employees to be activated
+     * manually through the credentials endpoint.
+     */
+    if (
+      data.isActive === true &&
+      employee.onboardingApprovalStatus !==
+        'APPROVED'
+    ) {
+      throw new BadRequestException(
+        'Employee credentials cannot be activated before onboarding approval is completed',
+      );
+    }
+
+    if (
+      data.isActive === true &&
+      (
+        employee.lifecycleStatus !== 'ACTIVE' ||
+        employee.isDeleted
+      )
+    ) {
+      throw new BadRequestException(
+        'Credentials cannot be activated for an inactive or deleted employee',
+      );
+    }
+
+    const updateData: {
+      username?: string;
+      password?: string;
+      isActive?: boolean;
+      mustChangePassword?: boolean;
+      passwordChangedAt?: Date | null;
+    } = {
+      ...data,
+    };
 
     if (data.password) {
-      updateData.password = await this.hashPassword(data.password);
-      updateData.mustChangePassword = true;
-      updateData.passwordChangedAt = null;
+      updateData.password =
+        await this.hashPassword(
+          data.password,
+        );
+
+      updateData.mustChangePassword =
+        true;
+
+      updateData.passwordChangedAt =
+        null;
     }
 
     return this.prisma.employeeCredentials.update({
-      where: { employeeID },
+      where: {
+        employeeID,
+      },
+
       data: updateData,
+
       select: {
         id: true,
         username: true,
@@ -776,68 +989,141 @@ async workflowSearch(params: {
         mustChangePassword: true,
         createdAt: true,
         updatedAt: true,
-      }
+      },
     });
   }
+  
+   async changePassword(
+    employeeID: number,
+    oldPassword: string,
+    newPassword: string,
+  ) {
+    const credentials =
+      await this.prisma.employeeCredentials.findUnique({
+        where: {
+          employeeID,
+        },
 
-  async changePassword(employeeID: number, oldPassword: string, newPassword: string) {
-    const credentials = await this.prisma.employeeCredentials.findUnique({
-      where: { employeeID },
-    });
+        include: {
+          employee: {
+            select: {
+              onboardingApprovalStatus: true,
+              lifecycleStatus: true,
+              isDeleted: true,
+            },
+          },
+        },
+      });
+
     if (!credentials) {
-      throw new Error('Employee credentials not found');
+      throw new NotFoundException(
+        'Employee credentials not found',
+      );
     }
-    const isValid = await this.verifyPassword(oldPassword, credentials.password);
+
+    if (
+      !credentials.isActive ||
+      credentials.employee
+        .onboardingApprovalStatus !==
+        'APPROVED' ||
+      credentials.employee.lifecycleStatus !==
+        'ACTIVE' ||
+      credentials.employee.isDeleted
+    ) {
+      throw new BadRequestException(
+        'Password cannot be changed because the employee account is not active',
+      );
+    }
+
+    const isValid =
+      await this.verifyPassword(
+        oldPassword,
+        credentials.password,
+      );
+
     if (!isValid) {
-      throw new Error('Current password is incorrect');
+      throw new BadRequestException(
+        'Current password is incorrect',
+      );
     }
-    const hashed = await this.hashPassword(newPassword);
+
+    const hashed =
+      await this.hashPassword(
+        newPassword,
+      );
+
     await this.prisma.employeeCredentials.update({
-      where: { employeeID },
+      where: {
+        employeeID,
+      },
+
       data: {
         password: hashed,
         mustChangePassword: false,
         passwordChangedAt: new Date(),
       },
     });
-    return { message: 'Password changed successfully' };
+
+    return {
+      message:
+        'Password changed successfully',
+    };
   }
 
   // Method for employee login verification
-  async verifyEmployeeLogin(username: string, password: string) {
-    const credentials = await this.prisma.employeeCredentials.findFirst({
-      where: {
-        username,
-        isActive: true
-      },
-      include: {
-        employee: {
-          include: {
-            serviceProvider: true,
-            company: true,
-            branches: true,
-            departments: true,
-            designations: true,
-          }
-        }
-      }
-    });
+    async verifyEmployeeLogin(
+    username: string,
+    password: string,
+  ) {
+    const credentials =
+      await this.prisma.employeeCredentials.findFirst({
+        where: {
+          username,
+          isActive: true,
+
+          employee: {
+            onboardingApprovalStatus: 'APPROVED',
+            lifecycleStatus: 'ACTIVE',
+            isDeleted: false,
+          },
+        },
+
+        include: {
+          employee: {
+            include: {
+              serviceProvider: true,
+              company: true,
+              branches: true,
+              departments: true,
+              designations: true,
+            },
+          },
+        },
+      });
 
     if (!credentials) {
       return null;
     }
 
-    const isPasswordValid = await this.verifyPassword(password, credentials.password);
+    const isPasswordValid =
+      await this.verifyPassword(
+        password,
+        credentials.password,
+      );
 
     if (!isPasswordValid) {
       return null;
     }
 
-    // Return employee data without password
-    const { password: _, ...credentialsWithoutPassword } = credentials;
+    const {
+      password: _password,
+      ...credentialsWithoutPassword
+    } = credentials;
+
     return {
       ...credentialsWithoutPassword,
-      mustChangePassword: credentials.mustChangePassword,
+      mustChangePassword:
+        credentials.mustChangePassword,
     };
   }
 
@@ -868,7 +1154,8 @@ async workflowSearch(params: {
         employmentType: true,
         employmentStatus: true,
         typeOfEmployee: true,
-        lifecycleStatus: true,
+         lifecycleStatus: true,
+        onboardingApprovalStatus: true,
         joiningDate: true,
         departments: { select: { id: true, departmentName: true } },
         designations: { select: { id: true, designation: true } },
@@ -920,8 +1207,8 @@ async workflowSearch(params: {
         workShift: true,
         employeeBankDetails: true,
         employeeDocuments: {
-  orderBy: { createdAt: 'desc' },
-},
+          orderBy: { createdAt: 'desc' },
+        },
         attendancePolicy: true,
         leavePolicy: true,
         monthlyPayGrade: true,
@@ -1000,8 +1287,8 @@ async workflowSearch(params: {
         designations: true,
         employeeBankDetails: true,
         employeeDocuments: {
-  orderBy: { createdAt: 'desc' },
-},
+          orderBy: { createdAt: 'desc' },
+        },
         workShift: true,
         attendancePolicy: true,
         leavePolicy: true,
@@ -1023,7 +1310,10 @@ async workflowSearch(params: {
         empLeavePolicy: { include: { leavePolicy: true } },
         empContractor: { include: { contractor: true } },
         empPromotion: {
-          orderBy: { id: 'desc' },
+          orderBy: {
+            id: 'desc',
+          },
+
           include: {
             departments: true,
             designations: true,
@@ -1032,6 +1322,47 @@ async workflowSearch(params: {
             leavePolicy: true,
             hourlyPayGrade: true,
             monthlyPayGrade: true,
+          },
+        },
+
+        onboardingApprovalRequests: {
+          orderBy: {
+            id: 'desc',
+          },
+
+          take: 1,
+
+          include: {
+            steps: {
+              orderBy: {
+                stepNo: 'asc',
+              },
+
+              include: {
+                approvers: {
+                  orderBy: {
+                    id: 'asc',
+                  },
+
+                  include: {
+                    approverEmployee: {
+                      select: {
+                        id: true,
+                        employeeID: true,
+                        employeeFirstName: true,
+                        employeeLastName: true,
+                      },
+                    },
+                  },
+                },
+              },
+            },
+
+            actions: {
+              orderBy: {
+                createdAt: 'desc',
+              },
+            },
           },
         },
       },
@@ -1049,8 +1380,8 @@ async workflowSearch(params: {
       designationID,
       employmentType,
       typeOfEmployee,
-bankDetails,
-employeeDocuments,
+      bankDetails,
+      employeeDocuments,
       employmentStatus,
       probationPeriod,
       workShiftID,
@@ -1094,10 +1425,75 @@ employeeDocuments,
       ...scalars
     } = dto;
 
-    const beforeUpdate = await this.prisma.manageEmployee.findUnique({ where: { id } });
-    if (!beforeUpdate) throw new NotFoundException(`Employee ${id} not found`);
+     const beforeUpdate =
+      await this.prisma.manageEmployee.findUnique({
+        where: {
+          id,
+        },
+      });
 
-    const updated = await this.prisma.$transaction(async (tx) => {
+    if (!beforeUpdate) {
+      throw new NotFoundException(
+        `Employee ${id} not found`,
+      );
+    }
+
+        if (
+      beforeUpdate.onboardingApprovalStatus ===
+        'REJECTED' ||
+      beforeUpdate.onboardingApprovalStatus ===
+        'CANCELLED'
+    ) {
+      throw new BadRequestException(
+        `Employee cannot be updated because onboarding approval is ${beforeUpdate.onboardingApprovalStatus}`,
+      );
+    }
+
+    /*
+     * Workflow-driving fields cannot be changed after the
+     * approval request has been frozen.
+     *
+     * A future "revise and resubmit" action should cancel the
+     * existing request and create a new approval request.
+     */
+    if (
+      beforeUpdate.onboardingApprovalStatus ===
+      'PENDING'
+    ) {
+      const scopeChanged =
+        (
+          companyID !== undefined &&
+          companyID !== beforeUpdate.companyID
+        ) ||
+        (
+          branchesID !== undefined &&
+          branchesID !== beforeUpdate.branchesID
+        ) ||
+        (
+          departmentNameID !== undefined &&
+          departmentNameID !==
+            beforeUpdate.departmentNameID
+        ) ||
+        (
+          designationID !== undefined &&
+          designationID !==
+            beforeUpdate.designationID
+        ) ||
+        (
+          serviceProviderID !== undefined &&
+          serviceProviderID !==
+            beforeUpdate.serviceProviderID
+        );
+
+      if (scopeChanged) {
+        throw new BadRequestException(
+          'Company, branch, department, designation and service provider cannot be changed while employee onboarding approval is pending',
+        );
+      }
+    }
+
+    const updated =
+      await this.prisma.$transaction(async (tx) => {
       let plainInitialPassword: string | null = null;
 
       delete (scalars as any).bankDetailsIdsToDelete;
@@ -1202,15 +1598,42 @@ employeeDocuments,
           plainInitialPassword = this.generateRandomPassword();
           const hashedPassword = await this.hashPassword(plainInitialPassword);
 
+                    const employeeApprovalState =
+            await tx.manageEmployee.findUnique({
+              where: {
+                id,
+              },
+
+              select: {
+                onboardingApprovalStatus: true,
+                lifecycleStatus: true,
+                isDeleted: true,
+              },
+            });
+
           await tx.employeeCredentials.create({
             data: {
               employeeID: id,
               username: scalars.personalPhoneNo,
               password: hashedPassword,
               mustChangePassword: true,
-              serviceProviderID: serviceProviderID ?? undefined,
-              companyID: companyID ?? undefined,
-              branchesID: branchesID ?? undefined,
+
+              isActive:
+                employeeApprovalState?.onboardingApprovalStatus ===
+                  'APPROVED' &&
+                employeeApprovalState?.lifecycleStatus ===
+                  'ACTIVE' &&
+                employeeApprovalState?.isDeleted ===
+                  false,
+
+              serviceProviderID:
+                serviceProviderID ?? undefined,
+
+              companyID:
+                companyID ?? undefined,
+
+              branchesID:
+                branchesID ?? undefined,
             },
           });
         }
@@ -1412,39 +1835,39 @@ employeeDocuments,
       }
 
       // Delete removed emp designations
-if (employeeDocuments !== undefined) {
-  const currentEmployee = await tx.manageEmployee.findUnique({
-    where: { id },
-    select: {
-      id: true,
-      serviceProviderID: true,
-      companyID: true,
-      branchesID: true,
-    },
-  });
+      if (employeeDocuments !== undefined) {
+        const currentEmployee = await tx.manageEmployee.findUnique({
+          where: { id },
+          select: {
+            id: true,
+            serviceProviderID: true,
+            companyID: true,
+            branchesID: true,
+          },
+        });
 
-  if (!currentEmployee) {
-    throw new NotFoundException(`Employee ${id} not found`);
-  }
+        if (!currentEmployee) {
+          throw new NotFoundException(`Employee ${id} not found`);
+        }
 
-  await tx.employeeDocument.deleteMany({
-    where: { employeeID: id },
-  });
+        await tx.employeeDocument.deleteMany({
+          where: { employeeID: id },
+        });
 
-  const docsToCreate = employeeDocuments
-    .map((doc: any) => this.normalizeEmployeeDocument(doc, currentEmployee))
-    .filter(Boolean);
+        const docsToCreate = employeeDocuments
+          .map((doc: any) => this.normalizeEmployeeDocument(doc, currentEmployee))
+          .filter(Boolean);
 
-  if (docsToCreate.length) {
-    await tx.employeeDocument.createMany({
-      data: docsToCreate as any[],
-    });
-  }
-}
+        if (docsToCreate.length) {
+          await tx.employeeDocument.createMany({
+            data: docsToCreate as any[],
+          });
+        }
+      }
 
-// Delete removed emp designations
-if (empDesignationIdsToDelete.length) {
-          await tx.empDesignation.deleteMany({
+      // Delete removed emp designations
+      if (empDesignationIdsToDelete.length) {
+        await tx.empDesignation.deleteMany({
           where: { id: { in: empDesignationIdsToDelete }, manageEmployeeID: id },
         });
       }
@@ -1693,8 +2116,8 @@ if (empDesignationIdsToDelete.length) {
           hourlyPayGrade: true,
           employeeBankDetails: true,
           employeeDocuments: {
-  orderBy: { createdAt: 'desc' },
-},
+            orderBy: { createdAt: 'desc' },
+          },
           empEduQualification: true,
           empProfExprience: true,
           empDesignation: { include: { designation: true } },
@@ -1746,134 +2169,168 @@ if (empDesignationIdsToDelete.length) {
     return updated;
   }
 
-async getEmployeeDocuments(employeeID: number) {
-  const employee = await this.prisma.manageEmployee.findUnique({
-    where: { id: employeeID },
-    select: { id: true },
-  });
+  async getEmployeeDocuments(employeeID: number) {
+    const employee = await this.prisma.manageEmployee.findUnique({
+      where: { id: employeeID },
+      select: { id: true },
+    });
 
-  if (!employee) {
-    throw new NotFoundException(`Employee ${employeeID} not found`);
+    if (!employee) {
+      throw new NotFoundException(`Employee ${employeeID} not found`);
+    }
+
+    const docs = await this.prisma.employeeDocument.findMany({
+      where: { employeeID },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    return docs.map((doc) => this.toEmployeeDocumentResponse(doc));
   }
 
-  const docs = await this.prisma.employeeDocument.findMany({
-    where: { employeeID },
-    orderBy: { createdAt: 'desc' },
-  });
+  async createEmployeeDocument(employeeID: number, body: any, req?: Request) {
+    const employee = await this.prisma.manageEmployee.findUnique({
+      where: { id: employeeID },
+    });
 
-  return docs.map((doc) => this.toEmployeeDocumentResponse(doc));
-}
+    if (!employee) {
+      throw new NotFoundException(`Employee ${employeeID} not found`);
+    }
 
-async createEmployeeDocument(employeeID: number, body: any, req?: Request) {
-  const employee = await this.prisma.manageEmployee.findUnique({
-    where: { id: employeeID },
-  });
+    const data = this.normalizeEmployeeDocument(body, employee);
 
-  if (!employee) {
-    throw new NotFoundException(`Employee ${employeeID} not found`);
+    if (!data) {
+      throw new Error('Document name, category and fileUrl are required');
+    }
+
+    const created = await this.prisma.employeeDocument.create({
+      data,
+    });
+
+    await this.auditLog.logFromRequest(req, {
+      action: 'CREATE',
+      module: 'EMPLOYEE_DOCUMENT',
+      entityId: created.id,
+      entityName: created.documentName,
+      newData: created,
+    });
+
+    return this.toEmployeeDocumentResponse(created);
   }
 
-  const data = this.normalizeEmployeeDocument(body, employee);
+  async updateEmployeeDocument(documentId: number, body: any, req?: Request) {
+    const existing = await this.prisma.employeeDocument.findUnique({
+      where: { id: documentId },
+    });
 
-  if (!data) {
-    throw new Error('Document name, category and fileUrl are required');
+    if (!existing) {
+      throw new NotFoundException(`Document ${documentId} not found`);
+    }
+
+    const updated = await this.prisma.employeeDocument.update({
+      where: { id: documentId },
+      data: {
+        documentName: body.documentName ?? body.name ?? existing.documentName,
+        documentCategory:
+          body.documentCategory ?? body.category ?? existing.documentCategory,
+        description:
+          body.description !== undefined ? body.description : existing.description,
+
+        issuedDate:
+          body.issuedDate !== undefined
+            ? body.issuedDate
+              ? new Date(body.issuedDate)
+              : null
+            : existing.issuedDate,
+
+        expiryDate:
+          body.expiryDate !== undefined
+            ? body.expiryDate
+              ? new Date(body.expiryDate)
+              : null
+            : existing.expiryDate,
+
+        fileName: body.fileName ?? existing.fileName,
+        fileUrl: body.fileUrl ?? existing.fileUrl,
+        fileType: body.fileType ?? body.fileMimeType ?? existing.fileType,
+        fileSize:
+          body.fileSize !== undefined ? Number(body.fileSize) : existing.fileSize,
+      },
+    });
+
+    await this.auditLog.logFromRequest(req, {
+      action: 'UPDATE',
+      module: 'EMPLOYEE_DOCUMENT',
+      entityId: updated.id,
+      entityName: updated.documentName,
+      oldData: existing,
+      newData: updated,
+    });
+
+    return this.toEmployeeDocumentResponse(updated);
   }
 
-  const created = await this.prisma.employeeDocument.create({
-    data,
-  });
+  async deleteEmployeeDocument(documentId: number, req?: Request) {
+    const existing = await this.prisma.employeeDocument.findUnique({
+      where: { id: documentId },
+    });
 
-  await this.auditLog.logFromRequest(req, {
-    action: 'CREATE',
-    module: 'EMPLOYEE_DOCUMENT',
-    entityId: created.id,
-    entityName: created.documentName,
-    newData: created,
-  });
+    if (!existing) {
+      throw new NotFoundException(`Document ${documentId} not found`);
+    }
 
-  return this.toEmployeeDocumentResponse(created);
-}
+    await this.prisma.employeeDocument.delete({
+      where: { id: documentId },
+    });
 
-async updateEmployeeDocument(documentId: number, body: any, req?: Request) {
-  const existing = await this.prisma.employeeDocument.findUnique({
-    where: { id: documentId },
-  });
+    await this.auditLog.logFromRequest(req, {
+      action: 'DELETE',
+      module: 'EMPLOYEE_DOCUMENT',
+      entityId: existing.id,
+      entityName: existing.documentName,
+      oldData: existing,
+    });
 
-  if (!existing) {
-    throw new NotFoundException(`Document ${documentId} not found`);
+    return { success: true };
   }
-
-  const updated = await this.prisma.employeeDocument.update({
-    where: { id: documentId },
-    data: {
-      documentName: body.documentName ?? body.name ?? existing.documentName,
-      documentCategory:
-        body.documentCategory ?? body.category ?? existing.documentCategory,
-      description:
-        body.description !== undefined ? body.description : existing.description,
-
-      issuedDate:
-        body.issuedDate !== undefined
-          ? body.issuedDate
-            ? new Date(body.issuedDate)
-            : null
-          : existing.issuedDate,
-
-      expiryDate:
-        body.expiryDate !== undefined
-          ? body.expiryDate
-            ? new Date(body.expiryDate)
-            : null
-          : existing.expiryDate,
-
-      fileName: body.fileName ?? existing.fileName,
-      fileUrl: body.fileUrl ?? existing.fileUrl,
-      fileType: body.fileType ?? body.fileMimeType ?? existing.fileType,
-      fileSize:
-        body.fileSize !== undefined ? Number(body.fileSize) : existing.fileSize,
-    },
-  });
-
-  await this.auditLog.logFromRequest(req, {
-    action: 'UPDATE',
-    module: 'EMPLOYEE_DOCUMENT',
-    entityId: updated.id,
-    entityName: updated.documentName,
-    oldData: existing,
-    newData: updated,
-  });
-
-  return this.toEmployeeDocumentResponse(updated);
-}
-
-async deleteEmployeeDocument(documentId: number, req?: Request) {
-  const existing = await this.prisma.employeeDocument.findUnique({
-    where: { id: documentId },
-  });
-
-  if (!existing) {
-    throw new NotFoundException(`Document ${documentId} not found`);
-  }
-
-  await this.prisma.employeeDocument.delete({
-    where: { id: documentId },
-  });
-
-  await this.auditLog.logFromRequest(req, {
-    action: 'DELETE',
-    module: 'EMPLOYEE_DOCUMENT',
-    entityId: existing.id,
-    entityName: existing.documentName,
-    oldData: existing,
-  });
-
-  return { success: true };
-}
 
   async remove(id: number, req?: Request) {
     try {
-      const existing = await this.prisma.manageEmployee.findUnique({ where: { id } });
-      if (!existing) throw new NotFoundException(`Employee ${id} not found`);
+           const existing =
+        await this.prisma.manageEmployee.findUnique({
+          where: {
+            id,
+          },
+
+          include: {
+            _count: {
+              select: {
+                onboardingApprovalRequests: true,
+                approvalAssignments: true,
+                approvalActions: true,
+              },
+            },
+          },
+        });
+
+      if (!existing) {
+        throw new NotFoundException(
+          `Employee ${id} not found`,
+        );
+      }
+
+      const hasApprovalHistory =
+        existing._count
+          .onboardingApprovalRequests > 0 ||
+        existing._count
+          .approvalAssignments > 0 ||
+        existing._count
+          .approvalActions > 0;
+
+      if (hasApprovalHistory) {
+        throw new BadRequestException(
+          'Employee cannot be deleted because approval workflow history exists. Mark the employee inactive instead.',
+        );
+      }
 
       await this.prisma.$transaction([
         // Delete employee credentials
@@ -1944,8 +2401,8 @@ async deleteEmployeeDocument(documentId: number, req?: Request) {
           where: { employeeID: id },
         }),
         this.prisma.employeeDocument.deleteMany({
-  where: { employeeID: id },
-}),
+          where: { employeeID: id },
+        }),
         this.prisma.empAttendanceRegularise.deleteMany({
           where: { manageEmployeeID: id },
         }),

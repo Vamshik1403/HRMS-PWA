@@ -267,7 +267,6 @@ model CompanyModule {
   companyID Int
   moduleID  Int
 
-
   isEnabled Boolean @default(false)
 
   company Company @relation(fields: [companyID], references: [id], onDelete: Cascade)
@@ -582,23 +581,23 @@ model PromotionRequest {
 }
 
 model EmployeeDelegation {
-  id                Int             @id @default(autoincrement())
+  id                Int            @id @default(autoincrement())
   delegatorId       Int
   delegateeId       Int
-  delegationType    String          @db.VarChar
-  startDate         DateTime?       @db.Date
-  endDate           DateTime?       @db.Date
-  notification      String          @db.VarChar
-  description       String?         @db.VarChar
-  status            String          @default("ACTIVE") @db.VarChar
-  isDeleted         Boolean         @default(false)
+  delegationType    String         @db.VarChar
+  startDate         DateTime?      @db.Date
+  endDate           DateTime?      @db.Date
+  notification      String         @db.VarChar
+  description       String?        @db.VarChar
+  status            String         @default("ACTIVE") @db.VarChar
+  isDeleted         Boolean        @default(false)
   companyID         Int?
   branchesID        Int?
   serviceProviderID Int?
-  createdAt         DateTime        @default(now()) @db.Timestamptz(6)
-  updatedAt         DateTime        @updatedAt @db.Timestamptz(6)
-  delegator         ManageEmployee  @relation("DelegationDelegator", fields: [delegatorId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  delegatee         ManageEmployee  @relation("DelegationDelegatee", fields: [delegateeId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  createdAt         DateTime       @default(now()) @db.Timestamptz(6)
+  updatedAt         DateTime       @updatedAt @db.Timestamptz(6)
+  delegator         ManageEmployee @relation("DelegationDelegator", fields: [delegatorId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  delegatee         ManageEmployee @relation("DelegationDelegatee", fields: [delegateeId], references: [id], onDelete: NoAction, onUpdate: NoAction)
 }
 
 model EmpAttendanceLogs {
@@ -795,6 +794,7 @@ model ManageEmployee {
   exitDate                           DateTime?
   isDeleted                          Boolean                             @default(false)
   lifecycleStatus                    EmployeeLifecycleStatus             @default(ACTIVE)
+  onboardingApprovalStatus           ApprovalRequestStatus               @default(APPROVED)
   maxHoursPerDay                     String?                             @db.VarChar
   nightShiftEligibility              String?                             @db.VarChar
   noticePeriodDaysForResignation     String?                             @db.VarChar
@@ -871,6 +871,9 @@ model ManageEmployee {
   employeeDocuments                  EmployeeDocument[]
   approvalWorkflowConditionEmployees ApprovalWorkflowConditionEmployee[]
   tasksCreated                       TaskProject[]                       @relation("TaskCreatorEmployee")
+  onboardingApprovalRequests         ApprovalRequest[]                   @relation("ApprovalRequestSubjectEmployee")
+  approvalAssignments                ApprovalRequestApprover[]           @relation("ApprovalAssignedEmployee")
+  approvalActions                    ApprovalRequestAction[]             @relation("ApprovalActionEmployee")
 
   @@unique([employeeID, companyID], name: "unique_employee_id_per_company")
 }
@@ -2365,7 +2368,6 @@ model EmailTemplate {
   @@unique([companyID, eventType])
 }
 
-/// Immutable audit trail — append-only (no update/delete APIs).
 model AuditLog {
   id            Int      @id @default(autoincrement())
   userId        Int?
@@ -2490,14 +2492,14 @@ model CompanySubscription {
 
 model CompanyModules {
   id                Int                @id @default(autoincrement())
-  moduleKey        String?
+  moduleKey         String?
   moduleName        String
   moduleDescription String?
   moduleStatus      Boolean            @default(true)
   approvalWorkflows ApprovalWorkflow[]
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  approvalRequests  ApprovalRequest[]
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
 
   @@map("company_modules")
 }
@@ -2584,8 +2586,9 @@ model ApprovalWorkflow {
   branches      Branches?      @relation(fields: [branchesID], references: [id], onDelete: Restrict)
   companyModule CompanyModules @relation(fields: [companyModuleID], references: [id], onDelete: Restrict)
 
-  steps      ApprovalWorkflowStep[]
-  conditions ApprovalWorkflowCondition[]
+  steps            ApprovalWorkflowStep[]
+  conditions       ApprovalWorkflowCondition[]
+  approvalRequests ApprovalRequest[]
 
   @@unique([companyID, branchesID, companyModuleID, workflowName], name: "unique_company_branch_module_workflow")
   @@index([companyID])
@@ -2594,6 +2597,179 @@ model ApprovalWorkflow {
   @@index([workflowStatus])
   @@index([effectiveFrom])
   @@map("approval_workflows")
+}
+
+model ApprovalRequest {
+  id Int @id @default(autoincrement())
+
+  serviceProviderID Int?
+  companyID         Int
+  branchesID        Int?
+
+  approvalWorkflowID Int
+  companyModuleID    Int
+
+  subjectType String
+  subjectID   Int
+
+  subjectEmployeeID Int?
+
+  status        ApprovalRequestStatus @default(PENDING)
+  currentStepNo Int?
+
+  workflowNameSnapshot            String
+  moduleKeySnapshot               String
+  conditionMatchTypeSnapshot      WorkflowConditionMatchType
+  allowAnySameDesignationSnapshot Boolean                    @default(false)
+
+  submittedByUserID Int?
+  submittedAt       DateTime @default(now())
+
+  completedAt DateTime?
+  rejectedAt  DateTime?
+  cancelledAt DateTime?
+
+  finalRemark String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  approvalWorkflow ApprovalWorkflow @relation(fields: [approvalWorkflowID], references: [id], onDelete: Restrict)
+  companyModule    CompanyModules   @relation(fields: [companyModuleID], references: [id], onDelete: Restrict)
+
+  subjectEmployee ManageEmployee? @relation("ApprovalRequestSubjectEmployee", fields: [subjectEmployeeID], references: [id], onDelete: Restrict)
+
+  steps     ApprovalRequestStep[]
+  approvers ApprovalRequestApprover[]
+  actions   ApprovalRequestAction[]
+
+  @@index([serviceProviderID, companyID, branchesID])
+  @@index([approvalWorkflowID])
+  @@index([companyModuleID])
+  @@index([subjectType, subjectID])
+  @@index([subjectEmployeeID])
+  @@index([status])
+  @@index([currentStepNo])
+  @@map("approval_requests")
+}
+
+model ApprovalRequestStep {
+  id Int @id @default(autoincrement())
+
+  approvalRequestID Int
+
+  approvalWorkflowStepID Int?
+  stepNo                 Int
+  designationID          Int
+
+  stepNameSnapshot        String?
+  designationNameSnapshot String
+
+  isMandatorySnapshot     Boolean @default(true)
+  canRejectSnapshot       Boolean @default(true)
+  canSendBackSnapshot     Boolean @default(false)
+  approvalTimeoutSnapshot Int?
+
+  status ApprovalStepStatus @default(WAITING)
+
+  activatedAt DateTime?
+  completedAt DateTime?
+  rejectedAt  DateTime?
+  sentBackAt  DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  approvalRequest ApprovalRequest @relation(fields: [approvalRequestID], references: [id], onDelete: Cascade)
+
+  approvers ApprovalRequestApprover[]
+  actions   ApprovalRequestAction[]
+
+  @@unique([approvalRequestID, stepNo])
+  @@index([approvalRequestID])
+  @@index([designationID])
+  @@index([status])
+  @@map("approval_request_steps")
+}
+
+model ApprovalRequestApprover {
+  id Int @id @default(autoincrement())
+
+  approvalRequestID     Int
+  approvalRequestStepID Int
+
+  approverEmployeeID Int
+
+  /**
+   * Snapshot organisational identity when assigned.
+   */
+  designationIDSnapshot   Int
+  designationNameSnapshot String
+
+  departmentIDSnapshot Int?
+  branchesIDSnapshot   Int?
+  companyIDSnapshot    Int
+
+  status ApprovalApproverStatus @default(WAITING)
+
+  activatedAt DateTime?
+  actedAt     DateTime?
+
+  comment String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  approvalRequest ApprovalRequest @relation(fields: [approvalRequestID], references: [id], onDelete: Cascade)
+
+  approvalRequestStep ApprovalRequestStep @relation(fields: [approvalRequestStepID], references: [id], onDelete: Cascade)
+
+  approverEmployee ManageEmployee @relation("ApprovalAssignedEmployee", fields: [approverEmployeeID], references: [id], onDelete: Restrict)
+
+  actions ApprovalRequestAction[]
+
+  @@unique([approvalRequestStepID, approverEmployeeID])
+  @@index([approvalRequestID])
+  @@index([approvalRequestStepID])
+  @@index([approverEmployeeID])
+  @@index([status])
+  @@map("approval_request_approvers")
+}
+
+model ApprovalRequestAction {
+  id Int @id @default(autoincrement())
+
+  approvalRequestID Int
+
+  approvalRequestStepID     Int?
+  approvalRequestApproverID Int?
+
+  action ApprovalActionType
+
+  actedByEmployeeID Int?
+  actedByUserID     Int?
+
+  fromStatus String?
+  toStatus   String?
+
+  remark String?
+
+  createdAt DateTime @default(now())
+
+  approvalRequest ApprovalRequest @relation(fields: [approvalRequestID], references: [id], onDelete: Cascade)
+
+  approvalRequestStep ApprovalRequestStep? @relation(fields: [approvalRequestStepID], references: [id], onDelete: Cascade)
+
+  approvalRequestApprover ApprovalRequestApprover? @relation(fields: [approvalRequestApproverID], references: [id], onDelete: Cascade)
+
+  actedByEmployee ManageEmployee? @relation("ApprovalActionEmployee", fields: [actedByEmployeeID], references: [id], onDelete: Restrict)
+
+  @@index([approvalRequestID])
+  @@index([approvalRequestStepID])
+  @@index([approvalRequestApproverID])
+  @@index([actedByEmployeeID])
+  @@index([createdAt])
+  @@map("approval_request_actions")
 }
 
 model ApprovalWorkflowCondition {
@@ -2678,7 +2854,6 @@ model ApprovalWorkflowStep {
   @@index([designationID])
   @@map("approval_workflow_steps")
 }
-
 
 enum ApprovalRequestStatus {
   PENDING

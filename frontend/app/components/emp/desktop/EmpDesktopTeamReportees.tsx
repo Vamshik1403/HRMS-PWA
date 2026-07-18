@@ -1,13 +1,15 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Building2, Users } from "lucide-react";
+import { Building2, CalendarCheck2, Users } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../../ui/card";
+import { Button } from "../../ui/button";
 import { listCardClass } from "../../app/list-ui-styles";
 import { useEmpManagerScope } from "../../../hooks/useEmpManagerScope";
 import { reporteeDisplayName, teamReportees } from "../../../utils/empManagerDisplay";
 import { formatPunchTime } from "../../../utils/empAttendanceHistory";
 import { cn } from "@/app/utils/cn";
+import { TeamAttendanceRegulariseModal } from "./TeamAttendanceRegulariseModal";
 
 const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL || "/backend";
 
@@ -63,6 +65,8 @@ export function EmpDesktopTeamReportees() {
   const [members, setMembers] = useState<MemberToday[]>([]);
   const [teamCount, setTeamCount] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
+  const [regulariseTarget, setRegulariseTarget] = useState<MemberToday | null>(null);
+  const [refreshToken, setRefreshToken] = useState(0);
 
   const reporteeCount = useMemo(() => teamReportees(managerScope).length, [managerScope]);
 
@@ -124,13 +128,14 @@ export function EmpDesktopTeamReportees() {
     return () => {
       cancelled = true;
     };
-  }, [scope, scopeLoading, managerScope]);
+  }, [scope, scopeLoading, managerScope, refreshToken]);
 
   if (!isManagerView) return null;
 
   const countFor = (tab: TeamScope) => (tab === "reportees" ? reporteeCount : teamCount);
 
   return (
+    <>
     <Card className={cn(listCardClass, "h-full flex flex-col min-h-[420px]")}>
       <CardHeader className="shrink-0 space-y-4 pb-3">
         <div>
@@ -225,6 +230,17 @@ export function EmpDesktopTeamReportees() {
                       {checkInLabel ? ` · ${checkInLabel}` : ""}
                     </p>
                   </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="shrink-0 h-8 gap-1.5 text-xs"
+                    onClick={() => setRegulariseTarget(m)}
+                    aria-label={`Regularize attendance for ${name}`}
+                  >
+                    <CalendarCheck2 className="size-3.5" />
+                    Regularize
+                  </Button>
                 </li>
               );
             })}
@@ -232,5 +248,16 @@ export function EmpDesktopTeamReportees() {
         )}
       </CardContent>
     </Card>
+
+    <TeamAttendanceRegulariseModal
+      open={regulariseTarget != null}
+      onOpenChange={(open) => {
+        if (!open) setRegulariseTarget(null);
+      }}
+      employeeId={regulariseTarget?.id ?? null}
+      employeeName={regulariseTarget ? memberName(regulariseTarget) : ""}
+      onSuccess={() => setRefreshToken((n) => n + 1)}
+    />
+    </>
   );
 }

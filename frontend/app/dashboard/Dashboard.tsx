@@ -1021,7 +1021,6 @@ export default function DashboardPage({ embeddedInEmpPortal = false }: { embedde
         isSuperadmin={user?.role === "SUPERADMIN"}
         lastSyncMinutesAgo={overviewStatsReady ? 2 : null}
         insights={dashboardInsights}
-        hideWorkspaceBadge={embeddedInEmpPortal}
       />
       {probationAlerts.length > 0 && (
         <NoticeBanner
