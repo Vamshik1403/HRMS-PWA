@@ -2,20 +2,17 @@
 
 import {
   BarChart3,
-  Bell,
   Calendar,
   CalendarDays,
-  CalendarRange,
-  CheckSquare,
   FileText,
   Home,
+  LayoutGrid,
   MapPin,
   UserCircle,
   UserPlus,
   Wallet,
   type LucideIcon,
 } from "lucide-react";
-import { TASK_MANAGEMENT_ENABLED } from "@/app/config/featureFlags";
 import type { EmpModuleId } from "./emp-portal-workspaces";
 
 export interface EmpSidebarNavItem {
@@ -115,29 +112,10 @@ export const EMP_SIDEBAR_NAVIGATION: EmpSidebarNavGroup[] = [
     label: "More",
     items: [
       {
-        label: "Tasks",
-        href: "/empMyTasks",
-        icon: CheckSquare,
-        moduleId: "tasks",
-        show: () => TASK_MANAGEMENT_ENABLED,
-      },
-      {
-        label: "Holidays",
-        href: "/empHolidays",
-        icon: CalendarDays,
-        moduleId: "leave",
-      },
-      {
-        label: "Internal Messages",
-        href: "/empNoticeboard",
-        icon: Bell,
-        moduleId: "home",
-      },
-      {
-        label: "Public Holiday",
-        href: "/empPublicHoliday",
-        icon: CalendarRange,
-        moduleId: "home",
+        label: "More",
+        href: "/empMore",
+        icon: LayoutGrid,
+        moduleId: "more",
       },
     ],
   },
@@ -176,6 +154,9 @@ export function isEmpNavItemActive(
   if (pathname === item.href || pathname.startsWith(`${item.href}/`)) {
     if (item.href === "/empdashboard") {
       return !tab || tab === "dashboard" || tab === "overview";
+    }
+    if (item.href === "/empMore") {
+      return pathname === "/empMore" || pathname.startsWith("/empMore/");
     }
     return true;
   }

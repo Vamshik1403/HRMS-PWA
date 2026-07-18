@@ -49,21 +49,42 @@ export class ApprovalEngineService {
     );
 
     
-    if (!workflow) {
+        /*
+     * Direct approval applies when:
+     *
+     * 1. No active onboarding workflow exists.
+     * 2. Active workflows exist, but none of their conditions
+     *    match the employee.
+     * 3. The selected workflow has no active conditions.
+     *
+     * Approval requests are created only when a workflow has
+     * at least one active condition and that condition set matches.
+     */
+    if (
+      !workflow ||
+      workflow.conditions.length === 0
+    ) {
       await tx.manageEmployee.update({
         where: {
           id: employee.id,
         },
+
         data: {
-          onboardingApprovalStatus: 'APPROVED',
+          onboardingApprovalStatus:
+            'APPROVED',
         },
       });
 
       return {
         approvalRequired: false,
         approvalRequestID: null,
-        workflowID: null,
-        workflowName: null,
+
+        workflowID:
+          workflow?.id ?? null,
+
+        workflowName:
+          workflow?.workflowName ?? null,
+
         currentStepNo: null,
         status: 'APPROVED',
       };
@@ -152,16 +173,20 @@ export class ApprovalEngineService {
       const isFirstStep =
         workflowStep.stepNo === 1;
 
-      const approvers =
-        await this.findStepApprovers(
-          tx,
-          employee,
-          workflowStep,
-        );
+      /*
+       * Employee onboarding requests are approved by COMPANY_ADMIN
+       * users of the employee's company when possible. Fall back to
+       * workflow-step approvers when admins have no linked employee record.
+       */
+      const approvers = await this.findOnboardingApprovers(
+        tx,
+        employee,
+        workflowStep,
+      );
 
       if (!approvers.length) {
         throw new BadRequestException(
-          `No active employee approver was found for step ${workflowStep.stepNo} "${workflowStep.stepName || workflowStep.designation.designation}"`,
+          `No active approver was found for step ${workflowStep.stepNo} "${workflowStep.stepName || workflowStep.designation.designation}"`,
         );
       }
 
@@ -510,11 +535,12 @@ export class ApprovalEngineService {
     conditions: Array<any>,
     employee: EmployeeApprovalSubject,
   ): boolean {
-    /*
-     * A workflow with no conditions is a valid catch-all workflow.
+        /*
+     * A workflow without conditions does not require approval.
+     * It is handled as direct approval by submitEmployeeOnboarding().
      */
     if (!conditions.length) {
-      return true;
+      return false;
     }
 
     const results =
@@ -627,6 +653,71 @@ export class ApprovalEngineService {
    * - not deleted
    * - active login credentials
    */
+  private async findOnboardingApprovers(
+    tx: TransactionClient,
+    employee: EmployeeApprovalSubject,
+    workflowStep: {
+      designationID: number;
+      designation: {
+        departmentID: number | null;
+        branchesID: number | null;
+        designation: string | null;
+      };
+    },
+  ) {
+    const companyAdminUsers = await tx.user.findMany({
+      where: {
+        role: 'COMPANY_ADMIN',
+        isActive: true,
+        OR: [
+          { companyID: employee.companyID },
+          {
+            userCompanies: {
+              some: { companyID: employee.companyID! },
+            },
+          },
+        ],
+      },
+      select: { username: true },
+    });
+
+    const adminUsernames = companyAdminUsers
+      .map((user) => user.username?.trim())
+      .filter((username): username is string => !!username);
+
+    if (adminUsernames.length) {
+      const linkedApprovers = await tx.manageEmployee.findMany({
+        where: {
+          companyID: employee.companyID,
+          id: { not: employee.id },
+          lifecycleStatus: 'ACTIVE',
+          onboardingApprovalStatus: 'APPROVED',
+          isDeleted: false,
+          employeeCredentials: {
+            is: {
+              isActive: true,
+              username: { in: adminUsernames },
+            },
+          },
+        },
+        select: {
+          id: true,
+          companyID: true,
+          branchesID: true,
+          departmentNameID: true,
+          designationID: true,
+        },
+        orderBy: { id: 'asc' },
+      });
+
+      if (linkedApprovers.length) {
+        return linkedApprovers;
+      }
+    }
+
+    return this.findStepApprovers(tx, employee, workflowStep);
+  }
+
   private async findStepApprovers(
     tx: TransactionClient,
     employee: EmployeeApprovalSubject,

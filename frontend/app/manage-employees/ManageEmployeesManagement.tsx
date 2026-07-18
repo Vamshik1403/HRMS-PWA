@@ -73,6 +73,32 @@ function parsePayGradeNames(shiftEligibility: string | null | undefined): string
    ========================= */
 type ID = number;
 
+type OnboardingApprovalStatus =
+  | "PENDING"
+  | "APPROVED"
+  | "REJECTED"
+  | "CANCELLED";
+
+interface EmployeeApprovalResponse {
+  required: boolean;
+  requestID: number | null;
+  workflowID: number | null;
+  workflowName: string | null;
+  currentStepNo: number | null;
+  status: "PENDING" | "APPROVED";
+  credentialsActive: boolean;
+}
+
+interface ManageEmployeeCreateResponse {
+  id: number;
+  employeeID?: string | null;
+  employeeFirstName?: string | null;
+  employeeLastName?: string | null;
+  onboardingApprovalStatus?: OnboardingApprovalStatus;
+  initialPassword?: string | null;
+  approval?: EmployeeApprovalResponse;
+}
+
 interface SP { id: ID; companyName?: string | null; }
 interface CO { id: ID; companyName?: string | null; serviceProviderID?: ID | null; branchesID?: ID | null; }
 interface BR { id: ID; branchName?: string | null; companyID?: ID | null; branchesID?: ID | null; serviceProviderID?: ID | null; }
@@ -274,6 +300,26 @@ interface ManageEmpRead {
 
   createdAt?: string | null;
 
+  lifecycleStatus?: string | null;
+
+  onboardingApprovalStatus?:
+    | OnboardingApprovalStatus
+    | null;
+
+  employeeCredentials?: {
+    id: number;
+    username?: string | null;
+    isActive?: boolean;
+    mustChangePassword?: boolean;
+  } | null;
+
+  onboardingApprovalRequests?: Array<{
+    id: number;
+    status: string;
+    currentStepNo?: number | null;
+    workflowNameSnapshot?: string | null;
+  }>;
+
   // Optional denormalized:
   serviceProviderName?: string | null;
   contractorName?: string | null;
@@ -318,6 +364,33 @@ async function fetchJSONSafe<T>(url: string, signal?: AbortSignal): Promise<T> {
   }
   const raw = await res.json();
   return (raw?.data ?? raw) as T;
+}
+
+async function readApiError(
+  response: Response,
+  fallback: string,
+): Promise<string> {
+  const raw = await response.text();
+
+  if (!raw) {
+    return fallback;
+  }
+
+  try {
+    const parsed = JSON.parse(raw);
+
+    if (Array.isArray(parsed?.message)) {
+      return parsed.message.join(", ");
+    }
+
+    return (
+      parsed?.message ||
+      parsed?.error ||
+      fallback
+    );
+  } catch {
+    return raw || fallback;
+  }
 }
 
 /**
@@ -527,14 +600,33 @@ export function ManageEmployeesManagement() {
     }
   };
 
-  const openCredentialModal = async (r: ManageEmpRead) => {
+  const openCredentialModal = async (
+    r: ManageEmpRead,
+  ) => {
+    if (
+      r.onboardingApprovalStatus !==
+      "APPROVED"
+    ) {
+      toast.error(
+        "Credentials can be managed only after employee onboarding is approved",
+      );
+      return;
+    }
+
     try {
       const res = await fetch(`/backend/manage-emp/${r.id}/reset-password`, {
         method: "POST",
         headers: authHeaders(),
       });
 
-      if (!res.ok) throw new Error(await res.text());
+      if (!res.ok) {
+        throw new Error(
+          await readApiError(
+            res,
+            "Failed to generate credentials",
+          ),
+        );
+      }
 
       const data = await res.json();
 
@@ -544,9 +636,14 @@ export function ManageEmployeesManagement() {
         password: data?.initialPassword ?? "",
       });
       setCredentialModalOpen(true);
-    } catch (err) {
+       } catch (err) {
       console.error(err);
-      toast.error("Failed to generate credentials");
+
+      toast.error(
+        err instanceof Error
+          ? err.message
+          : "Failed to generate credentials",
+      );
     }
   };
 
@@ -2785,7 +2882,12 @@ const addCombinedDevMap = () => {
     setError(null);
 
     try {
-      const uploadedPhotoUrl = await uploadPhotoIfNeeded();
+      let saveResult:
+        | ManageEmployeeCreateResponse
+        | null = null;
+
+      const uploadedPhotoUrl =
+        await uploadPhotoIfNeeded();
 
       const edu = formData.eduForm.map(e => ({
         id: e.id,
@@ -3037,48 +3139,177 @@ const addCombinedDevMap = () => {
       };
 
       if (editingRow) {
-        const res = await fetch(`${API.manageEmp}/${editingRow.id}`, {
-          method: "PATCH",
-          headers: jsonAuthHeaders(),
-          body: JSON.stringify(payload),
-        });
-        if (!res.ok) throw new Error(await res.text());
+        const res = await fetch(
+          `${API.manageEmp}/${editingRow.id}`,
+          {
+            method: "PATCH",
+            headers: jsonAuthHeaders(),
+            body: JSON.stringify(payload),
+          },
+        );
 
-        // Save linked employees
-        await fetch(`${API.manageEmp}/${editingRow.id}/linked-employees`, {
-          method: "POST",
-          headers: jsonAuthHeaders(),
-          body: JSON.stringify({ linkedEmployeeIds: linkedEmployees.map(le => le.id) }),
-        });
-      } else {
-        const res = await fetch(API.manageEmp, {
-          method: "POST",
-          headers: jsonAuthHeaders(),
-          body: JSON.stringify(payload),
-        });
-        if (!res.ok) throw new Error(await res.text());
+        if (!res.ok) {
+          throw new Error(
+            await readApiError(
+              res,
+              "Failed to update employee",
+            ),
+          );
+        }
 
-        // Save linked employees for newly created employee
-        const created = await res.json().catch(() => null);
-        const newId = created?.id ?? created?.data?.id;
-        if (newId && linkedEmployees.length > 0) {
-          await fetch(`${API.manageEmp}/${newId}/linked-employees`, {
+        saveResult =
+          await res
+            .json()
+            .catch(() => null);
+
+        const linkedResponse = await fetch(
+          `${API.manageEmp}/${editingRow.id}/linked-employees`,
+          {
             method: "POST",
             headers: jsonAuthHeaders(),
-            body: JSON.stringify({ linkedEmployeeIds: linkedEmployees.map(le => le.id) }),
-          });
+            body: JSON.stringify({
+              linkedEmployeeIds:
+                linkedEmployees.map(
+                  (employee) => employee.id,
+                ),
+            }),
+          },
+        );
+
+        if (!linkedResponse.ok) {
+          throw new Error(
+            await readApiError(
+              linkedResponse,
+              "Employee was updated, but linked employees could not be saved",
+            ),
+          );
+        }
+            } else {
+        const res = await fetch(
+          API.manageEmp,
+          {
+            method: "POST",
+            headers: jsonAuthHeaders(),
+            body: JSON.stringify(payload),
+          },
+        );
+
+        if (!res.ok) {
+          throw new Error(
+            await readApiError(
+              res,
+              "Failed to create employee",
+            ),
+          );
+        }
+
+        const rawCreated =
+          await res
+            .json()
+            .catch(() => null);
+
+        saveResult =
+          rawCreated?.data ??
+          rawCreated;
+
+        const newId =
+          Number(saveResult?.id) || null;
+
+        if (
+          newId &&
+          linkedEmployees.length > 0
+        ) {
+          const linkedResponse =
+            await fetch(
+              `${API.manageEmp}/${newId}/linked-employees`,
+              {
+                method: "POST",
+                headers:
+                  jsonAuthHeaders(),
+
+                body: JSON.stringify({
+                  linkedEmployeeIds:
+                    linkedEmployees.map(
+                      (employee) =>
+                        employee.id,
+                    ),
+                }),
+              },
+            );
+
+          if (!linkedResponse.ok) {
+            throw new Error(
+              await readApiError(
+                linkedResponse,
+                "Employee was created, but linked employees could not be saved",
+              ),
+            );
+          }
         }
       }
 
       clearRefCache();
       await fetchRows();
+
+      const wasEditing =
+        Boolean(editingRow);
+
+      const approvalRequired =
+        saveResult?.approval?.required ===
+        true;
+
+      const approvalStatus =
+        saveResult?.approval?.status ??
+        saveResult?.onboardingApprovalStatus;
+
       resetForm();
       setIsAddingNew(false);
       setEditingRow(null);
-      toast.success("Employee saved successfully");
+
+      if (wasEditing) {
+        toast.success(
+          "Employee updated successfully",
+        );
+      } else if (
+        approvalRequired &&
+        approvalStatus === "PENDING"
+      ) {
+        const workflowName =
+          saveResult?.approval
+            ?.workflowName;
+
+        toast.success(
+          workflowName
+            ? `Employee created and submitted for approval through "${workflowName}"`
+            : "Employee created and submitted for approval",
+          {
+            description:
+              "Employee login will remain inactive until final approval.",
+            duration: 6000,
+          },
+        );
+      } else {
+        toast.success(
+          "Employee created and approved successfully",
+          {
+            description:
+              saveResult?.initialPassword
+                ? "Employee credentials are active. The initial password was generated successfully."
+                : "No matching conditional approval workflow was required.",
+            duration: 6000,
+          },
+        );
+      }
+
       dispatchAppRefresh();
-    } catch (e: any) {
-      setError(e?.message || "Save failed");
+    } catch (e: unknown) {
+      const message =
+        e instanceof Error
+          ? e.message
+          : "Employee save failed";
+
+      setError(message);
+      toast.error(message);
     } finally {
       setSaving(false);
     }
@@ -3647,6 +3878,55 @@ const handleCancel = () => {
      UI Render
      ========== */
 
+
+       const approvalStatusBadge = (
+    status?: OnboardingApprovalStatus | null,
+  ) => {
+    switch (status) {
+      case "PENDING":
+        return (
+          <Badge className="w-fit border border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-50">
+            Pending approval
+          </Badge>
+        );
+
+      case "APPROVED":
+        return (
+          <Badge className="w-fit border border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-50">
+            Approved
+          </Badge>
+        );
+
+      case "REJECTED":
+        return (
+          <Badge className="w-fit border border-red-300 bg-red-50 text-red-700 hover:bg-red-50">
+            Rejected
+          </Badge>
+        );
+
+      case "CANCELLED":
+        return (
+          <Badge className="w-fit border border-gray-300 bg-gray-50 text-gray-600 hover:bg-gray-50">
+            Cancelled
+          </Badge>
+        );
+
+      default:
+        return (
+          <Badge variant="outline">
+            Not submitted
+          </Badge>
+        );
+    }
+  };
+
+  const canManageEmployeeCredentials = (
+    employee: ManageEmpRead,
+  ) =>
+    employee.onboardingApprovalStatus ===
+      "APPROVED" &&
+    employee.lifecycleStatus !== "EXITED";
+
   const employeeColumns = useMemo((): DataTableColumn<ManageEmpRead>[] => [
     {
       key: "name",
@@ -3654,9 +3934,18 @@ const handleCancel = () => {
       sortable: true,
       colSpan: 3,
       cell: (r) => (
-        <div className="flex flex-col gap-0.5">
-          <span>{r.employeeFirstName} {r.employeeLastName}</span>
-          {terminationMap[r.id] && terminationMap[r.id].daysLeft > 0 && (
+        <div className="flex flex-col gap-1">
+          <span>
+            {r.employeeFirstName}{" "}
+            {r.employeeLastName}
+          </span>
+
+          {approvalStatusBadge(
+            r.onboardingApprovalStatus,
+          )}
+
+          {terminationMap[r.id] &&
+            terminationMap[r.id].daysLeft > 0 && (
             <Badge className="bg-orange-100 text-orange-700 border border-orange-300 text-xs w-fit">
               Offboarding: Inactive in {terminationMap[r.id].daysLeft} day{terminationMap[r.id].daysLeft !== 1 ? "s" : ""}
             </Badge>
@@ -3707,6 +3996,16 @@ const handleCancel = () => {
       colSpan: 2,
       cell: (r) => r.employmentStatus ?? "—",
     },
+        {
+      key: "approvalStatus",
+      header: "Approval",
+      colSpan: 2,
+
+      cell: (r) =>
+        approvalStatusBadge(
+          r.onboardingApprovalStatus,
+        ),
+    },
     {
       key: "actions",
       header: "Actions",
@@ -3718,13 +4017,19 @@ const handleCancel = () => {
           onEdit={canManage ? () => handleEdit(r) : undefined}
           onDelete={canManage ? () => handleDelete(r.id) : undefined}
           extra={[
-            ...(canManage
-              ? [{
-                icon: Key,
-                title: "Generate / Edit Credentials",
-                onClick: () => openCredentialModal(r),
-                className: "text-orange-600",
-              }]
+                        ...(canManage &&
+            canManageEmployeeCredentials(r)
+              ? [
+                  {
+                    icon: Key,
+                    title:
+                      "Generate / Edit Credentials",
+                    onClick: () =>
+                      openCredentialModal(r),
+                    className:
+                      "text-orange-600",
+                  },
+                ]
               : []),
             {
               icon: History,

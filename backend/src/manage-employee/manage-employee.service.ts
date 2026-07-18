@@ -1140,32 +1140,101 @@ constructor(
 
     return this.prisma.manageEmployee.findMany({
       where: whereCondition,
-      select: {
-        id: true,
-        employeeFirstName: true,
-        employeeLastName: true,
-        employeeID: true,
-        businessEmail: true,
-        companyID: true,
-        branchesID: true,
-        serviceProviderID: true,
-        departmentNameID: true,
-        designationID: true,
-        employmentType: true,
-        employmentStatus: true,
-        typeOfEmployee: true,
-         lifecycleStatus: true,
-        onboardingApprovalStatus: true,
-        joiningDate: true,
-        departments: { select: { id: true, departmentName: true } },
-        designations: { select: { id: true, designation: true } },
-        branches: { select: { id: true, branchName: true } },
-        empDesignation: {
-          orderBy: { id: 'desc' },
-          take: 1,
-          include: { designation: { select: { designation: true } } },
+     select: {
+  id: true,
+  employeeFirstName: true,
+  employeeLastName: true,
+  employeeID: true,
+  businessEmail: true,
+  companyID: true,
+  branchesID: true,
+  serviceProviderID: true,
+  departmentNameID: true,
+  designationID: true,
+  employmentType: true,
+  employmentStatus: true,
+  typeOfEmployee: true,
+  lifecycleStatus: true,
+  onboardingApprovalStatus: true,
+  joiningDate: true,
+
+  employeeCredentials: {
+    select: {
+      id: true,
+      username: true,
+      isActive: true,
+      mustChangePassword: true,
+    },
+  },
+
+  departments: {
+    select: {
+      id: true,
+      departmentName: true,
+    },
+  },
+
+  designations: {
+    select: {
+      id: true,
+      designation: true,
+    },
+  },
+
+  branches: {
+    select: {
+      id: true,
+      branchName: true,
+    },
+  },
+
+  empDesignation: {
+    orderBy: {
+      id: 'desc',
+    },
+
+    take: 1,
+
+    include: {
+      designation: {
+        select: {
+          designation: true,
         },
       },
+    },
+  },
+
+  empBranch: {
+    orderBy: {
+      id: 'desc',
+    },
+    
+    take: 1,
+    include: {
+      branch: {
+        select: {
+          branchName: true,
+        },
+      },
+    },
+  },
+
+  empDepartment: {
+    orderBy: {
+      id: 'desc',
+    },
+
+    take: 1,
+
+    include: {
+      department: {
+        select: {
+          departmentName: true,
+        },
+      },
+    },
+  },
+},
       orderBy: { id: 'desc' },
     });
   }

@@ -228,5 +228,8 @@ export function resolveSidebarModuleId(pathname: string): EmpModuleId | "more" {
   if (EMP_MORE_WORKSPACE_ITEMS.some((i) => pathname === i.href || pathname.startsWith(`${i.href}/`))) {
     return "more";
   }
+  if (pathname === "/empMore" || pathname.startsWith("/empMore/")) {
+    return "more";
+  }
   return "home";
 }

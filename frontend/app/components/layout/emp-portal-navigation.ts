@@ -185,6 +185,9 @@ export function resolveSidebarSection(pathname: string): EmpSidebarSection {
   if (MORE_PATH_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`))) {
     return "more";
   }
+  if (pathname === "/empMore" || pathname.startsWith("/empMore/")) {
+    return "more";
+  }
   if (HOME_PATH_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`))) {
     return "home";
   }
