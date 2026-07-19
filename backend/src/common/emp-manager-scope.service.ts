@@ -64,11 +64,13 @@ export class EmpManagerScopeService {
     ]);
     if (!manager || !target || target.isDeleted) return false;
     if (manager.companyID != null && manager.companyID === target.companyID) return true;
-    return (
+    if (
       manager.departmentNameID != null &&
-      manager.departmentNameID === target.departmentNameID &&
-      manager.companyID === target.companyID
-    );
+      manager.departmentNameID === target.departmentNameID
+    ) {
+      return true;
+    }
+    return false;
   }
 
   /** First-person employee notification → manager-facing copy. */

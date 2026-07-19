@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { BarChart3, Calendar, FileText, MapPin } from "lucide-react";
 import { EmpAttendanceDayRow } from "../EmpAttendanceDayRow";
-import { EmpMobileDateField } from "../EmpMobileDateField";
+import { EmpDateField } from "../EmpDateField";
 import { EmpWorkspaceContent } from "../EmpWorkspaceTabNav";
 import { EmpDesktopPage } from "../desktop/EmpDesktopPage";
 import { EmpDesktopAttendanceTable } from "../desktop/EmpDesktopAttendanceTable";
@@ -96,18 +96,66 @@ function AttendanceReportsPanel() {
 
   const presentDays = displayDays.filter((d) => d.checkIn && d.checkOut).length;
   const totalHours = formatWorkHoursDecimal(displayDays.reduce((s, d) => s + d.workSeconds, 0));
+  const hoursTrend = displayDays
+    .slice()
+    .reverse()
+    .slice(-7)
+    .map((d) => Math.round((d.workSeconds / 3600) * 10) / 10);
 
   const stats: StatCardData[] = [
-    { label: "Present days", value: presentDays, icon: Calendar },
-    { label: "Total hours", value: totalHours, icon: MapPin, iconClassName: "text-emerald-600" },
-    { label: "Records", value: displayDays.length, icon: BarChart3 },
+    {
+      label: "Present days",
+      value: presentDays,
+      unit: `of ${displayDays.length} days`,
+      icon: Calendar,
+      visualization: {
+        type: "stacked",
+        segments: [
+          { label: "Present", value: presentDays, color: "#22c55e" },
+          {
+            label: "Partial",
+            value: displayDays.filter((d) => d.checkIn && !d.checkOut).length,
+            color: "#f59e0b",
+          },
+          {
+            label: "Absent",
+            value: displayDays.filter((d) => !d.checkIn).length,
+            color: "#f43f5e",
+          },
+        ],
+      },
+    },
+    {
+      label: "Total hours",
+      value: totalHours,
+      unit: "Logged in period",
+      icon: MapPin,
+      iconClassName: "bg-emerald-500/10 text-emerald-600",
+      visualization: { type: "sparkline", data: hoursTrend, color: "#22c55e" },
+    },
+    {
+      label: "Records",
+      value: displayDays.length,
+      unit: "Attendance entries",
+      icon: BarChart3,
+      visualization: {
+        type: "bars",
+        items: displayDays.slice(0, 4).map((d) => ({
+          label: new Date(d.dateKey + "T12:00:00Z").toLocaleDateString("en-IN", {
+            weekday: "short",
+            timeZone: "UTC",
+          }),
+          value: Math.round((d.workSeconds / 3600) * 10) / 10,
+        })),
+      },
+    },
   ];
 
   return (
     <>
       <div className="flex flex-wrap items-end gap-3">
-        <EmpMobileDateField label="From" value={fromDate} onChange={setFromDate} max={toDate || undefined} />
-        <EmpMobileDateField label="To" value={toDate} onChange={setToDate} min={fromDate || undefined} />
+        <EmpDateField label="From" value={fromDate} onChange={setFromDate} max={toDate || undefined} />
+        <EmpDateField label="To" value={toDate} onChange={setToDate} min={fromDate || undefined} />
       </div>
       {!loading && displayDays.length > 0 ? (
         <div className={`grid sm:grid-cols-3 ${gridGap} mb-6`}>

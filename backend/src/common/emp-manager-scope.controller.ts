@@ -361,7 +361,7 @@ export class EmpManagerScopeController {
     const byDay = new Map<string, { date: string; status: string; inTime?: string; outTime?: string }>();
     for (const log of records) {
       const d = new Date(log.checkinTime);
-      const key = d.toISOString().slice(0, 10);
+      const key = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
       const row = byDay.get(key) ?? { date: key, status: 'Present' };
       const time = d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
       if (log.checkType === 'CHECK_IN' && !row.inTime) row.inTime = time;

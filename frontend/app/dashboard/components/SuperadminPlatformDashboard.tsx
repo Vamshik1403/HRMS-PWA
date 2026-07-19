@@ -98,14 +98,107 @@ export function SuperadminPlatformDashboard() {
 
   const statCards: StatCardData[] = useMemo(
     () => [
-      { label: "Service providers", value: stats.serviceProviders, icon: Building2, hint: "Platform partners" },
-      { label: "Total tenants", value: stats.companies, icon: TrendingUp, hint: "All companies" },
-      { label: "Active users", value: stats.activeUsers, icon: Users, hint: "Enabled accounts" },
-      { label: "Total employees", value: stats.employees, icon: Briefcase, hint: "Workforce records" },
-      { label: "System users", value: stats.users, icon: UserCog },
-      { label: "Company admins", value: stats.companyAdmins, icon: ShieldCheck },
-      { label: "Branches", value: stats.branches, icon: GitBranch },
-      { label: "Devices", value: stats.devices, icon: Fingerprint },
+      {
+        label: "Service providers",
+        value: stats.serviceProviders,
+        unit: "Platform partners",
+        icon: Building2,
+        visualization: {
+          type: "funnel",
+          items: [
+            { label: "Providers", value: stats.serviceProviders, color: "#2563eb" },
+            { label: "Tenants", value: stats.companies, color: "#7c3aed" },
+            { label: "Branches", value: stats.branches, color: "#14b8a6" },
+          ],
+        },
+      },
+      {
+        label: "Total tenants",
+        value: stats.companies,
+        unit: "All companies",
+        icon: TrendingUp,
+        visualization: {
+          type: "sparkline",
+          data: [Math.max(1, stats.companies - 2), stats.companies - 1, stats.companies],
+          color: "#7c3aed",
+        },
+      },
+      {
+        label: "Active users",
+        value: stats.activeUsers,
+        unit: "Enabled accounts",
+        icon: Users,
+        visualization: {
+          type: "stacked",
+          segments: [
+            { label: "Active", value: stats.activeUsers, color: "#22c55e" },
+            { label: "Inactive", value: Math.max(0, stats.users - stats.activeUsers), color: "#94a3b8" },
+          ],
+        },
+      },
+      {
+        label: "Total employees",
+        value: stats.employees,
+        unit: "Workforce records",
+        icon: Briefcase,
+        visualization: {
+          type: "bars",
+          items: [
+            { label: "Employees", value: stats.employees, color: "#2563eb" },
+            { label: "Admins", value: stats.companyAdmins, color: "#7c3aed" },
+          ],
+        },
+      },
+      {
+        label: "System users",
+        value: stats.users,
+        unit: "All accounts",
+        icon: UserCog,
+        visualization: {
+          type: "donut",
+          segments: [
+            { label: "Active", value: stats.activeUsers, color: "#22c55e" },
+            { label: "Admins", value: stats.companyAdmins, color: "#2563eb" },
+            { label: "Other", value: Math.max(0, stats.users - stats.activeUsers), color: "#94a3b8" },
+          ],
+        },
+      },
+      {
+        label: "Company admins",
+        value: stats.companyAdmins,
+        unit: "Admin accounts",
+        icon: ShieldCheck,
+        visualization: {
+          type: "ring",
+          value: stats.users > 0 ? Math.round((stats.companyAdmins / stats.users) * 100) : 0,
+          max: 100,
+          color: "#2563eb",
+        },
+      },
+      {
+        label: "Branches",
+        value: stats.branches,
+        unit: "Locations",
+        icon: GitBranch,
+        visualization: {
+          type: "progress",
+          segments: [
+            { label: "Branches", value: stats.branches, color: "#14b8a6" },
+            { label: "Tenants", value: stats.companies, color: "#2563eb" },
+          ],
+        },
+      },
+      {
+        label: "Devices",
+        value: stats.devices,
+        unit: "Registered devices",
+        icon: Fingerprint,
+        visualization: {
+          type: "sparkline",
+          data: [stats.devices, stats.devices, stats.devices],
+          color: "#f59e0b",
+        },
+      },
     ],
     [stats],
   );
@@ -115,7 +208,7 @@ export function SuperadminPlatformDashboard() {
       <div className="space-y-6 animate-pulse">
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           {Array.from({ length: 8 }).map((_, i) => (
-            <div key={i} className="h-32 rounded-xl border bg-muted/30" />
+            <div key={i} className="h-[190px] rounded-xl border bg-muted/30" />
           ))}
         </div>
         <div className="grid gap-6 lg:grid-cols-3">

@@ -1007,6 +1007,35 @@ export default function DashboardPage({ embeddedInEmpPortal = false }: { embedde
 
   const absentCount = overviewAbsent;
 
+  const deptBars = useMemo(
+    () =>
+      departmentHeadcounts
+        .filter((d) => d.employeeCount > 0)
+        .slice(0, 5)
+        .map((d) => ({ label: d.departmentName, value: d.employeeCount })),
+    [departmentHeadcounts],
+  );
+
+  const attendanceStatusSegments = useMemo(
+    () =>
+      statusBreakdown.slice(0, 4).map((s) => ({
+        label: s.name,
+        value: s.value,
+        color: s.fill,
+      })),
+    [statusBreakdown],
+  );
+
+  const leavePendingSegments = useMemo(() => {
+    const p = hrWidgets?.pendingCounts;
+    if (!p) return [{ label: "Pending", value: 0, color: "#f59e0b" }];
+    return [
+      { label: "Leave", value: p.leave ?? 0, color: "#2563eb" },
+      { label: "Reimb.", value: p.reimbursement ?? 0, color: "#7c3aed" },
+      { label: "Advance", value: p.salaryAdvance ?? 0, color: "#14b8a6" },
+    ];
+  }, [hrWidgets]);
+
   return (
     <div className={`${sectionGap} animate-fade-in`}>
       <DashboardHero
@@ -1066,9 +1095,12 @@ export default function DashboardPage({ embeddedInEmpPortal = false }: { embedde
           stat={{
             label: "Employees",
             value: formatOverviewStat(overviewTotal),
+            unit: "Total workforce",
             icon: Users,
-            trendLabel: "Total workforce",
-            sparkline: sparklineData,
+            visualization: deptBars.length
+              ? { type: "bars", items: deptBars }
+              : { type: "sparkline", data: sparklineData, color: "#2563eb" },
+            accentColor: "#2563eb",
           }}
         />
         <StatCard
@@ -1077,11 +1109,14 @@ export default function DashboardPage({ embeddedInEmpPortal = false }: { embedde
             value: formatOverviewStat(overviewPresent),
             icon: UserCheck,
             trend: overviewStatsReady ? presentTrendVsYesterday : undefined,
-            trendLabel: overviewStatsReady
-              ? `${attRate}% attendance rate`
-              : undefined,
-            sparkline: sparklineData,
+            unit: overviewStatsReady ? `${attRate}% attendance rate` : undefined,
+            visualization: {
+              type: "sparkline",
+              data: sparklineData,
+              color: "#22c55e",
+            },
             iconClassName: "bg-emerald-500/10 text-emerald-600",
+            accentColor: "#22c55e",
           }}
         />
         <StatCard
@@ -1093,11 +1128,13 @@ export default function DashboardPage({ embeddedInEmpPortal = false }: { embedde
               overviewStatsReady && overviewTotal > 0
                 ? -Math.round((absentCount / overviewTotal) * 100)
                 : undefined,
-            trendLabel:
+            unit:
               overviewStatsReady && overviewTotal > 0
                 ? `${Math.round((absentCount / overviewTotal) * 100)}% of workforce`
                 : undefined,
+            visualization: { type: "stacked", segments: attendanceStatusSegments },
             iconClassName: "bg-rose-500/10 text-rose-600",
+            accentColor: "#f43f5e",
           }}
         />
         {isHrDesktopView && (
@@ -1105,9 +1142,15 @@ export default function DashboardPage({ embeddedInEmpPortal = false }: { embedde
             stat={{
               label: "Pending leave",
               value: hrWidgets?.pendingCounts?.leave ?? 0,
+              unit: "Awaiting approval",
               icon: CalendarClock,
-              trendLabel: "Awaiting approval",
+              trendDelta:
+                (hrWidgets?.pendingCounts?.leave ?? 0) > 0
+                  ? `▲ ${hrWidgets?.pendingCounts?.leave} open`
+                  : undefined,
+              visualization: { type: "progress", segments: leavePendingSegments },
               iconClassName: "bg-amber-500/10 text-amber-600",
+              accentColor: "#f59e0b",
             }}
           />
         )}

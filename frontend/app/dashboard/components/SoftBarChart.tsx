@@ -19,6 +19,7 @@ interface SoftBarChartProps {
   highlightColor?: string;
   barColor?: string;
   className?: string;
+  valueLabel?: string;
 }
 
 export default function SoftBarChart({
@@ -26,6 +27,7 @@ export default function SoftBarChart({
   highlightColor = "#22c55e",
   barColor = "#e8e8e8",
   className = "h-[220px]",
+  valueLabel = "Present",
 }: SoftBarChartProps) {
   const maxVal = Math.max(0, ...data.map((d) => d.value));
   const maxIndex = data.findIndex((d) => d.value === maxVal && maxVal > 0);
@@ -51,7 +53,7 @@ export default function SoftBarChart({
               padding: "8px 14px",
               background: "#fff",
             }}
-            formatter={(value: number) => [value.toLocaleString(), "Present"]}
+            formatter={(value: number) => [value.toLocaleString(), valueLabel]}
           />
           <Bar dataKey="value" radius={[10, 10, 10, 10]} maxBarSize={36}>
             {data.map((_, i) => (

@@ -41,7 +41,15 @@ export function EmpDesktopLeaveBalance({
     label: c.label,
     value: loading ? "…" : `${c.remaining}/${c.total}`,
     icon: Calendar,
-    hint: "Remaining / total",
+    unit: "Remaining / total days",
+    visualization: loading
+      ? undefined
+      : {
+          type: "ring" as const,
+          value: c.total > 0 ? Math.round((c.remaining / c.total) * 100) : 0,
+          max: 100,
+          color: c.key === "sick" ? "#f43f5e" : c.key === "casual" ? "#2563eb" : "#7c3aed",
+        },
   }));
 
   return (

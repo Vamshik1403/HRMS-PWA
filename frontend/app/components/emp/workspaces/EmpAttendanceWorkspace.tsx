@@ -8,7 +8,7 @@ import { EmpWorkspaceContent } from "../EmpWorkspaceTabNav";
 import { EmpDesktopPage } from "../desktop/EmpDesktopPage";
 import { EmpDesktopAttendancePanel } from "../desktop/EmpDesktopAttendancePanel";
 import { EmpDesktopAttendanceTable } from "../desktop/EmpDesktopAttendanceTable";
-import { EmpMobileDateField } from "../EmpMobileDateField";
+import { EmpDateField } from "../EmpDateField";
 import { EmpRecordHistorySheet } from "../EmpRecordHistorySheet";
 import { EmpListViewMoreButton } from "../EmpListViewMoreButton";
 import { StatCard, type StatCardData } from "../../../dashboard/components/StatCard";
@@ -24,6 +24,9 @@ import {
   type AttendanceDaySummary,
   type AttendanceLocationRecord,
 } from "../../../utils/empAttendanceHistory";
+import { AttendanceTrendChart } from "../../../dashboard/components/AttendanceTrendChart";
+import SoftBarChart from "../../../dashboard/components/SoftBarChart";
+import { attendanceDaysToHoursChart } from "../desktop/EmpSegmentDonut";
 import { formatWorkHoursDecimal } from "../../../utils/attendanceDuration";
 import { splitPreviewRecords } from "../../../utils/empListLimit";
 
@@ -131,17 +134,56 @@ export function EmpAttendanceWorkspace({ embedded = false }: { embedded?: boolea
     return filterDaysByCount(ranged, 14);
   }, [allDays, fromDate, toDate]);
 
+  const weekChartData = useMemo(() => attendanceDaysToHoursChart(weekDays), [weekDays]);
+  const reportChartData = useMemo(() => attendanceDaysToHoursChart(reportDays), [reportDays]);
+
+  const weekPresenceTrend = useMemo(
+    () => [...weekDays].reverse().map((d) => (d.checkIn ? 1 : 0)),
+    [weekDays],
+  );
+  const weekHoursTrend = useMemo(
+    () => [...weekDays].reverse().map((d) => Math.round((d.workSeconds / 3600) * 10) / 10),
+    [weekDays],
+  );
+
   const detailHref = (day: AttendanceDaySummary) => `/empHistory/${encodeDateKey(day.dateKey)}`;
 
   const overviewStats: StatCardData[] = [
-    { label: "Days present (week)", value: presentThisWeek, icon: Calendar },
-    { label: "Hours worked (week)", value: weekHours, icon: Clock, iconClassName: "text-emerald-600" },
-    { label: "Monthly attendance", value: `${monthPct}%`, icon: MapPin },
+    {
+      label: "Days present (week)",
+      value: presentThisWeek,
+      unit: `of ${weekDays.length} days tracked`,
+      icon: Calendar,
+      visualization: { type: "sparkline", data: weekPresenceTrend, color: "#2563eb" },
+    },
+    {
+      label: "Hours worked (week)",
+      value: weekHours,
+      unit: "Total logged hours",
+      icon: Clock,
+      iconClassName: "bg-emerald-500/10 text-emerald-600",
+      visualization: { type: "sparkline", data: weekHoursTrend, color: "#22c55e" },
+    },
+    {
+      label: "Monthly attendance",
+      value: `${monthPct}%`,
+      unit: `${presentMonth} full days this month`,
+      icon: MapPin,
+      visualization: { type: "ring", value: monthPct, max: 100, color: "#7c3aed" },
+    },
     {
       label: "Break today",
       value: todayStatus?.breakMinutes != null ? `${todayStatus.breakMinutes}m` : "0m",
+      unit: "Break time logged",
       icon: Clock,
-      iconClassName: "text-amber-600",
+      iconClassName: "bg-amber-500/10 text-amber-600",
+      visualization: {
+        type: "progress",
+        segments: [
+          { label: "Break", value: todayStatus?.breakMinutes ?? 0, color: "#f59e0b" },
+          { label: "Work", value: Math.round((todayStatus?.workSeconds ?? 0) / 60), color: "#22c55e" },
+        ],
+      },
     },
   ];
 
@@ -154,7 +196,12 @@ export function EmpAttendanceWorkspace({ embedded = false }: { embedded?: boolea
       </div>
 
       <div className={`grid lg:grid-cols-3 ${gridGap} items-start`}>
-        <div className="min-w-0 lg:col-span-2">
+        <div className="min-w-0 lg:col-span-2 space-y-6">
+          <DashboardSection>
+            <h2 className="text-lg font-semibold tracking-tight">Hours this week</h2>
+            <p className="text-sm text-muted-foreground mt-1 mb-4">Daily work hours from your punch records</p>
+            <SoftBarChart data={weekChartData} highlightColor="#2563eb" barColor="#dbeafe" />
+          </DashboardSection>
           <EmpDesktopAttendancePanel
             todayStatus={todayStatus}
             loading={statusLoading}
@@ -202,7 +249,7 @@ export function EmpAttendanceWorkspace({ embedded = false }: { embedded?: boolea
       <EmpWorkspaceContent>
         <EmpDesktopPage title="Attendance history" description="Search and review past attendance" icon={Calendar}>
           <div className="flex flex-wrap items-end gap-3 mb-2">
-            <EmpMobileDateField
+            <EmpDateField
               label="Search by date"
               value={searchDate}
               onChange={setSearchDate}
@@ -233,10 +280,60 @@ export function EmpAttendanceWorkspace({ embedded = false }: { embedded?: boolea
   if (tab === "calendar" || tab === "reports") {
     const present = reportDays.filter((d) => d.checkIn && d.checkOut).length;
     const hours = formatWorkHoursDecimal(reportDays.reduce((s, d) => s + d.workSeconds, 0));
+    const reportHoursTrend = reportDays
+      .slice()
+      .reverse()
+      .slice(-7)
+      .map((d) => Math.round((d.workSeconds / 3600) * 10) / 10);
     const reportStats: StatCardData[] = [
-      { label: "Present days", value: present, icon: Calendar },
-      { label: "Total hours", value: hours, icon: Clock, iconClassName: "text-emerald-600" },
-      { label: "Records", value: reportDays.length, icon: MapPin },
+      {
+        label: "Present days",
+        value: present,
+        unit: `of ${reportDays.length} records`,
+        icon: Calendar,
+        visualization: {
+          type: "bars",
+          items: reportDays
+            .slice(0, 5)
+            .map((d) => ({
+              label: new Date(d.dateKey + "T12:00:00Z").toLocaleDateString("en-IN", {
+                weekday: "short",
+                timeZone: "UTC",
+              }),
+              value: d.checkIn && d.checkOut ? 1 : 0,
+            })),
+        },
+      },
+      {
+        label: "Total hours",
+        value: hours,
+        unit: "In selected period",
+        icon: Clock,
+        iconClassName: "bg-emerald-500/10 text-emerald-600",
+        visualization: { type: "sparkline", data: reportHoursTrend, color: "#22c55e" },
+      },
+      {
+        label: "Records",
+        value: reportDays.length,
+        unit: "Attendance entries",
+        icon: MapPin,
+        visualization: {
+          type: "stacked",
+          segments: [
+            { label: "Complete", value: present, color: "#22c55e" },
+            {
+              label: "Partial",
+              value: reportDays.filter((d) => d.checkIn && !d.checkOut).length,
+              color: "#f59e0b",
+            },
+            {
+              label: "Absent",
+              value: reportDays.filter((d) => !d.checkIn).length,
+              color: "#f43f5e",
+            },
+          ],
+        },
+      },
     ];
 
     return (
@@ -247,15 +344,22 @@ export function EmpAttendanceWorkspace({ embedded = false }: { embedded?: boolea
           icon={Calendar}
         >
           <div className="flex flex-wrap items-end gap-3">
-            <EmpMobileDateField label="From" value={fromDate} onChange={setFromDate} max={toDate || undefined} />
-            <EmpMobileDateField label="To" value={toDate} onChange={setToDate} min={fromDate || undefined} />
+            <EmpDateField label="From" value={fromDate} onChange={setFromDate} max={toDate || undefined} />
+            <EmpDateField label="To" value={toDate} onChange={setToDate} min={fromDate || undefined} />
           </div>
           {tab === "reports" ? (
-            <div className={`grid sm:grid-cols-3 ${gridGap} mb-6`}>
-              {reportStats.map((s) => (
-                <StatCard key={s.label} stat={s} />
-              ))}
-            </div>
+            <>
+              <div className={`grid sm:grid-cols-3 ${gridGap} mb-6`}>
+                {reportStats.map((s) => (
+                  <StatCard key={s.label} stat={s} />
+                ))}
+              </div>
+              <DashboardSection className="mb-6">
+                <h2 className="text-lg font-semibold tracking-tight">Attendance trend</h2>
+                <p className="text-sm text-muted-foreground mt-1 mb-4">Work hours across the selected period</p>
+                <AttendanceTrendChart data={reportChartData} />
+              </DashboardSection>
+            </>
           ) : null}
           <EmpDesktopAttendanceTable days={reportDays} loading={historyLoading} detailHref={detailHref} />
         </EmpDesktopPage>

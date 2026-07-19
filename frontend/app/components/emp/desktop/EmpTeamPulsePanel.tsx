@@ -53,7 +53,7 @@ export function EmpTeamPulsePanel() {
   const spotlight = members.slice(0, 8);
 
   return (
-    <section className={cn(cardShell, "p-6 flex flex-col gap-6")}>
+    <section className={cn(cardShell, "p-5 flex flex-col gap-4")}>
       <div className="flex items-start justify-between gap-3">
         <div>
           <h3 className="font-display text-base font-semibold text-foreground">Today&apos;s team pulse</h3>
