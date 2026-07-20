@@ -120,14 +120,6 @@ export const EMP_MORE_SECTIONS: EmpMoreSection[] = [
     iconClassName: "text-yellow-600",
   },
   {
-    id: "team-overview",
-    label: "Team Overview",
-    href: "/empTeam",
-    icon: "solar:users-group-rounded-bold-duotone",
-    iconClassName: "text-[#4f46e5]",
-    managerOnly: true,
-  },
-  {
     id: "my-team",
     label: "My Team",
     href: "/empTeam/my-team",

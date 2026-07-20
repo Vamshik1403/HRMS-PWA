@@ -173,6 +173,8 @@ export function extractDayPunchTimes(records: AttendanceLocationRecord[]) {
     checkOut: lastOut,
     breakIn: breakIns[0] ?? null,
     breakOut: breakOuts.at(-1) ?? null,
+    allCheckIns: checkIns,
+    allCheckOuts: checkOuts,
     allBreakIns: breakIns,
     allBreakOuts: breakOuts,
   };

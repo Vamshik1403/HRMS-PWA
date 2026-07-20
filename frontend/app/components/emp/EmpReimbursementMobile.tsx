@@ -18,6 +18,8 @@ import { EmpPortalPage, empListClass, empPageRootClass } from "./EmpPortalPage";
 import { useEmpPortalDesktop } from "../layout/EmpPortalShell";
 import { EmpDesktopReimbursementTable } from "./desktop/EmpDesktopReimbursementTable";
 import { EmpDesktopPage } from "./desktop/EmpDesktopPage";
+import { EmpReimbursementApplyForm } from "./EmpReimbursementApplyForm";
+import { FormModal } from "../ui/form-modal";
 import { Button } from "../ui/button";
 import { Wallet } from "lucide-react";
 
@@ -69,7 +71,10 @@ function displayStatus(s: string) {
   return map[label] || label;
 }
 
-export function EmpReimbursementMobile({ desktopTab }: { desktopTab?: string } = {}) {
+export function EmpReimbursementMobile({
+  desktopTab,
+  embedded = false,
+}: { desktopTab?: string; embedded?: boolean } = {}) {
   const user = useCurrentUser();
   const isPortalDesktop = useEmpPortalDesktop();
   const inWorkspace = !!desktopTab;
@@ -79,6 +84,7 @@ export function EmpReimbursementMobile({ desktopTab }: { desktopTab?: string } =
   const [menuId, setMenuId] = useState<string | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [approvalId, setApprovalId] = useState<string | null>(null);
+  const [applyOpen, setApplyOpen] = useState(false);
 
   const load = useCallback(async (empId: number) => {
     const token =
@@ -258,6 +264,75 @@ export function EmpReimbursementMobile({ desktopTab }: { desktopTab?: string } =
         : desktopTab === "history"
           ? "Reimbursement history"
           : "Reimbursement overview";
+
+    if (embedded) {
+      return (
+        <>
+          {applyOpen ? (
+            <FormModal
+              open={applyOpen}
+              onOpenChange={setApplyOpen}
+              title="New reimbursement claim"
+              description="Submit expenses for reimbursement"
+            >
+              <EmpReimbursementApplyForm
+                onSuccess={() => {
+                  setApplyOpen(false);
+                  if (employeeId) load(employeeId);
+                }}
+                onCancel={() => setApplyOpen(false)}
+              />
+            </FormModal>
+          ) : (
+            <>
+              <div className="flex justify-end mb-4">
+                <Button type="button" size="sm" onClick={() => setApplyOpen(true)}>
+                  <Plus className="size-4" />
+                  New claim
+                </Button>
+              </div>
+              {showList ? (
+                <>
+                  <EmpDesktopReimbursementTable
+                    rows={listRows}
+                    isManagerView={isManagerView}
+                    employeeNameForRow={employeeNameForRow}
+                    onApprove={(id) => setApprovalId(id)}
+                    onDelete={handleDelete}
+                    title={desktopTab === "approvals" ? "Pending approvals" : "Claims"}
+                  />
+                  {hasHistory ? (
+                    <EmpListViewMoreButton count={historyRows.length} onClick={() => setHistoryOpen(true)} />
+                  ) : null}
+                </>
+              ) : null}
+            </>
+          )}
+          <EmpRecordHistorySheet
+            open={historyOpen}
+            onClose={() => setHistoryOpen(false)}
+            title="Reimbursement history"
+            subtitle={`${historyRows.length} older claim(s)`}
+          >
+            <EmpDesktopReimbursementTable
+              rows={historyRows}
+              isManagerView={isManagerView}
+              employeeNameForRow={employeeNameForRow}
+              onApprove={(id) => setApprovalId(id)}
+              onDelete={handleDelete}
+            />
+          </EmpRecordHistorySheet>
+          <EmpReimbursementApprovalSheet
+            open={!!approvalId}
+            onClose={() => setApprovalId(null)}
+            reimbursementId={approvalId}
+            onDone={() => {
+              if (employeeId) load(employeeId);
+            }}
+          />
+        </>
+      );
+    }
 
     return (
       <EmpDesktopPage

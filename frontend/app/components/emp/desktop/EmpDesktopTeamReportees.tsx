@@ -1,9 +1,16 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Building2, CalendarCheck2, Users } from "lucide-react";
+import Link from "next/link";
+import { Building2, CalendarCheck2, MoreVertical, UserCircle, Users } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../../ui/card";
 import { Button } from "../../ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "../../ui/dropdown-menu";
 import { listCardClass } from "../../app/list-ui-styles";
 import { useEmpManagerScope } from "../../../hooks/useEmpManagerScope";
 import { reporteeDisplayName, teamReportees } from "../../../utils/empManagerDisplay";
@@ -230,17 +237,33 @@ export function EmpDesktopTeamReportees() {
                       {checkInLabel ? ` · ${checkInLabel}` : ""}
                     </p>
                   </div>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="shrink-0 h-8 gap-1.5 text-xs"
-                    onClick={() => setRegulariseTarget(m)}
-                    aria-label={`Regularize attendance for ${name}`}
-                  >
-                    <CalendarCheck2 className="size-3.5" />
-                    Regularize
-                  </Button>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="shrink-0 size-8"
+                        aria-label={`Options for ${name}`}
+                      >
+                        <MoreVertical className="size-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-44">
+                      {scope === "reportees" ? (
+                        <DropdownMenuItem onClick={() => setRegulariseTarget(m)}>
+                          <CalendarCheck2 className="size-4" />
+                          Regularize
+                        </DropdownMenuItem>
+                      ) : null}
+                      <DropdownMenuItem asChild>
+                        <Link href={`/empTeam/member/${m.id}`} className="flex items-center gap-2">
+                          <UserCircle className="size-4" />
+                          View profile
+                        </Link>
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </li>
               );
             })}

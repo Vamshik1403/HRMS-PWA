@@ -4,6 +4,7 @@ import { usePathname } from "next/navigation";
 import { cn } from "@/app/utils/cn";
 import { SidebarBrand } from "../app/sidebar-brand";
 import { EmpNavLink } from "./emp-nav-link";
+import { useEmpManagerScope } from "@/app/hooks/useEmpManagerScope";
 import { filterEmpSidebarNavigation, type EmpSidebarNavGroup } from "./emp-portal-sidebar-navigation";
 
 interface EmpSidebarProps {
@@ -44,7 +45,8 @@ function EmpSidebarNavGroup({
 
 export function EmpSidebar({ collapsed, onToggle, onRefresh }: EmpSidebarProps) {
   const pathname = usePathname();
-  const groups = filterEmpSidebarNavigation();
+  const { isManagerView } = useEmpManagerScope();
+  const groups = filterEmpSidebarNavigation(isManagerView);
 
   return (
     <aside

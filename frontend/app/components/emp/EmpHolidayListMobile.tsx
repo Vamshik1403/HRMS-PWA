@@ -34,7 +34,7 @@ function dateRangeLabel(start: string, end: string): string {
   return `${formatDisplayDate(start)} – ${formatDisplayDate(end)}`;
 }
 
-export function EmpHolidayListMobile() {
+export function EmpHolidayListMobile({ embedded = false }: { embedded?: boolean } = {}) {
   const [holidays, setHolidays] = useState<EmpHolidayRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -114,21 +114,32 @@ export function EmpHolidayListMobile() {
   };
 
   return (
-    <div className="px-4 pt-3 pb-8">
-      <div className="flex items-center gap-2 mb-4">
-        <Link
-          href="/empdashboard"
-          className="inline-flex items-center gap-1 text-sm font-medium text-[#4f46e5]"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          Home
-        </Link>
-      </div>
+    <div className={embedded ? "space-y-4" : "px-4 pt-3 pb-8"}>
+      {!embedded ? (
+        <div className="flex items-center gap-2 mb-4">
+          <Link
+            href="/empdashboard"
+            className="inline-flex items-center gap-1 text-sm font-medium text-[#4f46e5]"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            Home
+          </Link>
+        </div>
+      ) : null}
 
-      <h1 className="text-xl font-bold text-gray-900 mb-1">Holiday list</h1>
-      <p className="text-sm text-gray-500 mb-4">
-        Public holidays for your company from the leave policy calendar.
-      </p>
+      {!embedded ? (
+        <>
+          <h1 className="text-xl font-bold text-gray-900 mb-1">Holiday list</h1>
+          <p className="text-sm text-gray-500 mb-4">
+            Public holidays for your company from the leave policy calendar.
+          </p>
+        </>
+      ) : (
+        <div>
+          <h3 className="text-base font-semibold text-foreground">My holidays</h3>
+          <p className="text-sm text-muted-foreground">Company holidays on your calendar</p>
+        </div>
+      )}
 
       {loading ? (
         <p className="text-sm text-gray-400 py-8 text-center">Loading holidays…</p>

@@ -21,21 +21,16 @@ export type ModuleWorkspace = {
   label: string;
   basePath: string;
   tabs: WorkspaceTab[];
-  /** Uses top zone nav (My Workspace / Team / Company) */
+  /** @deprecated Zone nav removed — kept for compatibility */
   usesZoneNav?: boolean;
 };
 
 export const MODULE_WORKSPACES: ModuleWorkspace[] = [
   {
     id: "home",
-    label: "My Workspace",
+    label: "Home",
     basePath: "/empdashboard",
-    usesZoneNav: true,
-    tabs: [
-      { id: "dashboard", label: "Dashboard" },
-      { id: "profile", label: "My Profile", href: "/empProfile" },
-      { id: "calendar", label: "My Calendar" },
-    ],
+    tabs: [{ id: "dashboard", label: "Dashboard" }],
   },
   {
     id: "onboarding",
@@ -73,10 +68,8 @@ export const MODULE_WORKSPACES: ModuleWorkspace[] = [
     label: "Payroll",
     basePath: "/empPayout",
     tabs: [
-      { id: "overview", label: "Overview" },
       { id: "payslips", label: "Payslips" },
       { id: "salary-advance", label: "Salary Advance" },
-      { id: "generate", label: "Generate Salary" },
     ],
   },
   {
@@ -118,18 +111,16 @@ export const MODULE_WORKSPACES: ModuleWorkspace[] = [
     basePath: "/empProfile",
     tabs: [
       { id: "profile", label: "Profile" },
-      { id: "approvals", label: "Approvals" },
-      { id: "leave", label: "Leave" },
       { id: "attendance", label: "Attendance" },
-      { id: "promotions", label: "Promotions & Transfer", managerOnly: true },
+      { id: "leave", label: "Leave" },
+      { id: "reimbursement", label: "Reimbursement" },
+      { id: "delegation", label: "My Delegation" },
     ],
   },
 ];
 
 const PATH_TO_MODULE: { prefix: string; id: EmpModuleId }[] = [
   { prefix: "/empdashboard", id: "home" },
-  { prefix: "/empTeam", id: "home" },
-  { prefix: "/empCompany", id: "home" },
   { prefix: "/empOnboarding", id: "onboarding" },
   { prefix: "/empAttendance", id: "attendance" },
   { prefix: "/empLeaveApplication", id: "leave" },
@@ -140,9 +131,6 @@ const PATH_TO_MODULE: { prefix: string; id: EmpModuleId }[] = [
   { prefix: "/empHistory", id: "reports" },
   { prefix: "/empMyTasks", id: "tasks" },
   { prefix: "/empProfile", id: "profile" },
-  { prefix: "/empHolidays", id: "home" },
-  { prefix: "/empNoticeboard", id: "home" },
-  { prefix: "/empPublicHoliday", id: "home" },
 ];
 
 export function resolveModuleWorkspace(pathname: string): ModuleWorkspace | null {
@@ -164,8 +152,14 @@ export function resolveModuleTab(
   // Legacy path-based tab hints
   if (workspace.id === "leave" && pathname.includes("/new")) return "apply";
   if (workspace.id === "reimbursement" && pathname.includes("/new")) return "apply";
-  if (workspace.id === "payroll" && pathname.startsWith("/empGenerateSalary")) return "generate";
   if (workspace.id === "payroll" && pathname.startsWith("/empSalaryAdvance")) return "salary-advance";
+  if (workspace.id === "payroll") {
+    const tab = searchParams.get("tab");
+    if (tab === "salary-advance") return "salary-advance";
+    if (tab === "generate") return "payslips";
+    if (tab === "overview") return "payslips";
+    return tab && workspace.tabs.some((t) => t.id === tab) ? tab : "payslips";
+  }
   if (workspace.id === "home") {
     if (searchParams.get("view") === "dashboard") return "dashboard";
     if (searchParams.get("tab") === "approvals") return "approvals";

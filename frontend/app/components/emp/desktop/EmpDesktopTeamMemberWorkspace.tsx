@@ -7,22 +7,42 @@ import { ArrowLeft, User } from "lucide-react";
 import { EmpDesktopPage } from "./EmpDesktopPage";
 import { EmpDesktopProfilePanel } from "./EmpDesktopProfilePanel";
 import { EmpProfileWorkspaceTabNav } from "./EmpProfileWorkspaceTabNav";
+import { EmpProfileAttendanceView } from "./EmpProfileAttendanceView";
+import { EmpHolidayListMobile } from "../EmpHolidayListMobile";
 import {
   EmpTeamMemberApprovals,
-  EmpTeamMemberAttendance,
   EmpTeamMemberLeave,
+  EmpTeamMemberReimbursement,
+  EmpTeamMemberPayslips,
+  EmpTeamMemberSalaryAdvances,
+  EmpTeamMemberMessaging,
   EmpTeamMemberPromotions,
 } from "../EmpTeamMemberSections";
 import { Icon } from "@iconify/react";
+
+const MEMBER_TABS = [
+  "profile",
+  "attendance",
+  "leave",
+  "reimbursement",
+  "payslips",
+  "salary-advance",
+  "messaging",
+  "holidays",
+  "approvals",
+  "promotions",
+] as const;
+
+type MemberTab = (typeof MEMBER_TABS)[number];
 
 function memberTabHref(employeeId: number, tab: string) {
   return `/empTeam/member/${employeeId}?tab=${tab}`;
 }
 
-function resolveMemberTab(searchParams: URLSearchParams) {
+function resolveMemberTab(searchParams: URLSearchParams): MemberTab {
   const tab = searchParams.get("tab");
-  if (tab && ["profile", "approvals", "leave", "attendance", "promotions"].includes(tab)) {
-    return tab;
+  if (tab && MEMBER_TABS.includes(tab as MemberTab)) {
+    return tab as MemberTab;
   }
   return "profile";
 }
@@ -43,9 +63,14 @@ function EmpDesktopTeamMemberWorkspaceInner() {
 
   const tabs = [
     { id: "profile", label: "Profile", href: memberTabHref(employeeId, "profile") },
-    { id: "approvals", label: "Approvals", href: memberTabHref(employeeId, "approvals") },
-    { id: "leave", label: "Leave", href: memberTabHref(employeeId, "leave") },
     { id: "attendance", label: "Attendance", href: memberTabHref(employeeId, "attendance") },
+    { id: "leave", label: "Leave", href: memberTabHref(employeeId, "leave") },
+    { id: "reimbursement", label: "Reimbursement", href: memberTabHref(employeeId, "reimbursement") },
+    { id: "payslips", label: "Payslips", href: memberTabHref(employeeId, "payslips") },
+    { id: "salary-advance", label: "Loans & Advances", href: memberTabHref(employeeId, "salary-advance") },
+    { id: "messaging", label: "IM", href: memberTabHref(employeeId, "messaging") },
+    { id: "holidays", label: "My Holidays", href: memberTabHref(employeeId, "holidays") },
+    { id: "approvals", label: "Approvals", href: memberTabHref(employeeId, "approvals") },
     { id: "promotions", label: "Promotions & Transfer", href: memberTabHref(employeeId, "promotions") },
   ];
 
@@ -65,9 +90,14 @@ function EmpDesktopTeamMemberWorkspaceInner() {
         {activeTab === "profile" && (
           <EmpDesktopProfilePanel embedded employeeId={employeeId} readOnly />
         )}
-        {activeTab === "approvals" && <EmpTeamMemberApprovals employeeId={employeeId} />}
+        {activeTab === "attendance" && <EmpProfileAttendanceView employeeId={employeeId} />}
         {activeTab === "leave" && <EmpTeamMemberLeave employeeId={employeeId} />}
-        {activeTab === "attendance" && <EmpTeamMemberAttendance employeeId={employeeId} />}
+        {activeTab === "reimbursement" && <EmpTeamMemberReimbursement employeeId={employeeId} />}
+        {activeTab === "payslips" && <EmpTeamMemberPayslips employeeId={employeeId} />}
+        {activeTab === "salary-advance" && <EmpTeamMemberSalaryAdvances employeeId={employeeId} />}
+        {activeTab === "messaging" && <EmpTeamMemberMessaging employeeId={employeeId} />}
+        {activeTab === "holidays" && <EmpHolidayListMobile embedded />}
+        {activeTab === "approvals" && <EmpTeamMemberApprovals employeeId={employeeId} />}
         {activeTab === "promotions" && <EmpTeamMemberPromotions employeeId={employeeId} />}
       </div>
     </EmpDesktopPage>

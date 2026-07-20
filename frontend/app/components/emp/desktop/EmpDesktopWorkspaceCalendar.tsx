@@ -1,13 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import Link from "next/link";
-import { ChevronLeft, ChevronRight, Calendar } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Bell, Calendar, ChevronLeft, ChevronRight, ListTodo } from "lucide-react";
 import { EmpDesktopPage } from "./EmpDesktopPage";
+import { EmpCalendarDayDetailPanel } from "./EmpCalendarDayDetailPanel";
 import { Button } from "../../ui/button";
+import { FormModal } from "../../ui/form-modal";
 import {
   groupAttendanceByDay,
-  encodeDateKey,
   type AttendanceDaySummary,
 } from "../../../utils/empAttendanceHistory";
 import { todayPunchDateKey } from "../../../utils/attendanceDuration";
@@ -18,6 +18,8 @@ import {
 } from "../../../utils/empCalendarDayStatus";
 import { buildWeekOffDayNames, isWeekOffDate, type WorkShiftDayRow } from "../../../utils/empWorkShiftWeekOff";
 import type { EmpHolidayRow } from "../EmpHolidayListMobile";
+import { useCurrentUser } from "@/app/hooks/useCurrentUser";
+import { taskFetch } from "@/app/utils/taskApi";
 import { cn } from "@/app/utils/cn";
 
 const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL || "/backend";
@@ -43,6 +45,16 @@ function monthRange(year: number, month: number) {
   };
 }
 
+function taskDateKey(scheduleDateTime: string) {
+  const d = new Date(scheduleDateTime);
+  if (Number.isNaN(d.getTime())) return "";
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+}
+
+function memoDateKey(iso: string) {
+  return iso.slice(0, 10);
+}
+
 function buildMonthCells(year: number, month: number) {
   const firstDow = new Date(Date.UTC(year, month - 1, 1)).getUTCDay();
   const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
@@ -53,11 +65,7 @@ function buildMonthCells(year: number, month: number) {
     const day = prevMonthDays - i;
     const pm = month === 1 ? 12 : month - 1;
     const py = month === 1 ? year - 1 : year;
-    cells.push({
-      dateKey: `${py}-${pad2(pm)}-${pad2(day)}`,
-      day,
-      outside: true,
-    });
+    cells.push({ dateKey: `${py}-${pad2(pm)}-${pad2(day)}`, day, outside: true });
   }
 
   for (let d = 1; d <= daysInMonth; d++) {
@@ -68,11 +76,7 @@ function buildMonthCells(year: number, month: number) {
   for (let d = 1; d <= trailing; d++) {
     const nm = month === 12 ? 1 : month + 1;
     const ny = month === 12 ? year + 1 : year;
-    cells.push({
-      dateKey: `${ny}-${pad2(nm)}-${pad2(d)}`,
-      day: d,
-      outside: true,
-    });
+    cells.push({ dateKey: `${ny}-${pad2(nm)}-${pad2(d)}`, day: d, outside: true });
   }
 
   return cells;
@@ -105,6 +109,7 @@ const kindBadge: Record<CalendarDayKind, string> = {
 };
 
 export function EmpDesktopWorkspaceCalendar() {
+  const user = useCurrentUser();
   const today = new Date();
   const [viewYear, setViewYear] = useState(today.getFullYear());
   const [viewMonth, setViewMonth] = useState(today.getMonth() + 1);
@@ -115,6 +120,10 @@ export function EmpDesktopWorkspaceCalendar() {
   const [leaves, setLeaves] = useState<
     { fromDate?: string; toDate?: string; status?: string; appliedLeaveType?: string; dayStatuses?: unknown }[]
   >([]);
+  const [tasksByDate, setTasksByDate] = useState<Map<string, number>>(new Map());
+  const [noticesByDate, setNoticesByDate] = useState<Map<string, number>>(new Map());
+  const [selectedDateKey, setSelectedDateKey] = useState<string | null>(null);
+  const monthInputRef = useRef<HTMLInputElement>(null);
 
   const todayKey = todayPunchDateKey();
 
@@ -123,29 +132,32 @@ export function EmpDesktopWorkspaceCalendar() {
     const { from, to } = monthRange(year, month);
     try {
       const userRaw = typeof window !== "undefined" ? localStorage.getItem("user") : null;
-      const user = userRaw ? JSON.parse(userRaw) : null;
-      const empId = user?.employee?.id;
+      const parsedUser = userRaw ? JSON.parse(userRaw) : null;
+      const empId = parsedUser?.employee?.id;
 
-      const [attendanceData, holidaysData, leaveData, empData] = await Promise.all([
+      const [attendanceData, holidaysData, leaveData, empData, memoData] = await Promise.all([
         fetch(`${BACKEND}/emp-location-attendance/my?from=${from}&to=${to}`, {
           headers: authHeaders(),
           cache: "no-store",
         }).then((r) => (r.ok ? r.json() : [])),
-        fetch(`${BACKEND}/emp-notifications/holidays`, {
-          headers: authHeaders(),
-          cache: "no-store",
-        }).then((r) => (r.ok ? r.json() : [])),
+        fetch(`${BACKEND}/emp-notifications/holidays`, { headers: authHeaders(), cache: "no-store" }).then((r) =>
+          r.ok ? r.json() : [],
+        ),
         empId != null
-          ? fetch(`${BACKEND}/leave-application/employee/${empId}`, {
-              headers: authHeaders(),
-              cache: "no-store",
-            }).then((r) => (r.ok ? r.json() : []))
+          ? fetch(`${BACKEND}/leave-application/employee/${empId}`, { headers: authHeaders(), cache: "no-store" }).then(
+              (r) => (r.ok ? r.json() : []),
+            )
           : Promise.resolve([]),
         empId != null
           ? fetch(`${BACKEND}/manage-emp/${empId}`, { headers: authHeaders(), cache: "no-store" }).then((r) =>
               r.ok ? r.json() : null,
             )
           : Promise.resolve(null),
+        empId != null
+          ? fetch(`${BACKEND}/employee-memo`, { headers: authHeaders(), cache: "no-store" }).then((r) =>
+              r.ok ? r.json() : [],
+            )
+          : Promise.resolve([]),
       ]);
 
       setDays(groupAttendanceByDay(Array.isArray(attendanceData) ? attendanceData : []));
@@ -159,6 +171,20 @@ export function EmpDesktopWorkspaceCalendar() {
         ),
       );
       setLeaves(Array.isArray(leaveData) ? leaveData : []);
+
+      const noticeMap = new Map<string, number>();
+      (Array.isArray(memoData) ? memoData : []).forEach(
+        (m: { employeeID?: number; employeeIDs?: number[]; undoneAt?: string | null; createdAt?: string; issuedDate?: string }) => {
+          if (m.undoneAt || !empId) return;
+          const mine =
+            m.employeeID === empId || (Array.isArray(m.employeeIDs) && m.employeeIDs.includes(empId));
+          if (!mine) return;
+          const key = memoDateKey(m.issuedDate || m.createdAt || "");
+          if (!key || key.length < 10) return;
+          noticeMap.set(key, (noticeMap.get(key) ?? 0) + 1);
+        },
+      );
+      setNoticesByDate(noticeMap);
 
       const workShiftId = empData?.workShiftID ?? empData?.workShift?.id;
       if (workShiftId) {
@@ -176,15 +202,38 @@ export function EmpDesktopWorkspaceCalendar() {
       } else {
         setWeekOffDays(new Set());
       }
+
+      if (user) {
+        try {
+          const taskData = await taskFetch<{ items: { scheduleDateTime?: string | null }[] }>(
+            "/task-projects",
+            user,
+            undefined,
+            { limit: 200 },
+          );
+          const taskMap = new Map<string, number>();
+          (taskData.items || []).forEach((t) => {
+            if (!t.scheduleDateTime) return;
+            const key = taskDateKey(t.scheduleDateTime);
+            if (!key) return;
+            taskMap.set(key, (taskMap.get(key) ?? 0) + 1);
+          });
+          setTasksByDate(taskMap);
+        } catch {
+          setTasksByDate(new Map());
+        }
+      }
     } catch {
       setDays([]);
       setHolidayMap(new Map());
       setLeaves([]);
       setWeekOffDays(new Set());
+      setTasksByDate(new Map());
+      setNoticesByDate(new Map());
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [user]);
 
   useEffect(() => {
     void loadMonth(viewYear, viewMonth);
@@ -205,15 +254,62 @@ export function EmpDesktopWorkspaceCalendar() {
     setViewMonth(d.getUTCMonth() + 1);
   };
 
+  const openMonthPicker = () => {
+    const el = monthInputRef.current;
+    if (!el) return;
+    el.focus({ preventScroll: true });
+    if (typeof el.showPicker === "function") {
+      try {
+        el.showPicker();
+        return;
+      } catch {
+        /* fall through */
+      }
+    }
+    el.click();
+  };
+
   return (
     <EmpDesktopPage
       title="My Calendar"
-      description="Monthly attendance with present, absent, leave, holiday, and week off"
+      description="Attendance, tasks, notices, holidays, and week offs"
       icon={Calendar}
     >
+      {selectedDateKey ? (
+        <FormModal
+          open={!!selectedDateKey}
+          onOpenChange={(open) => {
+            if (!open) setSelectedDateKey(null);
+          }}
+          title="Day details"
+          description={selectedDateKey}
+          size="xl"
+        >
+          <EmpCalendarDayDetailPanel dateKey={selectedDateKey} />
+        </FormModal>
+      ) : null}
+
       <div className="rounded-2xl border border-border bg-card shadow-sm overflow-hidden">
         <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-4 border-b border-border bg-gradient-to-r from-muted/40 to-card">
           <div className="flex items-center gap-2">
+            <input
+              ref={monthInputRef}
+              type="month"
+              value={`${viewYear}-${pad2(viewMonth)}`}
+              onChange={(e) => {
+                const [y, m] = e.target.value.split("-").map(Number);
+                if (y && m) {
+                  setViewYear(y);
+                  setViewMonth(m);
+                }
+              }}
+              className="sr-only"
+              aria-hidden
+              tabIndex={-1}
+            />
+            <Button type="button" variant="outline" size="icon" className="size-8" onClick={openMonthPicker} aria-label="Select month">
+              <Calendar className="size-4" />
+            </Button>
             <Button type="button" variant="outline" size="icon" className="size-8" onClick={() => shiftMonth(-1)} aria-label="Previous month">
               <ChevronLeft className="size-4" />
             </Button>
@@ -263,6 +359,9 @@ export function EmpDesktopWorkspaceCalendar() {
               const isOutside = cell.outside === true;
               const isWeekend = idx % 7 === 0 || idx % 7 === 6;
               const isWeekOff = !isOutside && isWeekOffDate(cell.dateKey, weekOffDays);
+              const taskCount = tasksByDate.get(cell.dateKey) ?? 0;
+              const noticeCount = noticesByDate.get(cell.dateKey) ?? 0;
+              const isHoliday = !isOutside && holidayMap.has(cell.dateKey);
 
               const display = isOutside
                 ? { kind: "none" as const, statusLabel: "", detailLine: "", hoursLine: "" }
@@ -276,18 +375,19 @@ export function EmpDesktopWorkspaceCalendar() {
                   });
 
               const hasStatus = Boolean(display.statusLabel);
-              const detailHref = `/empHistory/${encodeDateKey(cell.dateKey)}`;
+              const hasIcons = taskCount > 0 || noticeCount > 0 || isHoliday || isWeekOff;
+              const clickable = !isOutside && (hasStatus || hasIcons || true);
 
               const inner = (
                 <div
                   className={cn(
-                    "min-h-[108px] bg-card p-2 flex flex-col transition-colors",
+                    "min-h-[108px] bg-card p-2 flex flex-col transition-colors text-left w-full",
                     isOutside && "bg-muted/15 opacity-60",
                     isWeekend && !isOutside && "bg-muted/10",
                     isWeekOff && !isOutside && "bg-amber-50/30",
                     hasStatus && !isOutside && "border-l-[3px]",
                     hasStatus && !isOutside && kindAccent[display.kind],
-                    !isOutside && hasStatus && "hover:bg-muted/20",
+                    clickable && !isOutside && "hover:bg-muted/20 cursor-pointer",
                   )}
                 >
                   <div className="flex items-center justify-between gap-1">
@@ -310,31 +410,63 @@ export function EmpDesktopWorkspaceCalendar() {
                     ) : null}
                   </div>
 
-                  {hasStatus && !isOutside ? (
-                    <div className="mt-2 flex-1 space-y-1 min-w-0">
-                      {display.detailLine ? (
-                        <p className="text-[10px] leading-snug text-muted-foreground line-clamp-2" title={display.detailLine}>
-                          {display.detailLine}
-                        </p>
+                  {!isOutside ? (
+                    <div className="mt-auto flex flex-wrap items-center gap-1.5 pt-2">
+                      {taskCount > 0 ? (
+                        <span className="inline-flex items-center gap-0.5 rounded-md bg-sky-100 px-1.5 py-0.5 text-[9px] font-semibold text-sky-800" title={`${taskCount} task(s)`}>
+                          <ListTodo className="size-3" />
+                          {taskCount > 1 ? taskCount : null}
+                        </span>
                       ) : null}
-                      {display.hoursLine ? (
-                        <p className="text-[11px] font-semibold text-emerald-700">{display.hoursLine}</p>
+                      {noticeCount > 0 ? (
+                        <span className="inline-flex items-center gap-0.5 rounded-md bg-violet-100 px-1.5 py-0.5 text-[9px] font-semibold text-violet-800" title={`${noticeCount} notice(s)`}>
+                          <Bell className="size-3" />
+                          {noticeCount > 1 ? noticeCount : null}
+                        </span>
+                      ) : null}
+                      {isHoliday ? (
+                        <span className="rounded-md bg-violet-50 px-1.5 py-0.5 text-[9px] font-semibold text-violet-700" title={holidayMap.get(cell.dateKey)}>
+                          Hol
+                        </span>
+                      ) : null}
+                      {isWeekOff ? (
+                        <span className="rounded-md bg-amber-50 px-1.5 py-0.5 text-[9px] font-semibold text-amber-800">
+                          Off
+                        </span>
                       ) : null}
                     </div>
                   ) : (
                     <div className="flex-1" />
                   )}
+
+                  {hasStatus && !isOutside ? (
+                    <div className="mt-1 space-y-0.5 min-w-0">
+                      {display.detailLine ? (
+                        <p className="text-[10px] leading-snug text-muted-foreground line-clamp-1" title={display.detailLine}>
+                          {display.detailLine}
+                        </p>
+                      ) : null}
+                      {display.hoursLine ? (
+                        <p className="text-[10px] font-semibold text-emerald-700">{display.hoursLine}</p>
+                      ) : null}
+                    </div>
+                  ) : null}
                 </div>
               );
 
-              if (isOutside || !hasStatus || display.kind === "none") {
+              if (!clickable) {
                 return <div key={cell.dateKey}>{inner}</div>;
               }
 
               return (
-                <Link key={cell.dateKey} href={detailHref} className="block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset">
+                <button
+                  key={cell.dateKey}
+                  type="button"
+                  onClick={() => setSelectedDateKey(cell.dateKey)}
+                  className="block w-full text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+                >
                   {inner}
-                </Link>
+                </button>
               );
             })}
           </div>

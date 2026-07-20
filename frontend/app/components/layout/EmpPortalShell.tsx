@@ -1,8 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { Icon } from "@iconify/react";
 import { Eye, EyeOff } from "lucide-react";
 import {
@@ -44,21 +44,16 @@ import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
 import {
-  HOME_WORKSPACE,
-  homeWorkspaceTabHref,
-  resolveHomeWorkspaceTab,
   resolveModuleWorkspace,
   visibleModuleTabs,
 } from "./emp-portal-workspaces";
 import { EmpSidebar } from "./EmpSidebar";
 import { EmpWorkspaceTabNav } from "../emp/EmpWorkspaceTabNav";
+import { EmpPortalGlobalSearch } from "./EmpPortalGlobalSearch";
+import { EmpThemeToggle } from "./EmpThemeToggle";
 import {
   EMP_COMPANY_TABS,
-  EMP_TEAM_TABS,
-  EMP_ZONE_ITEMS,
-  pathnameMatches,
   resolvePortalZone,
-  type EmpPortalZone,
 } from "./emp-portal-navigation";
 
 interface EmpPortalShellProps {
@@ -123,7 +118,6 @@ function NavTabLink({
 
 export default function EmpPortalShell({ children, hideBottomNav = false }: EmpPortalShellProps) {
   const pathname = usePathname();
-  const searchParams = useSearchParams();
   const router = useRouter();
   const { isManagerView } = useEmpManagerScope();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -138,13 +132,14 @@ export default function EmpPortalShell({ children, hideBottomNav = false }: EmpP
   const syncInFlight = useRef(false);
 
   const activeZone = resolvePortalZone(pathname);
-  const search = searchParams.toString();
   const activeModule = resolveModuleWorkspace(pathname);
 
-  const visibleZones = useMemo(
-    () => EMP_ZONE_ITEMS.filter((z) => z.id === "workspace" || isManagerView),
-    [isManagerView],
-  );
+  const moduleTabs = activeModule
+    ? visibleModuleTabs(activeModule, isManagerView)
+    : [];
+
+  const companyTabs = EMP_COMPANY_TABS;
+  const showCompanyTabs = isManagerView && activeZone === "company";
 
   useEffect(() => {
     ensureFetchRefreshPatch();
@@ -288,6 +283,14 @@ export default function EmpPortalShell({ children, hideBottomNav = false }: EmpP
     empUser?.employee?.employeePhotoUrl,
   );
 
+  const toggleTheme = () => {
+    const next = theme === "dark" ? "light" : "dark";
+    setTheme(next);
+    localStorage.setItem("_emp_appearance", next);
+    document.documentElement.setAttribute("data-emp-theme", next);
+    window.dispatchEvent(new Event("emp-theme-change"));
+  };
+
   const handleChangePassword = async () => {
     if (!pwdForm.oldPassword || !pwdForm.newPassword) {
       toast.error("All fields are required");
@@ -328,29 +331,6 @@ export default function EmpPortalShell({ children, hideBottomNav = false }: EmpP
     void refreshHomeScreenBadge();
   }, [router]);
 
-  const zoneHref = (zone: EmpPortalZone) => {
-    if (zone === "team") return "/empTeam";
-    if (zone === "company") return "/empCompany";
-    return "/empdashboard";
-  };
-
-  const showZoneNav =
-    activeModule?.usesZoneNav === true || activeZone === "team" || activeZone === "company";
-  const isProfileWorkspacePath = pathname === "/empProfile" || pathname.startsWith("/empProfile/");
-  const showWorkspaceZoneNav = showZoneNav || isProfileWorkspacePath;
-  const moduleTabs = activeModule
-    ? visibleModuleTabs(activeModule, isManagerView)
-    : [];
-  const homeWorkspaceTabs = visibleModuleTabs(HOME_WORKSPACE, isManagerView);
-  const activeHomeWorkspaceTab = resolveHomeWorkspaceTab(pathname, searchParams);
-  const showHomeWorkspaceTabs =
-    showWorkspaceZoneNav &&
-    (activeZone === "workspace" || isProfileWorkspacePath) &&
-    homeWorkspaceTabs.length > 0;
-
-  const teamTabs = EMP_TEAM_TABS;
-  const companyTabs = EMP_COMPANY_TABS;
-
   return (
     <div className="emp-pwa-shell emp-pwa-page-bg emp-portal-desktop h-dvh max-h-dvh flex overflow-hidden" data-theme={theme}>
 
@@ -362,35 +342,14 @@ export default function EmpPortalShell({ children, hideBottomNav = false }: EmpP
 
       {/* Main column */}
       <div className="flex-1 flex flex-col min-w-0 min-h-0">
-        {/* Top navbar — zone tabs when home section */}
-        <header className="shrink-0 h-16 border-b border-border/50 bg-background/75 backdrop-blur-xl">
+        <div className="relative z-50 shrink-0">
+        {/* Top navbar */}
+        <header className="h-16 border-b border-border/50 bg-background/75 backdrop-blur-xl overflow-visible">
           <div className="h-full px-4 lg:px-6 flex items-center justify-between gap-4">
-            <div className="flex items-center gap-1 min-w-0 overflow-x-auto">
-              {showWorkspaceZoneNav ? (
-                visibleZones.map((zone) => {
-                  const active = activeZone === zone.id;
-                  return (
-                    <Link
-                      key={zone.id}
-                      href={zoneHref(zone.id)}
-                      className={`px-4 py-1.5 text-sm font-medium rounded-md whitespace-nowrap transition-colors ${
-                        active
-                          ? "bg-accent text-accent-foreground"
-                          : "text-muted-foreground hover:text-foreground hover:bg-accent/60"
-                      }`}
-                    >
-                      {zone.label}
-                    </Link>
-                  );
-                })
-              ) : activeModule ? (
-                <span className="text-sm font-medium text-foreground">{activeModule.label}</span>
-              ) : (
-                <span className="text-sm font-medium text-foreground">Portal</span>
-              )}
-            </div>
+            <EmpPortalGlobalSearch />
 
-            <div className="flex items-center gap-2 shrink-0">
+            <div className="flex items-center gap-3 shrink-0">
+              <EmpThemeToggle theme={theme} onToggle={toggleTheme} />
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <button type="button" className="rounded-full focus:outline-none">
@@ -436,17 +395,7 @@ export default function EmpPortalShell({ children, hideBottomNav = false }: EmpP
           </div>
         </header>
 
-        {/* Home zone: Team / Company secondary tabs */}
-        {showZoneNav && activeZone === "team" && (
-          <div className="shrink-0 bg-white border-b border-gray-100 px-4 flex gap-0.5 overflow-x-auto">
-            {teamTabs.map((tab) => (
-              <NavTabLink key={tab.id} href={tab.href} active={tab.match(pathname)}>
-                {tab.label}
-              </NavTabLink>
-            ))}
-          </div>
-        )}
-        {showZoneNav && activeZone === "company" && (
+        {showCompanyTabs && (
           <div className="shrink-0 bg-white border-b border-gray-100 px-4 flex gap-0.5 overflow-x-auto">
             {companyTabs.map((tab) => (
               <NavTabLink key={tab.id} href={tab.href} active={tab.match(pathname)}>
@@ -456,31 +405,15 @@ export default function EmpPortalShell({ children, hideBottomNav = false }: EmpP
           </div>
         )}
 
-        {/* Home workspace tabs — Overview, Dashboard, My Profile */}
-        {showHomeWorkspaceTabs && (
-          <div className="shrink-0 bg-white border-b border-gray-200 emp-workspace-tabbar">
-            <div className="px-4 flex gap-0.5 overflow-x-auto">
-              {homeWorkspaceTabs.map((tab) => (
-                <NavTabLink
-                  key={tab.id}
-                  href={homeWorkspaceTabHref(tab)}
-                  active={activeHomeWorkspaceTab === tab.id}
-                >
-                  {tab.label}
-                </NavTabLink>
-              ))}
-            </div>
-          </div>
-        )}
-
         {/* Module workspace tabs (Attendance, Leave, Payroll, etc.) */}
         {activeModule && activeModule.id !== "home" && activeModule.id !== "profile" && moduleTabs.length > 1 && (
           <EmpWorkspaceTabNav workspace={activeModule} tabs={moduleTabs} />
         )}
+        </div>
 
         {!hideBottomNav && <EmpMarkoutReminderBanner />}
 
-        <main className="flex-1 min-h-0 overflow-y-auto overscroll-y-contain bg-muted/30 emp-portal-main">
+        <main className="relative z-0 flex-1 min-h-0 overflow-y-auto overscroll-y-contain bg-muted/30 emp-portal-main">
           <div className="max-w-screen-2xl mx-auto w-full hrms-admin-content p-6 lg:p-8 emp-workspace-shell">
             {children}
           </div>

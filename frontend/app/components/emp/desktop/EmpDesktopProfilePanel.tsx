@@ -397,21 +397,21 @@ export function EmpDesktopProfilePanel({
     value: unknown;
     href?: string;
   }[] = [
-    {
-      icon: Mail,
-      label: "Work email",
-      value: workEmail,
-      href: workEmail ? `mailto:${workEmail}` : undefined,
-    },
+    { icon: Briefcase, label: "Employee type", value: employmentType },
+    { icon: Building2, label: "Department", value: department },
+    { icon: MapPin, label: "Office location", value: officeLocation },
     {
       icon: Phone,
       label: "Phone number",
       value: phoneNumber,
       href: phoneNumber ? `tel:${phoneNumber}` : undefined,
     },
-    { icon: Building2, label: "Department", value: department },
-    { icon: MapPin, label: "Office location", value: officeLocation },
-    { icon: Briefcase, label: "Employment type", value: employmentType },
+    {
+      icon: Mail,
+      label: "Work email",
+      value: workEmail,
+      href: workEmail ? `mailto:${workEmail}` : undefined,
+    },
     { icon: UserCircle, label: "Reporting manager", value: reportingManager },
   ];
 
@@ -547,20 +547,19 @@ export function EmpDesktopProfilePanel({
         </section>
       )}
 
+      <ProfileDetailSection title="Work details" fields={workFields} />
+
+      <div className="grid gap-6 lg:grid-cols-2">
+        <ProfileDetailSection title="Employee information" fields={employeeInfoFields} />
+        <ProfileDetailSection title="Official contact" fields={officialContactFields} />
+      </div>
+
       <div className="grid gap-6 lg:grid-cols-2">
         <ProfileDetailSection title="Identity information" fields={identityFields} />
         <ProfileDetailSection title="Personal details" fields={personalFields} />
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        <ProfileDetailSection title="Employee information" fields={employeeInfoFields} />
-        <ProfileDetailSection title="Work details" fields={workFields} />
-      </div>
-
-      <div className="grid gap-6 lg:grid-cols-2">
-        <ProfileDetailSection title="Personal contact" fields={personalContactFields} />
-        <ProfileDetailSection title="Official contact" fields={officialContactFields} />
-      </div>
+      <ProfileDetailSection title="Personal contact" fields={personalContactFields} />
     </div>
   );
 

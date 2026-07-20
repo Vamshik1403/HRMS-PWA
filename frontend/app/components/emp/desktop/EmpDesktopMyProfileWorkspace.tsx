@@ -1,36 +1,36 @@
 "use client";
 
-import { Suspense } from "react";
+import { Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { User } from "lucide-react";
 import { EmpDesktopPage } from "./EmpDesktopPage";
 import { EmpDesktopProfilePanel } from "./EmpDesktopProfilePanel";
 import { EmpDesktopProfileSettings } from "./EmpDesktopProfileSettings";
 import { EmpProfileWorkspaceTabNav, profileTabHref, resolveProfileWorkspaceTab } from "./EmpProfileWorkspaceTabNav";
-import { EmpWorkspaceApprovals } from "../EmpWorkspaceApprovals";
-import { EmpWorkspacePromotions } from "../EmpWorkspacePromotions";
 import { EmpWorkspaceDelegation } from "../EmpWorkspaceDelegation";
 import { EmpLeaveMobile } from "../EmpLeaveMobile";
-import { EmpAttendanceWorkspace } from "../workspaces/EmpAttendanceWorkspace";
-import { useEmpManagerScope } from "../../../hooks/useEmpManagerScope";
+import { EmpReimbursementMobile } from "../EmpReimbursementMobile";
+import { EmpProfileAttendanceView } from "./EmpProfileAttendanceView";
+import { EmpPayoutContent } from "../EmpPayoutContent";
+import { EmpProfileSalaryAdvancePanel } from "../EmpProfileSalaryAdvancePanel";
+import { EmpProfileMessagingPanel } from "../EmpProfileMessagingPanel";
+import { EmpHolidayListMobile } from "../EmpHolidayListMobile";
 import { Icon } from "@iconify/react";
 
 function EmpDesktopMyProfileWorkspaceInner() {
   const searchParams = useSearchParams();
-  const { isManagerView } = useEmpManagerScope();
   const activeTab = resolveProfileWorkspaceTab(searchParams);
 
   const tabs = [
     { id: "profile", label: "Profile", href: profileTabHref("profile") },
-    { id: "approvals", label: "Approvals", href: profileTabHref("approvals") },
-    { id: "leave", label: "Leave", href: profileTabHref("leave") },
     { id: "attendance", label: "Attendance", href: profileTabHref("attendance") },
-    ...(isManagerView
-      ? [
-          { id: "promotions", label: "Promotions & Transfer", href: profileTabHref("promotions") },
-          { id: "delegation", label: "My Delegation", href: profileTabHref("delegation") },
-        ]
-      : [{ id: "delegation", label: "My Delegation", href: profileTabHref("delegation") }]),
+    { id: "leave", label: "Leave", href: profileTabHref("leave") },
+    { id: "reimbursement", label: "Reimbursement", href: profileTabHref("reimbursement") },
+    { id: "delegation", label: "My Delegation", href: profileTabHref("delegation") },
+    { id: "payslips", label: "Payslips", href: profileTabHref("payslips") },
+    { id: "salary-advance", label: "Loans & Advances", href: profileTabHref("salary-advance") },
+    { id: "messaging", label: "IM", href: profileTabHref("messaging") },
+    { id: "holidays", label: "My Holidays", href: profileTabHref("holidays") },
   ];
 
   return (
@@ -45,11 +45,18 @@ function EmpDesktopMyProfileWorkspaceInner() {
           </div>
         )}
 
-        {activeTab === "approvals" && <EmpWorkspaceApprovals embedded />}
-        {activeTab === "leave" && <EmpLeaveMobile desktopTab="overview" embedded />}
-        {activeTab === "attendance" && <EmpAttendanceWorkspace embedded />}
-        {activeTab === "promotions" && isManagerView && <EmpWorkspacePromotions embedded />}
+        {activeTab === "attendance" && <EmpProfileAttendanceView />}
+        {activeTab === "leave" && <EmpLeaveMobile desktopTab="overview" embedded compactBalance />}
+        {activeTab === "reimbursement" && <EmpReimbursementMobile desktopTab="overview" embedded />}
         {activeTab === "delegation" && <EmpWorkspaceDelegation embedded />}
+        {activeTab === "payslips" && (
+          <Suspense fallback={<div className="text-sm text-muted-foreground">Loading payslips…</div>}>
+            <EmpPayoutContent embedded />
+          </Suspense>
+        )}
+        {activeTab === "salary-advance" && <EmpProfileSalaryAdvancePanel />}
+        {activeTab === "messaging" && <EmpProfileMessagingPanel />}
+        {activeTab === "holidays" && <EmpHolidayListMobile embedded />}
       </div>
     </EmpDesktopPage>
   );

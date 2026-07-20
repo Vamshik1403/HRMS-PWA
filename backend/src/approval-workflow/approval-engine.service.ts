@@ -48,22 +48,19 @@ export class ApprovalEngineService {
       employee,
     );
 
-    
-        /*
-     * Direct approval applies when:
-     *
-     * 1. No active onboarding workflow exists.
-     * 2. Active workflows exist, but none of their conditions
-     *    match the employee.
-     * 3. The selected workflow has no active conditions.
-     *
-     * Approval requests are created only when a workflow has
-     * at least one active condition and that condition set matches.
-     */
-    if (
-      !workflow ||
-      workflow.conditions.length === 0
-    ) {
+
+    /*
+ * Direct approval applies when:
+ *
+ * 1. No active onboarding workflow exists.
+ * 2. Active workflows exist, but none of their conditions
+ *    match the employee.
+ * 3. The selected workflow has no active conditions.
+ *
+ * Approval requests are created only when a workflow has
+ * at least one active condition and that condition set matches.
+ */
+    if (!workflow) {
       await tx.manageEmployee.update({
         where: {
           id: employee.id,
@@ -79,11 +76,9 @@ export class ApprovalEngineService {
         approvalRequired: false,
         approvalRequestID: null,
 
-        workflowID:
-          workflow?.id ?? null,
+        workflowID:null,
 
-        workflowName:
-          workflow?.workflowName ?? null,
+        workflowName:null,
 
         currentStepNo: null,
         status: 'APPROVED',
@@ -100,7 +95,9 @@ export class ApprovalEngineService {
       workflow.workflowName?.trim();
 
     const moduleKey =
-      workflow.companyModule.moduleKey?.trim();
+  workflow.companyModule.moduleKey
+    ?.trim()
+    .toUpperCase();
 
     if (!workflowName) {
       throw new BadRequestException(
@@ -113,8 +110,16 @@ export class ApprovalEngineService {
         `Workflow "${workflowName}" does not have a valid module key`,
       );
     }
+    if (
+  moduleKey !==
+  this.EMPLOYEE_ONBOARDING_MODULE_KEY
+) {
+  throw new BadRequestException(
+    `Workflow "${workflowName}" is not an Employee Onboarding workflow`,
+  );
+}
 
-   
+
     const approvalRequest =
       await tx.approvalRequest.create({
         data: {
@@ -148,7 +153,7 @@ export class ApprovalEngineService {
           currentStepNo:
             1,
 
-            workflowNameSnapshot:
+          workflowNameSnapshot:
             workflowName,
 
           moduleKeySnapshot:
@@ -168,7 +173,7 @@ export class ApprovalEngineService {
         },
       });
 
-   
+
     for (const workflowStep of workflow.steps) {
       const isFirstStep =
         workflowStep.stepNo === 1;
@@ -178,19 +183,35 @@ export class ApprovalEngineService {
        * users of the employee's company when possible. Fall back to
        * workflow-step approvers when admins have no linked employee record.
        */
-      const approvers = await this.findOnboardingApprovers(
-        tx,
-        employee,
-        workflowStep,
-      );
+const eligibleApprovers =
+  await this.findStepApprovers(
+    tx,
+    employee,
+    workflowStep,
+  );
 
-      if (!approvers.length) {
-        throw new BadRequestException(
-          `No active approver was found for step ${workflowStep.stepNo} "${workflowStep.stepName || workflowStep.designation.designation}"`,
-        );
-      }
+if (!eligibleApprovers.length) {
+  throw new BadRequestException(
+    `Employee cannot be created because no active approved "${
+      workflowStep.designation.designation ||
+      `Designation ${workflowStep.designationID}`
+    }" approver with active credentials exists in the selected company and branch for approval step ${workflowStep.stepNo}`,
+  );
+}
 
-            const designationName =
+/*
+ * allowAnySameDesignation = true
+ * → every eligible employee receives the approval request.
+ *
+ * allowAnySameDesignation = false
+ * → only one eligible employee receives the request until
+ *   reporting-manager hierarchy is implemented.
+ */
+const approvers =
+  workflow.allowAnySameDesignation
+    ? eligibleApprovers
+    : eligibleApprovers.slice(0, 1);
+      const designationName =
         workflowStep.designation.designation?.trim() ||
         `Designation ${workflowStep.designationID}`;
 
@@ -212,7 +233,7 @@ export class ApprovalEngineService {
             stepNameSnapshot:
               workflowStep.stepName,
 
-                      designationNameSnapshot:
+            designationNameSnapshot:
               designationName,
 
             isMandatorySnapshot:
@@ -239,7 +260,7 @@ export class ApprovalEngineService {
           },
         });
 
-               await tx.approvalRequestApprover.createMany({
+      await tx.approvalRequestApprover.createMany({
         data: approvers.map((approver) => ({
           approvalRequestID:
             approvalRequest.id,
@@ -386,41 +407,41 @@ export class ApprovalEngineService {
             {
               OR: employee.branchesID
                 ? [
-                    {
-                      branchesID:
-                        employee.branchesID,
-                    },
-                    {
-                      branchesID:
-                        null,
-                    },
-                  ]
+                  {
+                    branchesID:
+                      employee.branchesID,
+                  },
+                  {
+                    branchesID:
+                      null,
+                  },
+                ]
                 : [
-                    {
-                      branchesID:
-                        null,
-                    },
-                  ],
+                  {
+                    branchesID:
+                      null,
+                  },
+                ],
             },
 
             {
               OR: employee.serviceProviderID
                 ? [
-                    {
-                      serviceProviderID:
-                        employee.serviceProviderID,
-                    },
-                    {
-                      serviceProviderID:
-                        null,
-                    },
-                  ]
+                  {
+                    serviceProviderID:
+                      employee.serviceProviderID,
+                  },
+                  {
+                    serviceProviderID:
+                      null,
+                  },
+                ]
                 : [
-                    {
-                      serviceProviderID:
-                        null,
-                    },
-                  ],
+                  {
+                    serviceProviderID:
+                      null,
+                  },
+                ],
             },
           ],
         },
@@ -481,18 +502,20 @@ export class ApprovalEngineService {
     const sortedWorkflows =
       [...workflows].sort((a, b) => {
         const aBranchPriority =
-          employee.branchesID &&
-          a.branchesID ===
-            employee.branchesID
-            ? 0
-            : 1;
+  employee.branchesID != null &&
+  a.branchesID != null &&
+  Number(a.branchesID) ===
+    Number(employee.branchesID)
+    ? 0
+    : 1;
 
-        const bBranchPriority =
-          employee.branchesID &&
-          b.branchesID ===
-            employee.branchesID
-            ? 0
-            : 1;
+const bBranchPriority =
+  employee.branchesID != null &&
+  b.branchesID != null &&
+  Number(b.branchesID) ===
+    Number(employee.branchesID)
+    ? 0
+    : 1;
 
         if (
           aBranchPriority !==
@@ -531,261 +554,249 @@ export class ApprovalEngineService {
   }
 
   private workflowConditionsMatch(
-    matchType: WorkflowConditionMatchType,
-    conditions: Array<any>,
-    employee: EmployeeApprovalSubject,
-  ): boolean {
-        /*
-     * A workflow without conditions does not require approval.
-     * It is handled as direct approval by submitEmployeeOnboarding().
-     */
-    if (!conditions.length) {
-      return false;
-    }
+  matchType:
+    WorkflowConditionMatchType,
+  conditions: Array<any>,
+  employee:
+    EmployeeApprovalSubject,
+): boolean {
+  /*
+   * No conditions means this workflow does not trigger
+   * conditional employee approval.
+   */
+  if (!conditions.length) {
+    return false;
+  }
 
-    const results =
-      conditions.map((condition) =>
+  const results =
+    conditions.map(
+      (condition) =>
         this.conditionMatches(
           condition,
           employee,
         ),
+    );
+
+  if (
+    matchType ===
+    WorkflowConditionMatchType.ANY
+  ) {
+    return results.some(
+      (result) => result === true,
+    );
+  }
+
+  return results.every(
+    (result) => result === true,
+  );
+}
+
+private conditionMatches(
+  condition: any,
+  employee:
+    EmployeeApprovalSubject,
+): boolean {
+  switch (condition.fieldKey) {
+    case 'DEPARTMENT':
+      return this.compareEquality(
+        employee.departmentNameID,
+        condition.departmentID,
+        condition.operator,
       );
 
-    if (matchType === 'ANY') {
-      return results.some(Boolean);
+    case 'DESIGNATION':
+      return this.compareEquality(
+        employee.designationID,
+        condition.designationID,
+        condition.operator,
+      );
+
+    case 'EMPLOYEE': {
+      const selectedEmployeeIDs =
+        Array.isArray(
+          condition.employees,
+        )
+          ? condition.employees
+              .map(
+                (item: {
+                  manageEmployeeID:
+                    number;
+                }) =>
+                  Number(
+                    item.manageEmployeeID,
+                  ),
+              )
+              .filter(
+                (id: number) =>
+                  Number.isInteger(id) &&
+                  id > 0,
+              )
+          : [];
+
+      const included =
+        selectedEmployeeIDs.includes(
+          Number(employee.id),
+        );
+
+      if (
+        condition.operator ===
+        'IN'
+      ) {
+        return included;
+      }
+
+      if (
+        condition.operator ===
+        'NOT_IN'
+      ) {
+        return !included;
+      }
+
+      return false;
     }
 
-    return results.every(Boolean);
+    default:
+      /*
+       * Employee Onboarding supports only these fields:
+       * DEPARTMENT, DESIGNATION and EMPLOYEE.
+       */
+      return false;
   }
-
-  private conditionMatches(
-    condition: any,
-    employee: EmployeeApprovalSubject,
-  ): boolean {
-    switch (condition.fieldKey) {
-      case 'DEPARTMENT': {
-        return this.compareEquality(
-          employee.departmentNameID,
-          condition.departmentID,
-          condition.operator,
-        );
-      }
-
-      case 'DESIGNATION': {
-        return this.compareEquality(
-          employee.designationID,
-          condition.designationID,
-          condition.operator,
-        );
-      }
-
-      case 'EMPLOYEE': {
-        const selectedEmployeeIDs =
-          condition.employees.map(
-            (item: {
-              manageEmployeeID: number;
-            }) =>
-              Number(
-                item.manageEmployeeID,
-              ),
-          );
-
-        const included =
-          selectedEmployeeIDs.includes(
-            employee.id,
-          );
-
-        if (
-          condition.operator === 'IN'
-        ) {
-          return included;
-        }
-
-        if (
-          condition.operator === 'NOT_IN'
-        ) {
-          return !included;
-        }
-
-        return false;
-      }
-
-      default:
-        /*
-         * EMPLOYEE_ONBOARDING_MODULE currently supports only:
-         * DEPARTMENT, DESIGNATION and EMPLOYEE.
-         */
-        return false;
-    }
-  }
+}
 
   private compareEquality(
-    actualValue: number | null,
-    expectedValue: number | null,
-    operator: string,
-  ): boolean {
-    const equal =
-      actualValue != null &&
-      expectedValue != null &&
-      Number(actualValue) ===
-        Number(expectedValue);
-
-    if (operator === 'EQUALS') {
-      return equal;
-    }
-
-    if (operator === 'NOT_EQUALS') {
-      return !equal;
-    }
-
+  actualValue:
+    number | null,
+  expectedValue:
+    number | null,
+  operator:
+    string,
+): boolean {
+  /*
+   * A missing employee value must not accidentally satisfy
+   * either EQUALS or NOT_EQUALS.
+   */
+  if (
+    actualValue == null ||
+    expectedValue == null
+  ) {
     return false;
   }
 
-  /**
-   * Finds employees who can approve one specific step.
-   *
-   * Scope:
-   * - same company
-   * - step designation
-   * - request branch
-   * - designation department, when defined
-   * - active lifecycle
-   * - not deleted
-   * - active login credentials
-   */
-  private async findOnboardingApprovers(
-    tx: TransactionClient,
-    employee: EmployeeApprovalSubject,
-    workflowStep: {
-      designationID: number;
-      designation: {
-        departmentID: number | null;
-        branchesID: number | null;
-        designation: string | null;
-      };
-    },
-  ) {
-    const companyAdminUsers = await tx.user.findMany({
-      where: {
-        role: 'COMPANY_ADMIN',
-        isActive: true,
-        OR: [
-          { companyID: employee.companyID },
-          {
-            userCompanies: {
-              some: { companyID: employee.companyID! },
-            },
-          },
-        ],
-      },
-      select: { username: true },
-    });
+  const equal =
+    Number(actualValue) ===
+    Number(expectedValue);
 
-    const adminUsernames = companyAdminUsers
-      .map((user) => user.username?.trim())
-      .filter((username): username is string => !!username);
+  switch (operator) {
+    case 'EQUALS':
+      return equal;
 
-    if (adminUsernames.length) {
-      const linkedApprovers = await tx.manageEmployee.findMany({
-        where: {
-          companyID: employee.companyID,
-          id: { not: employee.id },
-          lifecycleStatus: 'ACTIVE',
-          onboardingApprovalStatus: 'APPROVED',
-          isDeleted: false,
-          employeeCredentials: {
-            is: {
-              isActive: true,
-              username: { in: adminUsernames },
-            },
-          },
-        },
-        select: {
-          id: true,
-          companyID: true,
-          branchesID: true,
-          departmentNameID: true,
-          designationID: true,
-        },
-        orderBy: { id: 'asc' },
-      });
+    case 'NOT_EQUALS':
+      return !equal;
 
-      if (linkedApprovers.length) {
-        return linkedApprovers;
-      }
-    }
-
-    return this.findStepApprovers(tx, employee, workflowStep);
+    default:
+      return false;
   }
+}
 
+  
   private async findStepApprovers(
-    tx: TransactionClient,
-    employee: EmployeeApprovalSubject,
-    workflowStep: {
-      designationID: number;
-      designation: {
-        departmentID: number | null;
-        branchesID: number | null;
-      };
-    },
-  ) {
-    const stepBranchID =
-      workflowStep.designation
-        .branchesID ??
-      employee.branchesID;
+  tx: TransactionClient,
+  employee: EmployeeApprovalSubject,
+  workflowStep: {
+    designationID: number;
 
-    return tx.manageEmployee.findMany({
-      where: {
-        companyID:
-          employee.companyID,
+    designation: {
+      departmentID: number | null;
+      branchesID: number | null;
+    };
+  },
+) {
+  if (!employee.companyID) {
+    return [];
+  }
 
-        designationID:
-          workflowStep.designationID,
+  /*
+   * A workflow with branchesID = null applies to employees
+   * from every branch, but approvers are resolved from the
+   * newly created employee's branch.
+   *
+   * This prevents a Technical Head from another branch from
+   * approving an employee unintentionally.
+   */
+  const approverBranchID =
+    employee.branchesID ??
+    workflowStep.designation.branchesID ??
+    null;
 
-        ...(stepBranchID
-          ? {
-              branchesID:
-                stepBranchID,
-            }
-          : {}),
+  return tx.manageEmployee.findMany({
+    where: {
+      companyID:
+        employee.companyID,
 
-        ...(workflowStep.designation
-          .departmentID
-          ? {
-              departmentNameID:
-                workflowStep.designation
-                  .departmentID,
-            }
-          : {}),
+      /*
+       * Never allow the newly created pending employee
+       * to approve themselves.
+       */
+      id: {
+        not: employee.id,
+      },
 
-             lifecycleStatus:
-          'ACTIVE',
+      ...(approverBranchID != null
+        ? {
+            branchesID:
+              approverBranchID,
+          }
+        : {}),
 
-        onboardingApprovalStatus:
-          'APPROVED',
+      /*
+       * Resolve designation using either the direct current
+       * field or employee designation history.
+       */
+      OR: [
+        {
+          designationID:
+            workflowStep.designationID,
+        },
 
-        isDeleted:
-          false,
-
-        employeeCredentials: {
-          is: {
-            isActive:
-              true,
+        {
+          empDesignation: {
+            some: {
+              designationID:
+                workflowStep.designationID,
+            },
           },
         },
-      },
+      ],
 
-      select: {
-        id: true,
-        companyID: true,
-        branchesID: true,
-        departmentNameID: true,
-        designationID: true,
-      },
+      lifecycleStatus:
+        'ACTIVE',
 
-      orderBy: {
-        id: 'asc',
+      onboardingApprovalStatus:
+        'APPROVED',
+
+      isDeleted:
+        false,
+
+      employeeCredentials: {
+        is: {
+          isActive:
+            true,
+        },
       },
-    });
-  }
+    },
+
+    select: {
+      id: true,
+      companyID: true,
+      branchesID: true,
+      departmentNameID: true,
+      designationID: true,
+    },
+
+    orderBy: {
+      id: 'asc',
+    },
+  });
+}
 }

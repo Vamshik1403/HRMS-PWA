@@ -79,6 +79,7 @@ import { SubscriptionModule } from './subscription/subscription.module';
 import { SystemDashboardModule } from './system-dashboard/system-dashboard.module';
 import { CompanyModulesModule } from './company-modules/company-modules.module';
 import { ApprovalWorkflowModule } from './approval-workflow/approval-workflow.module';
+import { ApprovalRequestModule } from './approval-request/approval-request.module';
 
 
 @Module({
@@ -163,6 +164,7 @@ import { ApprovalWorkflowModule } from './approval-workflow/approval-workflow.mo
     SystemDashboardModule,
     CompanyModulesModule,
     ApprovalWorkflowModule,
+    ApprovalRequestModule,
   ],
   providers: [AuthService],
   controllers: [AuthController],

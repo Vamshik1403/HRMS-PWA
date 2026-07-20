@@ -20,11 +20,14 @@ import { splitPreviewRecords } from "../../utils/empListLimit";
 import { EmpRecordHistorySheet } from "./EmpRecordHistorySheet";
 import { EmpListViewMoreButton } from "./EmpListViewMoreButton";
 import { EmpLeaveApprovalSheet } from "./EmpLeaveApprovalSheet";
+import { Button } from "../ui/button";
 import { formatDateShort } from "../../utils/leaveDisplay";
 import { EmpPortalPage, empListClass, empPageRootClass } from "./EmpPortalPage";
 import { useEmpPortalDesktop } from "../layout/EmpPortalShell";
 import { EmpDesktopLeaveBalance, EmpDesktopLeaveTable } from "./desktop/EmpDesktopLeaveList";
 import { EmpDesktopPage } from "./desktop/EmpDesktopPage";
+import { EmpLeaveApplyForm } from "./EmpLeaveApplyForm";
+import { FormModal } from "../ui/form-modal";
 import { Calendar } from "lucide-react";
 
 const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL || "/backend";
@@ -84,7 +87,11 @@ export interface LeaveAppRow {
   branchesID?: number;
 }
 
-export function EmpLeaveMobile({ desktopTab, embedded = false }: { desktopTab?: string; embedded?: boolean } = {}) {
+export function EmpLeaveMobile({
+  desktopTab,
+  embedded = false,
+  compactBalance = false,
+}: { desktopTab?: string; embedded?: boolean; compactBalance?: boolean } = {}) {
   const user = useCurrentUser();
   const isPortalDesktop = useEmpPortalDesktop();
   const inWorkspace = !!desktopTab;
@@ -100,6 +107,7 @@ export function EmpLeaveMobile({ desktopTab, embedded = false }: { desktopTab?: 
   const [menuId, setMenuId] = useState<string | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [approvalApp, setApprovalApp] = useState<LeaveAppRow | null>(null);
+  const [applyOpen, setApplyOpen] = useState(false);
 
   const loadApps = useCallback(async (empId: number, fetchBalance: boolean) => {
     const token =
@@ -326,10 +334,42 @@ export function EmpLeaveMobile({ desktopTab, embedded = false }: { desktopTab?: 
 
     const inner = (
       <>
-        {showBalance ? (
-          <EmpDesktopLeaveBalance cards={cards} loading={balanceLoading} />
+        {applyOpen ? (
+          <FormModal
+            open={applyOpen}
+            onOpenChange={setApplyOpen}
+            title="Apply for leave"
+            description="Submit a new leave request"
+          >
+            <EmpLeaveApplyForm
+              onSuccess={() => {
+                setApplyOpen(false);
+                if (employeeId) loadApps(employeeId, showLeaveBalance === true);
+              }}
+              onCancel={() => setApplyOpen(false)}
+            />
+          </FormModal>
         ) : null}
-        {showList ? (
+        {!applyOpen && showBalance ? (
+          <div className="space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <h3 className="text-sm font-semibold text-foreground">Leave balance</h3>
+              <Button type="button" size="sm" onClick={() => setApplyOpen(true)}>
+                <Plus className="size-4" />
+                Apply leave
+              </Button>
+            </div>
+            <EmpDesktopLeaveBalance cards={cards} loading={balanceLoading} compact={compactBalance} />
+          </div>
+        ) : !applyOpen && !showBalance ? (
+          <div className="flex justify-end mb-4">
+            <Button type="button" size="sm" onClick={() => setApplyOpen(true)}>
+              <Plus className="size-4" />
+              Apply leave
+            </Button>
+          </div>
+        ) : null}
+        {!applyOpen && showList ? (
           <div className={showBalance ? "mt-6" : ""}>
             <EmpDesktopLeaveTable
               apps={listApps}

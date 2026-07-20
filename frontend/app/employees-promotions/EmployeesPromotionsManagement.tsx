@@ -27,7 +27,9 @@ import { Icon } from "@iconify/react";
 import { Plus, Search, Edit, Trash2, Eye, CheckCircle, History, X } from "lucide-react";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "../components/ui/select";
 import { useCurrentUser } from "../hooks/useCurrentUser";
+import { useEmpManagerScope } from "../hooks/useEmpManagerScope";
 import { FormDrawer } from "../components/ui/form-drawer";
+import { FormModal } from "../components/ui/form-modal";
 import { DetailCard } from "../components/app/detail-card";
 import { EntityDetailHero, EntityDetailLayout } from "../components/app/entity-detail-layout";
 import { NoticeBanner } from "../components/ui/notice-banner";
@@ -193,7 +195,7 @@ async function fetchJSONSafe<T>(url: string, signal?: AbortSignal): Promise<T> {
 
 
 /** ========= Component ========= */
-export function EmployeesPromotionsManagement() {
+export function EmployeesPromotionsManagement({ embedded = false }: { embedded?: boolean } = {}) {
   /** ========== table data (show list of promotion requests) ========== */
   const [rows, setRows] = useState<EmpPromotionRow[]>([]);
   const [loading, setLoading] = useState(false);
@@ -201,7 +203,13 @@ export function EmployeesPromotionsManagement() {
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const user = useCurrentUser();
-  const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN" || user?.role === "BRANCH_ADMIN";
+  const { isManagerView } = useEmpManagerScope();
+  const canManage =
+    user?.role === "SUPERADMIN" ||
+    user?.role === "SERVICE_PROVIDER" ||
+    user?.role === "COMPANY_ADMIN" ||
+    user?.role === "BRANCH_ADMIN" ||
+    isManagerView;
   const isEmployee = user?.role === "EMPLOYEE";
 
   const [currentUserMapping, setCurrentUserMapping] = useState<any | null>(null);
@@ -1725,11 +1733,17 @@ const runFetchBR = (query: string) => {
         )}
       </div>
 
-      {/* Add/Edit FormDrawer */}
-      <FormDrawer open={isAddingNew} onOpenChange={(v) => { if (!v) { resetForm(); setIsAddingNew(false); } }}
+      {/* Add/Edit form — inline FormModal in emp portal; FormDrawer in admin */}
+      {(!embedded || isAddingNew) && (() => {
+        const FormWrapper = embedded ? FormModal : FormDrawer;
+        return (
+      <FormWrapper
+        open={isAddingNew}
+        onOpenChange={(v) => { if (!v) { resetForm(); setIsAddingNew(false); } }}
         title={editingRow ? "Edit Promotion / Current Position" : "Add New Promotion"}
-        description={editingRow ? "Update both 'Current Position' and 'Promotion Request' below." : "Fill in details below to create both records."}>
-
+        description={editingRow ? "Update both 'Current Position' and 'Promotion Request' below." : "Fill in details below to create both records."}
+        {...(embedded ? { size: "xl" as const } : {})}
+      >
             {error && (
               <NoticeBanner variant="error" compact className="mb-4">
                 {error}
@@ -2732,7 +2746,9 @@ const runFetchBR = (query: string) => {
                 </Button>
               </div>
             </form>
-      </FormDrawer>
+      </FormWrapper>
+        );
+      })()}
 
       {/* View Details FormDrawer */}
       <FormDrawer open={!!(isViewing && viewRow)} onOpenChange={(v) => { if (!v) { setIsViewing(false); setViewRow(null); } }}

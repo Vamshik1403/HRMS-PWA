@@ -1000,41 +1000,50 @@ export default function DashboardPage({ embeddedInEmpPortal = false }: { embedde
     );
   }
 
-  const attRate =
+   const attRate =
     overviewTotal > 0
       ? Math.round((overviewPresent / overviewTotal) * 1000) / 10
       : 0;
 
   const absentCount = overviewAbsent;
 
-  const deptBars = useMemo(
-    () =>
-      departmentHeadcounts
-        .filter((d) => d.employeeCount > 0)
-        .slice(0, 5)
-        .map((d) => ({ label: d.departmentName, value: d.employeeCount })),
-    [departmentHeadcounts],
-  );
+  const deptBars = departmentHeadcounts
+    .filter((d) => d.employeeCount > 0)
+    .slice(0, 5)
+    .map((d) => ({
+      label: d.departmentName,
+      value: d.employeeCount,
+    }));
 
-  const attendanceStatusSegments = useMemo(
-    () =>
-      statusBreakdown.slice(0, 4).map((s) => ({
-        label: s.name,
-        value: s.value,
-        color: s.fill,
-      })),
-    [statusBreakdown],
-  );
+  const attendanceStatusSegments = statusBreakdown
+    .slice(0, 4)
+    .map((s) => ({
+      label: s.name,
+      value: s.value,
+      color: s.fill,
+    }));
 
-  const leavePendingSegments = useMemo(() => {
-    const p = hrWidgets?.pendingCounts;
-    if (!p) return [{ label: "Pending", value: 0, color: "#f59e0b" }];
-    return [
-      { label: "Leave", value: p.leave ?? 0, color: "#2563eb" },
-      { label: "Reimb.", value: p.reimbursement ?? 0, color: "#7c3aed" },
-      { label: "Advance", value: p.salaryAdvance ?? 0, color: "#14b8a6" },
-    ];
-  }, [hrWidgets]);
+  const pendingCounts = hrWidgets?.pendingCounts;
+
+  const leavePendingSegments = pendingCounts
+    ? [
+        {
+          label: "Leave",
+          value: pendingCounts.leave ?? 0,
+          color: "#2563eb",
+        },
+        {
+          label: "Reimb.",
+          value: pendingCounts.reimbursement ?? 0,
+          color: "#7c3aed",
+        },
+        {
+          label: "Advance",
+          value: pendingCounts.salaryAdvance ?? 0,
+          color: "#14b8a6",
+        },
+      ]
+    : [{ label: "Pending", value: 0, color: "#f59e0b" }];
 
   return (
     <div className={`${sectionGap} animate-fade-in`}>

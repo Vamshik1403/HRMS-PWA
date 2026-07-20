@@ -1,16 +1,14 @@
 "use client";
 
 import {
-  BarChart3,
-  Calendar,
+  Building2,
   CalendarDays,
-  FileText,
+  ClipboardCheck,
   Home,
   LayoutGrid,
-  MapPin,
   UserCircle,
-  UserPlus,
-  Wallet,
+  Users,
+  ArrowLeftRight,
   type LucideIcon,
 } from "lucide-react";
 import type { EmpModuleId } from "./emp-portal-workspaces";
@@ -19,13 +17,15 @@ export interface EmpSidebarNavItem {
   label: string;
   href: string;
   icon: LucideIcon;
-  moduleId?: EmpModuleId | "more";
+  moduleId?: EmpModuleId | "more" | "team" | "company";
   tabMatch?: string | null;
+  managerOnly?: boolean;
   show?: () => boolean;
 }
 
 export interface EmpSidebarNavGroup {
   label: string;
+  managerOnly?: boolean;
   items: EmpSidebarNavItem[];
 }
 
@@ -40,30 +40,18 @@ export const EMP_SIDEBAR_NAVIGATION: EmpSidebarNavGroup[] = [
         href: "/empdashboard",
         icon: Home,
         moduleId: "home",
-        tabMatch: null,
+        tabMatch: "dashboard",
       },
     ],
   },
   {
-    label: "Workspace",
+    label: "My Workspace",
     items: [
       {
-        label: "Onboarding",
-        href: "/empOnboarding",
-        icon: UserPlus,
-        moduleId: "onboarding",
-      },
-      {
-        label: "Attendance",
-        href: "/empAttendance",
-        icon: MapPin,
-        moduleId: "attendance",
-      },
-      {
-        label: "Leave",
-        href: "/empLeaveApplication",
-        icon: Calendar,
-        moduleId: "leave",
+        label: "My Profile",
+        href: "/empProfile",
+        icon: UserCircle,
+        moduleId: "profile",
       },
       {
         label: "My Calendar",
@@ -72,39 +60,41 @@ export const EMP_SIDEBAR_NAVIGATION: EmpSidebarNavGroup[] = [
         moduleId: "home",
         tabMatch: "calendar",
       },
+    ],
+  },
+  {
+    label: "Team Management",
+    managerOnly: true,
+    items: [
       {
-        label: "My Profile",
-        href: "/empProfile",
-        icon: UserCircle,
-        moduleId: "profile",
+        label: "My Team",
+        href: "/empTeam/my-team",
+        icon: Users,
+        moduleId: "team",
+      },
+      {
+        label: "Team Approvals",
+        href: "/empTeam/approvals",
+        icon: ClipboardCheck,
+        moduleId: "team",
+      },
+      {
+        label: "Promotions and Transfers",
+        href: "/empTeam/promotions",
+        icon: ArrowLeftRight,
+        moduleId: "team",
       },
     ],
   },
   {
-    label: "Payroll",
+    label: "My Company",
+    managerOnly: true,
     items: [
       {
-        label: "Payroll",
-        href: "/empPayout",
-        icon: FileText,
-        moduleId: "payroll",
-      },
-      {
-        label: "Reimbursement",
-        href: "/empReimbursement",
-        icon: Wallet,
-        moduleId: "reimbursement",
-      },
-    ],
-  },
-  {
-    label: "Reports",
-    items: [
-      {
-        label: "Reports",
-        href: "/empHistory",
-        icon: BarChart3,
-        moduleId: "reports",
+        label: "My Company",
+        href: "/empCompany",
+        icon: Building2,
+        moduleId: "company",
       },
     ],
   },
@@ -121,11 +111,30 @@ export const EMP_SIDEBAR_NAVIGATION: EmpSidebarNavGroup[] = [
   },
 ];
 
-export function filterEmpSidebarNavigation(): EmpSidebarNavGroup[] {
-  return EMP_SIDEBAR_NAVIGATION.map((group) => ({
-    ...group,
-    items: group.items.filter((item) => (item.show ?? always)()),
-  })).filter((group) => group.items.length > 0);
+const COMPANY_PATH_PREFIXES = [
+  "/empCompany",
+  "/empHolidays",
+  "/empNoticeboard",
+  "/empPublicHoliday",
+];
+
+function isCompanyPath(pathname: string): boolean {
+  return COMPANY_PATH_PREFIXES.some(
+    (p) => pathname === p || pathname.startsWith(`${p}/`),
+  );
+}
+
+export function filterEmpSidebarNavigation(isManager: boolean): EmpSidebarNavGroup[] {
+  return EMP_SIDEBAR_NAVIGATION.map((group) => {
+    if (group.managerOnly && !isManager) return { ...group, items: [] };
+    return {
+      ...group,
+      items: group.items.filter((item) => {
+        if (item.managerOnly && !isManager) return false;
+        return (item.show ?? always)();
+      }),
+    };
+  }).filter((group) => group.items.length > 0);
 }
 
 export function isEmpNavItemActive(
@@ -136,36 +145,34 @@ export function isEmpNavItemActive(
   const tab = searchParams.get("tab");
 
   if (item.tabMatch === "dashboard") {
-    return pathname.startsWith("/empdashboard") && (!tab || tab === "dashboard" || tab === "overview");
+    return (
+      pathname === "/empdashboard" &&
+      (!tab || tab === "dashboard" || tab === "overview")
+    );
   }
   if (item.tabMatch === "calendar") {
-    return pathname.startsWith("/empdashboard") && tab === "calendar";
+    return pathname === "/empdashboard" && tab === "calendar";
   }
 
-  if (item.tabMatch === null) {
-    const onHome =
-      pathname === "/empdashboard" ||
-      pathname.startsWith("/empTeam") ||
-      pathname.startsWith("/empCompany");
-    if (!onHome) return false;
-    return !tab || tab === "dashboard" || tab === "overview";
+  if (item.moduleId === "company" || item.href === "/empCompany") {
+    return isCompanyPath(pathname);
+  }
+
+  if (item.moduleId === "team") {
+    if (pathname === item.href || pathname.startsWith(`${item.href}/`)) {
+      return true;
+    }
+    if (item.href === "/empTeam/my-team") {
+      return pathname.startsWith("/empTeam/member");
+    }
+    return false;
   }
 
   if (pathname === item.href || pathname.startsWith(`${item.href}/`)) {
-    if (item.href === "/empdashboard") {
-      return !tab || tab === "dashboard" || tab === "overview";
-    }
     if (item.href === "/empMore") {
       return pathname === "/empMore" || pathname.startsWith("/empMore/");
     }
     return true;
-  }
-
-  if (item.href === "/empdashboard") {
-    return (
-      (pathname.startsWith("/empTeam") || pathname.startsWith("/empCompany")) &&
-      (!tab || tab === "dashboard" || tab === "overview")
-    );
   }
 
   return false;

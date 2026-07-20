@@ -5,7 +5,7 @@ export default function EmpTeamPromotionsPage() {
   return (
     <EmpMobileLayout>
       <div className="emp-portal-embedded-admin -mx-2 lg:-mx-4">
-        <EmployeesPromotionsManagement />
+        <EmployeesPromotionsManagement embedded />
       </div>
     </EmpMobileLayout>
   );

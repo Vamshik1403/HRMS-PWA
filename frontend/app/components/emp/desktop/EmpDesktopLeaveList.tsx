@@ -29,10 +29,37 @@ function statusVariant(label: string): "default" | "destructive" | "warning" | "
 export function EmpDesktopLeaveBalance({
   cards,
   loading,
+  compact = false,
 }: {
   cards: { key: string; label: string; remaining: number; total: number }[];
   loading: boolean;
+  compact?: boolean;
 }) {
+  if (compact) {
+    const items = cards.length
+      ? cards
+      : [
+          { key: "sick", label: "Sick", remaining: 0, total: 0 },
+          { key: "casual", label: "Casual", remaining: 0, total: 0 },
+          { key: "privileged", label: "Privilege", remaining: 0, total: 0 },
+        ];
+    return (
+      <div className="flex flex-wrap items-stretch gap-2">
+        {items.map((c) => (
+          <div
+            key={c.key}
+            className="flex-1 min-w-[100px] rounded-lg border border-border bg-card px-3 py-2 shadow-sm"
+          >
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{c.label}</p>
+            <p className="text-lg font-bold tabular-nums text-foreground mt-0.5">
+              {loading ? "…" : `${c.remaining}/${c.total}`}
+            </p>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
   const stats: StatCardData[] = (cards.length ? cards : [
     { key: "sick", label: "Sick", remaining: 0, total: 0 },
     { key: "casual", label: "Casual", remaining: 0, total: 0 },

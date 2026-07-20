@@ -412,7 +412,7 @@ export function HeroMorningCover() {
 
       {/* Celestial elements — right zone only, transparent background */}
       <div className="absolute inset-y-0 right-0 w-[34%] min-w-[200px]">
-        <FarClouds opacity={scene.farCloudsOpacity} uid={uid} />
+        <FarClouds opacity={0} uid={uid} />
 
         {/* Stars — behind moon, visible on dark night shade */}
         <div
@@ -467,21 +467,7 @@ export function HeroMorningCover() {
           </div>
         ) : null}
 
-        {/* Primary cloud — occludes sun/moon, drifts away at night */}
-        <div
-          className="absolute right-[3%] z-[2] transition-[top,opacity,transform] duration-[4000ms] ease-in-out"
-          style={{
-            top: `${scene.cloudTop}%`,
-            opacity: scene.cloudOpacity,
-            transform: `translateX(${scene.cloudDrift}px)`,
-          }}
-        >
-          <HeroCloud
-            uid={uid}
-            night={scene.cloudNight}
-            className="emp-hero-main-cloud w-[160px] sm:w-[172px]"
-          />
-        </div>
+        {/* Primary cloud removed — sun/moon only */}
       </div>
 
       <style>{`

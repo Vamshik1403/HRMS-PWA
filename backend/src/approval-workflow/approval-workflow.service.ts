@@ -178,6 +178,54 @@ export class ApprovalWorkflowService {
     };
   }
 
+
+  private async validateConditionalWorkflowRequirement(
+    params: {
+      companyModuleID: number;
+      workflowStatus: boolean;
+      conditions: any[];
+    },
+  ) {
+    const module =
+      await this.prisma.companyModules.findUnique({
+        where: {
+          id: params.companyModuleID,
+        },
+
+        select: {
+          moduleKey: true,
+          moduleName: true,
+        },
+      });
+
+    if (!module) {
+      throw new BadRequestException(
+        'Selected company module was not found',
+      );
+    }
+
+    const moduleKey =
+      module.moduleKey
+        ?.trim()
+        .toUpperCase();
+
+    /*
+     * Employee onboarding approval is conditional.
+     * Without a condition, employee creation should
+     * remain direct approval.
+     */
+    if (
+      moduleKey ===
+      'EMPLOYEE_ONBOARDING_MODULE' &&
+      params.workflowStatus &&
+      params.conditions.length === 0
+    ) {
+      throw new BadRequestException(
+        'Employee Onboarding workflow requires at least one condition. Employees not matching any condition will be approved automatically.',
+      );
+    }
+  }
+
   async create(dto: CreateApprovalWorkflowDto) {
     this.validateSteps(dto.steps);
 
@@ -195,42 +243,7 @@ export class ApprovalWorkflowService {
       conditions: dto.conditions,
     });
 
-        if (
-      dto.workflowStatus !== false &&
-      !dto.conditions?.length
-    ) {
-      const existingCatchAll =
-        await this.prisma.approvalWorkflow.findFirst({
-          where: {
-            companyID:
-              dto.companyID,
 
-            branchesID:
-              dto.branchesID ?? null,
-
-            companyModuleID:
-              dto.companyModuleID,
-
-            workflowStatus:
-              true,
-
-            conditions: {
-              none: {},
-            },
-          },
-
-          select: {
-            id: true,
-            workflowName: true,
-          },
-        });
-
-      if (existingCatchAll) {
-        throw new ConflictException(
-          `An active catch-all workflow already exists for this scope: "${existingCatchAll.workflowName}"`,
-        );
-      }
-    }
 
     const workflowName = dto.workflowName.trim();
 
@@ -985,15 +998,258 @@ export class ApprovalWorkflowService {
     id: number,
     dto: UpdateApprovalWorkflowDto,
   ) {
-      const existing = await this.findOne(id);
+    const existing = await this.findOne(id);
+
+    const normalizedExistingSteps =
+      existing.steps
+        .map((step) => ({
+          stepNo:
+            Number(step.stepNo),
+
+          designationID:
+            Number(
+              step.designationID,
+            ),
+
+          stepName:
+            step.stepName?.trim() ||
+            null,
+
+          isMandatory:
+            step.isMandatory !== false,
+
+          canReject:
+            step.canReject !== false,
+
+          canSendBack:
+            step.canSendBack === true,
+
+          approvalTimeout:
+            step.approvalTimeout != null
+              ? Number(
+                step.approvalTimeout,
+              )
+              : null,
+        }))
+        .sort(
+          (a, b) =>
+            a.stepNo - b.stepNo,
+        );
+
+    const normalizedSubmittedSteps =
+      dto.steps === undefined
+        ? normalizedExistingSteps
+        : dto.steps
+          .map((step) => ({
+            stepNo:
+              Number(step.stepNo),
+
+            designationID:
+              Number(
+                step.designationID,
+              ),
+
+            stepName:
+              step.stepName?.trim() ||
+              null,
+
+            isMandatory:
+              step.isMandatory !== false,
+
+            canReject:
+              step.canReject !== false,
+
+            canSendBack:
+              step.canSendBack === true,
+
+            approvalTimeout:
+              step.approvalTimeout != null
+                ? Number(
+                  step.approvalTimeout,
+                )
+                : null,
+          }))
+          .sort(
+            (a, b) =>
+              a.stepNo - b.stepNo,
+          );
+
+    const normalizeCondition = (
+      condition: any,
+    ) => ({
+      conditionNo:
+        Number(
+          condition.conditionNo,
+        ),
+
+      fieldKey:
+        condition.fieldKey,
+
+      operator:
+        condition.operator,
+
+      valueType:
+        condition.valueType,
+
+      departmentID:
+        condition.departmentID != null
+          ? Number(
+            condition.departmentID,
+          )
+          : null,
+
+      designationID:
+        condition.designationID != null
+          ? Number(
+            condition.designationID,
+          )
+          : null,
+
+      employeeIDs:
+        [
+          ...(condition.employeeIDs ??
+            condition.employees?.map(
+              (item: any) =>
+                item.manageEmployeeID,
+            ) ??
+            []),
+        ]
+          .map(Number)
+          .sort((a, b) => a - b),
+
+      numberValue:
+        condition.numberValue != null
+          ? Number(
+            condition.numberValue,
+          )
+          : null,
+
+      numberValueTo:
+        condition.numberValueTo != null
+          ? Number(
+            condition.numberValueTo,
+          )
+          : null,
+
+      textValue:
+        condition.textValue?.trim() ||
+        null,
+
+      booleanValue:
+        condition.booleanValue ??
+        null,
+
+      dateValue:
+        condition.dateValue
+          ? new Date(
+            condition.dateValue,
+          ).toISOString()
+          : null,
+
+      dateValueTo:
+        condition.dateValueTo
+          ? new Date(
+            condition.dateValueTo,
+          ).toISOString()
+          : null,
+    });
+
+    const normalizedExistingConditions =
+      existing.conditions
+        .map(normalizeCondition)
+        .sort(
+          (a, b) =>
+            a.conditionNo -
+            b.conditionNo,
+        );
+
+    const normalizedSubmittedConditions =
+      dto.conditions === undefined
+        ? normalizedExistingConditions
+        : dto.conditions
+          .map(normalizeCondition)
+          .sort(
+            (a, b) =>
+              a.conditionNo -
+              b.conditionNo,
+          );
+
+    const stepsChanged =
+      JSON.stringify(
+        normalizedExistingSteps,
+      ) !==
+      JSON.stringify(
+        normalizedSubmittedSteps,
+      );
+
+    const conditionsChanged =
+      JSON.stringify(
+        normalizedExistingConditions,
+      ) !==
+      JSON.stringify(
+        normalizedSubmittedConditions,
+      );
+
+    const scopeChanged =
+      (
+        dto.companyID !== undefined &&
+        Number(dto.companyID) !==
+        Number(existing.companyID)
+      ) ||
+      (
+        dto.branchesID !== undefined &&
+        Number(
+          dto.branchesID ?? 0,
+        ) !==
+        Number(
+          existing.branchesID ?? 0,
+        )
+      ) ||
+      (
+        dto.companyModuleID !==
+        undefined &&
+        Number(dto.companyModuleID) !==
+        Number(
+          existing.companyModuleID,
+        )
+      ) ||
+      (
+        dto.serviceProviderID !==
+        undefined &&
+        Number(
+          dto.serviceProviderID ?? 0,
+        ) !==
+        Number(
+          existing.serviceProviderID ??
+          0,
+        )
+      );
 
     const structuralChangeRequested =
-      dto.steps !== undefined ||
-      dto.conditions !== undefined ||
-      dto.companyID !== undefined ||
-      dto.branchesID !== undefined ||
-      dto.companyModuleID !== undefined ||
-      dto.serviceProviderID !== undefined;
+      stepsChanged ||
+      conditionsChanged ||
+      scopeChanged;
+
+    if (structuralChangeRequested) {
+      const pendingRequestCount =
+        await this.prisma
+          .approvalRequest
+          .count({
+            where: {
+              approvalWorkflowID:
+                id,
+
+              status:
+                'PENDING',
+            },
+          });
+
+      if (pendingRequestCount > 0) {
+        throw new ConflictException(
+          `Workflow cannot be structurally changed because ${pendingRequestCount} approval request(s) are pending`,
+        );
+      }
+    }
 
     if (structuralChangeRequested) {
       const pendingRequestCount =
@@ -1020,8 +1276,9 @@ export class ApprovalWorkflowService {
         : existing.branchesID;
 
     const finalCompanyModuleID =
-      dto.companyModuleID ??
-      existing.companyModuleID;
+      dto.companyModuleID !== undefined
+        ? dto.companyModuleID
+        : existing.companyModuleID!;
 
     const finalSteps =
       dto.steps ??
@@ -1130,6 +1387,26 @@ export class ApprovalWorkflowService {
       conditions: finalConditions,
     });
 
+    await this.validateConditionalWorkflowRequirement({
+      companyModuleID:
+        finalCompanyModuleID,
+
+      workflowStatus:
+        dto.workflowStatus ??
+        existing.workflowStatus,
+
+      conditions:
+        finalConditions,
+    });
+
+    await this.validateConditionalWorkflowRequirement({
+      companyModuleID: finalCompanyModuleID,
+
+      workflowStatus: dto.workflowStatus ?? true,
+
+      conditions: dto.conditions ?? [],
+    });
+
     const finalWorkflowName =
       dto.workflowName?.trim() ??
       existing.workflowName;
@@ -1163,18 +1440,26 @@ export class ApprovalWorkflowService {
       /*
        * Recreate steps to ensure step numbers stay clean and sequential.
        */
-      if (dto.steps !== undefined) {
+      if (
+        dto.steps !== undefined &&
+        stepsChanged
+      ) {
         await tx.approvalWorkflowStep.deleteMany({
           where: {
-            approvalWorkflowID: id,
+            approvalWorkflowID:
+              id,
           },
         });
       }
 
-      if (dto.conditions !== undefined) {
+      if (
+        dto.conditions !== undefined &&
+        conditionsChanged
+      ) {
         await tx.approvalWorkflowCondition.deleteMany({
           where: {
-            approvalWorkflowID: id,
+            approvalWorkflowID:
+              id,
           },
         });
       }
@@ -1241,7 +1526,8 @@ export class ApprovalWorkflowService {
               dto.createdByUserID ?? null,
           }),
 
-          ...(dto.conditions !== undefined && {
+          ...(dto.conditions !== undefined &&
+            conditionsChanged && {
             conditions: {
               create: [...dto.conditions]
                 .sort(
@@ -1309,7 +1595,8 @@ export class ApprovalWorkflowService {
             },
           }),
 
-          ...(dto.steps !== undefined && {
+          ...(dto.steps !== undefined &&
+            stepsChanged && {
             steps: {
               create: [...dto.steps]
                 .sort(
@@ -1365,7 +1652,7 @@ export class ApprovalWorkflowService {
     });
   }
 
-   async remove(id: number) {
+  async remove(id: number) {
     const workflow =
       await this.findOne(id);
 
@@ -1396,23 +1683,23 @@ export class ApprovalWorkflowService {
   }
 
   /**
-   * Returns active workflow effective on the supplied date.
-   */
+  * Returns active candidate workflows for the supplied scope.
+  *
+  * Exact branch workflows are returned before company-wide
+  * workflows. The approval engine must then evaluate each
+  * workflow's conditions and use the first matching workflow.
+  */
   async resolveWorkflow(params: {
     companyID: number;
-    branchesID?: number;
+    branchesID?: number | null;
     companyModuleID: number;
     effectiveAt?: Date;
   }) {
     const effectiveAt =
       params.effectiveAt ?? new Date();
 
-    /*
-     * Branch-specific workflow gets priority.
-     * Company-wide workflow is the fallback.
-     */
-    const workflow =
-      await this.prisma.approvalWorkflow.findFirst({
+    const workflows =
+      await this.prisma.approvalWorkflow.findMany({
         where: {
           companyID:
             params.companyID,
@@ -1427,48 +1714,85 @@ export class ApprovalWorkflowService {
             lte: effectiveAt,
           },
 
-          OR: params.branchesID
-            ? [
-              {
-                branchesID:
-                  params.branchesID,
-              },
-              {
-                branchesID:
-                  null,
-              },
-            ]
-            : [
-              {
-                branchesID:
-                  null,
-              },
-            ],
+          OR:
+            params.branchesID != null
+              ? [
+                {
+                  branchesID:
+                    params.branchesID,
+                },
+                {
+                  branchesID:
+                    null,
+                },
+              ]
+              : [
+                {
+                  branchesID:
+                    null,
+                },
+              ],
         },
 
-        include: this.workflowInclude(),
+        include:
+          this.workflowInclude(),
 
         orderBy: [
-          /*
-           * Prisma cannot directly order nullable branch
-           * preference reliably here, so filter again below
-           * if you later allow several versions.
-           */
           {
             effectiveFrom:
+              'desc',
+          },
+          {
+            id:
               'desc',
           },
         ],
       });
 
-    if (!workflow) {
-      throw new NotFoundException(
-        'No active approval workflow was found',
-      );
+    if (!workflows.length) {
+      return [];
     }
 
-    return workflow;
+    return workflows.sort(
+      (left, right) => {
+        const leftExactBranch =
+          params.branchesID != null &&
+          left.branchesID != null &&
+          Number(left.branchesID) ===
+          Number(params.branchesID);
+
+        const rightExactBranch =
+          params.branchesID != null &&
+          right.branchesID != null &&
+          Number(right.branchesID) ===
+          Number(params.branchesID);
+
+        if (
+          leftExactBranch !==
+          rightExactBranch
+        ) {
+          return leftExactBranch
+            ? -1
+            : 1;
+        }
+
+        const effectiveDifference =
+          new Date(
+            right.effectiveFrom,
+          ).getTime() -
+          new Date(
+            left.effectiveFrom,
+          ).getTime();
+
+        if (effectiveDifference !== 0) {
+          return effectiveDifference;
+        }
+
+        return right.id - left.id;
+      },
+    );
   }
+
 
   private workflowInclude() {
     return {

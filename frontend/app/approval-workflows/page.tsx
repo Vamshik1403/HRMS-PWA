@@ -247,6 +247,7 @@ interface ApprovalWorkflowRead {
 }
 
 interface WorkflowStepForm {
+  id?: ID;
   localID: string;
   stepNo: number;
   designationID: ID | null;
@@ -281,6 +282,7 @@ interface WorkflowForm {
 }
 
 interface WorkflowConditionForm {
+  id?: ID;
   localID: string;
   conditionNo: number;
 
@@ -721,6 +723,7 @@ function formatDateTime(value?: string | null) {
 
 function createEmptyStep(stepNo: number): WorkflowStepForm {
   return {
+    id: undefined,
     localID: createLocalID(),
     stepNo,
     designationID: null,
@@ -737,6 +740,7 @@ function createEmptyCondition(
   conditionNo: number,
 ): WorkflowConditionForm {
   return {
+    id: undefined,
     localID: createLocalID(),
     conditionNo,
 
@@ -2106,9 +2110,10 @@ if (!conditionContainer) {
           (a, b) =>
             a.stepNo - b.stepNo,
         )
-        .map((step, index) => ({
-          localID: createLocalID(),
-          stepNo: index + 1,
+       .map((step, index) => ({
+  id: step.id,
+  localID: createLocalID(),
+  stepNo: index + 1,
 
           designationID:
             step.designationID ?? null,
@@ -2163,6 +2168,7 @@ if (!conditionContainer) {
               );
 
           return {
+            id: condition.id,
             localID: createLocalID(),
             conditionNo: index + 1,
 
@@ -2725,8 +2731,12 @@ setConditionEmployeeLoading({});
           ? Number(user.id)
           : undefined,
 
-      steps: formData.steps.map(
-        (step, index) => ({
+steps: formData.steps.map(
+  (step, index) => ({
+    id:
+      editing && step.id != null
+        ? Number(step.id)
+        : undefined,
           stepNo: index + 1,
 
           designationID:
@@ -2779,9 +2789,15 @@ setConditionEmployeeLoading({});
               condition.fieldKey,
             );
 
-            return {
-              conditionNo:
-                index + 1,
+          return {
+  id:
+    editing &&
+    condition.id != null
+      ? Number(condition.id)
+      : undefined,
+
+  conditionNo:
+    index + 1,
 
               fieldKey:
                 condition.fieldKey as
@@ -3874,6 +3890,255 @@ setConditionEmployeeLoading({});
           </section>
 
 
+
+<section className="space-y-4 border-t pt-6">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <h3 className="text-sm font-semibold text-gray-900">
+                  Approval Workflow Steps
+                </h3>
+
+                <p className="mt-1 text-xs text-gray-500">
+                  Steps are processed sequentially from
+                  top to bottom.
+                </p>
+              </div>
+
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={addStep}
+              >
+                <Plus className="mr-1 h-4 w-4" />
+                Add Step
+              </Button>
+            </div>
+
+            <div className="space-y-4">
+              {formData.steps.map(
+                (step, index) => {
+                  const suggestions =
+                    designationSuggestionMap[
+                    step.localID
+                    ] || [];
+
+                  const loadingDesignation =
+                    designationLoadingMap[
+                    step.localID
+                    ];
+
+                  return (
+                    <div
+                      key={step.localID}
+                      className="rounded-xl border border-gray-200 bg-gray-50/50 p-4"
+                    >
+                      <div className="mb-4 flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-2">
+                          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-sm font-semibold text-primary-foreground">
+                            {step.stepNo}
+                          </div>
+
+                          <div>
+                            <div className="text-sm font-semibold">
+                              Step {step.stepNo}
+                            </div>
+
+
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-1">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            disabled={index === 0}
+                            onClick={() =>
+                              moveStep(index, "UP")
+                            }
+                          >
+                            <ArrowUp className="h-4 w-4" />
+                          </Button>
+
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            disabled={
+                              index ===
+                              formData.steps.length - 1
+                            }
+                            onClick={() =>
+                              moveStep(index, "DOWN")
+                            }
+                          >
+                            <ArrowDown className="h-4 w-4" />
+                          </Button>
+
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="text-red-600 hover:bg-red-50 hover:text-red-700"
+                            onClick={() =>
+                              removeStep(
+                                step.localID,
+                              )
+                            }
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                        <div
+                          className="relative space-y-2"
+                          data-designation-autocomplete
+                        >
+                          <Label>
+                            Approver Designation *
+                          </Label>
+
+                          <Input
+                            value={
+                              step.designationName
+                            }
+                            onChange={(event) => {
+                              const value =
+                                event.target.value;
+
+                              updateStep(
+                                step.localID,
+                                {
+                                  designationID:
+                                    null,
+                                  designationName:
+                                    value,
+                                },
+                              );
+
+                              runDesignationSuggestions(
+                                step.localID,
+                                value,
+                              );
+                            }}
+                            onFocus={() =>
+                              runDesignationSuggestions(
+                                step.localID,
+                                step.designationName,
+                              )
+                            }
+                            placeholder={
+                              formData.branchesID
+                                ? "Search branch designation..."
+                                : "Search designation..."
+                            }
+                            autoComplete="off"
+                          />
+
+                          {(suggestions.length > 0 ||
+                            loadingDesignation) && (
+                              <div className="absolute z-40 max-h-52 w-full overflow-y-auto rounded-md border bg-white shadow-lg">
+                                {loadingDesignation && (
+                                  <div className="px-3 py-2 text-sm text-gray-500">
+                                    Loading…
+                                  </div>
+                                )}
+
+                                {suggestions.map(
+                                  (designation) => (
+                                    <button
+                                      key={
+                                        designation.id
+                                      }
+                                      type="button"
+                                      className="block w-full px-3 py-2 text-left hover:bg-gray-50"
+                                      onMouseDown={(
+                                        event,
+                                      ) =>
+                                        event.preventDefault()
+                                      }
+                                      onClick={() => {
+                                        updateStep(
+                                          step.localID,
+                                          {
+                                            designationID:
+                                              designation.id,
+                                            designationName:
+                                              designation.designation ?? "",
+                                            stepName:
+                                              step.stepName ||
+                                              `${designation.designation} Approval`,
+                                          },
+                                        );
+
+                                        setDesignationSuggestionMap(
+                                          (current) => ({
+                                            ...current,
+                                            [step.localID]:
+                                              [],
+                                          }),
+                                        );
+                                      }}
+                                    >
+                                      <div className="text-sm font-medium">
+                                        {
+                                          designation.designation
+                                        }
+                                      </div>
+
+                                      {designation
+                                        .departments
+                                        ?.departmentName && (
+                                          <div className="mt-0.5 text-xs text-gray-500">
+                                            {
+                                              designation
+                                                .departments
+                                                .departmentName
+                                            }
+                                          </div>
+                                        )}
+                                    </button>
+                                  ),
+                                )}
+                              </div>
+                            )}
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label>
+                            Step Name
+                          </Label>
+
+                          <Input
+                            value={step.stepName}
+                            onChange={(event) =>
+                              updateStep(
+                                step.localID,
+                                {
+                                  stepName:
+                                    event.target
+                                      .value,
+                                },
+                              )
+                            }
+                            placeholder="For example, Manager Approval"
+                            maxLength={150}
+                          />
+                        </div>
+
+
+                      </div>
+                    </div>
+                  );
+                },
+              )}
+            </div>
+          </section>
+
+
           <section className="space-y-4 border-t pt-6">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
@@ -3881,11 +4146,6 @@ setConditionEmployeeLoading({});
                   Workflow Conditions
                 </h3>
 
-                <p className="mt-1 text-xs text-gray-500">
-                  Define which requests should use this
-                  workflow. Leave empty to apply it to every
-                  request in the selected scope.
-                </p>
               </div>
 
               <Button
@@ -3903,12 +4163,9 @@ setConditionEmployeeLoading({});
             {formData.conditions.length > 0 && (
               <div className="flex items-center justify-between rounded-lg border bg-gray-50 p-4">
                 <div>
-                  <Label>Condition Matching</Label>
+                  <Label>Apply To</Label>
 
-                  <p className="mt-1 text-xs text-gray-500">
-                    Choose whether all conditions or any one
-                    condition must match.
-                  </p>
+              
                 </div>
 
                 <div className="flex gap-2">
@@ -4021,7 +4278,7 @@ setConditionEmployeeLoading({});
 
                       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                         <div className="space-y-2">
-                          <Label>Condition Field *</Label>
+                          <Label>Apply To *</Label>
 
                           <select
                             value={condition.fieldKey}
@@ -4488,253 +4745,7 @@ setConditionEmployeeLoading({});
             )}
           </section>
 
-          <section className="space-y-4 border-t pt-6">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <h3 className="text-sm font-semibold text-gray-900">
-                  Approval Workflow Steps
-                </h3>
-
-                <p className="mt-1 text-xs text-gray-500">
-                  Steps are processed sequentially from
-                  top to bottom.
-                </p>
-              </div>
-
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={addStep}
-              >
-                <Plus className="mr-1 h-4 w-4" />
-                Add Step
-              </Button>
-            </div>
-
-            <div className="space-y-4">
-              {formData.steps.map(
-                (step, index) => {
-                  const suggestions =
-                    designationSuggestionMap[
-                    step.localID
-                    ] || [];
-
-                  const loadingDesignation =
-                    designationLoadingMap[
-                    step.localID
-                    ];
-
-                  return (
-                    <div
-                      key={step.localID}
-                      className="rounded-xl border border-gray-200 bg-gray-50/50 p-4"
-                    >
-                      <div className="mb-4 flex items-center justify-between gap-3">
-                        <div className="flex items-center gap-2">
-                          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-sm font-semibold text-primary-foreground">
-                            {step.stepNo}
-                          </div>
-
-                          <div>
-                            <div className="text-sm font-semibold">
-                              Step {step.stepNo}
-                            </div>
-
-
-                          </div>
-                        </div>
-
-                        <div className="flex items-center gap-1">
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            disabled={index === 0}
-                            onClick={() =>
-                              moveStep(index, "UP")
-                            }
-                          >
-                            <ArrowUp className="h-4 w-4" />
-                          </Button>
-
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            disabled={
-                              index ===
-                              formData.steps.length - 1
-                            }
-                            onClick={() =>
-                              moveStep(index, "DOWN")
-                            }
-                          >
-                            <ArrowDown className="h-4 w-4" />
-                          </Button>
-
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            className="text-red-600 hover:bg-red-50 hover:text-red-700"
-                            onClick={() =>
-                              removeStep(
-                                step.localID,
-                              )
-                            }
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                        <div
-                          className="relative space-y-2"
-                          data-designation-autocomplete
-                        >
-                          <Label>
-                            Approver Designation *
-                          </Label>
-
-                          <Input
-                            value={
-                              step.designationName
-                            }
-                            onChange={(event) => {
-                              const value =
-                                event.target.value;
-
-                              updateStep(
-                                step.localID,
-                                {
-                                  designationID:
-                                    null,
-                                  designationName:
-                                    value,
-                                },
-                              );
-
-                              runDesignationSuggestions(
-                                step.localID,
-                                value,
-                              );
-                            }}
-                            onFocus={() =>
-                              runDesignationSuggestions(
-                                step.localID,
-                                step.designationName,
-                              )
-                            }
-                            placeholder={
-                              formData.branchesID
-                                ? "Search branch designation..."
-                                : "Search designation..."
-                            }
-                            autoComplete="off"
-                          />
-
-                          {(suggestions.length > 0 ||
-                            loadingDesignation) && (
-                              <div className="absolute z-40 max-h-52 w-full overflow-y-auto rounded-md border bg-white shadow-lg">
-                                {loadingDesignation && (
-                                  <div className="px-3 py-2 text-sm text-gray-500">
-                                    Loading…
-                                  </div>
-                                )}
-
-                                {suggestions.map(
-                                  (designation) => (
-                                    <button
-                                      key={
-                                        designation.id
-                                      }
-                                      type="button"
-                                      className="block w-full px-3 py-2 text-left hover:bg-gray-50"
-                                      onMouseDown={(
-                                        event,
-                                      ) =>
-                                        event.preventDefault()
-                                      }
-                                      onClick={() => {
-                                        updateStep(
-                                          step.localID,
-                                          {
-                                            designationID:
-                                              designation.id,
-                                            designationName:
-                                              designation.designation ?? "",
-                                            stepName:
-                                              step.stepName ||
-                                              `${designation.designation} Approval`,
-                                          },
-                                        );
-
-                                        setDesignationSuggestionMap(
-                                          (current) => ({
-                                            ...current,
-                                            [step.localID]:
-                                              [],
-                                          }),
-                                        );
-                                      }}
-                                    >
-                                      <div className="text-sm font-medium">
-                                        {
-                                          designation.designation
-                                        }
-                                      </div>
-
-                                      {designation
-                                        .departments
-                                        ?.departmentName && (
-                                          <div className="mt-0.5 text-xs text-gray-500">
-                                            {
-                                              designation
-                                                .departments
-                                                .departmentName
-                                            }
-                                          </div>
-                                        )}
-                                    </button>
-                                  ),
-                                )}
-                              </div>
-                            )}
-                        </div>
-
-                        <div className="space-y-2">
-                          <Label>
-                            Step Name
-                          </Label>
-
-                          <Input
-                            value={step.stepName}
-                            onChange={(event) =>
-                              updateStep(
-                                step.localID,
-                                {
-                                  stepName:
-                                    event.target
-                                      .value,
-                                },
-                              )
-                            }
-                            placeholder="For example, Manager Approval"
-                            maxLength={150}
-                          />
-                        </div>
-
-
-                      </div>
-                    </div>
-                  );
-                },
-              )}
-            </div>
-          </section>
-
+          
           <div className="flex justify-end gap-2 border-t pt-4">
             <Button
               type="button"

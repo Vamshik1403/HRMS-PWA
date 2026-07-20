@@ -12,12 +12,12 @@ import { ApprovalEngineService } from '../approval-workflow/approval-engine.serv
 export class ManageEmployeeService {
   private readonly SALT_ROUNDS = 12;
 
-constructor(
-  private readonly prisma: PrismaService,
-  private readonly joiningFormService: JoiningFormService,
-  private readonly auditLog: AuditLogService,
-  private readonly approvalEngine: ApprovalEngineService,
-) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly joiningFormService: JoiningFormService,
+    private readonly auditLog: AuditLogService,
+    private readonly approvalEngine: ApprovalEngineService,
+  ) { }
 
   private employeeDisplayName(emp: {
     employeeFirstName?: string | null;
@@ -330,7 +330,7 @@ constructor(
 
         } as any,
 
-         });
+      });
 
       /*
        * Resolve employee onboarding approval inside the same database
@@ -348,7 +348,7 @@ constructor(
               ? Number(requestUser.sub)
               : null;
 
-            const effectiveDepartmentID =
+      const effectiveDepartmentID =
         employee.departmentNameID ??
         empDepartments
           .filter(
@@ -421,7 +421,7 @@ constructor(
           plainInitialPassword = this.generateRandomPassword();
           const hashedPassword = await this.hashPassword(plainInitialPassword);
 
-                   await tx.employeeCredentials.create({
+          await tx.employeeCredentials.create({
             data: {
               employeeID: employee.id,
               username: scalars.personalPhoneNo,
@@ -494,7 +494,7 @@ constructor(
         },
       });
 
-           return {
+      return {
         ...employeeWithRelations,
         initialPassword: plainInitialPassword,
 
@@ -709,7 +709,7 @@ constructor(
       params.search?.trim();
 
     return this.prisma.manageEmployee.findMany({
-            where: {
+      where: {
         companyID:
           params.companyID,
 
@@ -830,7 +830,7 @@ constructor(
   }
 
   // Reset password to new random password
-   async resetPassword(employeeID: number) {
+  async resetPassword(employeeID: number) {
     const employee =
       await this.prisma.manageEmployee.findUnique({
         where: {
@@ -898,7 +898,7 @@ constructor(
   }
 
   // Method to update credentials separately with password hashing
-    async updateCredentials(
+  async updateCredentials(
     employeeID: number,
     data: {
       username?: string;
@@ -933,7 +933,7 @@ constructor(
     if (
       data.isActive === true &&
       employee.onboardingApprovalStatus !==
-        'APPROVED'
+      'APPROVED'
     ) {
       throw new BadRequestException(
         'Employee credentials cannot be activated before onboarding approval is completed',
@@ -992,8 +992,8 @@ constructor(
       },
     });
   }
-  
-   async changePassword(
+
+  async changePassword(
     employeeID: number,
     oldPassword: string,
     newPassword: string,
@@ -1025,9 +1025,9 @@ constructor(
       !credentials.isActive ||
       credentials.employee
         .onboardingApprovalStatus !==
-        'APPROVED' ||
+      'APPROVED' ||
       credentials.employee.lifecycleStatus !==
-        'ACTIVE' ||
+      'ACTIVE' ||
       credentials.employee.isDeleted
     ) {
       throw new BadRequestException(
@@ -1071,7 +1071,7 @@ constructor(
   }
 
   // Method for employee login verification
-    async verifyEmployeeLogin(
+  async verifyEmployeeLogin(
     username: string,
     password: string,
   ) {
@@ -1140,101 +1140,101 @@ constructor(
 
     return this.prisma.manageEmployee.findMany({
       where: whereCondition,
-     select: {
-  id: true,
-  employeeFirstName: true,
-  employeeLastName: true,
-  employeeID: true,
-  businessEmail: true,
-  companyID: true,
-  branchesID: true,
-  serviceProviderID: true,
-  departmentNameID: true,
-  designationID: true,
-  employmentType: true,
-  employmentStatus: true,
-  typeOfEmployee: true,
-  lifecycleStatus: true,
-  onboardingApprovalStatus: true,
-  joiningDate: true,
+      select: {
+        id: true,
+        employeeFirstName: true,
+        employeeLastName: true,
+        employeeID: true,
+        businessEmail: true,
+        companyID: true,
+        branchesID: true,
+        serviceProviderID: true,
+        departmentNameID: true,
+        designationID: true,
+        employmentType: true,
+        employmentStatus: true,
+        typeOfEmployee: true,
+        lifecycleStatus: true,
+        onboardingApprovalStatus: true,
+        joiningDate: true,
 
-  employeeCredentials: {
-    select: {
-      id: true,
-      username: true,
-      isActive: true,
-      mustChangePassword: true,
-    },
-  },
+        employeeCredentials: {
+          select: {
+            id: true,
+            username: true,
+            isActive: true,
+            mustChangePassword: true,
+          },
+        },
 
-  departments: {
-    select: {
-      id: true,
-      departmentName: true,
-    },
-  },
+        departments: {
+          select: {
+            id: true,
+            departmentName: true,
+          },
+        },
 
-  designations: {
-    select: {
-      id: true,
-      designation: true,
-    },
-  },
+        designations: {
+          select: {
+            id: true,
+            designation: true,
+          },
+        },
 
-  branches: {
-    select: {
-      id: true,
-      branchName: true,
-    },
-  },
+        branches: {
+          select: {
+            id: true,
+            branchName: true,
+          },
+        },
 
-  empDesignation: {
-    orderBy: {
-      id: 'desc',
-    },
+        empDesignation: {
+          orderBy: {
+            id: 'desc',
+          },
 
-    take: 1,
+          take: 1,
 
-    include: {
-      designation: {
-        select: {
-          designation: true,
+          include: {
+            designation: {
+              select: {
+                designation: true,
+              },
+            },
+          },
+        },
+
+        empBranch: {
+          orderBy: {
+            id: 'desc',
+          },
+
+          take: 1,
+          include: {
+            branch: {
+              select: {
+                branchName: true,
+              },
+            },
+          },
+        },
+
+        empDepartment: {
+          orderBy: {
+            id: 'desc',
+          },
+
+          take: 1,
+
+          include: {
+            department: {
+              select: {
+                departmentName: true,
+              },
+            },
+          },
         },
       },
-    },
-  },
-
-  empBranch: {
-    orderBy: {
-      id: 'desc',
-    },
-    
-    take: 1,
-    include: {
-      branch: {
-        select: {
-          branchName: true,
-        },
-      },
-    },
-  },
-
-  empDepartment: {
-    orderBy: {
-      id: 'desc',
-    },
-
-    take: 1,
-
-    include: {
-      department: {
-        select: {
-          departmentName: true,
-        },
-      },
-    },
-  },
-},
       orderBy: { id: 'desc' },
     });
   }
@@ -1494,7 +1494,7 @@ constructor(
       ...scalars
     } = dto;
 
-     const beforeUpdate =
+    const beforeUpdate =
       await this.prisma.manageEmployee.findUnique({
         where: {
           id,
@@ -1507,11 +1507,11 @@ constructor(
       );
     }
 
-        if (
+    if (
       beforeUpdate.onboardingApprovalStatus ===
-        'REJECTED' ||
+      'REJECTED' ||
       beforeUpdate.onboardingApprovalStatus ===
-        'CANCELLED'
+      'CANCELLED'
     ) {
       throw new BadRequestException(
         `Employee cannot be updated because onboarding approval is ${beforeUpdate.onboardingApprovalStatus}`,
@@ -1541,17 +1541,17 @@ constructor(
         (
           departmentNameID !== undefined &&
           departmentNameID !==
-            beforeUpdate.departmentNameID
+          beforeUpdate.departmentNameID
         ) ||
         (
           designationID !== undefined &&
           designationID !==
-            beforeUpdate.designationID
+          beforeUpdate.designationID
         ) ||
         (
           serviceProviderID !== undefined &&
           serviceProviderID !==
-            beforeUpdate.serviceProviderID
+          beforeUpdate.serviceProviderID
         );
 
       if (scopeChanged) {
@@ -1563,664 +1563,664 @@ constructor(
 
     const updated =
       await this.prisma.$transaction(async (tx) => {
-      let plainInitialPassword: string | null = null;
+        let plainInitialPassword: string | null = null;
 
-      delete (scalars as any).bankDetailsIdsToDelete;
-      delete (scalars as any).bankDetailIdsToDelete;
-      delete (scalars as any).empDesignationIdsToDelete;
-      delete (scalars as any).empBranchIdsToDelete;
-      delete (scalars as any).empDepartmentIdsToDelete;
-      delete (scalars as any).empEmploymentTypeIdsToDelete;
-      delete (scalars as any).empEmploymentStatusIdsToDelete;
-      delete (scalars as any).empWorkShiftIdsToDelete;
-      delete (scalars as any).empAttendancePolicyIdsToDelete;
-      delete (scalars as any).empFactualWorkShiftIdsToDelete;
-      delete (scalars as any).empFactualAttendancePolicyIdsToDelete;
-      delete (scalars as any).empLeavePolicyIdsToDelete;
-      delete (scalars as any).empContractorIdsToDelete;
+        delete (scalars as any).bankDetailsIdsToDelete;
+        delete (scalars as any).bankDetailIdsToDelete;
+        delete (scalars as any).empDesignationIdsToDelete;
+        delete (scalars as any).empBranchIdsToDelete;
+        delete (scalars as any).empDepartmentIdsToDelete;
+        delete (scalars as any).empEmploymentTypeIdsToDelete;
+        delete (scalars as any).empEmploymentStatusIdsToDelete;
+        delete (scalars as any).empWorkShiftIdsToDelete;
+        delete (scalars as any).empAttendancePolicyIdsToDelete;
+        delete (scalars as any).empFactualWorkShiftIdsToDelete;
+        delete (scalars as any).empFactualAttendancePolicyIdsToDelete;
+        delete (scalars as any).empLeavePolicyIdsToDelete;
+        delete (scalars as any).empContractorIdsToDelete;
 
-      // Fetch old data for history tracking
-      const oldData = await tx.manageEmployee.findUnique({ where: { id } });
+        // Fetch old data for history tracking
+        const oldData = await tx.manageEmployee.findUnique({ where: { id } });
 
-      // 1) update parent scalars + relations
-      await tx.manageEmployee.update({
-        where: { id },
-        data: {
-          ...scalars,
+        // 1) update parent scalars + relations
+        await tx.manageEmployee.update({
+          where: { id },
+          data: {
+            ...scalars,
 
-          // Basic position scalars
-          ...(employmentType !== undefined ? { employmentType } : {}),
-          ...(typeOfEmployee !== undefined ? { typeOfEmployee } : {}),
-          ...(employmentStatus !== undefined ? { employmentStatus } : {}),
-          ...(probationPeriod !== undefined ? { probationPeriod } : {}),
-          ...(salaryPayGradeType !== undefined ? { salaryPayGradeType } : {}),
+            // Basic position scalars
+            ...(employmentType !== undefined ? { employmentType } : {}),
+            ...(typeOfEmployee !== undefined ? { typeOfEmployee } : {}),
+            ...(employmentStatus !== undefined ? { employmentStatus } : {}),
+            ...(probationPeriod !== undefined ? { probationPeriod } : {}),
+            ...(salaryPayGradeType !== undefined ? { salaryPayGradeType } : {}),
 
-          // Basic position fields (direct field assignments)
-          ...(departmentNameID !== undefined ? { departmentNameID } : {}),
-          ...(designationID !== undefined ? { designationID } : {}),
-          ...(workShiftID !== undefined ? { workShiftID } : {}),
-          ...(attendancePolicyID !== undefined ? { attendancePolicyID } : {}),
-          ...(leavePolicyID !== undefined ? { leavePolicyID } : {}),
-          ...(monthlyPayGradeID !== undefined ? { monthlyPayGradeID } : {}),
-          ...(hourlyPayGradeID !== undefined ? { hourlyPayGradeID } : {}),
+            // Basic position fields (direct field assignments)
+            ...(departmentNameID !== undefined ? { departmentNameID } : {}),
+            ...(designationID !== undefined ? { designationID } : {}),
+            ...(workShiftID !== undefined ? { workShiftID } : {}),
+            ...(attendancePolicyID !== undefined ? { attendancePolicyID } : {}),
+            ...(leavePolicyID !== undefined ? { leavePolicyID } : {}),
+            ...(monthlyPayGradeID !== undefined ? { monthlyPayGradeID } : {}),
+            ...(hourlyPayGradeID !== undefined ? { hourlyPayGradeID } : {}),
 
-          ...(scalars.shiftEligibility !== undefined ? { shiftEligibility: scalars.shiftEligibility } : {}),
-          ...(scalars.nightShiftEligibility !== undefined ? { nightShiftEligibility: scalars.nightShiftEligibility } : {}),
-          ...(scalars.maxHoursPerDay !== undefined ? { maxHoursPerDay: scalars.maxHoursPerDay } : {}),
-          ...(scalars.weeklyOffPattern !== undefined ? { weeklyOffPattern: scalars.weeklyOffPattern } : {}),
-          ...(scalars.noticePeriodDaysForResignation !== undefined ? { noticePeriodDaysForResignation: scalars.noticePeriodDaysForResignation } : {}),
-          ...(scalars.noticePeriodDaysForTermination !== undefined ? { noticePeriodDaysForTermination: scalars.noticePeriodDaysForTermination } : {}),
-
-
-          // Foreign key fields
-          serviceProviderID: serviceProviderID ?? undefined,
-          companyID: companyID ?? undefined,
-          branchesID: branchesID ?? undefined,
-          contractorID: contractorID ?? undefined,
-        } as any,
-      });
-
-      // Track field changes for history
-      if (oldData) {
-        await this.trackFieldChanges(tx, id, oldData, {
-          departmentNameID,
-          branchesID,
-          designationID,
-          employmentType,
-          employmentStatus,
-          salaryPayGradeType,
-          monthlyPayGradeID,
-          workShiftID,
-          leavePolicyID,
-          attendancePolicyID,
-          contractorID,
-        });
-      }
-
-      // Update employee credentials username if personalPhoneNo changed
-      if (scalars.personalPhoneNo || serviceProviderID !== undefined || companyID !== undefined || branchesID !== undefined) {
+            ...(scalars.shiftEligibility !== undefined ? { shiftEligibility: scalars.shiftEligibility } : {}),
+            ...(scalars.nightShiftEligibility !== undefined ? { nightShiftEligibility: scalars.nightShiftEligibility } : {}),
+            ...(scalars.maxHoursPerDay !== undefined ? { maxHoursPerDay: scalars.maxHoursPerDay } : {}),
+            ...(scalars.weeklyOffPattern !== undefined ? { weeklyOffPattern: scalars.weeklyOffPattern } : {}),
+            ...(scalars.noticePeriodDaysForResignation !== undefined ? { noticePeriodDaysForResignation: scalars.noticePeriodDaysForResignation } : {}),
+            ...(scalars.noticePeriodDaysForTermination !== undefined ? { noticePeriodDaysForTermination: scalars.noticePeriodDaysForTermination } : {}),
 
 
-        const currentCredentials = await tx.employeeCredentials.findUnique({
-          where: { employeeID: id }
-        });
-
-        if (currentCredentials) {
-          const updateData: any = {
+            // Foreign key fields
             serviceProviderID: serviceProviderID ?? undefined,
             companyID: companyID ?? undefined,
             branchesID: branchesID ?? undefined,
-          };
+            contractorID: contractorID ?? undefined,
+          } as any,
+        });
 
-          // Mobile number is employee username
-          if (scalars.personalPhoneNo) {
-            updateData.username = scalars.personalPhoneNo;
-          }
+        // Track field changes for history
+        if (oldData) {
+          await this.trackFieldChanges(tx, id, oldData, {
+            departmentNameID,
+            branchesID,
+            designationID,
+            employmentType,
+            employmentStatus,
+            salaryPayGradeType,
+            monthlyPayGradeID,
+            workShiftID,
+            leavePolicyID,
+            attendancePolicyID,
+            contractorID,
+          });
+        }
 
-          await tx.employeeCredentials.update({
-            where: { employeeID: id },
-            data: updateData,
+        // Update employee credentials username if personalPhoneNo changed
+        if (scalars.personalPhoneNo || serviceProviderID !== undefined || companyID !== undefined || branchesID !== undefined) {
+
+
+          const currentCredentials = await tx.employeeCredentials.findUnique({
+            where: { employeeID: id }
           });
 
-        } else if (scalars.personalPhoneNo) {
-          // Create credentials if they don't exist
-          plainInitialPassword = this.generateRandomPassword();
-          const hashedPassword = await this.hashPassword(plainInitialPassword);
+          if (currentCredentials) {
+            const updateData: any = {
+              serviceProviderID: serviceProviderID ?? undefined,
+              companyID: companyID ?? undefined,
+              branchesID: branchesID ?? undefined,
+            };
 
-                    const employeeApprovalState =
-            await tx.manageEmployee.findUnique({
-              where: {
-                id,
-              },
+            // Mobile number is employee username
+            if (scalars.personalPhoneNo) {
+              updateData.username = scalars.personalPhoneNo;
+            }
 
-              select: {
-                onboardingApprovalStatus: true,
-                lifecycleStatus: true,
-                isDeleted: true,
-              },
+            await tx.employeeCredentials.update({
+              where: { employeeID: id },
+              data: updateData,
             });
 
-          await tx.employeeCredentials.create({
-            data: {
-              employeeID: id,
-              username: scalars.personalPhoneNo,
-              password: hashedPassword,
-              mustChangePassword: true,
+          } else if (scalars.personalPhoneNo) {
+            // Create credentials if they don't exist
+            plainInitialPassword = this.generateRandomPassword();
+            const hashedPassword = await this.hashPassword(plainInitialPassword);
 
-              isActive:
-                employeeApprovalState?.onboardingApprovalStatus ===
+            const employeeApprovalState =
+              await tx.manageEmployee.findUnique({
+                where: {
+                  id,
+                },
+
+                select: {
+                  onboardingApprovalStatus: true,
+                  lifecycleStatus: true,
+                  isDeleted: true,
+                },
+              });
+
+            await tx.employeeCredentials.create({
+              data: {
+                employeeID: id,
+                username: scalars.personalPhoneNo,
+                password: hashedPassword,
+                mustChangePassword: true,
+
+                isActive:
+                  employeeApprovalState?.onboardingApprovalStatus ===
                   'APPROVED' &&
-                employeeApprovalState?.lifecycleStatus ===
+                  employeeApprovalState?.lifecycleStatus ===
                   'ACTIVE' &&
-                employeeApprovalState?.isDeleted ===
+                  employeeApprovalState?.isDeleted ===
                   false,
 
-              serviceProviderID:
-                serviceProviderID ?? undefined,
+                serviceProviderID:
+                  serviceProviderID ?? undefined,
 
-              companyID:
-                companyID ?? undefined,
+                companyID:
+                  companyID ?? undefined,
 
-              branchesID:
-                branchesID ?? undefined,
-            },
-          });
+                branchesID:
+                  branchesID ?? undefined,
+              },
+            });
+          }
         }
-      }
 
-      if (eduIdsToDelete.length) {
-        await tx.empEduQualification.deleteMany({
-          where: { id: { in: eduIdsToDelete }, manageEmployeeID: id },
-        });
-      }
-
-      if (expIdsToDelete.length) {
-        await tx.empProfExprience.deleteMany({
-          where: { id: { in: expIdsToDelete }, manageEmployeeID: id },
-        });
-      }
-      if (deviceMapIdsToDelete.length) {
-        await tx.empDeviceMapping.deleteMany({
-          where: { id: { in: deviceMapIdsToDelete }, manageEmployeeID: id },
-        });
-      }
-
-      if (tokenDeviceMapIdsToDelete.length) {
-        await tx.tokenDeviceMapping.deleteMany({
-          where: { id: { in: tokenDeviceMapIdsToDelete }, manageEmployeeID: id },
-        });
-      }
-
-      // 3) upsert edu
-      if (edu?.length) {
-        const toUpdate = edu.filter((e) => !!e.id);
-        const toCreate = edu.filter((e) => !e.id);
-        for (const e of toUpdate) {
-          await tx.empEduQualification.update({
-            where: { id: e.id! },
-            data: {
-              instituteType: e.instituteType ?? null,
-              instituteName: e.instituteName ?? null,
-              degree: e.degree ?? null,
-              pasingYear: e.pasingYear ?? null,
-              marks: e.marks ?? null,
-              gpaCgpa: e.gpaCgpa ?? null,
-              class: e.class ?? null,
-            },
+        if (eduIdsToDelete.length) {
+          await tx.empEduQualification.deleteMany({
+            where: { id: { in: eduIdsToDelete }, manageEmployeeID: id },
           });
         }
 
-        if (toCreate.length) {
-          await tx.empEduQualification.createMany({
-            data: toCreate.map((e) => ({
-              manageEmployeeID: id,
-              instituteType: e.instituteType ?? null,
-              instituteName: e.instituteName ?? null,
-              degree: e.degree ?? null,
-              pasingYear: e.pasingYear ?? null,
-              marks: e.marks ?? null,
-              gpaCgpa: e.gpaCgpa ?? null,
-              class: e.class ?? null,
-            })),
+        if (expIdsToDelete.length) {
+          await tx.empProfExprience.deleteMany({
+            where: { id: { in: expIdsToDelete }, manageEmployeeID: id },
           });
         }
-      }
-
-      // 4) upsert exp
-      if (exp?.length) {
-        const toUpdate = exp.filter((x) => !!x.id);
-        const toCreate = exp.filter((x) => !x.id);
-        for (const x of toUpdate) {
-          await tx.empProfExprience.update({
-            where: { id: x.id! },
-            data: {
-              orgName: x.orgName ?? null,
-              designation: x.designation ?? null,
-              fromDate: x.fromDate ?? null,
-              toDate: x.toDate ?? null,
-              responsibility: x.responsibility ?? null,
-              skill: x.skill ?? null,
-            },
+        if (deviceMapIdsToDelete.length) {
+          await tx.empDeviceMapping.deleteMany({
+            where: { id: { in: deviceMapIdsToDelete }, manageEmployeeID: id },
           });
         }
 
-        if (toCreate.length) {
-          await tx.empProfExprience.createMany({
-            data: toCreate.map((x) => ({
-              manageEmployeeID: id,
-              orgName: x.orgName ?? null,
-              designation: x.designation ?? null,
-              fromDate: x.fromDate ?? null,
-              toDate: x.toDate ?? null,
-              responsibility: x.responsibility ?? null,
-              skill: x.skill ?? null,
-            })),
-          });
-        }
-      }
-
-      // 5) upsert devices
-      if (devices?.length) {
-        const toUpdate = devices.filter((d) => !!d.id);
-        const toCreate = devices.filter((d) => !d.id);
-        for (const d of toUpdate) {
-          const owned = await tx.empDeviceMapping.findFirst({
-            where: { id: d.id!, manageEmployeeID: id },
-          });
-          if (!owned) continue;
-          await tx.empDeviceMapping.update({
-            where: { id: d.id! },
-            data: {
-              device: { connect: { id: d.deviceID } },
-              deviceEmpCode: d.deviceEmpCode ?? null,
-              authType: d.authType ?? null,
-            },
+        if (tokenDeviceMapIdsToDelete.length) {
+          await tx.tokenDeviceMapping.deleteMany({
+            where: { id: { in: tokenDeviceMapIdsToDelete }, manageEmployeeID: id },
           });
         }
 
-        for (const d of toCreate) {
-          await tx.empDeviceMapping.create({
-            data: {
-              manageEmployee: { connect: { id } },
-              device: { connect: { id: d.deviceID } },
-              deviceEmpCode: d.deviceEmpCode ?? null,
-              authType: d.authType ?? null,
-            },
-          });
-        }
-      }
+        // 3) upsert edu
+        if (edu?.length) {
+          const toUpdate = edu.filter((e) => !!e.id);
+          const toCreate = edu.filter((e) => !e.id);
+          for (const e of toUpdate) {
+            await tx.empEduQualification.update({
+              where: { id: e.id! },
+              data: {
+                instituteType: e.instituteType ?? null,
+                instituteName: e.instituteName ?? null,
+                degree: e.degree ?? null,
+                pasingYear: e.pasingYear ?? null,
+                marks: e.marks ?? null,
+                gpaCgpa: e.gpaCgpa ?? null,
+                class: e.class ?? null,
+              },
+            });
+          }
 
-
-
-      // Upsert Token devices (TokenDeviceMapping)
-      if (tokenDevices?.length) {
-        const toUpdate = tokenDevices.filter((d) => !!d.id);
-        const toCreate = tokenDevices.filter((d) => !d.id);
-        for (const d of toUpdate) {
-          const owned = await tx.tokenDeviceMapping.findFirst({
-            where: { id: d.id!, manageEmployeeID: id },
-          });
-          if (!owned) continue;
-          await tx.tokenDeviceMapping.update({
-            where: { id: d.id! },
-            data: {
-              device: { connect: { id: d.deviceID } },
-              deviceEmpCode: d.deviceEmpCode ?? null,
-              authType: d.authType ?? null,
-            },
-          });
-        }
-        for (const d of toCreate) {
-          await tx.tokenDeviceMapping.create({
-            data: {
-              manageEmployee: { connect: { id } },
-              device: { connect: { id: d.deviceID } },
-              deviceEmpCode: d.deviceEmpCode ?? null,
-              authType: d.authType ?? null,
-            },
-          });
-        }
-      }
-
-      // 6) upsert bank details
-      if (bankDetails?.length) {
-        const toUpdate = bankDetails.filter((b) => !!b.id);
-        const toCreate = bankDetails.filter((b) => !b.id);
-
-        // Update existing
-        for (const b of toUpdate) {
-          await tx.employeeBankDetails.update({
-            where: { id: b.id! },
-            data: {
-              bankName: b.bankName ?? null,
-              bankBranchName: b.bankBranchName ?? null,
-              accNumber: b.accNumber ?? null,
-              ifscCode: b.ifscCode ?? null,
-              upi: b.upi ?? null,
-            },
-          });
-        }
-
-        // Create new
-        if (toCreate.length) {
-          await tx.employeeBankDetails.createMany({
-            data: toCreate.map((b) => ({
-              employeeID: id,
-              bankName: b.bankName ?? null,
-              bankBranchName: b.bankBranchName ?? null,
-              accNumber: b.accNumber ?? null,
-              ifscCode: b.ifscCode ?? null,
-              upi: b.upi ?? null,
-            })),
-          });
-        }
-      }
-
-      // Delete removed bank details
-      if (bankDetailsIdsToDelete.length) {
-        await tx.employeeBankDetails.deleteMany({
-          where: { id: { in: bankDetailsIdsToDelete }, employeeID: id },
-        });
-      }
-
-      // Delete removed emp designations
-      if (employeeDocuments !== undefined) {
-        const currentEmployee = await tx.manageEmployee.findUnique({
-          where: { id },
-          select: {
-            id: true,
-            serviceProviderID: true,
-            companyID: true,
-            branchesID: true,
-          },
-        });
-
-        if (!currentEmployee) {
-          throw new NotFoundException(`Employee ${id} not found`);
-        }
-
-        await tx.employeeDocument.deleteMany({
-          where: { employeeID: id },
-        });
-
-        const docsToCreate = employeeDocuments
-          .map((doc: any) => this.normalizeEmployeeDocument(doc, currentEmployee))
-          .filter(Boolean);
-
-        if (docsToCreate.length) {
-          await tx.employeeDocument.createMany({
-            data: docsToCreate as any[],
-          });
-        }
-      }
-
-      // Delete removed emp designations
-      if (empDesignationIdsToDelete.length) {
-        await tx.empDesignation.deleteMany({
-          where: { id: { in: empDesignationIdsToDelete }, manageEmployeeID: id },
-        });
-      }
-
-      // Upsert emp designations
-      if (empDesignations?.length) {
-        const toUpdate = empDesignations.filter((d) => !!d.id);
-        const toCreate = empDesignations.filter((d) => !d.id);
-        for (const d of toUpdate) {
-          await tx.empDesignation.update({
-            where: { id: d.id! },
-            data: {
-              designationID: d.designationID ?? null,
-              effectFrom: d.effectFrom ?? null,
-            },
-          });
-        }
-        if (toCreate.length) {
-          await tx.empDesignation.createMany({
-            data: toCreate
-              .filter((d) => d.designationID != null)
-              .map((d) => ({
+          if (toCreate.length) {
+            await tx.empEduQualification.createMany({
+              data: toCreate.map((e) => ({
                 manageEmployeeID: id,
-                designationID: d.designationID!,
-                effectFrom: d.effectFrom ?? null,
+                instituteType: e.instituteType ?? null,
+                instituteName: e.instituteName ?? null,
+                degree: e.degree ?? null,
+                pasingYear: e.pasingYear ?? null,
+                marks: e.marks ?? null,
+                gpaCgpa: e.gpaCgpa ?? null,
+                class: e.class ?? null,
               })),
+            });
+          }
+        }
+
+        // 4) upsert exp
+        if (exp?.length) {
+          const toUpdate = exp.filter((x) => !!x.id);
+          const toCreate = exp.filter((x) => !x.id);
+          for (const x of toUpdate) {
+            await tx.empProfExprience.update({
+              where: { id: x.id! },
+              data: {
+                orgName: x.orgName ?? null,
+                designation: x.designation ?? null,
+                fromDate: x.fromDate ?? null,
+                toDate: x.toDate ?? null,
+                responsibility: x.responsibility ?? null,
+                skill: x.skill ?? null,
+              },
+            });
+          }
+
+          if (toCreate.length) {
+            await tx.empProfExprience.createMany({
+              data: toCreate.map((x) => ({
+                manageEmployeeID: id,
+                orgName: x.orgName ?? null,
+                designation: x.designation ?? null,
+                fromDate: x.fromDate ?? null,
+                toDate: x.toDate ?? null,
+                responsibility: x.responsibility ?? null,
+                skill: x.skill ?? null,
+              })),
+            });
+          }
+        }
+
+        // 5) upsert devices
+        if (devices?.length) {
+          const toUpdate = devices.filter((d) => !!d.id);
+          const toCreate = devices.filter((d) => !d.id);
+          for (const d of toUpdate) {
+            const owned = await tx.empDeviceMapping.findFirst({
+              where: { id: d.id!, manageEmployeeID: id },
+            });
+            if (!owned) continue;
+            await tx.empDeviceMapping.update({
+              where: { id: d.id! },
+              data: {
+                device: { connect: { id: d.deviceID } },
+                deviceEmpCode: d.deviceEmpCode ?? null,
+                authType: d.authType ?? null,
+              },
+            });
+          }
+
+          for (const d of toCreate) {
+            await tx.empDeviceMapping.create({
+              data: {
+                manageEmployee: { connect: { id } },
+                device: { connect: { id: d.deviceID } },
+                deviceEmpCode: d.deviceEmpCode ?? null,
+                authType: d.authType ?? null,
+              },
+            });
+          }
+        }
+
+
+
+        // Upsert Token devices (TokenDeviceMapping)
+        if (tokenDevices?.length) {
+          const toUpdate = tokenDevices.filter((d) => !!d.id);
+          const toCreate = tokenDevices.filter((d) => !d.id);
+          for (const d of toUpdate) {
+            const owned = await tx.tokenDeviceMapping.findFirst({
+              where: { id: d.id!, manageEmployeeID: id },
+            });
+            if (!owned) continue;
+            await tx.tokenDeviceMapping.update({
+              where: { id: d.id! },
+              data: {
+                device: { connect: { id: d.deviceID } },
+                deviceEmpCode: d.deviceEmpCode ?? null,
+                authType: d.authType ?? null,
+              },
+            });
+          }
+          for (const d of toCreate) {
+            await tx.tokenDeviceMapping.create({
+              data: {
+                manageEmployee: { connect: { id } },
+                device: { connect: { id: d.deviceID } },
+                deviceEmpCode: d.deviceEmpCode ?? null,
+                authType: d.authType ?? null,
+              },
+            });
+          }
+        }
+
+        // 6) upsert bank details
+        if (bankDetails?.length) {
+          const toUpdate = bankDetails.filter((b) => !!b.id);
+          const toCreate = bankDetails.filter((b) => !b.id);
+
+          // Update existing
+          for (const b of toUpdate) {
+            await tx.employeeBankDetails.update({
+              where: { id: b.id! },
+              data: {
+                bankName: b.bankName ?? null,
+                bankBranchName: b.bankBranchName ?? null,
+                accNumber: b.accNumber ?? null,
+                ifscCode: b.ifscCode ?? null,
+                upi: b.upi ?? null,
+              },
+            });
+          }
+
+          // Create new
+          if (toCreate.length) {
+            await tx.employeeBankDetails.createMany({
+              data: toCreate.map((b) => ({
+                employeeID: id,
+                bankName: b.bankName ?? null,
+                bankBranchName: b.bankBranchName ?? null,
+                accNumber: b.accNumber ?? null,
+                ifscCode: b.ifscCode ?? null,
+                upi: b.upi ?? null,
+              })),
+            });
+          }
+        }
+
+        // Delete removed bank details
+        if (bankDetailsIdsToDelete.length) {
+          await tx.employeeBankDetails.deleteMany({
+            where: { id: { in: bankDetailsIdsToDelete }, employeeID: id },
           });
         }
-      }
 
-      // Delete and upsert empBranch
-      if (empBranchIdsToDelete.length) {
-        await tx.empBranch.deleteMany({ where: { id: { in: empBranchIdsToDelete }, manageEmployeeID: id } });
-      }
-      if (empBranches?.length) {
-        const toUpdate = empBranches.filter((b) => !!b.id);
-        const toCreate = empBranches.filter((b) => !b.id);
-        for (const b of toUpdate) {
-          await tx.empBranch.update({ where: { id: b.id! }, data: { branchesID: b.branchesID!, effectFrom: b.effectFrom ?? null } });
-        }
-        if (toCreate.length) {
-          await tx.empBranch.createMany({ data: toCreate.filter((b) => b.branchesID != null).map((b) => ({ manageEmployeeID: id, branchesID: b.branchesID!, effectFrom: b.effectFrom ?? null })) });
-        }
-      }
-
-      // Delete and upsert empDepartment
-      if (empDepartmentIdsToDelete.length) {
-        await tx.empDepartment.deleteMany({ where: { id: { in: empDepartmentIdsToDelete }, manageEmployeeID: id } });
-      }
-      if (empDepartments?.length) {
-        const toUpdate = empDepartments.filter((d) => !!d.id);
-        const toCreate = empDepartments.filter((d) => !d.id);
-        for (const d of toUpdate) {
-          await tx.empDepartment.update({ where: { id: d.id! }, data: { departmentNameID: d.departmentNameID!, effectFrom: d.effectFrom ?? null } });
-        }
-        if (toCreate.length) {
-          await tx.empDepartment.createMany({ data: toCreate.filter((d) => d.departmentNameID != null).map((d) => ({ manageEmployeeID: id, departmentNameID: d.departmentNameID!, effectFrom: d.effectFrom ?? null })) });
-        }
-      }
-
-      // Delete and upsert empEmploymentType
-      if (empEmploymentTypeIdsToDelete.length) {
-        await tx.empEmploymentType.deleteMany({ where: { id: { in: empEmploymentTypeIdsToDelete }, manageEmployeeID: id } });
-      }
-      if (empEmploymentTypes?.length) {
-        const toUpdate = empEmploymentTypes.filter((t) => !!t.id);
-        const toCreate = empEmploymentTypes.filter((t) => !t.id);
-        for (const t of toUpdate) {
-          await tx.empEmploymentType.update({ where: { id: t.id! }, data: { employmentType: t.employmentType!, effectFrom: t.effectFrom ?? null } });
-        }
-        if (toCreate.length) {
-          await tx.empEmploymentType.createMany({ data: toCreate.filter((t) => t.employmentType).map((t) => ({ manageEmployeeID: id, employmentType: t.employmentType!, effectFrom: t.effectFrom ?? null })) });
-        }
-      }
-
-      // Delete and upsert empEmploymentStatus
-      if (empEmploymentStatusIdsToDelete.length) {
-        await tx.empEmploymentStatus.deleteMany({ where: { id: { in: empEmploymentStatusIdsToDelete }, manageEmployeeID: id } });
-      }
-      if (empEmploymentStatuses?.length) {
-        const toUpdate = empEmploymentStatuses.filter((s) => !!s.id);
-        const toCreate = empEmploymentStatuses.filter((s) => !s.id);
-        for (const s of toUpdate) {
-          await tx.empEmploymentStatus.update({ where: { id: s.id! }, data: { employmentStatus: s.employmentStatus!, probationPeriod: s.probationPeriod ?? null, effectFrom: s.effectFrom ?? null } });
-        }
-        if (toCreate.length) {
-          await tx.empEmploymentStatus.createMany({ data: toCreate.filter((s) => s.employmentStatus).map((s) => ({ manageEmployeeID: id, employmentStatus: s.employmentStatus!, probationPeriod: s.probationPeriod ?? null, effectFrom: s.effectFrom ?? null })) });
-        }
-      }
-
-      // Delete and upsert empWorkShift
-      if (empWorkShiftIdsToDelete.length) {
-        await tx.empWorkShift.deleteMany({ where: { id: { in: empWorkShiftIdsToDelete }, manageEmployeeID: id } });
-      }
-      if (empWorkShifts?.length) {
-        const toUpdate = empWorkShifts.filter((w) => !!w.id);
-        const toCreate = empWorkShifts.filter((w) => !w.id);
-        for (const w of toUpdate) {
-          await tx.empWorkShift.update({ where: { id: w.id! }, data: { workShiftID: w.workShiftID!, effectFrom: w.effectFrom ?? null } });
-        }
-        if (toCreate.length) {
-          await tx.empWorkShift.createMany({ data: toCreate.filter((w) => w.workShiftID != null).map((w) => ({ manageEmployeeID: id, workShiftID: w.workShiftID!, effectFrom: w.effectFrom ?? null })) });
-        }
-      }
-
-      // Delete and upsert empAttendancePolicy
-      if (empAttendancePolicyIdsToDelete.length) {
-        await tx.empAttendancePolicy.deleteMany({ where: { id: { in: empAttendancePolicyIdsToDelete }, manageEmployeeID: id } });
-      }
-      if (empAttendancePolicies?.length) {
-        const toUpdate = empAttendancePolicies.filter((a) => !!a.id);
-        const toCreate = empAttendancePolicies.filter((a) => !a.id);
-        for (const a of toUpdate) {
-          await tx.empAttendancePolicy.update({ where: { id: a.id! }, data: { attendancePolicyID: a.attendancePolicyID!, effectFrom: a.effectFrom ?? null } });
-        }
-        if (toCreate.length) {
-          await tx.empAttendancePolicy.createMany({ data: toCreate.filter((a) => a.attendancePolicyID != null).map((a) => ({ manageEmployeeID: id, attendancePolicyID: a.attendancePolicyID!, effectFrom: a.effectFrom ?? null })) });
-        }
-      }
-
-      // Delete and upsert empFactualWorkShift
-      if (empFactualWorkShiftIdsToDelete.length) {
-        await (tx as any).empFactualWorkShift.deleteMany({ where: { id: { in: empFactualWorkShiftIdsToDelete }, manageEmployeeID: id } });
-      }
-      if (empFactualWorkShifts?.length) {
-        const toUpdate = empFactualWorkShifts.filter((w) => !!w.id);
-        const toCreate = empFactualWorkShifts.filter((w) => !w.id);
-        for (const w of toUpdate) {
-          await (tx as any).empFactualWorkShift.update({ where: { id: w.id! }, data: { factualWorkShiftID: w.factualWorkShiftID!, effectFrom: w.effectFrom ?? null } });
-        }
-        if (toCreate.length) {
-          await (tx as any).empFactualWorkShift.createMany({ data: toCreate.filter((w) => w.factualWorkShiftID != null).map((w) => ({ manageEmployeeID: id, factualWorkShiftID: w.factualWorkShiftID!, effectFrom: w.effectFrom ?? null })) });
-        }
-      }
-
-      // Delete and upsert empFactualAttendancePolicy
-      if (empFactualAttendancePolicyIdsToDelete.length) {
-        await (tx as any).empFactualAttendancePolicy.deleteMany({ where: { id: { in: empFactualAttendancePolicyIdsToDelete }, manageEmployeeID: id } });
-      }
-      if (empFactualAttendancePolicies?.length) {
-        const toUpdate = empFactualAttendancePolicies.filter((a) => !!a.id);
-        const toCreate = empFactualAttendancePolicies.filter((a) => !a.id);
-        for (const a of toUpdate) {
-          await (tx as any).empFactualAttendancePolicy.update({ where: { id: a.id! }, data: { factualAttendancePolicyID: a.factualAttendancePolicyID!, effectFrom: a.effectFrom ?? null } });
-        }
-        if (toCreate.length) {
-          await (tx as any).empFactualAttendancePolicy.createMany({ data: toCreate.filter((a) => a.factualAttendancePolicyID != null).map((a) => ({ manageEmployeeID: id, factualAttendancePolicyID: a.factualAttendancePolicyID!, effectFrom: a.effectFrom ?? null })) });
-        }
-      }
-
-      // Delete and upsert empLeavePolicy
-      if (empLeavePolicyIdsToDelete.length) {
-        await tx.empLeavePolicy.deleteMany({ where: { id: { in: empLeavePolicyIdsToDelete }, manageEmployeeID: id } });
-      }
-      if (empLeavePolicies?.length) {
-        const toUpdate = empLeavePolicies.filter((l) => !!l.id);
-        const toCreate = empLeavePolicies.filter((l) => !l.id);
-        for (const l of toUpdate) {
-          await tx.empLeavePolicy.update({ where: { id: l.id! }, data: { leavePolicyID: l.leavePolicyID!, effectFrom: l.effectFrom ?? null } });
-        }
-        if (toCreate.length) {
-          await tx.empLeavePolicy.createMany({ data: toCreate.filter((l) => l.leavePolicyID != null).map((l) => ({ manageEmployeeID: id, leavePolicyID: l.leavePolicyID!, effectFrom: l.effectFrom ?? null })) });
-        }
-      }
-
-      // Delete and upsert empContractor
-      if (empContractorIdsToDelete.length) {
-        await tx.empContractor.deleteMany({ where: { id: { in: empContractorIdsToDelete }, manageEmployeeID: id } });
-      }
-      if (empContractors?.length) {
-        const toUpdate = empContractors.filter((c) => !!c.id);
-        const toCreate = empContractors.filter((c) => !c.id);
-        for (const c of toUpdate) {
-          await tx.empContractor.update({ where: { id: c.id! }, data: { contractorID: c.contractorID!, effectFrom: c.effectFrom ?? null } });
-        }
-        if (toCreate.length) {
-          await tx.empContractor.createMany({ data: toCreate.filter((c) => c.contractorID != null).map((c) => ({ manageEmployeeID: id, contractorID: c.contractorID!, effectFrom: c.effectFrom ?? null })) });
-        }
-      }
-
-      if (promotion) {
-        if (promotion.id) {
-          await tx.empPromotion.update({
-            where: { id: promotion.id },
-            data: {
-              departmentNameID: promotion.departmentNameID ?? null,
-              designationID: promotion.designationID ?? null,
-              managerID: promotion.managerID ?? null,
-              employmentType: promotion.employmentType ?? null,
-              employmentStatus: promotion.employmentStatus ?? null,
-              probationPeriod: promotion.probationPeriod ?? null,
-              workShiftID: promotion.workShiftID ?? null,
-              attendancePolicyID: promotion.attendancePolicyID ?? null,
-              leavePolicyID: promotion.leavePolicyID ?? null,
-              salaryPayGradeType: promotion.salaryPayGradeType ?? null,
-              monthlyPayGradeID: promotion.monthlyPayGradeID ?? null,
-              hourlyPayGradeID: promotion.hourlyPayGradeID ?? null,
-            },
-          });
-        } else {
-          await tx.empPromotion.create({
-            data: {
-              manageEmployeeID: id,
-              departmentNameID: promotion.departmentNameID ?? null,
-              designationID: promotion.designationID ?? null,
-              managerID: promotion.managerID ?? null,
-              employmentType: promotion.employmentType ?? null,
-              employmentStatus: promotion.employmentStatus ?? null,
-              probationPeriod: promotion.probationPeriod ?? null,
-              workShiftID: promotion.workShiftID ?? null,
-              attendancePolicyID: promotion.attendancePolicyID ?? null,
-              leavePolicyID: promotion.leavePolicyID ?? null,
-              salaryPayGradeType: promotion.salaryPayGradeType ?? null,
-              monthlyPayGradeID: promotion.monthlyPayGradeID ?? null,
-              hourlyPayGradeID: promotion.hourlyPayGradeID ?? null,
-            },
-          });
-        }
-      }
-
-      // 7) return fresh data with credentials (excluding password)
-      const employeeWithRelations = await tx.manageEmployee.findUnique({
-        where: { id },
-        include: {
-          serviceProvider: true,
-          company: true,
-          branches: true,
-          contractors: true,
-          employeeCredentials: {
+        // Delete removed emp designations
+        if (employeeDocuments !== undefined) {
+          const currentEmployee = await tx.manageEmployee.findUnique({
+            where: { id },
             select: {
               id: true,
-              username: true,
-              isActive: true,
-              mustChangePassword: true,
-              createdAt: true,
-              updatedAt: true,
-            }
-          },
-          // Basic position relations
-          departments: true,
-          designations: true,
-          workShift: true,
-          attendancePolicy: true,
-          leavePolicy: true,
-          monthlyPayGrade: true,
-          hourlyPayGrade: true,
-          employeeBankDetails: true,
-          employeeDocuments: {
-            orderBy: { createdAt: 'desc' },
-          },
-          empEduQualification: true,
-          empProfExprience: true,
-          empDesignation: { include: { designation: true } },
-          empDeviceMapping: { include: { device: true } },
-          tokenDeviceMapping: { include: { device: true } },
-          empBranch: { include: { branch: true } },
-          empDepartment: { include: { department: true } },
-          empEmploymentType: true,
-          empEmploymentStatus: true,
-          empWorkShift: { include: { workShift: true } },
-          empAttendancePolicy: { include: { attendancePolicy: true } },
-          empFactualWorkShift: { include: { factualWorkShift: true } },
-          empFactualAttendancePolicy: { include: { factualAttendancePolicy: true } },
-          empLeavePolicy: { include: { leavePolicy: true } },
-          empContractor: { include: { contractor: true } },
-          empPromotion: {
-            orderBy: { id: 'desc' },
-            include: {
-              departments: true,
-              designations: true,
-              workShift: true,
-              attendancePolicy: true,
-              leavePolicy: true,
-              hourlyPayGrade: true,
-              monthlyPayGrade: true,
+              serviceProviderID: true,
+              companyID: true,
+              branchesID: true,
+            },
+          });
+
+          if (!currentEmployee) {
+            throw new NotFoundException(`Employee ${id} not found`);
+          }
+
+          await tx.employeeDocument.deleteMany({
+            where: { employeeID: id },
+          });
+
+          const docsToCreate = employeeDocuments
+            .map((doc: any) => this.normalizeEmployeeDocument(doc, currentEmployee))
+            .filter(Boolean);
+
+          if (docsToCreate.length) {
+            await tx.employeeDocument.createMany({
+              data: docsToCreate as any[],
+            });
+          }
+        }
+
+        // Delete removed emp designations
+        if (empDesignationIdsToDelete.length) {
+          await tx.empDesignation.deleteMany({
+            where: { id: { in: empDesignationIdsToDelete }, manageEmployeeID: id },
+          });
+        }
+
+        // Upsert emp designations
+        if (empDesignations?.length) {
+          const toUpdate = empDesignations.filter((d) => !!d.id);
+          const toCreate = empDesignations.filter((d) => !d.id);
+          for (const d of toUpdate) {
+            await tx.empDesignation.update({
+              where: { id: d.id! },
+              data: {
+                designationID: d.designationID ?? null,
+                effectFrom: d.effectFrom ?? null,
+              },
+            });
+          }
+          if (toCreate.length) {
+            await tx.empDesignation.createMany({
+              data: toCreate
+                .filter((d) => d.designationID != null)
+                .map((d) => ({
+                  manageEmployeeID: id,
+                  designationID: d.designationID!,
+                  effectFrom: d.effectFrom ?? null,
+                })),
+            });
+          }
+        }
+
+        // Delete and upsert empBranch
+        if (empBranchIdsToDelete.length) {
+          await tx.empBranch.deleteMany({ where: { id: { in: empBranchIdsToDelete }, manageEmployeeID: id } });
+        }
+        if (empBranches?.length) {
+          const toUpdate = empBranches.filter((b) => !!b.id);
+          const toCreate = empBranches.filter((b) => !b.id);
+          for (const b of toUpdate) {
+            await tx.empBranch.update({ where: { id: b.id! }, data: { branchesID: b.branchesID!, effectFrom: b.effectFrom ?? null } });
+          }
+          if (toCreate.length) {
+            await tx.empBranch.createMany({ data: toCreate.filter((b) => b.branchesID != null).map((b) => ({ manageEmployeeID: id, branchesID: b.branchesID!, effectFrom: b.effectFrom ?? null })) });
+          }
+        }
+
+        // Delete and upsert empDepartment
+        if (empDepartmentIdsToDelete.length) {
+          await tx.empDepartment.deleteMany({ where: { id: { in: empDepartmentIdsToDelete }, manageEmployeeID: id } });
+        }
+        if (empDepartments?.length) {
+          const toUpdate = empDepartments.filter((d) => !!d.id);
+          const toCreate = empDepartments.filter((d) => !d.id);
+          for (const d of toUpdate) {
+            await tx.empDepartment.update({ where: { id: d.id! }, data: { departmentNameID: d.departmentNameID!, effectFrom: d.effectFrom ?? null } });
+          }
+          if (toCreate.length) {
+            await tx.empDepartment.createMany({ data: toCreate.filter((d) => d.departmentNameID != null).map((d) => ({ manageEmployeeID: id, departmentNameID: d.departmentNameID!, effectFrom: d.effectFrom ?? null })) });
+          }
+        }
+
+        // Delete and upsert empEmploymentType
+        if (empEmploymentTypeIdsToDelete.length) {
+          await tx.empEmploymentType.deleteMany({ where: { id: { in: empEmploymentTypeIdsToDelete }, manageEmployeeID: id } });
+        }
+        if (empEmploymentTypes?.length) {
+          const toUpdate = empEmploymentTypes.filter((t) => !!t.id);
+          const toCreate = empEmploymentTypes.filter((t) => !t.id);
+          for (const t of toUpdate) {
+            await tx.empEmploymentType.update({ where: { id: t.id! }, data: { employmentType: t.employmentType!, effectFrom: t.effectFrom ?? null } });
+          }
+          if (toCreate.length) {
+            await tx.empEmploymentType.createMany({ data: toCreate.filter((t) => t.employmentType).map((t) => ({ manageEmployeeID: id, employmentType: t.employmentType!, effectFrom: t.effectFrom ?? null })) });
+          }
+        }
+
+        // Delete and upsert empEmploymentStatus
+        if (empEmploymentStatusIdsToDelete.length) {
+          await tx.empEmploymentStatus.deleteMany({ where: { id: { in: empEmploymentStatusIdsToDelete }, manageEmployeeID: id } });
+        }
+        if (empEmploymentStatuses?.length) {
+          const toUpdate = empEmploymentStatuses.filter((s) => !!s.id);
+          const toCreate = empEmploymentStatuses.filter((s) => !s.id);
+          for (const s of toUpdate) {
+            await tx.empEmploymentStatus.update({ where: { id: s.id! }, data: { employmentStatus: s.employmentStatus!, probationPeriod: s.probationPeriod ?? null, effectFrom: s.effectFrom ?? null } });
+          }
+          if (toCreate.length) {
+            await tx.empEmploymentStatus.createMany({ data: toCreate.filter((s) => s.employmentStatus).map((s) => ({ manageEmployeeID: id, employmentStatus: s.employmentStatus!, probationPeriod: s.probationPeriod ?? null, effectFrom: s.effectFrom ?? null })) });
+          }
+        }
+
+        // Delete and upsert empWorkShift
+        if (empWorkShiftIdsToDelete.length) {
+          await tx.empWorkShift.deleteMany({ where: { id: { in: empWorkShiftIdsToDelete }, manageEmployeeID: id } });
+        }
+        if (empWorkShifts?.length) {
+          const toUpdate = empWorkShifts.filter((w) => !!w.id);
+          const toCreate = empWorkShifts.filter((w) => !w.id);
+          for (const w of toUpdate) {
+            await tx.empWorkShift.update({ where: { id: w.id! }, data: { workShiftID: w.workShiftID!, effectFrom: w.effectFrom ?? null } });
+          }
+          if (toCreate.length) {
+            await tx.empWorkShift.createMany({ data: toCreate.filter((w) => w.workShiftID != null).map((w) => ({ manageEmployeeID: id, workShiftID: w.workShiftID!, effectFrom: w.effectFrom ?? null })) });
+          }
+        }
+
+        // Delete and upsert empAttendancePolicy
+        if (empAttendancePolicyIdsToDelete.length) {
+          await tx.empAttendancePolicy.deleteMany({ where: { id: { in: empAttendancePolicyIdsToDelete }, manageEmployeeID: id } });
+        }
+        if (empAttendancePolicies?.length) {
+          const toUpdate = empAttendancePolicies.filter((a) => !!a.id);
+          const toCreate = empAttendancePolicies.filter((a) => !a.id);
+          for (const a of toUpdate) {
+            await tx.empAttendancePolicy.update({ where: { id: a.id! }, data: { attendancePolicyID: a.attendancePolicyID!, effectFrom: a.effectFrom ?? null } });
+          }
+          if (toCreate.length) {
+            await tx.empAttendancePolicy.createMany({ data: toCreate.filter((a) => a.attendancePolicyID != null).map((a) => ({ manageEmployeeID: id, attendancePolicyID: a.attendancePolicyID!, effectFrom: a.effectFrom ?? null })) });
+          }
+        }
+
+        // Delete and upsert empFactualWorkShift
+        if (empFactualWorkShiftIdsToDelete.length) {
+          await (tx as any).empFactualWorkShift.deleteMany({ where: { id: { in: empFactualWorkShiftIdsToDelete }, manageEmployeeID: id } });
+        }
+        if (empFactualWorkShifts?.length) {
+          const toUpdate = empFactualWorkShifts.filter((w) => !!w.id);
+          const toCreate = empFactualWorkShifts.filter((w) => !w.id);
+          for (const w of toUpdate) {
+            await (tx as any).empFactualWorkShift.update({ where: { id: w.id! }, data: { factualWorkShiftID: w.factualWorkShiftID!, effectFrom: w.effectFrom ?? null } });
+          }
+          if (toCreate.length) {
+            await (tx as any).empFactualWorkShift.createMany({ data: toCreate.filter((w) => w.factualWorkShiftID != null).map((w) => ({ manageEmployeeID: id, factualWorkShiftID: w.factualWorkShiftID!, effectFrom: w.effectFrom ?? null })) });
+          }
+        }
+
+        // Delete and upsert empFactualAttendancePolicy
+        if (empFactualAttendancePolicyIdsToDelete.length) {
+          await (tx as any).empFactualAttendancePolicy.deleteMany({ where: { id: { in: empFactualAttendancePolicyIdsToDelete }, manageEmployeeID: id } });
+        }
+        if (empFactualAttendancePolicies?.length) {
+          const toUpdate = empFactualAttendancePolicies.filter((a) => !!a.id);
+          const toCreate = empFactualAttendancePolicies.filter((a) => !a.id);
+          for (const a of toUpdate) {
+            await (tx as any).empFactualAttendancePolicy.update({ where: { id: a.id! }, data: { factualAttendancePolicyID: a.factualAttendancePolicyID!, effectFrom: a.effectFrom ?? null } });
+          }
+          if (toCreate.length) {
+            await (tx as any).empFactualAttendancePolicy.createMany({ data: toCreate.filter((a) => a.factualAttendancePolicyID != null).map((a) => ({ manageEmployeeID: id, factualAttendancePolicyID: a.factualAttendancePolicyID!, effectFrom: a.effectFrom ?? null })) });
+          }
+        }
+
+        // Delete and upsert empLeavePolicy
+        if (empLeavePolicyIdsToDelete.length) {
+          await tx.empLeavePolicy.deleteMany({ where: { id: { in: empLeavePolicyIdsToDelete }, manageEmployeeID: id } });
+        }
+        if (empLeavePolicies?.length) {
+          const toUpdate = empLeavePolicies.filter((l) => !!l.id);
+          const toCreate = empLeavePolicies.filter((l) => !l.id);
+          for (const l of toUpdate) {
+            await tx.empLeavePolicy.update({ where: { id: l.id! }, data: { leavePolicyID: l.leavePolicyID!, effectFrom: l.effectFrom ?? null } });
+          }
+          if (toCreate.length) {
+            await tx.empLeavePolicy.createMany({ data: toCreate.filter((l) => l.leavePolicyID != null).map((l) => ({ manageEmployeeID: id, leavePolicyID: l.leavePolicyID!, effectFrom: l.effectFrom ?? null })) });
+          }
+        }
+
+        // Delete and upsert empContractor
+        if (empContractorIdsToDelete.length) {
+          await tx.empContractor.deleteMany({ where: { id: { in: empContractorIdsToDelete }, manageEmployeeID: id } });
+        }
+        if (empContractors?.length) {
+          const toUpdate = empContractors.filter((c) => !!c.id);
+          const toCreate = empContractors.filter((c) => !c.id);
+          for (const c of toUpdate) {
+            await tx.empContractor.update({ where: { id: c.id! }, data: { contractorID: c.contractorID!, effectFrom: c.effectFrom ?? null } });
+          }
+          if (toCreate.length) {
+            await tx.empContractor.createMany({ data: toCreate.filter((c) => c.contractorID != null).map((c) => ({ manageEmployeeID: id, contractorID: c.contractorID!, effectFrom: c.effectFrom ?? null })) });
+          }
+        }
+
+        if (promotion) {
+          if (promotion.id) {
+            await tx.empPromotion.update({
+              where: { id: promotion.id },
+              data: {
+                departmentNameID: promotion.departmentNameID ?? null,
+                designationID: promotion.designationID ?? null,
+                managerID: promotion.managerID ?? null,
+                employmentType: promotion.employmentType ?? null,
+                employmentStatus: promotion.employmentStatus ?? null,
+                probationPeriod: promotion.probationPeriod ?? null,
+                workShiftID: promotion.workShiftID ?? null,
+                attendancePolicyID: promotion.attendancePolicyID ?? null,
+                leavePolicyID: promotion.leavePolicyID ?? null,
+                salaryPayGradeType: promotion.salaryPayGradeType ?? null,
+                monthlyPayGradeID: promotion.monthlyPayGradeID ?? null,
+                hourlyPayGradeID: promotion.hourlyPayGradeID ?? null,
+              },
+            });
+          } else {
+            await tx.empPromotion.create({
+              data: {
+                manageEmployeeID: id,
+                departmentNameID: promotion.departmentNameID ?? null,
+                designationID: promotion.designationID ?? null,
+                managerID: promotion.managerID ?? null,
+                employmentType: promotion.employmentType ?? null,
+                employmentStatus: promotion.employmentStatus ?? null,
+                probationPeriod: promotion.probationPeriod ?? null,
+                workShiftID: promotion.workShiftID ?? null,
+                attendancePolicyID: promotion.attendancePolicyID ?? null,
+                leavePolicyID: promotion.leavePolicyID ?? null,
+                salaryPayGradeType: promotion.salaryPayGradeType ?? null,
+                monthlyPayGradeID: promotion.monthlyPayGradeID ?? null,
+                hourlyPayGradeID: promotion.hourlyPayGradeID ?? null,
+              },
+            });
+          }
+        }
+
+        // 7) return fresh data with credentials (excluding password)
+        const employeeWithRelations = await tx.manageEmployee.findUnique({
+          where: { id },
+          include: {
+            serviceProvider: true,
+            company: true,
+            branches: true,
+            contractors: true,
+            employeeCredentials: {
+              select: {
+                id: true,
+                username: true,
+                isActive: true,
+                mustChangePassword: true,
+                createdAt: true,
+                updatedAt: true,
+              }
+            },
+            // Basic position relations
+            departments: true,
+            designations: true,
+            workShift: true,
+            attendancePolicy: true,
+            leavePolicy: true,
+            monthlyPayGrade: true,
+            hourlyPayGrade: true,
+            employeeBankDetails: true,
+            employeeDocuments: {
+              orderBy: { createdAt: 'desc' },
+            },
+            empEduQualification: true,
+            empProfExprience: true,
+            empDesignation: { include: { designation: true } },
+            empDeviceMapping: { include: { device: true } },
+            tokenDeviceMapping: { include: { device: true } },
+            empBranch: { include: { branch: true } },
+            empDepartment: { include: { department: true } },
+            empEmploymentType: true,
+            empEmploymentStatus: true,
+            empWorkShift: { include: { workShift: true } },
+            empAttendancePolicy: { include: { attendancePolicy: true } },
+            empFactualWorkShift: { include: { factualWorkShift: true } },
+            empFactualAttendancePolicy: { include: { factualAttendancePolicy: true } },
+            empLeavePolicy: { include: { leavePolicy: true } },
+            empContractor: { include: { contractor: true } },
+            empPromotion: {
+              orderBy: { id: 'desc' },
+              include: {
+                departments: true,
+                designations: true,
+                workShift: true,
+                attendancePolicy: true,
+                leavePolicy: true,
+                hourlyPayGrade: true,
+                monthlyPayGrade: true,
+              },
             },
           },
-        },
+        });
+        return {
+          ...employeeWithRelations,
+          initialPassword: plainInitialPassword,
+        };
       });
-      return {
-        ...employeeWithRelations,
-        initialPassword: plainInitialPassword,
-      };
-    });
 
     await this.auditLog.logFromRequest(req, {
       action: 'UPDATE',
@@ -2364,7 +2364,7 @@ constructor(
 
   async remove(id: number, req?: Request) {
     try {
-           const existing =
+      const existing =
         await this.prisma.manageEmployee.findUnique({
           where: {
             id,

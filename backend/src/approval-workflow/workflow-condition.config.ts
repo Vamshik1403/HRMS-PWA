@@ -1,5 +1,4 @@
 export const WORKFLOW_CONDITION_CONFIG = {
-
   EMPLOYEE_ONBOARDING_MODULE: {
     fields: [
       'DEPARTMENT',
@@ -7,7 +6,8 @@ export const WORKFLOW_CONDITION_CONFIG = {
       'EMPLOYEE',
     ],
   },
-   REIMBURSEMENT_MODULE: {
+
+  REIMBURSEMENT_MODULE: {
     fields: [
       'DEPARTMENT',
       'DESIGNATION',
@@ -26,7 +26,7 @@ export const WORKFLOW_CONDITION_CONFIG = {
     ],
   },
 
-   PAYROLL_MODULE: {
+  PAYROLL_MODULE: {
     fields: [
       'DEPARTMENT',
       'DESIGNATION',
@@ -53,7 +53,11 @@ export const WORKFLOW_CONDITION_CONFIG = {
       'REGULARISATION_DAYS',
     ],
   },
-  
+
+  /*
+   * Legacy keys retained so existing CompanyModules
+   * records continue to work.
+   */
   SALARY_MANAGEMENT: {
     fields: [
       'DEPARTMENT',
@@ -103,9 +107,20 @@ export const WORKFLOW_CONDITION_CONFIG = {
 } as const;
 
 export const CONDITION_OPERATOR_CONFIG = {
-  DEPARTMENT: ['EQUALS', 'NOT_EQUALS'],
-  DESIGNATION: ['EQUALS', 'NOT_EQUALS'],
-  EMPLOYEE: ['IN', 'NOT_IN'],
+  DEPARTMENT: [
+    'EQUALS',
+    'NOT_EQUALS',
+  ],
+
+  DESIGNATION: [
+    'EQUALS',
+    'NOT_EQUALS',
+  ],
+
+  EMPLOYEE: [
+    'IN',
+    'NOT_IN',
+  ],
 
   TOTAL_AMOUNT: [
     'EQUALS',
@@ -127,7 +142,13 @@ export const CONDITION_OPERATOR_CONFIG = {
     'BETWEEN',
   ],
 
-  LEAVE_TYPE: ['EQUALS', 'NOT_EQUALS', 'IN'],
+  LEAVE_TYPE: [
+    'EQUALS',
+    'NOT_EQUALS',
+    'CONTAINS',
+    'NOT_CONTAINS',
+  ],
+
   LEAVE_DAYS: [
     'EQUALS',
     'GREATER_THAN',
@@ -137,12 +158,18 @@ export const CONDITION_OPERATOR_CONFIG = {
     'BETWEEN',
   ],
 
-  EXIT_TYPE: ['EQUALS', 'NOT_EQUALS', 'IN'],
+  EXIT_TYPE: [
+    'EQUALS',
+    'NOT_EQUALS',
+    'CONTAINS',
+    'NOT_CONTAINS',
+  ],
 
   REGULARISATION_TYPE: [
     'EQUALS',
     'NOT_EQUALS',
-    'IN',
+    'CONTAINS',
+    'NOT_CONTAINS',
   ],
 
   REGULARISATION_DAYS: [
@@ -161,3 +188,14 @@ export const CONDITION_OPERATOR_CONFIG = {
     'NOT_CONTAINS',
   ],
 } as const;
+
+export type WorkflowModuleKey =
+  keyof typeof WORKFLOW_CONDITION_CONFIG;
+
+export type WorkflowConditionField =
+  typeof WORKFLOW_CONDITION_CONFIG[
+    WorkflowModuleKey
+  ]['fields'][number];
+
+export type ConditionOperatorKey =
+  keyof typeof CONDITION_OPERATOR_CONFIG;
