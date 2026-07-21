@@ -4,8 +4,7 @@ import Link from "next/link";
 import { Calendar } from "lucide-react";
 import { Badge } from "../../ui/badge";
 import { Button } from "../../ui/button";
-import { EntityListShell } from "../../app/entity-list-shell";
-import type { DataTableColumn } from "../../app/data-table";
+import { DataTable, type DataTableColumn } from "../../app/data-table";
 import { StatCard, type StatCardData } from "../../../dashboard/components/StatCard";
 import { gridGap } from "../../../dashboard/components/dashboard-ui";
 import { useClientTable, sortRows } from "../../../hooks/use-client-table";
@@ -17,6 +16,7 @@ import {
   formatDateShort,
 } from "../../../utils/leaveDisplay";
 import type { LeaveAppRow } from "../EmpLeaveMobile";
+import { cn } from "@/app/utils/cn";
 
 function statusVariant(label: string): "default" | "destructive" | "warning" | "secondary" | "muted" {
   if (label === "Approved") return "default";
@@ -44,14 +44,14 @@ export function EmpDesktopLeaveBalance({
           { key: "privileged", label: "Privilege", remaining: 0, total: 0 },
         ];
     return (
-      <div className="flex flex-wrap items-stretch gap-2">
+      <div className="flex items-stretch gap-1.5 shrink-0">
         {items.map((c) => (
           <div
             key={c.key}
-            className="flex-1 min-w-[100px] rounded-lg border border-border bg-card px-3 py-2 shadow-sm"
+            className="w-[72px] rounded-lg border border-border bg-card px-2 py-1.5 shadow-sm"
           >
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{c.label}</p>
-            <p className="text-lg font-bold tabular-nums text-foreground mt-0.5">
+            <p className="text-[9px] font-semibold uppercase tracking-wide text-muted-foreground truncate">{c.label}</p>
+            <p className="text-sm font-bold tabular-nums text-foreground mt-0.5">
               {loading ? "…" : `${c.remaining}/${c.total}`}
             </p>
           </div>
@@ -88,35 +88,16 @@ export function EmpDesktopLeaveBalance({
   );
 }
 
-export function EmpDesktopLeaveTable({
-  apps,
-  loading,
-  isManagerView,
-  employeeNameForRow,
-  onApprove,
-  onDelete,
-  title = "Leave requests",
-}: {
-  apps: LeaveAppRow[];
-  loading?: boolean;
-  isManagerView: boolean;
-  employeeNameForRow: (app: LeaveAppRow) => string;
-  onApprove: (app: LeaveAppRow) => void;
-  onDelete: (id: string) => void;
-  title?: string;
-}) {
-  const { sortBy, sortDir, setSort } = useClientTable("createdAt");
-
-  const sorted = sortRows(apps, sortBy, sortDir, (a, key) => {
-    if (key === "fromDate") return a.fromDate;
-    return a.createdAt;
-  });
-
-  const columns: DataTableColumn<LeaveAppRow>[] = [
+function buildLeaveColumns(
+  isManagerView: boolean,
+  employeeNameForRow: (app: LeaveAppRow) => string,
+  onApprove: (app: LeaveAppRow) => void,
+  onDelete: (id: string) => void,
+): DataTableColumn<LeaveAppRow>[] {
+  return [
     {
       key: "employee",
       header: "Employee",
-      colSpan: 2,
       cell: (app) => (
         <span className="text-sm font-medium">
           {isManagerView ? employeeNameForRow(app) : "You"}
@@ -126,13 +107,11 @@ export function EmpDesktopLeaveTable({
     {
       key: "type",
       header: "Type",
-      colSpan: 2,
       cell: (app) => <span className="text-sm">{getDisplayLeaveType(app)}</span>,
     },
     {
       key: "dates",
       header: "Applied dates",
-      colSpan: 3,
       cell: (app) => (
         <span className="text-sm text-muted-foreground">{getAppliedDateRange(app)}</span>
       ),
@@ -140,7 +119,6 @@ export function EmpDesktopLeaveTable({
     {
       key: "status",
       header: "Status",
-      colSpan: 2,
       sortable: true,
       cell: (app) => {
         const label = getDisplayLeaveStatus(app.status, app.dayStatuses);
@@ -150,7 +128,6 @@ export function EmpDesktopLeaveTable({
     {
       key: "actions",
       header: "",
-      colSpan: 3,
       align: "right",
       cell: (app) => {
         const label = getDisplayLeaveStatus(app.status, app.dayStatuses);
@@ -174,21 +151,103 @@ export function EmpDesktopLeaveTable({
       },
     },
   ];
+}
+
+export function EmpDesktopLeaveGrid({
+  apps,
+  isManagerView,
+  employeeNameForRow,
+}: {
+  apps: LeaveAppRow[];
+  isManagerView: boolean;
+  employeeNameForRow: (app: LeaveAppRow) => string;
+}) {
+  return (
+    <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+      {apps.map((app) => {
+        const label = getDisplayLeaveStatus(app.status, app.dayStatuses);
+        return (
+          <div
+            key={app.id}
+            className="rounded-xl border border-border bg-card shadow-sm p-4 hover:border-primary/40 transition-colors"
+          >
+            <p className="text-xs text-muted-foreground">
+              {isManagerView ? employeeNameForRow(app) : "You"}
+            </p>
+            <p className="font-semibold text-foreground mt-1">{getDisplayLeaveType(app)}</p>
+            <p className="text-sm text-muted-foreground mt-1">{getAppliedDateRange(app)}</p>
+            <div className="mt-3 flex items-center justify-between gap-2">
+              <Badge variant={statusVariant(label)}>{label}</Badge>
+              <Button variant="ghost" size="sm" asChild>
+                <Link href={`/empLeaveApplication/${app.id}`}>View</Link>
+              </Button>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+export function EmpDesktopLeaveTable({
+  apps,
+  loading,
+  isManagerView,
+  employeeNameForRow,
+  onApprove,
+  onDelete,
+  hideHeader = false,
+}: {
+  apps: LeaveAppRow[];
+  loading?: boolean;
+  isManagerView: boolean;
+  employeeNameForRow: (app: LeaveAppRow) => string;
+  onApprove: (app: LeaveAppRow) => void;
+  onDelete: (id: string) => void;
+  hideHeader?: boolean;
+}) {
+  const { sortBy, sortDir, setSort } = useClientTable("createdAt");
+
+  const sorted = sortRows(apps, sortBy, sortDir, (a, key) => {
+    if (key === "fromDate") return a.fromDate;
+    return a.createdAt;
+  });
+
+  const columns = buildLeaveColumns(isManagerView, employeeNameForRow, onApprove, onDelete);
+
+  if (hideHeader) {
+    return (
+      <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+        <DataTable
+          columns={columns}
+          rows={sorted}
+          rowKey={(a) => a.id}
+          isLoading={!!loading}
+          sortBy={sortBy}
+          sortDir={sortDir}
+          onSort={setSort}
+          emptyIcon={Calendar}
+          emptyTitle="No leave requests"
+          emptyDescription="Apply for leave to see your requests here."
+        />
+      </div>
+    );
+  }
 
   return (
-    <EntityListShell
-      title={title}
-      totalLabel={(n) => `${n} request${n === 1 ? "" : "s"}`}
-      columns={columns}
-      rows={sorted}
-      isLoading={!!loading}
-      rowKey={(a) => a.id}
-      sortBy={sortBy}
-      sortDir={sortDir}
-      onSort={setSort}
-      emptyIcon={Calendar}
-      emptyTitle="No leave requests"
-      emptyDescription="Apply for leave to see your requests here."
-    />
+    <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+      <DataTable
+        columns={columns}
+        rows={sorted}
+        rowKey={(a) => a.id}
+        isLoading={!!loading}
+        sortBy={sortBy}
+        sortDir={sortDir}
+        onSort={setSort}
+        emptyIcon={Calendar}
+        emptyTitle="No leave requests"
+        emptyDescription="Apply for leave to see your requests here."
+      />
+    </div>
   );
 }

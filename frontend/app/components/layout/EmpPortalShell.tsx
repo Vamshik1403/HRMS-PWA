@@ -51,6 +51,7 @@ import { EmpSidebar } from "./EmpSidebar";
 import { EmpWorkspaceTabNav } from "../emp/EmpWorkspaceTabNav";
 import { EmpPortalGlobalSearch } from "./EmpPortalGlobalSearch";
 import { EmpThemeToggle } from "./EmpThemeToggle";
+import { applyEmpTheme, readStoredEmpTheme } from "@/app/utils/empTheme";
 import {
   EMP_COMPANY_TABS,
   resolvePortalZone,
@@ -107,8 +108,8 @@ function NavTabLink({
       href={href}
       className={`px-4 py-2.5 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
         active
-          ? "border-[#4f46e5] text-[#4f46e5]"
-          : "border-transparent text-gray-500 hover:text-gray-800 hover:border-gray-200"
+          ? "border-primary text-primary"
+          : "border-transparent text-muted-foreground hover:text-foreground hover:border-border"
       }`}
     >
       {children}
@@ -147,10 +148,9 @@ export default function EmpPortalShell({ children, hideBottomNav = false }: EmpP
 
   useEffect(() => {
     const applyStoredTheme = () => {
-      const stored = (localStorage.getItem("_emp_appearance") || "light") as "light" | "dark";
-      const next = stored === "dark" ? "dark" : "light";
+      const next = readStoredEmpTheme();
       setTheme(next);
-      document.documentElement.setAttribute("data-emp-theme", next);
+      applyEmpTheme(next);
     };
     applyStoredTheme();
     window.addEventListener("emp-theme-change", applyStoredTheme);
@@ -287,7 +287,7 @@ export default function EmpPortalShell({ children, hideBottomNav = false }: EmpP
     const next = theme === "dark" ? "light" : "dark";
     setTheme(next);
     localStorage.setItem("_emp_appearance", next);
-    document.documentElement.setAttribute("data-emp-theme", next);
+    applyEmpTheme(next);
     window.dispatchEvent(new Event("emp-theme-change"));
   };
 
@@ -362,9 +362,9 @@ export default function EmpPortalShell({ children, hideBottomNav = false }: EmpP
                   </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-52 rounded-xl">
-                  <div className="px-3 py-2 border-b border-gray-100">
-                    <p className="text-sm font-semibold text-gray-900 truncate">{empDisplayName}</p>
-                    <p className="text-[11px] text-gray-400">Employee Portal</p>
+                  <div className="px-3 py-2 border-b border-border">
+                    <p className="text-sm font-semibold text-foreground truncate">{empDisplayName}</p>
+                    <p className="text-[11px] text-muted-foreground">Employee Portal</p>
                   </div>
                   <DropdownMenuItem asChild>
                     <Link href="/empProfile" className="cursor-pointer">
@@ -396,7 +396,7 @@ export default function EmpPortalShell({ children, hideBottomNav = false }: EmpP
         </header>
 
         {showCompanyTabs && (
-          <div className="shrink-0 bg-white border-b border-gray-100 px-4 flex gap-0.5 overflow-x-auto">
+          <div className="shrink-0 bg-background border-b border-border px-4 flex gap-0.5 overflow-x-auto">
             {companyTabs.map((tab) => (
               <NavTabLink key={tab.id} href={tab.href} active={tab.match(pathname)}>
                 {tab.label}

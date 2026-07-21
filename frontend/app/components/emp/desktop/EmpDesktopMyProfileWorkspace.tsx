@@ -1,8 +1,9 @@
 "use client";
 
-import { Suspense, useState } from "react";
+import { Suspense } from "react";
 import { useSearchParams } from "next/navigation";
-import { User } from "lucide-react";
+import { User, MessageSquare } from "lucide-react";
+import { Icon } from "@iconify/react";
 import { EmpDesktopPage } from "./EmpDesktopPage";
 import { EmpDesktopProfilePanel } from "./EmpDesktopProfilePanel";
 import { EmpDesktopProfileSettings } from "./EmpDesktopProfileSettings";
@@ -15,7 +16,6 @@ import { EmpPayoutContent } from "../EmpPayoutContent";
 import { EmpProfileSalaryAdvancePanel } from "../EmpProfileSalaryAdvancePanel";
 import { EmpProfileMessagingPanel } from "../EmpProfileMessagingPanel";
 import { EmpHolidayListMobile } from "../EmpHolidayListMobile";
-import { Icon } from "@iconify/react";
 
 function EmpDesktopMyProfileWorkspaceInner() {
   const searchParams = useSearchParams();
@@ -29,9 +29,16 @@ function EmpDesktopMyProfileWorkspaceInner() {
     { id: "delegation", label: "My Delegation", href: profileTabHref("delegation") },
     { id: "payslips", label: "Payslips", href: profileTabHref("payslips") },
     { id: "salary-advance", label: "Loans & Advances", href: profileTabHref("salary-advance") },
-    { id: "messaging", label: "IM", href: profileTabHref("messaging") },
     { id: "holidays", label: "My Holidays", href: profileTabHref("holidays") },
   ];
+
+  if (activeTab === "messaging") {
+    return (
+      <EmpDesktopPage title="IM" description="Team communications and general messages" icon={MessageSquare}>
+        <EmpProfileMessagingPanel />
+      </EmpDesktopPage>
+    );
+  }
 
   return (
     <EmpDesktopPage title="My Profile" description="Your employee information and workspace sections" icon={User}>
@@ -55,7 +62,6 @@ function EmpDesktopMyProfileWorkspaceInner() {
           </Suspense>
         )}
         {activeTab === "salary-advance" && <EmpProfileSalaryAdvancePanel />}
-        {activeTab === "messaging" && <EmpProfileMessagingPanel />}
         {activeTab === "holidays" && <EmpHolidayListMobile embedded />}
       </div>
     </EmpDesktopPage>

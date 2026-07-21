@@ -81,9 +81,6 @@ export function EmpLeaveApplyForm({ onSuccess, onCancel }: { onSuccess: () => vo
         <Button type="button" onClick={() => void submit()} disabled={submitting}>
           {submitting ? "Submitting…" : "Submit request"}
         </Button>
-        <Button type="button" variant="outline" onClick={onCancel} disabled={submitting}>
-          Cancel
-        </Button>
       </div>
     </div>
   );

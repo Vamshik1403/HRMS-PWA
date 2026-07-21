@@ -4,8 +4,7 @@ import Link from "next/link";
 import { Wallet } from "lucide-react";
 import { Badge } from "../../ui/badge";
 import { Button } from "../../ui/button";
-import { EntityListShell } from "../../app/entity-list-shell";
-import type { DataTableColumn } from "../../app/data-table";
+import { DataTable, type DataTableColumn } from "../../app/data-table";
 import { useClientTable, sortRows } from "../../../hooks/use-client-table";
 import { displayStatusLabel } from "../../../utils/statusDisplay";
 import type { ReimbursementRow } from "../EmpReimbursementMobile";
@@ -31,35 +30,16 @@ function displayStatus(s: string) {
   return map[label] || label;
 }
 
-export function EmpDesktopReimbursementTable({
-  rows,
-  loading,
-  isManagerView,
-  employeeNameForRow,
-  onApprove,
-  onDelete,
-  title = "Reimbursement claims",
-}: {
-  rows: ReimbursementRow[];
-  loading?: boolean;
-  isManagerView: boolean;
-  employeeNameForRow: (row: ReimbursementRow) => string;
-  onApprove: (id: string) => void;
-  onDelete: (id: string) => void;
-  title?: string;
-}) {
-  const { sortBy, sortDir, setSort } = useClientTable("date");
-
-  const sorted = sortRows(rows, sortBy, sortDir, (r, key) => {
-    if (key === "amount") return totalAmount(r);
-    return r.date || "";
-  });
-
-  const columns: DataTableColumn<ReimbursementRow>[] = [
+function buildReimbursementColumns(
+  isManagerView: boolean,
+  employeeNameForRow: (row: ReimbursementRow) => string,
+  onApprove: (id: string) => void,
+  onDelete: (id: string) => void,
+): DataTableColumn<ReimbursementRow>[] {
+  return [
     {
       key: "employee",
       header: "Employee",
-      colSpan: 2,
       cell: (r) => (
         <span className="text-sm font-medium">
           {isManagerView ? employeeNameForRow(r) : "You"}
@@ -70,14 +50,12 @@ export function EmpDesktopReimbursementTable({
       key: "date",
       header: "Date",
       sortable: true,
-      colSpan: 2,
       cell: (r) => <span className="text-sm tabular-nums">{r.date || "—"}</span>,
     },
     {
       key: "amount",
       header: "Amount",
       sortable: true,
-      colSpan: 2,
       cell: (r) => (
         <span className="text-sm font-medium tabular-nums">₹{totalAmount(r).toFixed(2)}</span>
       ),
@@ -85,7 +63,6 @@ export function EmpDesktopReimbursementTable({
     {
       key: "status",
       header: "Status",
-      colSpan: 2,
       cell: (r) => {
         const label = displayStatus(r.status);
         return <Badge variant={statusVariant(label)}>{label}</Badge>;
@@ -94,7 +71,6 @@ export function EmpDesktopReimbursementTable({
     {
       key: "actions",
       header: "",
-      colSpan: 4,
       align: "right",
       cell: (r) => {
         const label = displayStatusLabel(r.status);
@@ -118,21 +94,84 @@ export function EmpDesktopReimbursementTable({
       },
     },
   ];
+}
+
+export function EmpDesktopReimbursementGrid({
+  rows,
+  isManagerView,
+  employeeNameForRow,
+}: {
+  rows: ReimbursementRow[];
+  isManagerView: boolean;
+  employeeNameForRow: (row: ReimbursementRow) => string;
+}) {
+  return (
+    <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+      {rows.map((r) => {
+        const label = displayStatus(r.status);
+        return (
+          <div
+            key={r.id}
+            className="rounded-xl border border-border bg-card shadow-sm p-4 hover:border-primary/40 transition-colors"
+          >
+            <p className="text-xs text-muted-foreground">
+              {isManagerView ? employeeNameForRow(r) : "You"}
+            </p>
+            <p className="font-semibold text-foreground mt-1 tabular-nums">₹{totalAmount(r).toFixed(2)}</p>
+            <p className="text-sm text-muted-foreground mt-1">{r.date || "—"}</p>
+            <div className="mt-3 flex items-center justify-between gap-2">
+              <Badge variant={statusVariant(label)}>{label}</Badge>
+              <Button variant="ghost" size="sm" asChild>
+                <Link href={`/empReimbursement/${r.id}`}>View</Link>
+              </Button>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+export function EmpDesktopReimbursementTable({
+  rows,
+  loading,
+  isManagerView,
+  employeeNameForRow,
+  onApprove,
+  onDelete,
+  hideHeader = false,
+}: {
+  rows: ReimbursementRow[];
+  loading?: boolean;
+  isManagerView: boolean;
+  employeeNameForRow: (row: ReimbursementRow) => string;
+  onApprove: (id: string) => void;
+  onDelete: (id: string) => void;
+  hideHeader?: boolean;
+}) {
+  const { sortBy, sortDir, setSort } = useClientTable("date");
+
+  const sorted = sortRows(rows, sortBy, sortDir, (r, key) => {
+    if (key === "amount") return totalAmount(r);
+    return r.date || "";
+  });
+
+  const columns = buildReimbursementColumns(isManagerView, employeeNameForRow, onApprove, onDelete);
 
   return (
-    <EntityListShell
-      title={title}
-      totalLabel={(n) => `${n} claim${n === 1 ? "" : "s"}`}
-      columns={columns}
-      rows={sorted}
-      isLoading={!!loading}
-      rowKey={(r) => r.id}
-      sortBy={sortBy}
-      sortDir={sortDir}
-      onSort={setSort}
-      emptyIcon={Wallet}
-      emptyTitle="No reimbursement claims"
-      emptyDescription="Submit a claim to track it here."
-    />
+    <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+      <DataTable
+        columns={columns}
+        rows={sorted}
+        rowKey={(r) => r.id}
+        isLoading={!!loading}
+        sortBy={sortBy}
+        sortDir={sortDir}
+        onSort={setSort}
+        emptyIcon={Wallet}
+        emptyTitle="No reimbursement claims"
+        emptyDescription="Submit a claim to track it here."
+      />
+    </div>
   );
 }

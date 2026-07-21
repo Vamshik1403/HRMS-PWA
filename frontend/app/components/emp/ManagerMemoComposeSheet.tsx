@@ -9,13 +9,13 @@ import { ManagerMemoComposeForm } from "./ManagerMemoComposeForm";
 export function ManagerMemoComposeSheet({
   open,
   onClose,
-  reportees,
+  reportees: _reportees,
   managerName,
   onSent,
 }: {
   open: boolean;
   onClose: () => void;
-  reportees: EmpManagerReportee[];
+  reportees?: EmpManagerReportee[];
   managerName?: string;
   onSent: () => void;
 }) {
@@ -42,7 +42,6 @@ export function ManagerMemoComposeSheet({
         </div>
         <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-4 py-4">
           <ManagerMemoComposeForm
-            reportees={reportees}
             managerName={managerName}
             onSent={onSent}
             onCancel={onClose}

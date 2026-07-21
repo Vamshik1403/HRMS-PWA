@@ -15,6 +15,7 @@ export interface FormModalProps {
   closeLabel?: string;
   showBackButton?: boolean;
   backLabel?: string;
+  showCloseButton?: boolean;
   className?: string;
 }
 
@@ -29,6 +30,7 @@ export function FormModal({
   closeLabel = "Close",
   showBackButton = false,
   backLabel = "Back",
+  showCloseButton = false,
   className,
 }: FormModalProps) {
   if (!open) return null;
@@ -56,15 +58,17 @@ export function FormModal({
             ) : null}
           </div>
         </div>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className="shrink-0"
-          onClick={() => onOpenChange(false)}
-        >
-          {closeLabel}
-        </Button>
+        {showCloseButton ? (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="shrink-0"
+            onClick={() => onOpenChange(false)}
+          >
+            {closeLabel}
+          </Button>
+        ) : null}
       </div>
       <div className="form-drawer-body">{children}</div>
     </div>

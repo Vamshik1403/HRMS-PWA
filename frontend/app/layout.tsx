@@ -99,6 +99,12 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning className={`${display.variable} ${sans.variable} ${mono.variable}`}>
       <head>
+        {/* Apply stored employee theme before paint to avoid light/dark flash */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{var t=localStorage.getItem('_emp_appearance');if(t==='dark'){document.documentElement.classList.add('dark');document.documentElement.setAttribute('data-emp-theme','dark');document.documentElement.style.colorScheme='dark';}}catch(e){}})();`,
+          }}
+        />
         {/* Favicon and Apple icons */}
         <link rel="icon" href="/favicon.ico" sizes="any" />
         <link rel="icon" href="/icons/icon-192.png" sizes="192x192" type="image/png" />

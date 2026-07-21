@@ -10,6 +10,7 @@ import {
   clearPageCachesByPrefix,
 } from "../utils/pageCache";
 import { clearLegacyEmpPhoto, getEmpPhoto, setEmpPhoto } from "../utils/empPhotoCache";
+import { applyEmpTheme, readStoredEmpTheme } from "../utils/empTheme";
 
 const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL || "/backend";
 
@@ -80,10 +81,9 @@ export function useEmpProfile() {
   }, [fetchEmpData]);
 
   useEffect(() => {
-    const saved = (localStorage.getItem("_emp_appearance") || "light") as "light" | "dark";
-    const next = saved === "dark" ? "dark" : "light";
+    const next = readStoredEmpTheme();
     setAppearance(next);
-    document.documentElement.setAttribute("data-emp-theme", next);
+    applyEmpTheme(next);
   }, []);
 
   const emp = empData || empUser?.employee || null;
@@ -115,7 +115,7 @@ export function useEmpProfile() {
   const changeAppearance = (next: "light" | "dark") => {
     setAppearance(next);
     localStorage.setItem("_emp_appearance", next);
-    document.documentElement.setAttribute("data-emp-theme", next);
+    applyEmpTheme(next);
     window.dispatchEvent(new Event("emp-theme-change"));
   };
 

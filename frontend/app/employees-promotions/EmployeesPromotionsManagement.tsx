@@ -2784,25 +2784,6 @@ const runFetchBR = (query: string) => {
       {/* Search + Table - only when neither form nor view is open */}
       {!isAddingNew && !isViewing && (
         <>
-      <Card>
-        <CardContent className="p-6">
-          <div className="flex items-center space-x-4 w-full">
-            <div className="relative flex-1 min-w-0">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-              <Input
-                placeholder="Search promotion requests…"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10 w-full"
-              />
-            </div>
-            <Badge variant="secondary" className="px-3 py-1 flex-shrink-0">
-              {filteredRows.length} items
-            </Badge>
-          </div>
-        </CardContent>
-      </Card>
-
       {/* Table */}
       <Card className="w-full">
         <CardHeader>
@@ -2812,6 +2793,17 @@ const runFetchBR = (query: string) => {
           </CardTitle>
         </CardHeader>
         <CardContent className="p-0 w-full">
+          <div className="px-6 pt-2 pb-4">
+            <div className="relative max-w-md">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+              <Input
+                placeholder="Search promotion requests…"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-10"
+              />
+            </div>
+          </div>
           <div className="overflow-x-auto w-full">
             <Table className="w-full">
               <TableHeader>

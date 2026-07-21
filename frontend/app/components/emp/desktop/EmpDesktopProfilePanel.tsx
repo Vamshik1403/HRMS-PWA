@@ -8,11 +8,11 @@ import {
   Camera,
   CreditCard,
   Fingerprint,
+  GraduationCap,
   Hash,
   Heart,
   Mail,
   MapPin,
-  Pencil,
   Phone,
   Trash2,
   User,
@@ -78,6 +78,46 @@ function ProfileFieldRow({ label, value, icon: Icon, href }: ProfileField) {
       </div>
     </div>
   );
+}
+
+function ProfileRepeaterSection({
+  title,
+  emptyMessage,
+  children,
+}: {
+  title: string;
+  emptyMessage: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
+      <div className="border-b border-border px-6 py-4">
+        <h3 className="font-display text-base font-semibold text-foreground">{title}</h3>
+      </div>
+      {children ?? (
+        <p className="px-6 py-8 text-sm text-muted-foreground text-center">{emptyMessage}</p>
+      )}
+    </section>
+  );
+}
+
+function resolvePolicyName(
+  emp: any,
+  directKey: "attendancePolicy" | "leavePolicy",
+  historyKey: "empAttendancePolicy" | "empLeavePolicy",
+  policyField: "attendancePolicy" | "leavePolicy",
+  nameField: "attendancePolicyName" | "leavePolicyName",
+) {
+  const direct = emp?.[directKey]?.[nameField];
+  if (direct) return direct;
+
+  const fromHistory = emp?.[historyKey]?.[0]?.[policyField]?.[nameField];
+  if (fromHistory) return fromHistory;
+
+  const fromPromotion = emp?.empPromotion?.[0]?.[policyField]?.[nameField];
+  if (fromPromotion) return fromPromotion;
+
+  return null;
 }
 
 function ProfileDetailSection({ title, fields }: { title: string; fields: ProfileField[] }) {
@@ -448,6 +488,35 @@ export function EmpDesktopProfilePanel({
     { label: "Designation", value: designation, icon: Briefcase },
     { label: "Branch", value: branchName, icon: Building2 },
     { label: "Work shift", value: workShiftName, icon: Calendar },
+    {
+      label: "Attendance policy",
+      value: resolvePolicyName(
+        emp,
+        "attendancePolicy",
+        "empAttendancePolicy",
+        "attendancePolicy",
+        "attendancePolicyName",
+      ),
+      icon: Calendar,
+    },
+    {
+      label: "Leave policy",
+      value: resolvePolicyName(emp, "leavePolicy", "empLeavePolicy", "leavePolicy", "leavePolicyName"),
+      icon: Calendar,
+    },
+  ];
+
+  const educationRows = Array.isArray(emp?.empEduQualification) ? emp.empEduQualification : [];
+  const experienceRows = Array.isArray(emp?.empProfExprience) ? emp.empProfExprience : [];
+  const bankRows = Array.isArray(emp?.employeeBankDetails) ? emp.employeeBankDetails : [];
+  const primaryBank = bankRows[0];
+
+  const nomineeFields: ProfileField[] = [
+    { label: "Nominee name", value: emp?.employeeSpouseName, icon: User },
+    { label: "Relationship", value: emp?.employeeSpouseName ? "Spouse" : null, icon: Users },
+    { label: "Emergency contact", value: emp?.emergancyContact, icon: Phone },
+    { label: "Bank name", value: primaryBank?.bankName, icon: Building2 },
+    { label: "Account number", value: primaryBank?.accNumber, icon: CreditCard },
   ];
 
   const personalContactFields: ProfileField[] = [
@@ -526,19 +595,6 @@ export function EmpDesktopProfilePanel({
                 <HeroInfoItem key={item.label} {...item} />
               ))}
             </div>
-
-            {!readOnly ? (
-              <div className="flex shrink-0 items-center xl:pl-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="h-11 rounded-lg border-[#E5E7EB] px-5 text-[15px] font-medium text-[#111827] hover:border-[#3B82F6] hover:bg-[#EFF6FF] hover:text-[#3B82F6]"
-                >
-                  <Pencil className="size-4" />
-                  Edit Profile
-                </Button>
-              </div>
-            ) : null}
           </div>
 
           {!readOnly && photoProfile.uploadError ? (
@@ -547,11 +603,71 @@ export function EmpDesktopProfilePanel({
         </section>
       )}
 
-      <ProfileDetailSection title="Work details" fields={workFields} />
+      <div className="grid gap-6 lg:grid-cols-2">
+        <ProfileDetailSection title="Work details" fields={workFields} />
+        <ProfileDetailSection title="Employee information" fields={employeeInfoFields} />
+      </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
-        <ProfileDetailSection title="Employee information" fields={employeeInfoFields} />
         <ProfileDetailSection title="Official contact" fields={officialContactFields} />
+        <ProfileRepeaterSection title="Work experience" emptyMessage="No work experience on file.">
+          {experienceRows.length > 0 ? (
+            <div className="divide-y divide-border">
+              {experienceRows.map((exp: Record<string, string | null | undefined>, index: number) => (
+                <div key={exp.id ?? index} className="px-6 py-4 space-y-2">
+                  <div className="flex items-start gap-3">
+                    <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-muted/80">
+                      <Briefcase className="size-4 text-muted-foreground" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold text-foreground">
+                        {[exp.designation, exp.orgName].filter(Boolean).join(" at ") || "Experience"}
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {[exp.fromDate, exp.toDate].filter(Boolean).join(" – ") || "—"}
+                      </p>
+                      {exp.responsibility ? (
+                        <p className="text-sm text-foreground mt-2">{exp.responsibility}</p>
+                      ) : null}
+                      {exp.skill ? (
+                        <p className="text-xs text-muted-foreground mt-1">Skills: {exp.skill}</p>
+                      ) : null}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : null}
+        </ProfileRepeaterSection>
+      </div>
+
+      <div className="grid gap-6 lg:grid-cols-2">
+        <ProfileRepeaterSection title="Education" emptyMessage="No education details on file.">
+          {educationRows.length > 0 ? (
+            <div className="divide-y divide-border">
+              {educationRows.map((edu: Record<string, string | null | undefined>, index: number) => (
+                <div key={edu.id ?? index} className="px-6 py-4 space-y-2">
+                  <div className="flex items-start gap-3">
+                    <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-muted/80">
+                      <GraduationCap className="size-4 text-muted-foreground" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold text-foreground">
+                        {[edu.degree, edu.instituteName].filter(Boolean).join(" · ") || "Education"}
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {[edu.instituteType, edu.pasingYear, edu.marks ? `Marks ${edu.marks}` : null, edu.gpaCgpa ? `GPA ${edu.gpaCgpa}` : null]
+                          .filter(Boolean)
+                          .join(" · ") || "—"}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : null}
+        </ProfileRepeaterSection>
+        <ProfileDetailSection title="Nominee details" fields={nomineeFields} />
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
@@ -559,7 +675,16 @@ export function EmpDesktopProfilePanel({
         <ProfileDetailSection title="Personal details" fields={personalFields} />
       </div>
 
-      <ProfileDetailSection title="Personal contact" fields={personalContactFields} />
+      <div className="grid gap-6 lg:grid-cols-2">
+        <ProfileDetailSection title="Personal contact" fields={personalContactFields} />
+        <ProfileDetailSection
+          title="Address"
+          fields={[
+            { label: "Present address", value: emp?.presentAddress, icon: MapPin },
+            { label: "Permanent address", value: emp?.permenantAddress, icon: MapPin },
+          ]}
+        />
+      </div>
     </div>
   );
 

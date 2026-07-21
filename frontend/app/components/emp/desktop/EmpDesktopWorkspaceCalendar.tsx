@@ -1,11 +1,20 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Bell, Calendar, ChevronLeft, ChevronRight, ListTodo } from "lucide-react";
+import { Bell, Calendar, CheckSquare, ChevronLeft, ChevronRight, Clock, ListTodo, MapPin } from "lucide-react";
 import { EmpDesktopPage } from "./EmpDesktopPage";
-import { EmpCalendarDayDetailPanel } from "./EmpCalendarDayDetailPanel";
+import {
+  EmpCalendarDayDetailPanel,
+  type CalendarDayDetailSection,
+} from "./EmpCalendarDayDetailPanel";
 import { Button } from "../../ui/button";
-import { FormModal } from "../../ui/form-modal";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "../../ui/sheet";
 import {
   groupAttendanceByDay,
   type AttendanceDaySummary,
@@ -108,6 +117,17 @@ const kindBadge: Record<CalendarDayKind, string> = {
   none: "",
 };
 
+const DAY_DETAIL_TABS: {
+  id: CalendarDayDetailSection;
+  label: string;
+  icon: typeof Clock;
+}[] = [
+  { id: "punches", label: "Attendance punches", icon: Clock },
+  { id: "sites", label: "Site visits", icon: MapPin },
+  { id: "tasks", label: "Tasks", icon: ListTodo },
+  { id: "todo", label: "ToDo", icon: CheckSquare },
+];
+
 export function EmpDesktopWorkspaceCalendar() {
   const user = useCurrentUser();
   const today = new Date();
@@ -123,6 +143,7 @@ export function EmpDesktopWorkspaceCalendar() {
   const [tasksByDate, setTasksByDate] = useState<Map<string, number>>(new Map());
   const [noticesByDate, setNoticesByDate] = useState<Map<string, number>>(new Map());
   const [selectedDateKey, setSelectedDateKey] = useState<string | null>(null);
+  const [dayDetailSection, setDayDetailSection] = useState<CalendarDayDetailSection>("punches");
   const monthInputRef = useRef<HTMLInputElement>(null);
 
   const todayKey = todayPunchDateKey();
@@ -276,17 +297,56 @@ export function EmpDesktopWorkspaceCalendar() {
       icon={Calendar}
     >
       {selectedDateKey ? (
-        <FormModal
+        <Sheet
           open={!!selectedDateKey}
           onOpenChange={(open) => {
             if (!open) setSelectedDateKey(null);
           }}
-          title="Day details"
-          description={selectedDateKey}
-          size="xl"
         >
-          <EmpCalendarDayDetailPanel dateKey={selectedDateKey} />
-        </FormModal>
+          <SheetContent
+            side="right"
+            overlayClassName="bg-background/30 backdrop-blur-[1px]"
+            className="w-full sm:max-w-xl overflow-y-auto p-0"
+          >
+            <SheetHeader className="px-6 pt-6 pb-4 border-b border-border text-left space-y-4">
+              <div>
+                <SheetTitle>Day details</SheetTitle>
+                <SheetDescription>{selectedDateKey}</SheetDescription>
+              </div>
+              <div
+                className="inline-flex w-full rounded-lg border border-border/80 bg-muted/30 p-1"
+                role="tablist"
+                aria-label="Day detail sections"
+              >
+                {DAY_DETAIL_TABS.map((tab) => {
+                  const Icon = tab.icon;
+                  const active = dayDetailSection === tab.id;
+                  return (
+                    <button
+                      key={tab.id}
+                      type="button"
+                      role="tab"
+                      aria-selected={active}
+                      onClick={() => setDayDetailSection(tab.id)}
+                      className={cn(
+                        "relative flex flex-1 items-center justify-center gap-1.5 rounded-md px-2 py-2 text-[11px] sm:text-xs font-medium transition-all",
+                        active
+                          ? "bg-card text-foreground shadow-sm ring-1 ring-border/60"
+                          : "text-muted-foreground hover:text-foreground",
+                      )}
+                    >
+                      <Icon className={cn("size-3.5 shrink-0 sm:size-4", active ? "text-primary" : "opacity-70")} />
+                      <span className="truncate">{tab.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </SheetHeader>
+            <div className="px-2 pb-6">
+              <EmpCalendarDayDetailPanel dateKey={selectedDateKey} section={dayDetailSection} />
+            </div>
+          </SheetContent>
+        </Sheet>
       ) : null}
 
       <div className="rounded-2xl border border-border bg-card shadow-sm overflow-hidden">
@@ -462,7 +522,10 @@ export function EmpDesktopWorkspaceCalendar() {
                 <button
                   key={cell.dateKey}
                   type="button"
-                  onClick={() => setSelectedDateKey(cell.dateKey)}
+                  onClick={() => {
+                    setDayDetailSection("punches");
+                    setSelectedDateKey(cell.dateKey);
+                  }}
                   className="block w-full text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
                 >
                   {inner}

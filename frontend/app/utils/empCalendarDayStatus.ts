@@ -45,7 +45,7 @@ export function expandHolidayDateMap(
 export function leaveTypeForDate(dateKey: string, leaves: LeaveRow[]): string | null {
   for (const app of leaves) {
     const status = (app.status || "").toLowerCase();
-    if (!["approved", "accepted", "revokepending"].includes(status)) continue;
+    if (!["approved", "accepted", "partially approved", "revokepending"].includes(status)) continue;
 
     const ds = parseDayStatuses(app.dayStatuses);
     const dayRow = ds.find((d) => d.date?.slice(0, 10) === dateKey);
@@ -57,7 +57,7 @@ export function leaveTypeForDate(dateKey: string, leaves: LeaveRow[]): string | 
       const from = String(app.fromDate).slice(0, 10);
       const to = String(app.toDate).slice(0, 10);
       if (dateKey >= from && dateKey <= to) {
-        return leaveTypeLabel(app.appliedLeaveType || "Leave");
+        return leaveTypeLabel(app.appliedLeaveType || app.status || "Leave");
       }
     }
   }
@@ -79,6 +79,16 @@ export function resolveCalendarDayDisplay({
   holidayMap: Map<string, string>;
   leaves: LeaveRow[];
 }): CalendarDayDisplay {
+  const leaveType = leaveTypeForDate(dateKey, leaves);
+  if (leaveType) {
+    return {
+      kind: "leave",
+      statusLabel: "Leave",
+      detailLine: leaveType,
+      hoursLine: "",
+    };
+  }
+
   if (dateKey > todayKey) {
     return { kind: "none", statusLabel: "", detailLine: "", hoursLine: "" };
   }
@@ -98,16 +108,6 @@ export function resolveCalendarDayDisplay({
       kind: "weekoff",
       statusLabel: "Weekoff",
       detailLine: "",
-      hoursLine: "",
-    };
-  }
-
-  const leaveType = leaveTypeForDate(dateKey, leaves);
-  if (leaveType) {
-    return {
-      kind: "leave",
-      statusLabel: "Leave",
-      detailLine: leaveType,
       hoursLine: "",
     };
   }

@@ -10,7 +10,6 @@ import { EmpProfileWorkspaceTabNav } from "./EmpProfileWorkspaceTabNav";
 import { EmpProfileAttendanceView } from "./EmpProfileAttendanceView";
 import { EmpHolidayListMobile } from "../EmpHolidayListMobile";
 import {
-  EmpTeamMemberApprovals,
   EmpTeamMemberLeave,
   EmpTeamMemberReimbursement,
   EmpTeamMemberPayslips,
@@ -29,7 +28,6 @@ const MEMBER_TABS = [
   "salary-advance",
   "messaging",
   "holidays",
-  "approvals",
   "promotions",
 ] as const;
 
@@ -70,7 +68,6 @@ function EmpDesktopTeamMemberWorkspaceInner() {
     { id: "salary-advance", label: "Loans & Advances", href: memberTabHref(employeeId, "salary-advance") },
     { id: "messaging", label: "IM", href: memberTabHref(employeeId, "messaging") },
     { id: "holidays", label: "My Holidays", href: memberTabHref(employeeId, "holidays") },
-    { id: "approvals", label: "Approvals", href: memberTabHref(employeeId, "approvals") },
     { id: "promotions", label: "Promotions & Transfer", href: memberTabHref(employeeId, "promotions") },
   ];
 
@@ -97,7 +94,6 @@ function EmpDesktopTeamMemberWorkspaceInner() {
         {activeTab === "salary-advance" && <EmpTeamMemberSalaryAdvances employeeId={employeeId} />}
         {activeTab === "messaging" && <EmpTeamMemberMessaging employeeId={employeeId} />}
         {activeTab === "holidays" && <EmpHolidayListMobile embedded />}
-        {activeTab === "approvals" && <EmpTeamMemberApprovals employeeId={employeeId} />}
         {activeTab === "promotions" && <EmpTeamMemberPromotions employeeId={employeeId} />}
       </div>
     </EmpDesktopPage>

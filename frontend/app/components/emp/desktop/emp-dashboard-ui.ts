@@ -1,17 +1,17 @@
 /** Enterprise employee dashboard design tokens */
 export const dashCard =
-  "rounded-[20px] bg-white border border-[#E5E7EB] shadow-[0_8px_24px_rgba(15,23,42,0.05)]";
+  "rounded-[20px] bg-card border border-border shadow-sm text-card-foreground";
 
-export const dashMetricCard = "rounded-2xl bg-[#F8FAFC] border border-[#E5E7EB] p-4";
+export const dashMetricCard = "rounded-2xl bg-muted/40 border border-border p-4";
 
 export const dashGrid = "grid grid-cols-12 gap-6";
 
 export const dashLabel =
-  "text-[13px] font-semibold uppercase tracking-wide text-[#6B7280]";
+  "text-[13px] font-semibold uppercase tracking-wide text-muted-foreground";
 
-export const dashTitle = "text-xl font-bold text-[#111827]";
+export const dashTitle = "text-xl font-bold text-foreground";
 
-export const dashMuted = "text-sm text-[#6B7280]";
+export const dashMuted = "text-sm text-muted-foreground";
 
 export function dashGreeting(): string {
   const h = new Date().getHours();

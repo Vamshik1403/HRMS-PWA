@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Plus, UserCog } from "lucide-react";
 import { toast } from "sonner";
 import { useCurrentUser } from "@/app/hooks/useCurrentUser";
@@ -17,6 +17,7 @@ import {
   SelectValue,
 } from "../ui/select";
 import { EmpMobileDateField } from "./EmpMobileDateField";
+import { EmpTeamStyleDataSection, useTeamListControls } from "./desktop/EmpTeamStyleDataSection";
 import { cn } from "@/app/utils/cn";
 
 const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL || "/backend";
@@ -42,6 +43,26 @@ type DelegationRow = {
   delegateeName: string;
 };
 
+type DelegationListRow = DelegationRow & {
+  role: "delegator" | "delegatee";
+  counterpart: string;
+};
+
+function toListRows(asDelegator: DelegationRow[], asDelegatee: DelegationRow[]): DelegationListRow[] {
+  return [
+    ...asDelegator.map((row) => ({
+      ...row,
+      role: "delegator" as const,
+      counterpart: row.delegateeName,
+    })),
+    ...asDelegatee.map((row) => ({
+      ...row,
+      role: "delegatee" as const,
+      counterpart: row.delegatorName,
+    })),
+  ];
+}
+
 function delegationTypeLabel(type: string) {
   return type === "PERMANENT" ? "Permanent" : "Temporary";
 }
@@ -55,6 +76,49 @@ function dateRangeLabel(row: DelegationRow) {
   if (row.startDate && row.endDate) return `${row.startDate} → ${row.endDate}`;
   if (row.startDate) return `From ${row.startDate}`;
   return "—";
+}
+
+function DelegationTable({ rows }: { rows: DelegationListRow[] }) {
+  return (
+    <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-border bg-muted/40 text-left">
+              <th className="px-4 py-3 font-medium text-muted-foreground">Role</th>
+              <th className="px-4 py-3 font-medium text-muted-foreground">Counterpart</th>
+              <th className="px-4 py-3 font-medium text-muted-foreground">Type</th>
+              <th className="px-4 py-3 font-medium text-muted-foreground">Period</th>
+              <th className="px-4 py-3 font-medium text-muted-foreground">Notification</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr key={`${row.role}-${row.id}`} className="border-b border-border last:border-0 hover:bg-muted/30">
+                <td className="px-4 py-3 font-medium">
+                  {row.role === "delegator" ? "Created by me" : "Assigned to me"}
+                </td>
+                <td className="px-4 py-3">{row.counterpart}</td>
+                <td className="px-4 py-3">{delegationTypeLabel(row.delegationType)}</td>
+                <td className="px-4 py-3">{dateRangeLabel(row)}</td>
+                <td className="px-4 py-3">{notificationLabel(row.notification)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function DelegationGrid({ rows }: { rows: DelegationListRow[] }) {
+  return (
+    <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+      {rows.map((row) => (
+        <DelegationCard key={`${row.role}-${row.id}`} row={row} role={row.role} />
+      ))}
+    </div>
+  );
 }
 
 function DelegationCard({ row, role }: { row: DelegationRow; role: "delegator" | "delegatee" }) {
@@ -235,9 +299,6 @@ function SetupDelegationForm({
         <Button type="button" onClick={() => void save()} disabled={submitting}>
           Save
         </Button>
-        <Button type="button" variant="outline" onClick={onCancel} disabled={submitting}>
-          Cancel
-        </Button>
       </div>
     </div>
   );
@@ -262,9 +323,6 @@ function SetupDelegationInline({
       onOpenChange={onOpenChange}
       title="Setup Delegation"
       description="Assign a colleague to act on your behalf"
-      showBackButton
-      backLabel="Back to delegations"
-      closeLabel="Cancel"
     >
       <SetupDelegationForm
         delegatorName={delegatorName}
@@ -287,6 +345,11 @@ export function EmpWorkspaceDelegation({ embedded = false }: { embedded?: boolea
   const [colleagues, setColleagues] = useState<Colleague[]>([]);
   const [formOpen, setFormOpen] = useState(false);
   const [delegatorName, setDelegatorName] = useState("");
+  const [roleFilter, setRoleFilter] = useState("all");
+  const [typeFilter, setTypeFilter] = useState("all");
+  const listControls = useTeamListControls("emp-profile-delegation-view");
+  const { viewMode, selectViewMode, searchOpen, searchQuery, setSearchQuery, toggleSearch, filterOpen, toggleFilter } =
+    listControls;
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -324,10 +387,25 @@ export function EmpWorkspaceDelegation({ embedded = false }: { embedded?: boolea
       .catch(() => setDelegatorName(user.username || "You"));
   }, [user?.username]);
 
-  const hasAny = asDelegator.length > 0 || asDelegatee.length > 0;
+  const allRows = useMemo(() => toListRows(asDelegator, asDelegatee), [asDelegator, asDelegatee]);
 
-  if (formOpen) {
-    return (
+  const filteredRows = useMemo(() => {
+    return allRows.filter((row) => {
+      if (roleFilter === "created" && row.role !== "delegator") return false;
+      if (roleFilter === "assigned" && row.role !== "delegatee") return false;
+      if (typeFilter !== "all" && row.delegationType !== typeFilter) return false;
+      const q = searchQuery.trim().toLowerCase();
+      if (!q) return true;
+      return (
+        row.counterpart.toLowerCase().includes(q) ||
+        delegationTypeLabel(row.delegationType).toLowerCase().includes(q) ||
+        dateRangeLabel(row).toLowerCase().includes(q)
+      );
+    });
+  }, [allRows, roleFilter, typeFilter, searchQuery]);
+
+  return (
+    <div className="space-y-6">
       <SetupDelegationInline
         open={formOpen}
         onOpenChange={setFormOpen}
@@ -335,65 +413,75 @@ export function EmpWorkspaceDelegation({ embedded = false }: { embedded?: boolea
         colleagues={colleagues}
         onSaved={() => void load()}
       />
-    );
-  }
 
-  const content = (
-    <div className="space-y-6">
-      <div className={cn("flex flex-wrap items-center justify-between gap-3", embedded ? "" : "")}>
-        {!embedded ? (
-          <div>
-            <h2 className="text-lg font-bold text-foreground">My Delegation</h2>
-            <p className="text-sm text-muted-foreground mt-0.5">Delegate your responsibilities when you are away</p>
-          </div>
-        ) : (
-          <div />
-        )}
-        <Button type="button" onClick={() => setFormOpen(true)}>
-          <Plus className="size-4" />
-          Setup delegation
-        </Button>
-      </div>
-
-      {loading ? (
-        <p className="text-sm text-muted-foreground py-8 text-center">Loading delegations…</p>
-      ) : !hasAny ? (
-        <div className="rounded-xl border border-border bg-card p-8 text-center">
-          <div className="mx-auto mb-4 flex size-14 items-center justify-center rounded-2xl bg-primary/10">
-            <UserCog className="size-7 text-primary" />
-          </div>
-          <h3 className="font-display text-lg font-semibold text-foreground">No active delegations</h3>
-          <p className="mt-2 text-sm text-muted-foreground max-w-md mx-auto">
-            When delegation is configured, you can assign a colleague to act on your behalf for approvals and
-            attendance during your absence.
-          </p>
-        </div>
-      ) : (
-        <div className="space-y-6">
-          {asDelegator.length > 0 ? (
-            <section className="space-y-3">
-              <h3 className="text-sm font-semibold text-foreground">Delegations I created</h3>
-              <div className="grid gap-3 lg:grid-cols-2">
-                {asDelegator.map((row) => (
-                  <DelegationCard key={`out-${row.id}`} row={row} role="delegator" />
-                ))}
-              </div>
-            </section>
-          ) : null}
-          {asDelegatee.length > 0 ? (
-            <section className="space-y-3">
-              <h3 className="text-sm font-semibold text-foreground">Delegations for me</h3>
-              <div className="grid gap-3 lg:grid-cols-2">
-                {asDelegatee.map((row) => (
-                  <DelegationCard key={`in-${row.id}`} row={row} role="delegatee" />
-                ))}
-              </div>
-            </section>
-          ) : null}
-        </div>
-      )}
+      {!formOpen ? (
+        <EmpTeamStyleDataSection
+          title="My Delegation"
+          subtitle={embedded ? undefined : "Delegate your responsibilities when you are away"}
+          actions={
+            <Button type="button" size="sm" onClick={() => setFormOpen(true)}>
+              <Plus className="size-4" />
+              Setup delegation
+            </Button>
+          }
+          searchOpen={searchOpen}
+          onToggleSearch={toggleSearch}
+          searchQuery={searchQuery}
+          onSearchChange={setSearchQuery}
+          searchPlaceholder="Search delegations…"
+          filterOpen={filterOpen}
+          onToggleFilter={toggleFilter}
+          filterContent={
+            <>
+              {[
+                { value: "all", label: "All roles" },
+                { value: "created", label: "Created by me" },
+                { value: "assigned", label: "Assigned to me" },
+              ].map((opt) => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => setRoleFilter(opt.value)}
+                  className={cn(
+                    "rounded-full px-3 py-1 text-xs font-semibold border transition-colors",
+                    roleFilter === opt.value
+                      ? "border-primary bg-primary/10 text-primary"
+                      : "border-border text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  {opt.label}
+                </button>
+              ))}
+              {[
+                { value: "all", label: "All types" },
+                { value: "TEMPORARY", label: "Temporary" },
+                { value: "PERMANENT", label: "Permanent" },
+              ].map((opt) => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => setTypeFilter(opt.value)}
+                  className={cn(
+                    "rounded-full px-3 py-1 text-xs font-semibold border transition-colors",
+                    typeFilter === opt.value
+                      ? "border-primary bg-primary/10 text-primary"
+                      : "border-border text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </>
+          }
+          viewMode={viewMode}
+          onViewModeChange={selectViewMode}
+          loading={loading}
+          empty={filteredRows.length === 0}
+          emptyMessage="No active delegations"
+          listContent={<DelegationTable rows={filteredRows} />}
+          gridContent={<DelegationGrid rows={filteredRows} />}
+        />
+      ) : null}
     </div>
   );
-
-  return content;
 }

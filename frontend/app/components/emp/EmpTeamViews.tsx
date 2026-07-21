@@ -178,18 +178,7 @@ export function EmpTeamMyTeam() {
 
   const body = (
     <div className="space-y-4">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-        <div>
-          <h2 className={cn("font-bold text-foreground", isDesktop ? "text-xl" : "text-lg")}>My Team</h2>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            {searchQuery.trim()
-              ? `${filteredMembers.length} of ${members.length} employee${members.length === 1 ? "" : "s"}`
-              : `${members.length} employee${members.length === 1 ? "" : "s"}`}{" "}
-            in {scope === "reportees" ? "your direct reports" : "your department"}
-          </p>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2 justify-end">
           {searchOpen ? (
             <div className="relative w-full sm:w-56">
               <Search className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
@@ -274,7 +263,6 @@ export function EmpTeamMyTeam() {
               <Search className="size-4" />
             </button>
           </div>
-        </div>
       </div>
 
       {statusLoading ? (

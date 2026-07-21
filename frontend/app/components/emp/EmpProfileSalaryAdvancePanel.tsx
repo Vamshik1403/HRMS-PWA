@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Plus } from "lucide-react";
 import { toast } from "sonner";
 import { useCurrentUser } from "@/app/hooks/useCurrentUser";
@@ -17,8 +17,8 @@ import {
   TableRow,
 } from "../ui/table";
 import { FormModal } from "../ui/form-modal";
-import { Card, CardContent } from "../ui/card";
-import { Search } from "lucide-react";
+import { EmpTeamStyleDataSection, useTeamListControls } from "./desktop/EmpTeamStyleDataSection";
+import { cn } from "@/app/utils/cn";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "/backend";
 
@@ -31,13 +31,76 @@ interface SalaryAdvance {
   createdAt: string;
 }
 
+const STATUS_FILTERS = ["all", "Pending", "Approved", "Rejected", "Paid"];
+
+function statusVariant(status: string): "default" | "destructive" | "warning" | "secondary" | "muted" {
+  if (status === "Approved" || status === "Paid") return "default";
+  if (status === "Rejected") return "destructive";
+  if (status === "Pending") return "secondary";
+  return "muted";
+}
+
+function SalaryAdvanceTable({ rows }: { rows: SalaryAdvance[] }) {
+  return (
+    <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+      <div className="overflow-x-auto">
+        <Table>
+          <TableHeader>
+            <TableRow className="bg-muted/40 hover:bg-muted/40">
+              <TableHead>Date</TableHead>
+              <TableHead>Amount</TableHead>
+              <TableHead>Reason</TableHead>
+              <TableHead>Status</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {rows.map((a) => (
+              <TableRow key={a.id} className="hover:bg-muted/30">
+                <TableCell>{a.createdAt || "—"}</TableCell>
+                <TableCell className="font-medium">₹{a.advanceAmount}</TableCell>
+                <TableCell className="max-w-xs truncate">{a.reason}</TableCell>
+                <TableCell>
+                  <Badge variant={statusVariant(a.status)}>{a.status}</Badge>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
+    </div>
+  );
+}
+
+function SalaryAdvanceGrid({ rows }: { rows: SalaryAdvance[] }) {
+  return (
+    <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+      {rows.map((a) => (
+        <div
+          key={a.id}
+          className="rounded-xl border border-border bg-card shadow-sm p-4 hover:border-primary/40 transition-colors"
+        >
+          <p className="text-xs text-muted-foreground">{a.createdAt || "—"}</p>
+          <p className="font-semibold text-foreground mt-1 tabular-nums">₹{a.advanceAmount}</p>
+          <p className="text-sm text-muted-foreground mt-1 line-clamp-2">{a.reason}</p>
+          <div className="mt-3">
+            <Badge variant={statusVariant(a.status)}>{a.status}</Badge>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export function EmpProfileSalaryAdvancePanel() {
   const user = useCurrentUser();
   const [advances, setAdvances] = useState<SalaryAdvance[]>([]);
-  const [searchTerm, setSearchTerm] = useState("");
   const [applyOpen, setApplyOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [statusFilter, setStatusFilter] = useState("all");
+  const listControls = useTeamListControls("emp-profile-advance-view");
+  const { viewMode, selectViewMode, searchOpen, searchQuery, setSearchQuery, toggleSearch, filterOpen, toggleFilter } =
+    listControls;
   const [formData, setFormData] = useState({
     advanceAmount: "",
     reason: "",
@@ -59,13 +122,13 @@ export function EmpProfileSalaryAdvancePanel() {
         (a: { manageEmployeeID?: number }) => a.manageEmployeeID === id,
       );
       setAdvances(
-        filtered.map((a: any) => ({
+        filtered.map((a: Record<string, unknown>) => ({
           id: String(a.id),
-          advanceAmount: a.advanceAmount || "",
-          reason: a.reason || "",
-          status: a.status || "Pending",
-          previousAdvancesDue: a.previousAdvancesDue || "0",
-          createdAt: a.createdAt ? new Date(a.createdAt).toISOString().slice(0, 10) : "",
+          advanceAmount: String(a.advanceAmount || ""),
+          reason: String(a.reason || ""),
+          status: String(a.status || "Pending"),
+          previousAdvancesDue: String(a.previousAdvancesDue || "0"),
+          createdAt: a.createdAt ? new Date(String(a.createdAt)).toISOString().slice(0, 10) : "",
         })),
       );
     } catch {
@@ -98,12 +161,18 @@ export function EmpProfileSalaryAdvancePanel() {
     void load();
   }, [user?.username, loadAdvances]);
 
-  const filtered = advances.filter(
-    (a) =>
-      a.reason.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      a.status.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      a.advanceAmount.includes(searchTerm),
-  );
+  const filtered = useMemo(() => {
+    return advances.filter((a) => {
+      if (statusFilter !== "all" && a.status !== statusFilter) return false;
+      const q = searchQuery.trim().toLowerCase();
+      if (!q) return true;
+      return (
+        a.reason.toLowerCase().includes(q) ||
+        a.status.toLowerCase().includes(q) ||
+        a.advanceAmount.includes(q)
+      );
+    });
+  }, [advances, statusFilter, searchQuery]);
 
   const submit = async () => {
     if (!formData.advanceAmount || !formData.reason) {
@@ -138,8 +207,8 @@ export function EmpProfileSalaryAdvancePanel() {
     }
   };
 
-  if (applyOpen) {
-    return (
+  return (
+    <div className="space-y-4">
       <FormModal
         open={applyOpen}
         onOpenChange={setApplyOpen}
@@ -173,72 +242,50 @@ export function EmpProfileSalaryAdvancePanel() {
             <Button type="button" onClick={() => void submit()} disabled={submitting}>
               {submitting ? "Submitting…" : "Submit request"}
             </Button>
-            <Button type="button" variant="outline" onClick={() => setApplyOpen(false)} disabled={submitting}>
-              Cancel
-            </Button>
           </div>
         </div>
       </FormModal>
-    );
-  }
 
-  return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h3 className="text-base font-semibold text-foreground">Salary advances</h3>
-          <p className="text-sm text-muted-foreground">Request and track salary advance payments</p>
-        </div>
-        <Button type="button" onClick={() => setApplyOpen(true)}>
-          <Plus className="size-4" />
-          New request
-        </Button>
-      </div>
-
-      <Card className="w-full">
-        <CardContent className="pt-6">
-          <div className="relative mb-4 max-w-md">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-            <Input
-              placeholder="Search advances…"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10"
-            />
-          </div>
-
-          {loading ? (
-            <p className="text-sm text-muted-foreground py-12 text-center">Loading…</p>
-          ) : filtered.length === 0 ? (
-            <p className="text-sm text-muted-foreground py-12 text-center">No salary advances yet.</p>
-          ) : (
-            <div className="overflow-x-auto rounded-xl border border-border">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Date</TableHead>
-                    <TableHead>Amount</TableHead>
-                    <TableHead>Reason</TableHead>
-                    <TableHead>Status</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filtered.map((a) => (
-                    <TableRow key={a.id}>
-                      <TableCell>{a.createdAt || "—"}</TableCell>
-                      <TableCell className="font-medium">₹{a.advanceAmount}</TableCell>
-                      <TableCell className="max-w-xs truncate">{a.reason}</TableCell>
-                      <TableCell>
-                        <Badge variant="secondary">{a.status}</Badge>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+      {!applyOpen ? (
+        <EmpTeamStyleDataSection
+          title="Salary advances"
+          actions={
+            <Button type="button" size="sm" onClick={() => setApplyOpen(true)}>
+              <Plus className="size-4" />
+              New request
+            </Button>
+          }
+          searchOpen={searchOpen}
+          onToggleSearch={toggleSearch}
+          searchQuery={searchQuery}
+          onSearchChange={setSearchQuery}
+          searchPlaceholder="Search advances…"
+          filterOpen={filterOpen}
+          onToggleFilter={toggleFilter}
+          filterContent={STATUS_FILTERS.map((status) => (
+            <button
+              key={status}
+              type="button"
+              onClick={() => setStatusFilter(status)}
+              className={cn(
+                "rounded-full px-3 py-1 text-xs font-semibold border transition-colors",
+                statusFilter === status
+                  ? "border-primary bg-primary/10 text-primary"
+                  : "border-border text-muted-foreground hover:text-foreground",
+              )}
+            >
+              {status === "all" ? "All" : status}
+            </button>
+          ))}
+          viewMode={viewMode}
+          onViewModeChange={selectViewMode}
+          loading={loading}
+          empty={filtered.length === 0}
+          emptyMessage="No salary advances yet."
+          listContent={<SalaryAdvanceTable rows={filtered} />}
+          gridContent={<SalaryAdvanceGrid rows={filtered} />}
+        />
+      ) : null}
     </div>
   );
 }

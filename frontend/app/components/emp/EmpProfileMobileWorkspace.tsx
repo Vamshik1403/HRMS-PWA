@@ -11,8 +11,8 @@ import { EmpReimbursementMobile } from "./EmpReimbursementMobile";
 import { EmpWorkspaceDelegation } from "./EmpWorkspaceDelegation";
 import { EmpPayoutContent } from "./EmpPayoutContent";
 import { EmpProfileSalaryAdvancePanel } from "./EmpProfileSalaryAdvancePanel";
-import { EmpProfileMessagingPanel } from "./EmpProfileMessagingPanel";
 import { EmpHolidayListMobile } from "./EmpHolidayListMobile";
+import { EmpProfileMessagingPanel } from "./EmpProfileMessagingPanel";
 import { Icon } from "@iconify/react";
 
 function EmpProfileMobileWorkspaceInner() {
@@ -27,9 +27,22 @@ function EmpProfileMobileWorkspaceInner() {
     { id: "delegation", label: "Delegation", href: profileTabHref("delegation") },
     { id: "payslips", label: "Payslips", href: profileTabHref("payslips") },
     { id: "salary-advance", label: "Advances", href: profileTabHref("salary-advance") },
-    { id: "messaging", label: "IM", href: profileTabHref("messaging") },
     { id: "holidays", label: "Holidays", href: profileTabHref("holidays") },
   ];
+
+  if (activeTab === "messaging") {
+    return (
+      <div className="px-4 pt-4 pb-8 space-y-4">
+        <div className="flex items-center gap-2">
+          <Link href="/empdashboard" className="text-sm font-medium text-primary">
+            ← Home
+          </Link>
+        </div>
+        <h1 className="text-[22px] font-bold text-gray-900">IM</h1>
+        <EmpProfileMessagingPanel />
+      </div>
+    );
+  }
 
   return (
     <div className="px-4 pt-4 pb-8 space-y-4">
@@ -52,7 +65,6 @@ function EmpProfileMobileWorkspaceInner() {
         </Suspense>
       )}
       {activeTab === "salary-advance" && <EmpProfileSalaryAdvancePanel />}
-      {activeTab === "messaging" && <EmpProfileMessagingPanel />}
       {activeTab === "holidays" && <EmpHolidayListMobile embedded />}
     </div>
   );

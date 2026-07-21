@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Icon } from "@iconify/react";
@@ -15,15 +15,14 @@ import {
 import { splitPreviewRecords } from "../../utils/empListLimit";
 import { EmpRecordHistorySheet } from "./EmpRecordHistorySheet";
 import { EmpListViewMoreButton } from "./EmpListViewMoreButton";
-import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
+import { Card, CardContent } from "../ui/card";
 import { Button } from "../ui/button";
 import { listCardClass } from "../app/list-ui-styles";
-import { filterSelectClass } from "../../dashboard/components/dashboard-ui";
+import { Calendar, ChevronLeft, ChevronRight } from "lucide-react";
 
-const MONTHS = [
-  "January", "February", "March", "April", "May", "June",
-  "July", "August", "September", "October", "November", "December",
-];
+function pad2(n: number) {
+  return String(n).padStart(2, "0");
+}
 
 function readFilterFromSearchParams(searchParams: URLSearchParams) {
   const now = new Date();
@@ -40,7 +39,6 @@ function readFilterFromSearchParams(searchParams: URLSearchParams) {
 
 export function EmpPayoutContent({ embedded = false }: { embedded?: boolean }) {
   const searchParams = useSearchParams();
-  const now = new Date();
   const initial = readFilterFromSearchParams(searchParams);
   const [rows, setRows] = useState<EmpPayslipRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -48,6 +46,7 @@ export function EmpPayoutContent({ embedded = false }: { embedded?: boolean }) {
   const [year, setYear] = useState(initial.year);
   const [downloadingId, setDownloadingId] = useState<number | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const monthInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const next = readFilterFromSearchParams(searchParams);
@@ -60,13 +59,6 @@ export function EmpPayoutContent({ embedded = false }: { embedded?: boolean }) {
       .then(setRows)
       .finally(() => setLoading(false));
   }, []);
-
-  const years = useMemo(() => {
-    const set = new Set(rows.map((r) => parseMonthYearFromPeriod(r.monthPeriod)?.year).filter(Boolean) as number[]);
-    set.add(year);
-    set.add(now.getFullYear());
-    return Array.from(set).sort((a, b) => b - a);
-  }, [rows, year, now]);
 
   const filtered = useMemo(() => {
     return rows
@@ -84,6 +76,26 @@ export function EmpPayoutContent({ embedded = false }: { embedded?: boolean }) {
   }, [rows, month, year]);
 
   const { preview, history, hasHistory } = splitPreviewRecords(filtered);
+
+  const monthLabel = new Date(year, month - 1, 1).toLocaleDateString("en-IN", {
+    month: "long",
+    year: "numeric",
+  });
+
+  const openMonthPicker = () => {
+    const el = monthInputRef.current;
+    if (!el) return;
+    el.focus({ preventScroll: true });
+    if (typeof el.showPicker === "function") {
+      try {
+        el.showPicker();
+        return;
+      } catch {
+        /* fall through */
+      }
+    }
+    el.click();
+  };
 
   const renderPayslipRow = (row: EmpPayslipRow) => (
     <div
@@ -175,37 +187,68 @@ export function EmpPayoutContent({ embedded = false }: { embedded?: boolean }) {
         </>
       )}
 
-      <Card className={`${listCardClass} mb-6`}>
-        <CardHeader>
-          <CardTitle className="text-base">Filter by period</CardTitle>
-        </CardHeader>
-        <CardContent className="grid sm:grid-cols-2 gap-4">
-          <label className="block space-y-2">
-            <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Month</span>
-            <select
-              value={month}
-              onChange={(e) => setMonth(Number(e.target.value))}
-              className={`${filterSelectClass} w-full`}
+      <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm mb-6">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-muted/30 px-4 py-3">
+          <div className="flex items-center gap-2">
+            <input
+              ref={monthInputRef}
+              type="month"
+              value={`${year}-${pad2(month)}`}
+              onChange={(e) => {
+                const [y, m] = e.target.value.split("-").map(Number);
+                if (y && m) {
+                  setYear(y);
+                  setMonth(m);
+                }
+              }}
+              className="sr-only"
+              aria-hidden
+              tabIndex={-1}
+            />
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              className="size-8"
+              onClick={openMonthPicker}
+              aria-label="Select month"
             >
-              {MONTHS.map((m, i) => (
-                <option key={m} value={i + 1}>{m}</option>
-              ))}
-            </select>
-          </label>
-          <label className="block space-y-2">
-            <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Year</span>
-            <select
-              value={year}
-              onChange={(e) => setYear(Number(e.target.value))}
-              className={`${filterSelectClass} w-full`}
+              <Calendar className="size-4" />
+            </Button>
+            <h3 className="text-sm font-semibold text-foreground">{monthLabel}</h3>
+          </div>
+          <div className="flex items-center gap-1">
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="size-8"
+              onClick={() => {
+                const d = new Date(year, month - 2, 1);
+                setYear(d.getFullYear());
+                setMonth(d.getMonth() + 1);
+              }}
+              aria-label="Previous month"
             >
-              {years.map((y) => (
-                <option key={y} value={y}>{y}</option>
-              ))}
-            </select>
-          </label>
-        </CardContent>
-      </Card>
+              <ChevronLeft className="size-4" />
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="size-8"
+              onClick={() => {
+                const d = new Date(year, month, 1);
+                setYear(d.getFullYear());
+                setMonth(d.getMonth() + 1);
+              }}
+              aria-label="Next month"
+            >
+              <ChevronRight className="size-4" />
+            </Button>
+          </div>
+        </div>
+      </div>
 
       {loading ? (
         <div className="py-16 flex justify-center">
@@ -219,13 +262,13 @@ export function EmpPayoutContent({ embedded = false }: { embedded?: boolean }) {
         </Card>
       ) : (
         <>
-          <Card className={`${listCardClass} overflow-hidden`}>
-            <div className="grid grid-cols-[1fr_auto] gap-2 px-4 py-3 bg-muted/40 border-b border-border text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+            <div className="border-b border-border bg-muted/40 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground grid grid-cols-[1fr_auto] gap-2">
               <span>Month / year</span>
               <span>Actions</span>
             </div>
             {preview.map(renderPayslipRow)}
-          </Card>
+          </div>
           {hasHistory && (
             <EmpListViewMoreButton count={history.length} onClick={() => setHistoryOpen(true)} />
           )}

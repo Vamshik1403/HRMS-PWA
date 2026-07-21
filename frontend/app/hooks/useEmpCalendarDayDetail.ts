@@ -172,13 +172,34 @@ export function useEmpCalendarDayDetail(dateKey: string | null) {
     [tasks],
   );
 
+  const todos = useMemo(
+    () =>
+      nonSiteTasks.filter((t) => {
+        const type = (t.taskType || "").toLowerCase();
+        const status = (t.status || "").toLowerCase();
+        return type.includes("todo") || type.includes("to-do") || status.includes("todo");
+      }),
+    [nonSiteTasks],
+  );
+
+  const regularTasks = useMemo(
+    () =>
+      nonSiteTasks.filter((t) => {
+        const type = (t.taskType || "").toLowerCase();
+        const status = (t.status || "").toLowerCase();
+        return !(type.includes("todo") || type.includes("to-do") || status.includes("todo"));
+      }),
+    [nonSiteTasks],
+  );
+
   return {
     dateKey,
     dayTitle,
     loading,
     records,
     siteVisits,
-    tasks: nonSiteTasks,
+    tasks: regularTasks,
+    todos,
     summary,
     dayPunches,
   };

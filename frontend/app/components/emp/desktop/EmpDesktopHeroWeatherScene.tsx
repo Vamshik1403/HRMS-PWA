@@ -25,7 +25,9 @@ type WeatherScene = {
   moonRight: number;
   moonOpacity: number;
   moonClipTop: number;
+  moonClipBottom: number;
   cloudTop: number;
+  cloudRight: number;
   cloudOpacity: number;
   cloudNight: boolean;
   cloudDrift: number;
@@ -34,6 +36,18 @@ type WeatherScene = {
   showSun: boolean;
   showMoon: boolean;
 };
+
+/** Shared cloud hub — sun/moon rise from and set into this point */
+const CLOUD_HUB_TOP = 54;
+const CLOUD_HUB_RIGHT = 21;
+/** Moon sits slightly left of the cloud anchor */
+const MOON_HUB_RIGHT = 27;
+/** Celestial peek position — centred on cloud so the lower disc hides behind it */
+const CELESTIAL_RISE_START = 44;
+/** Highest point in the sky (lower % = higher on screen) */
+const CELESTIAL_APEX_TOP = 8;
+/** Celestial position when sinking back toward the cloud */
+const CELESTIAL_SET_END = 40;
 
 /** Night palette — deeper navy, still feathered (not a hard box) */
 const NIGHT_CORE: [number, number, number] = [24, 36, 68];
@@ -71,10 +85,12 @@ function getWeatherScene(date: Date): WeatherScene {
   let sunClipBottom = 0;
   let sunClipTop = 100;
   let moonTop = 26;
-  let moonRight = 12;
+  let moonRight = MOON_HUB_RIGHT;
   let moonOpacity = 0;
   let moonClipTop = 100;
-  let cloudTop = 72;
+  let moonClipBottom = 0;
+  let cloudTop = CLOUD_HUB_TOP;
+  let cloudRight = CLOUD_HUB_RIGHT;
   let cloudOpacity = 0.95;
   let cloudNight = false;
   let cloudDrift = 0;
@@ -83,29 +99,39 @@ function getWeatherScene(date: Date): WeatherScene {
   let showSun = false;
   let showMoon = false;
 
-  // Sunrise 5:00 – 6:00
+  // Sunrise 5:00 – 6:00 — sun rises from cloud, moon finishes setting into cloud
   if (t >= 5 && t < 6) {
     const p = (t - 5) / 1;
     cardGradient = `linear-gradient(105deg, #FFFFFF 0%, #FFFFFF 46%, #FAF8FC 60%, #F8F0F4 76%, #FFF4E8 90%, #FFF0DC 100%)`;
     rightAtmosphere = `radial-gradient(ellipse 50% 88% at 96% 36%, ${rgba(sunrisePurple, lerp(0.14, 0.06, p))} 0%, ${rgba(sunrisePink, lerp(0.1, 0.04, p))} 30%, transparent 66%)`;
     sunGlow = `rgba(255, 200, 120, ${lerp(0.06, 0.18, p)})`;
 
-    sunTop = lerp(42, 24, p);
-    sunRight = lerp(18, 12, p);
-    sunOpacity = clamp01((p - 0.08) / 0.92);
-    sunClipTop = lerp(82, 0, clamp01((p - 0.05) / 0.95));
+    cloudTop = CLOUD_HUB_TOP;
+    cloudRight = CLOUD_HUB_RIGHT;
+
+    // Sun rises upward through the cloud hub
+    const sunRise = clamp01((p - 0.02) / 0.98);
+    sunTop = lerp(CELESTIAL_RISE_START, CELESTIAL_APEX_TOP, sunRise);
+    sunRight = CLOUD_HUB_RIGHT;
+    sunOpacity = clamp01((sunRise - 0.04) / 0.96);
+    sunClipTop = 0;
+    sunClipBottom = 0;
     showSun = sunOpacity > 0.02;
 
-    moonOpacity = clamp01(1 - p * 1.2);
-    moonClipTop = lerp(0, 100, p);
+    // Moon sinks down into the cloud hub
+    const moonSet = clamp01(p * 1.1);
+    moonTop = lerp(CELESTIAL_APEX_TOP, CELESTIAL_SET_END, moonSet);
+    moonRight = MOON_HUB_RIGHT;
+    moonOpacity = clamp01(1 - moonSet * 1.1);
+    moonClipTop = 0;
+    moonClipBottom = 0;
     showMoon = moonOpacity > 0.02;
 
-    cloudTop = lerp(40, 68, p);
-    cloudOpacity = lerp(0.55, 0.92, p);
-    farCloudsOpacity = lerp(0, 0.5, p);
+    cloudOpacity = lerp(0.72, 0.94, p);
+    farCloudsOpacity = lerp(0, 0.45, p);
     starsOpacity = clamp01(1 - p * 1.15) * 0.35;
   }
-  // Day 6:00 – 16:00
+  // Day 6:00 – 16:00 — sun travels above the cloud hub
   else if (t >= 6 && t < 16) {
     const p = (t - 6) / 10;
     const noonFactor = 1 - Math.abs(p - 0.5) * 2;
@@ -114,19 +140,21 @@ function getWeatherScene(date: Date): WeatherScene {
     rightAtmosphere = `radial-gradient(ellipse 52% 92% at 96% 36%, ${rgba(lightBlue, lerp(0.22, 0.32, noonFactor))} 0%, ${rgba(skyBlue, lerp(0.1, 0.16, noonFactor))} 28%, ${rgba(warmGold, 0.08)} 48%, transparent 68%)`;
     sunGlow = `rgba(255, 211, 77, ${lerp(0.12, 0.22, noonFactor)})`;
 
-    sunTop = lerp(30, 14, noonFactor) + lerp(0, 8, p);
-    sunRight = lerp(20, 8, noonFactor);
+    cloudTop = CLOUD_HUB_TOP;
+    cloudRight = CLOUD_HUB_RIGHT;
+
+    sunTop = lerp(CELESTIAL_APEX_TOP + 6, CELESTIAL_APEX_TOP, noonFactor) + lerp(0, 4, p);
+    sunRight = CLOUD_HUB_RIGHT;
     sunOpacity = 1;
     sunClipTop = 0;
     sunClipBottom = 0;
     showSun = true;
 
-    cloudTop = lerp(76, 58, p);
     cloudOpacity = 0.92;
     farCloudsOpacity = 0.5 + noonFactor * 0.15;
-    cloudDrift = p * 12;
+    cloudDrift = p * 10;
   }
-  // Sunset 16:00 – 18:00
+  // Sunset 16:00 – 18:00 — sun descends into the cloud hub
   else if (t >= 16 && t < 18) {
     const p = (t - 16) / 2;
 
@@ -134,20 +162,23 @@ function getWeatherScene(date: Date): WeatherScene {
     rightAtmosphere = `radial-gradient(ellipse 50% 90% at 96% 38%, ${rgba(sunsetPurple, lerp(0.08, 0.14, p))} 0%, ${rgba(sunsetPink, lerp(0.06, 0.12, p))} 26%, ${rgba(sunsetOrange, lerp(0.05, 0.1, p))} 44%, transparent 66%)`;
     sunGlow = `rgba(255, 170, 90, ${lerp(0.18, 0.08, p)})`;
 
-    sunTop = lerp(22, 38, p);
-    sunRight = lerp(10, 14, p);
-    sunOpacity = lerp(1, 0.15, clamp01((p - 0.75) / 0.25));
-    sunClipBottom = lerp(0, 72, clamp01((p - 0.35) / 0.65));
+    cloudTop = CLOUD_HUB_TOP;
+    cloudRight = CLOUD_HUB_RIGHT;
+
+    const sunSet = clamp01((p - 0.15) / 0.85);
+    sunTop = lerp(CELESTIAL_APEX_TOP, CELESTIAL_SET_END, sunSet);
+    sunRight = CLOUD_HUB_RIGHT;
+    sunOpacity = lerp(1, 0.08, clamp01((p - 0.72) / 0.28));
     sunClipTop = 0;
+    sunClipBottom = 0;
     showSun = sunOpacity > 0.04;
 
-    cloudTop = lerp(58, 42, p);
-    cloudOpacity = 0.9;
+    cloudOpacity = 0.92;
     farCloudsOpacity = lerp(0.45, 0.2, p);
   }
-  // Evening 18:00 – 19:30
-  else if (t >= 18 && t < 19.5) {
-    const p = (t - 18) / 1.5;
+  // Evening 18:00 – 20:00 — moon rises slowly upward from the cloud hub
+  else if (t >= 18 && t < 20) {
+    const p = (t - 18) / 2;
 
     cardGradient = `linear-gradient(105deg, #FFFFFF 0%, #FFFFFF 48%, #F6F8FB 62%, #E8EDF4 76%, #D8E0EC 90%, #CCD6E4 100%)`;
     rightAtmosphere = `radial-gradient(ellipse 140% 180% at 84% 50%, ${rgba(NIGHT_DEEP, lerp(0.18, 0.32, p))} 0%, ${rgba(NIGHT_MID, lerp(0.12, 0.22, p))} 32%, ${rgba(NIGHT_EDGE, lerp(0.08, 0.14, p))} 55%, transparent 82%)`;
@@ -156,22 +187,26 @@ function getWeatherScene(date: Date): WeatherScene {
     sunOpacity = 0;
     showSun = false;
 
-    const moonRise = clamp01((p - 0.05) / 0.85);
-    moonTop = lerp(40, 22, moonRise);
-    moonOpacity = lerp(0, 1, moonRise);
-    moonClipTop = lerp(88, 0, moonRise);
+    cloudTop = CLOUD_HUB_TOP;
+    cloudRight = CLOUD_HUB_RIGHT;
+
+    const moonRise = clamp01((p - 0.02) / 0.95);
+    moonTop = lerp(CELESTIAL_RISE_START, CELESTIAL_APEX_TOP, moonRise);
+    moonRight = MOON_HUB_RIGHT;
+    moonOpacity = lerp(0.12, 1, moonRise);
+    moonClipTop = 0;
+    moonClipBottom = 0;
     showMoon = moonOpacity > 0.04;
 
-    cloudTop = lerp(42, 40, p);
-    cloudOpacity = lerp(0.88, lerp(0.88, 0.25, clamp01((moonRise - 0.7) / 0.3)), p);
+    cloudOpacity = lerp(0.9, 0.82, p);
     cloudNight = p > 0.35;
     starsOpacity = lerp(0, 0.65, moonRise);
     farCloudsOpacity = lerp(0.15, 0, p);
   }
-  // Night 19:30 – 5:00
+  // Night 20:00 – 5:00 — moon above cloud, then sets into cloud before dawn
   else {
-    const nightT = t >= 19.5 ? t : t + 24;
-    const nightStart = 19.5;
+    const nightT = t >= 20 ? t : t + 24;
+    const nightStart = 20;
     const nightEnd = 29;
     const p = clamp01((nightT - nightStart) / (nightEnd - nightStart));
 
@@ -179,21 +214,36 @@ function getWeatherScene(date: Date): WeatherScene {
     rightAtmosphere = `radial-gradient(ellipse 150% 200% at 82% 50%, ${rgba(NIGHT_CORE, lerp(0.34, 0.44, p))} 0%, ${rgba(NIGHT_DEEP, lerp(0.24, 0.32, p))} 28%, ${rgba(NIGHT_MID, lerp(0.14, 0.2, p))} 50%, ${rgba(NIGHT_EDGE, lerp(0.08, 0.12, p))} 68%, transparent 88%), radial-gradient(ellipse 110% 120% at 78% 72%, ${rgba(NIGHT_DEEP, lerp(0.14, 0.2, p))} 0%, transparent 72%)`;
     sunGlow = `rgba(170, 188, 230, ${lerp(0.12, 0.2, p)})`;
 
-    const moonFull = clamp01((nightT - 19.5) / 1.2);
-    moonTop = lerp(24, 20, moonFull);
-    moonOpacity = lerp(0.85, 1, moonFull);
-    moonClipTop = lerp(20, 0, moonFull);
-    showMoon = true;
+    cloudTop = CLOUD_HUB_TOP;
+    cloudRight = CLOUD_HUB_RIGHT;
 
-    const cloudFade = clamp01((moonFull - 0.65) / 0.35);
-    cloudTop = 38;
-    cloudOpacity = lerp(0.7, 0.08, cloudFade);
+    const moonSet = clamp01((nightT - 28) / 1);
+    if (moonSet > 0) {
+      // 4:00–5:00 — moon sinks down into the cloud hub
+      moonTop = lerp(CELESTIAL_APEX_TOP, CELESTIAL_SET_END, moonSet);
+      moonRight = MOON_HUB_RIGHT;
+      moonOpacity = lerp(1, 0.06, moonSet);
+      moonClipTop = 0;
+      moonClipBottom = 0;
+      showMoon = moonOpacity > 0.04;
+      starsOpacity = lerp(0.55, 0.2, moonSet);
+      cloudOpacity = lerp(0.82, 0.72, moonSet);
+    } else {
+      const moonFull = clamp01((nightT - 20) / 1.5);
+      moonTop = lerp(CELESTIAL_APEX_TOP + 4, CELESTIAL_APEX_TOP, moonFull);
+      moonRight = MOON_HUB_RIGHT;
+      moonOpacity = lerp(0.9, 1, moonFull);
+      moonClipTop = 0;
+      moonClipBottom = 0;
+      showMoon = true;
+
+      const cloudFade = clamp01((moonFull - 0.65) / 0.35);
+      cloudOpacity = lerp(0.82, 0.55, cloudFade);
+      starsOpacity = lerp(0.35, 0.95, clamp01((moonFull - 0.75) / 0.25));
+    }
+
     cloudNight = true;
-    cloudDrift = 8 + p * 6;
-
-    // Stars brighten once the moon is fully revealed
-    const moonRevealed = clamp01((moonFull - 0.75) / 0.25);
-    starsOpacity = lerp(0.35, 0.95, moonRevealed);
+    cloudDrift = 6 + p * 6;
     farCloudsOpacity = 0;
   }
 
@@ -210,7 +260,9 @@ function getWeatherScene(date: Date): WeatherScene {
     moonRight,
     moonOpacity,
     moonClipTop,
+    moonClipBottom,
     cloudTop,
+    cloudRight,
     cloudOpacity,
     cloudNight,
     cloudDrift,
@@ -250,8 +302,8 @@ function HeroCloud({
         <linearGradient id={fillId} x1="0%" y1="0%" x2="0%" y2="100%">
           {night ? (
             <>
-              <stop offset="0%" stopColor="#4A5A78" stopOpacity="0.55" />
-              <stop offset="100%" stopColor="#2A3548" stopOpacity="0.35" />
+              <stop offset="0%" stopColor="#4A5A78" stopOpacity="0.78" />
+              <stop offset="100%" stopColor="#2A3548" stopOpacity="0.62" />
             </>
           ) : (
             <>
@@ -376,7 +428,7 @@ export function HeroMorningCover() {
   const [now, setNow] = useState(() => new Date());
 
   useEffect(() => {
-    const id = setInterval(() => setNow(new Date()), 30_000);
+    const id = setInterval(() => setNow(new Date()), 15_000);
     return () => clearInterval(id);
   }, []);
 
@@ -384,8 +436,8 @@ export function HeroMorningCover() {
 
   return (
     <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-[inherit]" aria-hidden>
-      {/* Base — always bright */}
-      <div className="absolute inset-0 bg-white" />
+      {/* Base — theme-aware */}
+      <div className="emp-hero-cover-base absolute inset-0 bg-card" />
 
       {/* Soft card-wide wash — same technique as morning orange */}
       <div
@@ -408,11 +460,11 @@ export function HeroMorningCover() {
       />
 
       {/* Readability shield — keeps name & text fully clear */}
-      <div className="absolute inset-0 bg-gradient-to-r from-white from-[0%] via-white via-[58%] via-white/95 via-[66%] via-white/50 via-[74%] to-transparent" />
+      <div className="emp-hero-cover-shield absolute inset-0 bg-gradient-to-r from-card from-[0%] via-card via-[58%] via-card/95 via-[66%] via-card/50 via-[74%] to-transparent" />
 
       {/* Celestial elements — right zone only, transparent background */}
       <div className="absolute inset-y-0 right-0 w-[34%] min-w-[200px]">
-        <FarClouds opacity={0} uid={uid} />
+        <FarClouds opacity={scene.farCloudsOpacity} uid={uid} />
 
         {/* Stars — behind moon, visible on dark night shade */}
         <div
@@ -437,10 +489,10 @@ export function HeroMorningCover() {
           <span className="emp-hero-shooting-star absolute left-[20%] top-[12%] size-1 rounded-full bg-white shadow-[0_0_4px_rgba(255,255,255,0.9)]" />
         </div>
 
-        {/* Sun */}
+        {/* Sun — rises behind the cloud; cloud masks the lower disc */}
         {scene.showSun ? (
           <div
-            className="emp-hero-celestial absolute z-[1] w-[132px] sm:w-[150px] transition-[top,right,opacity,clip-path] duration-[4000ms] ease-in-out"
+            className="emp-hero-celestial absolute z-[1] w-[132px] sm:w-[150px] transition-[top,right,opacity,clip-path] duration-[6000ms] ease-in-out"
             style={{
               top: `${scene.sunTop}%`,
               right: `${scene.sunRight}%`,
@@ -452,22 +504,39 @@ export function HeroMorningCover() {
           </div>
         ) : null}
 
-        {/* Moon */}
+        {/* Moon — rises behind the cloud; cloud masks the lower disc */}
         {scene.showMoon ? (
           <div
-            className="emp-hero-celestial absolute z-[1] w-[118px] sm:w-[134px] transition-[top,right,opacity,clip-path] duration-[4000ms] ease-in-out"
+            className="emp-hero-celestial absolute z-[1] w-[118px] sm:w-[134px] transition-[top,right,opacity,clip-path] duration-[6000ms] ease-in-out"
             style={{
               top: `${scene.moonTop}%`,
               right: `${scene.moonRight}%`,
               opacity: scene.moonOpacity,
-              clipPath: `inset(${scene.moonClipTop}% 0 0 0)`,
+              clipPath: `inset(${scene.moonClipTop}% 0 ${scene.moonClipBottom}% 0)`,
             }}
           >
             <HeroMoon uid={uid} className="emp-hero-moon-glow w-full" />
           </div>
         ) : null}
 
-        {/* Primary cloud removed — sun/moon only */}
+        {/* Cloud hub — in front of sun / moon, hides their lower portion */}
+        {scene.cloudOpacity > 0.04 ? (
+          <div
+            className="emp-hero-main-cloud absolute z-[3] transition-[top,right,opacity,transform] duration-[4000ms] ease-in-out"
+            style={{
+              top: `${scene.cloudTop}%`,
+              right: `${scene.cloudRight}%`,
+              opacity: scene.cloudOpacity,
+              transform: `translateX(${scene.cloudDrift}px)`,
+            }}
+          >
+            <HeroCloud
+              uid={`${uid}-main`}
+              night={scene.cloudNight}
+              className="w-[128px] sm:w-[164px]"
+            />
+          </div>
+        ) : null}
       </div>
 
       <style>{`

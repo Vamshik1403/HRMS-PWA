@@ -232,9 +232,6 @@ export function EmpReimbursementApplyForm({
         <Button type="button" onClick={() => void submit()} disabled={submitting || total <= 0}>
           {submitting ? "Submitting…" : "Submit"}
         </Button>
-        <Button type="button" variant="outline" onClick={onCancel} disabled={submitting}>
-          Cancel
-        </Button>
       </div>
     </div>
   );

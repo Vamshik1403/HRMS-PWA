@@ -22,6 +22,7 @@ import { EmpMarkoutReminderBanner } from "../emp/EmpMarkoutReminderBanner";
 import { toast } from "sonner";
 import { TASK_MANAGEMENT_ENABLED } from "@/app/config/featureFlags";
 import { ensureFetchRefreshPatch } from "@/app/utils/patchFetchForRefresh";
+import { applyEmpTheme, readStoredEmpTheme } from "@/app/utils/empTheme";
 
 interface EmpMobileLayoutProps {
   children: React.ReactNode;
@@ -88,10 +89,9 @@ function EmpMobileLayoutInner({ children, hideBottomNav = false }: EmpMobileLayo
 
   useEffect(() => {
     const applyStoredTheme = () => {
-      const stored = (localStorage.getItem("_emp_appearance") || "light") as "light" | "dark";
-      const next = stored === "dark" ? "dark" : "light";
+      const next = readStoredEmpTheme();
       setTheme(next);
-      document.documentElement.setAttribute("data-emp-theme", next);
+      applyEmpTheme(next);
     };
 
     applyStoredTheme();

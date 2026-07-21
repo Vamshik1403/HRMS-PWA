@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Icon } from "@iconify/react";
 import { Plus } from "lucide-react";
@@ -21,11 +21,13 @@ import { EmpRecordHistorySheet } from "./EmpRecordHistorySheet";
 import { EmpListViewMoreButton } from "./EmpListViewMoreButton";
 import { EmpLeaveApprovalSheet } from "./EmpLeaveApprovalSheet";
 import { Button } from "../ui/button";
+import { cn } from "@/app/utils/cn";
 import { formatDateShort } from "../../utils/leaveDisplay";
 import { EmpPortalPage, empListClass, empPageRootClass } from "./EmpPortalPage";
 import { useEmpPortalDesktop } from "../layout/EmpPortalShell";
-import { EmpDesktopLeaveBalance, EmpDesktopLeaveTable } from "./desktop/EmpDesktopLeaveList";
+import { EmpDesktopLeaveBalance, EmpDesktopLeaveGrid, EmpDesktopLeaveTable } from "./desktop/EmpDesktopLeaveList";
 import { EmpDesktopPage } from "./desktop/EmpDesktopPage";
+import { EmpTeamStyleDataSection, useTeamListControls } from "./desktop/EmpTeamStyleDataSection";
 import { EmpLeaveApplyForm } from "./EmpLeaveApplyForm";
 import { FormModal } from "../ui/form-modal";
 import { Calendar } from "lucide-react";
@@ -108,6 +110,10 @@ export function EmpLeaveMobile({
   const [historyOpen, setHistoryOpen] = useState(false);
   const [approvalApp, setApprovalApp] = useState<LeaveAppRow | null>(null);
   const [applyOpen, setApplyOpen] = useState(false);
+  const listControls = useTeamListControls("emp-profile-leave-view");
+  const { viewMode, selectViewMode, searchOpen, searchQuery, setSearchQuery, toggleSearch, filterOpen, toggleFilter } =
+    listControls;
+  const [statusFilter, setStatusFilter] = useState("all");
 
   const loadApps = useCallback(async (empId: number, fetchBalance: boolean) => {
     const token =
@@ -318,6 +324,23 @@ export function EmpLeaveMobile({
     ? previewApps.filter((a) => isTeamMemberId(scope, a.manageEmployeeID))
     : previewApps;
 
+  const filteredListApps = useMemo(() => {
+    return listApps.filter((app) => {
+      const label = getDisplayLeaveStatus(app.status, app.dayStatuses);
+      if (statusFilter !== "all" && label !== statusFilter) return false;
+      const q = searchQuery.trim().toLowerCase();
+      if (!q) return true;
+      return (
+        label.toLowerCase().includes(q) ||
+        getDisplayLeaveType(app).toLowerCase().includes(q) ||
+        (app.purpose || "").toLowerCase().includes(q) ||
+        getAppliedDateRange(app).toLowerCase().includes(q)
+      );
+    });
+  }, [listApps, statusFilter, searchQuery]);
+
+  const leaveStatusFilters = ["all", "Approval Pending", "Approved", "Partially Approved", "Rejected"];
+
   if (inWorkspace) {
     const pageTitle =
       desktopTab === "balance"
@@ -350,35 +373,75 @@ export function EmpLeaveMobile({
             />
           </FormModal>
         ) : null}
-        {!applyOpen && showBalance ? (
-          <div className="space-y-4">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <h3 className="text-sm font-semibold text-foreground">Leave balance</h3>
-              <Button type="button" size="sm" onClick={() => setApplyOpen(true)}>
-                <Plus className="size-4" />
-                Apply leave
-              </Button>
-            </div>
-            <EmpDesktopLeaveBalance cards={cards} loading={balanceLoading} compact={compactBalance} />
-          </div>
-        ) : !applyOpen && !showBalance ? (
-          <div className="flex justify-end mb-4">
-            <Button type="button" size="sm" onClick={() => setApplyOpen(true)}>
-              <Plus className="size-4" />
-              Apply leave
-            </Button>
-          </div>
-        ) : null}
         {!applyOpen && showList ? (
-          <div className={showBalance ? "mt-6" : ""}>
-            <EmpDesktopLeaveTable
-              apps={listApps}
-              isManagerView={isManagerView}
-              employeeNameForRow={employeeNameForRow}
-              onApprove={(app) => setApprovalApp(app)}
-              onDelete={handleDelete}
-              title={desktopTab === "approvals" ? "Pending approvals" : "Leave requests"}
-            />
+          <div>
+            {embedded ? (
+              <EmpTeamStyleDataSection
+                leading={
+                  showBalance ? (
+                    <EmpDesktopLeaveBalance cards={cards} loading={balanceLoading} compact={compactBalance} />
+                  ) : undefined
+                }
+                actions={
+                  <Button type="button" size="sm" onClick={() => setApplyOpen(true)}>
+                    <Plus className="size-4" />
+                    Apply leave
+                  </Button>
+                }
+                searchOpen={searchOpen}
+                onToggleSearch={toggleSearch}
+                searchQuery={searchQuery}
+                onSearchChange={setSearchQuery}
+                searchPlaceholder="Search leave requests…"
+                filterOpen={filterOpen}
+                onToggleFilter={toggleFilter}
+                filterContent={leaveStatusFilters.map((status) => (
+                  <button
+                    key={status}
+                    type="button"
+                    onClick={() => setStatusFilter(status)}
+                    className={cn(
+                      "rounded-full px-3 py-1 text-xs font-semibold border transition-colors",
+                      statusFilter === status
+                        ? "border-primary bg-primary/10 text-primary"
+                        : "border-border text-muted-foreground hover:text-foreground",
+                    )}
+                  >
+                    {status === "all" ? "All" : status}
+                  </button>
+                ))}
+                viewMode={viewMode}
+                onViewModeChange={selectViewMode}
+                loading={false}
+                empty={filteredListApps.length === 0}
+                emptyMessage="No leave requests"
+                listContent={
+                  <EmpDesktopLeaveTable
+                    apps={filteredListApps}
+                    isManagerView={isManagerView}
+                    employeeNameForRow={employeeNameForRow}
+                    onApprove={(app) => setApprovalApp(app)}
+                    onDelete={handleDelete}
+                    hideHeader
+                  />
+                }
+                gridContent={
+                  <EmpDesktopLeaveGrid
+                    apps={filteredListApps}
+                    isManagerView={isManagerView}
+                    employeeNameForRow={employeeNameForRow}
+                  />
+                }
+              />
+            ) : (
+              <EmpDesktopLeaveTable
+                apps={filteredListApps}
+                isManagerView={isManagerView}
+                employeeNameForRow={employeeNameForRow}
+                onApprove={(app) => setApprovalApp(app)}
+                onDelete={handleDelete}
+              />
+            )}
             {hasHistory ? (
               <EmpListViewMoreButton count={historyApps.length} onClick={() => setHistoryOpen(true)} />
             ) : null}

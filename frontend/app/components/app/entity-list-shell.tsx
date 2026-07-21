@@ -2,9 +2,7 @@
 
 import type { ReactNode } from "react";
 import type { LucideIcon } from "lucide-react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../ui/card";
 import { DataTable, type DataTableColumn } from "./data-table";
-import { listCardClass } from "./list-ui-styles";
 
 interface EntityListShellProps<T> {
   title: string;
@@ -20,6 +18,8 @@ interface EntityListShellProps<T> {
   emptyTitle?: string;
   emptyDescription?: string;
   emptyAction?: ReactNode;
+  toolbar?: ReactNode;
+  hideHeader?: boolean;
 }
 
 export function EntityListShell<T>({
@@ -36,22 +36,27 @@ export function EntityListShell<T>({
   emptyTitle,
   emptyDescription,
   emptyAction,
+  toolbar,
+  hideHeader = false,
 }: EntityListShellProps<T>) {
   const total = rows?.length ?? 0;
   const description = totalLabel ? totalLabel(total) : `${total} total`;
 
   return (
-    <Card className={listCardClass}>
-      <CardHeader className="gap-1.5">
-        <CardTitle className="text-xl font-semibold tracking-tight">{title}</CardTitle>
-        <CardDescription>{description}</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-3">
+    <div className="space-y-4">
+      {toolbar}
+      <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+        {!hideHeader ? (
+          <div className="border-b border-border px-4 py-3 bg-muted/30">
+            <h3 className="text-sm font-semibold text-foreground">{title}</h3>
+            <p className="text-xs text-muted-foreground mt-0.5">{description}</p>
+          </div>
+        ) : null}
         <DataTable
           columns={columns}
           rows={rows}
           rowKey={rowKey}
-          isLoading={isLoading}
+          isLoading={!!isLoading}
           sortBy={sortBy}
           sortDir={sortDir}
           onSort={onSort}
@@ -60,7 +65,7 @@ export function EntityListShell<T>({
           emptyDescription={emptyDescription}
           emptyAction={emptyAction}
         />
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }

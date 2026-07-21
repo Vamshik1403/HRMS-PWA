@@ -215,16 +215,21 @@ html[data-emp-theme="dark"] .emp-pwa-shell .app-form-control,
 html[data-emp-theme="dark"] .emp-pwa-shell input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):not([type="hidden"]),
 html[data-emp-theme="dark"] .emp-pwa-shell select,
 html[data-emp-theme="dark"] .emp-pwa-shell textarea {
-  background-color: #ffffff !important;
-  color: #111827 !important;
-  border-color: #e5e7eb !important;
-  color-scheme: light;
+  background-color: hsl(var(--background)) !important;
+  color: hsl(var(--foreground)) !important;
+  border-color: hsl(var(--input)) !important;
+  color-scheme: dark;
+}
+
+html[data-emp-theme="dark"] .emp-pwa-shell input::placeholder,
+html[data-emp-theme="dark"] .emp-pwa-shell textarea::placeholder {
+  color: hsl(var(--muted-foreground)) !important;
 }
 
 html[data-emp-theme="dark"] .emp-pwa-shell input:-webkit-autofill,
 html[data-emp-theme="dark"] .emp-pwa-shell select:-webkit-autofill {
-  -webkit-box-shadow: 0 0 0 1000px #ffffff inset !important;
-  -webkit-text-fill-color: #111827 !important;
+  -webkit-box-shadow: 0 0 0 1000px hsl(var(--background)) inset !important;
+  -webkit-text-fill-color: hsl(var(--foreground)) !important;
 }
 
 /* ── Sidebar icon‑collapse mode ── */
@@ -505,7 +510,7 @@ input[type="time"]::-webkit-calendar-picker-indicator:hover {
 
 /* Employee PWA appearance theme (scoped) */
 .emp-pwa-page-bg {
-  background-color: #f2f4f7;
+  background-color: hsl(var(--background));
 }
 
 html[data-emp-theme="dark"] .emp-pwa-shell,
@@ -653,6 +658,121 @@ html[data-emp-theme="dark"] .emp-pwa-bottom-nav .text-gray-400 {
 html[data-emp-theme="dark"] .emp-pwa-bottom-nav .group-active\:text-gray-500:active,
 html[data-emp-theme="dark"] .emp-pwa-bottom-nav .group-active\:text-gray-600:active {
   color: #cbd5e1 !important;
+}
+
+/* Employee portal — Tailwind dark token sync (cards, text, panels) */
+html.dark .emp-pwa-shell,
+html[data-emp-theme="dark"] .emp-pwa-shell {
+  color-scheme: dark;
+}
+
+html.dark .emp-pwa-page-bg,
+html[data-emp-theme="dark"] .emp-pwa-page-bg {
+  background-color: hsl(var(--background)) !important;
+}
+
+html.dark .emp-pwa-shell .text-foreground,
+html[data-emp-theme="dark"] .emp-pwa-shell .text-foreground {
+  color: hsl(var(--foreground)) !important;
+}
+
+html.dark .emp-pwa-shell .text-muted-foreground,
+html[data-emp-theme="dark"] .emp-pwa-shell .text-muted-foreground {
+  color: hsl(var(--muted-foreground)) !important;
+}
+
+html.dark .emp-pwa-shell .bg-card,
+html[data-emp-theme="dark"] .emp-pwa-shell .bg-card {
+  background-color: hsl(var(--card)) !important;
+  color: hsl(var(--card-foreground)) !important;
+}
+
+html.dark .emp-pwa-shell .border-border,
+html[data-emp-theme="dark"] .emp-pwa-shell .border-border,
+html.dark .emp-pwa-shell [class*="border-border"] {
+  border-color: hsl(var(--border)) !important;
+}
+
+html.dark .emp-pwa-shell .bg-muted\/30,
+html.dark .emp-pwa-shell [class*="bg-muted/30"] {
+  background-color: hsl(var(--muted) / 0.35) !important;
+}
+
+html.dark .emp-pwa-shell .bg-muted\/50,
+html.dark .emp-pwa-shell [class*="bg-muted/50"] {
+  background-color: hsl(var(--muted) / 0.55) !important;
+}
+
+html.dark .emp-pwa-shell .text-emerald-600,
+html.dark .emp-pwa-shell .text-emerald-700 {
+  color: #6ee7b7 !important;
+}
+
+html.dark .emp-pwa-shell .text-amber-600,
+html.dark .emp-pwa-shell .text-amber-700 {
+  color: #fbbf24 !important;
+}
+
+html.dark .emp-pwa-shell .text-rose-600,
+html.dark .emp-pwa-shell .text-rose-700 {
+  color: #fda4af !important;
+}
+
+html.dark .emp-pwa-shell .text-blue-600,
+html.dark .emp-pwa-shell .text-blue-700 {
+  color: #93c5fd !important;
+}
+
+html.dark .emp-pwa-shell .text-violet-600,
+html.dark .emp-pwa-shell .text-violet-700,
+html.dark .emp-pwa-shell .text-violet-800 {
+  color: #c4b5fd !important;
+}
+
+html.dark .emp-pwa-shell .bg-violet-50,
+html.dark .emp-pwa-shell .bg-sky-100,
+html.dark .emp-pwa-shell .bg-amber-100,
+html.dark .emp-pwa-shell .bg-emerald-100,
+html.dark .emp-pwa-shell .bg-rose-100 {
+  background-color: hsl(var(--muted) / 0.65) !important;
+}
+
+html.dark .emp-portal-desktop .emp-portal-page-body {
+  background: hsl(var(--card));
+  border-color: hsl(var(--border));
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+}
+
+html.dark .emp-portal-desktop .emp-portal-inner > h1,
+html.dark .emp-portal-desktop .emp-portal-page-body h1,
+html.dark .emp-portal-desktop .emp-ws-section-title,
+html.dark .emp-portal-desktop .emp-ws-stat-value,
+html.dark .emp-portal-desktop .emp-ws-nav-tile span {
+  color: hsl(var(--foreground)) !important;
+}
+
+html.dark .emp-portal-desktop .emp-portal-inner > p,
+html.dark .emp-portal-desktop .emp-portal-page-body .emp-portal-subtitle,
+html.dark .emp-portal-desktop .emp-ws-stat-label {
+  color: hsl(var(--muted-foreground)) !important;
+}
+
+html.dark .emp-portal-desktop .emp-ws-panel,
+html.dark .emp-portal-desktop .emp-ws-stat-tile,
+html.dark .emp-portal-desktop .emp-ws-nav-tile,
+html.dark .emp-portal-desktop .emp-ws-secondary-btn {
+  background: hsl(var(--card)) !important;
+  border-color: hsl(var(--border)) !important;
+  color: hsl(var(--foreground)) !important;
+}
+
+html.dark .emp-portal-desktop .emp-portal-two-col > .emp-portal-col-right,
+html.dark .emp-portal-desktop .emp-portal-header-row {
+  border-color: hsl(var(--border));
+}
+
+html.dark .emp-pwa-shell .emp-hero-sky {
+  opacity: 0.4;
 }
 
 /* PWA date fields — force light native picker, separate white cells */

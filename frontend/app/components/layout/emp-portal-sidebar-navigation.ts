@@ -6,9 +6,9 @@ import {
   ClipboardCheck,
   Home,
   LayoutGrid,
+  MessageSquare,
   UserCircle,
   Users,
-  ArrowLeftRight,
   type LucideIcon,
 } from "lucide-react";
 import type { EmpModuleId } from "./emp-portal-workspaces";
@@ -52,6 +52,7 @@ export const EMP_SIDEBAR_NAVIGATION: EmpSidebarNavGroup[] = [
         href: "/empProfile",
         icon: UserCircle,
         moduleId: "profile",
+        tabMatch: "profile",
       },
       {
         label: "My Calendar",
@@ -59,6 +60,13 @@ export const EMP_SIDEBAR_NAVIGATION: EmpSidebarNavGroup[] = [
         icon: CalendarDays,
         moduleId: "home",
         tabMatch: "calendar",
+      },
+      {
+        label: "IM",
+        href: "/empProfile?tab=messaging",
+        icon: MessageSquare,
+        moduleId: "profile",
+        tabMatch: "messaging",
       },
     ],
   },
@@ -76,12 +84,6 @@ export const EMP_SIDEBAR_NAVIGATION: EmpSidebarNavGroup[] = [
         label: "Team Approvals",
         href: "/empTeam/approvals",
         icon: ClipboardCheck,
-        moduleId: "team",
-      },
-      {
-        label: "Promotions and Transfers",
-        href: "/empTeam/promotions",
-        icon: ArrowLeftRight,
         moduleId: "team",
       },
     ],
@@ -152,6 +154,12 @@ export function isEmpNavItemActive(
   }
   if (item.tabMatch === "calendar") {
     return pathname === "/empdashboard" && tab === "calendar";
+  }
+  if (item.tabMatch === "profile") {
+    return pathname === "/empProfile" && tab !== "messaging";
+  }
+  if (item.tabMatch === "messaging") {
+    return pathname === "/empProfile" && tab === "messaging";
   }
 
   if (item.moduleId === "company" || item.href === "/empCompany") {

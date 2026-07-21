@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Icon } from "@iconify/react";
 import { Plus } from "lucide-react";
@@ -16,11 +16,13 @@ import { EmpReimbursementApprovalSheet } from "./EmpReimbursementApprovalSheet";
 import { displayStatusLabel, isPartiallyApprovedStatus } from "../../utils/statusDisplay";
 import { EmpPortalPage, empListClass, empPageRootClass } from "./EmpPortalPage";
 import { useEmpPortalDesktop } from "../layout/EmpPortalShell";
-import { EmpDesktopReimbursementTable } from "./desktop/EmpDesktopReimbursementTable";
+import { EmpDesktopReimbursementGrid, EmpDesktopReimbursementTable } from "./desktop/EmpDesktopReimbursementTable";
 import { EmpDesktopPage } from "./desktop/EmpDesktopPage";
+import { EmpTeamStyleDataSection, useTeamListControls } from "./desktop/EmpTeamStyleDataSection";
 import { EmpReimbursementApplyForm } from "./EmpReimbursementApplyForm";
 import { FormModal } from "../ui/form-modal";
 import { Button } from "../ui/button";
+import { cn } from "@/app/utils/cn";
 import { Wallet } from "lucide-react";
 
 const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL || "/backend";
@@ -85,6 +87,10 @@ export function EmpReimbursementMobile({
   const [historyOpen, setHistoryOpen] = useState(false);
   const [approvalId, setApprovalId] = useState<string | null>(null);
   const [applyOpen, setApplyOpen] = useState(false);
+  const listControls = useTeamListControls("emp-profile-reimb-view");
+  const { viewMode, selectViewMode, searchOpen, searchQuery, setSearchQuery, toggleSearch, filterOpen, toggleFilter } =
+    listControls;
+  const [statusFilter, setStatusFilter] = useState("all");
 
   const load = useCallback(async (empId: number) => {
     const token =
@@ -257,6 +263,29 @@ export function EmpReimbursementMobile({
     ? previewRows.filter((r) => isTeamMemberId(scope, r.manageEmployeeID))
     : previewRows;
 
+  const filteredListRows = useMemo(() => {
+    return listRows.filter((row) => {
+      const label = displayStatus(row.status);
+      if (statusFilter !== "all" && label !== statusFilter) return false;
+      const q = searchQuery.trim().toLowerCase();
+      if (!q) return true;
+      return (
+        label.toLowerCase().includes(q) ||
+        (row.date || "").toLowerCase().includes(q) ||
+        totalAmount(row).toFixed(2).includes(q)
+      );
+    });
+  }, [listRows, statusFilter, searchQuery]);
+
+  const reimbStatusFilters = [
+    "all",
+    "Pending for Approval",
+    "Approved",
+    "Partially Approved",
+    "Rejected",
+    "Paid",
+  ];
+
   if (inWorkspace) {
     const pageTitle =
       desktopTab === "approvals"
@@ -268,46 +297,80 @@ export function EmpReimbursementMobile({
     if (embedded) {
       return (
         <>
-          {applyOpen ? (
-            <FormModal
-              open={applyOpen}
-              onOpenChange={setApplyOpen}
-              title="New reimbursement claim"
-              description="Submit expenses for reimbursement"
-            >
-              <EmpReimbursementApplyForm
-                onSuccess={() => {
-                  setApplyOpen(false);
-                  if (employeeId) load(employeeId);
-                }}
-                onCancel={() => setApplyOpen(false)}
-              />
-            </FormModal>
-          ) : (
+          <FormModal
+            open={applyOpen}
+            onOpenChange={setApplyOpen}
+            title="New reimbursement claim"
+            description="Submit expenses for reimbursement"
+          >
+            <EmpReimbursementApplyForm
+              onSuccess={() => {
+                setApplyOpen(false);
+                if (employeeId) load(employeeId);
+              }}
+              onCancel={() => setApplyOpen(false)}
+            />
+          </FormModal>
+          {!applyOpen && showList ? (
             <>
-              <div className="flex justify-end mb-4">
-                <Button type="button" size="sm" onClick={() => setApplyOpen(true)}>
-                  <Plus className="size-4" />
-                  New claim
-                </Button>
-              </div>
-              {showList ? (
-                <>
+              <EmpTeamStyleDataSection
+                title="Reimbursement claims"
+                actions={
+                  <Button type="button" size="sm" onClick={() => setApplyOpen(true)}>
+                    <Plus className="size-4" />
+                    New claim
+                  </Button>
+                }
+                searchOpen={searchOpen}
+                onToggleSearch={toggleSearch}
+                searchQuery={searchQuery}
+                onSearchChange={setSearchQuery}
+                searchPlaceholder="Search claims…"
+                filterOpen={filterOpen}
+                onToggleFilter={toggleFilter}
+                filterContent={reimbStatusFilters.map((status) => (
+                  <button
+                    key={status}
+                    type="button"
+                    onClick={() => setStatusFilter(status)}
+                    className={cn(
+                      "rounded-full px-3 py-1 text-xs font-semibold border transition-colors",
+                      statusFilter === status
+                        ? "border-primary bg-primary/10 text-primary"
+                        : "border-border text-muted-foreground hover:text-foreground",
+                    )}
+                  >
+                    {status === "all" ? "All" : status}
+                  </button>
+                ))}
+                viewMode={viewMode}
+                onViewModeChange={selectViewMode}
+                loading={false}
+                empty={filteredListRows.length === 0}
+                emptyMessage="No reimbursement claims"
+                listContent={
                   <EmpDesktopReimbursementTable
-                    rows={listRows}
+                    rows={filteredListRows}
                     isManagerView={isManagerView}
                     employeeNameForRow={employeeNameForRow}
                     onApprove={(id) => setApprovalId(id)}
                     onDelete={handleDelete}
-                    title={desktopTab === "approvals" ? "Pending approvals" : "Claims"}
+                    hideHeader
                   />
-                  {hasHistory ? (
-                    <EmpListViewMoreButton count={historyRows.length} onClick={() => setHistoryOpen(true)} />
-                  ) : null}
-                </>
+                }
+                gridContent={
+                  <EmpDesktopReimbursementGrid
+                    rows={filteredListRows}
+                    isManagerView={isManagerView}
+                    employeeNameForRow={employeeNameForRow}
+                  />
+                }
+              />
+              {hasHistory ? (
+                <EmpListViewMoreButton count={historyRows.length} onClick={() => setHistoryOpen(true)} />
               ) : null}
             </>
-          )}
+          ) : null}
           <EmpRecordHistorySheet
             open={historyOpen}
             onClose={() => setHistoryOpen(false)}
@@ -356,7 +419,6 @@ export function EmpReimbursementMobile({
               employeeNameForRow={employeeNameForRow}
               onApprove={(id) => setApprovalId(id)}
               onDelete={handleDelete}
-              title={desktopTab === "approvals" ? "Pending approvals" : "Claims"}
             />
             {hasHistory ? (
               <EmpListViewMoreButton count={historyRows.length} onClick={() => setHistoryOpen(true)} />

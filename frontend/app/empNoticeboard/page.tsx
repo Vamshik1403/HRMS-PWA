@@ -391,7 +391,6 @@ export default function EmpNoticeboardPage() {
       <ManagerMemoComposeInline
         open={composeOpen}
         onOpenChange={setComposeOpen}
-        reportees={directReportees}
         managerName={managerName || undefined}
         onSent={() => {
           if (employeeIDRef.current) void loadMemos(employeeIDRef.current);
@@ -470,7 +469,6 @@ export default function EmpNoticeboardPage() {
           <ManagerMemoComposeSheet
             open={composeOpen}
             onClose={() => setComposeOpen(false)}
-            reportees={directReportees}
             managerName={managerName || undefined}
             onSent={() => {
               if (employeeIDRef.current) void loadMemos(employeeIDRef.current);

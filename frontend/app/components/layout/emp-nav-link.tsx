@@ -40,16 +40,11 @@ export function EmpNavLink({ item, pathname, collapsed }: EmpNavLinkProps) {
     </div>
   );
 
-  const [hrefPath, hrefQuery] = item.href.split("?");
-  const isCurrent =
-    pathname === hrefPath &&
-    (!hrefQuery || hrefQuery === searchParams.toString() || new URLSearchParams(hrefQuery).get("tab") === searchParams.get("tab"));
-
   return (
     <Link
       href={item.href}
       onClick={(e) => {
-        if (isCurrent) {
+        if (active) {
           e.preventDefault();
           router.refresh();
         }

@@ -353,6 +353,25 @@ export function EmpProfileAttendanceView({ employeeId: viewEmployeeId }: { emplo
           </div>
         </div>
 
+        <div className="flex flex-wrap items-center gap-4 px-4 py-3 border-b border-border bg-muted/20 text-xs">
+          <span className="inline-flex items-center gap-1.5">
+            <span className="size-2 rounded-full bg-emerald-500" />
+            Present {summary.present}
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <span className="size-2 rounded-full bg-rose-500" />
+            Absent {summary.absent}
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <span className="size-2 rounded-full bg-amber-500" />
+            Weekend {summary.weekend}
+          </span>
+          <span className="inline-flex items-center gap-1.5 ml-auto text-muted-foreground">
+            <Clock className="size-3.5" />
+            {summary.hoursLabel} total
+          </span>
+        </div>
+
         {loading ? (
           <div className="py-16 text-center text-sm text-muted-foreground">Loading attendance…</div>
         ) : (
@@ -443,25 +462,6 @@ export function EmpProfileAttendanceView({ employeeId: viewEmployeeId }: { emplo
             </div>
           </>
         )}
-
-        <div className="flex flex-wrap items-center gap-4 px-4 py-3 border-t border-border bg-muted/20 text-xs">
-          <span className="inline-flex items-center gap-1.5">
-            <span className="size-2 rounded-full bg-emerald-500" />
-            Present {summary.present}
-          </span>
-          <span className="inline-flex items-center gap-1.5">
-            <span className="size-2 rounded-full bg-rose-500" />
-            Absent {summary.absent}
-          </span>
-          <span className="inline-flex items-center gap-1.5">
-            <span className="size-2 rounded-full bg-amber-500" />
-            Weekend {summary.weekend}
-          </span>
-          <span className="inline-flex items-center gap-1.5 ml-auto text-muted-foreground">
-            <Clock className="size-3.5" />
-            {summary.hoursLabel} total
-          </span>
-        </div>
       </div>
     </div>
   );
