@@ -39,9 +39,9 @@ type WeatherScene = {
 
 /** Shared cloud hub — sun/moon rise from and set into this point */
 const CLOUD_HUB_TOP = 54;
-const CLOUD_HUB_RIGHT = 21;
+const CLOUD_HUB_RIGHT = 9;
 /** Moon sits slightly left of the cloud anchor */
-const MOON_HUB_RIGHT = 27;
+const MOON_HUB_RIGHT = 15;
 /** Celestial peek position — centred on cloud so the lower disc hides behind it */
 const CELESTIAL_RISE_START = 44;
 /** Highest point in the sky (lower % = higher on screen) */
