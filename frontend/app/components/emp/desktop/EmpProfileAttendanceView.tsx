@@ -1,9 +1,21 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Calendar, ChevronLeft, ChevronRight, Clock } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
+import {
+  Briefcase,
+  Calendar,
+  CalendarDays,
+  CheckCircle,
+  ChevronLeft,
+  ChevronRight,
+  Circle,
+  Clock3,
+  Flag,
+  Home,
+  Timer,
+} from "lucide-react";
 import { Button } from "../../ui/button";
-import { Badge } from "../../ui/badge";
 import {
   groupAttendanceByDay,
   formatPunchTime,
@@ -18,6 +30,22 @@ type RegularizationRow = {
   attendanceDate?: string;
   status?: string;
   requestedStatus?: string;
+};
+
+type AttendanceStatusKind =
+  | "present"
+  | "absent"
+  | "weekend"
+  | "partial"
+  | "leave"
+  | "holiday"
+  | "wfh";
+
+type AttendanceStatusMeta = {
+  kind: AttendanceStatusKind;
+  label: string;
+  icon: LucideIcon;
+  iconClassName: string;
 };
 
 function pad2(n: number) {
@@ -49,13 +77,86 @@ function isWeekend(dateKey: string) {
   return dow === 0 || dow === 6;
 }
 
-function statusMeta(day: AttendanceDaySummary | null, dateKey: string) {
-  if (!day?.checkIn) {
-    if (isWeekend(dateKey)) return { label: "Weekend", tone: "bg-amber-100 text-amber-800" };
-    return { label: "Absent", tone: "bg-rose-100 text-rose-700" };
+function resolveAttendanceStatus(
+  day: AttendanceDaySummary | null,
+  dateKey: string,
+): AttendanceStatusMeta {
+  if (isWeekend(dateKey)) {
+    return {
+      kind: "weekend",
+      label: "Weekend",
+      icon: CalendarDays,
+      iconClassName: "text-[#6B7280]",
+    };
   }
-  if (day.checkIn && day.checkOut) return { label: "Present", tone: "bg-emerald-100 text-emerald-800" };
-  return { label: "Partial", tone: "bg-amber-100 text-amber-800" };
+
+  if (!day?.checkIn) {
+    return {
+      kind: "absent",
+      label: "Absent",
+      icon: Circle,
+      iconClassName: "text-[#9CA3AF] fill-[#9CA3AF]",
+    };
+  }
+
+  if (day.checkIn && day.checkOut) {
+    return {
+      kind: "present",
+      label: "Present",
+      icon: CheckCircle,
+      iconClassName: "text-[#16A34A]",
+    };
+  }
+
+  return {
+    kind: "partial",
+    label: "Partial",
+    icon: Clock3,
+    iconClassName: "text-[#9A6700]",
+  };
+}
+
+function AttendanceStatusCell({ status }: { status: AttendanceStatusMeta }) {
+  const Icon = status.icon;
+  return (
+    <span className="inline-flex items-center gap-2 text-sm text-[#111827]">
+      <Icon
+        className={cn("size-4 shrink-0", status.iconClassName)}
+        strokeWidth={status.kind === "present" ? 1.75 : 2}
+        aria-hidden
+      />
+      <span className="font-normal">{status.label}</span>
+    </span>
+  );
+}
+
+function StatCard({
+  label,
+  value,
+  suffix,
+  icon: Icon,
+}: {
+  label: string;
+  value: number | string;
+  suffix?: string;
+  icon: LucideIcon;
+}) {
+  return (
+    <div className="group rounded-lg border border-[#E5E7EB] bg-white px-6 py-5 transition-colors hover:border-[#D1D5DB] hover:bg-[#FAFAFA]">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-[13px] font-medium text-[#6B7280]">{label}</p>
+          <p className="mt-2 text-2xl font-semibold tabular-nums tracking-tight text-[#111827]">
+            {value}
+            {suffix ? (
+              <span className="ml-1 text-sm font-normal text-[#6B7280]">{suffix}</span>
+            ) : null}
+          </p>
+        </div>
+        <Icon className="size-4 shrink-0 text-[#9CA3AF] transition-colors group-hover:text-[#6B7280]" strokeWidth={1.75} />
+      </div>
+    </div>
+  );
 }
 
 function PunchTimeline({ records }: { records: AttendanceLocationRecord[] }) {
@@ -66,36 +167,53 @@ function PunchTimeline({ records }: { records: AttendanceLocationRecord[] }) {
   const checkOuts = sorted.filter((r) => r.checkType === "CHECK_OUT");
 
   if (checkIns.length === 0 && checkOuts.length === 0) {
-    return <span className="text-xs text-muted-foreground">—</span>;
+    return <span className="text-sm text-[#9CA3AF]">—</span>;
   }
 
-  const PunchMarker = ({ time, color }: { time: string; color: string }) => (
-    <div className="relative flex h-10 w-14 shrink-0 items-center justify-center">
-      <span className="absolute top-0 text-[9px] font-medium tabular-nums text-muted-foreground leading-none">
-        {time}
-      </span>
-      <span
-        className={cn(
-          "absolute top-1/2 size-2 -translate-y-1/2 rounded-full ring-2 ring-background z-10",
-          color,
-        )}
-      />
+  const firstCheckIn = checkIns[0];
+  const lastCheckOut = checkOuts[checkOuts.length - 1];
+
+  const PunchMarker = ({
+    time,
+    dotClass,
+    edge,
+  }: {
+    time: string;
+    dotClass: string;
+    edge: "start" | "end";
+  }) => (
+    <div
+      className={cn(
+        "absolute top-1/2 z-10 -translate-y-1/2",
+        edge === "start" ? "left-0" : "right-0",
+      )}
+    >
+      <div className="relative flex flex-col items-center">
+        <span className="absolute bottom-full mb-1 whitespace-nowrap text-[11px] font-medium tabular-nums leading-none text-[#6B7280]">
+          {time}
+        </span>
+        <span className={cn("size-2 rounded-full ring-2 ring-white", dotClass)} />
+      </div>
     </div>
   );
 
   return (
-    <div className="relative flex min-w-[220px] h-10 items-center px-1">
-      <div className="absolute left-3 right-3 top-1/2 h-px -translate-y-1/2 bg-border z-0" />
-      <div className="relative z-[1] flex flex-1 items-center justify-start gap-2 pl-1">
-        {checkIns.map((r, i) => (
-          <PunchMarker key={`in-${i}`} time={formatPunchTime(r.checkinTime)} color="bg-emerald-500" />
-        ))}
-      </div>
-      <div className="relative z-[1] flex flex-1 items-center justify-end gap-2 pr-1">
-        {checkOuts.map((r, i) => (
-          <PunchMarker key={`out-${i}`} time={formatPunchTime(r.checkinTime)} color="bg-blue-500" />
-        ))}
-      </div>
+    <div className="relative mx-0 h-11 min-w-[200px]">
+      <div className="absolute inset-x-0 top-1/2 z-0 h-px -translate-y-1/2 bg-[#E5E7EB]" />
+      {firstCheckIn ? (
+        <PunchMarker
+          time={formatPunchTime(firstCheckIn.checkinTime)}
+          dotClass="bg-[#16A34A]"
+          edge="start"
+        />
+      ) : null}
+      {lastCheckOut ? (
+        <PunchMarker
+          time={formatPunchTime(lastCheckOut.checkinTime)}
+          dotClass="bg-[#111827]"
+          edge="end"
+        />
+      ) : null}
     </div>
   );
 }
@@ -250,19 +368,31 @@ export function EmpProfileAttendanceView({ employeeId: viewEmployeeId }: { emplo
     let present = 0;
     let absent = 0;
     let weekend = 0;
+    let partial = 0;
     let totalHours = 0;
+
     monthRows.forEach(({ dateKey, day }) => {
-      if (isWeekend(dateKey)) weekend++;
-      if (day?.checkIn && day.checkOut) {
+      const status = resolveAttendanceStatus(day, dateKey);
+      if (status.kind === "weekend") weekend++;
+      else if (status.kind === "present") {
         present++;
-        totalHours += day.workSeconds;
-      } else if (!isWeekend(dateKey) && !day?.checkIn) {
-        absent++;
-      }
+        totalHours += day?.workSeconds ?? 0;
+      } else if (status.kind === "partial") partial++;
+      else if (status.kind === "absent") absent++;
     });
+
+    const workingDays = monthRows.filter(({ dateKey }) => !isWeekend(dateKey)).length;
     const hours = Math.floor(totalHours / 3600);
     const mins = Math.floor((totalHours % 3600) / 60);
-    return { present, absent, weekend, hoursLabel: `${hours}h ${mins}m` };
+
+    return {
+      present,
+      absent,
+      weekend,
+      partial,
+      workingDays,
+      hoursLabel: `${hours}h ${mins}m`,
+    };
   }, [monthRows]);
 
   const openMonthPicker = () => {
@@ -280,29 +410,25 @@ export function EmpProfileAttendanceView({ employeeId: viewEmployeeId }: { emplo
     el.click();
   };
 
+  const statCards = [
+    { label: "Present", value: summary.present, suffix: summary.present === 1 ? "Day" : "Days", icon: CheckCircle },
+    { label: "Absent", value: summary.absent, suffix: summary.absent === 1 ? "Day" : "Days", icon: Circle },
+    { label: "Weekend", value: summary.weekend, suffix: summary.weekend === 1 ? "Day" : "Days", icon: CalendarDays },
+    { label: "Partial", value: summary.partial, suffix: summary.partial === 1 ? "Day" : "Days", icon: Clock3 },
+    { label: "Total working days", value: summary.workingDays, suffix: "", icon: Timer },
+  ];
+
   return (
-    <div className="space-y-4">
-      <div className="grid grid-cols-3 gap-2 sm:gap-3">
-        {[
-          { label: "Days present", value: summary.present, sub: "This month" },
-          { label: "Hours worked", value: summary.hoursLabel, sub: "Logged time" },
-          {
-            label: "Monthly attendance",
-            value: `${monthRows.length ? Math.round((summary.present / monthRows.length) * 100) : 0}%`,
-            sub: "Present rate",
-          },
-        ].map((s) => (
-          <div key={s.label} className="rounded-lg border border-border bg-card px-3 py-2.5 shadow-sm">
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{s.label}</p>
-            <p className="text-lg font-bold tabular-nums text-foreground mt-0.5">{s.value}</p>
-            <p className="text-[10px] text-muted-foreground">{s.sub}</p>
-          </div>
+    <div className="space-y-8">
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 xl:grid-cols-5">
+        {statCards.map((card) => (
+          <StatCard key={card.label} {...card} />
         ))}
       </div>
 
-      <div className="rounded-xl border border-border bg-card shadow-sm overflow-hidden">
-        <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-b border-border bg-muted/30">
-          <div className="flex items-center gap-2">
+      <div className="overflow-hidden rounded-xl border border-[#E5E7EB] bg-white">
+        <div className="flex flex-wrap items-center justify-between gap-4 border-b border-[#E5E7EB] px-6 py-5">
+          <div className="flex items-center gap-3">
             <input
               ref={monthInputRef}
               type="month"
@@ -318,113 +444,119 @@ export function EmpProfileAttendanceView({ employeeId: viewEmployeeId }: { emplo
               aria-hidden
               tabIndex={-1}
             />
-            <Button type="button" variant="outline" size="icon" className="size-8" onClick={openMonthPicker} aria-label="Select month">
-              <Calendar className="size-4" />
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              className="size-8 border-[#E5E7EB] bg-white text-[#6B7280] shadow-none hover:bg-[#F9FAFB] hover:text-[#111827]"
+              onClick={openMonthPicker}
+              aria-label="Select month"
+            >
+              <Calendar className="size-4" strokeWidth={1.75} />
             </Button>
-            <h3 className="text-sm font-semibold text-foreground">{monthLabel}</h3>
+            <div>
+              <h3 className="text-lg font-semibold tracking-tight text-[#111827]">{monthLabel}</h3>
+              <p className="mt-0.5 text-[13px] text-[#6B7280]">{summary.hoursLabel} logged this month</p>
+            </div>
           </div>
           <div className="flex items-center gap-1">
             <Button
               type="button"
               variant="ghost"
               size="icon"
-              className="size-8"
+              className="size-8 text-[#6B7280] hover:bg-[#F3F4F6] hover:text-[#111827]"
               onClick={() => {
                 const d = new Date(viewYear, viewMonth - 2, 1);
                 setViewYear(d.getFullYear());
                 setViewMonth(d.getMonth() + 1);
               }}
+              aria-label="Previous month"
             >
-              <ChevronLeft className="size-4" />
+              <ChevronLeft className="size-4" strokeWidth={1.75} />
             </Button>
             <Button
               type="button"
               variant="ghost"
               size="icon"
-              className="size-8"
+              className="size-8 text-[#6B7280] hover:bg-[#F3F4F6] hover:text-[#111827]"
               onClick={() => {
                 const d = new Date(viewYear, viewMonth, 1);
                 setViewYear(d.getFullYear());
                 setViewMonth(d.getMonth() + 1);
               }}
+              aria-label="Next month"
             >
-              <ChevronRight className="size-4" />
+              <ChevronRight className="size-4" strokeWidth={1.75} />
             </Button>
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-4 px-4 py-3 border-b border-border bg-muted/20 text-xs">
-          <span className="inline-flex items-center gap-1.5">
-            <span className="size-2 rounded-full bg-emerald-500" />
-            Present {summary.present}
-          </span>
-          <span className="inline-flex items-center gap-1.5">
-            <span className="size-2 rounded-full bg-rose-500" />
-            Absent {summary.absent}
-          </span>
-          <span className="inline-flex items-center gap-1.5">
-            <span className="size-2 rounded-full bg-amber-500" />
-            Weekend {summary.weekend}
-          </span>
-          <span className="inline-flex items-center gap-1.5 ml-auto text-muted-foreground">
-            <Clock className="size-3.5" />
-            {summary.hoursLabel} total
-          </span>
-        </div>
-
         {loading ? (
-          <div className="py-16 text-center text-sm text-muted-foreground">Loading attendance…</div>
+          <div className="py-20 text-center text-sm text-[#6B7280]">Loading attendance…</div>
         ) : (
           <>
             <div className="hidden lg:block overflow-x-auto">
-              <table className="w-full text-sm">
+              <table className="w-full">
                 <thead>
-                  <tr className="border-b border-border bg-primary/5 text-left">
-                    <th className="px-4 py-2.5 font-semibold text-foreground w-[100px]">Date</th>
-                    <th className="px-4 py-2.5 font-semibold text-foreground w-[70px]">Day</th>
-                    <th className="px-4 py-2.5 font-semibold text-foreground min-w-[240px]">In / Out</th>
-                    <th className="px-4 py-2.5 font-semibold text-foreground w-[90px]">Hours</th>
-                    <th className="px-4 py-2.5 font-semibold text-foreground w-[110px]">Work shift</th>
-                    <th className="px-4 py-2.5 font-semibold text-foreground w-[100px]">Regularize</th>
-                    <th className="px-4 py-2.5 font-semibold text-foreground w-[100px]">Status</th>
+                  <tr className="border-b border-[#E5E7EB]">
+                    {["Date", "Day", "In / Out", "Hours", "Work shift", "Regularize", "Status"].map((header) => (
+                      <th
+                        key={header}
+                        className={cn(
+                          "px-6 py-3 text-left text-sm font-medium text-[#6B7280]",
+                          header === "In / Out" && "min-w-[220px]",
+                          header === "Date" && "w-[108px]",
+                          header === "Day" && "w-[72px]",
+                          header === "Hours" && "w-[96px]",
+                          header === "Work shift" && "w-[120px]",
+                          header === "Regularize" && "w-[112px]",
+                          header === "Status" && "w-[128px]",
+                        )}
+                      >
+                        {header}
+                      </th>
+                    ))}
                   </tr>
                 </thead>
                 <tbody>
                   {monthRows.map(({ dateKey, day }) => {
-                    const meta = statusMeta(day, dateKey);
-                    const weekend = isWeekend(dateKey);
+                    const status = resolveAttendanceStatus(day, dateKey);
                     const isRegularized = regularizedDates.has(dateKey);
                     return (
                       <tr
                         key={dateKey}
                         className={cn(
-                          "border-b border-border last:border-0",
-                          weekend && "bg-muted/40",
-                          dateKey === todayKey && "bg-primary/5",
+                          "border-b border-[#F3F4F6] last:border-0 transition-colors hover:bg-[#FAFAFA]",
+                          dateKey === todayKey && "bg-[#FAFAFA]/80",
                         )}
                       >
-                        <td className="px-4 py-2.5 font-medium tabular-nums">{fullDateLabel(dateKey)}</td>
-                        <td className="px-4 py-2.5 text-muted-foreground">{dayName(dateKey)}</td>
-                        <td className="px-4 py-2">
+                        <td className="px-6 py-4 text-sm font-medium tabular-nums text-[#111827]">
+                          {fullDateLabel(dateKey)}
+                        </td>
+                        <td className="px-6 py-4 text-sm text-[#6B7280]">{dayName(dateKey)}</td>
+                        <td className="px-6 py-4">
                           {day?.records?.length ? (
                             <PunchTimeline records={day.records} />
                           ) : (
-                            <span className="text-xs text-muted-foreground">—</span>
+                            <span className="text-sm text-[#9CA3AF]">—</span>
                           )}
                         </td>
-                        <td className="px-4 py-2.5 tabular-nums font-medium">{day?.workLabel ?? "—"}</td>
-                        <td className="px-4 py-2.5 text-xs">{workShiftName}</td>
-                        <td className="px-4 py-2.5">
+                        <td className="px-6 py-4 text-sm tabular-nums text-[#111827]">
+                          {day?.workLabel ?? "—"}
+                        </td>
+                        <td className="px-6 py-4 text-sm text-[#6B7280]">{workShiftName}</td>
+                        <td className="px-6 py-4 text-sm text-[#6B7280]">
                           {isRegularized ? (
-                            <Badge className="text-[10px] font-semibold border-0 bg-violet-100 text-violet-800">
+                            <span className="inline-flex items-center gap-1.5 text-[#111827]">
+                              <CheckCircle className="size-3.5 text-[#6B7280]" strokeWidth={1.75} />
                               Regularized
-                            </Badge>
+                            </span>
                           ) : (
-                            <span className="text-xs text-muted-foreground">—</span>
+                            "—"
                           )}
                         </td>
-                        <td className="px-4 py-2.5">
-                          <Badge className={cn("text-[10px] font-semibold border-0", meta.tone)}>{meta.label}</Badge>
+                        <td className="px-6 py-4">
+                          <AttendanceStatusCell status={status} />
                         </td>
                       </tr>
                     );
@@ -433,26 +565,27 @@ export function EmpProfileAttendanceView({ employeeId: viewEmployeeId }: { emplo
               </table>
             </div>
 
-            <div className="lg:hidden divide-y divide-border">
+            <div className="divide-y divide-[#F3F4F6] lg:hidden">
               {monthRows.map(({ dateKey, day }) => {
-                const meta = statusMeta(day, dateKey);
+                const status = resolveAttendanceStatus(day, dateKey);
                 const isRegularized = regularizedDates.has(dateKey);
                 return (
-                  <div key={dateKey} className={cn("px-4 py-3", isWeekend(dateKey) && "bg-muted/30")}>
-                    <div className="flex items-center justify-between gap-2">
-                      <div>
-                        <p className="text-sm font-semibold tabular-nums">
-                          {fullDateLabel(dateKey)} · {dayName(dateKey)}
+                  <div key={dateKey} className="px-6 py-5 transition-colors hover:bg-[#FAFAFA]">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium tabular-nums text-[#111827]">
+                          {fullDateLabel(dateKey)}
+                          <span className="ml-2 font-normal text-[#6B7280]">{dayName(dateKey)}</span>
                         </p>
-                        <p className="text-xs text-muted-foreground mt-0.5">
-                          {day?.workLabel ?? "0h"} · {workShiftName}
+                        <p className="mt-1 text-[13px] text-[#6B7280]">
+                          {day?.workLabel ?? "—"} · {workShiftName}
                           {isRegularized ? " · Regularized" : ""}
                         </p>
                       </div>
-                      <Badge className={cn("text-[10px] border-0", meta.tone)}>{meta.label}</Badge>
+                      <AttendanceStatusCell status={status} />
                     </div>
                     {day?.records?.length ? (
-                      <div className="mt-2">
+                      <div className="mt-4">
                         <PunchTimeline records={day.records} />
                       </div>
                     ) : null}
@@ -466,3 +599,13 @@ export function EmpProfileAttendanceView({ employeeId: viewEmployeeId }: { emplo
     </div>
   );
 }
+
+// Reserved status variants for future leave / holiday / WFH integration
+export const ATTENDANCE_STATUS_PRESETS: Record<
+  Extract<AttendanceStatusKind, "leave" | "holiday" | "wfh">,
+  AttendanceStatusMeta
+> = {
+  leave: { kind: "leave", label: "Leave", icon: Briefcase, iconClassName: "text-[#6B7280]" },
+  holiday: { kind: "holiday", label: "Holiday", icon: Flag, iconClassName: "text-[#6B7280]" },
+  wfh: { kind: "wfh", label: "Work From Home", icon: Home, iconClassName: "text-[#6B7280]" },
+};
