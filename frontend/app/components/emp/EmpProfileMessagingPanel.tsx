@@ -114,15 +114,12 @@ export function EmpProfileMessagingPanel() {
         setMessages([]);
         return;
       }
-      const data = await fetch(`${BACKEND}/employee-memo`, { headers: authHeaders() }).then((r) =>
-        r.ok ? r.json() : [],
-      );
+      const data = await fetch(`${BACKEND}/employee-memo?employeeID=${empId}`, {
+        headers: authHeaders(),
+      }).then((r) => (r.ok ? r.json() : []));
       const list = (Array.isArray(data) ? data : []).filter(
-        (m: { employeeID?: number; employeeIDs?: number[]; undoneAt?: string | null; memoType?: string }) =>
-          !m.undoneAt &&
-          (m.employeeID === empId ||
-            (Array.isArray(m.employeeIDs) && m.employeeIDs.includes(empId))) &&
-          (m.memoType || "General") === "General",
+        (m: { undoneAt?: string | null; memoType?: string }) =>
+          !m.undoneAt && (m.memoType || "General") === "General",
       );
       list.sort(
         (a: MemoItem, b: MemoItem) =>
@@ -159,6 +156,7 @@ export function EmpProfileMessagingPanel() {
         onOpenChange={setComposeOpen}
         managerName={user?.username || "Manager"}
         onSent={() => {
+          setComposeOpen(false);
           void load();
         }}
       />

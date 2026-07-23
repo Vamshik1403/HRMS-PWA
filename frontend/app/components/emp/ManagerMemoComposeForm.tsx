@@ -285,6 +285,7 @@ export function ManagerMemoComposeForm({
           issuedDate: new Date().toISOString().slice(0, 10),
           issuedBy: managerName || "Manager",
           issuedByRole: "MANAGER",
+          senderEmployeeId: currentEmployeeId ?? undefined,
           attachmentPath,
         }),
       });
