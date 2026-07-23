@@ -201,6 +201,29 @@ interface ReportData {
   departmentName: string;
 }
 
+type AttendanceStatus = {
+  type: string;
+  label: string;
+  hasPunches: boolean;
+  workedMinutes?: number;
+  otMinutes?: number;
+  totalShiftMinutes?: number;
+  rosterShiftName?: string;
+};
+
+type ReportMasterData = {
+  reportRows: ReportData[];
+  empWorkShifts: EmpWorkShift[];
+  workShifts: WorkShift[];
+  rosters: RosterEmployee[];
+  publicHolidays: PublicHoliday[];
+  attendanceRegularizations: AttendanceRegularize[];
+  leaveApplications: LeaveApplication[];
+  attendancePolicy: AttendancePolicy | null;
+  factualWeekoffOverrides: Map<number, Set<string>>;
+  isFactualMode: boolean;
+};
+
 // ==================== CONSTANTS ====================
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "/backend";
@@ -391,6 +414,116 @@ const incrementTrackerAndShouldApply = (
   return false;
 };
 
+const buildStatusCacheKey = (date: string, employeeID: number, punches: string[]) =>
+  `${date}-${employeeID}-${punches.join(",")}`;
+
+const formatSummaryPunchTime = (timeStr: string) => {
+  if (!timeStr) return "";
+  const parts = timeStr.split(":");
+  return `${parts[0].padStart(2, "0")}:${parts[1].padStart(2, "0")}`;
+};
+
+const getSummaryStatusBadge = (status: AttendanceStatus) => {
+  switch (status.type) {
+    case "ABSENT":
+      return { badge: "A", badgeClass: "bg-red-100 text-red-800" };
+    case "WEEK_OFF":
+      return { badge: status.label === "WO-P" ? "WO-P" : "WO", badgeClass: "bg-orange-100 text-orange-800" };
+    case "HOLIDAY":
+      return { badge: status.label === "PH-P" ? "PH-P" : "PH", badgeClass: "bg-purple-100 text-purple-800" };
+    case "LEAVE":
+      return { badge: status.label === "Leave-P" ? "L-P" : "L", badgeClass: "bg-pink-100 text-pink-800" };
+    case "HALF_DAY":
+      return { badge: "HD", badgeClass: "bg-yellow-100 text-yellow-800" };
+    case "LATE_MARK":
+      return { badge: "L", badgeClass: "bg-blue-100 text-blue-800" };
+    case "LATE_MARK_LIMIT":
+      return { badge: "L+", badgeClass: "bg-red-200 text-red-900" };
+    case "OT":
+      return { badge: "OT", badgeClass: "bg-indigo-100 text-indigo-800" };
+    case "REGULARIZATION":
+      return { badge: "AR", badgeClass: "bg-teal-100 text-teal-800" };
+    case "SANDWICH":
+      return { badge: "SW", badgeClass: "bg-amber-100 text-amber-800" };
+    case "SINGLE_PUNCH":
+      return { badge: "no checkout", badgeClass: "bg-gray-100 text-gray-800" };
+    case "PRESENT":
+    default:
+      return { badge: "P", badgeClass: "bg-green-100 text-green-800" };
+  }
+};
+
+const formatMarkingExcelCell = (status: AttendanceStatus): string => {
+  if (status.type === "OT" && status.workedMinutes && status.totalShiftMinutes && status.otMinutes) {
+    return `P (${formatWorkedDuration(status.totalShiftMinutes)} + ${formatWorkedDuration(status.otMinutes)} OT)`;
+  }
+  if (status.type === "PRESENT" && status.workedMinutes) {
+    return `P (${formatWorkedDuration(status.workedMinutes)})`;
+  }
+  if (status.type === "HALF_DAY" && status.workedMinutes) {
+    return `HD (${formatWorkedDuration(status.workedMinutes)})`;
+  }
+  if (status.type === "LATE_MARK" && status.workedMinutes) {
+    return `L (${formatWorkedDuration(status.workedMinutes)})`;
+  }
+  if ((status.type === "WEEK_OFF" || status.type === "HOLIDAY" || status.type === "LEAVE") && status.workedMinutes) {
+    return `${status.label}\n${formatWorkedDuration(status.workedMinutes)}`;
+  }
+  return status.label;
+};
+
+const formatSummaryExcelCell = (punches: string[], status: AttendanceStatus): string => {
+  const { badge } = getSummaryStatusBadge(status);
+  const lines: string[] = [`Marking: ${badge}`];
+
+  if (punches.length > 0) {
+    const first = formatSummaryPunchTime(punches[0]);
+    const last = punches.length >= 2 ? formatSummaryPunchTime(punches[punches.length - 1]) : "--:--";
+    lines.push(`FILO: ${first} - ${last}`);
+  }
+
+  const workedMinutes = status.workedMinutes || 0;
+  const otMinutes = status.otMinutes || 0;
+
+  if (
+    workedMinutes > 0 &&
+    status.type !== "ABSENT" &&
+    status.type !== "WEEK_OFF" &&
+    status.type !== "HOLIDAY" &&
+    status.type !== "LEAVE"
+  ) {
+    lines.push(`Work: ${formatWorkedDuration(workedMinutes)}`);
+  }
+
+  if (otMinutes > 0) {
+    lines.push(`OT: ${formatWorkedDuration(otMinutes)}`);
+  }
+
+  if (
+    workedMinutes > 0 &&
+    status.type !== "WEEK_OFF" &&
+    status.type !== "HOLIDAY" &&
+    status.type !== "LEAVE"
+  ) {
+    lines.push(`Total: ${formatWorkedDuration(workedMinutes + otMinutes)}`);
+  }
+
+  if (punches.length === 0) {
+    if (status.type === "WEEK_OFF") lines.push("Weekly Off");
+    else if (status.type === "HOLIDAY") lines.push("Public Holiday");
+    else if (status.type === "LEAVE") lines.push(status.label);
+    else if (status.type === "ABSENT") lines.push("Absent");
+  }
+
+  return lines.join("\n");
+};
+
+const formatFILOExcelCell = (punches: string[]): string => {
+  if (punches.length === 0) return "";
+  if (punches.length === 1) return punches[0];
+  return `${punches[0]}\n${punches[punches.length - 1]}`;
+};
+
 // ==================== MULTI SELECT COMPONENT ====================
 
 const MultiSelect = ({ options, selectedValues, onChange, placeholder, disabled = false }: { 
@@ -519,7 +652,7 @@ const MultiSelect = ({ options, selectedValues, onChange, placeholder, disabled 
 
 const DateCell = ({ punches, date, employeeID, formData, reportData, selectedCompanyID, selectedBranchID, getComprehensiveStatus }: any) => {
   const punchesKey = punches.join(',');
-  const cacheKey = `${date}-${employeeID}-${punchesKey}`;
+  const cacheKey = buildStatusCacheKey(date, employeeID, punches);
   const [status, setStatus] = useState<any>(null);
 
   useEffect(() => {
@@ -717,62 +850,15 @@ const DateCell = ({ punches, date, employeeID, formData, reportData, selectedCom
 
   // ==================== ATTENDANCE SUMMARY LOGS (ENHANCED FOR PAYROLL) ====================
   if (formData.reportType === "Attendance Summary Logs") {
-    
-    // Helper function to format time with leading zeros
-    const formatPunchTime = (timeStr: string) => {
-      if (!timeStr) return "";
-      const parts = timeStr.split(':');
-      return `${parts[0].padStart(2, '0')}:${parts[1].padStart(2, '0')}`;
-    };
-    
-    // Get first and last punch
-    const firstPunch = punches.length > 0 ? formatPunchTime(punches[0]) : "";
-    const lastPunch = punches.length >= 2 ? formatPunchTime(punches[punches.length - 1]) : "";
-    
-    // Calculate worked hours (in minutes)
+    const firstPunch = punches.length > 0 ? formatSummaryPunchTime(punches[0]) : "";
+    const lastPunch = punches.length >= 2 ? formatSummaryPunchTime(punches[punches.length - 1]) : "";
     const workedMinutes = status.workedMinutes || 0;
-    
-    // Calculate OT hours (in minutes)
     const otMinutes = status.otMinutes || 0;
-    
-    // Determine status badge
-    let statusBadge = "";
-    let badgeClass = "";
-    
-    if (status.type === "ABSENT") {
-      statusBadge = "A";
-      badgeClass = "bg-red-100 text-red-800";
-    } else if (status.type === "WEEK_OFF") {
-      statusBadge = status.label === "WO-P" ? "WO-P" : "WO";
-      badgeClass = "bg-orange-100 text-orange-800";
-    } else if (status.type === "HOLIDAY") {
-      statusBadge = status.label === "PH-P" ? "PH-P" : "PH";
-      badgeClass = "bg-purple-100 text-purple-800";
-    } else if (status.type === "LEAVE") {
-      statusBadge = status.label === "Leave-P" ? "L-P" : "L";
-      badgeClass = "bg-pink-100 text-pink-800";
-    } else if (status.type === "HALF_DAY") {
-      statusBadge = "HD";
-      badgeClass = "bg-yellow-100 text-yellow-800";
-    } else if (status.type === "REGULARIZATION") {
-      statusBadge = "AR";
-      badgeClass = "bg-teal-100 text-teal-800";
-    } else if (status.type === "SANDWICH") {
-      statusBadge = "SW";
-      badgeClass = "bg-amber-100 text-amber-800";
-    } else if (status.type === "SINGLE_PUNCH") {
-      statusBadge = "no checkout";
-      badgeClass = "bg-gray-100 text-gray-800";
-    } else {
-      statusBadge = "P";
-      badgeClass = "bg-green-100 text-green-800";
-    }
+    const { badge: statusBadge, badgeClass } = getSummaryStatusBadge(status);
     
     return (
       <td className="px-2 py-1 border-b min-w-[140px] text-center align-top bg-white">
         <div className="flex flex-col gap-0.5">
-          
-          {/* Row 1: Status Badge */}
           <div className="flex items-center justify-center">
             <span className={`inline-block px-2 py-0.5 ${badgeClass} text-[9px] font-bold rounded-full`}>
               {statusBadge}
@@ -900,6 +986,7 @@ export function AttendanceReportsManagement({ mode = "actual" }: { mode?: Report
 
   const lateMarkTracker = useRef(new Map<string, number>());
   const noCheckoutTracker = useRef(new Map<string, number>());
+  const masterDataRef = useRef<ReportMasterData | null>(null);
   const canGenerateReports = !user
     ? true
     : isFactualMode
@@ -1382,26 +1469,37 @@ const employeeOptions = filteredEmployees.map((e: Employee) => ({
     selectedCompanyID: number, 
     selectedBranchID: number,
     statusesMap: Map<string, string>
-  ): Promise<{ type: string; label: string; hasPunches: boolean; workedMinutes?: number; otMinutes?: number; totalShiftMinutes?: number; rosterShiftName?: string }> => {
+  ): Promise<AttendanceStatus> => {
+    const md = masterDataRef.current;
+    const dataSource = md?.reportRows ?? reportData;
+    const sourceEmpWorkShifts = md?.empWorkShifts ?? empWorkShifts;
+    const sourceWorkShifts = md?.workShifts ?? workShifts;
+    const sourceRosters = md?.rosters ?? rosters;
+    const sourcePublicHolidays = md?.publicHolidays ?? publicHolidays;
+    const sourceRegularizations = md?.attendanceRegularizations ?? attendanceRegularizations;
+    const sourceLeaveApplications = md?.leaveApplications ?? leaveApplications;
+    const sourceAttendancePolicy = md?.attendancePolicy ?? attendancePolicy;
+    const sourceFactualWeekoffOverrides = md?.factualWeekoffOverrides ?? factualWeekoffOverrides;
+    const sourceIsFactualMode = md?.isFactualMode ?? isFactualMode;
     
     const hasPunches = punches.length > 0;
     
-    if (!reportData || reportData.length === 0) {
+    if (!dataSource || dataSource.length === 0) {
       if (!hasPunches) return { type: "ABSENT", label: "Absent", hasPunches: false };
       if (punches.length === 1) return { type: "SINGLE_PUNCH", label: "no checkout", hasPunches: true };
       return { type: "PRESENT", label: "P", hasPunches: true };
     }
     
-    const employee = reportData.find(r => r.employee.id === employeeID)?.employee;
+    const employee = dataSource.find(r => r.employee.id === employeeID)?.employee;
     if (!employee) return { type: "ABSENT", label: "Absent", hasPunches: false };
 
     // Get work shift
-    const empShift = empWorkShifts.find(ws => ws.manageEmployeeID === employeeID);
+    const empShift = sourceEmpWorkShifts.find(ws => ws.manageEmployeeID === employeeID);
     let workShift: WorkShift | undefined = empShift?.workShift;
     
     if (workShift && (!workShift.workShiftDay || workShift.workShiftDay.length === 0)) {
       try {
-        const shiftEndpoint = isFactualMode ? "factual-work-shift" : "work-shift";
+        const shiftEndpoint = sourceIsFactualMode ? "factual-work-shift" : "work-shift";
         const res = await fetch(`${BACKEND_URL}/${shiftEndpoint}/${workShift.id}`);
         if (res.ok) workShift = normalizeWorkShift(await res.json());
       } catch (err) {}
@@ -1409,13 +1507,13 @@ const employeeOptions = filteredEmployees.map((e: Employee) => ({
 
     // Check roster for a date-specific work shift override.
     // rosters state is already flattened to RosterEmployee[] in generateReport.
-    const rosterEmp = rosters.find(r => r.employeeID === employeeID);
+    const rosterEmp = sourceRosters.find(r => r.employeeID === employeeID);
     const rosterDayEntry = rosterEmp?.days?.find((d: RosterDay) => new Date(d.workDate).toISOString().split('T')[0] === date);
     let rosterShiftName: string | undefined;
     if (rosterDayEntry?.dayType === "WORK" && rosterDayEntry?.workShiftID != null) {
       // Prefer the fully-enriched shift from workShifts state (has workShiftDay loaded).
       // workShifts state is populated from /work-shift in generateReport.
-      const overrideShift = workShifts.find(ws => ws.id === rosterDayEntry.workShiftID);
+      const overrideShift = sourceWorkShifts.find(ws => ws.id === rosterDayEntry.workShiftID);
       if (overrideShift) {
         workShift = overrideShift;
         rosterShiftName = overrideShift.workShiftName;
@@ -1438,7 +1536,7 @@ const employeeOptions = filteredEmployees.map((e: Employee) => ({
     const otDay = workShift?.workShiftDay?.find(d => d.weekDay === dayOfWeek && d.shiftType === "OT");
     const defaultWorkedMinutes = shiftDay?.totalMinutes || 480;
 
-    if (isFactualMode && factualWeekoffOverrides.get(employeeID)?.has(date)) {
+    if (sourceIsFactualMode && sourceFactualWeekoffOverrides.get(employeeID)?.has(date)) {
       return { type: "WEEK_OFF", label: "WO", hasPunches: false, workedMinutes: defaultWorkedMinutes };
     }
 
@@ -1452,14 +1550,14 @@ const employeeOptions = filteredEmployees.map((e: Employee) => ({
       const nextDateObj = new Date(date);
       nextDateObj.setDate(nextDateObj.getDate() + 1);
       const nextDateKey = nextDateObj.toISOString().split('T')[0];
-      const empRow = reportData.find((r: ReportData) => r.employee.id === employeeID);
+      const empRow = dataSource.find((r: ReportData) => r.employee.id === employeeID);
       nextDayShiftPunches = empRow?.punches[nextDateKey] || [];
       effectivePunchesForDate = [...punches, ...nextDayShiftPunches];
     }
     const hasPunchesEffective = effectivePunchesForDate.length > 0;
 
     // PRIORITY 1: Approved Regularization — placed here so we have shiftDay to compute actual hours
-    const regularization = attendanceRegularizations.find(reg => 
+    const regularization = sourceRegularizations.find(reg =>
       reg.manageEmployeeID === employeeID &&
       reg.status === "Approved" &&
       new Date(reg.attendanceDate).toISOString().split('T')[0] === date
@@ -1485,7 +1583,7 @@ const employeeOptions = filteredEmployees.map((e: Employee) => ({
     const isWeekOff = (): boolean => {
       if (!workShift) return false;
       if (isRotating) {
-        const roster = rosters.find(r => r.employeeID === employeeID);
+        const roster = sourceRosters.find(r => r.employeeID === employeeID);
         const rosterDay = roster?.days?.find(d => new Date(d.workDate).toISOString().split('T')[0] === date);
         return rosterDay?.dayType === "WEEKLY_OFF";
       }
@@ -1495,7 +1593,7 @@ const employeeOptions = filteredEmployees.map((e: Employee) => ({
 
     // Public holiday check
     const isPublicHolidayDay = (): boolean => {
-      return publicHolidays.some(holiday => {
+      return sourcePublicHolidays.some(holiday => {
         if (holiday.companyID !== selectedCompanyID || holiday.branchesID !== selectedBranchID) return false;
         const holidayStart = new Date(holiday.startDate).toISOString().split('T')[0];
         const holidayEnd = new Date(holiday.endDate).toISOString().split('T')[0];
@@ -1506,7 +1604,7 @@ const employeeOptions = filteredEmployees.map((e: Employee) => ({
     // Leave check
 // Leave check - supports dayStatuses also
 const getLeaveDay = (): { leave: LeaveApplication; leaveLabel: string } | null => {
-  const leave = leaveApplications.find((leave) => {
+  const leave = sourceLeaveApplications.find((leave) => {
     if (
       Number(leave.manageEmployeeID) !== Number(employeeID) ||
       leave.status !== "Approved"
@@ -1539,11 +1637,11 @@ const getLeaveDay = (): { leave: LeaveApplication; leaveLabel: string } | null =
     }
 
     // PRIORITY 3: Public Holiday (factual mode only)
-    if (isFactualMode && isPublicHolidayDay()) {
+    if (sourceIsFactualMode && isPublicHolidayDay()) {
       let workedMinutes = 0;
       if (hasPunches && shiftDay) {
         workedMinutes = calculateWorkedMinutes(punches, shiftDay.startTime, shiftDay.endTime, 
-          { breakStart: shiftDay.breakStart || "", breakEnd: shiftDay.breakEnd || "" }, attendancePolicy, isFlexible);
+          { breakStart: shiftDay.breakStart || "", breakEnd: shiftDay.breakEnd || "" }, sourceAttendancePolicy, isFlexible);
       }
       return { type: "HOLIDAY", label: hasPunches ? "PH-P" : "PH", hasPunches, workedMinutes: workedMinutes || defaultWorkedMinutes };
     }
@@ -1563,10 +1661,10 @@ if (approvedLeave) {
 // Use effectivePunchesForDate (includes next-day punches for night shifts) for presence check.
 if (!hasPunchesEffective) return { type: "ABSENT", label: "Absent", hasPunches: false };
     
-    let policy = attendancePolicy;
+    let policy = sourceAttendancePolicy;
     if (!policy) {
       try {
-        const policyEndpoint = isFactualMode ? "factual-attendance-policy" : "attendance-policy";
+        const policyEndpoint = sourceIsFactualMode ? "factual-attendance-policy" : "attendance-policy";
         const res = await fetch(`${BACKEND_URL}/${policyEndpoint}?companyID=${selectedCompanyID}&branchesID=${selectedBranchID}`);
         if (res.ok) {
           const policies = await res.json();
@@ -1731,16 +1829,52 @@ if (!hasPunchesEffective) return { type: "ABSENT", label: "Absent", hasPunches: 
         return { type: "HALF_DAY", label: "Half Day", hasPunches: true, workedMinutes, rosterShiftName };
       } else if (otMinutes > 0) {
         return { type: "OT", label: "OT", hasPunches: true, workedMinutes, otMinutes, totalShiftMinutes, rosterShiftName };
-      } else if (workedMinutes >= requiredFullDayMinutes) {
-        return { type: "PRESENT", label: "P", hasPunches: true, workedMinutes, rosterShiftName };
       } else if (isLate) {
         return { type: "LATE_MARK", label: "Late Mark", hasPunches: true, workedMinutes, rosterShiftName };
+      } else if (workedMinutes >= requiredFullDayMinutes) {
+        return { type: "PRESENT", label: "P", hasPunches: true, workedMinutes, rosterShiftName };
       } else {
         return { type: "PRESENT", label: "P", hasPunches: true, workedMinutes, rosterShiftName };
       }
     }
 
     return { type: "PRESENT", label: "P", hasPunches: true };
+  };
+
+  // ==================== PRECOMPUTE STATUS CACHE ====================
+
+  const precomputeReportStatuses = async (
+    rows: ReportData[],
+    dateColumns: string[],
+    selectedCompanyID: number,
+    selectedBranchID: number,
+    weekoffOverrides: Map<number, Set<string>>,
+  ) => {
+    globalStatusCache.clear();
+    lateMarkTracker.current.clear();
+    noCheckoutTracker.current.clear();
+
+    const getDisplayPunches = (employeeID: number, date: string, punches: string[]) =>
+      isFactualMode && weekoffOverrides.get(employeeID)?.has(date) ? [] : punches;
+
+    await Promise.all(
+      rows.map(async (row) => {
+        const empStatuses = new Map<string, string>();
+        for (const date of dateColumns) {
+          const punches = getDisplayPunches(row.employee.id, date, row.punches[date] || []);
+          const status = await getComprehensiveStatus(
+            date,
+            row.employee.id,
+            punches,
+            selectedCompanyID,
+            selectedBranchID,
+            empStatuses,
+          );
+          empStatuses.set(date, status.label);
+          globalStatusCache.set(buildStatusCacheKey(date, row.employee.id, punches), status);
+        }
+      }),
+    );
   };
 
   // ==================== OPTIMIZED GENERATE REPORT ====================
@@ -1790,7 +1924,7 @@ if (!hasPunchesEffective) return { type: "ABSENT", label: "Absent", hasPunches: 
       const rosterEndpoint = isFactualMode ? "factual-rosters" : "rosters";
       const policyEndpoint = isFactualMode ? "factual-attendance-policy" : "attendance-policy";
 
-      const [holidaysRes, shiftsRes, regRes, leavesRes, rostersRes, policyRes, empShiftRes] = await Promise.all([
+      const [holidaysRes, shiftsRes, regRes, leavesRes, rostersRes, policyRes, empShiftRes, companiesRes, branchesRes, departmentsRes] = await Promise.all([
         fetch(`${BACKEND_URL}/public-holiday`),
         fetch(`${BACKEND_URL}/${shiftEndpoint}`),
         fetch(`${BACKEND_URL}/emp-attendance-regularise`),
@@ -1798,6 +1932,9 @@ if (!hasPunchesEffective) return { type: "ABSENT", label: "Absent", hasPunches: 
         fetch(`${BACKEND_URL}/${rosterEndpoint}`),
         fetch(`${BACKEND_URL}/${policyEndpoint}`),
         fetch(`${BACKEND_URL}/manage-emp`),
+        fetch(`${BACKEND_URL}/company`),
+        fetch(`${BACKEND_URL}/branches`),
+        fetch(`${BACKEND_URL}/departments`),
       ]);
 
       const holidaysData = await holidaysRes.json();
@@ -1815,6 +1952,9 @@ if (!hasPunchesEffective) return { type: "ABSENT", label: "Absent", hasPunches: 
       const safeRostersData = Array.isArray(rostersData) ? rostersData : [];
       const safePolicyData = Array.isArray(policyData) ? policyData : [];
       const safeEmpData = Array.isArray(empData) ? empData : [];
+      const companiesData = await companiesRes.json();
+      const branchesData = await branchesRes.json();
+      const departmentsData = await departmentsRes.json();
 
       const matchesCompanyBranch = (companyID?: number | null, branchesID?: number | null) => {
         if (Number(companyID) !== Number(selectedCompanyID)) return false;
@@ -1857,10 +1997,14 @@ if (!hasPunchesEffective) return { type: "ABSENT", label: "Absent", hasPunches: 
 
       const shifts = extractEmpWorkShiftMappings(safeEmpData, isFactualMode, shiftById);
 
-      setPublicHolidays(safeHolidays.filter((h: PublicHoliday) => Number(h.companyID) === Number(selectedCompanyID) && Number(h.branchesID) === Number(selectedBranchID)));
+      const filteredHolidays = safeHolidays.filter((h: PublicHoliday) => Number(h.companyID) === Number(selectedCompanyID) && Number(h.branchesID) === Number(selectedBranchID));
+      const filteredRegularizations = safeRegData.filter((r: AttendanceRegularize) => Number(r.companyID) === Number(selectedCompanyID) && Number(r.branchesID) === Number(selectedBranchID) && r.status === "Approved");
+      const filteredLeaves = safeLeavesData.filter((l: LeaveApplication) => Number(l.companyID) === Number(selectedCompanyID) && Number(l.branchesID) === Number(selectedBranchID) && l.status === "Approved");
+
+      setPublicHolidays(filteredHolidays);
       setWorkShifts(normalizedShifts);
-      setAttendanceRegularizations(safeRegData.filter((r: AttendanceRegularize) => Number(r.companyID) === Number(selectedCompanyID) && Number(r.branchesID) === Number(selectedBranchID) && r.status === "Approved"));
-      setLeaveApplications(safeLeavesData.filter((l: LeaveApplication) => Number(l.companyID) === Number(selectedCompanyID) && Number(l.branchesID) === Number(selectedBranchID) && l.status === "Approved"));
+      setAttendanceRegularizations(filteredRegularizations);
+      setLeaveApplications(filteredLeaves);
       setRosters(flatRosterEmployees);
       setAttendancePolicy(selectedPolicy);
       setEmpWorkShifts(shifts);
@@ -1918,10 +2062,6 @@ if (!hasPunchesEffective) return { type: "ABSENT", label: "Absent", hasPunches: 
 
       setAllEmployees(filteredEmpData);
 
-      const companiesData = await fetch(`${BACKEND_URL}/company`).then(r => r.json());
-      const branchesData = await fetch(`${BACKEND_URL}/branches`).then(r => r.json());
-      const departmentsData = await fetch(`${BACKEND_URL}/departments`).then(r => r.json());
-
       let finalFilteredEmployees = [...filteredEmpData];
 
       if (selectedDepartments.length > 0) {
@@ -1934,21 +2074,16 @@ if (!hasPunchesEffective) return { type: "ABSENT", label: "Absent", hasPunches: 
         finalFilteredEmployees = finalFilteredEmployees.filter(e => selectedEmployees.includes(e.id.toString()));
       }
 
-      // Process logs in chunks for better performance
+      // Group logs by employee
       const logsByEmployee = new Map<number, ProcessAttLog[]>();
-      const chunkSize = 500;
-      for (let i = 0; i < logsData.length; i += chunkSize) {
-        const chunk = logsData.slice(i, i + chunkSize);
-        chunk.forEach((log: ProcessAttLog) => {
-          const employeeId = Number(log.manage_employee_id);
-          if (employeeId && finalFilteredEmployees.some(e => Number(e.id) === employeeId)) {
-            if (!logsByEmployee.has(employeeId)) logsByEmployee.set(employeeId, []);
-            logsByEmployee.get(employeeId)!.push(log);
-          }
-        });
-        // Allow UI to breathe
-        await new Promise(resolve => setTimeout(resolve, 0));
-      }
+      const employeeIdSet = new Set(finalFilteredEmployees.map((e: Employee) => Number(e.id)));
+      logsData.forEach((log: ProcessAttLog) => {
+        const employeeId = Number(log.manage_employee_id);
+        if (employeeId && employeeIdSet.has(employeeId)) {
+          if (!logsByEmployee.has(employeeId)) logsByEmployee.set(employeeId, []);
+          logsByEmployee.get(employeeId)!.push(log);
+        }
+      });
 
       const rows = finalFilteredEmployees.map((emp: Employee) => {
         const empLogs = logsByEmployee.get(Number(emp.id)) || [];
@@ -1979,11 +2114,8 @@ if (!hasPunchesEffective) return { type: "ABSENT", label: "Absent", hasPunches: 
 
       setReportData(rows);
 
-      // Compute sandwich overrides for UI display
       const dateColumnsFull = buildDateRangeColumns();
 
-      // Enrich emp-to-workshift mappings with full workShiftDay data from the already-fetched shiftsData,
-      // because the /manage-emp endpoint includes workShift but NOT workShiftDay.
       const enrichedShifts = shifts.map(s => {
         if (!s.workShift?.workShiftDay?.length) {
           const fullShift = normalizedShifts.find((ws: WorkShift) => ws.id === s.workShiftID);
@@ -1999,8 +2131,29 @@ if (!hasPunchesEffective) return { type: "ABSENT", label: "Absent", hasPunches: 
           if (weekoffDates.size > 0) newFactualWeekoffOverrides.set(Number(row.employee.id), weekoffDates);
         }
       }
-      setFactualWeekoffOverrides(newFactualWeekoffOverrides);
 
+      masterDataRef.current = {
+        reportRows: rows,
+        empWorkShifts: shifts,
+        workShifts: normalizedShifts,
+        rosters: flatRosterEmployees,
+        publicHolidays: filteredHolidays,
+        attendanceRegularizations: filteredRegularizations,
+        leaveApplications: filteredLeaves,
+        attendancePolicy: selectedPolicy,
+        factualWeekoffOverrides: newFactualWeekoffOverrides,
+        isFactualMode,
+      };
+
+      await precomputeReportStatuses(
+        rows,
+        dateColumnsFull,
+        selectedCompanyID,
+        selectedBranchID,
+        newFactualWeekoffOverrides,
+      );
+
+      setFactualWeekoffOverrides(newFactualWeekoffOverrides);
       setSandwichOverrides(new Map());
     } catch (err) {
       console.error("Error generating report:", err);
@@ -2008,6 +2161,7 @@ if (!hasPunchesEffective) return { type: "ABSENT", label: "Absent", hasPunches: 
       setReportData([]);
       setFactualWeekoffOverrides(new Map());
       setSandwichOverrides(new Map());
+      masterDataRef.current = null;
     } finally {
       setLoading(false);
     }
@@ -2015,28 +2169,18 @@ if (!hasPunchesEffective) return { type: "ABSENT", label: "Absent", hasPunches: 
 
   // ==================== DOWNLOAD EXCEL ====================
 
-  const downloadExcel = async () => {
+  const downloadExcel = () => {
     if (reportData.length === 0) {
       alert("No data to download");
       return;
     }
 
     const dateColumns = buildDateRangeColumns();
-    
-    const activeCtx = getActiveReportContext();
-    const selectedCompanyID = activeCtx.companyID;
-    const selectedBranch = branches.find(
-      (b) =>
-        b.branchName === formData.branchName &&
-        Number(b.companyID) === Number(selectedCompanyID)
-    );
-    const selectedBranchID = selectedBranch?.id || 0;
+    const reportType = formData.reportType;
     const getDisplayPunches = (employeeID: number, date: string, punches: string[]) =>
       isFactualMode && factualWeekoffOverrides.get(employeeID)?.has(date) ? [] : punches;
-    
+
     const excelData: any[] = [];
-    const statusesMap = new Map<string, string>();
-    
     const headerRow: any = {
       "S.NO": "S.NO", "Employee ID": "Employee ID", "Employee Name": "Employee Name",
       "Company": "Company", "Branch": "Branch", "Department": "Department"
@@ -2058,46 +2202,31 @@ if (!hasPunchesEffective) return { type: "ABSENT", label: "Absent", hasPunches: 
 
       for (const date of dateColumns) {
         const punches = getDisplayPunches(row.employee.id, date, row.punches[date] || []);
-        const status = await getComprehensiveStatus(date, row.employee.id, punches, selectedCompanyID!, selectedBranchID, statusesMap);
-        statusesMap.set(date, status.label);
-        
-        if (formData.reportType === "FILO Punches Logs") {
-          dataRow[date] = punches.length === 0 ? "" : punches.length === 1 ? punches[0] : `${punches[0]}\n${punches[punches.length - 1]}`;
-        } else if (formData.reportType === "Attendance Marking Logs") {
-          let displayLabel = status.label;
-          if (status.type === "OT" && status.workedMinutes && status.totalShiftMinutes && status.otMinutes) {
-            displayLabel = `P (${formatWorkedDuration(status.totalShiftMinutes)} + ${formatWorkedDuration(status.otMinutes)} OT)`;
-          } else if (status.type === "PRESENT" && status.workedMinutes) {
-            displayLabel = `P (${formatWorkedDuration(status.workedMinutes)})`;
-          } else if (status.type === "HALF_DAY" && status.workedMinutes) {
-            displayLabel = `HD (${formatWorkedDuration(status.workedMinutes)})`;
-          } else if ((status.type === "WEEK_OFF" || status.type === "HOLIDAY" || status.type === "LEAVE") && status.workedMinutes) {
-            displayLabel = `${status.label}\n${formatWorkedDuration(status.workedMinutes)}`;
+        const cacheKey = buildStatusCacheKey(date, row.employee.id, punches);
+        const status = globalStatusCache.get(cacheKey) as AttendanceStatus | undefined;
+
+        if (reportType === "FILO Punches Logs") {
+          if (punches.length === 0) {
+            dataRow[date] = status?.type === "LEAVE" ? status.label : status?.type === "WEEK_OFF" ? "WO" : status?.type === "ABSENT" ? "Absent" : "";
+          } else {
+            dataRow[date] = formatFILOExcelCell(punches);
           }
-          dataRow[date] = displayLabel;
-        } else if (formData.reportType === "Attendance Summary Logs") {
-          let displayLabel = status.label;
-          if (status.type === "WEEK_OFF") {
-            displayLabel = status.label === "WO-P" ? "Weekly Off (Present)" : "Weekly Off";
-            if (status.workedMinutes) displayLabel += `\n${formatWorkedDuration(status.workedMinutes)}`;
-          } else if (status.type === "HOLIDAY") {
-            displayLabel = status.label === "PH-P" ? "Public Holiday (Present)" : "Public Holiday";
-            if (status.workedMinutes) displayLabel += `\n${formatWorkedDuration(status.workedMinutes)}`;
-          } else if (status.type === "LEAVE") {
-            displayLabel = status.label === "Leave-P" ? "Leave (Present)" : status.label;
-            if (status.workedMinutes) displayLabel += `\n${formatWorkedDuration(status.workedMinutes)}`;
-          } else if (status.type === "ABSENT") {
-            displayLabel = "Absent";
-          } else if (status.type === "PRESENT" && status.workedMinutes) {
-            displayLabel = `Present (${formatWorkedDuration(status.workedMinutes)})`;
-          } else if (status.type === "HALF_DAY" && status.workedMinutes) {
-            displayLabel = `Half Day (${formatWorkedDuration(status.workedMinutes)})`;
-          } else if (status.type === "OT" && status.workedMinutes && status.totalShiftMinutes && status.otMinutes) {
-            displayLabel = `Present (${formatWorkedDuration(status.totalShiftMinutes)} + ${formatWorkedDuration(status.otMinutes)} OT)`;
-          }
-          dataRow[date] = displayLabel;
+        } else if (reportType === "Attendance Marking Logs") {
+          dataRow[date] = status ? formatMarkingExcelCell(status) : "";
+        } else if (reportType === "Attendance Summary Logs") {
+          dataRow[date] = status ? formatSummaryExcelCell(punches, status) : "";
         } else {
-          dataRow[date] = punches.length > 0 ? punches.join("\n") : "";
+          if (punches.length > 0) {
+            dataRow[date] = punches.join("\n");
+          } else if (status?.type === "LEAVE") {
+            dataRow[date] = status.label;
+          } else if (status?.type === "WEEK_OFF") {
+            dataRow[date] = "WO";
+          } else if (status?.type === "ABSENT") {
+            dataRow[date] = "Absent";
+          } else {
+            dataRow[date] = "";
+          }
         }
       }
       excelData.push(dataRow);
@@ -2122,14 +2251,14 @@ if (!hasPunchesEffective) return { type: "ABSENT", label: "Absent", hasPunches: 
           if (R % 2 === 1) ws[cellRef].s.fill = { fgColor: { rgb: "F9FAFB" } };
           if (C >= 6) {
             const cv = ws[cellRef].v?.toString() || "";
-            if (cv.includes("Absent") || cv === "A") { ws[cellRef].s.fill = { fgColor: { rgb: "FEE2E2" } }; ws[cellRef].s.font = { name: "Arial", sz: 9, bold: true, color: { rgb: "991B1B" } }; }
-            else if (cv.includes("Present") || cv.includes("P (")) { ws[cellRef].s.fill = { fgColor: { rgb: "DCFCE7" } }; ws[cellRef].s.font = { name: "Arial", sz: 9, bold: true, color: { rgb: "166534" } }; }
-            else if (cv.includes("Half Day") || cv.includes("HD")) { ws[cellRef].s.fill = { fgColor: { rgb: "FEF9C3" } }; ws[cellRef].s.font = { name: "Arial", sz: 9, bold: true, color: { rgb: "854D0E" } }; }
-            else if (cv.includes("Late Mark")) { ws[cellRef].s.fill = { fgColor: { rgb: "DBEAFE" } }; ws[cellRef].s.font = { name: "Arial", sz: 9, bold: true, color: { rgb: "1E40AF" } }; }
-            else if (cv.includes("OT") || cv.includes("+")) { ws[cellRef].s.fill = { fgColor: { rgb: "E0E7FF" } }; ws[cellRef].s.font = { name: "Arial", sz: 9, bold: true, color: { rgb: "3730A3" } }; }
-            else if (cv.includes("PH") || cv.includes("Public Holiday")) { ws[cellRef].s.fill = { fgColor: { rgb: "F3E8FF" } }; ws[cellRef].s.font = { name: "Arial", sz: 9, bold: true, color: { rgb: "6B21A8" } }; }
-            else if (cv.includes("WO") || cv.includes("Weekly Off")) { ws[cellRef].s.fill = { fgColor: { rgb: "FFEDD5" } }; ws[cellRef].s.font = { name: "Arial", sz: 9, bold: true, color: { rgb: "9A3412" } }; }
-            else if (cv.includes("Leave")) { ws[cellRef].s.fill = { fgColor: { rgb: "FCE7F3" } }; ws[cellRef].s.font = { name: "Arial", sz: 9, bold: true, color: { rgb: "9D174D" } }; }
+            if (cv.includes("Absent") || cv === "A" || cv.includes("Marking: A")) { ws[cellRef].s.fill = { fgColor: { rgb: "FEE2E2" } }; ws[cellRef].s.font = { name: "Arial", sz: 9, bold: true, color: { rgb: "991B1B" } }; }
+            else if (cv.includes("Half Day") || cv.includes("Marking: HD") || (cv.includes("HD") && !cv.includes("PHD"))) { ws[cellRef].s.fill = { fgColor: { rgb: "FEF9C3" } }; ws[cellRef].s.font = { name: "Arial", sz: 9, bold: true, color: { rgb: "854D0E" } }; }
+            else if (cv.includes("Late Mark") || cv.includes("Marking: L") || cv.startsWith("L (")) { ws[cellRef].s.fill = { fgColor: { rgb: "DBEAFE" } }; ws[cellRef].s.font = { name: "Arial", sz: 9, bold: true, color: { rgb: "1E40AF" } }; }
+            else if (cv.includes("OT") || cv.includes("Marking: OT") || cv.includes("+")) { ws[cellRef].s.fill = { fgColor: { rgb: "E0E7FF" } }; ws[cellRef].s.font = { name: "Arial", sz: 9, bold: true, color: { rgb: "3730A3" } }; }
+            else if (cv.includes("PH") || cv.includes("Public Holiday") || cv.includes("Marking: PH")) { ws[cellRef].s.fill = { fgColor: { rgb: "F3E8FF" } }; ws[cellRef].s.font = { name: "Arial", sz: 9, bold: true, color: { rgb: "6B21A8" } }; }
+            else if (cv.includes("WO") || cv.includes("Weekly Off") || cv.includes("Marking: WO")) { ws[cellRef].s.fill = { fgColor: { rgb: "FFEDD5" } }; ws[cellRef].s.font = { name: "Arial", sz: 9, bold: true, color: { rgb: "9A3412" } }; }
+            else if (cv.includes("Leave") || cv.includes("Marking: L-")) { ws[cellRef].s.fill = { fgColor: { rgb: "FCE7F3" } }; ws[cellRef].s.font = { name: "Arial", sz: 9, bold: true, color: { rgb: "9D174D" } }; }
+            else if (cv.includes("Present") || cv.includes("P (") || cv.includes("Marking: P")) { ws[cellRef].s.fill = { fgColor: { rgb: "DCFCE7" } }; ws[cellRef].s.font = { name: "Arial", sz: 9, bold: true, color: { rgb: "166534" } }; }
             else if (cv.includes("Regularized")) { ws[cellRef].s.fill = { fgColor: { rgb: "CCFBF1" } }; ws[cellRef].s.font = { name: "Arial", sz: 9, bold: true, color: { rgb: "115E59" } }; }
           }
         }
@@ -2143,7 +2272,7 @@ if (!hasPunchesEffective) return { type: "ABSENT", label: "Absent", hasPunches: 
     
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Attendance Report");
-    XLSX.writeFile(wb, `${formData.reportType.replace(/\s+/g, '_')}_${formData.dateFrom}_to_${formData.dateTo}.xlsx`);
+    XLSX.writeFile(wb, `${reportType.replace(/\s+/g, '_')}_${formData.dateFrom}_to_${formData.dateTo}.xlsx`);
   };
 
   // ==================== RENDER HELPERS ====================
@@ -2214,6 +2343,7 @@ if (!hasPunchesEffective) return { type: "ABSENT", label: "Absent", hasPunches: 
     setReportData([]); setSearchTerm(""); setSelectedDepartments([]); setSelectedDesignations([]); setSelectedEmployees([]);
     setSandwichOverrides(new Map());
     setFactualWeekoffOverrides(new Map());
+    masterDataRef.current = null;
     globalStatusCache.clear();
   };
 
