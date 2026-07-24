@@ -30,21 +30,20 @@ function EmpProfileMobileWorkspaceInner() {
     { id: "holidays", label: "Holidays", href: profileTabHref("holidays") },
   ];
 
-  if (activeTab === "messaging") {
-    return (
-      <div className="px-4 pt-4 pb-8 space-y-4">
-        <div className="flex items-center gap-2">
-          <Link href="/empdashboard" className="text-sm font-medium text-primary">
+  const isMessaging = activeTab === "messaging";
+
+  return (
+    <>
+      <div className={isMessaging ? "pb-8" : "hidden"} aria-hidden={!isMessaging}>
+        <div className="mb-4 px-1">
+          <Link href="/empdashboard" className="text-[14px] font-medium text-[#6D4AFF]">
             ← Home
           </Link>
         </div>
-        <h1 className="text-[22px] font-bold text-gray-900">IM</h1>
-        <EmpProfileMessagingPanel />
+        <EmpProfileMessagingPanel active={isMessaging} />
       </div>
-    );
-  }
 
-  return (
+      {!isMessaging ? (
     <div className="px-4 pt-4 pb-8 space-y-4">
       <div className="flex items-center gap-2">
         <Link href="/empdashboard" className="text-sm font-medium text-primary">
@@ -67,6 +66,8 @@ function EmpProfileMobileWorkspaceInner() {
       {activeTab === "salary-advance" && <EmpProfileSalaryAdvancePanel />}
       {activeTab === "holidays" && <EmpHolidayListMobile embedded />}
     </div>
+      ) : null}
+    </>
   );
 }
 

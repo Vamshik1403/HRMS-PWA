@@ -79,7 +79,7 @@ export function EmpDesktopHomeOverview({
   ];
 
   return (
-    <EmpDesktopPage>
+    <EmpDesktopPage title="Home" description="Your workspace overview" icon={LayoutDashboard}>
       <div className="space-y-6">
         <div className={`grid lg:grid-cols-3 ${gridGap} items-stretch`}>
           <div className="lg:col-span-2 space-y-6">

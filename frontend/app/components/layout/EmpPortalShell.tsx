@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Icon } from "@iconify/react";
 import { Eye, EyeOff } from "lucide-react";
 import {
   registerPushSubscription,
@@ -24,17 +23,6 @@ import { isDesktopBrowser } from "@/lib/desktopManager";
 import { resolveEmpPhoto } from "@/app/utils/empPhotoCache";
 import { getPageCache } from "@/app/utils/pageCache";
 import {
-  Avatar,
-  AvatarFallback,
-  AvatarImage,
-} from "@/app/components/ui/avatar";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/app/components/ui/dropdown-menu";
-import {
   Dialog,
   DialogContent,
   DialogHeader,
@@ -49,8 +37,8 @@ import {
 } from "./emp-portal-workspaces";
 import { EmpSidebar } from "./EmpSidebar";
 import { EmpWorkspaceTabNav } from "../emp/EmpWorkspaceTabNav";
-import { EmpPortalGlobalSearch } from "./EmpPortalGlobalSearch";
-import { EmpThemeToggle } from "./EmpThemeToggle";
+import { EmpPortalTopbar } from "./EmpPortalTopbar";
+import { EmpPortalPageProvider } from "./emp-portal-page-context";
 import { applyEmpTheme, readStoredEmpTheme } from "@/app/utils/empTheme";
 import {
   EMP_COMPANY_TABS,
@@ -332,7 +320,8 @@ export default function EmpPortalShell({ children, hideBottomNav = false }: EmpP
   }, [router]);
 
   return (
-    <div className="emp-pwa-shell emp-pwa-page-bg emp-portal-desktop h-dvh max-h-dvh flex overflow-hidden" data-theme={theme}>
+    <EmpPortalPageProvider>
+    <div className="emp-pwa-shell emp-portal-desktop flex h-dvh max-h-dvh overflow-hidden bg-[#f8f9ff]" data-theme={theme}>
 
       <EmpSidebar
         collapsed={sidebarCollapsed}
@@ -344,56 +333,21 @@ export default function EmpPortalShell({ children, hideBottomNav = false }: EmpP
       <div className="flex-1 flex flex-col min-w-0 min-h-0">
         <div className="relative z-50 shrink-0">
         {/* Top navbar */}
-        <header className="h-16 border-b border-border/50 bg-background/75 backdrop-blur-xl overflow-visible">
-          <div className="h-full px-4 lg:px-6 flex items-center justify-between gap-4">
-            <EmpPortalGlobalSearch />
-
-            <div className="flex items-center gap-3 shrink-0">
-              <EmpThemeToggle theme={theme} onToggle={toggleTheme} />
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <button type="button" className="rounded-full focus:outline-none">
-                    <Avatar className="w-8 h-8 ring-2 ring-border/60">
-                      <AvatarImage src={headerPhotoUrl ?? undefined} />
-                      <AvatarFallback className="bg-[#2563eb] text-white text-xs font-bold">
-                        {empInitials}
-                      </AvatarFallback>
-                    </Avatar>
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-52 rounded-xl">
-                  <div className="px-3 py-2 border-b border-border">
-                    <p className="text-sm font-semibold text-foreground truncate">{empDisplayName}</p>
-                    <p className="text-[11px] text-muted-foreground">Employee Portal</p>
-                  </div>
-                  <DropdownMenuItem asChild>
-                    <Link href="/empProfile" className="cursor-pointer">
-                      <Icon icon="solar:user-circle-linear" className="w-4 h-4 mr-2" />
-                      My Profile
-                    </Link>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem className="cursor-pointer" onClick={() => setShowChangePassword(true)}>
-                    <Icon icon="solar:lock-keyhole-linear" className="w-4 h-4 mr-2" />
-                    Change Password
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    className="cursor-pointer text-red-600 focus:text-red-600"
-                    onClick={() => {
-                      localStorage.removeItem("accessToken");
-                      localStorage.removeItem("token");
-                      localStorage.removeItem("user");
-                      document.cookie = "accessToken=; path=/; max-age=0";
-                      window.location.href = "/login";
-                    }}
-                  >
-                    <Icon icon="solar:logout-2-linear" className="w-4 h-4 mr-2" />
-                    Logout
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
-          </div>
-        </header>
+        <EmpPortalTopbar
+          theme={theme}
+          onToggleTheme={toggleTheme}
+          empDisplayName={empDisplayName}
+          empInitials={empInitials}
+          headerPhotoUrl={headerPhotoUrl}
+          onChangePassword={() => setShowChangePassword(true)}
+          onLogout={() => {
+            localStorage.removeItem("accessToken");
+            localStorage.removeItem("token");
+            localStorage.removeItem("user");
+            document.cookie = "accessToken=; path=/; max-age=0";
+            window.location.href = "/login";
+          }}
+        />
 
         {showCompanyTabs && (
           <div className="shrink-0 bg-background border-b border-border px-4 flex gap-0.5 overflow-x-auto">
@@ -413,8 +367,8 @@ export default function EmpPortalShell({ children, hideBottomNav = false }: EmpP
 
         {!hideBottomNav && <EmpMarkoutReminderBanner />}
 
-        <main className="relative z-0 flex-1 min-h-0 overflow-y-auto overscroll-y-contain bg-muted/30 emp-portal-main">
-          <div className="max-w-screen-2xl mx-auto w-full hrms-admin-content p-6 lg:p-8 emp-workspace-shell">
+        <main className="emp-portal-main relative z-0 min-h-0 flex-1 overflow-y-auto overscroll-y-contain bg-[#f8f9ff]">
+          <div className="hrms-admin-content emp-workspace-shell mx-auto w-full max-w-[1400px] px-8 py-8">
             {children}
           </div>
         </main>
@@ -490,5 +444,6 @@ export default function EmpPortalShell({ children, hideBottomNav = false }: EmpP
         </DialogContent>
       </Dialog>
     </div>
+    </EmpPortalPageProvider>
   );
 }

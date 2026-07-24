@@ -15,7 +15,7 @@ interface SidebarBrandProps {
 export function SidebarBrand({ collapsed, homeHref = "/dashboard", onRefresh, onToggle }: SidebarBrandProps) {
   if (collapsed) {
     return (
-      <div className="border-b shrink-0 px-2 py-3 flex flex-col items-center gap-2">
+      <div className="flex h-[72px] shrink-0 flex-col items-center justify-center gap-2 border-b border-[#e5eeff] px-2">
         <Link
           href={homeHref}
           className="flex items-center justify-center w-full"
@@ -45,18 +45,18 @@ export function SidebarBrand({ collapsed, homeHref = "/dashboard", onRefresh, on
   }
 
   return (
-    <div className="h-16 px-3 flex items-center gap-1 border-b shrink-0 min-w-0">
+      <div className="flex h-[72px] shrink-0 items-center gap-1 border-b border-[#e5eeff] px-2.5 min-w-0">
       <Link href={homeHref} className="flex items-center gap-2 min-w-0 flex-1">
         <img
           src="/img/OpenHRM_Logo.png"
           alt="OpenHRM"
-          className="size-9 rounded-md object-cover shadow-sm shrink-0"
+          className="size-8 rounded-md object-cover shadow-sm shrink-0"
         />
         <div className="min-w-0">
-          <div className="font-display text-base font-semibold tracking-tight leading-none truncate">
+          <div className="font-display text-sm font-semibold tracking-tight leading-none truncate">
             OpenHRM
           </div>
-          <div className="text-[10px] text-muted-foreground mt-1 uppercase tracking-wider font-mono">
+          <div className="text-[9px] text-muted-foreground mt-0.5 uppercase tracking-wider font-mono">
             v1.0.0
           </div>
         </div>
@@ -66,10 +66,10 @@ export function SidebarBrand({ collapsed, homeHref = "/dashboard", onRefresh, on
         <button
           type="button"
           onClick={onRefresh}
-          className="p-1.5 mr-0.5 rounded-md text-muted-foreground hover:text-primary hover:bg-accent/60 transition-colors shrink-0"
+          className="p-1 rounded-md text-muted-foreground hover:text-primary hover:bg-accent/60 transition-colors shrink-0"
           title="Refresh data"
         >
-          <RefreshCw className="size-4" />
+          <RefreshCw className="size-3.5" />
         </button>
       )}
 
@@ -79,11 +79,11 @@ export function SidebarBrand({ collapsed, homeHref = "/dashboard", onRefresh, on
           variant="ghost"
           size="icon"
           onClick={onToggle}
-          className="size-9 shrink-0 rounded-md text-muted-foreground hover:text-foreground"
+          className="size-7 shrink-0 rounded-md text-muted-foreground hover:text-foreground"
           aria-label="Collapse sidebar"
           title="Collapse sidebar"
         >
-          <PanelLeftClose className="size-4" />
+          <PanelLeftClose className="size-3.5" />
         </Button>
       )}
     </div>

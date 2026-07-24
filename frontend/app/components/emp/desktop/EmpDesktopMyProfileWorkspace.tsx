@@ -2,7 +2,7 @@
 
 import { Suspense } from "react";
 import { useSearchParams } from "next/navigation";
-import { User, MessageSquare } from "lucide-react";
+import { User } from "lucide-react";
 import { Icon } from "@iconify/react";
 import { EmpDesktopPage } from "./EmpDesktopPage";
 import { EmpDesktopProfilePanel } from "./EmpDesktopProfilePanel";
@@ -32,15 +32,15 @@ function EmpDesktopMyProfileWorkspaceInner() {
     { id: "holidays", label: "My Holidays", href: profileTabHref("holidays") },
   ];
 
-  if (activeTab === "messaging") {
-    return (
-      <EmpDesktopPage title="IM" description="Team communications and general messages" icon={MessageSquare}>
-        <EmpProfileMessagingPanel />
-      </EmpDesktopPage>
-    );
-  }
+  const isMessaging = activeTab === "messaging";
 
   return (
+    <>
+      <div className={isMessaging ? undefined : "hidden"} aria-hidden={!isMessaging}>
+        <EmpProfileMessagingPanel active={isMessaging} />
+      </div>
+
+      {!isMessaging ? (
     <EmpDesktopPage title="My Profile" description="Your employee information and workspace sections" icon={User}>
       <div className="space-y-6">
         <EmpProfileWorkspaceTabNav tabs={tabs} activeTab={activeTab} />
@@ -65,6 +65,8 @@ function EmpDesktopMyProfileWorkspaceInner() {
         {activeTab === "holidays" && <EmpHolidayListMobile embedded />}
       </div>
     </EmpDesktopPage>
+      ) : null}
+    </>
   );
 }
 

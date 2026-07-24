@@ -18,25 +18,22 @@ export function EmpNavLink({ item, pathname, collapsed }: EmpNavLinkProps) {
   const active = isEmpNavItemActive(item, pathname, searchParams);
   const Icon = item.icon;
 
-  const layout = collapsed ? "px-2 py-2 justify-center" : "px-3 py-2";
-  const stateClasses = active
-    ? "bg-accent text-accent-foreground shadow-sm"
-    : "text-muted-foreground hover:text-foreground hover:bg-accent/60";
-
   const content = (
     <div
       title={collapsed ? item.label : undefined}
       className={cn(
-        "group relative flex items-center gap-3 rounded-md transition-all duration-150",
-        layout,
-        stateClasses,
+        "group relative flex h-[38px] items-center gap-2 transition-all duration-150",
+        collapsed ? "mx-1.5 justify-center rounded-[10px] px-0" : "pl-2.5 pr-2 py-2",
+        active
+          ? "border-l-[3px] border-[#4648d4] bg-[#eef4ff] font-bold text-[#4648d4]"
+          : "border-l-[3px] border-transparent text-[#5b5f61] hover:bg-white hover:text-[#4648d4]",
       )}
     >
-      {active && !collapsed && (
-        <div className="absolute left-0 top-2 bottom-2 w-[3px] rounded-r bg-primary" />
-      )}
-      <Icon className={cn("size-4 shrink-0", active && "text-primary")} />
-      {!collapsed && <span className="text-sm flex-1 truncate">{item.label}</span>}
+      <Icon
+        className={cn("size-[18px] shrink-0", active ? "text-[#4648d4]" : "text-[#5b5f61]")}
+        strokeWidth={1.75}
+      />
+      {!collapsed && <span className="min-w-0 flex-1 truncate text-[13px] font-medium leading-tight">{item.label}</span>}
     </div>
   );
 

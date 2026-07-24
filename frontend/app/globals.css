@@ -1,3 +1,5 @@
+@import url("https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400..900;1,400..900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap");
+
 :root {
   --primary: 217 91% 60%;
   --primary-foreground: 0 0% 100%;
@@ -1485,4 +1487,61 @@ html.dark .app-select:focus {
   );
   background-size: 200% 100%;
   animation: shimmer 1.5s ease-in-out infinite;
+}
+
+/* Aether HR app form styling (visual only) */
+.aether-form-modal .form-drawer-body input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+.aether-form-modal .form-drawer-body textarea,
+.aether-form-modal .form-drawer-body select {
+  background-color: #f8f9ff !important;
+  border-color: rgba(199, 196, 215, 0.4) !important;
+  color: #121c28 !important;
+  border-radius: 0.5rem;
+}
+
+.aether-form-modal .form-drawer-body input:focus,
+.aether-form-modal .form-drawer-body textarea:focus,
+.aether-form-modal .form-drawer-body select:focus {
+  box-shadow: 0 0 0 2px rgba(70, 72, 212, 0.2) !important;
+}
+
+.aether-form-modal .form-drawer-body label {
+  color: #121c28;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.aether-form-modal .form-drawer-body button[type="submit"],
+.aether-form-modal .form-drawer-body .bg-primary {
+  background-color: #4648d4 !important;
+}
+
+.aether-form-modal .form-drawer-body button[type="submit"]:hover {
+  background-color: #6063ee !important;
+}
+
+/* Employee portal — force white data surfaces on light theme */
+html:not(.dark):not([data-emp-theme="dark"]) .emp-portal-desktop .hrms-admin-content table,
+html:not(.dark):not([data-emp-theme="dark"]) .emp-portal-desktop .hrms-admin-content thead,
+html:not(.dark):not([data-emp-theme="dark"]) .emp-portal-desktop .hrms-admin-content tbody,
+html:not(.dark):not([data-emp-theme="dark"]) .emp-portal-desktop .hrms-admin-content tbody tr,
+html:not(.dark):not([data-emp-theme="dark"]) .emp-portal-desktop .hrms-admin-content thead tr,
+html:not(.dark):not([data-emp-theme="dark"]) .emp-portal-desktop .hrms-admin-content thead th,
+html:not(.dark):not([data-emp-theme="dark"]) .emp-portal-desktop .hrms-admin-content tbody td {
+  background-color: #ffffff !important;
+}
+
+html:not(.dark):not([data-emp-theme="dark"]) .emp-portal-desktop .hrms-admin-content .bg-card {
+  background-color: #ffffff !important;
+}
+
+/* IM editorial panel — hrms-ai-main typography */
+.im-editorial-panel {
+  font-family: "Plus Jakarta Sans", system-ui, sans-serif;
+  color: #121212;
+}
+
+.im-editorial-panel .font-serif,
+.im-editorial-panel [class*="font-serif"] {
+  font-family: "Playfair Display", Georgia, serif;
 }

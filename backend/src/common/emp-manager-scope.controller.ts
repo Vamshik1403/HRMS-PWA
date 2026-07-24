@@ -49,7 +49,11 @@ export class EmpManagerScopeController {
     }
 
     const employees = await this.prisma.manageEmployee.findMany({
-      where: { id: { in: directReporteeIds } },
+      where: {
+        id: { in: directReporteeIds },
+        isDeleted: false,
+        lifecycleStatus: 'ACTIVE',
+      },
       select: this.employeeSelect,
     });
 
@@ -127,7 +131,11 @@ export class EmpManagerScopeController {
         return { members: [], scope: mode };
       }
       const employees = await this.prisma.manageEmployee.findMany({
-        where: { id: { in: directReporteeIds } },
+        where: {
+          id: { in: directReporteeIds },
+          isDeleted: false,
+          lifecycleStatus: 'ACTIVE',
+        },
         select: this.employeeSelect,
       });
       const members = await this.statusForEmployees(employees);
@@ -148,6 +156,7 @@ export class EmpManagerScopeController {
         departmentNameID: me.departmentNameID,
         companyID: me.companyID ?? undefined,
         isDeleted: false,
+        lifecycleStatus: 'ACTIVE',
         id: { not: employeeId },
       },
       select: this.employeeSelect,

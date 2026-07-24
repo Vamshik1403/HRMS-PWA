@@ -26,13 +26,16 @@ export class EmployeeMemoService {
   ) {}
 
   async findAll(employeeID?: number) {
+    const identityIds =
+      employeeID != null ? await this.resolveMessagingIdentityIds(employeeID) : null;
+
     const where =
-      employeeID != null
+      identityIds != null
         ? {
             OR: [
-              { employeeID },
-              { employeeIDs: { has: employeeID } },
-              { senderEmployeeId: employeeID },
+              { employeeID: { in: identityIds } },
+              ...identityIds.map((id) => ({ employeeIDs: { has: id } })),
+              { senderEmployeeId: { in: identityIds } },
             ],
             parentMemoId: null,
             undoneAt: null,
@@ -48,6 +51,89 @@ export class EmployeeMemoService {
     });
 
     return this.attachRecipients(rows);
+  }
+
+  /**
+   * Include inactive duplicate employee rows (same company + same name) so messages
+   * sent to an EXITED duplicate still appear for the ACTIVE login identity.
+   */
+  private async resolveMessagingIdentityIds(employeeID: number): Promise<number[]> {
+    const self = await this.prisma.manageEmployee.findUnique({
+      where: { id: employeeID },
+      select: {
+        id: true,
+        companyID: true,
+        employeeFirstName: true,
+        employeeLastName: true,
+      },
+    });
+    if (!self) return [employeeID];
+
+    const first = self.employeeFirstName?.trim();
+    const last = self.employeeLastName?.trim();
+    if (!self.companyID || !first || !last) return [employeeID];
+
+    const aliases = await this.prisma.manageEmployee.findMany({
+      where: {
+        id: { not: employeeID },
+        companyID: self.companyID,
+        employeeFirstName: { equals: first, mode: 'insensitive' },
+        employeeLastName: { equals: last, mode: 'insensitive' },
+        isDeleted: false,
+        lifecycleStatus: { not: 'ACTIVE' },
+      },
+      select: { id: true },
+    });
+
+    return [employeeID, ...aliases.map((row) => row.id)];
+  }
+
+  /** Prefer ACTIVE employee when a recipient id points at an EXITED duplicate. */
+  private async resolveActiveRecipientIds(employeeIDs: number[]): Promise<number[]> {
+    if (employeeIDs.length === 0) return employeeIDs;
+
+    const employees = await this.prisma.manageEmployee.findMany({
+      where: { id: { in: employeeIDs } },
+      select: {
+        id: true,
+        companyID: true,
+        employeeFirstName: true,
+        employeeLastName: true,
+        lifecycleStatus: true,
+      },
+    });
+
+    const resolved: number[] = [];
+    for (const emp of employees) {
+      if (emp.lifecycleStatus === 'ACTIVE' || !emp.companyID) {
+        resolved.push(emp.id);
+        continue;
+      }
+
+      const first = emp.employeeFirstName?.trim();
+      const last = emp.employeeLastName?.trim();
+      if (!first || !last) {
+        resolved.push(emp.id);
+        continue;
+      }
+
+      const active = await this.prisma.manageEmployee.findFirst({
+        where: {
+          id: { not: emp.id },
+          companyID: emp.companyID,
+          employeeFirstName: { equals: first, mode: 'insensitive' },
+          employeeLastName: { equals: last, mode: 'insensitive' },
+          isDeleted: false,
+          lifecycleStatus: 'ACTIVE',
+        },
+        select: { id: true },
+        orderBy: { id: 'desc' },
+      });
+
+      resolved.push(active?.id ?? emp.id);
+    }
+
+    return [...new Set(resolved)];
   }
 
   private async attachRecipients<T extends { employeeID?: number | null; employeeIDs?: number[] }>(
@@ -106,12 +192,14 @@ export class EmployeeMemoService {
   }
 
   async create(dto: CreateEmployeeMemoDto) {
-    const employeeIDs =
+    const requestedIds =
       dto.employeeIDs && dto.employeeIDs.length > 0
         ? dto.employeeIDs
         : dto.employeeID
           ? [dto.employeeID]
           : [];
+
+    const employeeIDs = await this.resolveActiveRecipientIds(requestedIds);
 
     if (employeeIDs.length === 0) {
       throw new BadRequestException('At least one employee is required');

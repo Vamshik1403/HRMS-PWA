@@ -13,6 +13,7 @@ const TTLs: Record<string, number> = {
   empPwaShowLeaveBalance: 86_400_000, // 24 h — per-employee PWA leave balance visibility
   empReimbursements:30_000,        // 30 s  — reimbursement list
   empMemos:         60_000,        // 1 min — notice board
+  empImPanel:       120_000,       // 2 min — internal messaging workspace
   empNotifFeed:     60_000,        // 1 min — notifications feed (SWR)
   sidebarSPs:       300_000,       // 5 min — sidebar service providers
   sidebarCompanies: 300_000,       // 5 min — sidebar companies

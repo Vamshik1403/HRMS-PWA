@@ -3,10 +3,10 @@ import { cn } from "@/app/utils/cn";
 
 /** Premium borderless card shell — theme-aware shadows. */
 export const cardShell =
-  "rounded-xl border-0 bg-card text-card-foreground shadow-[0_1px_3px_rgba(0,0,0,0.05),0_8px_24px_rgba(0,0,0,0.04)] dark:shadow-[0_1px_2px_rgba(0,0,0,0.35)] transition-all duration-200 hover:shadow-[0_4px_20px_rgba(0,0,0,0.08)] dark:hover:shadow-[0_0_0_1px_hsl(var(--border))]";
+  "rounded-xl border border-[#e5eeff] bg-white text-card-foreground shadow-[0px_4px_20px_rgba(0,0,0,0.05)] dark:border-0 dark:bg-card dark:shadow-[0_1px_2px_rgba(0,0,0,0.35)] transition-all duration-200 hover:shadow-[0_4px_20px_rgba(0,0,0,0.08)] dark:hover:shadow-[0_0_0_1px_hsl(var(--border))]";
 
 export const cardShellFlat =
-  "rounded-xl border-0 bg-card text-card-foreground shadow-[0_1px_3px_rgba(0,0,0,0.05)] dark:shadow-[0_1px_2px_rgba(0,0,0,0.35)]";
+  "rounded-xl border border-[#e5eeff] bg-white text-card-foreground shadow-[0_1px_3px_rgba(0,0,0,0.05)] dark:border-0 dark:bg-card dark:shadow-[0_1px_2px_rgba(0,0,0,0.35)]";
 
 export const panelTitle =
   "text-xl font-semibold tracking-tight text-foreground";

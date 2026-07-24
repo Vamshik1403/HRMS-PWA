@@ -90,8 +90,8 @@ function ProfileRepeaterSection({
   children: React.ReactNode;
 }) {
   return (
-    <section className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
-      <div className="border-b border-border px-6 py-4">
+    <section className="overflow-hidden rounded-2xl border border-[#e5eeff] bg-white shadow-[0px_4px_20px_rgba(0,0,0,0.05)]">
+      <div className="border-b border-[#e5eeff] px-6 py-4">
         <h3 className="font-display text-base font-semibold text-foreground">{title}</h3>
       </div>
       {children ?? (
@@ -122,8 +122,8 @@ function resolvePolicyName(
 
 function ProfileDetailSection({ title, fields }: { title: string; fields: ProfileField[] }) {
   return (
-    <section className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
-      <div className="border-b border-border px-6 py-4">
+    <section className="overflow-hidden rounded-2xl border border-[#e5eeff] bg-white shadow-[0px_4px_20px_rgba(0,0,0,0.05)]">
+      <div className="border-b border-[#e5eeff] px-6 py-4">
         <h3 className="font-display text-base font-semibold text-foreground">{title}</h3>
       </div>
       <div className="divide-y divide-border">
@@ -554,7 +554,7 @@ export function EmpDesktopProfilePanel({
       {loading ? (
         <ProfileHeroSkeleton />
       ) : (
-        <section className="rounded-[20px] border border-black/[0.06] bg-white p-8 shadow-[0_8px_24px_rgba(0,0,0,0.05)]">
+        <section className="rounded-[20px] border border-[#e5eeff] bg-white p-8 shadow-[0px_4px_20px_rgba(0,0,0,0.05)]">
           <div className="flex flex-col gap-8 xl:flex-row xl:items-center">
             <div className="flex min-w-0 shrink-0 items-center gap-5">
               <ProfileAvatar

@@ -16,5 +16,5 @@ export const listSelectTriggerClass = cn(
 );
 
 export const listCardClass = cn(
-  "w-full bg-card border border-border shadow-sm rounded-xl text-card-foreground",
+  "w-full bg-white border border-[#e5eeff] shadow-[0px_4px_20px_rgba(0,0,0,0.05)] rounded-xl text-card-foreground",
 );

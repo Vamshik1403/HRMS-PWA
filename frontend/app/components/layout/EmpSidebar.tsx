@@ -25,9 +25,9 @@ function EmpSidebarNavGroup({
   if (group.items.length === 0) return null;
 
   return (
-    <div className="space-y-1">
+    <div className="space-y-0.5">
       {!collapsed && (
-        <div className="px-2 mb-2 text-[10px] uppercase tracking-[0.18em] text-muted-foreground/80 font-semibold">
+        <div className="mb-1 px-2.5 text-[10px] font-bold uppercase tracking-wider text-[#5b5f61]">
           {group.label}
         </div>
       )}
@@ -51,8 +51,8 @@ export function EmpSidebar({ collapsed, onToggle, onRefresh }: EmpSidebarProps) 
   return (
     <aside
       className={cn(
-        "shrink-0 border-r bg-card/40 backdrop-blur-sm transition-[width] duration-300 flex flex-col h-full min-h-0 z-40",
-        collapsed ? "w-14" : "w-52",
+        "z-40 flex h-full min-h-0 shrink-0 flex-col border-r border-[#e5eeff] bg-[#f8f9ff] shadow-[0px_4px_20px_rgba(0,0,0,0.05)] transition-[width] duration-300",
+        collapsed ? "w-14" : "w-[184px]",
       )}
     >
       <SidebarBrand
@@ -62,7 +62,7 @@ export function EmpSidebar({ collapsed, onToggle, onRefresh }: EmpSidebarProps) 
         onToggle={onToggle}
       />
 
-      <nav className="flex-1 min-h-0 overflow-y-auto scrollbar-auto-hide py-3 px-1.5 space-y-5">
+      <nav className="scrollbar-auto-hide min-h-0 flex-1 space-y-5 overflow-y-auto px-0.5 py-3">
         {groups.map((group) => (
           <EmpSidebarNavGroup
             key={group.label}

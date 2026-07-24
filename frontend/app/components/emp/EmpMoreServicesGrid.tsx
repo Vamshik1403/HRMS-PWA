@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { Icon } from "@iconify/react";
-import { Search } from "lucide-react";
+import { LayoutGrid, Search } from "lucide-react";
 import { Input } from "@/app/components/ui/input";
 import { getVisibleEmpMoreSections } from "@/app/components/layout/emp-portal-more-sections";
 import { useEmpManagerScope } from "@/app/hooks/useEmpManagerScope";
@@ -75,7 +75,7 @@ export function EmpMoreServicesGrid() {
 
   if (isDesktop) {
     return (
-      <EmpDesktopPage title="More">
+      <EmpDesktopPage title="More" description="Browse modules and services" icon={LayoutGrid}>
         {body}
       </EmpDesktopPage>
     );

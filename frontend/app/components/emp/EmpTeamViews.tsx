@@ -170,7 +170,7 @@ export function EmpTeamMyTeam() {
 
   if (!isManagerView) {
     return (
-      <div className="rounded-xl border border-border bg-card p-8 text-center">
+      <div className="rounded-xl border border-[#e5eeff] bg-white p-8 text-center">
         <p className="text-muted-foreground">You do not have any direct reportees.</p>
       </div>
     );
@@ -268,13 +268,13 @@ export function EmpTeamMyTeam() {
       {statusLoading ? (
         <p className="text-sm text-muted-foreground py-8 text-center">Loading team members…</p>
       ) : members.length === 0 ? (
-        <div className="rounded-xl border border-border bg-card p-8 text-center text-muted-foreground">
+        <div className="rounded-xl border border-[#e5eeff] bg-white p-8 text-center text-muted-foreground shadow-[0px_4px_20px_rgba(0,0,0,0.05)]">
           {scope === "reportees"
             ? "No reportees linked yet. Assign team members from the employee form in admin."
             : "No other employees found in your department."}
         </div>
       ) : filteredMembers.length === 0 ? (
-        <div className="rounded-xl border border-border bg-card p-8 text-center text-muted-foreground">
+        <div className="rounded-xl border border-[#e5eeff] bg-white p-8 text-center text-muted-foreground shadow-[0px_4px_20px_rgba(0,0,0,0.05)]">
           No employees match &ldquo;{searchQuery.trim()}&rdquo;.
         </div>
       ) : viewMode === "grid" ? (
@@ -292,7 +292,7 @@ export function EmpTeamMyTeam() {
                 key={m.id}
                 type="button"
                 onClick={() => openMember(m.id)}
-                className="rounded-xl border border-border bg-card shadow-sm p-4 text-left hover:border-primary/40 hover:shadow-md transition-all"
+                className="rounded-xl border border-[#e5eeff] bg-white p-4 text-left shadow-[0px_4px_20px_rgba(0,0,0,0.05)] transition-all hover:border-[#4648d4]/40 hover:shadow-md"
               >
                 <div className="flex items-start gap-3">
                   <MemberAvatar member={m} className="size-12 text-sm" />
@@ -315,32 +315,32 @@ export function EmpTeamMyTeam() {
           })}
         </div>
       ) : (
-        <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border bg-muted/40 text-left">
-                  <th className="px-4 py-3 font-medium text-muted-foreground">Employee</th>
-                  <th className="px-4 py-3 font-medium text-muted-foreground">Status</th>
-                  <th className="px-4 py-3 font-medium text-muted-foreground hidden md:table-cell">
+        <div className="overflow-hidden rounded-xl border border-[#e5eeff] bg-white shadow-[0px_4px_20px_rgba(0,0,0,0.05)]">
+          <div className="overflow-x-auto bg-white">
+            <table className="w-full bg-white text-sm">
+              <thead className="bg-white">
+                <tr className="border-b border-[#e5eeff] bg-white text-left">
+                  <th className="bg-white px-4 py-3 text-xs font-medium uppercase tracking-wide text-[#6b7280]">Employee</th>
+                  <th className="bg-white px-4 py-3 text-xs font-medium uppercase tracking-wide text-[#6b7280]">Status</th>
+                  <th className="bg-white px-4 py-3 text-xs font-medium uppercase tracking-wide text-[#6b7280] hidden md:table-cell">
                     Designation
                   </th>
-                  <th className="px-4 py-3 font-medium text-muted-foreground hidden lg:table-cell">
+                  <th className="bg-white px-4 py-3 text-xs font-medium uppercase tracking-wide text-[#6b7280] hidden lg:table-cell">
                     Email
                   </th>
-                  <th className="px-4 py-3 font-medium text-muted-foreground hidden sm:table-cell">
+                  <th className="bg-white px-4 py-3 text-xs font-medium uppercase tracking-wide text-[#6b7280] hidden sm:table-cell">
                     Joined
                   </th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="bg-white">
                 {filteredMembers.map((m) => {
                   const name = memberName(m);
                   const statusLabel = m.statusLabel || "Yet to check-in";
                   return (
                     <tr
                       key={m.id}
-                      className="border-b border-border last:border-0 hover:bg-muted/30 cursor-pointer"
+                      className="cursor-pointer border-b border-[#e5eeff] bg-white transition-colors last:border-0 hover:bg-[#f8f9ff]"
                       onClick={() => openMember(m.id)}
                     >
                       <td className="px-4 py-3">

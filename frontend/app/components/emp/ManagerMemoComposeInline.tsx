@@ -20,6 +20,7 @@ export function ManagerMemoComposeInline({
       onOpenChange={onOpenChange}
       title="Send Message"
       description="Send a message to one or more team members"
+      appearance="aether"
     >
       <ManagerMemoComposeForm managerName={managerName} onSent={onSent} />
     </FormModal>
