@@ -378,7 +378,10 @@ export class EmpManagerScopeController {
       byDay.set(key, row);
     }
 
-    return { days: Array.from(byDay.values()).sort((a, b) => b.date.localeCompare(a.date)) };
+    return {
+      days: Array.from(byDay.values()).sort((a, b) => b.date.localeCompare(a.date)),
+      records,
+    };
   }
 
   private delegationSelect = {

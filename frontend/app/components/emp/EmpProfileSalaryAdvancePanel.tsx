@@ -239,7 +239,7 @@ export function EmpProfileSalaryAdvancePanel() {
             />
           </div>
           <div className="flex gap-2">
-            <Button type="button" onClick={() => void submit()} disabled={submitting}>
+            <Button type="button" size="lg" onClick={() => void submit()} disabled={submitting}>
               {submitting ? "Submitting…" : "Submit request"}
             </Button>
           </div>

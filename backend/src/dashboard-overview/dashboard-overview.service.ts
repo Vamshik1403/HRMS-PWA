@@ -1022,13 +1022,20 @@ export class DashboardOverviewService {
       if (dob) {
         const eventAt = this.eventDateThisYear(today, dob.month, dob.day);
         const diff = this.daysFromToday(today, eventAt);
-        if (diff >= -1 && diff <= 1) {
+        if (diff >= -1 && diff <= 14) {
           events.push({
             id: `bday-${emp.id}`,
             kind: 'birthday',
             label: `${name}'s birthday`,
             date: dateKeyLocal(eventAt),
-            when: diff === -1 ? 'Yesterday' : diff === 0 ? 'Today' : 'Tomorrow',
+            when:
+              diff === -1
+                ? 'Yesterday'
+                : diff === 0
+                  ? 'Today'
+                  : diff === 1
+                    ? 'Tomorrow'
+                    : `In ${diff} days`,
           });
         }
       }
@@ -1037,14 +1044,21 @@ export class DashboardOverviewService {
       if (join) {
         const eventAt = this.eventDateThisYear(today, join.month, join.day);
         const diff = this.daysFromToday(today, eventAt);
-        if (diff >= -1 && diff <= 1) {
+        if (diff >= -1 && diff <= 14) {
           const years = today.getFullYear() - (Number(String(emp.joiningDate).slice(0, 4)) || today.getFullYear());
           events.push({
             id: `anniv-${emp.id}`,
             kind: 'anniversary',
             label: years > 0 ? `${name} — ${years} yr work anniversary` : `${name} joined the company`,
             date: dateKeyLocal(eventAt),
-            when: diff === -1 ? 'Yesterday' : diff === 0 ? 'Today' : 'Tomorrow',
+            when:
+              diff === -1
+                ? 'Yesterday'
+                : diff === 0
+                  ? 'Today'
+                  : diff === 1
+                    ? 'Tomorrow'
+                    : `In ${diff} days`,
           });
         }
       }

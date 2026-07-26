@@ -51,6 +51,7 @@ export function resolveProfileWorkspaceTab(searchParams: URLSearchParams): strin
   const allowed = [
     "profile",
     "attendance",
+    "work-report",
     "leave",
     "reimbursement",
     "delegation",

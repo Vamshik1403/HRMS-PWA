@@ -15,7 +15,7 @@ interface SidebarBrandProps {
 export function SidebarBrand({ collapsed, homeHref = "/dashboard", onRefresh, onToggle }: SidebarBrandProps) {
   if (collapsed) {
     return (
-      <div className="flex h-[72px] shrink-0 flex-col items-center justify-center gap-2 border-b border-[#e5eeff] px-2">
+      <div className="flex h-[72px] shrink-0 flex-col items-center justify-center gap-2 border-b border-border px-2">
         <Link
           href={homeHref}
           className="flex items-center justify-center w-full"
@@ -45,7 +45,7 @@ export function SidebarBrand({ collapsed, homeHref = "/dashboard", onRefresh, on
   }
 
   return (
-      <div className="flex h-[72px] shrink-0 items-center gap-1 border-b border-[#e5eeff] px-2.5 min-w-0">
+      <div className="flex h-[72px] shrink-0 items-center gap-1 border-b border-border px-2.5 min-w-0">
       <Link href={homeHref} className="flex items-center gap-2 min-w-0 flex-1">
         <img
           src="/img/OpenHRM_Logo.png"

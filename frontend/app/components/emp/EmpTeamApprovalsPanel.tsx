@@ -349,6 +349,9 @@ export function EmpTeamApprovalsPanel({
         reimbursementId={selectedReimbId}
         onDone={() => {
           if (employeeId) void loadData(employeeId);
+          if (typeof window !== "undefined") {
+            window.dispatchEvent(new Event("emp-sidebar-badges-changed"));
+          }
         }}
       />
     </div>

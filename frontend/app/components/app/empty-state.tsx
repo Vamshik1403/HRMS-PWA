@@ -12,17 +12,17 @@ interface EmptyStateProps {
 
 export function EmptyState({ icon: Icon, title, description, action }: EmptyStateProps) {
   return (
-    <div className="px-4 py-14 min-h-[220px] flex flex-col items-center justify-center text-center gap-3 bg-white">
-      <div className="rounded-full bg-[#F1F5F9] p-4">
-        <Icon className="size-7 text-muted-foreground" />
+    <div className="flex min-h-[280px] flex-col items-center justify-center gap-4 bg-card px-6 py-16 text-center">
+      <div className="rounded-full bg-muted p-5">
+        <Icon className="size-8 text-muted-foreground" />
       </div>
-      <div className="space-y-1">
-        <div className="font-medium">{title}</div>
+      <div className="space-y-1.5">
+        <div className="text-[17px] font-semibold text-foreground">{title}</div>
         {description ? (
-          <p className="text-sm text-muted-foreground max-w-md">{description}</p>
+          <p className="mx-auto max-w-md text-[14px] text-muted-foreground">{description}</p>
         ) : null}
       </div>
-      {action}
+      {action ? <div className="pt-1">{action}</div> : null}
     </div>
   );
 }

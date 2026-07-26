@@ -321,7 +321,7 @@ export default function EmpPortalShell({ children, hideBottomNav = false }: EmpP
 
   return (
     <EmpPortalPageProvider>
-    <div className="emp-pwa-shell emp-portal-desktop flex h-dvh max-h-dvh overflow-hidden bg-[#f8f9ff]" data-theme={theme}>
+    <div className="emp-pwa-shell emp-portal-desktop flex h-dvh max-h-dvh overflow-hidden bg-background" data-theme={theme}>
 
       <EmpSidebar
         collapsed={sidebarCollapsed}
@@ -367,8 +367,8 @@ export default function EmpPortalShell({ children, hideBottomNav = false }: EmpP
 
         {!hideBottomNav && <EmpMarkoutReminderBanner />}
 
-        <main className="emp-portal-main relative z-0 min-h-0 flex-1 overflow-y-auto overscroll-y-contain bg-[#f8f9ff]">
-          <div className="hrms-admin-content emp-workspace-shell mx-auto w-full max-w-[1400px] px-8 py-8">
+        <main className="emp-portal-main relative z-0 min-h-0 flex-1 overflow-y-auto overscroll-y-contain bg-background">
+          <div className="hrms-admin-content emp-workspace-shell mx-auto w-full max-w-[1400px] px-8 py-6">
             {children}
           </div>
         </main>

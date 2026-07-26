@@ -9,7 +9,7 @@ const Table = React.forwardRef<
   <div className="relative w-full overflow-auto app-scroll">
     <table
       ref={ref}
-      className={cn("w-full caption-bottom text-sm", className)}
+      className={cn("w-full caption-bottom text-left text-sm", className)}
       {...props}
     />
   </div>
@@ -62,7 +62,7 @@ const TableRow = React.forwardRef<
   <tr
     ref={ref}
     className={cn(
-      "border-b transition-colors hover:bg-accent/30 data-[state=selected]:bg-accent",
+      "h-16 border-b border-[#E5E7EB]/80 transition-colors hover:bg-[#F8FAFC] data-[state=selected]:bg-accent dark:border-border dark:hover:bg-muted/40",
       className
     )}
     {...props}
@@ -77,7 +77,7 @@ const TableHead = React.forwardRef<
   <th
     ref={ref}
     className={cn(
-      "h-11 px-4 text-left align-middle text-[11px] font-semibold uppercase tracking-wider text-muted-foreground [&:has([role=checkbox])]:pr-0",
+      "h-[52px] bg-[#FAFBFC] px-6 text-left align-middle text-[13px] font-semibold tracking-wide text-muted-foreground dark:bg-muted/40 [&:has([role=checkbox])]:pr-0",
       className
     )}
     {...props}
@@ -92,7 +92,7 @@ const TableCell = React.forwardRef<
   <td
     ref={ref}
     className={cn(
-      "p-4 align-middle text-sm [&:has([role=checkbox])]:pr-0",
+      "px-6 py-3 align-middle text-[15px] font-medium text-foreground [&:has([role=checkbox])]:pr-0",
       className
     )}
     {...props}

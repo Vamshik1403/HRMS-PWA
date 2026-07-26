@@ -705,26 +705,25 @@ useAppRefresh(() => {
                 />
               </>
             }
-            trailing={
-              <div className="hidden lg:flex items-center gap-2 shrink-0">
-                {[
-                  { label: "Completed", status: "Closed", value: stats.Closed, cls: "bg-emerald-50 text-emerald-700 border-emerald-200" },
-                  { label: "Open", status: "Open", value: stats.Open, cls: "bg-slate-50 text-slate-700 border-slate-200" },
-                  { label: "Work In Progress", status: "WIP", value: stats.WIP, cls: "bg-amber-50 text-amber-800 border-amber-200" },
-                  { label: "Reopened", status: "Reopen", value: stats.Reopen, cls: "bg-violet-50 text-violet-800 border-violet-200" },
-                ].map((s) => (
-                  <button
-                    key={s.status}
-                    type="button"
-                    onClick={() => setStatusFilter(statusFilter === s.status ? "ALL" : s.status)}
-                    className={`text-xs font-medium px-3 py-1.5 rounded-full border transition-colors whitespace-nowrap ${s.cls} ${statusFilter === s.status ? "ring-2 ring-offset-1 ring-blue-400" : ""}`}
-                  >
-                    {s.label} <span className="font-bold">{s.value}</span>
-                  </button>
-                ))}
-              </div>
-            }
           />
+
+          <div className="flex flex-wrap items-center gap-2">
+            {[
+              { label: "Completed", status: "Closed", value: stats.Closed, cls: "bg-emerald-50 text-emerald-700 border-emerald-200" },
+              { label: "Open", status: "Open", value: stats.Open, cls: "bg-slate-50 text-slate-700 border-slate-200" },
+              { label: "Work In Progress", status: "WIP", value: stats.WIP, cls: "bg-amber-50 text-amber-800 border-amber-200" },
+              { label: "Reopened", status: "Reopen", value: stats.Reopen, cls: "bg-violet-50 text-violet-800 border-violet-200" },
+            ].map((s) => (
+              <button
+                key={s.status}
+                type="button"
+                onClick={() => setStatusFilter(statusFilter === s.status ? "ALL" : s.status)}
+                className={`text-xs font-medium px-3 py-1.5 rounded-full border transition-colors whitespace-nowrap ${s.cls} ${statusFilter === s.status ? "ring-2 ring-offset-1 ring-blue-400" : ""}`}
+              >
+                {s.label} <span className="font-bold">{s.value}</span>
+              </button>
+            ))}
+          </div>
 
           <EntityListShell
             title="All tasks"

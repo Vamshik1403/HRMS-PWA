@@ -115,6 +115,8 @@ export default function EmpNoticeboardPage() {
 
   useEffect(() => {
     localStorage.setItem("_notice_last_viewed", Date.now().toString());
+    window.dispatchEvent(new Event("emp-sidebar-badges-changed"));
+    window.dispatchEvent(new Event("emp-notifications-changed"));
 
     const userRaw = localStorage.getItem("user");
     if (!userRaw) {

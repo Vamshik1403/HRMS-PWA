@@ -1,13 +1,13 @@
 "use client";
 
 import { Suspense } from "react";
-import Link from "next/link";
 import { useParams, useSearchParams } from "next/navigation";
-import { ArrowLeft, User } from "lucide-react";
+import { User } from "lucide-react";
 import { EmpDesktopPage } from "./EmpDesktopPage";
 import { EmpDesktopProfilePanel } from "./EmpDesktopProfilePanel";
 import { EmpProfileWorkspaceTabNav } from "./EmpProfileWorkspaceTabNav";
 import { EmpProfileAttendanceView } from "./EmpProfileAttendanceView";
+import { EmpProfileWorkReportView } from "./EmpProfileWorkReportView";
 import { EmpHolidayListMobile } from "../EmpHolidayListMobile";
 import {
   EmpTeamMemberLeave,
@@ -22,6 +22,7 @@ import { Icon } from "@iconify/react";
 const MEMBER_TABS = [
   "profile",
   "attendance",
+  "work-report",
   "leave",
   "reimbursement",
   "payslips",
@@ -62,6 +63,7 @@ function EmpDesktopTeamMemberWorkspaceInner() {
   const tabs = [
     { id: "profile", label: "Profile", href: memberTabHref(employeeId, "profile") },
     { id: "attendance", label: "Attendance", href: memberTabHref(employeeId, "attendance") },
+    { id: "work-report", label: "Work Report", href: memberTabHref(employeeId, "work-report") },
     { id: "leave", label: "Leave", href: memberTabHref(employeeId, "leave") },
     { id: "reimbursement", label: "Reimbursement", href: memberTabHref(employeeId, "reimbursement") },
     { id: "payslips", label: "Payslips", href: memberTabHref(employeeId, "payslips") },
@@ -73,21 +75,14 @@ function EmpDesktopTeamMemberWorkspaceInner() {
 
   return (
     <EmpDesktopPage title="Team member" description="Employee profile and records" icon={User}>
-      <div className="space-y-6">
-        <Link
-          href="/empTeam/my-team"
-          className="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground"
-        >
-          <ArrowLeft className="size-4" />
-          Back to My Team
-        </Link>
-
+      <div className="space-y-3">
         <EmpProfileWorkspaceTabNav tabs={tabs} activeTab={activeTab} />
 
         {activeTab === "profile" && (
           <EmpDesktopProfilePanel embedded employeeId={employeeId} readOnly />
         )}
         {activeTab === "attendance" && <EmpProfileAttendanceView employeeId={employeeId} />}
+        {activeTab === "work-report" && <EmpProfileWorkReportView employeeId={employeeId} />}
         {activeTab === "leave" && <EmpTeamMemberLeave employeeId={employeeId} />}
         {activeTab === "reimbursement" && <EmpTeamMemberReimbursement employeeId={employeeId} />}
         {activeTab === "payslips" && <EmpTeamMemberPayslips employeeId={employeeId} />}

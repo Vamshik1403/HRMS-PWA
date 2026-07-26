@@ -296,7 +296,7 @@ function SetupDelegationForm({
       </div>
 
       <div className="flex flex-wrap gap-2 pt-2">
-        <Button type="button" onClick={() => void save()} disabled={submitting}>
+        <Button type="button" size="lg" onClick={() => void save()} disabled={submitting}>
           Save
         </Button>
       </div>

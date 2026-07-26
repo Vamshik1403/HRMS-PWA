@@ -1,25 +1,27 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Card, CardContent } from "../components/ui/card";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
-import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
-} from "../components/ui/table";
 import { Badge } from "../components/ui/badge";
-import { Plus, Search, Edit, Trash2, Eye, EyeOff, X } from "lucide-react";
+import { Plus, Edit, Trash2, Eye, EyeOff, X, Users } from "lucide-react";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "../components/ui/select";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import { useListAutoRefresh } from "../hooks/useListAutoRefresh";
-import { TableBodySkeleton } from "../components/ui/TableBodySkeleton";
 import { toast } from "sonner";
 import { FormDrawer } from "../components/ui/form-drawer";
 import { DetailCard } from "../components/app/detail-card";
 import { EntityDetailHero, EntityDetailLayout } from "../components/app/entity-detail-layout";
+import { PageHeader } from "../components/app/page-header";
+import { FilterBar } from "../components/app/filter-bar";
+import { EntityListShell } from "../components/app/entity-list-shell";
+import { useClientTable, sortRows } from "../hooks/use-client-table";
+import type { DataTableColumn } from "../components/app/data-table";
+import { listPrimaryButtonClass } from "../components/app/list-ui-styles";
+import { cn } from "@/app/utils/cn";
 
 const API = "/backend/users";
 
@@ -95,7 +97,7 @@ const canAccess = isSuperAdmin || isServiceProvider || isAdmin;
   const [rows, setRows] = useState<UserRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [searchTerm, setSearchTerm] = useState("");
+  const table = useClientTable("username");
   const [isAddingNew, setIsAddingNew] = useState(false);
   const [editingRow, setEditingRow] = useState<UserRow | null>(null);
   const [isViewing, setIsViewing] = useState(false);
@@ -343,18 +345,138 @@ companyIDs: form.role === "COMPANY_ADMIN" || form.role === "SUPERADMIN" ? form.c
 if (isAdmin && user?.companyID) {
   data = data.filter((r) => r.companyID === user.companyID && r.role !== "COMPANY_ADMIN");
 }
-    const t = searchTerm.trim().toLowerCase();
-    if (!t) return data;
-    return data.filter((r) => {
-      return [
-        r.username,
-        r.role,
-        r.serviceProvider?.companyName ?? "",
-        r.company?.companyName ?? "",
-        r.branches?.branchName ?? "",
-      ].some((x) => x.toLowerCase().includes(t));
+    const t = table.search.trim().toLowerCase();
+    if (t) {
+      data = data.filter((r) => {
+        return [
+          r.username,
+          r.firstName ?? "",
+          r.lastName ?? "",
+          r.email ?? "",
+          r.role,
+          r.serviceProvider?.companyName ?? "",
+          r.company?.companyName ?? "",
+          r.branches?.branchName ?? "",
+          ...(r.userCompanies?.map((x) => x.company?.companyName ?? "") ?? []),
+        ].some((x) => x.toLowerCase().includes(t));
+      });
+    }
+    return sortRows(data, table.sortBy, table.sortDir, (row, key) => {
+      switch (key) {
+        case "name":
+          return [row.firstName, row.lastName].filter(Boolean).join(" ") || row.username;
+        case "username":
+          return row.username || "";
+        case "email":
+          return row.email || "";
+        case "role":
+          return ROLE_DISPLAY[row.role] || row.role || "";
+        case "company":
+          return row.userCompanies?.length
+            ? row.userCompanies.map((x) => x.company?.companyName).filter(Boolean).join(", ")
+            : row.company?.companyName ?? "";
+        case "branch":
+          return row.branches?.branchName ?? "";
+        case "status":
+          return row.isActive ? "Active" : "Inactive";
+        default:
+          return "";
+      }
     });
-  }, [rows, searchTerm, isAdmin, user?.companyID]);
+  }, [rows, table.search, table.sortBy, table.sortDir, isAdmin, isServiceProvider, user?.companyID, user?.serviceProviderID]);
+
+  const userColumns: Array<DataTableColumn<UserRow>> = useMemo(
+    () => [
+      {
+        key: "name",
+        header: "Name",
+        sortable: true,
+        cell: (r) => (
+          <span className="font-medium text-foreground">
+            {[r.firstName, r.lastName].filter(Boolean).join(" ") || "—"}
+          </span>
+        ),
+      },
+      {
+        key: "username",
+        header: "Username",
+        sortable: true,
+        cell: (r) => r.username,
+      },
+      {
+        key: "email",
+        header: "Email",
+        sortable: true,
+        cell: (r) => r.email || "—",
+      },
+      {
+        key: "role",
+        header: "Role",
+        sortable: true,
+        cell: (r) => <Badge variant="secondary">{ROLE_DISPLAY[r.role] || r.role}</Badge>,
+      },
+      {
+        key: "company",
+        header: "Company",
+        sortable: true,
+        cell: (r) =>
+          r.userCompanies?.length
+            ? r.userCompanies.map((x) => x.company?.companyName).filter(Boolean).join(", ")
+            : r.company?.companyName ?? "—",
+      },
+      {
+        key: "branch",
+        header: "Branch",
+        sortable: true,
+        cell: (r) => r.branches?.branchName ?? "—",
+      },
+      {
+        key: "status",
+        header: "Status",
+        sortable: true,
+        cell: (r) => (
+          <Badge variant={r.isActive ? "default" : "destructive"}>
+            {r.isActive ? "Active" : "Inactive"}
+          </Badge>
+        ),
+      },
+      {
+        key: "actions",
+        header: "Actions",
+        align: "right",
+        cell: (r) => (
+          <div className="flex justify-end gap-1">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setViewRow(r);
+                setIsViewing(true);
+              }}
+            >
+              <Eye className="w-4 h-4" />
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => handleEdit(r)}>
+              <Edit className="w-4 h-4" />
+            </Button>
+            {r.role !== "SUPERADMIN" ? (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => handleDelete(r.id)}
+                className="text-red-500 hover:text-red-700"
+              >
+                <Trash2 className="w-4 h-4" />
+              </Button>
+            ) : null}
+          </div>
+        ),
+      },
+    ],
+    // handleEdit/handleDelete are stable enough in this module scope for list actions
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  );
 
   if (!canAccess) {
     return <div className="p-8 text-center text-gray-500">Access restricted.</div>;
@@ -362,36 +484,41 @@ if (isAdmin && user?.companyID) {
 
   return (
     <div className="space-y-6 w-full max-w-none animate-fade-in page-content-enter">
-      <div className="flex items-center justify-between w-full">
-        <p className="text-gray-600 text-sm">Manage system users and access</p>
-        {!isAddingNew && !isViewing && (
-          <Button
-            onClick={() => {
-              resetForm();
+      <PageHeader
+        icon={Users}
+        title="System Users"
+        description="Manage system users and access"
+        actions={
+          !isAddingNew && !isViewing ? (
+            <Button
+              type="button"
+              className={cn(listPrimaryButtonClass)}
+              onClick={() => {
+                resetForm();
 
-            if (isServiceProvider && user?.serviceProviderID) {
-  setForm((p) => ({
-    ...p,
-    serviceProviderID: user.serviceProviderID as number,
-  }));
-}
+                if (isServiceProvider && user?.serviceProviderID) {
+                  setForm((p) => ({
+                    ...p,
+                    serviceProviderID: user.serviceProviderID as number,
+                  }));
+                }
 
-if (isAdmin && user?.companyID) {
-  setForm((p) => ({
-    ...p,
-    companyID: user.companyID as number,
-    companyIDs: [Number(user.companyID)],
-  }));
-}
+                if (isAdmin && user?.companyID) {
+                  setForm((p) => ({
+                    ...p,
+                    companyID: user.companyID as number,
+                    companyIDs: [Number(user.companyID)],
+                  }));
+                }
 
-              setIsAddingNew(true);
-            }}
-            className="text-sm px-3 py-2"
-          >
-              <Plus className="w-4 h-4 mr-1" /> Add User
-          </Button>
-        )}
-      </div>
+                setIsAddingNew(true);
+              }}
+            >
+              <Plus className="w-4 h-4" /> Add User
+            </Button>
+          ) : null
+        }
+      />
 
       {/* Add/Edit FormDrawer */}
       <FormDrawer open={isAddingNew} onOpenChange={(v) => { if (!v) handleCancel(); }}
@@ -640,8 +767,8 @@ Select at least one company from dropdown. First selected company becomes primar
           )}
 
           <div className="flex justify-end gap-2 pt-4">
-            <Button type="button" variant="outline" onClick={handleCancel}>Cancel</Button>
-            <Button type="submit" disabled={saving}>{saving ? "Saving…" : editingRow ? "Update" : "Create"}</Button>
+            <Button type="button" variant="outline" size="lg" onClick={handleCancel}>Cancel</Button>
+            <Button type="submit" size="lg" disabled={saving}>{saving ? "Saving…" : editingRow ? "Update" : "Create"}</Button>
           </div>
         </form>
       </FormDrawer>
@@ -699,75 +826,26 @@ Select at least one company from dropdown. First selected company becomes primar
       {/* Table listing */}
       {!isAddingNew && !isViewing && (
         <>
-          <div className="flex items-center gap-2 bg-white rounded-lg border px-3 py-2 max-w-sm">
-            <Search className="w-4 h-4 text-gray-400" />
-            <Input
-              placeholder="Search users…"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="border-0 bg-transparent shadow-none focus-visible:ring-0 h-8 px-0 text-sm"
-            />
-          </div>
-
-          <Card>
-            <CardContent className="p-0">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                   <TableHead>Name</TableHead>
-<TableHead>Username</TableHead>
-<TableHead>Email</TableHead>
-<TableHead>Role</TableHead>
-                    <TableHead>Company</TableHead>
-                    <TableHead>Branch</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {loading ? (
-                    <TableBodySkeleton cols={8} />
-                  ) : filteredRows.length === 0 ? (
-                    <TableRow><TableCell colSpan={8} className="text-center py-8 text-gray-400">No users found</TableCell></TableRow>
-                  ) : (
-                    filteredRows.map((r) => (
-                      <TableRow key={r.id}>
-                      <TableCell className="font-medium">
-  {[r.firstName, r.lastName].filter(Boolean).join(" ") || "—"}
-</TableCell>
-<TableCell>{r.username}</TableCell>
-<TableCell>{r.email || "—"}</TableCell>
-<TableCell><Badge variant="secondary">{ROLE_DISPLAY[r.role] || r.role}</Badge></TableCell>
-
-                        <TableCell>
-                          {r.userCompanies?.length
-                            ? r.userCompanies
-                                .map((x) => x.company?.companyName)
-                                .filter(Boolean)
-                                .join(", ")
-                            : r.company?.companyName ?? "—"}
-                        </TableCell>
-                        
-                         <TableCell>{r.branches?.branchName ?? "—"}</TableCell>
-                        <TableCell>
-                          <Badge variant={r.isActive ? "default" : "destructive"}>{r.isActive ? "Active" : "Inactive"}</Badge>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex justify-end gap-1">
-                            <Button variant="ghost" size="sm" onClick={() => { setViewRow(r); setIsViewing(true); }}><Eye className="w-4 h-4" /></Button>
-                            <Button variant="ghost" size="sm" onClick={() => handleEdit(r)}><Edit className="w-4 h-4" /></Button>
-                            {r.role !== "SUPERADMIN" && (
-                              <Button variant="ghost" size="sm" onClick={() => handleDelete(r.id)} className="text-red-500 hover:text-red-700"><Trash2 className="w-4 h-4" /></Button>
-                            )}
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
+          <FilterBar
+            search={{
+              value: table.search,
+              onChange: table.setSearch,
+              placeholder: "Search users…",
+            }}
+          />
+          <EntityListShell
+            title="System users"
+            columns={userColumns}
+            rows={filteredRows}
+            rowKey={(r) => String(r.id)}
+            isLoading={loading}
+            sortBy={table.sortBy}
+            sortDir={table.sortDir}
+            onSort={table.setSort}
+            emptyIcon={Users}
+            emptyTitle="No users found"
+            emptyDescription="Try a different search, or add a new system user."
+          />
         </>
       )}
     </div>

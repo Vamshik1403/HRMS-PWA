@@ -1,24 +1,21 @@
 "use client";
 
-import { useEffect, useRef, useState, useCallback } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "../components/ui/table";
 import { Badge } from "../components/ui/badge";
-import { Search, Trash2, IndianRupee, X } from "lucide-react";
+import { Plus, IndianRupee, X } from "lucide-react";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import { toast } from "sonner";
-import { TableBodySkeleton } from "../components/ui/TableBodySkeleton";
 import { NoticeBanner } from "../components/ui/notice-banner";
 import { getSidebarContext } from "../utils/sidebarContext";
+import { FormDrawer } from "../components/ui/form-drawer";
+import { PageHeader } from "../components/app/page-header";
+import { FilterBar } from "../components/app/filter-bar";
+import { EntityListShell } from "../components/app/entity-list-shell";
+import { EntityRowActions } from "../components/app/entity-row-actions";
+import type { DataTableColumn } from "../components/app/data-table";
+import { useClientTable, sortRows } from "../hooks/use-client-table";
 
 // ─── Types ──────────────────────────────────────────────────
 interface Contractor {
@@ -401,6 +398,8 @@ export function ContractorPayoutsManagement() {
   const [payoutRecords, setPayoutRecords] = useState<PayoutRecord[]>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [formOpen, setFormOpen] = useState(false);
+  const table = useClientTable("contractor");
 
   // Search suggest hooks for single selects
   const contrSuggest = useSearchSuggest(allContractors, (c) => c.contractorName || "");
@@ -801,7 +800,7 @@ return companyOk && branchOk && designationOk && contractorOk;
       setReportType("");
       setPeriodFrom("");
       setPeriodTo("");
-    } catch (err: any) {
+      setFormOpen(false);    } catch (err: any) {
       toast.error(err?.message || "Failed to save");
     } finally {
       setSaving(false);
@@ -825,26 +824,172 @@ return companyOk && branchOk && designationOk && contractorOk;
 
   const hasShiftSelected = selectedShifts.length > 0 || allShiftsSelected;
 
-  return (
-    <div className="p-6 space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">Contractor Payouts</h1>
-        <p className="text-sm text-gray-500 mt-1">
-          Configure payout assignments for contractors by selecting filters and auto-fetching the rate card.
-        </p>
-      </div>
+  const parseIds = (raw?: string | null) => {
+    if (!raw) return [] as number[];
+    try {
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed.map(Number).filter(Boolean) : [];
+    } catch {
+      return [];
+    }
+  };
 
-      {/* ── Form Card ── */}
-      {canManage && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-base">
-              <IndianRupee className="w-5 h-5 text-[#4f46e5]" />
-              Generate Contactor Payout Statement
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+  const nameList = (ids: number[], lookup: Map<number, string>) => {
+    if (!ids.length) return "—";
+    return ids.map((id) => lookup.get(id) || `#${id}`).join(", ");
+  };
+
+  const branchNameById = useMemo(() => {
+    const map = new Map<number, string>();
+    allBranches.forEach((b) => map.set(b.id, b.branchName || `#${b.id}`));
+    return map;
+  }, [allBranches]);
+
+  const deptNameById = useMemo(() => {
+    const map = new Map<number, string>();
+    allDepartments.forEach((d) => map.set(d.id, d.departmentName || `#${d.id}`));
+    return map;
+  }, [allDepartments]);
+
+  const desigNameById = useMemo(() => {
+    const map = new Map<number, string>();
+    allDesignations.forEach((d) => map.set(d.id, d.designation || `#${d.id}`));
+    return map;
+  }, [allDesignations]);
+
+  const empNameById = useMemo(() => {
+    const map = new Map<number, string>();
+    allEmployees.forEach((e) => map.set(e.id, empLabel(e)));
+    return map;
+  }, [allEmployees]);
+
+  const shiftNameById = useMemo(() => {
+    const map = new Map<number, string>();
+    allWorkshifts.forEach((w) => map.set(w.id, w.workShiftName || `#${w.id}`));
+    return map;
+  }, [allWorkshifts]);
+
+  const filteredRecords = useMemo(() => {
+    const q = table.search.trim().toLowerCase();
+    const filtered = payoutRecords.filter((r) => {
+      if (!q) return true;
+      const contractor = (r.contractor?.contractorName || `#${r.contractorID}`).toLowerCase();
+      const branch = String(branchNameById.get(r.branchID || -1) || r.branchID || "").toLowerCase();
+      return contractor.includes(q) || branch.includes(q) || String(r.rateCardID || "").includes(q);
+    });
+    return sortRows(filtered, table.sortBy, table.sortDir, (row, key) => {
+      if (key === "contractor") return row.contractor?.contractorName || String(row.contractorID);
+      if (key === "branch") return branchNameById.get(row.branchID || -1) || String(row.branchID || "");
+      if (key === "rateCard") return String(row.rateCardID || "");
+      return String((row as any)[key] ?? "");
+    });
+  }, [payoutRecords, table.search, table.sortBy, table.sortDir, branchNameById]);
+
+  const payoutColumns = useMemo((): DataTableColumn<PayoutRecord>[] => [
+    {
+      key: "contractor",
+      header: "Contractor",
+      sortable: true,
+      cell: (r) => r.contractor?.contractorName || `#${r.contractorID}`,
+    },
+    {
+      key: "branch",
+      header: "Branch",
+      sortable: true,
+      cell: (r) => (r.branchID ? branchNameById.get(r.branchID) || `#${r.branchID}` : "—"),
+    },
+    {
+      key: "departments",
+      header: "Departments",
+      cell: (r) => nameList(parseIds(r.departmentIDs), deptNameById),
+    },
+    {
+      key: "designations",
+      header: "Designations",
+      cell: (r) => nameList(parseIds(r.designationIDs), desigNameById),
+    },
+    {
+      key: "employees",
+      header: "Employees",
+      cell: (r) => nameList(parseIds(r.employeeIDs), empNameById),
+    },
+    {
+      key: "workshifts",
+      header: "Workshifts",
+      cell: (r) => nameList(parseIds(r.workshiftIDs), shiftNameById),
+    },
+    {
+      key: "rateCard",
+      header: "Rate Card",
+      sortable: true,
+      cell: (r) =>
+        r.rateCardID ? (
+          <Badge variant="secondary" className="bg-[#eef2ff] text-[#4f46e5]">
+            #{r.rateCardID}
+          </Badge>
+        ) : (
+          "—"
+        ),
+    },
+    {
+      key: "actions",
+      header: "Actions",
+      align: "right",
+      cell: (r) =>
+        canManage ? (
+          <EntityRowActions
+            onDelete={() => handleDelete(r.id)}
+            deleteTitle="Delete configuration"
+            confirmDelete={false}
+          />
+        ) : null,
+    },
+  ], [branchNameById, canManage, deptNameById, desigNameById, empNameById, shiftNameById]);
+
+  const openGenerateForm = () => {
+    setSelectedContractor(null);
+    contrSuggest.setQuery("");
+    resetFromBranch();
+    setReportType("");
+    setPeriodFrom("");
+    setPeriodTo("");
+    setFormOpen(true);
+  };
+
+  return (
+    <div className="space-y-6 w-full max-w-none animate-fade-in page-content-enter">
+      <PageHeader
+        icon={IndianRupee}
+        title="Contractor Payouts"
+        description="Configure payout assignments for contractors by selecting filters and auto-fetching the rate card."
+        actions={
+          canManage && !formOpen ? (
+            <Button onClick={openGenerateForm}>
+              <Plus className="w-4 h-4 mr-1" />
+              Generate Statement
+            </Button>
+          ) : null
+        }
+      />
+
+      <FormDrawer
+        open={formOpen}
+        onOpenChange={(open) => {
+          setFormOpen(open);
+          if (!open) {
+            setSelectedContractor(null);
+            contrSuggest.setQuery("");
+            resetFromBranch();
+            setReportType("");
+            setPeriodFrom("");
+            setPeriodTo("");
+          }
+        }}
+        title="Generate Contractor Payout Statement"
+        description="Select filters to auto-fetch the rate card and save the payout configuration."
+        showHeaderCancel
+      >
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
 
               {/* 1. Contractor */}
               <SingleSuggestField<Contractor>
@@ -1009,95 +1154,44 @@ return companyOk && branchOk && designationOk && contractorOk;
               </NoticeBanner>
             )}
 
-            <div className="mt-5 flex justify-end">
+            <div className="mt-5 flex justify-end gap-2">
+              <Button type="button" variant="outline" onClick={() => setFormOpen(false)}>
+                Cancel
+              </Button>
               <Button
                 onClick={handleSave}
                 disabled={!selectedContractor || saving}
-                className="bg-[#4f46e5] hover:bg-[#4338ca] text-white"
               >
                 {saving ? "Saving…" : "Generate Statement"}
               </Button>
             </div>
-          </CardContent>
-        </Card>
-      )}
+      </FormDrawer>
 
-      {/* ── Records Table ── */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-base">
-            <Search className="w-4 h-4" />
-            Saved Payout Configurations
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="p-0">
-          {payoutRecords.length === 0 && !loading ? (
-            <div className="p-8 text-center text-sm text-gray-400">No payout configurations saved yet.</div>
-          ) : (
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>#</TableHead>
-                    <TableHead>Contractor</TableHead>
-                    <TableHead>Branch ID</TableHead>
-                    <TableHead>Departments</TableHead>
-                    <TableHead>Designations</TableHead>
-                    <TableHead>Employees</TableHead>
-                    <TableHead>Workshifts</TableHead>
-                    <TableHead>Rate Card</TableHead>
-                    {canManage && <TableHead className="text-right">Actions</TableHead>}
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {loading ? (
-                    <TableBodySkeleton cols={canManage ? 9 : 8} />
-                  ) : payoutRecords.map((record, idx) => (
-                    <TableRow key={record.id}>
-                      <TableCell className="text-xs text-gray-400">{idx + 1}</TableCell>
-                      <TableCell className="font-medium text-sm">
-                        {record.contractor?.contractorName || `#${record.contractorID}`}
-                      </TableCell>
-                      <TableCell className="text-sm">{record.branchID ?? "—"}</TableCell>
-                      <TableCell className="text-xs text-gray-600">
-                        {record.departmentIDs ? (JSON.parse(record.departmentIDs) as number[]).join(", ") : "—"}
-                      </TableCell>
-                      <TableCell className="text-xs text-gray-600">
-                        {record.designationIDs ? (JSON.parse(record.designationIDs) as number[]).join(", ") : "—"}
-                      </TableCell>
-                      <TableCell className="text-xs text-gray-600">
-                        {record.employeeIDs ? (JSON.parse(record.employeeIDs) as number[]).join(", ") : "—"}
-                      </TableCell>
-                      <TableCell className="text-xs text-gray-600">
-                        {record.workshiftIDs ? (JSON.parse(record.workshiftIDs) as number[]).join(", ") : "—"}
-                      </TableCell>
-                      <TableCell>
-                        {record.rateCardID ? (
-                          <Badge variant="secondary" className="bg-[#eef2ff] text-[#4f46e5]">#{record.rateCardID}</Badge>
-                        ) : (
-                          <span className="text-gray-400 text-xs">—</span>
-                        )}
-                      </TableCell>
-                      {canManage && (
-                        <TableCell className="text-right">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="text-red-500 hover:text-red-700 hover:bg-red-50"
-                            onClick={() => handleDelete(record.id)}
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
-                        </TableCell>
-                      )}
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+      {!formOpen && (
+        <>
+          <FilterBar
+            search={{
+              value: table.search,
+              onChange: table.setSearch,
+              placeholder: "Search contractor, branch, rate card…",
+            }}
+          />
+
+          <EntityListShell
+            title="Saved payout configurations"
+            columns={payoutColumns}
+            rows={filteredRecords}
+            rowKey={(r) => String(r.id)}
+            isLoading={loading}
+            sortBy={table.sortBy}
+            sortDir={table.sortDir}
+            onSort={table.setSort}
+            emptyIcon={IndianRupee}
+            emptyTitle="No payout configurations saved yet"
+            emptyDescription="Generate a statement to save a payout configuration."
+          />
+        </>
+      )}
     </div>
   );
 }

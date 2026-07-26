@@ -2,8 +2,11 @@
 
 import { Eye, Pencil, Trash2, type LucideIcon } from "lucide-react";
 import { Button } from "@/app/components/ui/button";
+import { cn } from "@/app/utils/cn";
 
 const ICON = "size-3.5";
+const ACTION_BTN =
+  "size-[34px] rounded-lg border-0 bg-transparent text-muted-foreground shadow-none hover:bg-[#F3F4F6] hover:text-foreground dark:hover:bg-muted";
 
 interface EntityRowActionsProps {
   onView?: () => void;
@@ -36,27 +39,52 @@ export function EntityRowActions({
   };
 
   return (
-    <div className="flex items-center justify-end gap-0.5 flex-nowrap">
+    <div className="flex flex-nowrap items-center justify-end gap-2">
       {extra?.map(({ icon: Icon, title, onClick, className }) => (
-        <Button key={title} variant="ghost" size="icon" className="size-8" title={title} onClick={onClick}>
-          <Icon className={`${ICON} ${className || "text-primary"}`} />
+        <Button
+          key={title}
+          variant="ghost"
+          size="icon"
+          className={ACTION_BTN}
+          title={title}
+          onClick={onClick}
+        >
+          <Icon className={cn(ICON, className || "text-primary")} />
         </Button>
       ))}
-      {onView && (
-        <Button variant="ghost" size="icon" className="size-8" title={viewTitle} onClick={onView}>
-          <Eye className={`${ICON} text-muted-foreground`} />
+      {onView ? (
+        <Button
+          variant="ghost"
+          size="icon"
+          className={ACTION_BTN}
+          title={viewTitle}
+          onClick={onView}
+        >
+          <Eye className={ICON} />
         </Button>
-      )}
-      {onEdit && (
-        <Button variant="ghost" size="icon" className="size-8" title={editTitle} onClick={onEdit}>
-          <Pencil className={`${ICON} text-muted-foreground`} />
+      ) : null}
+      {onEdit ? (
+        <Button
+          variant="ghost"
+          size="icon"
+          className={ACTION_BTN}
+          title={editTitle}
+          onClick={onEdit}
+        >
+          <Pencil className={ICON} />
         </Button>
-      )}
-      {onDelete && (
-        <Button variant="ghost" size="icon" className="size-8" title={deleteTitle} onClick={handleDeleteClick}>
-          <Trash2 className={`${ICON} text-destructive`} />
+      ) : null}
+      {onDelete ? (
+        <Button
+          variant="ghost"
+          size="icon"
+          className={cn(ACTION_BTN, "hover:text-destructive")}
+          title={deleteTitle}
+          onClick={handleDeleteClick}
+        >
+          <Trash2 className={cn(ICON, "text-destructive")} />
         </Button>
-      )}
+      ) : null}
     </div>
   );
 }

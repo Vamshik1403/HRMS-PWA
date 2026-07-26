@@ -6,6 +6,7 @@ import { useSearchParams } from "next/navigation";
 import { EmpProfileWorkspaceTabNav, profileTabHref, resolveProfileWorkspaceTab } from "./desktop/EmpProfileWorkspaceTabNav";
 import { EmpDesktopProfilePanel } from "./desktop/EmpDesktopProfilePanel";
 import { EmpProfileAttendanceView } from "./desktop/EmpProfileAttendanceView";
+import { EmpProfileWorkReportView } from "./desktop/EmpProfileWorkReportView";
 import { EmpLeaveMobile } from "./EmpLeaveMobile";
 import { EmpReimbursementMobile } from "./EmpReimbursementMobile";
 import { EmpWorkspaceDelegation } from "./EmpWorkspaceDelegation";
@@ -22,6 +23,7 @@ function EmpProfileMobileWorkspaceInner() {
   const tabs = [
     { id: "profile", label: "Profile", href: profileTabHref("profile") },
     { id: "attendance", label: "Attendance", href: profileTabHref("attendance") },
+    { id: "work-report", label: "Work Report", href: profileTabHref("work-report") },
     { id: "leave", label: "Leave", href: profileTabHref("leave") },
     { id: "reimbursement", label: "Reimbursement", href: profileTabHref("reimbursement") },
     { id: "delegation", label: "Delegation", href: profileTabHref("delegation") },
@@ -55,6 +57,7 @@ function EmpProfileMobileWorkspaceInner() {
 
       {activeTab === "profile" && <EmpDesktopProfilePanel embedded />}
       {activeTab === "attendance" && <EmpProfileAttendanceView />}
+      {activeTab === "work-report" && <EmpProfileWorkReportView />}
       {activeTab === "leave" && <EmpLeaveMobile embedded compactBalance />}
       {activeTab === "reimbursement" && <EmpReimbursementMobile embedded />}
       {activeTab === "delegation" && <EmpWorkspaceDelegation embedded />}

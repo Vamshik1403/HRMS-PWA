@@ -49,6 +49,17 @@ const CELESTIAL_APEX_TOP = 8;
 /** Celestial position when sinking back toward the cloud */
 const CELESTIAL_SET_END = 40;
 
+/**
+ * Hub cloud opacity from celestial height:
+ * fully risen (near apex) → nearly invisible;
+ * near the horizon/cloud hub (setting or rising) → fully visible to hide the cut edge.
+ */
+function cloudOpacityFromCelestialTop(celestialTop: number) {
+  const span = Math.max(1, CELESTIAL_SET_END - CELESTIAL_APEX_TOP);
+  const nearHorizon = clamp01((celestialTop - CELESTIAL_APEX_TOP) / span);
+  return lerp(0.05, 0.96, nearHorizon);
+}
+
 /** Night palette — deeper navy, still feathered (not a hard box) */
 const NIGHT_CORE: [number, number, number] = [24, 36, 68];
 const NIGHT_DEEP: [number, number, number] = [35, 52, 92];
@@ -127,7 +138,9 @@ function getWeatherScene(date: Date): WeatherScene {
     moonClipBottom = 0;
     showMoon = moonOpacity > 0.02;
 
-    cloudOpacity = lerp(0.72, 0.94, p);
+    cloudOpacity = cloudOpacityFromCelestialTop(
+      Math.min(showSun ? sunTop : 999, showMoon ? moonTop : 999),
+    );
     farCloudsOpacity = lerp(0, 0.45, p);
     starsOpacity = clamp01(1 - p * 1.15) * 0.35;
   }
@@ -150,8 +163,8 @@ function getWeatherScene(date: Date): WeatherScene {
     sunClipBottom = 0;
     showSun = true;
 
-    cloudOpacity = 0.92;
-    farCloudsOpacity = 0.5 + noonFactor * 0.15;
+    cloudOpacity = cloudOpacityFromCelestialTop(sunTop);
+    farCloudsOpacity = 0.35 + noonFactor * 0.2;
     cloudDrift = p * 10;
   }
   // Sunset 16:00 – 18:00 — sun descends into the cloud hub
@@ -173,7 +186,7 @@ function getWeatherScene(date: Date): WeatherScene {
     sunClipBottom = 0;
     showSun = sunOpacity > 0.04;
 
-    cloudOpacity = 0.92;
+    cloudOpacity = cloudOpacityFromCelestialTop(sunTop);
     farCloudsOpacity = lerp(0.45, 0.2, p);
   }
   // Evening 18:00 – 20:00 — moon rises slowly upward from the cloud hub
@@ -198,7 +211,7 @@ function getWeatherScene(date: Date): WeatherScene {
     moonClipBottom = 0;
     showMoon = moonOpacity > 0.04;
 
-    cloudOpacity = lerp(0.9, 0.82, p);
+    cloudOpacity = cloudOpacityFromCelestialTop(moonTop);
     cloudNight = p > 0.35;
     starsOpacity = lerp(0, 0.65, moonRise);
     farCloudsOpacity = lerp(0.15, 0, p);
@@ -227,7 +240,7 @@ function getWeatherScene(date: Date): WeatherScene {
       moonClipBottom = 0;
       showMoon = moonOpacity > 0.04;
       starsOpacity = lerp(0.55, 0.2, moonSet);
-      cloudOpacity = lerp(0.82, 0.72, moonSet);
+      cloudOpacity = cloudOpacityFromCelestialTop(moonTop);
     } else {
       const moonFull = clamp01((nightT - 20) / 1.5);
       moonTop = lerp(CELESTIAL_APEX_TOP + 4, CELESTIAL_APEX_TOP, moonFull);
@@ -237,8 +250,7 @@ function getWeatherScene(date: Date): WeatherScene {
       moonClipBottom = 0;
       showMoon = true;
 
-      const cloudFade = clamp01((moonFull - 0.65) / 0.35);
-      cloudOpacity = lerp(0.82, 0.55, cloudFade);
+      cloudOpacity = cloudOpacityFromCelestialTop(moonTop);
       starsOpacity = lerp(0.35, 0.95, clamp01((moonFull - 0.75) / 0.25));
     }
 
@@ -428,11 +440,26 @@ export function HeroMorningCover() {
   const [now, setNow] = useState(() => new Date());
 
   useEffect(() => {
-    const id = setInterval(() => setNow(new Date()), 15_000);
-    return () => clearInterval(id);
+    const tick = () => setNow(new Date());
+    tick();
+    const id = window.setInterval(tick, 1000);
+    return () => window.clearInterval(id);
   }, []);
 
   const scene = useMemo(() => getWeatherScene(now), [now]);
+
+  /** Continuous sub-second depth for a live 3D feel without jumping phase. */
+  const depthPulse = useMemo(() => {
+    const ms = now.getSeconds() + now.getMilliseconds() / 1000;
+    const wave = Math.sin((ms / 60) * Math.PI * 2);
+    return {
+      sunRotateY: wave * 8,
+      sunRotateX: Math.cos((ms / 60) * Math.PI * 2) * 4,
+      moonRotateY: -wave * 10,
+      moonRotateX: Math.sin((ms / 45) * Math.PI * 2) * 5,
+      z: 18 + wave * 6,
+    };
+  }, [now]);
 
   return (
     <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-[inherit]" aria-hidden>
@@ -441,19 +468,19 @@ export function HeroMorningCover() {
 
       {/* Soft card-wide wash — same technique as morning orange */}
       <div
-        className="emp-hero-sky absolute inset-0 transition-[background] duration-[4000ms] ease-in-out"
+        className="emp-hero-sky absolute inset-0 transition-[background] duration-[1200ms] ease-in-out"
         style={{ background: scene.cardGradient }}
       />
 
       {/* Right-side atmospheric shade — radial, feathered, no hard box */}
       <div
-        className="absolute inset-0 transition-[background] duration-[4000ms] ease-in-out"
+        className="absolute inset-0 transition-[background] duration-[1200ms] ease-in-out"
         style={{ background: scene.rightAtmosphere }}
       />
 
       {/* Celestial bloom — sun / moon glow */}
       <div
-        className="absolute inset-0 transition-[background] duration-[4000ms] ease-in-out"
+        className="absolute inset-0 transition-[background] duration-[1200ms] ease-in-out"
         style={{
           background: `radial-gradient(ellipse 72% 110% at 88% 44%, ${scene.sunGlow} 0%, transparent 74%)`,
         }}
@@ -462,13 +489,16 @@ export function HeroMorningCover() {
       {/* Readability shield — keeps name & text fully clear */}
       <div className="emp-hero-cover-shield absolute inset-0 bg-gradient-to-r from-card from-[0%] via-card via-[58%] via-card/95 via-[66%] via-card/50 via-[74%] to-transparent" />
 
-      {/* Celestial elements — right zone only, transparent background */}
-      <div className="absolute inset-y-0 right-0 w-[34%] min-w-[200px]">
+      {/* Celestial elements — right zone with CSS 3D stage */}
+      <div
+        className="absolute inset-y-0 right-0 w-[34%] min-w-[200px]"
+        style={{ perspective: "720px", perspectiveOrigin: "70% 40%" }}
+      >
         <FarClouds opacity={scene.farCloudsOpacity} uid={uid} />
 
         {/* Stars — behind moon, visible on dark night shade */}
         <div
-          className="absolute inset-0 z-0 transition-opacity duration-[4000ms] ease-in-out"
+          className="absolute inset-0 z-0 transition-opacity duration-[1200ms] ease-in-out"
           style={{ opacity: scene.starsOpacity }}
         >
           {STAR_POSITIONS.map(([x, y], i) => (
@@ -489,30 +519,34 @@ export function HeroMorningCover() {
           <span className="emp-hero-shooting-star absolute left-[20%] top-[12%] size-1 rounded-full bg-white shadow-[0_0_4px_rgba(255,255,255,0.9)]" />
         </div>
 
-        {/* Sun — rises behind the cloud; cloud masks the lower disc */}
+        {/* Sun — realtime 3D orbital motion */}
         {scene.showSun ? (
           <div
-            className="emp-hero-celestial absolute z-[1] w-[132px] sm:w-[150px] transition-[top,right,opacity,clip-path] duration-[6000ms] ease-in-out"
+            className="emp-hero-celestial emp-hero-celestial-3d absolute z-[1] w-[132px] sm:w-[150px] transition-[top,right,opacity,clip-path,transform] duration-[1000ms] ease-linear"
             style={{
               top: `${scene.sunTop}%`,
               right: `${scene.sunRight}%`,
               opacity: scene.sunOpacity,
               clipPath: `inset(${scene.sunClipTop}% 0 ${scene.sunClipBottom}% 0)`,
+              transform: `translateZ(${depthPulse.z}px) rotateY(${depthPulse.sunRotateY}deg) rotateX(${depthPulse.sunRotateX}deg)`,
+              transformStyle: "preserve-3d",
             }}
           >
             <HeroSun uid={uid} className="emp-hero-sun-pulse w-full" />
           </div>
         ) : null}
 
-        {/* Moon — rises behind the cloud; cloud masks the lower disc */}
+        {/* Moon — realtime 3D orbital motion */}
         {scene.showMoon ? (
           <div
-            className="emp-hero-celestial absolute z-[1] w-[118px] sm:w-[134px] transition-[top,right,opacity,clip-path] duration-[6000ms] ease-in-out"
+            className="emp-hero-celestial emp-hero-celestial-3d absolute z-[1] w-[118px] sm:w-[134px] transition-[top,right,opacity,clip-path,transform] duration-[1000ms] ease-linear"
             style={{
               top: `${scene.moonTop}%`,
               right: `${scene.moonRight}%`,
               opacity: scene.moonOpacity,
               clipPath: `inset(${scene.moonClipTop}% 0 ${scene.moonClipBottom}% 0)`,
+              transform: `translateZ(${depthPulse.z + 4}px) rotateY(${depthPulse.moonRotateY}deg) rotateX(${depthPulse.moonRotateX}deg)`,
+              transformStyle: "preserve-3d",
             }}
           >
             <HeroMoon uid={uid} className="emp-hero-moon-glow w-full" />
@@ -522,12 +556,13 @@ export function HeroMorningCover() {
         {/* Cloud hub — in front of sun / moon, hides their lower portion */}
         {scene.cloudOpacity > 0.04 ? (
           <div
-            className="emp-hero-main-cloud absolute z-[3] transition-[top,right,opacity,transform] duration-[4000ms] ease-in-out"
+            className="emp-hero-main-cloud absolute z-[3] transition-[top,right,opacity,transform] duration-[1200ms] ease-in-out"
             style={{
               top: `${scene.cloudTop}%`,
               right: `${scene.cloudRight}%`,
               opacity: scene.cloudOpacity,
-              transform: `translateX(${scene.cloudDrift}px)`,
+              transform: `translateX(${scene.cloudDrift}px) translateZ(28px)`,
+              transformStyle: "preserve-3d",
             }}
           >
             <HeroCloud
@@ -542,9 +577,11 @@ export function HeroMorningCover() {
       <style>{`
         .emp-hero-sun-pulse {
           animation: emp-hero-sun-pulse 8s ease-in-out infinite;
+          transform-style: preserve-3d;
         }
         .emp-hero-moon-glow {
           animation: emp-hero-moon-glow 10s ease-in-out infinite;
+          transform-style: preserve-3d;
         }
         .emp-hero-far-clouds {
           animation: emp-hero-far-drift 42s ease-in-out infinite alternate;
@@ -560,20 +597,20 @@ export function HeroMorningCover() {
           opacity: 0;
         }
         @keyframes emp-hero-sun-pulse {
-          0%, 100% { opacity: 0.92; filter: brightness(1); }
-          50% { opacity: 1; filter: brightness(1.06); }
+          0%, 100% { opacity: 0.92; filter: brightness(1) drop-shadow(0 8px 18px rgba(255,180,40,0.28)); }
+          50% { opacity: 1; filter: brightness(1.08) drop-shadow(0 10px 24px rgba(255,200,60,0.38)); }
         }
         @keyframes emp-hero-moon-glow {
-          0%, 100% { opacity: 0.94; filter: brightness(1); }
-          50% { opacity: 1; filter: brightness(1.08); }
+          0%, 100% { opacity: 0.94; filter: brightness(1) drop-shadow(0 6px 16px rgba(160,180,230,0.35)); }
+          50% { opacity: 1; filter: brightness(1.1) drop-shadow(0 8px 22px rgba(180,200,255,0.45)); }
         }
         @keyframes emp-hero-far-drift {
-          0% { transform: translateX(0); }
-          100% { transform: translateX(-14px); }
+          0% { transform: translateX(0) translateZ(0); }
+          100% { transform: translateX(-14px) translateZ(6px); }
         }
         @keyframes emp-hero-cloud-float {
-          0%, 100% { transform: translateY(0); }
-          50% { transform: translateY(-3px); }
+          0%, 100% { transform: translateY(0) translateZ(28px); }
+          50% { transform: translateY(-4px) translateZ(34px); }
         }
         @keyframes emp-hero-twinkle {
           0%, 100% { opacity: 0.45; transform: scale(1); }

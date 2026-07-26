@@ -1,17 +1,22 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   ArrowLeft,
   AtSign,
+  Check,
   CheckCheck,
   Filter,
   MessageSquare,
   MoreHorizontal,
   Paperclip,
+  Plus,
   Search,
   SendHorizontal,
   Smile,
+  Users,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useCurrentUser } from "@/app/hooks/useCurrentUser";
@@ -22,6 +27,7 @@ import { useEmpPortalPageHeader } from "@/app/components/layout/emp-portal-page-
 import { reporteeDisplayName } from "@/app/utils/empManagerDisplay";
 import { resolveAttachmentUrl, uploadAttachmentFile } from "@/app/utils/uploadFile";
 import { getPageCache, setPageCache } from "@/app/utils/pageCache";
+import { getSidebarContext } from "@/app/utils/sidebarContext";
 import { Button } from "../ui/button";
 import {
   DropdownMenu,
@@ -32,7 +38,8 @@ import {
 import { cn } from "@/app/utils/cn";
 
 const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL || "/backend";
-
+/** Synthetic self id for admin users who are not linked to an employee row. */
+const ADMIN_SELF_ID = -1;
 type PresenceStatus = "online" | "away" | "offline" | "busy";
 type ConversationFilter = "all" | "unread" | "archived";
 
@@ -97,7 +104,12 @@ type ChatBubble = {
 };
 
 type Conversation = {
-  employeeId: number;
+  key: string;
+  kind: "dm" | "group";
+  employeeId: number | null;
+  groupId: string | null;
+  groupName: string | null;
+  memberIds: number[];
   profile: EmployeeProfile;
   lastMessage: string;
   lastMessageAt: string | null;
@@ -105,6 +117,42 @@ type Conversation = {
   memoIds: number[];
   isArchived: boolean;
 };
+
+const GROUP_SUBJECT_PREFIX = "IM_GROUP::";
+
+function dmConversationKey(employeeId: number) {
+  return `dm:${employeeId}`;
+}
+
+function groupConversationKey(groupId: string) {
+  return `group:${groupId}`;
+}
+
+function parseGroupSubject(subject: string | null | undefined): { groupId: string; groupName: string } | null {
+  if (!subject?.startsWith(GROUP_SUBJECT_PREFIX)) return null;
+  const rest = subject.slice(GROUP_SUBJECT_PREFIX.length);
+  const sep = rest.indexOf("::");
+  if (sep <= 0) return null;
+  const groupId = rest.slice(0, sep).trim();
+  const groupName = rest.slice(sep + 2).trim();
+  if (!groupId || !groupName) return null;
+  return { groupId, groupName };
+}
+
+function encodeGroupSubject(groupId: string, groupName: string) {
+  return `${GROUP_SUBJECT_PREFIX}${groupId}::${groupName.trim()}`;
+}
+
+function isGroupMemo(memo: MemoItem) {
+  return parseGroupSubject(memo.subject) != null;
+}
+
+function createGroupId() {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+    return crypto.randomUUID();
+  }
+  return `g-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
 
 type TeamMemberRow = {
   id: number;
@@ -133,6 +181,7 @@ type ImPanelCache = {
 };
 
 const IM_PANEL_CACHE_KEY = "empImPanel";
+const IM_ADMIN_PANEL_CACHE_KEY = "adminImPanel";
 
 function isSelfEmployee(
   member: Pick<TeamMemberRow, "id" | "employeeID" | "employeeFirstName" | "employeeLastName">,
@@ -291,6 +340,18 @@ function normalizeId(value: unknown): number | null {
   return Number.isFinite(id) && id > 0 ? id : null;
 }
 
+/** Safe JSON parse for APIs that return HTTP 200 with an empty body (e.g. admin credentials). */
+async function readJsonOrNull(res: Response): Promise<any | null> {
+  if (!res.ok) return null;
+  const text = await res.text();
+  if (!text.trim()) return null;
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
+}
+
 function memoRecipientIds(memo: MemoItem): number[] {
   const ids =
     memo.employeeIDs && memo.employeeIDs.length > 0
@@ -442,14 +503,31 @@ function ConversationAvatar({
   profile,
   size = "md",
   showPresence = true,
+  isGroup = false,
 }: {
   profile: EmployeeProfile;
   size?: "sm" | "md" | "lg";
   showPresence?: boolean;
+  isGroup?: boolean;
 }) {
   const presence = presenceFromProfile(profile);
   const sizeClass = size === "lg" ? "size-11" : size === "sm" ? "size-10" : "size-10";
   const textClass = size === "lg" ? "text-sm" : "text-xs";
+
+  if (isGroup) {
+    return (
+      <div className="relative shrink-0">
+        <div
+          className={cn(
+            sizeClass,
+            "flex items-center justify-center rounded-full bg-primary/10 text-primary",
+          )}
+        >
+          <Users className={size === "lg" ? "size-5" : "size-4"} />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="relative shrink-0">
@@ -463,7 +541,7 @@ function ConversationAvatar({
         <div
           className={cn(
             sizeClass,
-            "flex items-center justify-center rounded-full bg-[#EEF2FF] text-[13px] font-semibold text-[#4F46E5]",
+            "flex items-center justify-center rounded-full bg-primary/10 text-[13px] font-semibold text-primary",
             textClass,
           )}
         >
@@ -512,7 +590,7 @@ function AttachmentPreview({ path }: { path: string }) {
       href={url}
       target="_blank"
       rel="noopener noreferrer"
-      className="mt-2 inline-flex max-w-full items-center gap-2 rounded-xl border border-[#EEF2F7] bg-white px-3 py-2 text-[13px] font-medium text-[#4F46E5] transition-colors duration-150 hover:bg-[#F8F9FC]"
+      className="mt-2 inline-flex max-w-full items-center gap-2 rounded-xl border border-[#EEF2F7] bg-white px-3 py-2 text-[13px] font-medium text-primary transition-colors duration-150 hover:bg-[#F8F9FC]"
     >
       <Paperclip className="size-4 shrink-0" />
       <span className="truncate">{fileName || label}</span>
@@ -520,15 +598,27 @@ function AttachmentPreview({ path }: { path: string }) {
   );
 }
 
-export function EmpProfileMessagingPanel({ active = true }: { active?: boolean } = {}) {
+export function EmpProfileMessagingPanel({
+  active = true,
+  variant = "employee",
+}: {
+  active?: boolean;
+  /** employee = team/dept contacts; admin = company-wide contacts (COMPANY_ADMIN, SUPERADMIN, etc.) */
+  variant?: "employee" | "admin";
+} = {}) {
   const user = useCurrentUser();
   const { scope, isManagerView } = useEmpManagerScope();
+  const isAdminVariant = variant === "admin";
+  /** Company-wide directory only for the admin IM shell; employee portal stays team/dept scoped. */
+  const isCompanyScope = isAdminVariant;
+  const panelCacheKey = isAdminVariant ? IM_ADMIN_PANEL_CACHE_KEY : IM_PANEL_CACHE_KEY;
   const [messages, setMessages] = useState<MemoItem[]>([]);
   const [threads, setThreads] = useState<Record<number, MemoReply[]>>({});
   const [teamMembers, setTeamMembers] = useState<TeamMemberRow[]>([]);
   const [teamLoading, setTeamLoading] = useState(false);
-  const [departmentLabel, setDepartmentLabel] = useState("Your Team");
-  const [loading, setLoading] = useState(false);
+  const [departmentLabel, setDepartmentLabel] = useState(
+    isCompanyScope ? "All employees" : "Your Team",
+  );  const [loading, setLoading] = useState(false);
   const [threadsLoading, setThreadsLoading] = useState(false);
   const [employeeId, setEmployeeId] = useState<number | null>(null);
   const [selfProfile, setSelfProfile] = useState<SelfProfile>({
@@ -544,7 +634,7 @@ export function EmpProfileMessagingPanel({ active = true }: { active?: boolean }
   const [managerName, setManagerName] = useState("Manager");
   const [searchQuery, setSearchQuery] = useState("");
   const [conversationFilter, setConversationFilter] = useState<ConversationFilter>("all");
-  const [selectedEmployeeId, setSelectedEmployeeId] = useState<number | null>(null);
+  const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [readIds, setReadIds] = useState<Set<number>>(new Set());
   const [archivedIds, setArchivedIds] = useState<Set<number>>(new Set());
   const [draft, setDraft] = useState("");
@@ -552,12 +642,26 @@ export function EmpProfileMessagingPanel({ active = true }: { active?: boolean }
   const [attachmentFile, setAttachmentFile] = useState<File | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [isCompact, setIsCompact] = useState(false);
+  const [showCreateGroup, setShowCreateGroup] = useState(false);
+  const [groupNameDraft, setGroupNameDraft] = useState("");
+  const [groupMemberIds, setGroupMemberIds] = useState<number[]>([]);
+  const [groupMemberSearch, setGroupMemberSearch] = useState("");
+  const [creatingGroup, setCreatingGroup] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const hydratedRef = useRef(false);
 
-  const canCompose = Boolean(employeeId);
+  const canCompose = Boolean(employeeId) || isCompanyScope;
+
+  const issuedByRoleLabel = useMemo(() => {
+    if (isManagerView) return "MANAGER";
+    if (user?.role === "COMPANY_ADMIN") return "COMPANY_ADMIN";
+    if (user?.role === "BRANCH_ADMIN") return "BRANCH_ADMIN";
+    if (user?.role === "SUPERADMIN") return "SUPERADMIN";
+    if (user?.role === "SERVICE_PROVIDER") return "SERVICE_PROVIDER";
+    return "EMPLOYEE";
+  }, [isManagerView, user?.role]);
 
   const persistPanelCache = useCallback(
     (payload: {
@@ -567,9 +671,9 @@ export function EmpProfileMessagingPanel({ active = true }: { active?: boolean }
       departmentLabel: string;
       selfProfile: SelfProfile;
     }) => {
-      setPageCache(IM_PANEL_CACHE_KEY, payload);
+      setPageCache(panelCacheKey, payload);
     },
-    [],
+    [panelCacheKey],
   );
 
   const mergeTeamMember = useCallback(
@@ -705,6 +809,128 @@ export function EmpProfileMessagingPanel({ active = true }: { active?: boolean }
     [employeeId, mergeTeamMember, scope?.reportees, selfProfile, teamMembers.length, user?.username],
   );
 
+  const loadCompanyContacts = useCallback(
+    async (selfOverride?: SelfProfile, options?: { silent?: boolean; companyID?: number | null }) => {
+      const self = selfOverride ?? selfProfile;
+      if (!options?.silent) {
+        setTeamLoading((current) => current || teamMembers.length === 0);
+      }
+      try {
+        let res = await fetch(`${BACKEND}/manage-emp/list?status=ACTIVE`, {
+          cache: "no-store",
+        });
+        if (!res.ok) {
+          res = await fetch(`${BACKEND}/manage-emp`, { cache: "no-store" });
+        }
+        const raw = await readJsonOrNull(res);
+        let all: any[] = Array.isArray(raw) ? raw : raw?.data ?? [];
+        if (!Array.isArray(all)) all = [];
+        let companyID =
+          normalizeId(options?.companyID) ??
+          normalizeId(user?.companyID) ??
+          null;
+
+        if (!companyID && user?.username) {
+          try {
+            const usersRes = await fetch(`${BACKEND}/users`, {
+              headers: authHeaders(),
+              cache: "no-store",
+            });
+            const usersRaw = await readJsonOrNull(usersRes);
+            const users = Array.isArray(usersRaw) ? usersRaw : usersRaw?.data ?? [];
+            const me = users.find((u: any) => u.username === user.username);
+            companyID = normalizeId(me?.companyID);
+          } catch {
+            /* ignore */
+          }
+        }
+
+        const ctx = getSidebarContext();
+        if (!companyID) {
+          companyID = normalizeId(ctx?.companyID);
+        }
+
+        const branchID =
+          user?.role === "BRANCH_ADMIN" ? (user?.branchesID ?? null) : null;
+
+        if (companyID) {
+          all = all.filter((e: any) => Number(e.companyID) === Number(companyID));
+        }
+        if (branchID) {
+          all = all.filter((e: any) => Number(e.branchesID) === Number(branchID));
+        }
+
+        // If company filter wiped everyone but the API returned rows, fall back to unfiltered
+        // ACTIVE list (avoids stale sidebar company context hiding real employees).
+        if (companyID && all.length === 0) {
+          const unfiltered: any[] = Array.isArray(raw) ? raw : raw?.data ?? [];
+          if (unfiltered.length > 0) {
+            // Keep only rows that share the most common companyID among ACTIVE employees
+            // belonging to this admin when possible; otherwise show all ACTIVE.
+            const adminCompany = companyID;
+            const matching = unfiltered.filter(
+              (e: any) => Number(e.companyID) === Number(adminCompany),
+            );
+            all = matching.length > 0 ? matching : unfiltered;
+          }
+        }
+
+        setDepartmentLabel(
+          user?.role === "BRANCH_ADMIN" ? "Branch employees" : "All employees",
+        );
+
+        if (companyID) {
+          setSenderContext((prev) => ({
+            ...prev,
+            companyID: Number(companyID),
+          }));
+        }
+
+        const byId = new Map<number, TeamMemberRow>();
+        all.forEach((emp: any) => {
+          const designation =
+            emp.designations?.designation ||
+            emp.empDesignation?.[0]?.designation?.designation ||
+            emp.designation?.designation ||
+            (typeof emp.designation === "string" ? emp.designation : null) ||
+            "—";
+          const department =
+            emp.departments?.departmentName ||
+            emp.empDepartment?.[0]?.department?.departmentName ||
+            emp.departmentName ||
+            (typeof emp.department === "string" ? emp.department : null) ||
+            "—";
+
+          mergeTeamMember(
+            byId,
+            {
+              id: emp.id,
+              employeeID: emp.employeeID,
+              employeeFirstName: emp.employeeFirstName,
+              employeeLastName: emp.employeeLastName,
+              employeePhotoUrl: emp.employeePhotoUrl,
+              designation,
+              department,
+              departmentName: department,
+            },
+            self,
+          );
+        });
+
+        const merged = dedupeTeamMembersByName(
+          [...byId.values()].filter((member) => !isSelfEmployee(member, self)),
+        );
+        merged.sort((a, b) => reporteeDisplayName(a).localeCompare(reporteeDisplayName(b)));
+        setTeamMembers(merged);
+      } catch {
+        if (!options?.silent) setTeamMembers([]);
+      } finally {
+        setTeamLoading(false);
+      }
+    },
+    [mergeTeamMember, selfProfile, teamMembers.length, user?.branchesID, user?.companyID, user?.role, user?.username],
+  );
+
   useEffect(() => {
     const compactMq = window.matchMedia("(max-width: 1023px)");
     const onChange = () => {
@@ -725,10 +951,19 @@ export function EmpProfileMessagingPanel({ active = true }: { active?: boolean }
         setLoading((current) => current || (messages.length === 0 && teamMembers.length === 0));
       }
       try {
-        const creds = await fetch(
-          `${BACKEND}/manage-emp/credentials/${encodeURIComponent(user.username)}`,
-          { headers: authHeaders() },
-        ).then((r) => (r.ok ? r.json() : null));
+        const headers = authHeaders();
+        const ctx = getSidebarContext();
+        // Admin users often have no employee credentials — empty 200 body must not abort load.
+        let creds: any = null;
+        try {
+          const credsRes = await fetch(
+            `${BACKEND}/manage-emp/credentials/${encodeURIComponent(user.username)}`,
+            { headers },
+          );
+          creds = await readJsonOrNull(credsRes);
+        } catch {
+          creds = null;
+        }
         const empId = normalizeId(creds?.employee?.id);
         const nextSelfProfile: SelfProfile = {
           id: empId,
@@ -741,51 +976,123 @@ export function EmpProfileMessagingPanel({ active = true }: { active?: boolean }
         };
         setEmployeeId(empId);
         setSelfProfile(nextSelfProfile);
-        setSenderContext({
-          companyID: normalizeId(creds?.companyID ?? creds?.employee?.companyID) ?? undefined,
-          branchesID: normalizeId(creds?.employee?.branchesID) ?? undefined,
-          serviceProviderID: normalizeId(creds?.serviceProviderID) ?? undefined,
-        });
-        setManagerName(nextSelfProfile.fullName || user.username || "Manager");
-        if (!empId) {
-          setMessages([]);
-          return;
+        const nextSenderContext = {
+          companyID:
+            normalizeId(
+              creds?.companyID ??
+                creds?.employee?.companyID ??
+                ctx?.companyID ??
+                user?.companyID,
+            ) ?? undefined,
+          branchesID:
+            normalizeId(creds?.employee?.branchesID ?? user?.branchesID) ??
+            undefined,
+          serviceProviderID:
+            normalizeId(
+              creds?.serviceProviderID ?? ctx?.serviceProviderID ?? user?.serviceProviderID,
+            ) ?? undefined,
+        };
+        // Prefer company from /users when credentials are missing (typical COMPANY_ADMIN).
+        if (!nextSenderContext.companyID && user?.username) {
+          try {
+            const usersRes = await fetch(`${BACKEND}/users`, {
+              headers,
+              cache: "no-store",
+            });
+            const usersRaw = await readJsonOrNull(usersRes);
+            const users = Array.isArray(usersRaw) ? usersRaw : usersRaw?.data ?? [];
+            const me = users.find((u: any) => u.username === user.username);
+            const fromUser = normalizeId(me?.companyID);
+            if (fromUser) nextSenderContext.companyID = fromUser;
+          } catch {
+            /* ignore */
+          }
         }
-        setReadIds(loadIdSet(readStorageKey(empId)));
-        setArchivedIds(loadIdSet(archiveStorageKey(empId)));
+        setSenderContext(nextSenderContext);
+        setManagerName(nextSelfProfile.fullName || user.username || "Admin");
 
-        const data = await fetch(`${BACKEND}/employee-memo?employeeID=${empId}`, {
-          headers: authHeaders(),
-        }).then((r) => (r.ok ? r.json() : []));
-        const list = (Array.isArray(data) ? data : []).filter((m: MemoItem) => isGeneralMemo(m));
+        const storageKeyId = empId ?? nextSenderContext.companyID ?? ADMIN_SELF_ID;
+        setReadIds(loadIdSet(readStorageKey(storageKeyId)));
+        setArchivedIds(loadIdSet(archiveStorageKey(storageKeyId)));
+
+        const memoUrl =
+          isCompanyScope || !empId
+            ? `${BACKEND}/employee-memo`
+            : `${BACKEND}/employee-memo?employeeID=${empId}`;
+        let list: MemoItem[] = [];
+        try {
+          const memoRes = await fetch(memoUrl, { headers });
+          const data = await readJsonOrNull(memoRes);
+          list = (Array.isArray(data) ? data : data?.data ?? []).filter((m: MemoItem) =>
+            isGeneralMemo(m),
+          );
+        } catch {
+          list = [];
+        }
+
+        if (isCompanyScope && nextSenderContext.companyID) {
+          list = list.filter((m: any) => {
+            const companyID = m.companyID ?? m.manageEmployee?.companyID;
+            return companyID == null || Number(companyID) === Number(nextSenderContext.companyID);
+          });
+        }
+
         list.sort(
           (a: MemoItem, b: MemoItem) =>
             new Date(b.createdAt || b.issuedDate || 0).getTime() -
             new Date(a.createdAt || a.issuedDate || 0).getTime(),
         );
         setMessages(list);
-        if (list.length === 0 && typeof window !== "undefined") {
-          sessionStorage.removeItem(`_pc_${IM_PANEL_CACHE_KEY}`);
+        if (list.length === 0 && typeof window !== "undefined" && !isCompanyScope) {
+          sessionStorage.removeItem(`_pc_${panelCacheKey}`);
           for (const key of Object.keys(localStorage)) {
             if (key.startsWith("im-read-") || key.startsWith("im-archived-")) {
               localStorage.removeItem(key);
             }
           }
         }
-        await loadTeamContacts(empId, nextSelfProfile, { silent: true });
+
+        if (isCompanyScope) {
+          await loadCompanyContacts(nextSelfProfile, {
+            silent: true,
+            companyID: nextSenderContext.companyID ?? null,
+          });
+        } else if (empId) {
+          await loadTeamContacts(empId, nextSelfProfile, { silent: true });
+        } else {
+          setTeamMembers([]);
+        }
       } catch {
         if (!options?.silent) setMessages([]);
+        // Still try to load company contacts for admin even if earlier steps failed.
+        if (isCompanyScope) {
+          try {
+            await loadCompanyContacts(undefined, { silent: true });
+          } catch {
+            /* ignore */
+          }
+        }
       } finally {
         setLoading(false);
       }
     },
-    [loadTeamContacts, messages.length, teamMembers.length, user?.username],
+    [
+      isCompanyScope,
+      loadCompanyContacts,
+      loadTeamContacts,
+      messages.length,
+      teamMembers.length,
+      user?.branchesID,
+      user?.companyID,
+      user?.serviceProviderID,
+      user?.username,
+    ],
   );
 
   useEffect(() => {
     if (hydratedRef.current) return;
     hydratedRef.current = true;
-    const cached = getPageCache<ImPanelCache>(IM_PANEL_CACHE_KEY);
+    const cached = getPageCache<ImPanelCache>(panelCacheKey);
     if (!cached) {
       void load();
       return;
@@ -800,7 +1107,7 @@ export function EmpProfileMessagingPanel({ active = true }: { active?: boolean }
   }, [load]);
 
   useEffect(() => {
-    if (!employeeId) return;
+    if (!employeeId && !isCompanyScope) return;
     const refresh = () => {
       if (document.visibilityState === "visible") void load({ silent: true });
     };
@@ -812,11 +1119,11 @@ export function EmpProfileMessagingPanel({ active = true }: { active?: boolean }
       document.removeEventListener("visibilitychange", refresh);
       window.removeEventListener("focus", refresh);
     };
-  }, [employeeId, load]);
+  }, [employeeId, isCompanyScope, load]);
 
   useEffect(() => {
-    const id = normalizeId(employeeId);
-    if (!id || messages.length === 0 && teamMembers.length === 0) return;
+    const id = normalizeId(employeeId) ?? (isCompanyScope ? senderContext.companyID ?? ADMIN_SELF_ID : null);
+    if (id == null || (messages.length === 0 && teamMembers.length === 0)) return;
     persistPanelCache({
       employeeId: id,
       messages,
@@ -824,7 +1131,16 @@ export function EmpProfileMessagingPanel({ active = true }: { active?: boolean }
       departmentLabel,
       selfProfile,
     });
-  }, [departmentLabel, employeeId, messages, persistPanelCache, selfProfile, teamMembers]);
+  }, [
+    departmentLabel,
+    employeeId,
+    isCompanyScope,
+    messages,
+    persistPanelCache,
+    selfProfile,
+    senderContext.companyID,
+    teamMembers,
+  ]);
 
   const nameToEmployeeId = useMemo(() => {
     const map = new Map<string, number>();
@@ -887,7 +1203,13 @@ export function EmpProfileMessagingPanel({ active = true }: { active?: boolean }
   const isReceived = useCallback(
     (m: MemoItem) => {
       const self = normalizeId(employeeId);
-      if (!self) return false;
+      if (!self) {
+        const issuedBy = normalizePersonName(m.issuedBy);
+        const selfName = normalizePersonName(managerName);
+        const userName = normalizePersonName(user?.username);
+        if ((selfName && issuedBy === selfName) || (userName && issuedBy === userName)) return false;
+        return true;
+      }
       const senderId = normalizeId(m.senderEmployeeId);
       if (senderId === self) return false;
       const recipients = memoRecipientIds(m);
@@ -905,16 +1227,21 @@ export function EmpProfileMessagingPanel({ active = true }: { active?: boolean }
         }),
       );
     },
-    [employeeId, selfProfile.fullName],
+    [employeeId, managerName, selfProfile.fullName, user?.username],
   );
 
   const isSent = useCallback(
     (m: MemoItem) => {
       const self = normalizeId(employeeId);
       const senderId = normalizeId(m.senderEmployeeId);
-      return self != null && senderId === self;
+      if (self != null && senderId === self) return true;
+      if (self != null) return false;
+      const issuedBy = normalizePersonName(m.issuedBy);
+      const selfName = normalizePersonName(managerName);
+      const userName = normalizePersonName(user?.username);
+      return Boolean((selfName && issuedBy === selfName) || (userName && issuedBy === userName));
     },
-    [employeeId],
+    [employeeId, managerName, user?.username],
   );
 
   const rowStatus = useCallback(
@@ -928,40 +1255,62 @@ export function EmpProfileMessagingPanel({ active = true }: { active?: boolean }
 
   const markRead = useCallback(
     (id: number) => {
-      if (!employeeId) return;
+      const storageId = employeeId ?? senderContext.companyID ?? ADMIN_SELF_ID;
       setReadIds((prev) => {
         const next = new Set(prev);
         next.add(id);
-        saveIdSet(readStorageKey(employeeId), next);
+        saveIdSet(readStorageKey(storageId), next);
         return next;
       });
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new Event("emp-sidebar-badges-changed"));
+      }
     },
-    [employeeId],
+    [employeeId, senderContext.companyID],
   );
 
   const markArchived = useCallback(
     (id: number) => {
-      if (!employeeId) return;
+      const storageId = employeeId ?? senderContext.companyID ?? ADMIN_SELF_ID;
       setArchivedIds((prev) => {
         const next = new Set(prev);
         next.add(id);
-        saveIdSet(archiveStorageKey(employeeId), next);
+        saveIdSet(archiveStorageKey(storageId), next);
         return next;
       });
     },
-    [employeeId],
+    [employeeId, senderContext.companyID],
+  );
+
+  const markUnarchived = useCallback(
+    (id: number) => {
+      const storageId = employeeId ?? senderContext.companyID ?? ADMIN_SELF_ID;
+      setArchivedIds((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        saveIdSet(archiveStorageKey(storageId), next);
+        return next;
+      });
+    },
+    [employeeId, senderContext.companyID],
   );
 
   const conversations = useMemo(() => {
-    const self = normalizeId(employeeId);
-    if (!self) return [] as Conversation[];
-    const map = new Map<number, Conversation>();
+    const self = normalizeId(employeeId) ?? (isCompanyScope ? ADMIN_SELF_ID : null);
+    if (self == null) return [] as Conversation[];
+    const dmMap = new Map<number, Conversation>();
+    const groupMap = new Map<string, Conversation>();
 
     teamMembers.forEach((member) => {
       const memberId = normalizeId(member.id);
       if (!memberId || isSelfEmployee(member, selfProfile)) return;
-      map.set(memberId, {
+      dmMap.set(memberId, {
+        key: dmConversationKey(memberId),
+        kind: "dm",
         employeeId: memberId,
+        groupId: null,
+        groupName: null,
+        memberIds: [memberId],
         profile: profileFromTeamMember(member, departmentLabel),
         lastMessage: "",
         lastMessageAt: null,
@@ -972,6 +1321,58 @@ export function EmpProfileMessagingPanel({ active = true }: { active?: boolean }
     });
 
     messages.forEach((memo) => {
+      const groupMeta = parseGroupSubject(memo.subject);
+      if (groupMeta) {
+        const memberIds = Array.from(
+          new Set(
+            [...memoRecipientIds(memo), normalizeId(memo.senderEmployeeId)]
+              .filter((id): id is number => id != null && id !== self),
+          ),
+        );
+        const key = groupConversationKey(groupMeta.groupId);
+        const existing =
+          groupMap.get(key) ||
+          ({
+            key,
+            kind: "group",
+            employeeId: null,
+            groupId: groupMeta.groupId,
+            groupName: groupMeta.groupName,
+            memberIds,
+            profile: {
+              id: 0,
+              name: groupMeta.groupName,
+              designation: "Group chat",
+              department: `${Math.max(memberIds.length, 1) + 1} members`,
+            },
+            lastMessage: "",
+            lastMessageAt: null,
+            unreadCount: 0,
+            memoIds: [],
+            isArchived: false,
+          } satisfies Conversation);
+
+        existing.groupName = groupMeta.groupName;
+        existing.profile.name = groupMeta.groupName;
+        existing.memberIds = Array.from(new Set([...existing.memberIds, ...memberIds]));
+        existing.profile.department = `${existing.memberIds.length + 1} members`;
+        if (!existing.memoIds.includes(memo.id)) existing.memoIds.push(memo.id);
+
+        const preview = messagePreview(memo);
+        const date = memoTimestamp(memo);
+        if (
+          !existing.lastMessageAt ||
+          new Date(date || 0).getTime() > new Date(existing.lastMessageAt).getTime()
+        ) {
+          existing.lastMessage = preview;
+          existing.lastMessageAt = date;
+        }
+        if (rowStatus(memo) === "Unread") existing.unreadCount += 1;
+        existing.isArchived = existing.memoIds.every((id) => archivedIds.has(id));
+        groupMap.set(key, existing);
+        return;
+      }
+
       const cp = resolveActiveCounterpart(memo, self);
       if (!cp || cp === self || isSelfConversation(cp, selfProfile)) return;
 
@@ -985,9 +1386,14 @@ export function EmpProfileMessagingPanel({ active = true }: { active?: boolean }
         } satisfies EmployeeProfile);
 
       const existing =
-        map.get(cp) ||
+        dmMap.get(cp) ||
         ({
+          key: dmConversationKey(cp),
+          kind: "dm",
           employeeId: cp,
+          groupId: null,
+          groupName: null,
+          memberIds: [cp],
           profile,
           lastMessage: "",
           lastMessageAt: null,
@@ -1010,11 +1416,12 @@ export function EmpProfileMessagingPanel({ active = true }: { active?: boolean }
 
       if (rowStatus(memo) === "Unread") existing.unreadCount += 1;
       existing.isArchived = existing.memoIds.every((id) => archivedIds.has(id));
-      map.set(cp, existing);
+      dmMap.set(cp, existing);
     });
 
-    return [...map.values()]
+    return [...dmMap.values(), ...groupMap.values()]
       .filter((conversation) => {
+        if (conversation.kind === "group") return true;
         if (isSelfConversation(conversation.employeeId, selfProfile)) return false;
         const profileName = conversation.profile.name.trim().toLowerCase();
         const selfName = selfProfile.fullName?.trim().toLowerCase();
@@ -1030,15 +1437,17 @@ export function EmpProfileMessagingPanel({ active = true }: { active?: boolean }
         }
         return a.profile.name.localeCompare(b.profile.name);
       });
-  }, [employeeId, teamMembers, departmentLabel, messages, profileMap, resolveActiveCounterpart, rowStatus, archivedIds, selfProfile]);
+  }, [employeeId, isCompanyScope, teamMembers, departmentLabel, messages, profileMap, resolveActiveCounterpart, rowStatus, archivedIds, selfProfile]);
 
   const filteredConversations = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
     return conversations.filter((conv) => {
-      if (isSelfConversation(conv.employeeId, selfProfile)) return false;
-      const profileName = conv.profile.name.trim().toLowerCase();
-      const selfName = selfProfile.fullName?.trim().toLowerCase();
-      if (selfName && profileName === selfName) return false;
+      if (conv.kind === "dm") {
+        if (isSelfConversation(conv.employeeId, selfProfile)) return false;
+        const profileName = conv.profile.name.trim().toLowerCase();
+        const selfName = selfProfile.fullName?.trim().toLowerCase();
+        if (selfName && profileName === selfName) return false;
+      }
       if (conversationFilter === "unread" && conv.unreadCount === 0) return false;
       if (conversationFilter === "archived" && !conv.isArchived) return false;
       if (conversationFilter === "all" && conv.isArchived) return false;
@@ -1047,7 +1456,8 @@ export function EmpProfileMessagingPanel({ active = true }: { active?: boolean }
         conv.profile.name.toLowerCase().includes(q) ||
         conv.profile.designation.toLowerCase().includes(q) ||
         conv.profile.department.toLowerCase().includes(q) ||
-        conv.lastMessage.toLowerCase().includes(q)
+        conv.lastMessage.toLowerCase().includes(q) ||
+        (conv.groupName?.toLowerCase().includes(q) ?? false)
       );
     });
   }, [conversations, searchQuery, conversationFilter, selfProfile]);
@@ -1058,22 +1468,46 @@ export function EmpProfileMessagingPanel({ active = true }: { active?: boolean }
   );
 
   const selectedConversation = useMemo(
-    () => conversations.find((c) => c.employeeId === selectedEmployeeId) ?? null,
-    [conversations, selectedEmployeeId],
+    () => conversations.find((c) => c.key === selectedKey) ?? null,
+    [conversations, selectedKey],
   );
+
+  const archiveSelectedConversation = useCallback(() => {
+    if (!selectedConversation) return;
+    selectedConversation.memoIds.forEach((id) => markArchived(id));
+    toast.success("Conversation archived");
+  }, [selectedConversation, markArchived]);
+
+  const unarchiveSelectedConversation = useCallback(() => {
+    if (!selectedConversation) return;
+    selectedConversation.memoIds.forEach((id) => markUnarchived(id));
+    toast.success("Conversation restored");
+  }, [selectedConversation, markUnarchived]);
 
   const conversationMemos = useMemo(() => {
     const self = normalizeId(employeeId);
-    const selectedId = normalizeId(selectedEmployeeId);
-    if (!selectedId || !self) return [] as MemoItem[];
+    if (!self || !selectedConversation) return [] as MemoItem[];
+
+    if (selectedConversation.kind === "group" && selectedConversation.groupId) {
+      return messages
+        .filter((memo) => parseGroupSubject(memo.subject)?.groupId === selectedConversation.groupId)
+        .sort(
+          (a, b) =>
+            new Date(a.createdAt || a.issuedDate || 0).getTime() -
+            new Date(b.createdAt || b.issuedDate || 0).getTime(),
+        );
+    }
+
+    const selectedId = normalizeId(selectedConversation.employeeId);
+    if (!selectedId) return [] as MemoItem[];
     return messages
-      .filter((memo) => resolveActiveCounterpart(memo, self) === selectedId)
+      .filter((memo) => !isGroupMemo(memo) && resolveActiveCounterpart(memo, self) === selectedId)
       .sort(
         (a, b) =>
           new Date(a.createdAt || a.issuedDate || 0).getTime() -
           new Date(b.createdAt || b.issuedDate || 0).getTime(),
       );
-  }, [messages, selectedEmployeeId, employeeId, resolveActiveCounterpart]);
+  }, [messages, selectedConversation, employeeId, resolveActiveCounterpart]);
 
   const latestThreadId = useMemo(() => {
     if (conversationMemos.length === 0) return null;
@@ -1130,7 +1564,7 @@ export function EmpProfileMessagingPanel({ active = true }: { active?: boolean }
       const replies = Array.isArray(data?.replies) ? data.replies : [];
       setThreads((prev) => ({ ...prev, [latestThreadId]: replies }));
     },
-    selectedEmployeeId != null && latestThreadId != null,
+    selectedKey != null && latestThreadId != null,
     2500,
     authHeaders,
   );
@@ -1145,7 +1579,8 @@ export function EmpProfileMessagingPanel({ active = true }: { active?: boolean }
   }, [selectedConversation, loadConversationThreads]);
 
   const chatBubbles = useMemo(() => {
-    if (!employeeId) return [] as ChatBubble[];
+    const self = normalizeId(employeeId) ?? (isCompanyScope ? ADMIN_SELF_ID : null);
+    if (!self) return [] as ChatBubble[];
     const bubbles: ChatBubble[] = [];
 
     conversationMemos.forEach((memo) => {
@@ -1161,11 +1596,16 @@ export function EmpProfileMessagingPanel({ active = true }: { active?: boolean }
 
       const replies = threads[memo.id] || [];
       replies.forEach((reply) => {
+        const replySelf =
+          normalizeId(reply.senderEmployeeId) === normalizeId(employeeId) ||
+          (isCompanyScope &&
+            !normalizeId(reply.senderEmployeeId) &&
+            String(reply.issuedBy || "").trim().toLowerCase() === String(managerName || "").trim().toLowerCase());
         bubbles.push({
           id: reply.id,
           threadMemoId: memo.id,
           text: reply.description || "",
-          isOutgoing: normalizeId(reply.senderEmployeeId) === normalizeId(employeeId),
+          isOutgoing: replySelf,
           senderName: reply.issuedBy?.trim() || "User",
           createdAt: reply.createdAt || null,
           attachmentPath: reply.attachmentPath,
@@ -1176,28 +1616,30 @@ export function EmpProfileMessagingPanel({ active = true }: { active?: boolean }
     return bubbles.sort(
       (a, b) => new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime(),
     );
-  }, [conversationMemos, threads, employeeId, isSent]);
+  }, [conversationMemos, threads, employeeId, isSent, isCompanyScope, managerName]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [chatBubbles, selectedEmployeeId, threadsLoading]);
+  }, [chatBubbles, selectedKey, threadsLoading]);
 
   useEffect(() => {
     const self = normalizeId(employeeId);
-    const visible = filteredConversations.filter((conversation) => conversation.employeeId !== self);
+    const visible = filteredConversations.filter((conversation) => {
+      if (conversation.kind === "group") return true;
+      return conversation.employeeId !== self;
+    });
     if (visible.length === 0) {
-      setSelectedEmployeeId(null);
+      setSelectedKey(null);
       return;
     }
 
-    const selectedId = normalizeId(selectedEmployeeId);
-    const stillValid = selectedId != null && visible.some((conversation) => conversation.employeeId === selectedId);
+    const stillValid = selectedKey != null && visible.some((conversation) => conversation.key === selectedKey);
     if (stillValid) return;
 
     const withMessages =
       visible.find((conversation) => conversation.memoIds.length > 0 || conversation.lastMessageAt) ?? visible[0];
-    setSelectedEmployeeId(withMessages.employeeId);
-  }, [filteredConversations, selectedEmployeeId, employeeId]);
+    setSelectedKey(withMessages.key);
+  }, [filteredConversations, selectedKey, employeeId]);
 
   const portalHeader = useMemo(
     () =>
@@ -1205,30 +1647,144 @@ export function EmpProfileMessagingPanel({ active = true }: { active?: boolean }
         ? {
             icon: MessageSquare,
             title: "Internal Messaging",
-            subtitle: "Team conversations and direct messages",
+            subtitle: "Direct messages and group conversations",
             messageBadgeCount: totalUnread,
           }
         : null,
     [active, totalUnread],
   );
 
-  useEmpPortalPageHeader(portalHeader);
+  useEmpPortalPageHeader(isAdminVariant ? null : portalHeader);
 
-  const selectConversation = (id: number) => {
-    setSelectedEmployeeId(id);
+  const selectConversation = (key: string) => {
+    setSelectedKey(key);
     if (isCompact) setSidebarOpen(false);
+  };
+
+  const toggleGroupMember = (id: number) => {
+    setGroupMemberIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  };
+
+  const createGroupChat = async () => {
+    const self = normalizeId(employeeId);
+    const name = groupNameDraft.trim();
+    if (!canCompose) return;
+    if (!name) {
+      toast.error("Enter a group name");
+      return;
+    }
+    if (groupMemberIds.length < 2) {
+      toast.error("Select at least 2 team members");
+      return;
+    }
+
+    setCreatingGroup(true);
+    try {
+      const groupId = createGroupId();
+      const res = await fetch(`${BACKEND}/employee-memo`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...authHeaders() },
+        body: JSON.stringify({
+          employeeIDs: groupMemberIds,
+          memoType: "General",
+          subject: encodeGroupSubject(groupId, name),
+          description: `${managerName} created the group “${name}”.`,
+          issuedDate: new Date().toISOString().slice(0, 10),
+          issuedBy: managerName,
+          issuedByRole: issuedByRoleLabel,
+          ...(self ? { senderEmployeeId: self } : {}),
+          ...(senderContext.companyID ? { companyID: senderContext.companyID } : {}),
+          ...(senderContext.branchesID ? { branchesID: senderContext.branchesID } : {}),
+          ...(senderContext.serviceProviderID ? { serviceProviderID: senderContext.serviceProviderID } : {}),
+        }),
+      });
+      if (!res.ok) {
+        const errText = await res.text().catch(() => "");
+        throw new Error(errText || "Could not create group");
+      }
+
+      setShowCreateGroup(false);
+      setGroupNameDraft("");
+      setGroupMemberIds([]);
+      setGroupMemberSearch("");
+      if (typeof window !== "undefined") {
+        sessionStorage.removeItem(`_pc_${panelCacheKey}`);
+      }
+      await load({ silent: true });
+      setSelectedKey(groupConversationKey(groupId));
+      toast.success("Group created");
+    } catch {
+      toast.error("Could not create group");
+    } finally {
+      setCreatingGroup(false);
+    }
   };
 
   const sendMessage = async () => {
     const text = draft.trim();
     const self = normalizeId(employeeId);
-    const recipientId = normalizeId(selectedEmployeeId);
-    if (!text || !self || !recipientId) return;
-    if (recipientId === self || isSelfConversation(recipientId, selfProfile)) {
+    if (!text || !canCompose || !selectedConversation) return;
+
+    if (selectedConversation.kind === "group") {
+      if (!selectedConversation.groupId || !selectedConversation.groupName) return;
+      const recipients = selectedConversation.memberIds.filter((id) => id !== self);
+      if (recipients.length === 0) {
+        toast.error("This group has no other members");
+        return;
+      }
+
+      setSending(true);
+      try {
+        let attachmentPath: string | undefined;
+        if (attachmentFile) {
+          attachmentPath = await uploadAttachmentFile(attachmentFile);
+        }
+
+        const res = await fetch(`${BACKEND}/employee-memo`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", ...authHeaders() },
+          body: JSON.stringify({
+            employeeIDs: recipients,
+            memoType: "General",
+            subject: encodeGroupSubject(selectedConversation.groupId, selectedConversation.groupName),
+            description: text,
+            issuedDate: new Date().toISOString().slice(0, 10),
+            issuedBy: managerName,
+            issuedByRole: issuedByRoleLabel,
+            ...(self ? { senderEmployeeId: self } : {}),
+            attachmentPath,
+            ...(senderContext.companyID ? { companyID: senderContext.companyID } : {}),
+            ...(senderContext.branchesID ? { branchesID: senderContext.branchesID } : {}),
+            ...(senderContext.serviceProviderID ? { serviceProviderID: senderContext.serviceProviderID } : {}),
+          }),
+        });
+        if (!res.ok) {
+          const errText = await res.text().catch(() => "");
+          throw new Error(errText || "Send failed");
+        }
+
+        setDraft("");
+        setAttachmentFile(null);
+        if (typeof window !== "undefined") {
+          sessionStorage.removeItem(`_pc_${panelCacheKey}`);
+        }
+        await load({ silent: true });
+        setSelectedKey(selectedConversation.key);
+      } catch {
+        toast.error("Could not send message");
+      } finally {
+        setSending(false);
+      }
+      return;
+    }
+
+    const recipientId = normalizeId(selectedConversation.employeeId);
+    if (!recipientId) return;
+    if (self && (recipientId === self || isSelfConversation(recipientId, selfProfile))) {
       toast.error("You cannot message yourself");
       return;
     }
-    const recipientProfile = selectedConversation?.profile;
+    const recipientProfile = selectedConversation.profile;
     if (
       recipientProfile &&
       selfProfile.fullName &&
@@ -1255,8 +1811,8 @@ export function EmpProfileMessagingPanel({ active = true }: { active?: boolean }
           description: text,
           issuedDate: new Date().toISOString().slice(0, 10),
           issuedBy: managerName,
-          issuedByRole: isManagerView ? "MANAGER" : "EMPLOYEE",
-          senderEmployeeId: self,
+          issuedByRole: issuedByRoleLabel,
+          ...(self ? { senderEmployeeId: self } : {}),
           attachmentPath,
           ...(senderContext.companyID ? { companyID: senderContext.companyID } : {}),
           ...(senderContext.branchesID ? { branchesID: senderContext.branchesID } : {}),
@@ -1271,10 +1827,10 @@ export function EmpProfileMessagingPanel({ active = true }: { active?: boolean }
       setDraft("");
       setAttachmentFile(null);
       if (typeof window !== "undefined") {
-        sessionStorage.removeItem(`_pc_${IM_PANEL_CACHE_KEY}`);
+        sessionStorage.removeItem(`_pc_${panelCacheKey}`);
       }
       await load({ silent: true });
-      setSelectedEmployeeId(recipientId);
+      setSelectedKey(dmConversationKey(recipientId));
     } catch {
       toast.error("Could not send message");
     } finally {
@@ -1315,8 +1871,175 @@ export function EmpProfileMessagingPanel({ active = true }: { active?: boolean }
 
   const showSidebar = !isCompact || sidebarOpen;
 
+  const closeCreateGroup = useCallback(() => {
+    setShowCreateGroup(false);
+    setGroupNameDraft("");
+    setGroupMemberIds([]);
+    setGroupMemberSearch("");
+  }, []);
+
+  useEffect(() => {
+    if (!showCreateGroup) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") closeCreateGroup();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => {
+      document.body.style.overflow = prev;
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [showCreateGroup, closeCreateGroup]);
+
+  const createGroupModal =
+    showCreateGroup && typeof document !== "undefined"
+      ? createPortal(
+          <div className="fixed inset-0 z-[350] flex items-center justify-center p-4">
+            <button
+              type="button"
+              aria-label="Close create group"
+              className="absolute inset-0 bg-black/45"
+              onClick={closeCreateGroup}
+            />
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="create-group-title"
+              className="relative z-10 flex max-h-[min(560px,90vh)] w-full max-w-md flex-col overflow-hidden rounded-2xl border border-border bg-white text-[#111827] shadow-[0_25px_60px_rgba(0,0,0,0.28)]"
+            >
+              <div className="flex items-center justify-between border-b border-[#EEF2F7] px-5 py-4">
+                <div>
+                  <h3 id="create-group-title" className="text-[16px] font-semibold text-[#111827]">
+                    Create group
+                  </h3>
+                  <p className="mt-0.5 text-[12px] text-[#6B7280]">Select members and name your group</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={closeCreateGroup}
+                  className="inline-flex size-8 items-center justify-center rounded-lg text-[#6B7280] hover:bg-[#F8F9FC]"
+                  aria-label="Close"
+                >
+                  <X className="size-4" />
+                </button>
+              </div>
+
+              <div className="space-y-4 overflow-y-auto px-5 py-4">
+                <div>
+                  <label className="mb-1.5 block text-[12px] font-medium text-[#6B7280]">Group name</label>
+                  <input
+                    value={groupNameDraft}
+                    onChange={(e) => setGroupNameDraft(e.target.value)}
+                    placeholder="e.g. Project Alpha"
+                    className="h-10 w-full rounded-xl border border-[#EEF2F7] bg-white px-3 text-[14px] text-[#111827] outline-none focus:border-primary/30 focus:ring-2 focus:ring-primary/10"
+                  />
+                </div>
+
+                <div>
+                  <div className="mb-1.5 flex items-center justify-between gap-2">
+                    <label className="text-[12px] font-medium text-[#6B7280]">Members</label>
+                    <span className="text-[11px] text-[#9CA3AF]">{groupMemberIds.length} selected</span>
+                  </div>
+                  <div className="relative mb-2">
+                    <Search className="pointer-events-none absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-[#9CA3AF]" />
+                    <input
+                      value={groupMemberSearch}
+                      onChange={(e) => setGroupMemberSearch(e.target.value)}
+                      placeholder="Search team members..."
+                      className="h-9 w-full rounded-xl border border-[#EEF2F7] bg-white pl-9 pr-3 text-[13px] text-[#111827] outline-none focus:border-primary/30 focus:ring-2 focus:ring-primary/10"
+                    />
+                  </div>
+                  <div className="max-h-56 space-y-1 overflow-y-auto rounded-xl border border-[#EEF2F7] bg-white p-1.5">
+                    {teamMembers
+                      .filter((member) => {
+                        const id = normalizeId(member.id);
+                        if (!id || isSelfEmployee(member, selfProfile)) return false;
+                        const q = groupMemberSearch.trim().toLowerCase();
+                        if (!q) return true;
+                        const name = reporteeDisplayName(member).toLowerCase();
+                        const desig = (member.designation || "").toLowerCase();
+                        return name.includes(q) || desig.includes(q);
+                      })
+                      .map((member) => {
+                        const id = normalizeId(member.id)!;
+                        const selected = groupMemberIds.includes(id);
+                        const name = reporteeDisplayName(member);
+                        return (
+                          <button
+                            key={id}
+                            type="button"
+                            onClick={() => toggleGroupMember(id)}
+                            className={cn(
+                              "flex w-full items-center gap-3 rounded-lg px-2.5 py-2 text-left transition-colors duration-150",
+                              selected ? "bg-primary/10" : "hover:bg-[#F8F9FC]",
+                            )}
+                          >
+                            <ConversationAvatar
+                              profile={profileFromTeamMember(member, departmentLabel)}
+                              size="sm"
+                              showPresence={false}
+                            />
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate text-[13px] font-medium text-[#111827]">{name}</p>
+                              <p className="truncate text-[11px] text-[#6B7280]">
+                                {member.designation?.trim() || "Team Member"}
+                              </p>
+                            </div>
+                            <span
+                              className={cn(
+                                "flex size-5 items-center justify-center rounded-md border",
+                                selected
+                                  ? "border-primary bg-primary text-white"
+                                  : "border-[#D1D5DB] bg-white text-transparent",
+                              )}
+                            >
+                              <Check className="size-3" />
+                            </span>
+                          </button>
+                        );
+                      })}
+                    {teamMembers.filter((m) => !isSelfEmployee(m, selfProfile)).length === 0 ? (
+                      <p className="px-3 py-6 text-center text-[12px] text-[#6B7280]">No team members available</p>
+                    ) : null}
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 border-t border-[#EEF2F7] px-5 py-4">
+                <button
+                  type="button"
+                  onClick={closeCreateGroup}
+                  className="rounded-xl px-4 py-2 text-[13px] font-medium text-[#6B7280] hover:bg-[#F8F9FC]"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={creatingGroup || groupMemberIds.length < 2 || !groupNameDraft.trim()}
+                  onClick={() => void createGroupChat()}
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-primary px-4 py-2 text-[13px] font-semibold text-white transition-colors duration-150 hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <Users className="size-3.5" />
+                  {creatingGroup ? "Creating…" : "Create group"}
+                </button>
+              </div>
+            </div>
+          </div>,
+          document.body,
+        )
+      : null;
+
   return (
-    <div className="im-workspace relative -mx-8 -mb-8 -mt-4 flex min-h-[calc(100dvh-10rem)] overflow-hidden rounded-2xl border border-[#EEF2F7] bg-white font-['Inter',sans-serif] text-[#111827] shadow-[0_2px_10px_rgba(15,23,42,0.05)]">
+    <div
+      className={cn(
+        "im-workspace relative flex overflow-hidden rounded-2xl border border-[#EEF2F7] bg-white font-['Inter',sans-serif] text-[#111827] shadow-[0_2px_10px_rgba(15,23,42,0.05)]",
+        isAdminVariant
+          ? "h-full max-h-full"
+          : "-mx-8 -mb-8 -mt-4 min-h-[calc(100dvh-10rem)]",
+      )}
+    >
+      {createGroupModal}
       {(loading || teamLoading) && filteredConversations.length > 0 ? (
         <div className="pointer-events-none absolute right-4 top-4 z-10 rounded-full border border-[#EEF2F7] bg-white px-3 py-1 text-[11px] text-[#6B7280] shadow-sm">
           Updating…
@@ -1325,16 +2048,30 @@ export function EmpProfileMessagingPanel({ active = true }: { active?: boolean }
       {showSidebar ? (
         <aside className="flex w-full shrink-0 flex-col border-r border-[#EEF2F7] bg-white md:w-[360px]">
           <div className="border-b border-[#EEF2F7] px-5 py-5">
-            <h2 className="text-[26px] font-semibold tracking-tight text-[#111827]">Conversations</h2>
-            <p className="mt-0.5 text-[13px] text-[#6B7280]">{departmentLabel}</p>
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <h2 className="text-[26px] font-semibold tracking-tight text-[#111827]">Conversations</h2>
+                <p className="mt-0.5 text-[13px] text-[#6B7280]">{departmentLabel}</p>
+              </div>
+              {canCompose ? (
+                <button
+                  type="button"
+                  onClick={() => setShowCreateGroup(true)}
+                  className="inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-primary px-3 py-2 text-[12px] font-semibold text-white transition-colors duration-150 hover:bg-primary/90"
+                >
+                  <Plus className="size-3.5" />
+                  New group
+                </button>
+              ) : null}
+            </div>
             <div className="mt-4 flex items-center gap-2">
               <div className="relative flex-1">
                 <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[#9CA3AF]" />
                 <input
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search employee..."
-                  className="h-10 w-full rounded-xl border border-[#EEF2F7] bg-white pl-9 pr-3 text-[14px] text-[#111827] outline-none transition-colors duration-150 placeholder:text-[#9CA3AF] focus:border-[#4F46E5]/30 focus:ring-2 focus:ring-[#4F46E5]/10"
+                  placeholder="Search conversations..."
+                  className="h-10 w-full rounded-xl border border-[#EEF2F7] bg-white pl-9 pr-3 text-[14px] text-[#111827] outline-none transition-colors duration-150 placeholder:text-[#9CA3AF] focus:border-primary/30 focus:ring-2 focus:ring-primary/10"
                 />
               </div>
               <DropdownMenu>
@@ -1363,27 +2100,29 @@ export function EmpProfileMessagingPanel({ active = true }: { active?: boolean }
               <p className="px-3 py-8 text-center text-[13px] text-[#6B7280]">
                 {searchQuery.trim()
                   ? "No conversations match your search."
-                  : "No team members found yet. Colleagues from your department or company will appear here."}
+                  : isCompanyScope
+                    ? "No employees found yet. Company employees will appear here."
+                    : "No team members found yet. Colleagues from your department or company will appear here."}
               </p>
             ) : (
               <div className="space-y-1">
                 {filteredConversations.map((conv) => {
-                  const isSelected = conv.employeeId === selectedEmployeeId;
+                  const isSelected = conv.key === selectedKey;
                   const preview =
                     conv.lastMessage.length > 48
                       ? `${conv.lastMessage.slice(0, 48)}…`
-                      : conv.lastMessage || "Tap to start chatting";
+                      : conv.lastMessage || (conv.kind === "group" ? "Tap to open group chat" : "Tap to start chatting");
                   return (
                     <button
-                      key={conv.employeeId}
+                      key={conv.key}
                       type="button"
-                      onClick={() => selectConversation(conv.employeeId)}
+                      onClick={() => selectConversation(conv.key)}
                       className={cn(
                         "flex h-[76px] w-full items-center gap-3 rounded-xl px-3.5 py-3.5 text-left transition-colors duration-150",
-                        isSelected ? "bg-[#EEF2FF]" : "hover:bg-[#F8F9FC]",
+                        isSelected ? "bg-primary/10" : "hover:bg-[#F8F9FC]",
                       )}
                     >
-                      <ConversationAvatar profile={conv.profile} size="sm" />
+                      <ConversationAvatar profile={conv.profile} size="sm" isGroup={conv.kind === "group"} showPresence={conv.kind === "dm"} />
                       <div className="min-w-0 flex-1">
                         <div className="flex items-start justify-between gap-2">
                           <p className="truncate text-[15px] font-medium text-[#111827]">{conv.profile.name}</p>
@@ -1392,14 +2131,16 @@ export function EmpProfileMessagingPanel({ active = true }: { active?: boolean }
                           </span>
                         </div>
                         <p className="truncate text-[12px] text-[#6B7280]">
-                          {conv.profile.designation} • {conv.profile.department}
+                          {conv.kind === "group"
+                            ? conv.profile.department
+                            : `${conv.profile.designation} • ${conv.profile.department}`}
                         </p>
                         <div className="mt-1 flex items-center justify-between gap-2">
                           <p className="truncate text-[13px] text-[#6B7280]">
                             {conv.lastMessage ? `"${preview}"` : preview}
                           </p>
                           {conv.unreadCount > 0 ? (
-                            <span className="inline-flex min-w-5 shrink-0 items-center justify-center rounded-full bg-[#4F46E5] px-1.5 py-0.5 text-[11px] font-semibold text-white">
+                            <span className="inline-flex min-w-5 shrink-0 items-center justify-center rounded-full bg-primary px-1.5 py-0.5 text-[11px] font-semibold text-white">
                               {conv.unreadCount > 9 ? "9+" : conv.unreadCount}
                             </span>
                           ) : null}
@@ -1429,17 +2170,28 @@ export function EmpProfileMessagingPanel({ active = true }: { active?: boolean }
                     <ArrowLeft className="size-5" />
                   </button>
                 ) : null}
-                <ConversationAvatar profile={selectedConversation.profile} size="lg" />
+                <ConversationAvatar
+                  profile={selectedConversation.profile}
+                  size="lg"
+                  isGroup={selectedConversation.kind === "group"}
+                  showPresence={selectedConversation.kind === "dm"}
+                />
                 <div className="min-w-0">
                   <p className="truncate text-[15px] font-medium text-[#111827]">
                     {selectedConversation.profile.name}
                   </p>
                   <p className="truncate text-[13px] text-[#6B7280]">
-                    {selectedConversation.profile.designation} • {selectedConversation.profile.department}
+                    {selectedConversation.kind === "group"
+                      ? selectedConversation.profile.department
+                      : `${selectedConversation.profile.designation} • ${selectedConversation.profile.department}`}
                   </p>
-                  <p className="text-[12px] font-medium text-[#6B7280]">
-                    {presenceLabel(selectedPresence)}
-                  </p>
+                  {selectedConversation.kind === "dm" ? (
+                    <p className="text-[12px] font-medium text-[#6B7280]">
+                      {presenceLabel(selectedPresence)}
+                    </p>
+                  ) : (
+                    <p className="text-[12px] font-medium text-[#6B7280]">Group conversation</p>
+                  )}
                 </div>
               </div>
               <div className="flex items-center gap-1">
@@ -1455,12 +2207,19 @@ export function EmpProfileMessagingPanel({ active = true }: { active?: boolean }
                       <MoreHorizontal className="size-4" />
                     </Button>
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="border border-[#EEF2F7] bg-white">
-                    {selectedConversation.memoIds.map((id) => (
-                      <DropdownMenuItem key={id} onClick={() => markArchived(id)}>
+                  <DropdownMenuContent align="end" className="border border-border bg-popover text-popover-foreground">
+                    {selectedConversation.isArchived ? (
+                      <DropdownMenuItem onClick={unarchiveSelectedConversation}>
+                        Unarchive conversation
+                      </DropdownMenuItem>
+                    ) : (
+                      <DropdownMenuItem
+                        onClick={archiveSelectedConversation}
+                        disabled={selectedConversation.memoIds.length === 0}
+                      >
                         Archive conversation
                       </DropdownMenuItem>
-                    ))}
+                    )}
                     <DropdownMenuItem onClick={() => void load()}>Refresh messages</DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
@@ -1472,7 +2231,7 @@ export function EmpProfileMessagingPanel({ active = true }: { active?: boolean }
                 <p className="py-10 text-center text-[13px] text-[#6B7280]">Loading messages…</p>
               ) : chatBubbles.length === 0 ? (
                 <div className="flex h-full min-h-[240px] flex-col items-center justify-center text-center">
-                  <div className="mb-3 flex size-12 items-center justify-center rounded-2xl bg-[#EEF2FF] text-[#4F46E5]">
+                  <div className="mb-3 flex size-12 items-center justify-center rounded-2xl bg-primary/10 text-primary">
                     <MessageSquare className="size-5" />
                   </div>
                   <p className="text-[15px] font-medium text-[#111827]">No messages yet</p>
@@ -1502,10 +2261,13 @@ export function EmpProfileMessagingPanel({ active = true }: { active?: boolean }
                             className={cn(
                               "max-w-[65%] rounded-[18px] px-4 py-3 shadow-[0_2px_10px_rgba(15,23,42,0.05)]",
                               bubble.isOutgoing
-                                ? "bg-[#EEF2FF] text-[#111827]"
+                                ? "bg-primary/10 text-[#111827]"
                                 : "border border-[#EEF2F7] bg-white text-[#111827]",
                             )}
                           >
+                            {selectedConversation.kind === "group" && !bubble.isOutgoing ? (
+                              <p className="mb-1 text-[11px] font-semibold text-primary">{bubble.senderName}</p>
+                            ) : null}
                             <p className="whitespace-pre-wrap text-[14px] leading-relaxed">{bubble.text}</p>
                             {bubble.attachmentPath ? (
                               <AttachmentPreview path={bubble.attachmentPath} />
@@ -1517,7 +2279,7 @@ export function EmpProfileMessagingPanel({ active = true }: { active?: boolean }
                               )}
                             >
                               <span>{formatBubbleTime(bubble.createdAt)}</span>
-                              {bubble.isOutgoing ? <CheckCheck className="size-3.5 text-[#4F46E5]" /> : null}
+                              {bubble.isOutgoing ? <CheckCheck className="size-3.5 text-primary" /> : null}
                             </div>
                           </div>
                         </div>
@@ -1532,8 +2294,8 @@ export function EmpProfileMessagingPanel({ active = true }: { active?: boolean }
             <footer className="border-t border-[#EEF2F7] bg-white px-4 py-4 md:px-5">
               {attachmentFile ? (
                 <div className="mb-3 flex items-center gap-2">
-                  <Paperclip className="size-4 shrink-0 text-[#4F46E5]" />
-                  <span className="truncate text-[12px] text-[#4F46E5]">{attachmentFile.name}</span>
+                  <Paperclip className="size-4 shrink-0 text-primary" />
+                  <span className="truncate text-[12px] text-primary">{attachmentFile.name}</span>
                   <button
                     type="button"
                     onClick={() => setAttachmentFile(null)}
@@ -1592,7 +2354,7 @@ export function EmpProfileMessagingPanel({ active = true }: { active?: boolean }
                   type="button"
                   disabled={sending || !draft.trim()}
                   onClick={() => void sendMessage()}
-                  className="inline-flex size-10 shrink-0 items-center justify-center rounded-xl bg-[#4F46E5] text-white transition-all duration-[120ms] hover:bg-[#4338CA] disabled:cursor-not-allowed disabled:opacity-50"
+                  className="inline-flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary text-white transition-all duration-[120ms] hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
                   aria-label="Send message"
                 >
                   <SendHorizontal className="size-4" />
@@ -1606,18 +2368,18 @@ export function EmpProfileMessagingPanel({ active = true }: { active?: boolean }
               <button
                 type="button"
                 onClick={() => setSidebarOpen(true)}
-                className="mb-4 inline-flex items-center gap-2 rounded-xl border border-[#EEF2F7] bg-white px-4 py-2 text-[13px] font-medium text-[#4F46E5]"
+                className="mb-4 inline-flex items-center gap-2 rounded-xl border border-[#EEF2F7] bg-white px-4 py-2 text-[13px] font-medium text-primary"
               >
                 <ArrowLeft className="size-4" />
                 Open conversations
               </button>
             ) : null}
-            <div className="mb-3 flex size-12 items-center justify-center rounded-2xl bg-[#EEF2FF] text-[#4F46E5]">
+            <div className="mb-3 flex size-12 items-center justify-center rounded-2xl bg-primary/10 text-primary">
               <MessageSquare className="size-5" />
             </div>
             <p className="text-[15px] font-medium text-[#111827]">Select a conversation</p>
             <p className="mt-1 max-w-sm text-[13px] text-[#6B7280]">
-              Choose a team member from the left to view messages and continue the conversation.
+              Choose a team member or group from the left to view messages and continue the conversation.
             </p>
           </div>
         )}

@@ -78,7 +78,7 @@ export function EmpLeaveApplyForm({ onSuccess, onCancel }: { onSuccess: () => vo
         />
       </div>
       <div className="flex flex-wrap gap-2 pt-2">
-        <Button type="button" onClick={() => void submit()} disabled={submitting}>
+        <Button type="button" size="lg" onClick={() => void submit()} disabled={submitting}>
           {submitting ? "Submitting…" : "Submit request"}
         </Button>
       </div>

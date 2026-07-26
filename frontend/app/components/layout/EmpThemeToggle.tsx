@@ -24,7 +24,7 @@ export function EmpThemeToggle({
       className={cn(
         "inline-flex size-10 shrink-0 items-center justify-center rounded-[10px] transition-colors duration-150",
         monochrome
-          ? "text-[#111827] hover:bg-[#F3F4F6]"
+          ? "text-foreground hover:bg-muted"
           : "border border-border bg-muted/60 text-foreground hover:bg-muted",
         className,
       )}
@@ -33,7 +33,7 @@ export function EmpThemeToggle({
         <Sun
           className={cn(
             "absolute inset-0 size-5 transition-all duration-300",
-            monochrome ? "text-[#111827]" : "text-amber-500",
+            monochrome ? "text-foreground" : "text-amber-500",
             isDark ? "scale-0 rotate-90 opacity-0" : "scale-100 rotate-0 opacity-100",
           )}
           strokeWidth={1.75}
@@ -41,7 +41,7 @@ export function EmpThemeToggle({
         <Moon
           className={cn(
             "absolute inset-0 size-5 transition-all duration-300",
-            monochrome ? "text-[#111827]" : "text-slate-300",
+            monochrome ? "text-foreground" : "text-slate-300",
             isDark ? "scale-100 rotate-0 opacity-100" : "scale-0 -rotate-90 opacity-0",
           )}
           strokeWidth={1.75}

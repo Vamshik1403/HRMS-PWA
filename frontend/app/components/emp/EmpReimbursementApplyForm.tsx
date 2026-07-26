@@ -229,7 +229,7 @@ export function EmpReimbursementApplyForm({
       <p className="text-sm font-semibold border-t pt-3">Total: ₹{total.toFixed(2)}</p>
 
       <div className="flex flex-wrap gap-2">
-        <Button type="button" onClick={() => void submit()} disabled={submitting || total <= 0}>
+        <Button type="button" size="lg" onClick={() => void submit()} disabled={submitting || total <= 0}>
           {submitting ? "Submitting…" : "Submit"}
         </Button>
       </div>

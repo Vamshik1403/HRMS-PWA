@@ -632,7 +632,7 @@ export class ManageEmployeeService {
 
   // Fix getCredentialsByUsername
   async getCredentialsByUsername(username: string) {
-    return this.prisma.employeeCredentials.findFirst({
+    const row = await this.prisma.employeeCredentials.findFirst({
       where: {
         username,
         isActive: true,
@@ -676,6 +676,8 @@ export class ManageEmployeeService {
         }
       }
     });
+    // Return explicit null (JSON `null`) instead of an empty Nest/Express body.
+    return row ?? null;
   }
 
 

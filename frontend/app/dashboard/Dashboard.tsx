@@ -18,6 +18,7 @@ import SoftBarChart from "./components/SoftBarChart";
 import type { SoftBarPoint } from "./components/SoftBarChart";
 import { DashboardHero } from "./components/DashboardHero";
 import { SuperadminPlatformDashboard } from "./components/SuperadminPlatformDashboard";
+import { CompanyAdminEnterpriseDashboard } from "./components/CompanyAdminEnterpriseDashboard";
 import EmployeeStatusCharts, {
   type StatusBreakdownItem,
 } from "./components/EmployeeStatusCharts";
@@ -1045,16 +1046,70 @@ export default function DashboardPage({ embeddedInEmpPortal = false }: { embedde
       ]
     : [{ label: "Pending", value: 0, color: "#f59e0b" }];
 
+  if (user?.role === "COMPANY_ADMIN") {
+    const newJoinersCount =
+      hrWidgets?.newsFeed?.filter((n) => n.kind === "onboarding").length ?? 0;
+
+    return (
+      <div className="animate-fade-in">
+        {probationAlerts.length > 0 && (
+          <div className="mb-6">
+            <NoticeBanner
+              variant="warning"
+              title="Probation ending soon"
+              description="Employees on probation whose period is ending within 60 days (based on employment status WEF and probation period)."
+            >
+              <ul className="space-y-2 max-h-40 overflow-y-auto">
+                {probationAlerts.slice(0, 8).map((a) => (
+                  <li key={a.employeeId} className="text-xs text-foreground flex flex-wrap gap-x-2 gap-y-0.5">
+                    <Link href="/manage-employees" className="font-semibold text-primary hover:underline">
+                      {a.employeeName}
+                    </Link>
+                    <span className="text-muted-foreground">· {a.probationPeriod} · ends {a.probationEndDate}</span>
+                    <span className={a.isOverdue ? "text-destructive font-semibold" : "text-muted-foreground"}>
+                      {a.isOverdue ? "(overdue)" : `(${a.daysRemaining} days left)`}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </NoticeBanner>
+          </div>
+        )}
+        <CompanyAdminEnterpriseDashboard
+          firstName={user?.firstName || user?.username || "Company Admin"}
+          todayDate={todayDate}
+          overviewTotal={overviewTotal}
+          overviewPresent={overviewPresent}
+          overviewAbsent={overviewAbsent}
+          overviewOnLeave={overviewSummary?.onLeave ?? 0}
+          overviewHalfDay={overviewSummary?.halfDay ?? 0}
+          overviewStatsReady={overviewStatsReady}
+          employeesCount={employees.length}
+          presentTrendVsYesterday={presentTrendVsYesterday}
+          newJoinersCount={newJoinersCount}
+          statusBreakdown={statusBreakdown}
+          attendanceTrend={barData}
+          departmentHeadcounts={departmentHeadcounts.map((d) => ({
+            name: d.departmentName,
+            count: d.employeeCount,
+          }))}
+          upcomingEvents={hrWidgets?.upcomingEvents ?? []}
+          newsFeed={hrWidgets?.newsFeed ?? []}
+          activityItems={activityItems}
+          pendingCounts={hrWidgets?.pendingCounts ?? null}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className={`${sectionGap} animate-fade-in`}>
       <DashboardHero
         firstName={user?.firstName || user?.username}
         roleLabel={
-          user?.role === "COMPANY_ADMIN"
-            ? "Company Admin"
-            : user?.role === "ADMIN"
-              ? "Manager"
-              : user?.role?.replace(/_/g, " ")
+          user?.role === "ADMIN"
+            ? "Manager"
+            : user?.role?.replace(/_/g, " ")
         }
         isSuperadmin={user?.role === "SUPERADMIN"}
         lastSyncMinutesAgo={overviewStatsReady ? 2 : null}

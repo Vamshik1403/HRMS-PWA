@@ -7,6 +7,10 @@ import { LayoutGrid, Search } from "lucide-react";
 import { Input } from "@/app/components/ui/input";
 import { getVisibleEmpMoreSections } from "@/app/components/layout/emp-portal-more-sections";
 import { useEmpManagerScope } from "@/app/hooks/useEmpManagerScope";
+import {
+  moreSectionBadgeCount,
+  useEmpSidebarBadges,
+} from "@/app/hooks/useEmpSidebarBadges";
 import { EmpDesktopPage } from "./desktop/EmpDesktopPage";
 import { useEmpPortalDesktop } from "@/app/components/layout/EmpPortalShell";
 import { cn } from "@/app/utils/cn";
@@ -14,6 +18,7 @@ import { cn } from "@/app/utils/cn";
 export function EmpMoreServicesGrid() {
   const isDesktop = useEmpPortalDesktop();
   const { isManagerView } = useEmpManagerScope();
+  const badges = useEmpSidebarBadges();
   const [query, setQuery] = useState("");
 
   const sections = useMemo(
@@ -47,26 +52,34 @@ export function EmpMoreServicesGrid() {
           </p>
         ) : (
           <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-x-3 gap-y-6">
-            {filtered.map((section) => (
-              <Link
-                key={section.id}
-                href={section.href}
-                className="group flex flex-col items-center gap-2.5 text-center"
-              >
-                <div
-                  className={cn(
-                    "w-full max-w-[92px] aspect-square rounded-xl border border-border/70 bg-card shadow-sm",
-                    "flex items-center justify-center transition-all duration-150",
-                    "group-hover:border-primary/30 group-hover:shadow-md group-hover:-translate-y-0.5",
-                  )}
+            {filtered.map((section) => {
+              const badge = moreSectionBadgeCount(section.id, badges);
+              return (
+                <Link
+                  key={section.id}
+                  href={section.href}
+                  className="group flex flex-col items-center gap-2.5 text-center"
                 >
-                  <Icon icon={section.icon} className={cn("size-9", section.iconClassName)} />
-                </div>
-                <span className="text-[11px] sm:text-xs font-medium text-muted-foreground leading-snug px-1 group-hover:text-foreground">
-                  {section.label}
-                </span>
-              </Link>
-            ))}
+                  <div
+                    className={cn(
+                      "relative w-full max-w-[92px] aspect-square rounded-xl border border-border/70 bg-card shadow-sm",
+                      "flex items-center justify-center transition-all duration-150",
+                      "group-hover:border-primary/30 group-hover:shadow-md group-hover:-translate-y-0.5",
+                    )}
+                  >
+                    <Icon icon={section.icon} className={cn("size-9", section.iconClassName)} />
+                    {badge > 0 ? (
+                      <span className="absolute -right-1.5 -top-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-bold text-primary-foreground shadow-sm">
+                        {badge > 99 ? "99+" : badge}
+                      </span>
+                    ) : null}
+                  </div>
+                  <span className="text-[11px] sm:text-xs font-medium text-muted-foreground leading-snug px-1 group-hover:text-foreground">
+                    {section.label}
+                  </span>
+                </Link>
+              );
+            })}
           </div>
         )}
       </div>

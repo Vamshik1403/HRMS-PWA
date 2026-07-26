@@ -3,6 +3,8 @@
 import type { ReactNode } from "react";
 import type { LucideIcon } from "lucide-react";
 import { DataTable, type DataTableColumn } from "./data-table";
+import { listCardClass } from "./list-ui-styles";
+import { cn } from "@/app/utils/cn";
 
 interface EntityListShellProps<T> {
   title: string;
@@ -19,7 +21,10 @@ interface EntityListShellProps<T> {
   emptyDescription?: string;
   emptyAction?: ReactNode;
   toolbar?: ReactNode;
+  /** Hide the legacy "All X / N total" card header (default true for enterprise layout). */
   hideHeader?: boolean;
+  footer?: ReactNode;
+  className?: string;
 }
 
 export function EntityListShell<T>({
@@ -35,21 +40,23 @@ export function EntityListShell<T>({
   emptyIcon,
   emptyTitle,
   emptyDescription,
-  emptyAction,
   toolbar,
-  hideHeader = false,
+  hideHeader = true,
+  footer,
+  className,
 }: EntityListShellProps<T>) {
   const total = rows?.length ?? 0;
   const description = totalLabel ? totalLabel(total) : `${total} total`;
+  const showCount = !isLoading && Array.isArray(rows) && rows.length > 0;
 
   return (
-    <div className="space-y-4">
+    <div className={cn("space-y-5", className)}>
       {toolbar}
-      <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+      <div className={listCardClass}>
         {!hideHeader ? (
-          <div className="border-b border-border px-4 py-3 bg-muted/30">
+          <div className="border-b border-border bg-muted/30 px-6 py-3">
             <h3 className="text-sm font-semibold text-foreground">{title}</h3>
-            <p className="text-xs text-muted-foreground mt-0.5">{description}</p>
+            <p className="mt-0.5 text-xs text-muted-foreground">{description}</p>
           </div>
         ) : null}
         <DataTable
@@ -63,8 +70,16 @@ export function EntityListShell<T>({
           emptyIcon={emptyIcon}
           emptyTitle={emptyTitle}
           emptyDescription={emptyDescription}
-          emptyAction={emptyAction}
         />
+        {footer != null ? (
+          footer
+        ) : showCount ? (
+          <div className="flex flex-col gap-3 border-t border-[#E5E7EB] dark:border-border px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-[13px] text-muted-foreground">
+              Showing {total} of {total} {total === 1 ? "record" : "records"}
+            </p>
+          </div>
+        ) : null}
       </div>
     </div>
   );

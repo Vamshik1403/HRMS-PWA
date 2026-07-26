@@ -14,15 +14,21 @@ interface SearchBarProps {
 
 export function SearchBar({ value, onChange, placeholder, className }: SearchBarProps) {
   return (
-    <div className={cn("relative flex-1 min-w-[200px] max-w-md", className)}>
-      <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground pointer-events-none" />
+    <div
+      className={cn(
+        /* Grow to ~60–65%+ of the toolbar; do not cap width (ml-auto siblings steal space). */
+        "relative min-w-0 w-full flex-1 basis-[60%] sm:min-w-[280px]",
+        className,
+      )}
+    >
+      <Search className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
       <Input
         type="search"
         data-hrms-list-control
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder || "Search…"}
-        className={cn(listControlClass, "pl-9")}
+        className={cn(listControlClass, "w-full pl-10 pr-4")}
       />
     </div>
   );

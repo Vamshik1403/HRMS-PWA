@@ -2,17 +2,18 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { LayoutGrid, List, Search, Users } from "lucide-react";
+import { LayoutGrid, List, Users } from "lucide-react";
 import { useEmpManagerScope } from "@/app/hooks/useEmpManagerScope";
 import { reporteeDisplayName } from "@/app/utils/empManagerDisplay";
 import { formatPunchTime } from "@/app/utils/empAttendanceHistory";
 import { useEmpPortalDesktop } from "@/app/components/layout/EmpPortalShell";
 import { EmpTeamApprovalsPanel } from "./EmpTeamApprovalsPanel";
 import { EmpDesktopPage } from "./desktop/EmpDesktopPage";
+import { FilterBar, FilterSelect } from "@/app/components/app/filter-bar";
+import { listCardClass, listIconButtonClass } from "@/app/components/app/list-ui-styles";
 import { cn } from "@/app/utils/cn";
 import { fmtJoined } from "@/app/hooks/useEmpProfile";
 import { authHeaders } from "@/lib/auth";
-import { Input } from "@/app/components/ui/input";
 
 const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL || "/backend";
 
@@ -37,8 +38,8 @@ type ViewMode = "grid" | "list";
 const TEAM_VIEW_MODE_KEY = "emp-team-view-mode";
 
 function readTeamViewMode(): ViewMode {
-  if (typeof window === "undefined") return "grid";
-  return localStorage.getItem(TEAM_VIEW_MODE_KEY) === "list" ? "list" : "grid";
+  if (typeof window === "undefined") return "list";
+  return localStorage.getItem(TEAM_VIEW_MODE_KEY) === "grid" ? "grid" : "list";
 }
 
 function statusTone(label: string) {
@@ -93,7 +94,6 @@ export function EmpTeamMyTeam() {
     searchParams.get("scope") === "team" ? "team" : "reportees";
   const [scope, setScope] = useState<TeamScope>(initialScope);
   const [viewMode, setViewMode] = useState<ViewMode>(() => readTeamViewMode());
-  const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [members, setMembers] = useState<TeamMemberRow[]>([]);
   const [statusLoading, setStatusLoading] = useState(false);
@@ -153,15 +153,17 @@ export function EmpTeamMyTeam() {
     });
   }, [members, searchQuery]);
 
-  const toggleSearch = () => {
-    setSearchOpen((open) => {
-      if (open) setSearchQuery("");
-      return !open;
-    });
-  };
-
   const openMember = (id: number) => {
     router.push(`/empTeam/member/${id}`);
+  };
+
+  const setScopeAndUrl = (next: TeamScope) => {
+    setScope(next);
+    const params = new URLSearchParams(searchParams.toString());
+    if (next === "team") params.set("scope", "team");
+    else params.delete("scope");
+    const qs = params.toString();
+    router.replace(qs ? `/empTeam/my-team?${qs}` : "/empTeam/my-team");
   };
 
   if (loading) {
@@ -177,108 +179,74 @@ export function EmpTeamMyTeam() {
   }
 
   const body = (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-2 justify-end">
-          {searchOpen ? (
-            <div className="relative w-full sm:w-56">
-              <Search className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                autoFocus
-                placeholder="Search by name or ID…"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="h-9 pl-8"
-              />
-            </div>
-          ) : null}
-
-          <div className="inline-flex rounded-lg border border-border bg-muted/30 p-1">
-            <button
-              type="button"
-              onClick={() => setScope("reportees")}
-              className={cn(
-                "rounded-md px-3 py-1.5 text-xs font-semibold transition-colors",
-                scope === "reportees"
-                  ? "bg-card text-foreground shadow-sm"
-                  : "text-muted-foreground hover:text-foreground",
-              )}
-            >
-              My Reportees{scope === "reportees" && directCount != null ? ` ${directCount}` : ""}
-            </button>
-            <button
-              type="button"
-              onClick={() => setScope("team")}
-              className={cn(
-                "rounded-md px-3 py-1.5 text-xs font-semibold transition-colors",
-                scope === "team"
-                  ? "bg-card text-foreground shadow-sm"
-                  : "text-muted-foreground hover:text-foreground",
-              )}
-            >
-              My Team{scope === "team" ? ` ${members.length}` : ""}
-            </button>
-          </div>
-
-          <div className="inline-flex rounded-lg border border-border bg-muted/30 p-1">
+    <div className="space-y-4 page-content-enter">
+      <FilterBar
+        search={{
+          value: searchQuery,
+          onChange: setSearchQuery,
+          placeholder: "Search by name, ID, email…",
+        }}
+        filters={
+          <FilterSelect
+            id="team-scope"
+            ariaLabel="Team scope"
+            value={scope}
+            onChange={(v) => setScopeAndUrl(v as TeamScope)}
+            options={[
+              {
+                value: "reportees",
+                label:
+                  directCount != null
+                    ? `My Reportees (${directCount})`
+                    : "My Reportees",
+              },
+              {
+                value: "team",
+                label: `My Team (${members.length})`,
+              },
+            ]}
+            width="w-52"
+          />
+        }
+        filtersPlacement="popover"
+        trailing={
+          <div className="flex items-center gap-2.5">
             <button
               type="button"
               aria-label="Grid view"
+              title="Grid view"
               onClick={() => selectViewMode("grid")}
-              className={cn(
-                "rounded-md p-2 transition-colors",
-                viewMode === "grid"
-                  ? "bg-card text-foreground shadow-sm"
-                  : "text-muted-foreground hover:text-foreground",
-              )}
+              className={cn(listIconButtonClass, viewMode === "grid" && "bg-muted text-foreground")}
             >
-              <LayoutGrid className="size-4" />
+              <LayoutGrid className="size-4" strokeWidth={1.75} />
             </button>
             <button
               type="button"
               aria-label="List view"
+              title="List view"
               onClick={() => selectViewMode("list")}
-              className={cn(
-                "rounded-md p-2 transition-colors",
-                viewMode === "list"
-                  ? "bg-card text-foreground shadow-sm"
-                  : "text-muted-foreground hover:text-foreground",
-              )}
+              className={cn(listIconButtonClass, viewMode === "list" && "bg-muted text-foreground")}
             >
-              <List className="size-4" />
+              <List className="size-4" strokeWidth={1.75} />
             </button>
           </div>
-
-          <div className="inline-flex rounded-lg border border-border bg-muted/30 p-1">
-            <button
-              type="button"
-              aria-label="Search employees"
-              onClick={toggleSearch}
-              className={cn(
-                "rounded-md p-2 transition-colors",
-                searchOpen
-                  ? "bg-card text-foreground shadow-sm"
-                  : "text-muted-foreground hover:text-foreground",
-              )}
-            >
-              <Search className="size-4" />
-            </button>
-          </div>
-      </div>
+        }
+      />
 
       {statusLoading ? (
-        <p className="text-sm text-muted-foreground py-8 text-center">Loading team members…</p>
+        <p className="py-8 text-center text-sm text-muted-foreground">Loading team members…</p>
       ) : members.length === 0 ? (
-        <div className="rounded-xl border border-[#e5eeff] bg-white p-8 text-center text-muted-foreground shadow-[0px_4px_20px_rgba(0,0,0,0.05)]">
+        <div className={cn(listCardClass, "p-8 text-center text-muted-foreground")}>
           {scope === "reportees"
             ? "No reportees linked yet. Assign team members from the employee form in admin."
             : "No other employees found in your department."}
         </div>
       ) : filteredMembers.length === 0 ? (
-        <div className="rounded-xl border border-[#e5eeff] bg-white p-8 text-center text-muted-foreground shadow-[0px_4px_20px_rgba(0,0,0,0.05)]">
+        <div className={cn(listCardClass, "p-8 text-center text-muted-foreground")}>
           No employees match &ldquo;{searchQuery.trim()}&rdquo;.
         </div>
       ) : viewMode === "grid" ? (
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {filteredMembers.map((m) => {
             const name = memberName(m);
             const statusLabel = m.statusLabel || "Yet to check-in";
@@ -292,21 +260,24 @@ export function EmpTeamMyTeam() {
                 key={m.id}
                 type="button"
                 onClick={() => openMember(m.id)}
-                className="rounded-xl border border-[#e5eeff] bg-white p-4 text-left shadow-[0px_4px_20px_rgba(0,0,0,0.05)] transition-all hover:border-[#4648d4]/40 hover:shadow-md"
+                className={cn(
+                  listCardClass,
+                  "p-4 text-left transition-all hover:border-primary/30 hover:shadow-md",
+                )}
               >
                 <div className="flex items-start gap-3">
                   <MemberAvatar member={m} className="size-12 text-sm" />
                   <div className="min-w-0 flex-1">
-                    <p className="text-xs text-muted-foreground font-mono truncate">
+                    <p className="truncate font-mono text-xs text-muted-foreground">
                       {m.employeeID || `ID ${m.id}`}
                     </p>
-                    <p className="font-semibold text-foreground truncate">{name}</p>
-                    <p className="text-xs text-muted-foreground truncate mt-0.5">
+                    <p className="truncate font-semibold text-foreground">{name}</p>
+                    <p className="mt-0.5 truncate text-xs text-muted-foreground">
                       {m.designation || "—"}
                     </p>
                   </div>
                 </div>
-                <p className={cn("text-xs font-semibold mt-3", statusTone(statusLabel))}>
+                <p className={cn("mt-3 text-xs font-semibold", statusTone(statusLabel))}>
                   {statusLabel}
                   {checkInLabel ? ` · ${checkInLabel}` : ""}
                 </p>
@@ -315,55 +286,59 @@ export function EmpTeamMyTeam() {
           })}
         </div>
       ) : (
-        <div className="overflow-hidden rounded-xl border border-[#e5eeff] bg-white shadow-[0px_4px_20px_rgba(0,0,0,0.05)]">
-          <div className="overflow-x-auto bg-white">
-            <table className="w-full bg-white text-sm">
-              <thead className="bg-white">
-                <tr className="border-b border-[#e5eeff] bg-white text-left">
-                  <th className="bg-white px-4 py-3 text-xs font-medium uppercase tracking-wide text-[#6b7280]">Employee</th>
-                  <th className="bg-white px-4 py-3 text-xs font-medium uppercase tracking-wide text-[#6b7280]">Status</th>
-                  <th className="bg-white px-4 py-3 text-xs font-medium uppercase tracking-wide text-[#6b7280] hidden md:table-cell">
+        <div className={listCardClass}>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border text-left" data-hrms-table-header>
+                  <th className="px-4 py-3 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    Employee
+                  </th>
+                  <th className="px-4 py-3 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    Status
+                  </th>
+                  <th className="hidden px-4 py-3 text-xs font-medium uppercase tracking-wide text-muted-foreground md:table-cell">
                     Designation
                   </th>
-                  <th className="bg-white px-4 py-3 text-xs font-medium uppercase tracking-wide text-[#6b7280] hidden lg:table-cell">
+                  <th className="hidden px-4 py-3 text-xs font-medium uppercase tracking-wide text-muted-foreground lg:table-cell">
                     Email
                   </th>
-                  <th className="bg-white px-4 py-3 text-xs font-medium uppercase tracking-wide text-[#6b7280] hidden sm:table-cell">
+                  <th className="hidden px-4 py-3 text-xs font-medium uppercase tracking-wide text-muted-foreground sm:table-cell">
                     Joined
                   </th>
                 </tr>
               </thead>
-              <tbody className="bg-white">
+              <tbody>
                 {filteredMembers.map((m) => {
                   const name = memberName(m);
                   const statusLabel = m.statusLabel || "Yet to check-in";
                   return (
                     <tr
                       key={m.id}
-                      className="cursor-pointer border-b border-[#e5eeff] bg-white transition-colors last:border-0 hover:bg-[#f8f9ff]"
+                      className="cursor-pointer border-b border-border transition-colors last:border-0 hover:bg-muted/40"
                       onClick={() => openMember(m.id)}
                     >
                       <td className="px-4 py-3">
-                        <div className="flex items-center gap-3 min-w-[200px]">
+                        <div className="flex min-w-[200px] items-center gap-3">
                           <MemberAvatar member={m} className="size-10 text-xs" />
                           <div className="min-w-0">
-                            <p className="text-xs text-muted-foreground font-mono">
+                            <p className="font-mono text-xs text-muted-foreground">
                               {m.employeeID || m.id}
                             </p>
-                            <p className="font-medium text-foreground truncate">{name}</p>
+                            <p className="truncate font-medium text-foreground">{name}</p>
                           </div>
                         </div>
                       </td>
-                      <td className={cn("px-4 py-3 font-semibold whitespace-nowrap", statusTone(statusLabel))}>
+                      <td className={cn("whitespace-nowrap px-4 py-3 font-semibold", statusTone(statusLabel))}>
                         {statusLabel}
                       </td>
-                      <td className="px-4 py-3 text-muted-foreground hidden md:table-cell">
+                      <td className="hidden px-4 py-3 text-muted-foreground md:table-cell">
                         {m.designation || "—"}
                       </td>
-                      <td className="px-4 py-3 text-muted-foreground hidden lg:table-cell truncate max-w-[200px]">
+                      <td className="hidden max-w-[200px] truncate px-4 py-3 text-muted-foreground lg:table-cell">
                         {m.email || "—"}
                       </td>
-                      <td className="px-4 py-3 text-muted-foreground hidden sm:table-cell whitespace-nowrap">
+                      <td className="hidden whitespace-nowrap px-4 py-3 text-muted-foreground sm:table-cell">
                         {m.joiningDate ? fmtJoined(m.joiningDate) : "—"}
                       </td>
                     </tr>
@@ -371,6 +346,10 @@ export function EmpTeamMyTeam() {
                 })}
               </tbody>
             </table>
+          </div>
+          <div className="border-t border-border px-6 py-3 text-[13px] text-muted-foreground">
+            Showing {filteredMembers.length} of {members.length}{" "}
+            {members.length === 1 ? "record" : "records"}
           </div>
         </div>
       )}

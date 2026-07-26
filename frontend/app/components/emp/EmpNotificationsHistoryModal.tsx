@@ -1,11 +1,15 @@
 "use client";
 
+import { useEffect } from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
 import { Icon } from "@iconify/react";
 import type { FeedNotification } from "./EmpNotificationsPanel";
 import { empPayoutHrefForPeriod } from "../../utils/empPayslipApi";
 import type { EmpManagerScope } from "../../utils/empManagerDisplay";
 import { formatManagerNotificationCopy } from "../../utils/empManagerDisplay";
+
+const GROUP_SUBJECT_PREFIX = "IM_GROUP::";
 
 function fmtWhen(iso: string, kind?: string) {
   const d = new Date(iso);
@@ -40,27 +44,40 @@ function resolveNotificationHref(n: FeedNotification): string | undefined {
   return n.href;
 }
 
+function cleanNotificationText(text: string | null | undefined) {
+  const value = (text || "").trim();
+  if (!value) return "";
+  if (!value.includes(GROUP_SUBJECT_PREFIX)) return value;
+  return value.replace(/IM_GROUP::[^\s:]+::/g, "Group · ");
+}
+
 function NotificationRow({
   n,
   isManagerView,
   scope,
+  onNavigate,
 }: {
   n: FeedNotification;
   isManagerView: boolean;
   scope: EmpManagerScope | null;
+  onNavigate?: () => void;
 }) {
-  const copy = isManagerView
+  const raw = isManagerView
     ? formatManagerNotificationCopy(n, scope)
     : { title: n.title, body: n.body };
+  const copy = {
+    title: cleanNotificationText(raw.title),
+    body: cleanNotificationText(raw.body),
+  };
   const inner = (
-    <div className="bg-white rounded-2xl border border-gray-100 shadow-[0_1px_8px_rgba(15,23,42,0.04)] px-3.5 py-3 flex gap-3 active:scale-[0.99] transition-transform">
-      <div className="w-10 h-10 rounded-xl bg-gray-50 flex items-center justify-center flex-shrink-0 overflow-hidden">
+    <div className="flex gap-3 rounded-2xl border border-border bg-card px-3.5 py-3 shadow-sm transition-colors hover:bg-muted/40 active:scale-[0.99]">
+      <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center overflow-hidden rounded-xl bg-muted">
         {n.kind === "holiday" && /^\d{1,2} [A-Z][a-z]{2}$/.test(n.emoji) ? (
-          <div className="flex flex-col items-center justify-center w-full h-full bg-red-50 rounded-xl border border-red-100">
-            <span className="text-[9px] font-semibold text-red-400 uppercase leading-none tracking-wide">
+          <div className="flex h-full w-full flex-col items-center justify-center rounded-xl border border-red-500/20 bg-red-500/10">
+            <span className="text-[9px] font-semibold uppercase leading-none tracking-wide text-red-400">
               {n.emoji.split(" ")[1]}
             </span>
-            <span className="text-[14px] font-bold text-red-600 leading-none mt-0.5">
+            <span className="mt-0.5 text-[14px] font-bold leading-none text-red-500">
               {n.emoji.split(" ")[0]}
             </span>
           </div>
@@ -70,16 +87,18 @@ function NotificationRow({
       </div>
       <div className="min-w-0 flex-1">
         <div className="flex items-start justify-between gap-2">
-          <p className="text-[13px] font-bold text-gray-900 leading-snug">{copy.title}</p>
-          <span className="text-[10px] text-gray-400 flex-shrink-0">{fmtWhen(n.at, n.kind)}</span>
+          <p className="text-[13px] font-bold leading-snug text-foreground">{copy.title}</p>
+          <span className="flex-shrink-0 text-[10px] text-muted-foreground">{fmtWhen(n.at, n.kind)}</span>
         </div>
-        <p className="text-[12px] text-gray-600 mt-0.5 leading-relaxed">{copy.body}</p>
+        <p className="mt-0.5 text-[12px] leading-relaxed text-muted-foreground">{copy.body}</p>
       </div>
     </div>
   );
   const href = resolveNotificationHref(n);
   return href ? (
-    <Link href={href}>{inner}</Link>
+    <Link href={href} onClick={onNavigate}>
+      {inner}
+    </Link>
   ) : (
     <div>{inner}</div>
   );
@@ -98,32 +117,61 @@ export function EmpNotificationsHistoryModal({
   isManagerView: boolean;
   scope: EmpManagerScope | null;
 }) {
-  if (!open) return null;
-  return (
-    <div className="fixed inset-0 z-[240] flex flex-col bg-[#f8f9fb]">
-      <header className="sticky top-0 z-10 bg-white border-b px-4 py-3 flex items-center gap-2">
+  useEffect(() => {
+    if (!open) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => {
+      document.body.style.overflow = prev;
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [open, onClose]);
+
+  if (!open || typeof document === "undefined") return null;
+
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[400] flex flex-col bg-background"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="emp-notifications-history-title"
+    >
+      <header className="sticky top-0 z-10 flex shrink-0 items-center gap-2 border-b border-border bg-card px-4 py-3 shadow-sm">
         <button
           type="button"
           onClick={onClose}
-          className="w-9 h-9 rounded-full flex items-center justify-center"
+          className="flex h-9 w-9 items-center justify-center rounded-full text-foreground hover:bg-muted"
           aria-label="Close"
         >
-          <Icon icon="solar:arrow-left-linear" className="w-5 h-5" />
+          <Icon icon="solar:arrow-left-linear" className="h-5 w-5" />
         </button>
         <div>
-          <h1 className="text-[17px] font-bold text-gray-900">All notifications</h1>
-          <p className="text-[11px] text-gray-500">Last 90 days</p>
+          <h1 id="emp-notifications-history-title" className="text-[17px] font-bold text-foreground">
+            All notifications
+          </h1>
+          <p className="text-[11px] text-muted-foreground">Last 90 days</p>
         </div>
       </header>
-      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-2 pb-8">
+      <div className="min-h-0 flex-1 space-y-2 overflow-y-auto px-4 py-4 pb-8">
         {items.length === 0 ? (
-          <p className="text-center text-[13px] text-gray-400 py-12">No notifications</p>
+          <p className="py-12 text-center text-[13px] text-muted-foreground">No notifications</p>
         ) : (
           items.map((n) => (
-            <NotificationRow key={n.id} n={n} isManagerView={isManagerView} scope={scope} />
+            <NotificationRow
+              key={n.id}
+              n={n}
+              isManagerView={isManagerView}
+              scope={scope}
+              onNavigate={onClose}
+            />
           ))
         )}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

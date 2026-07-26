@@ -74,30 +74,35 @@
     --radius: 0.625rem;
   }
   .dark {
-    --background: 224 71% 4%;
-    --foreground: 210 40% 98%;
-    --card: 224 71% 6%;
-    --card-foreground: 210 40% 98%;
-    --popover: 224 71% 6%;
-    --popover-foreground: 210 40% 98%;
+    --background: 0 0% 7%;
+    --foreground: 0 0% 98%;
+    --card: 0 0% 10%;
+    --card-foreground: 0 0% 98%;
+    --popover: 0 0% 10%;
+    --popover-foreground: 0 0% 98%;
     --primary: 217 91% 60%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 215 28% 12%;
-    --secondary-foreground: 210 40% 98%;
-    --muted: 215 28% 12%;
-    --muted-foreground: 215 20% 65%;
-    --accent: 217 33% 17%;
-    --accent-foreground: 210 40% 98%;
-    --destructive: 0 63% 31%;
+    --secondary: 0 0% 14%;
+    --secondary-foreground: 0 0% 98%;
+    --muted: 0 0% 14%;
+    --muted-foreground: 0 0% 68%;
+    --accent: 0 0% 16%;
+    --accent-foreground: 0 0% 98%;
+    --destructive: 0 63% 40%;
     --destructive-foreground: 0 0% 98%;
-    --border: 215 28% 14%;
-    --input: 215 28% 14%;
+    --border: 0 0% 18%;
+    --input: 0 0% 18%;
     --ring: 217 91% 60%;
     --chart-1: 217 91% 65%;
     --chart-2: 142 71% 50%;
     --chart-3: 38 92% 55%;
     --chart-4: 187 86% 48%;
     --chart-5: 0 84% 65%;
+    --sidebar: 0 0% 8%;
+    --sidebar-foreground: 0 0% 98%;
+    --sidebar-border: 0 0% 16%;
+    --sidebar-accent: 0 0% 14%;
+    --sidebar-accent-foreground: 0 0% 98%;
   }
 }
 
@@ -179,6 +184,29 @@ html.dark .form-drawer-body {
   color-scheme: light;
   -webkit-appearance: none;
   appearance: none;
+}
+
+html[data-emp-theme="dark"] .emp-pwa-shell input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):not([type="hidden"]),
+html[data-emp-theme="dark"] .emp-pwa-shell select,
+html[data-emp-theme="dark"] .emp-pwa-shell textarea {
+  background-color: #1a1a1a !important;
+  color: #f5f5f5 !important;
+  color-scheme: dark;
+  border-color: #2a2a2a !important;
+}
+
+html[data-emp-theme="dark"] .emp-pwa-shell input::placeholder {
+  color: #737373 !important;
+}
+
+html[data-emp-theme="dark"] .emp-pwa-shell input:-webkit-autofill,
+html[data-emp-theme="dark"] .emp-pwa-shell input:-webkit-autofill:hover,
+html[data-emp-theme="dark"] .emp-pwa-shell input:-webkit-autofill:focus,
+html[data-emp-theme="dark"] .emp-pwa-shell select:-webkit-autofill,
+html[data-emp-theme="dark"] .emp-pwa-shell textarea:-webkit-autofill {
+  -webkit-box-shadow: 0 0 0 1000px #1a1a1a inset !important;
+  -webkit-text-fill-color: #f5f5f5 !important;
+  caret-color: #f5f5f5 !important;
 }
 
 .app-form-control::placeholder,
@@ -518,35 +546,67 @@ input[type="time"]::-webkit-calendar-picker-indicator:hover {
 html[data-emp-theme="dark"] .emp-pwa-shell,
 html[data-emp-theme="dark"] .emp-pwa-safe-top,
 html[data-emp-theme="dark"] .emp-pwa-page-bg {
-  background: #0b1220 !important;
-  color: #e5e7eb !important;
+  background: #121212 !important;
+  color: #f5f5f5 !important;
 }
 
 html[data-emp-theme="dark"] .emp-pwa-shell {
   color-scheme: dark;
 }
 
-html[data-emp-theme="dark"] .emp-pwa-shell .bg-white {
-  background-color: #111827 !important;
+html[data-emp-theme="dark"] .emp-pwa-shell .bg-white,
+html[data-emp-theme="dark"] .emp-pwa-shell [class*="bg-white"] {
+  background-color: #1a1a1a !important;
 }
 
 html[data-emp-theme="dark"] .emp-pwa-shell .bg-gray-50,
 html[data-emp-theme="dark"] .emp-pwa-shell [class*="bg-gray-50"] {
-  background-color: #1e293b !important;
+  background-color: #1f1f1f !important;
 }
 
 html[data-emp-theme="dark"] .emp-pwa-shell .bg-gray-100,
 html[data-emp-theme="dark"] .emp-pwa-shell [class*="bg-gray-100"] {
-  background-color: #1f2937 !important;
+  background-color: #242424 !important;
 }
 
 html[data-emp-theme="dark"] .emp-pwa-shell [class*="bg-[#f8f9fb]"],
-html[data-emp-theme="dark"] .emp-pwa-shell [class*="bg-[#f2f4f7]"] {
-  background-color: #0b1220 !important;
+html[data-emp-theme="dark"] .emp-pwa-shell [class*="bg-[#f2f4f7]"],
+html[data-emp-theme="dark"] .emp-pwa-shell [class*="bg-[#f8f9ff]"],
+html[data-emp-theme="dark"] .emp-pwa-shell [class*="bg-[#F8F9FC]"],
+html[data-emp-theme="dark"] .emp-pwa-shell [class*="bg-[#EEF2F7]"],
+html[data-emp-theme="dark"] .emp-pwa-shell [class*="bg-[#EEF2FF]"] {
+  background-color: #1a1a1a !important;
+}
+
+html[data-emp-theme="dark"] .emp-pwa-shell [class*="bg-[#eef4ff]"],
+html[data-emp-theme="dark"] .emp-pwa-shell [class*="bg-[#EEF4FF]"] {
+  background-color: #222222 !important;
 }
 
 html[data-emp-theme="dark"] .emp-pwa-shell .shadow-sm {
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35) !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.45) !important;
+}
+
+/* Force readable light text over hardcoded light-theme hex colors */
+html[data-emp-theme="dark"] .emp-pwa-shell [class*="text-[#111827]"],
+html[data-emp-theme="dark"] .emp-pwa-shell [class*="text-[#121c28]"],
+html[data-emp-theme="dark"] .emp-pwa-shell [class*="text-[#0f172a]"],
+html[data-emp-theme="dark"] .emp-pwa-shell [class*="text-[#1f2937]"] {
+  color: #f5f5f5 !important;
+}
+
+html[data-emp-theme="dark"] .emp-pwa-shell [class*="text-[#5b5f61]"],
+html[data-emp-theme="dark"] .emp-pwa-shell [class*="text-[#6B7280]"],
+html[data-emp-theme="dark"] .emp-pwa-shell [class*="text-[#6b7280]"],
+html[data-emp-theme="dark"] .emp-pwa-shell [class*="text-[#464554]"],
+html[data-emp-theme="dark"] .emp-pwa-shell [class*="text-[#9CA3AF]"] {
+  color: #a3a3a3 !important;
+}
+
+html[data-emp-theme="dark"] .emp-pwa-shell [class*="border-[#EEF2F7]"],
+html[data-emp-theme="dark"] .emp-pwa-shell [class*="border-[#e5eeff]"],
+html[data-emp-theme="dark"] .emp-pwa-shell [class*="border-[#E5EEFF]"] {
+  border-color: #2a2a2a !important;
 }
 
 html[data-emp-theme="dark"] .emp-pwa-shell .text-gray-900 {
@@ -562,16 +622,32 @@ html[data-emp-theme="dark"] .emp-pwa-shell .text-gray-700 {
 }
 
 html[data-emp-theme="dark"] .emp-pwa-shell .text-gray-600 {
-  color: #9ca3af !important;
+  color: #a3a3a3 !important;
 }
 
 html[data-emp-theme="dark"] .emp-pwa-shell .text-gray-500,
 html[data-emp-theme="dark"] .emp-pwa-shell .text-gray-400 {
-  color: #94a3b8 !important;
+  color: #a3a3a3 !important;
 }
 
 html[data-emp-theme="dark"] .emp-pwa-shell .text-gray-300 {
-  color: #64748b !important;
+  color: #737373 !important;
+}
+
+/* IM workspace dark readability */
+html[data-emp-theme="dark"] .emp-pwa-shell .im-workspace {
+  background: #141414 !important;
+  border-color: #2a2a2a !important;
+  color: #f5f5f5 !important;
+}
+
+html[data-emp-theme="dark"] .emp-pwa-shell .im-workspace aside {
+  background: #121212 !important;
+  border-color: #2a2a2a !important;
+}
+
+html[data-emp-theme="dark"] .emp-pwa-shell .im-workspace section {
+  background: #0f0f0f !important;
 }
 
 html[data-emp-theme="dark"] .emp-pwa-shell .text-amber-600,
@@ -1356,6 +1432,20 @@ html.dark .hrms-admin-content [data-hrms-table-header] [class*="hover:text-foreg
 /* ── Admin content UI consistency ── */
 .hrms-admin-content {
   @apply animate-fade-in;
+}
+
+/* Fit IM (and similar full-height panels) inside the shell — no page scrollbar */
+.hrms-admin-content:has([data-messaging-fit]) {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding-top: 1.25rem;
+  padding-bottom: 1.25rem;
+}
+
+.hrms-admin-content:has([data-messaging-fit]) > * {
+  min-height: 0;
+  flex: 1 1 auto;
 }
 
 

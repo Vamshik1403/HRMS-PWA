@@ -14,7 +14,7 @@ export function PageContent({
   return (
     <div
       className={cn(
-        "space-y-6 w-full max-w-none animate-fade-in page-content-enter",
+        "page-content-enter w-full max-w-none animate-fade-in space-y-6",
         className,
       )}
     >

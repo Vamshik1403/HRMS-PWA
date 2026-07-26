@@ -1,8 +1,9 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
-import { Filter, LayoutGrid, List, Search } from "lucide-react";
-import { Input } from "../../ui/input";
+import { LayoutGrid, List } from "lucide-react";
+import { FilterBar } from "@/app/components/app/filter-bar";
+import { listCardClass, listIconButtonClass } from "@/app/components/app/list-ui-styles";
 import { cn } from "@/app/utils/cn";
 
 export type TeamListViewMode = "grid" | "list";
@@ -12,9 +13,11 @@ export function useTeamListControls(storageKey?: string) {
     if (!storageKey || typeof window === "undefined") return "list";
     return localStorage.getItem(storageKey) === "grid" ? "grid" : "list";
   });
-  const [searchOpen, setSearchOpen] = useState(false);
+  /** Always-visible search (admin FilterBar); kept for API compatibility. */
+  const [searchOpen] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
-  const [filterOpen, setFilterOpen] = useState(false);
+  /** Filters stay visible in the toolbar; kept for API compatibility. */
+  const [filterOpen, setFilterOpen] = useState(true);
 
   const selectViewMode = (mode: TeamListViewMode) => {
     setViewMode(mode);
@@ -23,23 +26,16 @@ export function useTeamListControls(storageKey?: string) {
     }
   };
 
-  const toggleSearch = () => {
-    setSearchOpen((open) => {
-      if (open) setSearchQuery("");
-      return !open;
-    });
-  };
-
   return {
     viewMode,
     selectViewMode,
     searchOpen,
     searchQuery,
     setSearchQuery,
-    toggleSearch,
+    toggleSearch: () => undefined,
     filterOpen,
     setFilterOpen,
-    toggleFilter: () => setFilterOpen((open) => !open),
+    toggleFilter: () => setFilterOpen(true),
   };
 }
 
@@ -48,13 +44,13 @@ export function EmpTeamStyleDataSection({
   subtitle,
   leading,
   actions,
-  searchOpen,
-  onToggleSearch,
+  searchOpen: _searchOpen,
+  onToggleSearch: _onToggleSearch,
   searchQuery,
   onSearchChange,
   searchPlaceholder = "Search…",
-  filterOpen,
-  onToggleFilter,
+  filterOpen: _filterOpen,
+  onToggleFilter: _onToggleFilter,
   filterContent,
   viewMode,
   onViewModeChange,
@@ -86,128 +82,79 @@ export function EmpTeamStyleDataSection({
   listContent: ReactNode;
   gridContent?: ReactNode;
 }) {
-  const showToolbar =
-    title ||
-    subtitle ||
-    leading ||
-    actions ||
-    onToggleSearch ||
-    onToggleFilter ||
-    (showViewToggle && onViewModeChange);
+  void _searchOpen;
+  void _onToggleSearch;
+  void _filterOpen;
+  void _onToggleFilter;
 
-  const controlButtons = (
-    <>
-      {searchOpen && onSearchChange ? (
-        <div className="relative w-full sm:w-48">
-          <Search className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            autoFocus
-            placeholder={searchPlaceholder}
-            value={searchQuery ?? ""}
-            onChange={(e) => onSearchChange(e.target.value)}
-            className="h-9 pl-8"
-          />
-        </div>
-      ) : null}
-
-      {onToggleFilter ? (
-        <div className="inline-flex rounded-lg border border-border bg-muted/30 p-1">
-          <button
-            type="button"
-            aria-label="Filter"
-            onClick={onToggleFilter}
-            className={cn(
-              "rounded-md p-2 transition-colors",
-              filterOpen
-                ? "bg-card text-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground",
-            )}
-          >
-            <Filter className="size-4" />
-          </button>
-        </div>
-      ) : null}
-
-      {showViewToggle && onViewModeChange ? (
-        <div className="inline-flex rounded-lg border border-border bg-muted/30 p-1">
-          <button
-            type="button"
-            aria-label="Grid view"
-            onClick={() => onViewModeChange("grid")}
-            className={cn(
-              "rounded-md p-2 transition-colors",
-              viewMode === "grid"
-                ? "bg-card text-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground",
-            )}
-          >
-            <LayoutGrid className="size-4" />
-          </button>
-          <button
-            type="button"
-            aria-label="List view"
-            onClick={() => onViewModeChange("list")}
-            className={cn(
-              "rounded-md p-2 transition-colors",
-              viewMode === "list"
-                ? "bg-card text-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground",
-            )}
-          >
-            <List className="size-4" />
-          </button>
-        </div>
-      ) : null}
-
-      {onToggleSearch ? (
-        <div className="inline-flex rounded-lg border border-border bg-muted/30 p-1">
-          <button
-            type="button"
-            aria-label="Search"
-            onClick={onToggleSearch}
-            className={cn(
-              "rounded-md p-2 transition-colors",
-              searchOpen
-                ? "bg-card text-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground",
-            )}
-          >
-            <Search className="size-4" />
-          </button>
-        </div>
-      ) : null}
-    </>
-  );
+  const showHeader = title || subtitle || leading;
+  const showViewControls = showViewToggle && onViewModeChange && gridContent;
 
   return (
-    <div className="space-y-4">
-      {showToolbar ? (
-        <div className="space-y-3">
-          <div className="flex flex-wrap items-center gap-3">
-            {leading ? <div className="flex items-center gap-2 shrink-0">{leading}</div> : null}
-
-            {title || subtitle ? (
-              <div className="shrink-0">
-                {title ? <h2 className="text-base font-semibold text-foreground">{title}</h2> : null}
-                {subtitle ? <p className="text-sm text-muted-foreground mt-0.5">{subtitle}</p> : null}
-              </div>
-            ) : null}
-
-            <div className="flex flex-wrap items-center gap-2">{controlButtons}</div>
-
-            {actions ? <div className="flex items-center gap-2 ml-auto shrink-0">{actions}</div> : null}
-          </div>
-
-          {filterOpen && filterContent ? (
-            <div className="flex flex-wrap items-center gap-2">{filterContent}</div>
+    <div className="space-y-4 page-content-enter">
+      {showHeader ? (
+        <div className="flex flex-wrap items-start gap-3">
+          {leading ? <div className="flex items-center gap-2 shrink-0">{leading}</div> : null}
+          {title || subtitle ? (
+            <div className="min-w-0 flex-1">
+              {title ? <h2 className="text-base font-semibold text-foreground">{title}</h2> : null}
+              {subtitle ? <p className="mt-0.5 text-sm text-muted-foreground">{subtitle}</p> : null}
+            </div>
           ) : null}
         </div>
       ) : null}
 
+      <FilterBar
+        search={
+          onSearchChange
+            ? {
+                value: searchQuery ?? "",
+                onChange: onSearchChange,
+                placeholder: searchPlaceholder,
+              }
+            : undefined
+        }
+        filters={filterContent}
+        filtersPlacement={filterContent ? "popover" : "inline"}
+        trailing={
+          <>
+            {showViewControls ? (
+              <div className="flex items-center gap-2.5">
+                <button
+                  type="button"
+                  aria-label="Grid view"
+                  title="Grid view"
+                  onClick={() => onViewModeChange!("grid")}
+                  className={cn(
+                    listIconButtonClass,
+                    viewMode === "grid" && "bg-muted text-foreground",
+                  )}
+                >
+                  <LayoutGrid className="size-4" strokeWidth={1.75} />
+                </button>
+                <button
+                  type="button"
+                  aria-label="List view"
+                  title="List view"
+                  onClick={() => onViewModeChange!("list")}
+                  className={cn(
+                    listIconButtonClass,
+                    viewMode === "list" && "bg-muted text-foreground",
+                  )}
+                >
+                  <List className="size-4" strokeWidth={1.75} />
+                </button>
+              </div>
+            ) : null}
+            {actions ? <div className="flex items-center gap-2 shrink-0">{actions}</div> : null}
+          </>
+        }
+      />
+
       {loading ? (
-        <p className="text-sm text-muted-foreground py-8 text-center">Loading…</p>
+        <p className="py-8 text-center text-sm text-muted-foreground">Loading…</p>
       ) : empty ? (
-        <div className="rounded-xl border border-border bg-card p-8 text-center text-muted-foreground">
+        <div className={cn(listCardClass, "p-8 text-center text-muted-foreground")}>
           {emptyMessage}
         </div>
       ) : viewMode === "grid" && gridContent ? (

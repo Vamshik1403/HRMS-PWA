@@ -3,6 +3,7 @@
 import { ArrowDown, ArrowUp, ArrowUpDown, type LucideIcon } from "lucide-react";
 import { Skeleton } from "../ui/skeleton";
 import { EmptyState } from "./empty-state";
+import { cn } from "@/app/utils/cn";
 
 export interface DataTableColumn<T> {
   key: string;
@@ -27,70 +28,12 @@ export interface DataTableProps<T> {
   onSort?: (field: string) => void;
 }
 
-const GRID_COLS = 12;
-
-const COL_SPAN: Record<number, string> = {
-  1: "col-span-1", 2: "col-span-2", 3: "col-span-3", 4: "col-span-4",
-  5: "col-span-5", 6: "col-span-6", 7: "col-span-7", 8: "col-span-8",
-  9: "col-span-9", 10: "col-span-10", 11: "col-span-11", 12: "col-span-12",
-};
-
-const colClass = (span: number) => COL_SPAN[Math.max(1, Math.min(12, span))] ?? "col-span-2";
-
-/** Ensure column spans always sum to 12 so grid rows never wrap. */
-function resolveColSpans(columns: Array<{ colSpan?: number }>): number[] {
-  const n = columns.length;
-  if (n === 0) return [];
-
-  const hasExplicit = columns.some((c) => c.colSpan != null && c.colSpan > 0);
-  if (!hasExplicit) {
-    const base = Math.floor(GRID_COLS / n);
-    const extra = GRID_COLS % n;
-    return columns.map((_, i) => base + (i < extra ? 1 : 0));
-  }
-
-  const weights = columns.map((c) => Math.max(1, c.colSpan ?? 1));
-  const total = weights.reduce((a, b) => a + b, 0);
-  if (total === GRID_COLS) return weights;
-
-  const exact = weights.map((w) => (w / total) * GRID_COLS);
-  const floors = exact.map((v) => Math.floor(v));
-  let remainder = GRID_COLS - floors.reduce((a, b) => a + b, 0);
-
-  const order = exact
-    .map((v, i) => ({ i, frac: v - floors[i] }))
-    .sort((a, b) => b.frac - a.frac);
-
-  const spans = [...floors];
-  for (let r = 0; r < remainder; r++) {
-    spans[order[r].i]++;
-  }
-
-  return spans.map((s) => Math.max(1, s));
-}
-
 function sortIndicator(isSorted: boolean, sortDir: "asc" | "desc" | undefined) {
   if (!isSorted) return ArrowUpDown;
   return sortDir === "asc" ? ArrowUp : ArrowDown;
 }
 
-const SKELETON_KEYS = ["s1", "s2", "s3", "s4"];
-
-function SkeletonRows<T>({ columns, spans }: { columns: Array<DataTableColumn<T>>; spans: number[] }) {
-  return (
-    <>
-      {SKELETON_KEYS.map((k) => (
-        <div key={k} className="px-4 py-3 grid grid-cols-12 gap-3 items-center bg-card">
-          {columns.map((c, i) => (
-            <div key={`${k}-${c.key}`} className={colClass(spans[i])}>
-              <Skeleton className="h-4 w-3/4" />
-            </div>
-          ))}
-        </div>
-      ))}
-    </>
-  );
-}
+const SKELETON_KEYS = ["s1", "s2", "s3", "s4", "s5"];
 
 export function DataTable<T>({
   columns,
@@ -105,24 +48,35 @@ export function DataTable<T>({
   onSort,
 }: DataTableProps<T>) {
   return (
-    <div className="overflow-hidden bg-card w-full">
+    <div className="w-full overflow-hidden bg-card">
       <div className="overflow-x-auto">
-        <table className="w-full text-sm">
+        <table className="w-full min-w-[720px] border-collapse text-left">
           <thead>
-            <tr className="border-b border-border bg-muted/40 text-left">
+            <tr className="h-[52px] border-b border-[#E5E7EB] bg-[#FAFBFC] dark:border-border dark:bg-muted/40">
               {columns.map((c) => {
                 const isSorted = sortBy === c.key;
                 const Indicator = sortIndicator(isSorted, sortDir);
                 return (
                   <th
                     key={c.key}
-                    className={`px-4 py-3 font-medium text-muted-foreground ${c.align === "right" ? "text-right" : ""} ${c.sortable ? "cursor-pointer select-none hover:text-foreground" : ""}`}
+                    className={cn(
+                      "px-6 text-[13px] font-semibold tracking-wide text-muted-foreground",
+                      c.align === "right" && "text-right",
+                      c.sortable && "cursor-pointer select-none hover:text-foreground",
+                    )}
                     onClick={() => c.sortable && onSort?.(c.key)}
                   >
-                    <span className={`inline-flex items-center gap-1 ${c.align === "right" ? "justify-end w-full" : ""}`}>
+                    <span
+                      className={cn(
+                        "inline-flex items-center gap-1.5",
+                        c.align === "right" && "w-full justify-end",
+                      )}
+                    >
                       {c.header}
                       {c.sortable ? (
-                        <Indicator className={`size-3 ${isSorted ? "text-primary" : "opacity-50"}`} />
+                        <Indicator
+                          className={cn("size-3.5", isSorted ? "text-primary" : "opacity-40")}
+                        />
                       ) : null}
                     </span>
                   </th>
@@ -133,9 +87,9 @@ export function DataTable<T>({
           <tbody>
             {isLoading ? (
               SKELETON_KEYS.map((k) => (
-                <tr key={k} className="border-b border-border">
+                <tr key={k} className="h-16 border-b border-[#E5E7EB]/80 dark:border-border">
                   {columns.map((c) => (
-                    <td key={`${k}-${c.key}`} className="px-4 py-3">
+                    <td key={`${k}-${c.key}`} className="px-6 py-3">
                       <Skeleton className="h-4 w-3/4" />
                     </td>
                   ))}
@@ -146,18 +100,27 @@ export function DataTable<T>({
                 <td colSpan={columns.length} className="p-0">
                   <EmptyState
                     icon={emptyIcon ?? ArrowUpDown}
-                    title={emptyTitle ?? "No records"}
-                    description={emptyDescription}
+                    title={emptyTitle ?? "No records found"}
+                    description={
+                      emptyDescription ?? "Try changing your search or filters."
+                    }
+                    /* Page header already has the primary Add action — do not duplicate it here. */
                   />
                 </td>
               </tr>
             ) : (
               rows.map((row) => (
-                <tr key={rowKey(row)} className="border-b border-border last:border-0 hover:bg-muted/30">
+                <tr
+                  key={rowKey(row)}
+                  className="h-16 border-b border-[#E5E7EB]/80 transition-colors last:border-0 hover:bg-[#F8FAFC] dark:border-border dark:hover:bg-muted/40"
+                >
                   {columns.map((c) => (
                     <td
                       key={c.key}
-                      className={`px-4 py-3 ${c.align === "right" ? "text-right" : ""} min-w-0`}
+                      className={cn(
+                        "min-w-0 px-6 py-3 align-middle text-[15px] font-medium text-foreground",
+                        c.align === "right" && "text-right",
+                      )}
                     >
                       {c.cell(row)}
                     </td>

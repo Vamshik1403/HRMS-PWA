@@ -15,7 +15,16 @@ interface SearchHit {
   group: string;
 }
 
-export function GlobalNavSearch() {
+export function GlobalNavSearch({
+  className,
+  inputClassName,
+  alwaysVisible = false,
+}: {
+  className?: string;
+  inputClassName?: string;
+  /** When true, show on mobile too (dashboard embedded search). */
+  alwaysVisible?: boolean;
+} = {}) {
   const router = useRouter();
   const user = useCurrentUser();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -85,7 +94,14 @@ export function GlobalNavSearch() {
   }, [query]);
 
   return (
-    <div ref={rootRef} className="relative flex-1 max-w-md hidden sm:block">
+    <div
+      ref={rootRef}
+      className={cn(
+        "relative flex-1 max-w-md",
+        alwaysVisible ? "block" : "hidden sm:block",
+        className,
+      )}
+    >
       <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground pointer-events-none z-10" />
       <Input
         ref={inputRef}
@@ -108,8 +124,11 @@ export function GlobalNavSearch() {
             navigate(results[activeIndex].href);
           }
         }}
-        placeholder="Search employees, pages…"
-        className="h-10 pl-10 pr-14 rounded-md border-transparent bg-muted/40 focus-visible:bg-background focus-visible:ring-2 focus-visible:ring-ring/25 transition-colors"
+        placeholder="Search employees, modules…"
+        className={cn(
+          "h-10 pl-10 pr-14 rounded-md border-transparent bg-muted/40 focus-visible:bg-background focus-visible:ring-2 focus-visible:ring-ring/25 transition-colors",
+          inputClassName,
+        )}
       />
       <kbd className="absolute right-3 top-1/2 -translate-y-1/2 hidden lg:inline-flex h-5 items-center rounded border border-border/60 bg-background/80 px-1.5 text-[10px] font-medium text-muted-foreground">
         ⌘K

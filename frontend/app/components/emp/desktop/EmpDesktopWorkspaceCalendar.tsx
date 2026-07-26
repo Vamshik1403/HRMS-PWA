@@ -295,6 +295,7 @@ export function EmpDesktopWorkspaceCalendar() {
       title="My Calendar"
       description="Attendance, tasks, notices, holidays, and week offs"
       icon={Calendar}
+      className="!space-y-0 h-[calc(100dvh-8.75rem)] max-h-[calc(100dvh-8.75rem)] overflow-hidden"
     >
       {selectedDateKey ? (
         <Sheet
@@ -349,8 +350,8 @@ export function EmpDesktopWorkspaceCalendar() {
         </Sheet>
       ) : null}
 
-      <div className="rounded-2xl border border-border bg-card shadow-sm overflow-hidden">
-        <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-4 border-b border-border bg-gradient-to-r from-muted/40 to-card">
+      <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
+        <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-border bg-gradient-to-r from-muted/40 to-card px-5 py-3">
           <div className="flex items-center gap-2">
             <input
               ref={monthInputRef}
@@ -388,12 +389,12 @@ export function EmpDesktopWorkspaceCalendar() {
           </div>
         </div>
 
-        <div className="grid grid-cols-7 border-b border-border bg-muted/30">
+        <div className="grid shrink-0 grid-cols-7 border-b border-border bg-muted/30">
           {WEEKDAYS.map((w, i) => (
             <div
               key={w}
               className={cn(
-                "py-2.5 text-center text-[11px] font-semibold uppercase tracking-wide",
+                "py-2 text-center text-[11px] font-semibold uppercase tracking-wide",
                 i === 0 || i === 6 ? "text-muted-foreground/70" : "text-muted-foreground",
               )}
             >
@@ -403,16 +404,22 @@ export function EmpDesktopWorkspaceCalendar() {
         </div>
 
         {loading ? (
-          <div className="grid grid-cols-7 gap-px bg-border p-px">
+          <div
+            className="grid min-h-0 flex-1 grid-cols-7 gap-px bg-border p-px"
+            style={{ gridTemplateRows: "repeat(5, minmax(0, 1fr))" }}
+          >
             {Array.from({ length: 35 }).map((_, i) => (
-              <div key={i} className="min-h-[108px] bg-card animate-pulse" />
+              <div key={i} className="h-full min-h-0 bg-card animate-pulse" />
             ))}
           </div>
         ) : (
-          <div className="grid grid-cols-7 gap-px bg-border">
+          <div
+            className="grid min-h-0 flex-1 grid-cols-7 gap-px bg-border"
+            style={{ gridTemplateRows: `repeat(${Math.max(1, Math.ceil(cells.length / 7))}, minmax(0, 1fr))` }}
+          >
             {cells.map((cell, idx) => {
               if (!cell.dateKey || cell.day == null) {
-                return <div key={`empty-${idx}`} className="min-h-[108px] bg-muted/20" />;
+                return <div key={`empty-${idx}`} className="h-full min-h-0 bg-muted/20" />;
               }
 
               const isToday = cell.dateKey === todayKey;
@@ -441,7 +448,7 @@ export function EmpDesktopWorkspaceCalendar() {
               const inner = (
                 <div
                   className={cn(
-                    "min-h-[108px] bg-card p-2 flex flex-col transition-colors text-left w-full",
+                    "flex h-full min-h-0 w-full flex-col overflow-hidden bg-card p-1.5 text-left transition-colors",
                     isOutside && "bg-muted/15 opacity-60",
                     isWeekend && !isOutside && "bg-muted/10",
                     isWeekOff && !isOutside && "bg-amber-50/30",
@@ -453,7 +460,7 @@ export function EmpDesktopWorkspaceCalendar() {
                   <div className="flex items-center justify-between gap-1">
                     <span
                       className={cn(
-                        "inline-flex size-7 items-center justify-center rounded-full text-sm font-semibold",
+                        "inline-flex size-6 items-center justify-center rounded-full text-xs font-semibold sm:size-7 sm:text-sm",
                         isToday
                           ? "bg-primary text-primary-foreground shadow-sm"
                           : isOutside
@@ -471,7 +478,7 @@ export function EmpDesktopWorkspaceCalendar() {
                   </div>
 
                   {!isOutside ? (
-                    <div className="mt-auto flex flex-wrap items-center gap-1.5 pt-2">
+                    <div className="mt-auto flex flex-wrap items-center gap-1 pt-1">
                       {taskCount > 0 ? (
                         <span className="inline-flex items-center gap-0.5 rounded-md bg-sky-100 px-1.5 py-0.5 text-[9px] font-semibold text-sky-800" title={`${taskCount} task(s)`}>
                           <ListTodo className="size-3" />
@@ -500,9 +507,9 @@ export function EmpDesktopWorkspaceCalendar() {
                   )}
 
                   {hasStatus && !isOutside ? (
-                    <div className="mt-1 space-y-0.5 min-w-0">
+                    <div className="mt-0.5 min-w-0 space-y-0.5">
                       {display.detailLine ? (
-                        <p className="text-[10px] leading-snug text-muted-foreground line-clamp-1" title={display.detailLine}>
+                        <p className="line-clamp-1 text-[10px] leading-snug text-muted-foreground" title={display.detailLine}>
                           {display.detailLine}
                         </p>
                       ) : null}
@@ -515,7 +522,7 @@ export function EmpDesktopWorkspaceCalendar() {
               );
 
               if (!clickable) {
-                return <div key={cell.dateKey}>{inner}</div>;
+                return <div key={cell.dateKey} className="h-full min-h-0">{inner}</div>;
               }
 
               return (
@@ -526,7 +533,7 @@ export function EmpDesktopWorkspaceCalendar() {
                     setDayDetailSection("punches");
                     setSelectedDateKey(cell.dateKey);
                   }}
-                  className="block w-full text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+                  className="block h-full min-h-0 w-full text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
                 >
                   {inner}
                 </button>
