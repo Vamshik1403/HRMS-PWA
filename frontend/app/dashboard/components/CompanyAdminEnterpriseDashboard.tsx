@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
 import {
   Area,
@@ -179,7 +179,7 @@ function DashboardCalendarCard({
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden">
       <div className="mb-2 flex items-center justify-between gap-2">
-        <h3 className="text-[14px] font-bold tracking-tight text-foreground">{monthLabel}</h3>
+        <h3 className="text-[14px] font-semibold tracking-tight text-foreground">{monthLabel}</h3>
         <div className="flex items-center gap-1.5">
           <button
             type="button"
@@ -200,7 +200,7 @@ function DashboardCalendarCard({
         </div>
       </div>
 
-      <div className="mb-0.5 grid grid-cols-7 text-center text-[10px] font-bold text-foreground">
+      <div className="mb-0.5 grid grid-cols-7 text-center text-[10px] font-medium text-slate-500">
         {["S", "M", "T", "W", "T", "F", "S"].map((d, i) => (
           <span key={`${d}-${i}`}>{d}</span>
         ))}
@@ -232,7 +232,7 @@ function DashboardCalendarCard({
       </div>
 
       <div className="mt-2 flex items-center justify-between gap-2 border-t border-border pt-2">
-        <h4 className="text-[13px] font-bold text-foreground">Upcoming Schedules</h4>
+        <h4 className="text-[13px] font-semibold text-foreground">Upcoming Schedules</h4>
         <Link href="/manage-employees" className="text-[11px] font-semibold text-primary">
           See all
         </Link>
@@ -263,37 +263,263 @@ function pct(part: number, total: number) {
   return Math.round((part / total) * 1000) / 10;
 }
 
-function formatStat(ready: boolean, value: number) {
-  return ready ? value.toLocaleString() : "—";
+function useCountUp(target: number, enabled: boolean, duration = 700) {
+  const [value, setValue] = useState(0);
+  useEffect(() => {
+    if (!enabled) {
+      setValue(0);
+      return;
+    }
+    let frame = 0;
+    const start = performance.now();
+    const from = 0;
+    const tick = (now: number) => {
+      const t = Math.min(1, (now - start) / duration);
+      const eased = 1 - Math.pow(1 - t, 3);
+      setValue(Math.round(from + (target - from) * eased));
+      if (t < 1) frame = requestAnimationFrame(tick);
+    };
+    frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame);
+  }, [target, enabled, duration]);
+  return value;
 }
 
-function Trend({ value }: { value: number }) {
-  if (!Number.isFinite(value) || value === 0) {
-    return <span className="text-[13px] text-muted-foreground">No change vs yesterday</span>;
-  }
-  const up = value > 0;
+function RadialRing({
+  percent,
+  colorFrom,
+  colorTo,
+  label,
+}: {
+  percent: number;
+  colorFrom: string;
+  colorTo: string;
+  label: string;
+}) {
+  const safe = Math.max(0, Math.min(100, Number.isFinite(percent) ? percent : 0));
+  const [drawn, setDrawn] = useState(0);
+  useEffect(() => {
+    const id = requestAnimationFrame(() => setDrawn(safe));
+    return () => cancelAnimationFrame(id);
+  }, [safe]);
+
+  const size = 72;
+  const stroke = 5;
+  const r = (size - stroke) / 2;
+  const c = 2 * Math.PI * r;
+  const offset = c - (drawn / 100) * c;
+  const gradId = `ring-${colorFrom.replace("#", "")}`;
+
   return (
-    <span className={cn("text-[13px] font-medium", up ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400")}>
-      {up ? "↑" : "↓"} {Math.abs(value)}% vs yesterday
-    </span>
+    <div className="relative size-[72px] shrink-0">
+      <svg width={size} height={size} className="-rotate-90">
+        <defs>
+          <linearGradient id={gradId} x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stopColor={colorFrom} />
+            <stop offset="100%" stopColor={colorTo} />
+          </linearGradient>
+        </defs>
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={r}
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={stroke}
+          className="text-slate-200 dark:text-slate-700"
+        />
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={r}
+          fill="none"
+          stroke={`url(#${gradId})`}
+          strokeWidth={stroke}
+          strokeLinecap="round"
+          strokeDasharray={c}
+          strokeDashoffset={offset}
+          style={{ transition: "stroke-dashoffset 750ms ease-out" }}
+        />
+      </svg>
+      <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+        <span className="text-[14px] font-bold leading-none tabular-nums text-slate-900 dark:text-slate-50">
+          {Math.round(safe)}%
+        </span>
+        <span className="mt-0.5 text-[10px] font-medium text-slate-500 dark:text-slate-400">{label}</span>
+      </div>
+    </div>
   );
 }
 
-function StatIcon({
-  children,
-  from,
-  to,
+function WorkforceAreaChart({
+  accent = "#6366F1",
+  values,
 }: {
+  accent?: string;
+  values?: number[];
+}) {
+  const data = useMemo(() => {
+    const series =
+      values && values.length >= 2
+        ? values.slice(-7)
+        : [18, 24, 20, 28, 26, 32, 36];
+    return series.map((y, i) => ({ x: String(i), y }));
+  }, [values]);
+  const gradId = `kpiWorkforceFill-${accent.replace("#", "")}`;
+
+  return (
+    <div className="h-[38px] w-full">
+      <ResponsiveContainer width="100%" height="100%">
+        <AreaChart data={data} margin={{ top: 6, right: 6, left: 0, bottom: 0 }}>
+          <defs>
+            <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor={accent} stopOpacity={0.28} />
+              <stop offset="100%" stopColor={accent} stopOpacity={0.02} />
+            </linearGradient>
+          </defs>
+          <Area
+            type="monotone"
+            dataKey="y"
+            stroke={accent}
+            strokeWidth={2}
+            fill={`url(#${gradId})`}
+            activeDot={false}
+            isAnimationActive
+            animationDuration={750}
+            animationEasing="ease-out"
+            dot={(props: { cx?: number; cy?: number; index?: number }) => {
+              const { cx, cy, index } = props;
+              if (index !== data.length - 1 || cx == null || cy == null) {
+                return <g key={`kpi-dot-empty-${index ?? 0}`} />;
+              }
+              return (
+                <g key="kpi-dot-glow">
+                  <circle cx={cx} cy={cy} r={7} fill={accent} opacity={0.18} />
+                  <circle cx={cx} cy={cy} r={3.5} fill={accent} />
+                  <circle cx={cx} cy={cy} r={1.5} fill="#fff" />
+                </g>
+              );
+            }}
+          />
+        </AreaChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
+function MetricSparkline({
+  accent,
+  values,
+}: {
+  accent: string;
+  values: number[];
+}) {
+  const data = useMemo(() => {
+    const series = values.length >= 2 ? values.slice(-7) : [2, 4, 3, 5, 4, 6, 5];
+    return series.map((y, i) => ({ x: String(i), y }));
+  }, [values]);
+  const gradId = `kpiSparkFill-${accent.replace("#", "")}`;
+
+  return (
+    <div className="h-[28px] w-full">
+      <ResponsiveContainer width="100%" height="100%">
+        <AreaChart data={data} margin={{ top: 4, right: 2, left: 0, bottom: 0 }}>
+          <defs>
+            <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor={accent} stopOpacity={0.22} />
+              <stop offset="100%" stopColor={accent} stopOpacity={0.02} />
+            </linearGradient>
+          </defs>
+          <Area
+            type="monotone"
+            dataKey="y"
+            stroke={accent}
+            strokeWidth={2}
+            fill={`url(#${gradId})`}
+            dot={false}
+            activeDot={false}
+            isAnimationActive
+            animationDuration={700}
+          />
+        </AreaChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
+function JoinersMiniBars({ values, accent = "#38BDF8" }: { values: number[]; accent?: string }) {
+  const bars = values.length >= 7 ? values.slice(-7) : [...Array(Math.max(0, 7 - values.length)).fill(0), ...values];
+  const max = Math.max(...bars, 1);
+
+  return (
+    <div className="flex h-9 items-end justify-between gap-1.5">
+      {bars.map((v, i) => {
+        const h = Math.max(6, Math.round((v / max) * 36));
+        const latest = i === bars.length - 1;
+        return (
+          <div
+            key={i}
+            className="w-full max-w-[10px] rounded-full transition-[height] duration-700 ease-out"
+            style={{
+              height: `${h}px`,
+              background: latest
+                ? `linear-gradient(180deg, ${accent}, ${accent}99)`
+                : `${accent}55`,
+              boxShadow: latest ? `0 0 0 1.5px ${accent}, 0 0 10px ${accent}55` : undefined,
+            }}
+          />
+        );
+      })}
+    </div>
+  );
+}
+
+function EnterpriseKpiShell({
+  href,
+  children,
+}: {
+  href: string;
   children: ReactNode;
-  from: string;
-  to: string;
 }) {
   return (
-    <div
-      className="flex size-11 shrink-0 items-center justify-center rounded-full text-white shadow-sm"
-      style={{ background: `linear-gradient(135deg, ${from}, ${to})` }}
+    <Link
+      href={href}
+      className={cn(
+        "group relative flex min-h-[196px] flex-col overflow-hidden rounded-[24px] border border-border bg-card p-5",
+        "shadow-[0_12px_40px_rgba(15,23,42,0.06)] transition-colors duration-200",
+        "hover:border-slate-400/80",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35 dark:border-border",
+      )}
     >
       {children}
+    </Link>
+  );
+}
+
+function KpiNumber({ value, ready }: { value: number; ready: boolean }) {
+  const counted = useCountUp(ready ? value : 0, ready);
+  return (
+    <p className="text-[42px] font-semibold leading-none tracking-tight text-slate-800 tabular-nums dark:text-white">
+      {ready ? counted.toLocaleString() : "—"}
+    </p>
+  );
+}
+
+function KpiTitle({
+  icon,
+  label,
+  color,
+}: {
+  icon: ReactNode;
+  label: string;
+  color: string;
+}) {
+  return (
+    <div className="flex min-w-0 items-center gap-2.5">
+      <span className="inline-flex size-5 shrink-0 items-center justify-center" style={{ color }}>
+        {icon}
+      </span>
+      <p className="text-[14px] font-medium text-slate-600 dark:text-slate-300">{label}</p>
     </div>
   );
 }
@@ -386,7 +612,7 @@ export function CompanyAdminEnterpriseDashboard({
   overviewHalfDay,
   overviewStatsReady,
   employeesCount,
-  presentTrendVsYesterday,
+  presentTrendVsYesterday: _presentTrendVsYesterday,
   newJoinersCount,
   statusBreakdown,
   attendanceTrend,
@@ -396,7 +622,6 @@ export function CompanyAdminEnterpriseDashboard({
   activityItems,
   pendingCounts,
 }: CompanyAdminEnterpriseDashboardProps) {
-  const [attPeriod] = useState("This Month");
   const [trendPeriod] = useState("Last 7 Days");
 
   const displayDate = useMemo(() => {
@@ -408,6 +633,25 @@ export function CompanyAdminEnterpriseDashboard({
       year: "numeric",
     });
   }, [todayDate]);
+
+  const shortDate = useMemo(() => {
+    const d = new Date(`${todayDate}T12:00:00`);
+    if (Number.isNaN(d.getTime())) return todayDate;
+    return d.toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+  }, [todayDate]);
+
+  const dateBadge = (
+    <span
+      className="shrink-0 rounded-lg border bg-muted/60 px-2.5 py-1 text-[11px] font-semibold"
+      style={{ borderColor: BORDER, color: MUTED }}
+    >
+      {shortDate}
+    </span>
+  );
 
   const donutData = useMemo(() => {
     const rows = [
@@ -442,8 +686,6 @@ export function CompanyAdminEnterpriseDashboard({
   const leavePct = pct(overviewOnLeave, overviewTotal);
   const absentPct = pct(overviewAbsent, overviewTotal);
   const halfPct = pct(overviewHalfDay, overviewTotal);
-  const joinersDelta =
-    employeesCount > 0 ? Math.round((newJoinersCount / employeesCount) * 1000) / 10 : 0;
 
   const leavePending = pendingCounts?.leave ?? 0;
   const reimbPending = pendingCounts?.reimbursement ?? 0;
@@ -527,33 +769,73 @@ export function CompanyAdminEnterpriseDashboard({
     { name: "Half Day", value: overviewHalfDay, percent: halfPct, color: PRIMARY },
   ];
 
+  const sparkValues = useMemo(() => {
+    const fromTrend = attendanceTrend.map((p) => Number(p.value) || 0).slice(-7);
+    if (fromTrend.length >= 2) return fromTrend;
+    const base = Math.max(newJoinersCount, 1);
+    return [1, 2, 3, 2, 4, 5, base];
+  }, [attendanceTrend, newJoinersCount]);
+
+  const presentSeries = useMemo(() => {
+    const fromTrend = attendanceTrend.map((p) => Number(p.value) || 0).slice(-7);
+    if (fromTrend.length >= 2) return fromTrend;
+    return [overviewPresent, overviewPresent, overviewPresent, overviewPresent, overviewPresent, overviewPresent, overviewPresent];
+  }, [attendanceTrend, overviewPresent]);
+
+  const leaveSeries = useMemo(
+    () => Array.from({ length: 7 }, (_, i) => Math.max(0, overviewOnLeave + ((i % 3) - 1))),
+    [overviewOnLeave],
+  );
+
+  const absentSeries = useMemo(
+    () => Array.from({ length: 7 }, (_, i) => Math.max(0, overviewAbsent + ((i % 2) === 0 ? 0 : -1))),
+    [overviewAbsent],
+  );
+
+  const workforceTotal = overviewTotal || employeesCount;
+  const statsReady = overviewStatsReady || employeesCount > 0;
+
   return (
     <div
       className="ca-enterprise-dashboard -mx-4 -mt-3 -mb-6 min-h-full bg-background px-4 pb-8 pt-0 text-foreground sm:-mx-6 sm:-mt-4 sm:px-6 lg:-mx-8 lg:-mt-5 lg:px-8"
     >
       <style jsx global>{`
+        /* Opacity-only fade — transforms keep a compositor layer and blur text at 100% zoom */
         .ca-enterprise-dashboard .ca-fade {
-          animation: caFadeUp 0.45s ease-out both;
+          animation: caFadeIn 0.35s ease-out both;
         }
-        @keyframes caFadeUp {
-          from {
-            opacity: 0;
-            transform: translateY(20px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
+        @keyframes caFadeIn {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+        .ca-enterprise-dashboard {
+          -webkit-font-smoothing: auto;
+          -moz-osx-font-smoothing: auto;
+          text-rendering: auto;
+          font-synthesis: none;
+        }
+        .ca-enterprise-dashboard .text-muted-foreground {
+          color: hsl(215 16% 47%) !important;
+          font-weight: 400;
+        }
+        .ca-enterprise-dashboard p,
+        .ca-enterprise-dashboard span,
+        .ca-enterprise-dashboard li,
+        .ca-enterprise-dashboard a,
+        .ca-enterprise-dashboard button,
+        .ca-enterprise-dashboard label {
+          -webkit-font-smoothing: auto;
+          -moz-osx-font-smoothing: auto;
         }
       `}</style>
 
       {/* Header */}
       <header className="ca-fade mb-5 flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
         <div>
-          <h1 className="text-[28px] font-bold tracking-tight" style={{ color: TEXT }}>
+          <h1 className="text-[28px] font-semibold tracking-tight" style={{ color: TEXT }}>
             Dashboard
           </h1>
-          <p className="mt-1 text-[15px]" style={{ color: MUTED }}>
+          <p className="mt-1 text-[15px] font-normal text-slate-500 dark:text-slate-400">
             Welcome back, {formatWelcomeName(firstName)}
           </p>
         </div>
@@ -582,98 +864,106 @@ export function CompanyAdminEnterpriseDashboard({
         className="ca-fade mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5"
         style={{ animationDelay: "40ms" }}
       >
-        <article className={cn(cardClass, "flex h-[120px] flex-col justify-between")}>
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <p className="text-[13px] font-medium" style={{ color: MUTED }}>
-                Total Employees
-              </p>
-              <p className="mt-1 text-[30px] font-bold leading-none tracking-tight">
-                {formatStat(overviewStatsReady || employeesCount > 0, overviewTotal || employeesCount)}
-              </p>
-            </div>
-            <StatIcon from="#3B82F6" to="#2563EB">
-              <Users className="size-5" />
-            </StatIcon>
+        <EnterpriseKpiShell href="/manage-employees">
+          <KpiTitle
+            icon={<Users className="size-5" strokeWidth={1.75} />}
+            label="Total Employees"
+            color="#6366F1"
+          />
+          <div className="mt-4">
+            <KpiNumber value={workforceTotal} ready={statsReady} />
+            <p className="mt-1.5 text-[13px] font-normal text-slate-500 dark:text-slate-400">Active Workforce</p>
           </div>
-          <p className="text-[12px] font-medium text-emerald-600">
-            {newJoinersCount > 0 ? `+${newJoinersCount} this month` : "Active workforce"}
-          </p>
-        </article>
+          <div className="mt-auto pt-4">
+            <WorkforceAreaChart
+              accent="#6366F1"
+              values={[
+                Math.max(1, workforceTotal - 3),
+                Math.max(1, workforceTotal - 2),
+                Math.max(1, workforceTotal - 2),
+                Math.max(1, workforceTotal - 1),
+                workforceTotal,
+                workforceTotal,
+                workforceTotal,
+              ]}
+            />
+          </div>
+        </EnterpriseKpiShell>
 
-        <article className={cn(cardClass, "flex h-[120px] flex-col justify-between")}>
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <p className="text-[13px] font-medium" style={{ color: MUTED }}>
-                Present Today
-              </p>
-              <p className="mt-1 text-[30px] font-bold leading-none tracking-tight">
-                {formatStat(overviewStatsReady, overviewPresent)}
+        <EnterpriseKpiShell href="/attendance-logs">
+          <KpiTitle
+            icon={<UserCheck className="size-5" strokeWidth={1.75} />}
+            label="Present Today"
+            color="#16A34A"
+          />
+          <div className="mt-4 flex items-end justify-between gap-3">
+            <div className="min-w-0">
+              <KpiNumber value={overviewPresent} ready={overviewStatsReady} />
+              <p className="mt-1.5 text-[13px] font-normal text-slate-500 dark:text-slate-400">
+                of {statsReady ? workforceTotal.toLocaleString() : "—"} employees
               </p>
             </div>
-            <StatIcon from="#22C55E" to="#16A34A">
-              <UserCheck className="size-5" />
-            </StatIcon>
+            <RadialRing percent={presentPct} colorFrom="#86EFAC" colorTo="#16A34A" label="Present" />
           </div>
-          <p className="text-[12px]" style={{ color: MUTED }}>
-            {overviewStatsReady ? `${presentPct}% of total` : "—"}
-          </p>
-        </article>
+          <div className="mt-auto pt-3">
+            <MetricSparkline accent="#22C55E" values={presentSeries} />
+          </div>
+        </EnterpriseKpiShell>
 
-        <article className={cn(cardClass, "flex h-[120px] flex-col justify-between")}>
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <p className="text-[13px] font-medium" style={{ color: MUTED }}>
-                On Leave Today
-              </p>
-              <p className="mt-1 text-[30px] font-bold leading-none tracking-tight">
-                {formatStat(overviewStatsReady, overviewOnLeave)}
+        <EnterpriseKpiShell href="/leave-applications">
+          <KpiTitle
+            icon={<CalendarClock className="size-5" strokeWidth={1.75} />}
+            label="On Leave Today"
+            color="#D97706"
+          />
+          <div className="mt-4 flex items-end justify-between gap-3">
+            <div className="min-w-0">
+              <KpiNumber value={overviewOnLeave} ready={overviewStatsReady} />
+              <p className="mt-1.5 text-[13px] font-normal text-slate-500 dark:text-slate-400">
+                {overviewStatsReady ? `${overviewOnLeave.toLocaleString()} employees` : "—"}
               </p>
             </div>
-            <StatIcon from="#F59E0B" to="#D97706">
-              <CalendarClock className="size-5" />
-            </StatIcon>
+            <RadialRing percent={leavePct} colorFrom="#FCD34D" colorTo="#D97706" label="On Leave" />
           </div>
-          <p className="text-[12px]" style={{ color: MUTED }}>
-            {overviewStatsReady ? `${leavePct}% of total` : "—"}
-          </p>
-        </article>
+          <div className="mt-auto pt-3">
+            <MetricSparkline accent="#F59E0B" values={leaveSeries} />
+          </div>
+        </EnterpriseKpiShell>
 
-        <article className={cn(cardClass, "flex h-[120px] flex-col justify-between")}>
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <p className="text-[13px] font-medium" style={{ color: MUTED }}>
-                Absent Today
-              </p>
-              <p className="mt-1 text-[30px] font-bold leading-none tracking-tight">
-                {formatStat(overviewStatsReady, overviewAbsent)}
+        <EnterpriseKpiShell href="/attendance-reports">
+          <KpiTitle
+            icon={<UserX className="size-5" strokeWidth={1.75} />}
+            label="Absent Today"
+            color="#DC2626"
+          />
+          <div className="mt-4 flex items-end justify-between gap-3">
+            <div className="min-w-0">
+              <KpiNumber value={overviewAbsent} ready={overviewStatsReady} />
+              <p className="mt-1.5 text-[13px] font-normal text-slate-500 dark:text-slate-400">
+                of {statsReady ? workforceTotal.toLocaleString() : "—"} employees
               </p>
             </div>
-            <StatIcon from="#EF4444" to="#DC2626">
-              <UserX className="size-5" />
-            </StatIcon>
+            <RadialRing percent={absentPct} colorFrom="#FCA5A5" colorTo="#DC2626" label="Absent" />
           </div>
-          <p className="text-[12px]" style={{ color: MUTED }}>
-            {overviewStatsReady ? `${absentPct}% of total` : "—"}
-          </p>
-        </article>
+          <div className="mt-auto pt-3">
+            <MetricSparkline accent="#EF4444" values={absentSeries} />
+          </div>
+        </EnterpriseKpiShell>
 
-        <article className={cn(cardClass, "flex h-[120px] flex-col justify-between")}>
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <p className="text-[13px] font-medium" style={{ color: MUTED }}>
-                New Joiners
-              </p>
-              <p className="mt-1 text-[30px] font-bold leading-none tracking-tight">
-                {newJoinersCount.toLocaleString()}
-              </p>
-            </div>
-            <StatIcon from="#3B82F6" to="#2563EB">
-              <UserPlus className="size-5" />
-            </StatIcon>
+        <EnterpriseKpiShell href="/manage-employees">
+          <KpiTitle
+            icon={<UserPlus className="size-5" strokeWidth={1.75} />}
+            label="New Joiners"
+            color="#0EA5E9"
+          />
+          <div className="mt-4">
+            <KpiNumber value={newJoinersCount} ready />
+            <p className="mt-1.5 text-[13px] font-normal text-slate-500 dark:text-slate-400">This Month</p>
           </div>
-          <Trend value={joinersDelta || presentTrendVsYesterday} />
-        </article>
+          <div className="mt-auto pt-4">
+            <JoinersMiniBars values={sparkValues} accent="#38BDF8" />
+          </div>
+        </EnterpriseKpiShell>
       </section>
 
       {/* Attendance | Trend | Calendar */}
@@ -684,14 +974,7 @@ export function CompanyAdminEnterpriseDashboard({
         <article className={cn(cardClass, ROW_CARD)}>
           <SectionTitle
             title="Attendance Overview"
-            action={
-              <span
-                className="shrink-0 rounded-lg border bg-muted/60 px-2.5 py-1 text-[11px] font-medium"
-                style={{ borderColor: BORDER, color: MUTED }}
-              >
-                {attPeriod}
-              </span>
-            }
+            action={dateBadge}
           />
           <div className="flex min-h-0 flex-1 items-center gap-3 py-1">
             <div className="relative h-[150px] w-[150px] shrink-0">
@@ -829,14 +1112,7 @@ export function CompanyAdminEnterpriseDashboard({
                 <Calendar className="size-4" />
               </span>
             }
-            action={
-              <span
-                className="rounded-lg border bg-muted/60 px-2.5 py-1 text-[11px] font-medium"
-                style={{ borderColor: BORDER, color: MUTED }}
-              >
-                This Month
-              </span>
-            }
+            action={dateBadge}
           />
           <div>
             <SummaryListRow label="Total Leave" value={leaveTotal} />
@@ -894,14 +1170,7 @@ export function CompanyAdminEnterpriseDashboard({
                 <Briefcase className="size-4" />
               </span>
             }
-            action={
-              <span
-                className="rounded-lg border bg-muted/60 px-2.5 py-1 text-[11px] font-medium"
-                style={{ borderColor: BORDER, color: MUTED }}
-              >
-                This Month
-              </span>
-            }
+            action={dateBadge}
           />
           <div>
             <SummaryListRow label="New Joiners" value={newJoinersCount} />
@@ -921,7 +1190,7 @@ export function CompanyAdminEnterpriseDashboard({
               </span>
             }
           />
-          <div className="grid grid-cols-4 gap-2">
+          <div className="grid grid-cols-4 gap-x-2 gap-y-3">
             {QUICK_ACCESS.map((item) => {
               const Icon = item.icon;
               return (
@@ -938,7 +1207,7 @@ export function CompanyAdminEnterpriseDashboard({
                   >
                     <Icon className="size-4" />
                   </span>
-                  <span className="text-[10px] font-medium leading-tight" style={{ color: MUTED }}>
+                  <span className="text-[10px] font-semibold leading-tight" style={{ color: MUTED }}>
                     {item.label}
                   </span>
                 </Link>

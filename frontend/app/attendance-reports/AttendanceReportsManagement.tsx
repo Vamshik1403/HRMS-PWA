@@ -7,7 +7,7 @@ import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 import { Search, Download, FileText, ChevronDown, X } from "lucide-react";
 import { useCurrentUser } from "../hooks/useCurrentUser";
-import * as XLSX from "xlsx";
+import * as XLSX from "xlsx-js-style";
 import { formatDevicePunchForDisplay } from "../utils/devicePunchTime";
 import { formatWorkedDuration } from "../utils/attendanceDuration";
 import { getSidebarContext } from "@/app/utils/sidebarContext";
@@ -2180,99 +2180,211 @@ if (!hasPunchesEffective) return { type: "ABSENT", label: "Absent", hasPunches: 
     const getDisplayPunches = (employeeID: number, date: string, punches: string[]) =>
       isFactualMode && factualWeekoffOverrides.get(employeeID)?.has(date) ? [] : punches;
 
-    const excelData: any[] = [];
-    const headerRow: any = {
-      "S.NO": "S.NO", "Employee ID": "Employee ID", "Employee Name": "Employee Name",
-      "Company": "Company", "Branch": "Branch", "Department": "Department"
+    const metaLabels = ["S.NO", "Employee ID", "Employee Name", "Company", "Branch", "Department"];
+    const metaCount = metaLabels.length;
+
+    const formatExcelDateHeader = (iso: string) => {
+      const d = new Date(`${iso}T00:00:00`);
+      const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+      const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+      return {
+        dateLabel: `${d.getDate()}-${months[d.getMonth()]}-${String(d.getFullYear()).slice(-2)}`,
+        dayLabel: days[d.getDay()],
+      };
     };
-    dateColumns.forEach(date => {
-      const { dayName, dateStr } = formatHeaderDate(date);
-      headerRow[date] = `${dateStr}\n${dayName}`;
-    });
-    excelData.push(headerRow);
+
+    const cellValueForDate = (
+      punches: string[],
+      status: AttendanceStatus | undefined,
+    ): string => {
+      if (reportType === "FILO Punches Logs") {
+        if (punches.length === 0) {
+          return status?.type === "LEAVE"
+            ? status.label
+            : status?.type === "WEEK_OFF"
+              ? "WO"
+              : status?.type === "ABSENT"
+                ? "Absent"
+                : "";
+        }
+        return formatFILOExcelCell(punches);
+      }
+      if (reportType === "Attendance Marking Logs") {
+        return status ? formatMarkingExcelCell(status) : "";
+      }
+      if (reportType === "Attendance Summary Logs") {
+        return status ? formatSummaryExcelCell(punches, status) : "";
+      }
+      // All Punches Logs — timestamps on present days, "Absent" when missing
+      if (punches.length > 0) return punches.join("\n");
+      if (status?.type === "LEAVE") return status.label;
+      if (status?.type === "WEEK_OFF") return "WO";
+      if (status?.type === "ABSENT") return "Absent";
+      return "";
+    };
+
+    // Row 0: meta headers + date labels (1-Jul-26)
+    // Row 1: blank meta (merged) + weekday labels (Wed)
+    const aoa: (string | number)[][] = [
+      [
+        ...metaLabels,
+        ...dateColumns.map((date) => formatExcelDateHeader(date).dateLabel),
+      ],
+      [
+        ...Array(metaCount).fill(""),
+        ...dateColumns.map((date) => formatExcelDateHeader(date).dayLabel),
+      ],
+    ];
+
+    const rowPunchCounts: number[] = [];
 
     for (let index = 0; index < filteredReportData.length; index++) {
       const row = filteredReportData[index];
-      const dataRow: any = {
-        "S.NO": index + 1,
-        "Employee ID": row.employee.employeeID,
-        "Employee Name": `${row.employee.employeeFirstName} ${row.employee.employeeLastName}`,
-        "Company": row.companyName, "Branch": row.branchName, "Department": row.departmentName || "N/A"
-      };
+      const dataRow: (string | number)[] = [
+        index + 1,
+        row.employee.employeeID,
+        `${row.employee.employeeFirstName} ${row.employee.employeeLastName}`,
+        row.companyName,
+        row.branchName,
+        row.departmentName || "N/A",
+      ];
 
+      let maxPunches = 1;
       for (const date of dateColumns) {
         const punches = getDisplayPunches(row.employee.id, date, row.punches[date] || []);
         const cacheKey = buildStatusCacheKey(date, row.employee.id, punches);
         const status = globalStatusCache.get(cacheKey) as AttendanceStatus | undefined;
-
-        if (reportType === "FILO Punches Logs") {
-          if (punches.length === 0) {
-            dataRow[date] = status?.type === "LEAVE" ? status.label : status?.type === "WEEK_OFF" ? "WO" : status?.type === "ABSENT" ? "Absent" : "";
-          } else {
-            dataRow[date] = formatFILOExcelCell(punches);
-          }
-        } else if (reportType === "Attendance Marking Logs") {
-          dataRow[date] = status ? formatMarkingExcelCell(status) : "";
-        } else if (reportType === "Attendance Summary Logs") {
-          dataRow[date] = status ? formatSummaryExcelCell(punches, status) : "";
-        } else {
-          if (punches.length > 0) {
-            dataRow[date] = punches.join("\n");
-          } else if (status?.type === "LEAVE") {
-            dataRow[date] = status.label;
-          } else if (status?.type === "WEEK_OFF") {
-            dataRow[date] = "WO";
-          } else if (status?.type === "ABSENT") {
-            dataRow[date] = "Absent";
-          } else {
-            dataRow[date] = "";
-          }
-        }
+        const value = cellValueForDate(punches, status);
+        dataRow.push(value);
+        if (punches.length > maxPunches) maxPunches = punches.length;
       }
-      excelData.push(dataRow);
+      aoa.push(dataRow);
+      rowPunchCounts.push(maxPunches);
     }
 
-    const ws = XLSX.utils.json_to_sheet(excelData, { skipHeader: true });
-    const range = XLSX.utils.decode_range(ws['!ref'] || 'A1');
-    
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    const range = XLSX.utils.decode_range(ws["!ref"] || "A1");
+
+    // Merge meta header cells across the two header rows (like reference sheet)
+    ws["!merges"] = Array.from({ length: metaCount }, (_, c) => ({
+      s: { r: 0, c },
+      e: { r: 1, c },
+    }));
+
+    const thinBorder = {
+      top: { style: "thin", color: { rgb: "000000" } },
+      left: { style: "thin", color: { rgb: "000000" } },
+      bottom: { style: "thin", color: { rgb: "000000" } },
+      right: { style: "thin", color: { rgb: "000000" } },
+    };
+    const solidFill = (rgb: string) => ({ patternType: "solid", fgColor: { rgb } });
+    const looksLikePunchTimes = (cv: string) =>
+      /\d{1,2}:\d{2}(:\d{2})?/.test(cv) && !cv.includes("Absent") && !cv.includes("Marking: A");
+
+    // Soft pastel fills matching reference Excel (light pink / light green, black text)
+    const ABSENT_FILL = "FCE4E4";
+    const PRESENT_FILL = "E2EFDA";
+    const HEADER_FILL = "F2F2F2";
+    const TEXT_BLACK = "000000";
+
     for (let R = range.s.r; R <= range.e.r; R++) {
       for (let C = range.s.c; C <= range.e.c; C++) {
         const cellRef = XLSX.utils.encode_cell({ c: C, r: R });
-        if (!ws[cellRef]) continue;
+        if (!ws[cellRef]) {
+          ws[cellRef] = { t: "s", v: "" };
+        }
+
+        const isHeader = R <= 1;
+        const isMeta = C < metaCount;
+        const isDateCol = C >= metaCount;
+
         ws[cellRef].s = {
-          font: { name: "Arial", sz: 9 },
-          alignment: { horizontal: "center", vertical: "center", wrapText: true },
-          border: { top: { style: "thin", color: { rgb: "CCCCCC" } }, left: { style: "thin", color: { rgb: "CCCCCC" } }, bottom: { style: "thin", color: { rgb: "CCCCCC" } }, right: { style: "thin", color: { rgb: "CCCCCC" } } }
+          font: {
+            name: "Calibri",
+            sz: isHeader ? 10 : 9,
+            bold: isHeader,
+            color: { rgb: TEXT_BLACK },
+          },
+          alignment: {
+            horizontal: isMeta && !isHeader ? "left" : "center",
+            vertical: "center",
+            wrapText: true,
+          },
+          border: thinBorder,
         };
-        if (R === 0) {
-          ws[cellRef].s.fill = { fgColor: { rgb: "1F2937" } };
-          ws[cellRef].s.font = { name: "Arial", sz: 10, bold: true, color: { rgb: "FFFFFF" } };
-        } else {
-          if (R % 2 === 1) ws[cellRef].s.fill = { fgColor: { rgb: "F9FAFB" } };
-          if (C >= 6) {
-            const cv = ws[cellRef].v?.toString() || "";
-            if (cv.includes("Absent") || cv === "A" || cv.includes("Marking: A")) { ws[cellRef].s.fill = { fgColor: { rgb: "FEE2E2" } }; ws[cellRef].s.font = { name: "Arial", sz: 9, bold: true, color: { rgb: "991B1B" } }; }
-            else if (cv.includes("Half Day") || cv.includes("Marking: HD") || (cv.includes("HD") && !cv.includes("PHD"))) { ws[cellRef].s.fill = { fgColor: { rgb: "FEF9C3" } }; ws[cellRef].s.font = { name: "Arial", sz: 9, bold: true, color: { rgb: "854D0E" } }; }
-            else if (cv.includes("Late Mark") || cv.includes("Marking: L") || cv.startsWith("L (")) { ws[cellRef].s.fill = { fgColor: { rgb: "DBEAFE" } }; ws[cellRef].s.font = { name: "Arial", sz: 9, bold: true, color: { rgb: "1E40AF" } }; }
-            else if (cv.includes("OT") || cv.includes("Marking: OT") || cv.includes("+")) { ws[cellRef].s.fill = { fgColor: { rgb: "E0E7FF" } }; ws[cellRef].s.font = { name: "Arial", sz: 9, bold: true, color: { rgb: "3730A3" } }; }
-            else if (cv.includes("PH") || cv.includes("Public Holiday") || cv.includes("Marking: PH")) { ws[cellRef].s.fill = { fgColor: { rgb: "F3E8FF" } }; ws[cellRef].s.font = { name: "Arial", sz: 9, bold: true, color: { rgb: "6B21A8" } }; }
-            else if (cv.includes("WO") || cv.includes("Weekly Off") || cv.includes("Marking: WO")) { ws[cellRef].s.fill = { fgColor: { rgb: "FFEDD5" } }; ws[cellRef].s.font = { name: "Arial", sz: 9, bold: true, color: { rgb: "9A3412" } }; }
-            else if (cv.includes("Leave") || cv.includes("Marking: L-")) { ws[cellRef].s.fill = { fgColor: { rgb: "FCE7F3" } }; ws[cellRef].s.font = { name: "Arial", sz: 9, bold: true, color: { rgb: "9D174D" } }; }
-            else if (cv.includes("Present") || cv.includes("P (") || cv.includes("Marking: P")) { ws[cellRef].s.fill = { fgColor: { rgb: "DCFCE7" } }; ws[cellRef].s.font = { name: "Arial", sz: 9, bold: true, color: { rgb: "166534" } }; }
-            else if (cv.includes("Regularized")) { ws[cellRef].s.fill = { fgColor: { rgb: "CCFBF1" } }; ws[cellRef].s.font = { name: "Arial", sz: 9, bold: true, color: { rgb: "115E59" } }; }
-          }
+
+        if (isHeader) {
+          ws[cellRef].s.fill = solidFill(HEADER_FILL);
+          continue;
+        }
+
+        if (!isDateCol) continue;
+
+        const cv = ws[cellRef].v?.toString() || "";
+        if (!cv) continue;
+
+        if (cv.includes("Absent") || cv === "A" || cv.includes("Marking: A")) {
+          ws[cellRef].s.fill = solidFill(ABSENT_FILL);
+          ws[cellRef].s.font = { name: "Calibri", sz: 9, bold: false, color: { rgb: TEXT_BLACK } };
+        } else if (
+          cv.includes("Present") ||
+          cv.includes("P (") ||
+          cv.includes("Marking: P") ||
+          looksLikePunchTimes(cv)
+        ) {
+          ws[cellRef].s.fill = solidFill(PRESENT_FILL);
+          ws[cellRef].s.font = { name: "Calibri", sz: 9, bold: false, color: { rgb: TEXT_BLACK } };
+        } else if (cv.includes("Half Day") || cv.includes("Marking: HD") || (cv.includes("HD") && !cv.includes("PHD"))) {
+          ws[cellRef].s.fill = solidFill("FFF2CC");
+          ws[cellRef].s.font = { name: "Calibri", sz: 9, bold: false, color: { rgb: TEXT_BLACK } };
+        } else if (cv.includes("WO") || cv.includes("Weekly Off") || cv.includes("Marking: WO")) {
+          ws[cellRef].s.fill = solidFill("FCE4D6");
+          ws[cellRef].s.font = { name: "Calibri", sz: 9, bold: false, color: { rgb: TEXT_BLACK } };
+        } else if (cv.includes("Leave") || cv.includes("Marking: L-")) {
+          ws[cellRef].s.fill = solidFill("FCE4EC");
+          ws[cellRef].s.font = { name: "Calibri", sz: 9, bold: false, color: { rgb: TEXT_BLACK } };
+        } else if (cv.includes("Late Mark") || cv.includes("Marking: L") || cv.startsWith("L (")) {
+          ws[cellRef].s.fill = solidFill("DDEBF7");
+          ws[cellRef].s.font = { name: "Calibri", sz: 9, bold: false, color: { rgb: TEXT_BLACK } };
+        } else if (cv.includes("PH") || cv.includes("Public Holiday") || cv.includes("Marking: PH")) {
+          ws[cellRef].s.fill = solidFill("E2D5F1");
+          ws[cellRef].s.font = { name: "Calibri", sz: 9, bold: false, color: { rgb: TEXT_BLACK } };
+        } else if (cv.includes("OT") || cv.includes("Marking: OT")) {
+          ws[cellRef].s.fill = solidFill("D6DCE4");
+          ws[cellRef].s.font = { name: "Calibri", sz: 9, bold: false, color: { rgb: TEXT_BLACK } };
+        } else if (cv.includes("Regularized")) {
+          ws[cellRef].s.fill = solidFill("D0F0E8");
+          ws[cellRef].s.font = { name: "Calibri", sz: 9, bold: false, color: { rgb: TEXT_BLACK } };
         }
       }
     }
-    
-    const colWidths = [{ wch: 6 }, { wch: 14 }, { wch: 20 }, { wch: 22 }, { wch: 16 }, { wch: 18 }];
-    dateColumns.forEach(() => colWidths.push({ wch: 18 }));
-    ws['!cols'] = colWidths;
-    ws['!freeze'] = { x: 6, y: 1 };
-    
+
+    const colWidths = [
+      { wch: 6 },
+      { wch: 14 },
+      { wch: 22 },
+      { wch: 18 },
+      { wch: 16 },
+      { wch: 22 },
+    ];
+    dateColumns.forEach(() => colWidths.push({ wch: 12 }));
+    ws["!cols"] = colWidths;
+
+    // Header rows + taller data rows when multiple punches (reference layout)
+    ws["!rows"] = [
+      { hpt: 18 },
+      { hpt: 16 },
+      ...rowPunchCounts.map((count) => ({ hpt: Math.max(22, count * 14) })),
+    ];
+    ws["!freeze"] = { x: metaCount, y: 2 };
+
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Attendance Report");
-    XLSX.writeFile(wb, `${reportType.replace(/\s+/g, '_')}_${formData.dateFrom}_to_${formData.dateTo}.xlsx`);
+    XLSX.writeFile(
+      wb,
+      `${reportType.replace(/\s+/g, "_")}_${formData.dateFrom}_to_${formData.dateTo}.xlsx`,
+      { cellStyles: true },
+    );
   };
 
   // ==================== RENDER HELPERS ====================

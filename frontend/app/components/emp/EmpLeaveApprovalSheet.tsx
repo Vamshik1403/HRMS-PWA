@@ -20,6 +20,13 @@ import {
 import { fetchEmployeeLeaveBalance } from "../../utils/leaveApprovalApi";
 import { formatDateShort } from "../../utils/leaveDisplay";
 import { EmpMobileDateField } from "./EmpMobileDateField";
+import { useEmpPortalDesktop } from "../layout/EmpPortalShell";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "../ui/dialog";
 
 const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL || "/backend";
 
@@ -60,6 +67,7 @@ export function EmpLeaveApprovalSheet({
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const isDesktop = useEmpPortalDesktop();
 
   const periodFrom = application?.fromDate.slice(0, 10) ?? "";
   const periodTo = application?.toDate.slice(0, 10) ?? "";
@@ -241,16 +249,18 @@ export function EmpLeaveApprovalSheet({
     }
   };
 
+  const useDesktopDialog = !embedded && isDesktop;
+
   const sheet = (
     <div
       className={
-        embedded
+        embedded || useDesktopDialog
           ? "flex flex-col bg-[#f8f9fb] min-h-0"
           : "fixed inset-0 z-[200] flex flex-col bg-[#f8f9fb]"
       }
-      style={embedded ? undefined : { paddingTop: "env(safe-area-inset-top)" }}
+      style={embedded || useDesktopDialog ? undefined : { paddingTop: "env(safe-area-inset-top)" }}
     >
-      {!embedded && (
+      {!embedded && !useDesktopDialog && (
       <header className="shrink-0 bg-white border-b border-gray-100 px-4 py-3 flex items-center gap-2">
         <button type="button" onClick={onClose} className="w-9 h-9 rounded-full flex items-center justify-center">
           <Icon icon="solar:arrow-left-linear" className="w-5 h-5" />
@@ -461,5 +471,20 @@ export function EmpLeaveApprovalSheet({
   );
 
   if (embedded) return sheet;
+  if (useDesktopDialog) {
+    return (
+      <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
+        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-hidden flex flex-col p-0 gap-0">
+          <DialogHeader className="px-6 pt-5 pb-3 border-b shrink-0">
+            <DialogTitle>Approve leave</DialogTitle>
+            <p className="text-xs text-muted-foreground">
+              {formatDateShort(application.fromDate)} – {formatDateShort(application.toDate)}
+            </p>
+          </DialogHeader>
+          <div className="flex-1 min-h-0 overflow-y-auto">{sheet}</div>
+        </DialogContent>
+      </Dialog>
+    );
+  }
   return createPortal(sheet, document.body);
 }

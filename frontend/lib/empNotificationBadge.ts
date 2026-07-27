@@ -33,6 +33,101 @@ export function markBellNotificationsViewed() {
   window.dispatchEvent(new Event("emp-sidebar-badges-changed"));
 }
 
+/** Mark notice-type memos as viewed (company / noticeboard / More notices). */
+export function markNoticesViewed() {
+  if (typeof window === "undefined") return;
+  localStorage.setItem(NOTICE_LAST_VIEWED_KEY, String(Date.now()));
+  window.dispatchEvent(new Event("emp-home-badges-changed"));
+  window.dispatchEvent(new Event("emp-sidebar-badges-changed"));
+}
+
+/**
+ * Clear employee portal badges for the route the user just opened.
+ * Visiting Home clears the Home/bell badge; visiting Leave/Reimb list clears those module badges.
+ */
+export async function clearEmpBadgesForVisitedPath(
+  pathname: string,
+  search = "",
+): Promise<void> {
+  if (typeof window === "undefined") return;
+  const token = localStorage.getItem("accessToken") || localStorage.getItem("token");
+  const employeeId = getEmployeeIdFromStorage();
+  if (!token || !employeeId) return;
+
+  const headers = { Authorization: `Bearer ${token}` };
+  const qs = new URLSearchParams(search.startsWith("?") ? search.slice(1) : search);
+  const path = pathname || "";
+
+  const isHome =
+    path.startsWith("/empdashboard") &&
+    qs.get("tab") !== "calendar" &&
+    !path.includes("tab=calendar");
+
+  if (isHome) {
+    markBellNotificationsViewed();
+  }
+
+  if (
+    path.startsWith("/empNoticeboard") ||
+    path.startsWith("/empCompany") ||
+    path.startsWith("/empHolidays") ||
+    path.startsWith("/empPublicHoliday")
+  ) {
+    markNoticesViewed();
+  }
+
+  if (path.startsWith("/empLeaveApplication")) {
+    try {
+      const res = await fetch(`${BACKEND}/leave-application/employee/${employeeId}`, {
+        headers,
+        cache: "no-store",
+      });
+      if (res.ok) {
+        const rows = await res.json();
+        const own = (Array.isArray(rows) ? rows : []).filter(
+          (r: { manageEmployeeID?: number | null }) =>
+            Number(r.manageEmployeeID) === employeeId,
+        );
+        const {
+          markEmpRecordsSeenBulk,
+          pendingLeaveRowsForBadge,
+        } = await import("@/app/utils/empHomeSeen");
+        markEmpRecordsSeenBulk("leave", pendingLeaveRowsForBadge(own));
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+
+  if (path.startsWith("/empReimbursement")) {
+    try {
+      const res = await fetch(`${BACKEND}/reimbursement/employee/${employeeId}`, {
+        headers,
+        cache: "no-store",
+      });
+      if (res.ok) {
+        const rows = await res.json();
+        const own = (Array.isArray(rows) ? rows : []).filter(
+          (r: { manageEmployeeID?: number | null }) =>
+            Number(r.manageEmployeeID) === employeeId,
+        );
+        const {
+          markEmpRecordsSeenBulk,
+          pendingReimbRowsForBadge,
+        } = await import("@/app/utils/empHomeSeen");
+        markEmpRecordsSeenBulk("reimb", pendingReimbRowsForBadge(own));
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+
+  // Opening More hub: clear notice portion; leave/reimb clear when those modules are opened.
+  if (path.startsWith("/empMore")) {
+    markNoticesViewed();
+  }
+}
+
 function loadIdSet(key: string): Set<number> {
   try {
     const raw = localStorage.getItem(key);

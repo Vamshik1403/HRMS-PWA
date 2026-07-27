@@ -28,7 +28,7 @@ export function NavLink({ item, pathname, collapsed, onNavigate }: NavLinkProps)
     ? "text-muted-foreground/40 cursor-not-allowed"
     : active
       ? "bg-accent text-accent-foreground shadow-sm"
-      : "text-muted-foreground hover:text-foreground hover:bg-accent/60";
+      : "text-slate-600 hover:text-slate-800 hover:bg-accent/60 font-medium";
 
   const Icon = item.icon;
 
@@ -36,7 +36,7 @@ export function NavLink({ item, pathname, collapsed, onNavigate }: NavLinkProps)
     <div
       title={collapsed ? item.label : undefined}
       className={cn(
-        "group relative flex items-center gap-3 rounded-md transition-all duration-150",
+        "group relative flex items-center gap-3 rounded-md transition-colors duration-150",
         layout,
         stateClasses,
       )}
@@ -44,10 +44,16 @@ export function NavLink({ item, pathname, collapsed, onNavigate }: NavLinkProps)
       {active && !disabled && !collapsed && (
         <div className="absolute left-0 top-2 bottom-2 w-[3px] rounded-r bg-primary" />
       )}
-      <Icon className={cn("size-4 shrink-0", active && !disabled && "text-primary")} />
+      <Icon
+        className={cn(
+          "size-4 shrink-0",
+          active && !disabled ? "text-primary" : "text-slate-500",
+        )}
+        strokeWidth={1.75}
+      />
       {!collapsed && (
         <>
-          <span className="text-sm flex-1 truncate">{item.label}</span>
+          <span className="text-sm font-medium flex-1 truncate tracking-normal text-inherit">{item.label}</span>
           {item.comingSoon && (
             <Badge variant="muted" className="text-[9px] px-1.5 py-0">
               soon

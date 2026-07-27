@@ -54,14 +54,8 @@ export const MODULE_WORKSPACES: ModuleWorkspace[] = [
     id: "leave",
     label: "Leave",
     basePath: "/empLeaveApplication",
-    tabs: [
-      { id: "overview", label: "Overview" },
-      { id: "apply", label: "Apply Leave" },
-      { id: "balance", label: "Leave Balance" },
-      { id: "history", label: "History" },
-      { id: "holidays", label: "Holiday Calendar" },
-      { id: "approvals", label: "Approvals", managerOnly: true },
-    ],
+    // Single tab — avoids duplicate Overview/Apply/History/… bar (already in My Profile)
+    tabs: [{ id: "overview", label: "Overview" }],
   },
   {
     id: "payroll",
@@ -76,12 +70,8 @@ export const MODULE_WORKSPACES: ModuleWorkspace[] = [
     id: "reimbursement",
     label: "Reimbursement",
     basePath: "/empReimbursement",
-    tabs: [
-      { id: "overview", label: "Overview" },
-      { id: "apply", label: "Apply" },
-      { id: "history", label: "History" },
-      { id: "approvals", label: "Approvals", managerOnly: true },
-    ],
+    // Single tab — avoids duplicate Overview/Apply/History/… bar (already in My Profile)
+    tabs: [{ id: "overview", label: "Overview" }],
   },
   {
     id: "reports",

@@ -4,6 +4,13 @@ import { useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { Icon } from "@iconify/react";
 import { toast } from "sonner";
+import { useEmpPortalDesktop } from "../layout/EmpPortalShell";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "../ui/dialog";
 
 const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL || "/backend";
 
@@ -44,6 +51,7 @@ export function EmpReimbursementApprovalSheet({
   const [loading, setLoading] = useState(false);
   const [acting, setActing] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const isDesktop = useEmpPortalDesktop();
 
   useEffect(() => {
     setMounted(true);
@@ -140,16 +148,18 @@ export function EmpReimbursementApprovalSheet({
     .filter(Boolean)
     .join(" ");
 
+  const useDesktopDialog = !embedded && isDesktop;
+
   const sheet = (
     <div
       className={
-        embedded
+        embedded || useDesktopDialog
           ? "flex flex-col bg-[#f8f9fb] min-h-0"
           : "fixed inset-0 z-[200] flex flex-col bg-[#f8f9fb]"
       }
-      style={embedded ? undefined : { paddingTop: "env(safe-area-inset-top)" }}
+      style={embedded || useDesktopDialog ? undefined : { paddingTop: "env(safe-area-inset-top)" }}
     >
-      {!embedded && (
+      {!embedded && !useDesktopDialog && (
       <header className="shrink-0 bg-white border-b px-4 py-3 flex items-center gap-2">
         <button type="button" onClick={onClose} className="w-9 h-9 rounded-full flex items-center justify-center">
           <Icon icon="solar:arrow-left-linear" className="w-5 h-5" />
@@ -160,7 +170,7 @@ export function EmpReimbursementApprovalSheet({
         </div>
       </header>
       )}
-      <div className="flex-1 min-h-0 overflow-y-auto px-4 py-4 space-y-3">
+      <div className={embedded || useDesktopDialog ? "flex-1 min-h-0 overflow-y-auto px-6 py-4 space-y-3" : "flex-1 min-h-0 overflow-y-auto px-4 py-4 space-y-3"}>
         <p className="text-[12px] text-amber-800 bg-amber-50 border border-amber-100 rounded-xl px-3 py-2 leading-relaxed">
           Approve or reject <strong>each expense line</strong> separately (partial approval). Parent status
           updates when all lines are reviewed.
@@ -172,15 +182,15 @@ export function EmpReimbursementApprovalSheet({
             const itemId = item.id;
             const pending = (item.status || "Pending") === "Pending";
             return (
-              <div key={itemId ?? i} className="bg-white rounded-2xl border p-3">
+              <div key={itemId ?? i} className="bg-white rounded-2xl border border-[#cbd5e1] p-4">
                 <p className="font-semibold text-[13px]">{item.reimbursementType || "Expense"}</p>
                 <p className="text-[12px] text-gray-600 mt-0.5">{item.description || "—"}</p>
                 <p className="text-emerald-700 font-bold mt-1">₹{parseFloat(item.amount || "0").toFixed(2)}</p>
                 <p className="text-[11px] text-gray-500 mt-1">Status: {item.status || "Pending"}</p>
                 {pending && itemId && (
-                  <div className="flex gap-2 mt-2">
-                    <button type="button" disabled={acting} onClick={() => approveItem(itemId)} className="flex-1 py-2 rounded-lg bg-emerald-600 text-white text-[12px] font-semibold">Approve</button>
-                    <button type="button" disabled={acting} onClick={() => rejectItem(itemId)} className="flex-1 py-2 rounded-lg border border-red-200 text-red-600 text-[12px] font-semibold">Reject</button>
+                  <div className="flex gap-2 mt-3">
+                    <button type="button" disabled={acting} onClick={() => approveItem(itemId)} className="flex-1 py-2.5 rounded-lg bg-emerald-600 text-white text-[12px] font-semibold">Approve</button>
+                    <button type="button" disabled={acting} onClick={() => rejectItem(itemId)} className="flex-1 py-2.5 rounded-lg border border-red-200 text-red-600 text-[12px] font-semibold">Reject</button>
                   </div>
                 )}
               </div>
@@ -192,8 +202,8 @@ export function EmpReimbursementApprovalSheet({
         )}
       </div>
       <footer
-        className="shrink-0 bg-white border-t px-4 py-3"
-        style={{ paddingBottom: "max(12px, env(safe-area-inset-bottom))" }}
+        className={embedded || useDesktopDialog ? "shrink-0 bg-white border-t px-6 py-3" : "shrink-0 bg-white border-t px-4 py-3"}
+        style={embedded || useDesktopDialog ? undefined : { paddingBottom: "max(12px, env(safe-area-inset-bottom))" }}
       >
         <button type="button" disabled={acting} onClick={rejectAll} className="w-full py-3 rounded-xl border border-red-200 text-red-600 font-semibold text-[13px]">Reject entire claim</button>
       </footer>
@@ -201,5 +211,18 @@ export function EmpReimbursementApprovalSheet({
   );
 
   if (embedded) return sheet;
+  if (useDesktopDialog) {
+    return (
+      <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
+        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-hidden flex flex-col p-0 gap-0">
+          <DialogHeader className="px-6 pt-5 pb-3 border-b shrink-0">
+            <DialogTitle>Approve reimbursement</DialogTitle>
+            {teamName ? <p className="text-xs text-primary font-medium">Team · {teamName}</p> : null}
+          </DialogHeader>
+          <div className="flex-1 min-h-0 overflow-hidden flex flex-col">{sheet}</div>
+        </DialogContent>
+      </Dialog>
+    );
+  }
   return createPortal(sheet, document.body);
 }

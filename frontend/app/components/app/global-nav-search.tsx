@@ -126,7 +126,7 @@ export function GlobalNavSearch({
         }}
         placeholder="Search employees, modules…"
         className={cn(
-          "h-10 pl-10 pr-14 rounded-md border-transparent bg-muted/40 focus-visible:bg-background focus-visible:ring-2 focus-visible:ring-ring/25 transition-colors",
+          "h-10 pl-10 pr-14 rounded-md border border-border bg-muted/40 focus-visible:bg-background focus-visible:ring-2 focus-visible:ring-ring/25 transition-colors",
           inputClassName,
         )}
       />

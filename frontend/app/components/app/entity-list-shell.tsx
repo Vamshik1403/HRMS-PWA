@@ -74,7 +74,7 @@ export function EntityListShell<T>({
         {footer != null ? (
           footer
         ) : showCount ? (
-          <div className="flex flex-col gap-3 border-t border-[#E5E7EB] dark:border-border px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-col gap-3 border-t border-border px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-[13px] text-muted-foreground">
               Showing {total} of {total} {total === 1 ? "record" : "records"}
             </p>

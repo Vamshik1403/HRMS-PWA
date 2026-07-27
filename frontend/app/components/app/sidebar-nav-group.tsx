@@ -15,7 +15,7 @@ export function SidebarNavGroup({ group, pathname, collapsed }: SidebarNavGroupP
   return (
     <div className="space-y-1">
       {!collapsed && (
-        <div className="px-3 mb-2 text-[10px] uppercase tracking-[0.18em] text-muted-foreground/80 font-semibold">
+        <div className="px-3 mb-2 text-[10px] uppercase tracking-[0.14em] text-slate-500 font-semibold">
           {group.label}
         </div>
       )}

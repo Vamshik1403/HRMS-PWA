@@ -46,14 +46,14 @@ export function SidebarBrand({ collapsed, homeHref = "/dashboard", onRefresh, on
 
   return (
       <div className="flex h-[72px] shrink-0 items-center gap-1 border-b border-border px-2.5 min-w-0">
-      <Link href={homeHref} className="flex items-center gap-2 min-w-0 flex-1">
+      <Link href={homeHref} className="flex items-center gap-2 min-w-0 flex-1 overflow-hidden">
         <img
           src="/img/OpenHRM_Logo.png"
           alt="OpenHRM"
           className="size-8 rounded-md object-cover shadow-sm shrink-0"
         />
         <div className="min-w-0">
-          <div className="font-display text-sm font-semibold tracking-tight leading-none truncate">
+          <div className="font-display text-sm font-semibold tracking-tight leading-none whitespace-nowrap">
             OpenHRM
           </div>
           <div className="text-[9px] text-muted-foreground mt-0.5 uppercase tracking-wider font-mono">

@@ -57,7 +57,7 @@ export function EmpSidebar({ collapsed, onToggle, onRefresh }: EmpSidebarProps) 
     <aside
       className={cn(
         "z-40 flex h-full min-h-0 shrink-0 flex-col border-r border-border bg-background shadow-sm transition-[width] duration-300",
-        collapsed ? "w-14" : "w-[184px]",
+        collapsed ? "w-14" : "w-[210px]",
       )}
     >
       <SidebarBrand

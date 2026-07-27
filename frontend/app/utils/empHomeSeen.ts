@@ -35,6 +35,51 @@ export function markEmpRecordSeen(
   map[String(id)] = status ?? "";
   saveMap(category, map);
   window.dispatchEvent(new Event("emp-home-badges-changed"));
+  window.dispatchEvent(new Event("emp-sidebar-badges-changed"));
+}
+
+/** Mark many leave/reimb rows as seen (e.g. when opening the list page). */
+export function markEmpRecordsSeenBulk(
+  category: SeenCategory,
+  rows: { id: string | number; status?: string | null }[],
+) {
+  if (typeof window === "undefined" || rows.length === 0) return;
+  const map = loadMap(category);
+  let changed = false;
+  for (const r of rows) {
+    const id = String(r.id);
+    if (!id || id === "undefined" || id === "null") continue;
+    const next = r.status ?? "";
+    if (map[id] === undefined || map[id] !== next) {
+      map[id] = next;
+      changed = true;
+    }
+  }
+  if (!changed) return;
+  saveMap(category, map);
+  window.dispatchEvent(new Event("emp-home-badges-changed"));
+  window.dispatchEvent(new Event("emp-sidebar-badges-changed"));
+}
+
+/** Own pending leave rows that still drive the badge. */
+export function pendingLeaveRowsForBadge<
+  T extends { id?: string | number; status?: string | null },
+>(rows: T[]): T[] {
+  return rows.filter((r) => r.status === "Pending" || r.status === "RevokePending");
+}
+
+/** Own pending reimbursement rows that still drive the badge. */
+export function pendingReimbRowsForBadge<
+  T extends { id?: string | number; status?: string | null },
+>(rows: T[]): T[] {
+  return rows.filter((r) => {
+    const status = r.status || "Pending";
+    return (
+      status === "Pending" ||
+      status === "Partially Approved" ||
+      status === "Partly Approved"
+    );
+  });
 }
 
 /** Reimbursement home badge: pending items not yet opened. */

@@ -52,7 +52,7 @@ export function DataTable<T>({
       <div className="overflow-x-auto">
         <table className="w-full min-w-[720px] border-collapse text-left">
           <thead>
-            <tr className="h-[52px] border-b border-[#E5E7EB] bg-[#FAFBFC] dark:border-border dark:bg-muted/40">
+            <tr className="h-[52px] border-b border-border bg-[#FAFBFC] dark:border-border dark:bg-muted/40">
               {columns.map((c) => {
                 const isSorted = sortBy === c.key;
                 const Indicator = sortIndicator(isSorted, sortDir);
@@ -87,7 +87,7 @@ export function DataTable<T>({
           <tbody>
             {isLoading ? (
               SKELETON_KEYS.map((k) => (
-                <tr key={k} className="h-16 border-b border-[#E5E7EB]/80 dark:border-border">
+                <tr key={k} className="h-16 border-b border-border dark:border-border">
                   {columns.map((c) => (
                     <td key={`${k}-${c.key}`} className="px-6 py-3">
                       <Skeleton className="h-4 w-3/4" />
@@ -112,7 +112,7 @@ export function DataTable<T>({
               rows.map((row) => (
                 <tr
                   key={rowKey(row)}
-                  className="h-16 border-b border-[#E5E7EB]/80 transition-colors last:border-0 hover:bg-[#F8FAFC] dark:border-border dark:hover:bg-muted/40"
+                  className="h-16 border-b border-border transition-colors last:border-0 hover:bg-[#F8FAFC] dark:border-border dark:hover:bg-muted/40"
                 >
                   {columns.map((c) => (
                     <td

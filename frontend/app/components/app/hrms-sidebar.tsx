@@ -42,7 +42,7 @@ export function HrmsSidebar({
     <aside
       className={cn(
         "shrink-0 border-r bg-card/40 backdrop-blur-sm transition-[width] duration-300 flex flex-col h-full min-h-0",
-        collapsed ? "w-[68px]" : "w-64",
+        collapsed ? "w-14" : "w-[210px]",
       )}
     >
       <SidebarBrand collapsed={collapsed} onRefresh={onRefresh} onToggle={onToggle} />

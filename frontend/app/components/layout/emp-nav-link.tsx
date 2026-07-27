@@ -27,13 +27,13 @@ export function EmpNavLink({ item, pathname, collapsed, badgeCount = 0 }: EmpNav
         "group relative flex h-[38px] items-center gap-2 transition-all duration-150",
         collapsed ? "mx-1.5 justify-center rounded-[10px] px-0" : "pl-2.5 pr-2 py-2",
         active
-          ? "border-l-[3px] border-primary bg-primary/10 font-bold text-primary"
-          : "border-l-[3px] border-transparent text-muted-foreground hover:bg-muted hover:text-foreground",
+          ? "border-l-[3px] border-primary bg-primary/10 font-semibold text-primary"
+          : "border-l-[3px] border-transparent text-slate-600 hover:bg-muted hover:text-slate-800",
       )}
     >
       <span className="relative shrink-0">
         <Icon
-          className={cn("size-[18px]", active ? "text-primary" : "text-muted-foreground")}
+          className={cn("size-[18px]", active ? "text-primary" : "text-slate-500")}
           strokeWidth={1.75}
         />
         {collapsed && showBadge ? (
@@ -44,7 +44,7 @@ export function EmpNavLink({ item, pathname, collapsed, badgeCount = 0 }: EmpNav
       </span>
       {!collapsed ? (
         <>
-          <span className="min-w-0 flex-1 truncate text-[13px] font-medium leading-tight">{item.label}</span>
+          <span className="min-w-0 flex-1 truncate text-[13px] font-medium leading-tight tracking-normal">{item.label}</span>
           {showBadge ? (
             <span className="ml-auto inline-flex min-w-5 shrink-0 items-center justify-center rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-semibold leading-none text-primary-foreground">
               {badgeCount > 99 ? "99+" : badgeCount}

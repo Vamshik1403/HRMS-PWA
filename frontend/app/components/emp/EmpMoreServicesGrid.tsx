@@ -40,7 +40,7 @@ export function EmpMoreServicesGrid() {
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Search modules"
-          className="h-11 pl-10 rounded-xl bg-card border-border/80 shadow-sm"
+          className="h-11 pl-10 rounded-xl bg-card border-border shadow-sm"
         />
       </div>
 
@@ -62,7 +62,7 @@ export function EmpMoreServicesGrid() {
                 >
                   <div
                     className={cn(
-                      "relative w-full max-w-[92px] aspect-square rounded-xl border border-border/70 bg-card shadow-sm",
+                      "relative w-full max-w-[92px] aspect-square rounded-xl border border-border bg-card shadow-sm",
                       "flex items-center justify-center transition-all duration-150",
                       "group-hover:border-primary/30 group-hover:shadow-md group-hover:-translate-y-0.5",
                     )}

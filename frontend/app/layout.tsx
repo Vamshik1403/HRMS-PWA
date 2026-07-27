@@ -15,6 +15,9 @@ const display = Bricolage_Grotesque({
 const sans = DM_Sans({
   subsets: ['latin'],
   variable: '--font-sans',
+  weight: ['400', '500', '600', '700'],
+  display: 'swap',
+  adjustFontFallback: true,
 })
 
 const mono = JetBrains_Mono({
@@ -133,7 +136,7 @@ export default function RootLayout({
         {/* PWA splash screen configuration */}
         <meta name="description" content="Comprehensive HR Management Dashboard" />
       </head>
-      <body className={`${display.variable} ${sans.variable} ${mono.variable} min-h-screen bg-background font-sans antialiased`}>
+      <body className={`${display.variable} ${sans.variable} ${mono.variable} min-h-screen bg-background font-sans subpixel-antialiased`}>
         <Providers>
           <ServiceWorkerBootstrap />
           <FetchRefreshBootstrap />

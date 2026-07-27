@@ -4,9 +4,13 @@
   --primary: 217 91% 60%;
   --primary-foreground: 0 0% 100%;
   --secondary: 240 4.8% 95.9%;
-  --secondary-foreground: 240 5.9% 10%;
+  --secondary-foreground: 222 47% 8%;
   --muted: 220 14% 96%;
-  --muted-foreground: 220 9% 46%;
+  --muted-foreground: 215 16% 47%;
+  --foreground: 222 47% 11%;
+  --card-foreground: 222 47% 11%;
+  --popover-foreground: 222 47% 11%;
+  --sidebar-foreground: 222 47% 11%;
   --accent: 214 95% 93%;
   --accent-foreground: 217 91% 35%;
   --destructive: 0 84% 60%;
@@ -18,29 +22,24 @@
   --info: 187 86% 43%;
   --info-foreground: 0 0% 100%;
   --card: 0 0% 100%;
-  --card-foreground: 222 47% 11%;
   --popover: 0 0% 100%;
-  --popover-foreground: 222 47% 11%;
-  --border: 220 13% 91%;
-  --input: 220 13% 91%;
+  --border: 215 16% 78%;
+  --input: 215 16% 78%;
   --ring: 217 91% 60%;
   --sidebar: 0 0% 100%;
-  --sidebar-foreground: 222 47% 11%;
   --sidebar-primary: 217 91% 60%;
   --sidebar-primary-foreground: 0 0% 100%;
   --sidebar-accent: 214 95% 93%;
   --sidebar-accent-foreground: 217 91% 35%;
-  --sidebar-border: 220 13% 91%;
+  --sidebar-border: 215 16% 78%;
   --sidebar-ring: 217 91% 60%;
   --chart-1: 217 91% 60%;
   --chart-2: 142 71% 45%;
   --chart-3: 38 92% 50%;
   --chart-4: 187 86% 43%;
   --chart-5: 0 84% 60%;
-
   --radius: 0.625rem;
 }
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -58,13 +57,13 @@
     --secondary: 220 14% 96%;
     --secondary-foreground: 222 47% 11%;
     --muted: 220 14% 96%;
-    --muted-foreground: 220 9% 46%;
+    --muted-foreground: 215 16% 47%;
     --accent: 214 95% 93%;
     --accent-foreground: 217 91% 35%;
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 98%;
-    --border: 220 13% 91%;
-    --input: 220 13% 91%;
+    --border: 215 16% 78%;
+    --input: 215 16% 78%;
     --ring: 217 91% 60%;
     --chart-1: 217 91% 60%;
     --chart-2: 142 71% 45%;
@@ -85,7 +84,7 @@
     --secondary: 0 0% 14%;
     --secondary-foreground: 0 0% 98%;
     --muted: 0 0% 14%;
-    --muted-foreground: 0 0% 68%;
+    --muted-foreground: 0 0% 84%;
     --accent: 0 0% 16%;
     --accent-foreground: 0 0% 98%;
     --destructive: 0 63% 40%;
@@ -132,13 +131,37 @@
   body {
     @apply bg-background text-foreground;
     font-family: var(--font-sans), system-ui, sans-serif;
-    font-feature-settings: "rlig" 1, "calt" 1, "ss01" 1;
+    font-weight: 400;
+    font-synthesis: none;
+    -webkit-font-smoothing: auto;
+    -moz-osx-font-smoothing: auto;
+    text-rendering: auto;
+    letter-spacing: 0;
     overscroll-behavior: none;
   }
 
   h1, h2, h3, h4 {
     font-family: var(--font-display), var(--font-sans), system-ui, sans-serif;
-    letter-spacing: -0.02em;
+    letter-spacing: -0.01em;
+    font-weight: 600;
+    color: hsl(var(--foreground));
+    -webkit-font-smoothing: auto;
+    -moz-osx-font-smoothing: auto;
+  }
+
+  p, span, li, label, a, button, td, th {
+    -webkit-font-smoothing: auto;
+    -moz-osx-font-smoothing: auto;
+    text-rendering: auto;
+  }
+
+  .text-muted-foreground {
+    color: hsl(215 16% 47%) !important;
+    font-weight: 400;
+  }
+
+  html.dark .text-muted-foreground {
+    color: hsl(0 0% 84%) !important;
   }
 
   code, pre, kbd {
@@ -151,6 +174,30 @@
       overscroll-behavior: auto;
     }
   }
+}
+
+/* Keep ClearType-friendly smoothing without forcing heavy/dark type */
+html.hrms-admin-shell,
+html.hrms-admin-shell body {
+  -webkit-font-smoothing: auto !important;
+  -moz-osx-font-smoothing: auto !important;
+  text-rendering: auto;
+  font-weight: 400;
+}
+
+/* Stronger panel borders so white cards/tables read clearly on grey canvas */
+html:not(.dark):not([data-emp-theme="dark"]) .hrms-admin-content .border-\[\#e5eeff\],
+html:not(.dark):not([data-emp-theme="dark"]) .emp-workspace-shell .border-\[\#e5eeff\],
+html:not(.dark):not([data-emp-theme="dark"]) .hrms-admin-content .border-\[\#E8EDF5\],
+html:not(.dark):not([data-emp-theme="dark"]) .emp-workspace-shell .border-\[\#E8EDF5\] {
+  border-color: #cbd5e1 !important;
+}
+
+html:not(.dark):not([data-emp-theme="dark"]) .hrms-admin-content .border-\[\#E5E7EB\],
+html:not(.dark):not([data-emp-theme="dark"]) .emp-workspace-shell .border-\[\#E5E7EB\],
+html:not(.dark):not([data-emp-theme="dark"]) .hrms-admin-content .border-\[\#E5E7EB\]\/80,
+html:not(.dark):not([data-emp-theme="dark"]) .emp-workspace-shell .border-\[\#E5E7EB\]\/80 {
+  border-color: #cbd5e1 !important;
 }
 
 /* Prevent mobile browsers from auto-zooming focused form fields in PWA mode */

@@ -8,7 +8,10 @@ import {
   registerPushSubscription,
   resetPushClientStateIfNeeded,
 } from "@/lib/pushSubscribe";
-import { refreshHomeScreenBadge } from "@/lib/empNotificationBadge";
+import {
+  clearEmpBadgesForVisitedPath,
+  refreshHomeScreenBadge,
+} from "@/lib/empNotificationBadge";
 import {
   appendInAppNotification,
   pushPayloadToInAppNotification,
@@ -48,6 +51,14 @@ import {
 interface EmpPortalShellProps {
   children: React.ReactNode;
   hideBottomNav?: boolean;
+}
+
+function isLeaveReimbSubRoute(pathname: string | null): boolean {
+  if (!pathname) return false;
+  // Detail / apply routes under leave or reimbursement — no module tab bar
+  if (/^\/empLeaveApplication\/(new|[^/]+)$/.test(pathname)) return true;
+  if (/^\/empReimbursement\/(new|edit|[^/]+)$/.test(pathname)) return true;
+  return false;
 }
 
 function isRunningStandalone(): boolean {
@@ -133,6 +144,12 @@ export default function EmpPortalShell({ children, hideBottomNav = false }: EmpP
   useEffect(() => {
     ensureFetchRefreshPatch();
   }, []);
+
+  // Clear sidebar/module badges when the employee opens that section
+  useEffect(() => {
+    const search = typeof window !== "undefined" ? window.location.search : "";
+    void clearEmpBadgesForVisitedPath(pathname || "", search);
+  }, [pathname]);
 
   useEffect(() => {
     const applyStoredTheme = () => {
@@ -359,8 +376,12 @@ export default function EmpPortalShell({ children, hideBottomNav = false }: EmpP
           </div>
         )}
 
-        {/* Module workspace tabs (Attendance, Leave, Payroll, etc.) */}
-        {activeModule && activeModule.id !== "home" && activeModule.id !== "profile" && moduleTabs.length > 1 && (
+        {/* Module workspace tabs — hide on leave/reimb detail & apply routes (no duplicate bars) */}
+        {activeModule &&
+          activeModule.id !== "home" &&
+          activeModule.id !== "profile" &&
+          moduleTabs.length > 1 &&
+          !isLeaveReimbSubRoute(pathname) && (
           <EmpWorkspaceTabNav workspace={activeModule} tabs={moduleTabs} />
         )}
         </div>
