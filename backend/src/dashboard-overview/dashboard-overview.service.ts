@@ -842,6 +842,7 @@ export class DashboardOverviewService {
 
   async getHrWidgets(query: TodayOverviewQuery) {
     const today = new Date();
+    const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
     const employeeWhere: Prisma.ManageEmployeeWhereInput = {
       isDeleted: false,
       OR: [
@@ -898,6 +899,13 @@ export class DashboardOverviewService {
       employees,
       holidays,
       company,
+      recentLeaves,
+      recentMemos,
+      recentCreatedEmployees,
+      recentPayroll,
+      recentTaskCreates,
+      recentPunches,
+      recentMobilePunches,
     ] = await Promise.all([
       this.prisma.employeeMemo.count({ where: memoWhere }),
       this.prisma.taskProject.count({
@@ -907,9 +915,13 @@ export class DashboardOverviewService {
       this.prisma.leaveApplication.count({ where: leaveWhere }),
       this.prisma.salaryAdvance.count({ where: advanceWhere }),
       this.prisma.taskProject.findMany({
-        where: taskWhere,
-        orderBy: { createdAt: 'desc' },
-        take: 5,
+        where: {
+          ...taskWhere,
+          dueDateTime: { not: null },
+          status: { not: 'Closed' },
+        },
+        orderBy: { dueDateTime: 'asc' },
+        take: 100,
         select: {
           id: true,
           taskCode: true,
@@ -948,10 +960,147 @@ export class DashboardOverviewService {
             select: { companyName: true },
           })
         : Promise.resolve(null),
+      this.prisma.leaveApplication.findMany({
+        where: {
+          ...(query.companyID ? { companyID: query.companyID } : {}),
+          ...(query.branchId ? { branchesID: query.branchId } : {}),
+          ...(query.serviceProviderID ? { serviceProviderID: query.serviceProviderID } : {}),
+        },
+        orderBy: { id: 'desc' },
+        take: 12,
+        select: {
+          id: true,
+          appliedLeaveType: true,
+          fromDate: true,
+          toDate: true,
+          status: true,
+          purpose: true,
+          manageEmployee: {
+            select: { employeeFirstName: true, employeeLastName: true },
+          },
+        },
+      }),
+      this.prisma.employeeMemo.findMany({
+        where: { ...memoWhere, createdAt: { gte: weekAgo } },
+        orderBy: { createdAt: 'desc' },
+        take: 20,
+        select: {
+          id: true,
+          subject: true,
+          memoType: true,
+          createdAt: true,
+          issuedBy: true,
+          manageEmployee: {
+            select: { employeeFirstName: true, employeeLastName: true },
+          },
+        },
+      }),
+      this.prisma.employeeCredentials.findMany({
+        where: {
+          ...(query.companyID ? { companyID: query.companyID } : {}),
+          ...(query.branchId ? { branchesID: query.branchId } : {}),
+          ...(query.serviceProviderID ? { serviceProviderID: query.serviceProviderID } : {}),
+          createdAt: { gte: weekAgo },
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 20,
+        select: {
+          id: true,
+          createdAt: true,
+          employee: {
+            select: { employeeFirstName: true, employeeLastName: true, employeeID: true },
+          },
+        },
+      }),
+      this.prisma.generateSalary.findMany({
+        where: {
+          ...(query.companyID ? { companyID: query.companyID } : {}),
+          ...(query.branchId ? { branchesID: query.branchId } : {}),
+          ...(query.serviceProviderID ? { serviceProviderID: query.serviceProviderID } : {}),
+          createdAt: { gte: weekAgo },
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 40,
+        select: {
+          id: true,
+          monthPeriod: true,
+          status: true,
+          createdAt: true,
+          manageEmployee: {
+            select: { employeeFirstName: true, employeeLastName: true },
+          },
+        },
+      }),
+      this.prisma.taskProject.findMany({
+        where: { ...taskWhere, createdAt: { gte: weekAgo } },
+        orderBy: { createdAt: 'desc' },
+        take: 20,
+        select: {
+          id: true,
+          taskCode: true,
+          taskName: true,
+          priority: true,
+          status: true,
+          createdAt: true,
+          assignments: {
+            take: 3,
+            select: {
+              manageEmployee: {
+                select: { employeeFirstName: true, employeeLastName: true },
+              },
+            },
+          },
+        },
+      }),
+      this.prisma.empAttendanceLogs.findMany({
+        where: {
+          ...(query.companyID ? { companyID: query.companyID } : {}),
+          ...(query.branchId ? { branchesID: query.branchId } : {}),
+          ...(query.serviceProviderID ? { serviceProviderID: query.serviceProviderID } : {}),
+          createdAt: { gte: weekAgo },
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 60,
+        select: {
+          id: true,
+          employeeID: true,
+          punchTimeStamp: true,
+          createdAt: true,
+        },
+      }),
+      this.prisma.attendanceLocation.findMany({
+        where: {
+          ...(query.companyID ? { companyID: query.companyID } : {}),
+          ...(query.branchId ? { branchesID: query.branchId } : {}),
+          ...(query.serviceProviderID ? { serviceProviderID: query.serviceProviderID } : {}),
+          checkinTime: { gte: weekAgo },
+        },
+        orderBy: { checkinTime: 'desc' },
+        take: 40,
+        select: {
+          id: true,
+          employeeId: true,
+          checkType: true,
+          checkinTime: true,
+          employee: {
+            select: { employeeFirstName: true, employeeLastName: true },
+          },
+        },
+      }),
     ]);
 
     const upcomingEvents = this.buildUpcomingEvents(employees, today);
     const newsFeed = this.buildNewsFeed(employees, holidays, company?.companyName ?? 'Company', today);
+    const recentActivities = this.buildRecentActivities({
+      employees,
+      recentLeaves,
+      recentMemos,
+      recentCreatedEmployees,
+      recentPayroll,
+      recentTaskCreates,
+      recentPunches,
+      recentMobilePunches,
+    });
 
     return {
       pendingCounts: {
@@ -964,7 +1113,288 @@ export class DashboardOverviewService {
       latestTasks,
       upcomingEvents,
       newsFeed,
+      recentActivities,
     };
+  }
+
+  private employeeDisplayName(
+    emp?: { employeeFirstName?: string | null; employeeLastName?: string | null } | null,
+  ): string {
+    const name = `${emp?.employeeFirstName ?? ''} ${emp?.employeeLastName ?? ''}`.trim();
+    return name || 'Employee';
+  }
+
+  private formatActivityTime(at: Date): string {
+    const now = Date.now();
+    const diffMs = now - at.getTime();
+    const mins = Math.floor(diffMs / 60000);
+    if (mins < 1) return 'Just now';
+    if (mins < 60) return `${mins}m ago`;
+    const hours = Math.floor(mins / 60);
+    if (hours < 24) return `${hours}h ago`;
+    const days = Math.floor(hours / 24);
+    if (days < 7) return `${days}d ago`;
+    return at.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  }
+
+  private buildRecentActivities(input: {
+    employees: { id: number; employeeFirstName: string | null; employeeLastName: string | null }[];
+    recentLeaves: {
+      id: number;
+      appliedLeaveType: string | null;
+      fromDate: Date | null;
+      toDate: Date | null;
+      status: string | null;
+      purpose: string | null;
+      manageEmployee: { employeeFirstName: string | null; employeeLastName: string | null } | null;
+    }[];
+    recentMemos: {
+      id: number;
+      subject: string | null;
+      memoType: string | null;
+      createdAt: Date;
+      issuedBy: string | null;
+      manageEmployee: { employeeFirstName: string | null; employeeLastName: string | null } | null;
+    }[];
+    recentCreatedEmployees: {
+      id: number;
+      createdAt: Date;
+      employee: {
+        employeeFirstName: string | null;
+        employeeLastName: string | null;
+        employeeID: string | null;
+      } | null;
+    }[];
+    recentPayroll: {
+      id: number;
+      monthPeriod: string;
+      status: string | null;
+      createdAt: Date;
+      manageEmployee: { employeeFirstName: string | null; employeeLastName: string | null } | null;
+    }[];
+    recentTaskCreates: {
+      id: number;
+      taskCode: string;
+      taskName: string;
+      priority: string;
+      status: string;
+      createdAt: Date;
+      assignments: {
+        manageEmployee: { employeeFirstName: string | null; employeeLastName: string | null } | null;
+      }[];
+    }[];
+    recentPunches: {
+      id: number;
+      employeeID: number | null;
+      punchTimeStamp: string;
+      createdAt: Date;
+    }[];
+    recentMobilePunches: {
+      id: number;
+      employeeId: number;
+      checkType: string;
+      checkinTime: Date;
+      employee: { employeeFirstName: string | null; employeeLastName: string | null } | null;
+    }[];
+  }) {
+    type Activity = {
+      id: string;
+      kind: string;
+      headline: string;
+      body: string;
+      time: string;
+      sortAt: number;
+      href: string;
+      avatarInitial: string;
+    };
+    const items: Activity[] = [];
+    const empById = new Map(input.employees.map((e) => [e.id, e]));
+    const weekAgoMs = Date.now() - 7 * 24 * 60 * 60 * 1000;
+
+    for (const row of input.recentCreatedEmployees) {
+      const name = this.employeeDisplayName(row.employee);
+      items.push({
+        id: `emp-created-${row.id}`,
+        kind: 'employee',
+        headline: `${name} was created`,
+        body: row.employee?.employeeID
+          ? `Employee ID ${row.employee.employeeID} added to the company`
+          : 'New employee record created',
+        time: this.formatActivityTime(row.createdAt),
+        sortAt: row.createdAt.getTime(),
+        href: '/manage-employees',
+        avatarInitial: name.charAt(0).toUpperCase() || 'E',
+      });
+    }
+
+    for (const leave of input.recentLeaves) {
+      const fromTs = leave.fromDate?.getTime();
+      if (fromTs == null || fromTs < weekAgoMs) continue;
+      if (fromTs > Date.now()) continue; // upcoming leave dates aren't "past week" activity
+
+      const name = this.employeeDisplayName(leave.manageEmployee);
+      const leaveType = (leave.appliedLeaveType || 'leave').replace(/_/g, ' ');
+      const from = leave.fromDate
+        ? leave.fromDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+        : null;
+      const to = leave.toDate
+        ? leave.toDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+        : null;
+      const range = from && to ? (from === to ? from : `${from} – ${to}`) : from || to || 'upcoming dates';
+      items.push({
+        id: `leave-${leave.id}`,
+        kind: 'leave',
+        headline: `${name} applied ${leaveType}`,
+        body: `For ${range}${leave.status ? ` · ${leave.status}` : ''}`,
+        time: this.formatActivityTime(leave.fromDate!),
+        sortAt: fromTs,
+        href: '/leave-applications',
+        avatarInitial: name.charAt(0).toUpperCase() || 'L',
+      });
+    }
+
+    for (const memo of input.recentMemos) {
+      const toName = this.employeeDisplayName(memo.manageEmployee);
+      const sender = memo.issuedBy?.trim() || 'Someone';
+      items.push({
+        id: `memo-${memo.id}`,
+        kind: 'memo',
+        headline: `${sender} sent an internal message`,
+        body: memo.subject
+          ? `“${memo.subject}”${memo.manageEmployee ? ` to ${toName}` : ''}`
+          : memo.manageEmployee
+            ? `Message to ${toName}`
+            : memo.memoType || 'Internal message',
+        time: this.formatActivityTime(memo.createdAt),
+        sortAt: memo.createdAt.getTime(),
+        href: '/employee-memo',
+        avatarInitial: sender.charAt(0).toUpperCase() || 'M',
+      });
+    }
+
+    // Group payroll rows by monthPeriod + day so one run shows as one activity
+    const payrollGroups = new Map<string, typeof input.recentPayroll>();
+    for (const row of input.recentPayroll) {
+      const dayKey = dateKeyLocal(row.createdAt);
+      const key = `${row.monthPeriod}|${dayKey}`;
+      const list = payrollGroups.get(key) ?? [];
+      list.push(row);
+      payrollGroups.set(key, list);
+    }
+    for (const [key, rows] of payrollGroups) {
+      const first = rows[0];
+      if (!first) continue;
+      items.push({
+        id: `payroll-${key}`,
+        kind: 'payroll',
+        headline: 'Payroll generated',
+        body:
+          rows.length > 1
+            ? `${rows.length} salary slips for ${first.monthPeriod}`
+            : `${this.employeeDisplayName(first.manageEmployee)} · ${first.monthPeriod}`,
+        time: this.formatActivityTime(first.createdAt),
+        sortAt: first.createdAt.getTime(),
+        href: '/generate-salary',
+        avatarInitial: 'P',
+      });
+    }
+
+    for (const task of input.recentTaskCreates) {
+      const assignees = task.assignments
+        .map((a) => this.employeeDisplayName(a.manageEmployee))
+        .filter(Boolean);
+      items.push({
+        id: `task-created-${task.id}`,
+        kind: 'task',
+        headline: assignees.length
+          ? `New task assigned to ${assignees.slice(0, 2).join(', ')}`
+          : `New task created: ${task.taskName}`,
+        body: `${task.taskCode} — ${task.taskName} · ${task.priority}`,
+        time: this.formatActivityTime(task.createdAt),
+        sortAt: task.createdAt.getTime(),
+        href: '/task-projects',
+        avatarInitial: 'T',
+      });
+    }
+
+    // Collapse punches per employee per day into check-in / check-out events
+    const punchesByEmpDay = new Map<string, typeof input.recentPunches>();
+    for (const punch of input.recentPunches) {
+      if (!punch.employeeID) continue;
+      const day = punch.punchTimeStamp.split(' ')[0] || dateKeyLocal(punch.createdAt);
+      const key = `${punch.employeeID}|${day}`;
+      const list = punchesByEmpDay.get(key) ?? [];
+      list.push(punch);
+      punchesByEmpDay.set(key, list);
+    }
+    for (const [key, punches] of punchesByEmpDay) {
+      const empId = Number(key.split('|')[0]);
+      const sorted = [...punches].sort(
+        (a, b) => new Date(a.punchTimeStamp).getTime() - new Date(b.punchTimeStamp).getTime(),
+      );
+      const emp = empById.get(empId);
+      const name = this.employeeDisplayName(emp);
+      const first = sorted[0];
+      const last = sorted[sorted.length - 1];
+      if (!first) continue;
+
+      const firstTime =
+        first.punchTimeStamp.split(' ')[1]?.slice(0, 5) ||
+        this.formatActivityTime(first.createdAt);
+      items.push({
+        id: `punch-in-${key}-${first.id}`,
+        kind: 'attendance',
+        headline: `${name} checked in`,
+        body: `Checked in at ${firstTime}`,
+        time: this.formatActivityTime(first.createdAt),
+        sortAt: first.createdAt.getTime(),
+        href: '/attendance-logs',
+        avatarInitial: name.charAt(0).toUpperCase() || 'A',
+      });
+
+      if (sorted.length > 1 && last && last.id !== first.id) {
+        const lastTime =
+          last.punchTimeStamp.split(' ')[1]?.slice(0, 5) ||
+          this.formatActivityTime(last.createdAt);
+        items.push({
+          id: `punch-out-${key}-${last.id}`,
+          kind: 'attendance',
+          headline: `${name} checked out`,
+          body: `Checked out at ${lastTime}`,
+          time: this.formatActivityTime(last.createdAt),
+          sortAt: last.createdAt.getTime(),
+          href: '/attendance-logs',
+          avatarInitial: name.charAt(0).toUpperCase() || 'A',
+        });
+      }
+    }
+
+    for (const punch of input.recentMobilePunches) {
+      const name = this.employeeDisplayName(punch.employee);
+      const type = (punch.checkType || '').toUpperCase();
+      const isOut = type.includes('OUT') || type.includes('CHECKOUT') || type === 'OUT';
+      const clock = punch.checkinTime.toLocaleTimeString('en-US', {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+      });
+      items.push({
+        id: `mobile-punch-${punch.id}`,
+        kind: 'attendance',
+        headline: isOut ? `${name} checked out` : `${name} checked in`,
+        body: `${isOut ? 'Checked out' : 'Checked in'} at ${clock}`,
+        time: this.formatActivityTime(punch.checkinTime),
+        sortAt: punch.checkinTime.getTime(),
+        href: '/attendance-logs',
+        avatarInitial: name.charAt(0).toUpperCase() || 'A',
+      });
+    }
+
+    items.sort((a, b) => b.sortAt - a.sortAt);
+    return items
+      .filter((item) => item.sortAt >= weekAgoMs)
+      .slice(0, 20)
+      .map(({ sortAt: _s, ...rest }) => rest);
   }
 
   private parseMonthDay(value: string | null | undefined): { month: number; day: number } | null {
@@ -998,8 +1428,12 @@ export class DashboardOverviewService {
     return Math.round((b.getTime() - a.getTime()) / 86400000);
   }
 
-  private eventDateThisYear(today: Date, month: number, day: number): Date {
-    return new Date(today.getFullYear(), month - 1, day, 12, 0, 0, 0);
+  private formatRelativeWhen(diff: number): string {
+    if (diff === -1) return 'Yesterday';
+    if (diff === 0) return 'Today';
+    if (diff === 1) return 'Tomorrow';
+    if (diff < 0) return `${Math.abs(diff)} days ago`;
+    return `In ${diff} days`;
   }
 
   private buildUpcomingEvents(
@@ -1020,45 +1454,51 @@ export class DashboardOverviewService {
 
       const dob = this.parseMonthDay(emp.dateOfBirth);
       if (dob) {
-        const eventAt = this.eventDateThisYear(today, dob.month, dob.day);
-        const diff = this.daysFromToday(today, eventAt);
-        if (diff >= -1 && diff <= 14) {
+        // Current + next year so calendar month views can mark days year-round
+        for (const yearOffset of [0, 1]) {
+          const eventAt = new Date(
+            today.getFullYear() + yearOffset,
+            dob.month - 1,
+            dob.day,
+            12,
+            0,
+            0,
+            0,
+          );
+          const diff = this.daysFromToday(today, eventAt);
+          if (diff < -60 || diff > 400) continue;
           events.push({
-            id: `bday-${emp.id}`,
+            id: `bday-${emp.id}-y${yearOffset}`,
             kind: 'birthday',
             label: `${name}'s birthday`,
             date: dateKeyLocal(eventAt),
-            when:
-              diff === -1
-                ? 'Yesterday'
-                : diff === 0
-                  ? 'Today'
-                  : diff === 1
-                    ? 'Tomorrow'
-                    : `In ${diff} days`,
+            when: this.formatRelativeWhen(diff),
           });
         }
       }
 
       const join = this.parseMonthDay(emp.joiningDate);
       if (join) {
-        const eventAt = this.eventDateThisYear(today, join.month, join.day);
-        const diff = this.daysFromToday(today, eventAt);
-        if (diff >= -1 && diff <= 14) {
-          const years = today.getFullYear() - (Number(String(emp.joiningDate).slice(0, 4)) || today.getFullYear());
+        for (const yearOffset of [0, 1]) {
+          const eventAt = new Date(
+            today.getFullYear() + yearOffset,
+            join.month - 1,
+            join.day,
+            12,
+            0,
+            0,
+            0,
+          );
+          const diff = this.daysFromToday(today, eventAt);
+          if (diff < -60 || diff > 400) continue;
+          const joinYear = Number(String(emp.joiningDate).slice(0, 4)) || today.getFullYear();
+          const years = today.getFullYear() + yearOffset - joinYear;
           events.push({
-            id: `anniv-${emp.id}`,
+            id: `anniv-${emp.id}-y${yearOffset}`,
             kind: 'anniversary',
             label: years > 0 ? `${name} — ${years} yr work anniversary` : `${name} joined the company`,
             date: dateKeyLocal(eventAt),
-            when:
-              diff === -1
-                ? 'Yesterday'
-                : diff === 0
-                  ? 'Today'
-                  : diff === 1
-                    ? 'Tomorrow'
-                    : `In ${diff} days`,
+            when: this.formatRelativeWhen(diff),
           });
         }
       }
@@ -1113,19 +1553,25 @@ export class DashboardOverviewService {
       if (!h.startDate) continue;
       const eventAt = new Date(h.startDate);
       const diff = this.daysFromToday(today, eventAt);
-      if (diff === 0 || diff === 1) {
-        const holidayName = h.manageHoliday?.holidayName?.trim() || 'Public holiday';
-        items.push({
-          id: `holiday-${h.id}`,
-          kind: 'holiday',
-          title: diff === 0 ? `${holidayName} today` : `${holidayName} tomorrow`,
-          subtitle: companyName,
-          date: dateKeyLocal(eventAt),
-        });
-      }
+      // Broad window so dashboard calendar can show public holidays for the month
+      if (diff < -60 || diff > 400) continue;
+      const holidayName = h.manageHoliday?.holidayName?.trim() || 'Public holiday';
+      const title =
+        diff === 0
+          ? `${holidayName} today`
+          : diff === 1
+            ? `${holidayName} tomorrow`
+            : holidayName;
+      items.push({
+        id: `holiday-${h.id}`,
+        kind: 'holiday',
+        title,
+        subtitle: companyName,
+        date: dateKeyLocal(eventAt),
+      });
     }
 
-    items.sort((a, b) => b.date.localeCompare(a.date));
+    items.sort((a, b) => a.date.localeCompare(b.date));
     return items;
   }
 

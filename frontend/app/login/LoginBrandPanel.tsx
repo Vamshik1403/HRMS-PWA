@@ -33,9 +33,9 @@ export function LoginBrandPanel() {
           <Sparkles className="size-3.5" />
           Enterprise HRMS Platform
         </div>
-        <h1 className="font-display text-5xl xl:text-6xl leading-[1.05] font-medium">
+        <h1 className="font-display text-5xl xl:text-6xl leading-[1.05] font-medium text-white">
           Run payroll, attendance, leave & people ops{" "}
-          <span className="text-primary">— end to end.</span>
+          <span className="text-sky-300">— end to end.</span>
         </h1>
         <p className="text-base text-white/65 leading-relaxed">
           A modular, multi-tenant platform for HR teams that want enterprise control without enterprise bloat.

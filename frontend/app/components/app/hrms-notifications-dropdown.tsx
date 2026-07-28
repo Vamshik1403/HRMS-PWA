@@ -155,11 +155,14 @@ export function HrmsNotificationsDropdown() {
       refreshSeen();
       void load();
     };
+    const onOpen = () => setOpen(true);
     window.addEventListener("hrms-admin-notifications-changed", onChange);
     window.addEventListener("sidebar-context-changed", onChange);
+    window.addEventListener("hrms-open-admin-notifications", onOpen);
     return () => {
       window.removeEventListener("hrms-admin-notifications-changed", onChange);
       window.removeEventListener("sidebar-context-changed", onChange);
+      window.removeEventListener("hrms-open-admin-notifications", onOpen);
     };
   }, [load, refreshSeen]);
 

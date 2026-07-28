@@ -80,6 +80,16 @@ export type EnterprisePendingCounts = {
   salaryAdvance: number;
 };
 
+export type EnterpriseTaskItem = {
+  id: number;
+  taskCode: string;
+  taskName: string;
+  status: string;
+  priority: string;
+  dueDateTime: string | null;
+  createdAt: string;
+};
+
 export type CompanyAdminEnterpriseDashboardProps = {
   firstName?: string;
   todayDate: string;
@@ -97,8 +107,35 @@ export type CompanyAdminEnterpriseDashboardProps = {
   departmentHeadcounts: { name: string; count: number }[];
   upcomingEvents: EnterpriseUpcomingEvent[];
   newsFeed: EnterpriseNewsItem[];
+  latestTasks: EnterpriseTaskItem[];
   activityItems: ActivityItem[];
   pendingCounts: EnterprisePendingCounts | null;
+};
+
+type CalendarEventKind = "birthday" | "anniversary" | "holiday" | "task" | "onboarding";
+
+type CalendarEvent = {
+  id: string;
+  kind: CalendarEventKind;
+  title: string;
+  detail: string;
+  date: string;
+};
+
+const KIND_DOT: Record<CalendarEventKind, string> = {
+  birthday: "bg-pink-500",
+  anniversary: "bg-violet-500",
+  holiday: "bg-amber-500",
+  task: "bg-sky-500",
+  onboarding: "bg-emerald-500",
+};
+
+const KIND_LABEL: Record<CalendarEventKind, string> = {
+  birthday: "Birthday",
+  anniversary: "Anniversary",
+  holiday: "Holiday",
+  task: "Task",
+  onboarding: "Onboarding",
 };
 
 function formatWelcomeName(name?: string) {
@@ -140,12 +177,10 @@ function buildMonthCells(year: number, month: number) {
 
 function DashboardCalendarCard({
   todayDate,
-  eventDates,
-  schedules,
+  events,
 }: {
   todayDate: string;
-  eventDates: Set<string>;
-  schedules: { id: string; time: string; title: string; detail: string }[];
+  events: CalendarEvent[];
 }) {
   const initial = useMemo(() => {
     const d = new Date(`${todayDate}T12:00:00`);
@@ -158,6 +193,7 @@ function DashboardCalendarCard({
 
   const [viewYear, setViewYear] = useState(initial.year);
   const [viewMonth, setViewMonth] = useState(initial.month);
+  const [hoveredKey, setHoveredKey] = useState<string | null>(null);
 
   const monthLabel = useMemo(
     () =>
@@ -170,53 +206,107 @@ function DashboardCalendarCard({
 
   const cells = useMemo(() => buildMonthCells(viewYear, viewMonth), [viewYear, viewMonth]);
 
+  const eventsByDate = useMemo(() => {
+    const map = new Map<string, CalendarEvent[]>();
+    for (const e of events) {
+      const key = e.date.slice(0, 10);
+      const list = map.get(key);
+      if (list) list.push(e);
+      else map.set(key, [e]);
+    }
+    return map;
+  }, [events]);
+
+  const monthPrefix = `${viewYear}-${pad2(viewMonth)}`;
+  const monthSchedules = useMemo(() => {
+    return events
+      .filter((e) => {
+        const d = e.date.slice(0, 10);
+        if (!d.startsWith(monthPrefix)) return false;
+        // Upcoming only: today and future (calendar still shows past dots)
+        return d >= todayDate;
+      })
+      .sort((a, b) => a.date.localeCompare(b.date));
+  }, [events, monthPrefix, todayDate]);
+
   const shiftMonth = (delta: number) => {
     const d = new Date(viewYear, viewMonth - 1 + delta, 1);
     setViewYear(d.getFullYear());
     setViewMonth(d.getMonth() + 1);
   };
 
+  const openNotifications = () => {
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new Event("hrms-open-admin-notifications"));
+    }
+  };
+
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden">
-      <div className="mb-2 flex items-center justify-between gap-2">
-        <h3 className="text-[14px] font-semibold tracking-tight text-foreground">{monthLabel}</h3>
-        <div className="flex items-center gap-1.5">
+      <div className="mb-1 flex shrink-0 items-center justify-between gap-2">
+        <h3 className="text-[13px] font-semibold tracking-tight text-foreground">{monthLabel}</h3>
+        <div className="flex items-center gap-1">
           <button
             type="button"
             onClick={() => shiftMonth(-1)}
-            className="flex size-7 items-center justify-center rounded-full bg-primary/10 text-primary transition-colors hover:bg-primary/15"
+            className="flex size-6 items-center justify-center rounded-full bg-primary/10 text-primary transition-colors hover:bg-primary/15"
             aria-label="Previous month"
           >
-            <ChevronLeft className="size-4" />
+            <ChevronLeft className="size-3.5" />
           </button>
           <button
             type="button"
             onClick={() => shiftMonth(1)}
-            className="flex size-7 items-center justify-center rounded-full bg-primary/10 text-primary transition-colors hover:bg-primary/15"
+            className="flex size-6 items-center justify-center rounded-full bg-primary/10 text-primary transition-colors hover:bg-primary/15"
             aria-label="Next month"
           >
-            <ChevronRight className="size-4" />
+            <ChevronRight className="size-3.5" />
           </button>
         </div>
       </div>
 
-      <div className="mb-0.5 grid grid-cols-7 text-center text-[10px] font-medium text-slate-500">
+      <div className="mb-0 shrink-0 grid grid-cols-7 text-center text-[9px] font-medium text-slate-500 dark:text-slate-400">
         {["S", "M", "T", "W", "T", "F", "S"].map((d, i) => (
           <span key={`${d}-${i}`}>{d}</span>
         ))}
       </div>
 
-      <div className="grid grid-cols-7 text-center">
-        {cells.map((cell) => {
+      <div className="relative shrink-0 grid grid-cols-7 text-center">
+        {cells.map((cell, index) => {
+          const col = index % 7;
+          const row = Math.floor(index / 7);
           const dow = new Date(`${cell.dateKey}T12:00:00`).getDay();
           const isWeekend = dow === 0 || dow === 6;
           const isToday = cell.dateKey === todayDate;
-          const hasEvent = eventDates.has(cell.dateKey);
+          const dayEvents = eventsByDate.get(cell.dateKey) ?? [];
+          const hasEvent = dayEvents.length > 0;
+          const tooltip = dayEvents
+            .map((e) => `${KIND_LABEL[e.kind]}: ${e.title}`)
+            .join("\n");
+          const dots = Array.from(new Set(dayEvents.map((e) => e.kind))).slice(0, 3);
+          // Keep tooltip inside card: flip for edge columns / top rows
+          const tipX =
+            col >= 5
+              ? "right-0 left-auto translate-x-0"
+              : col <= 1
+                ? "left-0 translate-x-0"
+                : "left-1/2 -translate-x-1/2";
+          const tipY =
+            row <= 1
+              ? "top-full bottom-auto mt-1"
+              : "bottom-full top-auto mb-1";
+
           return (
-            <div key={cell.dateKey} className="flex items-center justify-center py-px">
+            <div
+              key={cell.dateKey}
+              className="relative flex flex-col items-center justify-center py-0"
+              onMouseEnter={() => hasEvent && setHoveredKey(cell.dateKey)}
+              onMouseLeave={() => setHoveredKey(null)}
+            >
               <span
+                title={tooltip || undefined}
                 className={cn(
-                  "flex size-6 items-center justify-center rounded-full text-[11px] font-medium tabular-nums",
+                  "flex size-[18px] items-center justify-center rounded-full text-[10px] font-medium tabular-nums leading-none",
                   cell.outside && "text-muted-foreground/40",
                   !cell.outside && isWeekend && !isToday && "text-rose-500 dark:text-rose-400",
                   !cell.outside && !isWeekend && !isToday && !hasEvent && "text-foreground",
@@ -226,30 +316,82 @@ function DashboardCalendarCard({
               >
                 {cell.day}
               </span>
+              {!cell.outside && hasEvent ? (
+                <div className="flex h-1.5 items-center justify-center gap-0.5">
+                  {dots.map((kind) => (
+                    <span
+                      key={kind}
+                      className={cn("size-1 rounded-full", KIND_DOT[kind])}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <div className="h-1.5" />
+              )}
+              {hoveredKey === cell.dateKey && hasEvent && (
+                <div
+                  className={cn(
+                    "pointer-events-none absolute z-30 w-[140px] max-w-[140px] rounded-md border border-border bg-popover px-2 py-1.5 text-left text-[10px] shadow-md",
+                    tipX,
+                    tipY,
+                  )}
+                >
+                  {dayEvents.slice(0, 4).map((e) => (
+                    <p key={e.id} className="truncate text-popover-foreground">
+                      <span
+                        className={cn(
+                          "mr-1 inline-block size-1.5 rounded-full align-middle",
+                          KIND_DOT[e.kind],
+                        )}
+                      />
+                      {e.title}
+                    </p>
+                  ))}
+                  {dayEvents.length > 4 && (
+                    <p className="text-muted-foreground">+{dayEvents.length - 4} more</p>
+                  )}
+                </div>
+              )}
             </div>
           );
         })}
       </div>
 
-      <div className="mt-2 flex items-center justify-between gap-2 border-t border-border pt-2">
-        <h4 className="text-[13px] font-semibold text-foreground">Upcoming Schedules</h4>
-        <Link href="/manage-employees" className="text-[11px] font-semibold text-primary">
+      <div className="mt-1.5 flex shrink-0 items-center justify-between gap-2 border-t border-border pt-1.5">
+        <h4 className="text-[12px] font-semibold text-foreground">Upcoming Schedules</h4>
+        <button
+          type="button"
+          onClick={openNotifications}
+          className="text-[11px] font-semibold text-primary hover:underline"
+        >
           See all
-        </Link>
+        </button>
       </div>
 
-      <div className="mt-1.5 min-h-0 flex-1 space-y-1.5 overflow-y-auto">
-        {schedules.length === 0 ? (
-          <p className="py-3 text-center text-[12px] text-muted-foreground">No upcoming schedules</p>
+      <div className="mt-1 min-h-0 flex-1 space-y-1 overflow-y-auto pr-0.5">
+        {monthSchedules.length === 0 ? (
+          <p className="py-2 text-center text-[11px] text-muted-foreground">No upcoming schedules</p>
         ) : (
-          schedules.slice(0, 2).map((item) => (
+          monthSchedules.slice(0, 10).map((item) => (
             <div
               key={item.id}
-              className="rounded-[10px] border border-border bg-background px-2.5 py-2"
+              className="rounded-lg border border-border bg-background px-2 py-1.5"
             >
-              <p className="text-[10px] text-muted-foreground">{item.time}</p>
-              <p className="truncate text-[12px] font-bold text-foreground">{item.title}</p>
-              <p className="truncate text-[10px] text-muted-foreground">{item.detail}</p>
+              <div className="mb-0.5 flex items-center gap-1.5">
+                <span className={cn("size-1.5 shrink-0 rounded-full", KIND_DOT[item.kind])} />
+                <p className="text-[9px] text-muted-foreground">
+                  {new Date(`${item.date.slice(0, 10)}T12:00:00`).toLocaleDateString("en-US", {
+                    month: "short",
+                    day: "numeric",
+                  })}
+                  {" · "}
+                  {KIND_LABEL[item.kind]}
+                </p>
+              </div>
+              <p className="truncate text-[11px] font-bold text-foreground">{item.title}</p>
+              {item.detail ? (
+                <p className="truncate text-[9px] text-muted-foreground">{item.detail}</p>
+              ) : null}
             </div>
           ))
         )}
@@ -534,14 +676,14 @@ function SectionTitle({
   icon?: ReactNode;
 }) {
   return (
-    <div className="mb-3 flex items-center justify-between gap-3">
-      <div className="flex min-w-0 items-center gap-2.5">
+    <div className="mb-3 flex items-center justify-between gap-1.5">
+      <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden">
         {icon}
-        <h2 className="truncate text-[16px] font-semibold tracking-tight text-foreground">
+        <h2 className="whitespace-nowrap text-[14px] font-semibold leading-none tracking-tight text-foreground sm:text-[15px]">
           {title}
         </h2>
       </div>
-      {action}
+      {action ? <div className="shrink-0">{action}</div> : null}
     </div>
   );
 }
@@ -619,6 +761,7 @@ export function CompanyAdminEnterpriseDashboard({
   departmentHeadcounts,
   upcomingEvents,
   newsFeed,
+  latestTasks,
   activityItems,
   pendingCounts,
 }: CompanyAdminEnterpriseDashboardProps) {
@@ -646,7 +789,7 @@ export function CompanyAdminEnterpriseDashboard({
 
   const dateBadge = (
     <span
-      className="shrink-0 rounded-lg border bg-muted/60 px-2.5 py-1 text-[11px] font-semibold"
+      className="shrink-0 whitespace-nowrap rounded-md border bg-muted/60 px-1.5 py-0.5 text-[9px] font-medium tabular-nums"
       style={{ borderColor: BORDER, color: MUTED }}
     >
       {shortDate}
@@ -707,60 +850,66 @@ export function CompanyAdminEnterpriseDashboard({
     [departmentHeadcounts],
   );
 
-  const events = useMemo(() => {
-    type EventRow = {
-      id: string;
-      title: string;
-      subtitle: string;
-      date?: string;
-    };
-    const items: EventRow[] = [];
+  const calendarEvents = useMemo(() => {
+    const items: CalendarEvent[] = [];
+    const seen = new Set<string>();
 
     for (const e of upcomingEvents) {
+      const date = e.date?.slice(0, 10);
+      if (!date || seen.has(e.id)) continue;
+      seen.add(e.id);
       items.push({
         id: e.id,
-        title: e.kind === "birthday" ? "Employee Birthday" : "Work Anniversary",
-        subtitle: `${e.label} · ${e.when}`,
-        date: e.date,
+        kind: e.kind,
+        title: e.label,
+        detail: e.when,
+        date,
       });
     }
 
-    for (const n of newsFeed.filter((x) => x.kind === "holiday").slice(0, 3)) {
-      if (items.some((i) => i.id === n.id)) continue;
+    for (const n of newsFeed) {
+      const date = n.date?.slice(0, 10);
+      if (!date || seen.has(n.id)) continue;
+      seen.add(n.id);
+      if (n.kind === "holiday") {
+        items.push({
+          id: n.id,
+          kind: "holiday",
+          title: n.title.replace(/\s+(today|tomorrow)$/i, "").trim() || "Public holiday",
+          detail: "",
+          date,
+        });
+      } else if (n.kind === "onboarding") {
+        items.push({
+          id: n.id,
+          kind: "onboarding",
+          title: n.title,
+          detail: n.subtitle || "New joiner",
+          date,
+        });
+      }
+    }
+
+    for (const t of latestTasks) {
+      if (!t.dueDateTime) continue;
+      const due = new Date(t.dueDateTime);
+      if (Number.isNaN(due.getTime())) continue;
+      const date = `${due.getFullYear()}-${pad2(due.getMonth() + 1)}-${pad2(due.getDate())}`;
+      const id = `task-${t.id}`;
+      if (seen.has(id)) continue;
+      seen.add(id);
       items.push({
-        id: n.id,
-        title: n.title || "Company Holiday",
-        subtitle: n.subtitle || n.date || "Upcoming",
-        date: n.date?.slice(0, 10),
+        id,
+        kind: "task",
+        title: t.taskName || t.taskCode || "Task",
+        detail: `${t.priority || "Normal"} · ${t.status || "Open"}`,
+        date,
       });
     }
 
-    return items.slice(0, 5);
-  }, [upcomingEvents, newsFeed]);
-
-  const eventDates = useMemo(() => {
-    const set = new Set<string>();
-    for (const e of events) {
-      if (e.date) set.add(e.date.slice(0, 10));
-    }
-    return set;
-  }, [events]);
-
-  const schedules = useMemo(
-    () =>
-      events.map((e) => ({
-        id: e.id,
-        time: e.date
-          ? new Date(`${e.date.slice(0, 10)}T12:00:00`).toLocaleDateString("en-US", {
-              month: "short",
-              day: "numeric",
-            })
-          : "Upcoming",
-        title: e.title,
-        detail: e.subtitle,
-      })),
-    [events],
-  );
+    items.sort((a, b) => a.date.localeCompare(b.date));
+    return items;
+  }, [upcomingEvents, newsFeed, latestTasks]);
 
   const legend = [
     { name: "Present", value: overviewPresent, percent: presentPct, color: GREEN },
@@ -835,7 +984,7 @@ export function CompanyAdminEnterpriseDashboard({
           <h1 className="text-[28px] font-semibold tracking-tight" style={{ color: TEXT }}>
             Dashboard
           </h1>
-          <p className="mt-1 text-[15px] font-normal text-slate-500 dark:text-slate-400">
+          <p className="mt-1 text-[15px] font-semibold text-slate-800 dark:text-slate-200">
             Welcome back, {formatWelcomeName(firstName)}
           </p>
         </div>
@@ -1093,8 +1242,7 @@ export function CompanyAdminEnterpriseDashboard({
         <article className={cn(cardClass, ROW_CARD)}>
           <DashboardCalendarCard
             todayDate={todayDate}
-            eventDates={eventDates}
-            schedules={schedules}
+            events={calendarEvents}
           />
         </article>
       </section>
@@ -1108,8 +1256,8 @@ export function CompanyAdminEnterpriseDashboard({
           <SectionTitle
             title="Leave Summary"
             icon={
-              <span className="flex size-8 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
-                <Calendar className="size-4" />
+              <span className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
+                <Calendar className="size-3.5" />
               </span>
             }
             action={dateBadge}
@@ -1166,8 +1314,8 @@ export function CompanyAdminEnterpriseDashboard({
           <SectionTitle
             title="Recruitment Summary"
             icon={
-              <span className="flex size-8 items-center justify-center rounded-lg bg-fuchsia-50 text-fuchsia-600">
-                <Briefcase className="size-4" />
+              <span className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-fuchsia-50 text-fuchsia-600">
+                <Briefcase className="size-3.5" />
               </span>
             }
             action={dateBadge}
@@ -1265,7 +1413,7 @@ export function CompanyAdminEnterpriseDashboard({
           </div>
         </article>
 
-        <article className={cn(cardClass, "flex flex-col xl:col-span-4")}>
+        <article className={cn(cardClass, "flex min-h-[300px] max-h-[320px] flex-col xl:col-span-4")}>
           <SectionTitle title="Recent Activities" />
           <div className="min-h-0 flex-1 space-y-1 overflow-y-auto">
             {activityItems.length === 0 ? (

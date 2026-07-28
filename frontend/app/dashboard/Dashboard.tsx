@@ -323,6 +323,15 @@ export default function DashboardPage({ embeddedInEmpPortal = false }: { embedde
       subtitle: string;
       date: string;
     }[];
+    recentActivities?: {
+      id: string;
+      kind: string;
+      headline: string;
+      body: string;
+      time: string;
+      href: string;
+      avatarInitial: string;
+    }[];
   } | null>(null);
 
   useEffect(() => {
@@ -922,6 +931,34 @@ export default function DashboardPage({ embeddedInEmpPortal = false }: { embedde
   }, [overviewStatsReady, overviewPresent, hrWidgets, overviewTotal]);
 
   const activityItems: ActivityItem[] = useMemo(() => {
+    const fromApi = (hrWidgets?.recentActivities ?? []).map((a) => ({
+      id: a.id,
+      headline: a.headline,
+      body: a.body,
+      time: a.time,
+      avatarInitial: a.avatarInitial || "A",
+      avatarBg:
+        a.kind === "leave"
+          ? "bg-amber-500"
+          : a.kind === "attendance"
+            ? "bg-emerald-500"
+            : a.kind === "payroll"
+              ? "bg-blue-500"
+              : a.kind === "memo"
+                ? "bg-violet-500"
+                : a.kind === "task"
+                  ? "bg-sky-500"
+                  : a.kind === "employee"
+                    ? "bg-indigo-500"
+                    : "bg-primary",
+      href: a.href,
+    }));
+
+    if (fromApi.length > 0) {
+      return fromApi.slice(0, 12);
+    }
+
+    // Fallback if widgets have no recentActivities yet
     const fromComments: ActivityItem[] = commentFeed.map((c) => ({
       id: String(c.id),
       headline: c.headline,
@@ -1095,6 +1132,7 @@ export default function DashboardPage({ embeddedInEmpPortal = false }: { embedde
           }))}
           upcomingEvents={hrWidgets?.upcomingEvents ?? []}
           newsFeed={hrWidgets?.newsFeed ?? []}
+          latestTasks={hrWidgets?.latestTasks ?? []}
           activityItems={activityItems}
           pendingCounts={hrWidgets?.pendingCounts ?? null}
         />

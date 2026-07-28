@@ -28,7 +28,7 @@ export function NavLink({ item, pathname, collapsed, onNavigate }: NavLinkProps)
     ? "text-muted-foreground/40 cursor-not-allowed"
     : active
       ? "bg-accent text-accent-foreground shadow-sm"
-      : "text-slate-600 hover:text-slate-800 hover:bg-accent/60 font-medium";
+      : "text-slate-600 dark:text-slate-200 hover:text-slate-800 dark:hover:text-white hover:bg-accent/60 font-medium";
 
   const Icon = item.icon;
 
@@ -47,7 +47,7 @@ export function NavLink({ item, pathname, collapsed, onNavigate }: NavLinkProps)
       <Icon
         className={cn(
           "size-4 shrink-0",
-          active && !disabled ? "text-primary" : "text-slate-500",
+          active && !disabled ? "text-primary" : "text-slate-500 dark:text-slate-300",
         )}
         strokeWidth={1.75}
       />
