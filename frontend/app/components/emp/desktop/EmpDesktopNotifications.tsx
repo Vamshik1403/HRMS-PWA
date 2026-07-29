@@ -20,6 +20,7 @@ import { useEmpManagerScope } from "../../../hooks/useEmpManagerScope";
 import { formatManagerNotificationCopy } from "../../../utils/empManagerDisplay";
 import { filterNotificationsForViewer } from "../../../utils/empNotificationFilter";
 import { EmpNotificationsHistoryModal } from "../EmpNotificationsHistoryModal";
+import { cn } from "@/app/utils/cn";
 
 const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL || "/backend";
 
@@ -223,7 +224,7 @@ export function EmpDesktopNotifications() {
       cell: (n) => {
         const href = resolveNotificationHref(n);
         return href ? (
-          <Button variant="ghost" size="sm" asChild>
+          <Button variant="ghost" size="sm" className="h-8 px-2 text-xs" asChild>
             <Link href={href}>Open</Link>
           </Button>
         ) : (
@@ -235,7 +236,7 @@ export function EmpDesktopNotifications() {
 
   return (
     <>
-      <Card className={listCardClass}>
+      <Card className={cn(listCardClass, "min-w-0 overflow-hidden")}>
         <CardHeader className="flex flex-row items-start justify-between gap-4">
           <div>
             <CardTitle className="text-xl font-semibold tracking-tight flex items-center gap-2">
@@ -250,7 +251,7 @@ export function EmpDesktopNotifications() {
             </Button>
           ) : null}
         </CardHeader>
-        <CardContent>
+        <CardContent className="min-w-0 overflow-hidden">
           <DataTable
             columns={columns}
             rows={panelList}
@@ -259,6 +260,7 @@ export function EmpDesktopNotifications() {
             emptyIcon={Bell}
             emptyTitle="No notifications"
             emptyDescription="You're all caught up for the last 7 days."
+            fitContainer
           />
           {error ? <p className="text-sm text-destructive mt-3">{error}</p> : null}
         </CardContent>

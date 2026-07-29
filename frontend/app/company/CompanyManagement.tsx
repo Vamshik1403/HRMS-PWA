@@ -18,7 +18,7 @@ import { fetchCurrencies } from "../utils/geoApi"
 import { PdfUploadField } from "../components/PdfUploadField"
 import { ListAreaSkeleton } from "../components/ui/TableBodySkeleton"
 import { toast } from "sonner"
-import { getSidebarContext } from "../utils/sidebarContext"
+import { getSidebarContext, clearSidebarContext, setSidebarContext } from "../utils/sidebarContext"
 import { isDesktopManagerFlagSet } from "@/lib/desktopManager"
 import {
   canDesktopManagerManage,
@@ -38,6 +38,7 @@ import {
   FINANCIAL_YEAR_EMPTY,
   mapCompanyToFormData,
 } from "../utils/companyFormPayload"
+import { LEGAL_ENTITY_OPTIONS, ownerTitleForLegalEntity } from "@/lib/companyAccess"
 import { FormSection } from "../components/ui/form-section"
 import { FormField } from "../components/ui/form-field"
 import { OptionCardGroup } from "../components/ui/option-card-group"
@@ -55,6 +56,7 @@ interface Company {
   serviceProviderID?: number
   companyName?: string
   companyType?: string
+  legalEntityType?: string
   noticePeriodDaysForResignation?: string
   noticePeriodDaysForTermination?: string
   address?: string
@@ -135,7 +137,7 @@ const getSafeStorageItem = (storage: "session" | "local", key: string): string |
 const emptyCompanyAdminForm = {
   username: "",
   password: "",
-  role: "COMPANY_ADMIN",
+  role: "COMPANY_OWNER",
   firstName: "",
   lastName: "",
   contactNo: "",
@@ -200,6 +202,7 @@ const shouldAutoOpenCompanyProfile = isCompanyProfileOnly
   const [formData, setFormData] = useState<CompanyFormData>({
     companyName: "",
     companyType: "",
+    legalEntityType: "",
     noticePeriodDaysForResignation: "",
     noticePeriodDaysForTermination: "",
     address: "",
@@ -337,18 +340,55 @@ let filtered =
     }
   }
 
-  // Fetch service providers for autocomplete
-  const fetchServiceProviders = async (query: string) => {
+  // Resolve the single service provider (platform has only one).
+  // Never trust stale sidebar/localStorage SP after deletes.
+  const resolveSoleServiceProvider = async (): Promise<ServiceProvider | null> => {
     try {
-      const res = await fetch("/backend/service-provider")
+      const res = await fetch("/backend/service-provider", { cache: "no-store" })
+      if (!res.ok) return null
       const data = await res.json()
-      const filtered = data.filter((sp: ServiceProvider) =>
-        sp.companyName.toLowerCase().includes(query.toLowerCase())
-      )
-      setServiceProviders(filtered)
+      const list: ServiceProvider[] = Array.isArray(data) ? data : data?.data ?? []
+      const sole = list[0] || null
+
+      const ctx = getSidebarContext()
+      if (!sole) {
+        if (ctx?.serviceProviderID) clearSidebarContext()
+        return null
+      }
+
+      // Keep sidebar context in sync with the live SP only.
+      if (
+        !ctx ||
+        Number(ctx.serviceProviderID) !== Number(sole.id) ||
+        ctx.serviceProviderName !== sole.companyName
+      ) {
+        setSidebarContext(
+          sole.id,
+          sole.companyName || "",
+          ctx?.companyID || 0,
+          ctx?.companyName || "",
+        )
+      }
+      return sole
     } catch (error) {
-      console.error("Error fetching service providers:", error)
+      console.error("Error resolving service provider:", error)
+      return null
     }
+  }
+
+  const applySoleServiceProviderToForm = async () => {
+    const sole = await resolveSoleServiceProvider()
+    setFormData((p) => ({
+      ...p,
+      serviceProviderID: sole?.id,
+      autocompleteName: sole?.companyName || "",
+    }))
+    return sole
+  }
+
+  // Fetch service providers for autocomplete (legacy — kept unused for SP list cache)
+  const fetchServiceProviders = async (_query: string) => {
+    /* no-op: tenant SP field is read-only and auto-bound */
   }
 
 
@@ -388,15 +428,12 @@ let filtered =
         SignatureUrl = await uploadImage(signatureFile);
       }
 
-      // Validate serviceProviderID exists in DB before submitting to avoid FK constraint errors
-      let resolvedServiceProviderID: number | undefined = formData.serviceProviderID || undefined;
-      if (resolvedServiceProviderID) {
-        try {
-          const spCheck = await fetch(`/backend/service-provider/${resolvedServiceProviderID}`);
-          if (!spCheck.ok) resolvedServiceProviderID = undefined;
-        } catch {
-          resolvedServiceProviderID = undefined;
-        }
+      // Always bind the sole live service provider (never stale localStorage / typed text).
+      const soleSp = await resolveSoleServiceProvider()
+      const resolvedServiceProviderID = soleSp?.id
+      if (!resolvedServiceProviderID) {
+        toast.error("Create a Service Provider first, then add a tenant.")
+        return
       }
 
       const finalData = buildCompanyPayload(formData as Record<string, unknown>, {
@@ -445,7 +482,7 @@ setEditingCompany(null);
       ...emptyCompanyAdminForm,
       username: user.username || "",
       password: "",
-      role: "COMPANY_ADMIN",
+      role: "COMPANY_OWNER",
       firstName: user.firstName || "",
       lastName: user.lastName || "",
       contactNo: user.contactNo || "",
@@ -458,25 +495,26 @@ setEditingCompany(null);
   }
 
   const handleDeleteCompanyAdmin = async (id: number) => {
-    if (!confirm("Delete this Company Admin user?")) return
+    if (!selectedCompanyForAdmin?.id) return
+    if (!confirm("Deactivate this Company Owner?")) return
 
     try {
-      const res = await fetch(`/backend/users/${id}`, {
+      const res = await fetch(`/backend/company/${selectedCompanyForAdmin.id}/owner/${id}`, {
         method: "DELETE",
       })
 
       if (!res.ok) {
         const errText = await res.text()
-        throw new Error(errText || "Failed to delete Company Admin")
+        throw new Error(errText || "Failed to deactivate Company Owner")
       }
 
-      toast.success("Company Admin deleted successfully")
+      toast.success("Company Owner deactivated")
 
       if (editingCompanyAdmin?.id === id) {
         setEditingCompanyAdmin(null)
         setCompanyAdminForm({
           ...emptyCompanyAdminForm,
-          role: "COMPANY_ADMIN",
+          role: "COMPANY_OWNER",
           serviceProviderID: selectedCompanyForAdmin?.serviceProviderID || "",
           companyID: selectedCompanyForAdmin?.id || "",
           isActive: true,
@@ -488,17 +526,18 @@ setEditingCompany(null);
         setCompanyAdminFormOpen(false)
       }
     } catch (error: any) {
-      toast.error(error?.message || "Failed to delete Company Admin")
+      toast.error(error?.message || "Failed to deactivate Company Owner")
     }
   }
 
-  const handleEdit = (company: Company & { serviceProvider?: ServiceProvider }) => {
+  const handleEdit = async (company: Company & { serviceProvider?: ServiceProvider }) => {
     setServiceProviders([])
     setSpDropdownOpen(false)
     setFormData(mapCompanyToFormData(company))
     setEditingCompany(company)
     setIsAddingNew(true)
     setIsViewing(false)
+    await applySoleServiceProviderToForm()
   }
 
   const handleView = (company: Company) => {
@@ -510,7 +549,18 @@ setEditingCompany(null);
   const handleDelete = async (id: number) => {
     if (confirm("Are you sure you want to delete this company?")) {
       try {
-        await fetch(`/backend/company/${id}`, { method: "DELETE" })
+        const res = await fetch(`/backend/company/${id}`, { method: "DELETE" })
+        if (!res.ok) {
+          const errText = await res.text()
+          let message = "Failed to delete company"
+          try {
+            const parsed = JSON.parse(errText)
+            message = parsed?.message || message
+          } catch {
+            if (errText) message = errText
+          }
+          throw new Error(message)
+        }
         await fetchCompanies()
         toast.success("Company deleted successfully")
       } catch (error) {
@@ -524,6 +574,7 @@ setEditingCompany(null);
     setFormData({
       companyName: "",
       companyType: "",
+      legalEntityType: "",
       noticePeriodDaysForResignation: "",
       noticePeriodDaysForTermination: "",
       address: "",
@@ -737,6 +788,17 @@ setEditingCompany(null);
               ? () => handleDelete(c.id)
               : undefined
           }
+          extra={
+            user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER"
+              ? [
+                  {
+                    icon: UserPlus,
+                    title: "Company Owners",
+                    onClick: () => openCompanyAdminDrawer(c),
+                  },
+                ]
+              : undefined
+          }
         />
       ),
     },
@@ -757,19 +819,28 @@ setEditingCompany(null);
     try {
       setCompanyAdminLoading(true)
 
-      const res = await fetch("/backend/users")
+      const res = await fetch(`/backend/company/owners?companyID=${company.id}`)
       const data = await res.json()
-      const users = Array.isArray(data) ? data : data?.data ?? []
+      const owners = Array.isArray(data) ? data : data?.data ?? []
 
-      const filtered = users.filter(
-        (u: CompanyAdminUser) =>
-          Number(u.companyID) === Number(company.id) &&
-          u.role === "COMPANY_ADMIN"
+      setCompanyAdminUsers(
+        owners.map((o: any) => ({
+          id: o.id,
+          username: o.employeeCredentials?.username || o.employeeID || "",
+          role: "COMPANY_OWNER",
+          firstName: o.employeeFirstName,
+          lastName: o.employeeLastName,
+          contactNo: o.personalPhoneNo,
+          email: o.businessEmail,
+          isActive: o.employeeCredentials?.isActive !== false,
+          serviceProviderID: o.serviceProviderID,
+          companyID: o.companyID,
+          company: o.company,
+          ownerTitle: o.ownerTitle,
+        })),
       )
-
-      setCompanyAdminUsers(filtered)
     } catch (error) {
-      console.error("Failed to fetch company admin users:", error)
+      console.error("Failed to fetch company owners:", error)
       setCompanyAdminUsers([])
     } finally {
       setCompanyAdminLoading(false)
@@ -781,7 +852,7 @@ setEditingCompany(null);
 
     setCompanyAdminForm({
       ...emptyCompanyAdminForm,
-      role: "COMPANY_ADMIN",
+      role: "COMPANY_OWNER",
       serviceProviderID: company.serviceProviderID || "",
       companyID: company.id,
       isActive: true,
@@ -831,28 +902,30 @@ setEditingCompany(null);
     setCompanyAdminSaving(true)
 
     try {
+      const companyId = selectedCompanyForAdmin.id
+      const isEdit = Boolean(editingCompanyAdmin?.id)
+
       const payload: any = {
+        firstName: companyAdminForm.firstName || companyAdminForm.username.trim(),
+        lastName: companyAdminForm.lastName || undefined,
         username: companyAdminForm.username.trim(),
-        role: "COMPANY_ADMIN",
-        firstName: companyAdminForm.firstName || null,
-        lastName: companyAdminForm.lastName || null,
-        contactNo: companyAdminForm.contactNo || null,
-        email: companyAdminForm.email || null,
-        serviceProviderID: selectedCompanyForAdmin.serviceProviderID || null,
-        companyID: selectedCompanyForAdmin.id,
-        companyIDs: [selectedCompanyForAdmin.id],
-        branchesID: null,
+        personalPhoneNo: companyAdminForm.contactNo || undefined,
+        businessEmail: companyAdminForm.email || undefined,
         isActive: companyAdminForm.isActive,
       }
 
       if (companyAdminForm.password.trim()) {
         payload.password = companyAdminForm.password
+      } else if (!isEdit) {
+        toast.error("Password is required")
+        setCompanyAdminSaving(false)
+        return
       }
 
-      const isEdit = Boolean(editingCompanyAdmin?.id)
-
       const res = await fetch(
-        isEdit ? `/backend/users/${editingCompanyAdmin?.id}` : "/backend/users",
+        isEdit
+          ? `/backend/company/${companyId}/owner/${editingCompanyAdmin?.id}`
+          : `/backend/company/${companyId}/owner`,
         {
           method: isEdit ? "PATCH" : "POST",
           headers: { "Content-Type": "application/json" },
@@ -865,21 +938,21 @@ setEditingCompany(null);
         throw new Error(
           errText ||
           (isEdit
-            ? "Failed to update company admin"
-            : "Failed to create company admin")
+            ? "Failed to update company owner"
+            : "Failed to create company owner")
         )
       }
 
       toast.success(
         isEdit
-          ? "Company admin updated successfully"
-          : "Company admin created successfully"
+          ? "Company owner updated successfully"
+          : "Company owner created — they log in as an employee"
       )
 
       setEditingCompanyAdmin(null)
       setCompanyAdminForm({
         ...emptyCompanyAdminForm,
-        role: "COMPANY_ADMIN",
+        role: "COMPANY_OWNER",
         serviceProviderID: selectedCompanyForAdmin.serviceProviderID || "",
         companyID: selectedCompanyForAdmin.id,
         isActive: true,
@@ -888,7 +961,7 @@ setEditingCompany(null);
       await fetchCompanyAdminUsers(selectedCompanyForAdmin)
     } catch (error: any) {
       console.error(error)
-      toast.error(error?.message || "Failed to save company admin")
+      toast.error(error?.message || "Failed to save company owner")
     } finally {
       setCompanyAdminSaving(false)
     }
@@ -915,18 +988,10 @@ setEditingCompany(null);
 
               {!isAddingNew && !isViewing && !isModuleDrawerOpen && user?.role === "SUPERADMIN" && (
                 <Button
-                  onClick={() => {
+                  onClick={async () => {
                     resetForm()
-                    // Auto-populate serviceProviderID from sidebar context
-                    const ctx = getSidebarContext()
-                    if (ctx?.serviceProviderID) {
-                      setFormData(prev => ({
-                        ...prev,
-                        serviceProviderID: ctx.serviceProviderID,
-                        autocompleteName: ctx.serviceProviderName || "",
-                      }))
-                    }
                     setIsAddingNew(true)
+                    await applySoleServiceProviderToForm()
                   }}
                   className="text-sm px-3 py-2"
                 >
@@ -958,49 +1023,26 @@ setEditingCompany(null);
                 {companyFormTab === "basic" && (
                   <>
 {user?.role === "SUPERADMIN" && (
-                    <FormSection title="Service provider" description="Link this company to a service provider account.">
+                    <FormSection
+                      title="Service provider"
+                      description="Tenants are linked to the platform service provider automatically."
+                    >
                     <div ref={wrapperRef} className="relative">
                       <FormField label="Service Provider" required>
                         <Input
                           value={formData.autocompleteName || ""}
-                          onChange={(e) => {
-                            const val = e.target.value
-                            setFormData((p) => ({ ...p, autocompleteName: val }))
-                            if (val.length > 1) {
-                              fetchServiceProviders(val)
-                              setSpDropdownOpen(true)
-                            } else {
-                              setServiceProviders([])
-                              setSpDropdownOpen(false)
-                            }
-                          }}
-                          onFocus={() => setSpDropdownOpen(false)}
-                          placeholder="Start typing service provider…"
+                          readOnly
+                          disabled
+                          placeholder="No service provider found — create one first"
                           autoComplete="off"
+                          className="bg-muted cursor-not-allowed"
                         />
                       </FormField>
-                      {spDropdownOpen && serviceProviders.length > 0 && (
-                        <div className="absolute z-10 mt-1 w-full overflow-hidden rounded-xl border border-[#E2E8F0] bg-popover shadow-lg">
-                          {serviceProviders.map((sp) => (
-                            <div
-                              key={sp.id}
-                              className="cursor-pointer px-3.5 py-2.5 text-sm transition-colors hover:bg-[#F8FAFC]"
-                              onMouseDown={(e) => e.preventDefault()}
-                              onClick={() => {
-                                setFormData((p) => ({
-                                  ...p,
-                                  serviceProviderID: sp.id,
-                                  autocompleteName: sp.companyName,
-                                }))
-                                setServiceProviders([])
-                                setSpDropdownOpen(false)
-                              }}
-                            >
-                              {sp.companyName}
-                            </div>
-                          ))}
-                        </div>
-                      )}
+                      {!formData.serviceProviderID ? (
+                        <p className="text-xs text-amber-700 mt-1.5">
+                          Create a Service Provider under System → Service Provider, then reopen this form.
+                        </p>
+                      ) : null}
                     </div>
                   </FormSection>
                 )}
@@ -1017,7 +1059,7 @@ setEditingCompany(null);
                     />
                   </FormField>
 
-                  <FormField label="Company Type" description="Select all types that apply to this organization.">
+                  <FormField label="Establishment Type" description="Select all that apply to this organization.">
                     <OptionCardGroup
                       options={[
                         { value: "office", label: "Office", description: "Corporate HQ", icon: Building2 },
@@ -1027,6 +1069,24 @@ setEditingCompany(null);
                       value={(formData.companyType || "").split(",").map((s) => s.trim()).filter(Boolean)}
                       onChange={(types) => setFormData((p) => ({ ...p, companyType: types.join(", ") }))}
                     />
+                  </FormField>
+
+                  <FormField label="Company Type" description="Legal entity type for this tenant." required>
+                    <Select
+                      value={formData.legalEntityType || ""}
+                      onValueChange={(v) => setFormData((p) => ({ ...p, legalEntityType: v }))}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select company type" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {LEGAL_ENTITY_OPTIONS.map((opt) => (
+                          <SelectItem key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </FormField>
 
                   <FormField label="Company Address">
@@ -1182,7 +1242,16 @@ setEditingCompany(null);
                 hero={
                   <EntityDetailHero
                     title={viewCompany.companyName}
-                    subtitle={<span>{viewCompany.companyType}</span>}
+                    subtitle={
+                      <span>
+                        {[
+                          LEGAL_ENTITY_OPTIONS.find((o) => o.value === viewCompany.legalEntityType)?.label,
+                          viewCompany.companyType,
+                        ]
+                          .filter(Boolean)
+                          .join(" · ") || "—"}
+                      </span>
+                    }
                   />
                 }
               >
@@ -1191,7 +1260,14 @@ setEditingCompany(null);
                   subtitle="Core company details"
                   rows={[
                     { label: "Company name", value: viewCompany.companyName },
-                    { label: "Company type", value: viewCompany.companyType },
+                    {
+                      label: "Company type",
+                      value:
+                        LEGAL_ENTITY_OPTIONS.find((o) => o.value === viewCompany.legalEntityType)?.label ||
+                        viewCompany.legalEntityType ||
+                        "—",
+                    },
+                    { label: "Establishment type", value: viewCompany.companyType },
                     { label: "Address", value: viewCompany.address },
                   ]}
                 />
@@ -1321,10 +1397,10 @@ setEditingCompany(null);
                   <div>
                     <CardTitle className="flex items-center gap-2 text-xl">
                       <UserPlus className="w-5 h-5 text-indigo-600" />
-                      Company Admin Users
+                      Company Owners
                     </CardTitle>
                     <p className="text-sm text-gray-500 mt-1">
-                      Create and view admin users for selected company.
+                      Create and view company owner employee logins for this tenant.
                     </p>
                   </div>
 
@@ -1336,7 +1412,7 @@ setEditingCompany(null);
                           setEditingCompanyAdmin(null)
                           setCompanyAdminForm({
                             ...emptyCompanyAdminForm,
-                            role: "COMPANY_ADMIN",
+                            role: "COMPANY_OWNER",
                             serviceProviderID: selectedCompanyForAdmin?.serviceProviderID || "",
                             companyID: selectedCompanyForAdmin?.id || "",
                             isActive: true,
@@ -1389,14 +1465,22 @@ setEditingCompany(null);
                     <div>
                       <h3 className="text-base font-semibold text-gray-900">
                         {editingCompanyAdmin
-                          ? "Update Company Admin"
-                          : "Create Company Admin"}
+                          ? "Update Company Owner"
+                          : "Create Company Owner"}
                       </h3>
                       <p className="text-sm text-gray-500">
                         {editingCompanyAdmin
-                          ? "Update COMPANY_ADMIN user details. Leave password blank to keep existing password."
-                          : "This user will get COMPANY_ADMIN role for this company only."}
+                          ? "Update owner employee login. Leave password blank to keep existing password."
+                          : "Creates an employee login with full company owner rights (title from company type)."}
                       </p>
+                      {selectedCompanyForAdmin ? (
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Owner title:{" "}
+                          <span className="font-medium text-foreground">
+                            {ownerTitleForLegalEntity(selectedCompanyForAdmin.legalEntityType)}
+                          </span>
+                        </p>
+                      ) : null}
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1521,7 +1605,7 @@ setEditingCompany(null);
                             setEditingCompanyAdmin(null)
                             setCompanyAdminForm({
                               ...emptyCompanyAdminForm,
-                              role: "COMPANY_ADMIN",
+                              role: "COMPANY_OWNER",
                               serviceProviderID: selectedCompanyForAdmin?.serviceProviderID || "",
                               companyID: selectedCompanyForAdmin?.id || "",
                               isActive: true,
@@ -1538,8 +1622,8 @@ setEditingCompany(null);
                             ? "Updating..."
                             : "Creating..."
                           : editingCompanyAdmin
-                            ? "Update Company Admin"
-                            : "Create Company Admin"}
+                            ? "Update Company Owner"
+                            : "Create Company Owner"}
 
                       </Button>
                     </div>
@@ -1548,10 +1632,10 @@ setEditingCompany(null);
                   <div className="rounded-xl border bg-white overflow-hidden">
                     <div className="px-5 py-4 border-b">
                       <h3 className="text-base font-semibold text-gray-900">
-                        Existing Company Admin Users
+                        Existing Company Owners
                       </h3>
                       <p className="text-sm text-gray-500">
-                        Only COMPANY_ADMIN users for this company are listed here.
+                        Company owner employee accounts for this tenant.
                       </p>
                     </div>
 
@@ -1576,7 +1660,7 @@ setEditingCompany(null);
                         ) : companyAdminUsers.length === 0 ? (
                           <TableRow>
                             <TableCell colSpan={4} className="text-center py-8 text-gray-500">
-                              No company admin users found
+                              No company owners found
                             </TableCell>
                           </TableRow>
                         ) : (
@@ -1647,17 +1731,10 @@ setEditingCompany(null);
               emptyAction={
                 user?.role === "SUPERADMIN" ? (
                   <Button
-                    onClick={() => {
+                    onClick={async () => {
                       resetForm()
-                      const ctx = getSidebarContext()
-                      if (ctx?.serviceProviderID) {
-                        setFormData(prev => ({
-                          ...prev,
-                          serviceProviderID: ctx.serviceProviderID,
-                          autocompleteName: ctx.serviceProviderName || "",
-                        }))
-                      }
                       setIsAddingNew(true)
+                      await applySoleServiceProviderToForm()
                     }}
                   >
                     <Plus className="w-4 h-4 mr-1" /> Add Company

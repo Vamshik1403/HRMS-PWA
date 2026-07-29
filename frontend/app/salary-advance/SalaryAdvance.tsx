@@ -12,6 +12,7 @@ import { FormDrawer } from "../components/ui/form-drawer"
 import { Badge } from "../components/ui/badge"
 import { Edit, Trash2, Check, X, Plus, Settings, PlusCircle, MinusCircle, AlertCircle, Loader2, Wallet } from "lucide-react"
 import { PageHeader } from "../components/app/page-header";
+import { hasModuleWriteAccess } from "@/lib/companyAccess";
 import { FilterBar } from "../components/app/filter-bar"
 import { EntityListShell } from "../components/app/entity-list-shell"
 import type { DataTableColumn } from "../components/app/data-table"

@@ -332,6 +332,7 @@ export default function DashboardPage({ embeddedInEmpPortal = false }: { embedde
       href: string;
       avatarInitial: string;
     }[];
+    newJoinersThisMonth?: number;
   } | null>(null);
 
   useEffect(() => {
@@ -1084,8 +1085,7 @@ export default function DashboardPage({ embeddedInEmpPortal = false }: { embedde
     : [{ label: "Pending", value: 0, color: "#f59e0b" }];
 
   if (user?.role === "COMPANY_ADMIN") {
-    const newJoinersCount =
-      hrWidgets?.newsFeed?.filter((n) => n.kind === "onboarding").length ?? 0;
+    const newJoinersCount = hrWidgets?.newJoinersThisMonth ?? 0;
 
     return (
       <div className="animate-fade-in">

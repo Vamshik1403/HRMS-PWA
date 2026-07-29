@@ -22,6 +22,7 @@ import { useClientTable, sortRows } from "../hooks/use-client-table";
 import type { DataTableColumn } from "../components/app/data-table";
 import { listPrimaryButtonClass } from "../components/app/list-ui-styles";
 import { cn } from "@/app/utils/cn";
+import { ownerTitleForLegalEntity } from "@/lib/companyAccess";
 
 const API = "/backend/users";
 
@@ -51,21 +52,26 @@ interface UserRow {
   createdAt?: string;
   updatedAt?: string;
   serviceProvider?: { companyName?: string } | null;
-  company?: { id?: number; companyName?: string } | null;
+  company?: { id?: number; companyName?: string; legalEntityType?: string } | null;
   branches?: { branchName?: string } | null;
   userCompanies?: UserCompanyRow[];
+  /** True when row is a ManageEmployee company owner (not a User). */
+  isOwnerEmployee?: boolean;
+  ownerTitle?: string | null;
+  manageEmployeeId?: number;
 }
 
 // Roles available based on the current user's role
-const SUPERADMIN_ROLES = ["SUPERADMIN", "COMPANY_ADMIN"];
-const SERVICE_PROVIDER_ROLES = ["SERVICE_PROVIDER", "COMPANY_ADMIN"];
+const SUPERADMIN_ROLES = ["SUPERADMIN", "COMPANY_OWNER"];
+const SERVICE_PROVIDER_ROLES = ["SERVICE_PROVIDER", "COMPANY_OWNER"];
 
 const ADMIN_ROLES = ["BRANCH_ADMIN"];
 
 const ROLE_DISPLAY: Record<string, string> = {
   SUPERADMIN: "SUPERADMIN",
   SERVICE_PROVIDER: "SERVICE PROVIDER",
-  COMPANY_ADMIN: "COMPANY ADMIN",
+  COMPANY_OWNER: "COMPANY OWNER",
+  COMPANY_ADMIN: "COMPANY ADMIN (legacy)",
   ADMIN: "ADMIN",
   BRANCH_ADMIN: "BRANCH ADMIN",
   EMPLOYEE: "EMPLOYEE",
@@ -115,9 +121,33 @@ const canAccess = isSuperAdmin || isServiceProvider || isAdmin;
   const fetchRows = async () => {
     setLoading(true);
     try {
-      const res = await fetch(API);
+      const [res, ownersRes] = await Promise.all([
+        fetch(API),
+        fetch("/backend/company/owners"),
+      ]);
       const data = await res.json();
-      setRows(Array.isArray(data) ? data : data?.data ?? []);
+      const users: UserRow[] = Array.isArray(data) ? data : data?.data ?? [];
+      let owners: UserRow[] = [];
+      if (ownersRes.ok) {
+        const ownerRows = await ownersRes.json();
+        owners = (Array.isArray(ownerRows) ? ownerRows : []).map((o: any) => ({
+          id: o.id,
+          manageEmployeeId: o.id,
+          username: o.employeeCredentials?.username || o.employeeID || `owner-${o.id}`,
+          role: "COMPANY_OWNER",
+          firstName: o.employeeFirstName,
+          lastName: o.employeeLastName,
+          contactNo: o.personalPhoneNo,
+          email: o.businessEmail,
+          isActive: o.employeeCredentials?.isActive !== false,
+          serviceProviderID: o.serviceProviderID,
+          companyID: o.companyID,
+          company: o.company,
+          isOwnerEmployee: true,
+          ownerTitle: o.ownerTitle,
+        }));
+      }
+      setRows([...owners, ...users]);
     } catch {
       setRows([]);
     } finally {
@@ -228,8 +258,12 @@ const filteredCompanies = useMemo(() => {
     e.preventDefault();
     if (!form.username) { toast.error("Username is required"); return; }
     if (!editingRow && !form.password) { toast.error("Password is required"); return; }
-if ((form.role === "COMPANY_ADMIN" || form.role === "SUPERADMIN") && form.companyIDs.length === 0) {
+if ((form.role === "COMPANY_OWNER" || form.role === "SUPERADMIN") && form.companyIDs.length === 0 && form.role === "SUPERADMIN") {
         toast.error("Select at least one company");
+      return;
+    }
+    if (form.role === "COMPANY_OWNER" && !form.companyID && form.companyIDs.length === 0) {
+      toast.error("Select a company for the Company Owner");
       return;
     }
 
@@ -246,6 +280,36 @@ if ((form.role === "COMPANY_ADMIN" || form.role === "SUPERADMIN") && form.compan
     setSaving(true);
     
     try {
+      if (form.role === "COMPANY_OWNER") {
+        if (editingRow) {
+          toast.error("Edit company owners from the Company page");
+          setSaving(false);
+          return;
+        }
+        const companyId = Number(form.companyID || form.companyIDs[0]);
+        const ownerRes = await fetch(`/backend/company/${companyId}/owner`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            firstName: form.firstName.trim() || form.username.trim(),
+            lastName: form.lastName.trim() || undefined,
+            username: form.username.trim(),
+            password: form.password,
+            personalPhoneNo: form.contactNo.trim() || undefined,
+            businessEmail: form.email.trim() || undefined,
+          }),
+        });
+        if (!ownerRes.ok) throw new Error(await ownerRes.text());
+        toast.success("Company Owner created — they log in as an employee");
+        resetForm();
+        setTimeout(() => {
+          setForm({ ...emptyUserForm });
+        }, 0);
+        setIsAddingNew(false);
+        fetchRows();
+        return;
+      }
+
      const payload: any = {
         firstName: form.firstName.trim() || null,
         lastName: form.lastName.trim() || null,
@@ -260,7 +324,7 @@ serviceProviderID: isServiceProvider
     : undefined,
     
     companyID: form.companyID ? Number(form.companyID) : undefined,
-companyIDs: form.role === "COMPANY_ADMIN" || form.role === "SUPERADMIN" ? form.companyIDs : undefined,
+companyIDs: form.role === "SUPERADMIN" ? form.companyIDs : undefined,
         branchesID: form.branchesID ? Number(form.branchesID) : undefined,
         isActive: form.isActive,
       };
@@ -323,12 +387,38 @@ companyIDs: form.role === "COMPANY_ADMIN" || form.role === "SUPERADMIN" ? form.c
   };
 
   const handleDelete = async (id: number) => {
-    if (!confirm("Delete this user?")) return;
+    const row = rows.find((r) => r.id === id);
+    if (!confirm(row?.isOwnerEmployee ? "Deactivate this Company Owner?" : "Delete this user?")) return;
     try {
-      await fetch(`${API}/${id}`, { method: "DELETE" });
-      toast.success("Deleted");
+      if (row?.isOwnerEmployee && row.companyID) {
+        const res = await fetch(`/backend/company/${row.companyID}/owner/${id}`, { method: "DELETE" });
+        if (!res.ok) throw new Error(await res.text());
+        toast.success("Company Owner deactivated");
+      } else {
+        await fetch(`${API}/${id}`, { method: "DELETE" });
+        toast.success("Deleted");
+      }
       fetchRows();
-    } catch { toast.error("Delete failed"); }
+    } catch (e: any) {
+      toast.error(e?.message || "Delete failed");
+    }
+  };
+
+  const handleMigrateAdmin = async (row: UserRow) => {
+    if (!confirm(`Migrate ${row.username} from COMPANY_ADMIN to Company Owner employee login?`)) return;
+    try {
+      const res = await fetch(`/backend/company/migrate-admin/${row.id}`, { method: "POST" });
+      if (!res.ok) throw new Error(await res.text());
+      const data = await res.json();
+      toast.success(
+        data.temporaryPassword
+          ? `Migrated. Temporary password: ${data.temporaryPassword}`
+          : data.message || "Migrated",
+      );
+      fetchRows();
+    } catch (e: any) {
+      toast.error(e?.message || "Migrate failed");
+    }
   };
 
   const filteredRows = useMemo(() => {
@@ -338,7 +428,7 @@ companyIDs: form.role === "COMPANY_ADMIN" || form.role === "SUPERADMIN" ? form.c
   data = data.filter(
     (r) =>
       Number(r.serviceProviderID) === Number(user.serviceProviderID) &&
-      (r.role === "SERVICE_PROVIDER" || r.role === "COMPANY_ADMIN")
+      (r.role === "SERVICE_PROVIDER" || r.role === "COMPANY_ADMIN" || r.role === "COMPANY_OWNER")
   );
 }
 
@@ -456,9 +546,22 @@ if (isAdmin && user?.companyID) {
             >
               <Eye className="w-4 h-4" />
             </Button>
-            <Button variant="ghost" size="sm" onClick={() => handleEdit(r)}>
-              <Edit className="w-4 h-4" />
-            </Button>
+            {!r.isOwnerEmployee ? (
+              <Button variant="ghost" size="sm" onClick={() => handleEdit(r)}>
+                <Edit className="w-4 h-4" />
+              </Button>
+            ) : null}
+            {r.role === "COMPANY_ADMIN" && isSuperAdmin ? (
+              <Button
+                variant="ghost"
+                size="sm"
+                title="Migrate to Company Owner"
+                onClick={() => handleMigrateAdmin(r)}
+                className="text-amber-700 hover:text-amber-900"
+              >
+                Migrate
+              </Button>
+            ) : null}
             {r.role !== "SUPERADMIN" ? (
               <Button
                 variant="ghost"
@@ -612,8 +715,8 @@ if (isAdmin && user?.companyID) {
             </Select>
           </div>
 
-          {/* SP field: shown for SERVICE_PROVIDER, COMPANY_ADMIN, ADMIN, BRANCH_ADMIN */}
-          {isSuperAdmin && (form.role === "SERVICE_PROVIDER" || form.role === "COMPANY_ADMIN" || form.role === "ADMIN" || form.role === "BRANCH_ADMIN") && (
+          {/* SP field: shown for SERVICE_PROVIDER, COMPANY_OWNER, ADMIN, BRANCH_ADMIN */}
+          {isSuperAdmin && (form.role === "SERVICE_PROVIDER" || form.role === "COMPANY_OWNER" || form.role === "ADMIN" || form.role === "BRANCH_ADMIN") && (
             <div className="space-y-2">
               <Label>Service Provider</Label>
               <Select
@@ -637,13 +740,13 @@ if (isAdmin && user?.companyID) {
           )}
 
                    {/* Company field */}
-{(form.role === "SUPERADMIN" || form.role === "COMPANY_ADMIN" || form.role === "ADMIN" || form.role === "BRANCH_ADMIN") && (
+{(form.role === "SUPERADMIN" || form.role === "COMPANY_OWNER" || form.role === "ADMIN" || form.role === "BRANCH_ADMIN") && (
             <div className="space-y-2">
               <Label>
-{form.role === "COMPANY_ADMIN" || form.role === "SUPERADMIN" ? "Companies" : "Company"}
+{form.role === "SUPERADMIN" ? "Companies" : "Company"}
               </Label>
 
-{form.role === "COMPANY_ADMIN" || form.role === "SUPERADMIN" ? (
+{form.role === "SUPERADMIN" ? (
                 <div className="space-y-3">
                   <div className="relative">
                   <Input
@@ -743,6 +846,18 @@ Select at least one company from dropdown. First selected company becomes primar
                   </SelectContent>
                 </Select>
               )}
+              {form.role === "COMPANY_OWNER" && form.companyID ? (
+                <p className="text-xs text-muted-foreground">
+                  Owner title:{" "}
+                  <span className="font-medium text-foreground">
+                    {ownerTitleForLegalEntity(
+                      filteredCompanies.find((c: any) => Number(c.id) === Number(form.companyID))
+                        ?.legalEntityType,
+                    )}
+                  </span>{" "}
+                  (from company type)
+                </p>
+              ) : null}
             </div>
           )}
 

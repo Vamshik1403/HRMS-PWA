@@ -15,6 +15,7 @@ import { EntityRowActions } from "../components/app/entity-row-actions"
 import { useClientTable, sortRows } from "../hooks/use-client-table"
 import { SearchSuggestInput } from "../components/SearchSuggestInput"
 import { useCurrentUser } from "../hooks/useCurrentUser";
+import { hasModuleWriteAccess } from "@/lib/companyAccess";
 import { toast } from "sonner";
 import { readApiErrorMessage } from "../utils/api-error";
 import { getSidebarContext } from "../utils/sidebarContext";
@@ -135,7 +136,8 @@ export function LeavePolicyManagement() {
     user?.role === "SERVICE_PROVIDER" ||
     user?.role === "COMPANY_ADMIN" ||
     user?.role === "ADMIN" ||
-    user?.role === "BRANCH_ADMIN";
+    user?.role === "BRANCH_ADMIN" ||
+    hasModuleWriteAccess("LEAVE_POLICY");
 const [currentUserMapping, setCurrentUserMapping] = useState<any>(null);
 
 

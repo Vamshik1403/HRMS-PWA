@@ -56,6 +56,8 @@ export class AuthService {
               employeeLastName: true,
               employeeID: true,
               businessEmail: true,
+              isCompanyOwner: true,
+              ownerTitle: true,
               departments: {
                 select: {
                   id: true,
@@ -164,14 +166,18 @@ export class AuthService {
         username: user.username,
         role: 'EMPLOYEE',
         type: 'employee',
+        isCompanyOwner: !!user.employee?.isCompanyOwner,
+        ownerTitle: user.employee?.ownerTitle ?? null,
         employee: {
           id: user.employee.id,
           employeeID: user.employee.employeeID,
           firstName: user.employee.employeeFirstName,
           lastName: user.employee.employeeLastName,
           email: user.employee.businessEmail,
+          isCompanyOwner: !!user.employee?.isCompanyOwner,
+          ownerTitle: user.employee?.ownerTitle ?? null,
           department: user.employee.departments?.departmentName,
-          designation: user.employee.designations?.designationName,
+          designation: user.employee.designations?.designation,
           company: user.employee.company?.companyName,
           branch: user.employee.branches?.branchName
         },

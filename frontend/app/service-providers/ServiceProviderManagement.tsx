@@ -22,6 +22,8 @@ import { Badge } from "../components/ui/badge"
 import { Icon } from "@iconify/react"
 import { Plus, Search, Edit, Trash2, Eye, ArrowLeft, EyeOff, UserPlus, Building2 } from "lucide-react"
 import { toast } from "sonner"
+import { LocationFields } from "../components/ui/location-fields"
+import { clearSidebarContext, getSidebarContext } from "../utils/sidebarContext"
 
 interface ServiceProvider {
   id: number
@@ -106,6 +108,8 @@ const [editingSpUser, setEditingSpUser] = useState<any | null>(null)
     // Validation
     const validationErrors: string[] = []
     if (!formData.companyName?.trim()) validationErrors.push("Company Name is required")
+    if (!formData.country?.trim()) validationErrors.push("Country is required")
+    if (!formData.state?.trim()) validationErrors.push("State is required")
     if (validationErrors.length > 0) {
       validationErrors.forEach(msg => toast.error(msg))
       return
@@ -342,11 +346,20 @@ toast.success(editingSpUser ? "Service provider user updated successfully" : "Se
   const handleDelete = async (id: number) => {
     if (confirm("Are you sure you want to delete this service provider?")) {
       try {
-        await fetch(`/backend/service-provider/${id}`, {
+        const res = await fetch(`/backend/service-provider/${id}`, {
           method: "DELETE",
         })
+        if (!res.ok) {
+          const errText = await res.text()
+          throw new Error(errText || "Failed to delete service provider")
+        }
+        const ctx = getSidebarContext()
+        if (ctx && Number(ctx.serviceProviderID) === Number(id)) {
+          clearSidebarContext()
+        }
         await fetchProviders()
         toast.success("Service provider deleted successfully")
+        window.dispatchEvent(new Event("sidebar-refresh"))
       } catch (error) {
         console.error("Error deleting service provider:", error)
         toast.error((error as any)?.message || "Failed to delete service provider")
@@ -410,7 +423,7 @@ toast.success(editingSpUser ? "Service provider user updated successfully" : "Se
         title="Service Providers"
         description="Manage your service provider relationships"
         actions={
-  !isDialogOpen && !isUserDrawerOpen ? (
+  !isDialogOpen && !isUserDrawerOpen && serviceProviders.length === 0 ? (
             <Button onClick={() => { resetForm(); setIsDialogOpen(true); }}>
               <Plus className="w-4 h-4 mr-1" />
               Add Service Provider
@@ -449,44 +462,21 @@ toast.success(editingSpUser ? "Service provider user updated successfully" : "Se
               required
             />
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="country">Country *</Label>
-              <Input
-                id="country"
-                value={formData.country}
-                onChange={(e) => setFormData((prev) => ({ ...prev, country: e.target.value }))}
-                required
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="state">State *</Label>
-              <Input
-                id="state"
-                value={formData.state}
-                onChange={(e) => setFormData((prev) => ({ ...prev, state: e.target.value }))}
-                required
-              />
-            </div>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="city">City</Label>
-              <Input
-                id="city"
-                value={formData.city}
-                onChange={(e) => setFormData((prev) => ({ ...prev, city: e.target.value }))}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="pincode">Pincode</Label>
-              <Input
-                id="pincode"
-                value={formData.pincode}
-                onChange={(e) => setFormData((prev) => ({ ...prev, pincode: e.target.value }))}
-              />
-            </div>
-          </div>
+          <LocationFields
+            showCurrency={false}
+            values={{
+              country: formData.country,
+              state: formData.state,
+              city: formData.city,
+              pincode: formData.pincode,
+            }}
+            onChange={(patch) =>
+              setFormData((prev) => ({
+                ...prev,
+                ...patch,
+              }))
+            }
+          />
           <div className="space-y-2">
             <Label htmlFor="gstNo">GST No *</Label>
             <Input

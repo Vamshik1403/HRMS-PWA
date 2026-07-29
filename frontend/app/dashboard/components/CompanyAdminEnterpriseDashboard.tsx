@@ -19,7 +19,6 @@ import {
 import {
   Briefcase,
   Calendar,
-  CalendarClock,
   CalendarDays,
   CheckCircle2,
   ChevronLeft,
@@ -55,6 +54,9 @@ const cardClass =
   "rounded-[18px] border border-border bg-card text-card-foreground p-5 shadow-[0_6px_24px_rgba(15,23,42,0.05)] dark:shadow-[0_6px_24px_rgba(0,0,0,0.35)]";
 const ROW_CARD =
   "flex h-full min-h-[300px] max-h-[300px] flex-col overflow-hidden";
+/** Calendar spans KPI row + middle row — taller from the top */
+const CALENDAR_SPAN_CARD =
+  "flex h-full min-h-[300px] xl:min-h-[520px] flex-col overflow-hidden";
 
 export type EnterpriseUpcomingEvent = {
   id: string;
@@ -110,6 +112,8 @@ export type CompanyAdminEnterpriseDashboardProps = {
   latestTasks: EnterpriseTaskItem[];
   activityItems: ActivityItem[];
   pendingCounts: EnterprisePendingCounts | null;
+  /** When true, page title is shown in the portal navbar instead of the content header. */
+  suppressPageTitle?: boolean;
 };
 
 type CalendarEventKind = "birthday" | "anniversary" | "holiday" | "task" | "onboarding";
@@ -299,14 +303,14 @@ function DashboardCalendarCard({
           return (
             <div
               key={cell.dateKey}
-              className="relative flex flex-col items-center justify-center py-0"
+              className="relative flex flex-col items-center justify-center py-0.5"
               onMouseEnter={() => hasEvent && setHoveredKey(cell.dateKey)}
               onMouseLeave={() => setHoveredKey(null)}
             >
               <span
                 title={tooltip || undefined}
                 className={cn(
-                  "flex size-[18px] items-center justify-center rounded-full text-[10px] font-medium tabular-nums leading-none",
+                  "flex size-6 items-center justify-center rounded-full text-[11px] font-medium tabular-nums leading-none",
                   cell.outside && "text-muted-foreground/40",
                   !cell.outside && isWeekend && !isToday && "text-rose-500 dark:text-rose-400",
                   !cell.outside && !isWeekend && !isToday && !hasEvent && "text-foreground",
@@ -627,7 +631,7 @@ function EnterpriseKpiShell({
     <Link
       href={href}
       className={cn(
-        "group relative flex min-h-[196px] flex-col overflow-hidden rounded-[24px] border border-border bg-card p-5",
+        "group relative flex h-full min-h-[176px] flex-col overflow-hidden rounded-[24px] border border-border bg-card p-4 xl:p-5",
         "shadow-[0_12px_40px_rgba(15,23,42,0.06)] transition-colors duration-200",
         "hover:border-slate-400/80",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35 dark:border-border",
@@ -764,6 +768,7 @@ export function CompanyAdminEnterpriseDashboard({
   latestTasks,
   activityItems,
   pendingCounts,
+  suppressPageTitle = false,
 }: CompanyAdminEnterpriseDashboardProps) {
   const [trendPeriod] = useState("Last 7 Days");
 
@@ -931,11 +936,6 @@ export function CompanyAdminEnterpriseDashboard({
     return [overviewPresent, overviewPresent, overviewPresent, overviewPresent, overviewPresent, overviewPresent, overviewPresent];
   }, [attendanceTrend, overviewPresent]);
 
-  const leaveSeries = useMemo(
-    () => Array.from({ length: 7 }, (_, i) => Math.max(0, overviewOnLeave + ((i % 3) - 1))),
-    [overviewOnLeave],
-  );
-
   const absentSeries = useMemo(
     () => Array.from({ length: 7 }, (_, i) => Math.max(0, overviewAbsent + ((i % 2) === 0 ? 0 : -1))),
     [overviewAbsent],
@@ -980,14 +980,18 @@ export function CompanyAdminEnterpriseDashboard({
 
       {/* Header */}
       <header className="ca-fade mb-5 flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
-        <div>
-          <h1 className="text-[28px] font-semibold tracking-tight" style={{ color: TEXT }}>
-            Dashboard
-          </h1>
-          <p className="mt-1 text-[15px] font-semibold text-slate-800 dark:text-slate-200">
-            Welcome back, {formatWelcomeName(firstName)}
-          </p>
-        </div>
+        {suppressPageTitle ? (
+          <div className="min-w-0" />
+        ) : (
+          <div>
+            <h1 className="text-[28px] font-semibold tracking-tight" style={{ color: TEXT }}>
+              Dashboard
+            </h1>
+            <p className="mt-1 text-[15px] font-semibold text-slate-800 dark:text-slate-200">
+              Welcome back, {formatWelcomeName(firstName)}
+            </p>
+          </div>
+        )}
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
           <div
             className="inline-flex h-[42px] items-center gap-2 rounded-[14px] border border-border bg-card px-4 text-sm font-medium text-foreground shadow-sm"
@@ -1008,119 +1012,108 @@ export function CompanyAdminEnterpriseDashboard({
         </div>
       </header>
 
-      {/* Stat cards */}
+      {/* KPIs (4) + Attendance / Trend + tall Calendar */}
       <section
-        className="ca-fade mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5"
+        className="ca-fade mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-12 xl:gap-5"
         style={{ animationDelay: "40ms" }}
       >
-        <EnterpriseKpiShell href="/manage-employees">
-          <KpiTitle
-            icon={<Users className="size-5" strokeWidth={1.75} />}
-            label="Total Employees"
-            color="#6366F1"
-          />
-          <div className="mt-4">
-            <KpiNumber value={workforceTotal} ready={statsReady} />
-            <p className="mt-1.5 text-[13px] font-normal text-slate-500 dark:text-slate-400">Active Workforce</p>
-          </div>
-          <div className="mt-auto pt-4">
-            <WorkforceAreaChart
-              accent="#6366F1"
-              values={[
-                Math.max(1, workforceTotal - 3),
-                Math.max(1, workforceTotal - 2),
-                Math.max(1, workforceTotal - 2),
-                Math.max(1, workforceTotal - 1),
-                workforceTotal,
-                workforceTotal,
-                workforceTotal,
-              ]}
+        <div className="xl:col-span-2">
+          <EnterpriseKpiShell href="/manage-employees">
+            <KpiTitle
+              icon={<Users className="size-5" strokeWidth={1.75} />}
+              label="Total Employees"
+              color="#6366F1"
             />
-          </div>
-        </EnterpriseKpiShell>
-
-        <EnterpriseKpiShell href="/attendance-logs">
-          <KpiTitle
-            icon={<UserCheck className="size-5" strokeWidth={1.75} />}
-            label="Present Today"
-            color="#16A34A"
-          />
-          <div className="mt-4 flex items-end justify-between gap-3">
-            <div className="min-w-0">
-              <KpiNumber value={overviewPresent} ready={overviewStatsReady} />
-              <p className="mt-1.5 text-[13px] font-normal text-slate-500 dark:text-slate-400">
-                of {statsReady ? workforceTotal.toLocaleString() : "—"} employees
-              </p>
+            <div className="mt-4">
+              <KpiNumber value={workforceTotal} ready={statsReady} />
+              <p className="mt-1.5 text-[13px] font-normal text-slate-500 dark:text-slate-400">Active Workforce</p>
             </div>
-            <RadialRing percent={presentPct} colorFrom="#86EFAC" colorTo="#16A34A" label="Present" />
-          </div>
-          <div className="mt-auto pt-3">
-            <MetricSparkline accent="#22C55E" values={presentSeries} />
-          </div>
-        </EnterpriseKpiShell>
-
-        <EnterpriseKpiShell href="/leave-applications">
-          <KpiTitle
-            icon={<CalendarClock className="size-5" strokeWidth={1.75} />}
-            label="On Leave Today"
-            color="#D97706"
-          />
-          <div className="mt-4 flex items-end justify-between gap-3">
-            <div className="min-w-0">
-              <KpiNumber value={overviewOnLeave} ready={overviewStatsReady} />
-              <p className="mt-1.5 text-[13px] font-normal text-slate-500 dark:text-slate-400">
-                {overviewStatsReady ? `${overviewOnLeave.toLocaleString()} employees` : "—"}
-              </p>
+            <div className="mt-auto pt-4">
+              <WorkforceAreaChart
+                accent="#6366F1"
+                values={[
+                  Math.max(1, workforceTotal - 3),
+                  Math.max(1, workforceTotal - 2),
+                  Math.max(1, workforceTotal - 2),
+                  Math.max(1, workforceTotal - 1),
+                  workforceTotal,
+                  workforceTotal,
+                  workforceTotal,
+                ]}
+              />
             </div>
-            <RadialRing percent={leavePct} colorFrom="#FCD34D" colorTo="#D97706" label="On Leave" />
-          </div>
-          <div className="mt-auto pt-3">
-            <MetricSparkline accent="#F59E0B" values={leaveSeries} />
-          </div>
-        </EnterpriseKpiShell>
+          </EnterpriseKpiShell>
+        </div>
 
-        <EnterpriseKpiShell href="/attendance-reports">
-          <KpiTitle
-            icon={<UserX className="size-5" strokeWidth={1.75} />}
-            label="Absent Today"
-            color="#DC2626"
-          />
-          <div className="mt-4 flex items-end justify-between gap-3">
-            <div className="min-w-0">
-              <KpiNumber value={overviewAbsent} ready={overviewStatsReady} />
-              <p className="mt-1.5 text-[13px] font-normal text-slate-500 dark:text-slate-400">
-                of {statsReady ? workforceTotal.toLocaleString() : "—"} employees
-              </p>
+        <div className="xl:col-span-2">
+          <EnterpriseKpiShell href="/attendance-logs?presence=present">
+            <KpiTitle
+              icon={<UserCheck className="size-5" strokeWidth={1.75} />}
+              label="Present Today"
+              color="#16A34A"
+            />
+            <div className="mt-4 flex items-end justify-between gap-3">
+              <div className="min-w-0">
+                <KpiNumber value={overviewPresent} ready={overviewStatsReady} />
+                <p className="mt-1.5 text-[13px] font-normal text-slate-500 dark:text-slate-400">
+                  of {statsReady ? workforceTotal.toLocaleString() : "—"} employees
+                </p>
+              </div>
+              <RadialRing percent={presentPct} colorFrom="#86EFAC" colorTo="#16A34A" label="Present" />
             </div>
-            <RadialRing percent={absentPct} colorFrom="#FCA5A5" colorTo="#DC2626" label="Absent" />
-          </div>
-          <div className="mt-auto pt-3">
-            <MetricSparkline accent="#EF4444" values={absentSeries} />
-          </div>
-        </EnterpriseKpiShell>
+            <div className="mt-auto pt-3">
+              <MetricSparkline accent="#22C55E" values={presentSeries} />
+            </div>
+          </EnterpriseKpiShell>
+        </div>
 
-        <EnterpriseKpiShell href="/manage-employees">
-          <KpiTitle
-            icon={<UserPlus className="size-5" strokeWidth={1.75} />}
-            label="New Joiners"
-            color="#0EA5E9"
+        <div className="xl:col-span-2">
+          <EnterpriseKpiShell href="/attendance-logs?presence=absent">
+            <KpiTitle
+              icon={<UserX className="size-5" strokeWidth={1.75} />}
+              label="Absent Today"
+              color="#DC2626"
+            />
+            <div className="mt-4 flex items-end justify-between gap-3">
+              <div className="min-w-0">
+                <KpiNumber value={overviewAbsent} ready={overviewStatsReady} />
+                <p className="mt-1.5 text-[13px] font-normal text-slate-500 dark:text-slate-400">
+                  of {statsReady ? workforceTotal.toLocaleString() : "—"} employees
+                </p>
+              </div>
+              <RadialRing percent={absentPct} colorFrom="#FCA5A5" colorTo="#DC2626" label="Absent" />
+            </div>
+            <div className="mt-auto pt-3">
+              <MetricSparkline accent="#EF4444" values={absentSeries} />
+            </div>
+          </EnterpriseKpiShell>
+        </div>
+
+        <div className="xl:col-span-2">
+          <EnterpriseKpiShell href="/new-joiners">
+            <KpiTitle
+              icon={<UserPlus className="size-5" strokeWidth={1.75} />}
+              label="New Joiners"
+              color="#0EA5E9"
+            />
+            <div className="mt-4">
+              <KpiNumber value={newJoinersCount} ready />
+              <p className="mt-1.5 text-[13px] font-normal text-slate-500 dark:text-slate-400">This Month</p>
+            </div>
+            <div className="mt-auto pt-4">
+              <JoinersMiniBars values={sparkValues} accent="#38BDF8" />
+            </div>
+          </EnterpriseKpiShell>
+        </div>
+
+        <article className={cn(cardClass, CALENDAR_SPAN_CARD, "xl:col-span-4 xl:row-span-2")}>
+          <DashboardCalendarCard
+            todayDate={todayDate}
+            events={calendarEvents}
           />
-          <div className="mt-4">
-            <KpiNumber value={newJoinersCount} ready />
-            <p className="mt-1.5 text-[13px] font-normal text-slate-500 dark:text-slate-400">This Month</p>
-          </div>
-          <div className="mt-auto pt-4">
-            <JoinersMiniBars values={sparkValues} accent="#38BDF8" />
-          </div>
-        </EnterpriseKpiShell>
-      </section>
+        </article>
 
-      {/* Attendance | Trend | Calendar */}
-      <section
-        className="ca-fade mb-6 grid grid-cols-1 items-stretch gap-5 lg:grid-cols-3"
-        style={{ animationDelay: "80ms" }}
-      >
-        <article className={cn(cardClass, ROW_CARD)}>
+        <article className={cn(cardClass, ROW_CARD, "xl:col-span-4")}>
           <SectionTitle
             title="Attendance Overview"
             action={dateBadge}
@@ -1185,7 +1178,7 @@ export function CompanyAdminEnterpriseDashboard({
           <ViewLink href="/attendance-reports">View Attendance Report</ViewLink>
         </article>
 
-        <article className={cn(cardClass, ROW_CARD)}>
+        <article className={cn(cardClass, ROW_CARD, "xl:col-span-4")}>
           <SectionTitle
             title="Employee Trend"
             action={
@@ -1239,12 +1232,6 @@ export function CompanyAdminEnterpriseDashboard({
           <ViewLink href="/attendance-reports">View Full Report</ViewLink>
         </article>
 
-        <article className={cn(cardClass, ROW_CARD)}>
-          <DashboardCalendarCard
-            todayDate={todayDate}
-            events={calendarEvents}
-          />
-        </article>
       </section>
 
       {/* Leave | Payroll | Recruitment | Quick Access */}

@@ -21,6 +21,11 @@ import {
   Building,
 } from "lucide-react";
 import { TASK_MANAGEMENT_ENABLED } from "@/app/config/featureFlags";
+import {
+  canViewModule,
+  hasCompanyAccessFlag,
+  moduleKeyForPath,
+} from "@/lib/companyAccess";
 
 export interface NavContext {
   role: string;
@@ -53,7 +58,10 @@ export function buildNavContext(user: any, desktopManager: boolean): NavContext 
 
   const isSuperAdmin = role === "SUPERADMIN";
   const isServiceProvider = role === "SERVICE_PROVIDER";
-  const isCompanyAdmin = role === "COMPANY_ADMIN";
+  const isCompanyOperator =
+    role === "COMPANY_ADMIN" ||
+    (role === "EMPLOYEE" && hasCompanyAccessFlag());
+  const isCompanyAdmin = isCompanyOperator;
   const isAdmin = role === "ADMIN";
   const isBranchAdmin = role === "BRANCH_ADMIN";
   const isDesktopManager = desktopManager && role === "EMPLOYEE";
@@ -269,10 +277,19 @@ export function dispatchSidebarMainPageClick(path: string) {
 }
 
 export function filterNavigation(ctx: NavContext): NavGroup[] {
+  const gateEmployeeModules = ctx.role === "EMPLOYEE" && hasCompanyAccessFlag();
+
   return HRMS_NAVIGATION.map((group) => {
     if (group.show && !group.show(ctx)) return null;
 
-    const items = group.items.filter((item) => !item.show || item.show(ctx));
+    const items = group.items.filter((item) => {
+      if (item.show && !item.show(ctx)) return false;
+      if (gateEmployeeModules) {
+        const moduleKey = moduleKeyForPath(item.href);
+        if (moduleKey && !canViewModule(moduleKey)) return false;
+      }
+      return true;
+    });
 
     if (items.length === 0) return null;
 

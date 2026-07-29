@@ -8,6 +8,7 @@ import { FormDrawer } from "../components/ui/form-drawer"
 import { Icon } from "@iconify/react"
 import { Plus, Calendar } from "lucide-react"
 import { PageHeader } from "../components/app/page-header";
+import { hasModuleWriteAccess } from "@/lib/companyAccess";
 import { FilterBar, FilterSelect } from "../components/app/filter-bar";
 import { EntityListShell } from "../components/app/entity-list-shell";
 import type { DataTableColumn } from "../components/app/data-table";
@@ -121,7 +122,7 @@ const [isDialogOpen, setIsDialogOpen] = useState(false)
   })
   
   const user = useCurrentUser();
-  const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN" || user?.role === "BRANCH_ADMIN" || canDesktopManagerManage(user);
+  const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN" || user?.role === "BRANCH_ADMIN" || canDesktopManagerManage(user) || hasModuleWriteAccess("HOLIDAYS");
 
   const [managerData, setManagerData] = useState<any>(null);
   const [empCreds, setEmpCreds] = useState<any>(null);

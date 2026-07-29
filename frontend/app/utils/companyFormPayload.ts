@@ -3,6 +3,7 @@ export const COMPANY_SCALAR_FIELDS = [
   "serviceProviderID",
   "companyName",
   "companyType",
+  "legalEntityType",
   "address",
   "country",
   "state",
@@ -39,6 +40,7 @@ export function mapCompanyToFormData(company: Record<string, unknown> | object) 
   return {
     companyName: (row.companyName as string) ?? "",
     companyType: (row.companyType as string) ?? "",
+    legalEntityType: (row.legalEntityType as string) ?? "",
     noticePeriodDaysForResignation: (row.noticePeriodDaysForResignation as string) ?? "",
     noticePeriodDaysForTermination: (row.noticePeriodDaysForTermination as string) ?? "",
     address: (row.address as string) ?? "",

@@ -361,6 +361,12 @@ export default function EmpPortalShell({ children, hideBottomNav = false }: EmpP
             localStorage.removeItem("accessToken");
             localStorage.removeItem("token");
             localStorage.removeItem("user");
+            try {
+              localStorage.removeItem("openhrmCompanyAccess");
+              localStorage.removeItem("openhrmDesktopManager");
+            } catch {
+              /* ignore */
+            }
             document.cookie = "accessToken=; path=/; max-age=0";
             window.location.href = "/login";
           }}

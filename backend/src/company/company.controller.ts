@@ -8,11 +8,13 @@ import {
   Delete,
   ParseIntPipe,
   Put,
+  Query,
 } from '@nestjs/common';
 import { CompanyService } from './company.service';
 import { CreateCompanyDto } from './dto/create-company.dto';
 import { UpdateCompanyDto } from './dto/update-company.dto';
 import { UpdateCompanyModulesDto } from './dto/update-company-modules.dto';
+import { CreateCompanyOwnerDto } from './dto/create-company-owner.dto';
 
 @Controller('company')
 export class CompanyController {
@@ -21,17 +23,6 @@ export class CompanyController {
   @Post()
   create(@Body() dto: CreateCompanyDto) {
     return this.companyService.create(dto);
-  }
-
-  // ✅ dynamic routes after fixed routes
-  @Get(':id/modules')
-  getCompanyModules(@Param('id', ParseIntPipe) id: number) {
-    return this.companyService.getCompanyModules(id);
-  }
-
-  @Get()
-  findAll() {
-    return this.companyService.findAll();
   }
 
   // ✅ fixed/static routes first
@@ -45,14 +36,59 @@ export class CompanyController {
     return this.companyService.seedDefaultModules();
   }
 
-  
+  @Get('owners')
+  listOwners(@Query('companyID') companyID?: string) {
+    return this.companyService.listOwners(
+      companyID ? Number(companyID) : undefined,
+    );
+  }
 
-   @Put(':id/modules')
+  @Post('migrate-admin/:userId')
+  migrateAdmin(@Param('userId', ParseIntPipe) userId: number) {
+    return this.companyService.migrateCompanyAdminToOwner(userId);
+  }
+
+  @Get()
+  findAll() {
+    return this.companyService.findAll();
+  }
+
+  @Get(':id/modules')
+  getCompanyModules(@Param('id', ParseIntPipe) id: number) {
+    return this.companyService.getCompanyModules(id);
+  }
+
+  @Put(':id/modules')
   updateCompanyModules(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: UpdateCompanyModulesDto,
   ) {
     return this.companyService.updateCompanyModules(id, dto.modules);
+  }
+
+  @Post(':id/owner')
+  createOwner(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: CreateCompanyOwnerDto,
+  ) {
+    return this.companyService.createOwner(id, dto);
+  }
+
+  @Patch(':id/owner/:ownerId')
+  updateOwner(
+    @Param('id', ParseIntPipe) id: number,
+    @Param('ownerId', ParseIntPipe) ownerId: number,
+    @Body() dto: CreateCompanyOwnerDto,
+  ) {
+    return this.companyService.updateOwner(id, ownerId, dto);
+  }
+
+  @Delete(':id/owner/:ownerId')
+  deactivateOwner(
+    @Param('id', ParseIntPipe) id: number,
+    @Param('ownerId', ParseIntPipe) ownerId: number,
+  ) {
+    return this.companyService.deactivateOwner(id, ownerId);
   }
 
   @Get(':id')

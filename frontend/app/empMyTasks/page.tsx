@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { ListTodo } from "lucide-react";
 import EmpMobileLayout from "../components/layout/EmpMobileLayout";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import { taskFetch } from "../utils/taskApi";
@@ -17,6 +18,8 @@ import { getNextSitePunchKind, sitePunchLabel } from "../utils/taskSitePunch";
 import { downloadTaskReportForId } from "../utils/taskReportPdf";
 import { useTaskChatPolling } from "../hooks/useTaskChatPolling";
 import { useEmpManagerScope } from "../hooks/useEmpManagerScope";
+import { EmpDesktopPage } from "../components/emp/desktop/EmpDesktopPage";
+import { useEmpPortalDesktop } from "../components/layout/EmpPortalShell";
 
 const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL || "/backend";
 
@@ -31,6 +34,7 @@ interface Task extends MobileTaskListItem {
 
 export default function EmpMyTasksPage() {
   const user = useCurrentUser();
+  const isDesktop = useEmpPortalDesktop();
   const { scope, isManagerView } = useEmpManagerScope();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
@@ -218,8 +222,8 @@ export default function EmpMyTasksPage() {
     );
   }
 
-  return (
-    <EmpMobileLayout hideBottomNav={createOpen}>
+  const listBody = (
+    <>
       <MobileTaskListView
         tasks={tasks}
         loading={loading}
@@ -239,6 +243,7 @@ export default function EmpMyTasksPage() {
         showCreateFab={canCreateTask}
         managerScope={scope}
         isManagerView={isManagerView}
+        hidePageTitle={isDesktop}
       />
 
       {infoTask && (
@@ -269,6 +274,22 @@ export default function EmpMyTasksPage() {
         creatorEmp={creatorEmp}
         onCreated={() => load()}
       />
+    </>
+  );
+
+  return (
+    <EmpMobileLayout hideBottomNav={createOpen}>
+      {isDesktop ? (
+        <EmpDesktopPage
+          title="Tasks"
+          description={isManagerView ? "Team member tasks" : "Assigned tasks"}
+          icon={ListTodo}
+        >
+          {listBody}
+        </EmpDesktopPage>
+      ) : (
+        listBody
+      )}
     </EmpMobileLayout>
   );
 }

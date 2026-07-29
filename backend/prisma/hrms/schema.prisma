@@ -198,6 +198,7 @@ model Company {
   companyLogoUrl                 String?                   @db.VarChar
   SignatureUrl                   String?                   @db.VarChar
   companyType                    String?                   @db.VarChar
+  legalEntityType                String?                   @db.VarChar
   noticePeriodDaysForResignation String?                   @db.VarChar
   noticePeriodDaysForTermination String?                   @db.VarChar
   pwaShowLeaveBalance            Boolean                   @default(true)
@@ -217,6 +218,7 @@ model Company {
   empFieldSiteAttendance         EmpFieldSiteAttendance[]
   empPromotion                   EmpPromotion[]
   employeeCredentials            EmployeeCredentials[]
+  employeeModulePermissions      EmployeeModulePermission[]
   genarateBonus                  GenarateBonus[]
   generateSalary                 GenerateSalary[]
   hourlyPayGrade                 HourlyPayGrade[]
@@ -793,6 +795,8 @@ model ManageEmployee {
   empType                            String?                             @db.VarChar
   exitDate                           DateTime?
   isDeleted                          Boolean                             @default(false)
+  isCompanyOwner                     Boolean                             @default(false)
+  ownerTitle                         String?                             @db.VarChar
   lifecycleStatus                    EmployeeLifecycleStatus             @default(ACTIVE)
   onboardingApprovalStatus           ApprovalRequestStatus               @default(APPROVED)
   maxHoursPerDay                     String?                             @db.VarChar
@@ -863,6 +867,7 @@ model ManageEmployee {
   empFactualWorkShift                EmpFactualWorkShift[]
   empFactualAttendancePolicy         EmpFactualAttendancePolicy[]
   employeeMemo                       EmployeeMemo[]
+  employeeModulePermissions          EmployeeModulePermission[]
   attendanceLocations                AttendanceLocation[]
   absentDeclarations                 EmpAbsentDeclaration[]
   empLeaveBalance                    EmpLeaveBalance?
@@ -876,6 +881,26 @@ model ManageEmployee {
   approvalActions                    ApprovalRequestAction[]             @relation("ApprovalActionEmployee")
 
   @@unique([employeeID, companyID], name: "unique_employee_id_per_company")
+}
+
+model EmployeeModulePermission {
+  id               Int            @id @default(autoincrement())
+  companyID        Int
+  manageEmployeeID Int
+  moduleKey        String         @db.VarChar(64)
+  canView          Boolean        @default(false)
+  canCreate        Boolean        @default(false)
+  canEdit          Boolean        @default(false)
+  canDelete        Boolean        @default(false)
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  company          Company        @relation(fields: [companyID], references: [id], onDelete: Cascade)
+  manageEmployee   ManageEmployee @relation(fields: [manageEmployeeID], references: [id], onDelete: Cascade)
+
+  @@unique([companyID, manageEmployeeID, moduleKey])
+  @@index([manageEmployeeID])
+  @@index([companyID])
+  @@map("employee_module_permissions")
 }
 
 model EmployeeDocument {

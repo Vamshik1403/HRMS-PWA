@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { hasModuleWriteAccess } from "@/lib/companyAccess";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
@@ -209,7 +210,8 @@ export function EmployeesPromotionsManagement({ embedded = false }: { embedded?:
     user?.role === "SERVICE_PROVIDER" ||
     user?.role === "COMPANY_ADMIN" ||
     user?.role === "BRANCH_ADMIN" ||
-    isManagerView;
+    isManagerView ||
+    hasModuleWriteAccess("EMPLOYEES");
   const isEmployee = user?.role === "EMPLOYEE";
 
   const [currentUserMapping, setCurrentUserMapping] = useState<any | null>(null);

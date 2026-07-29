@@ -26,6 +26,8 @@ export interface DataTableProps<T> {
   sortBy?: string | null;
   sortDir?: "asc" | "desc";
   onSort?: (field: string) => void;
+  /** Fit parent width — no min-width / horizontal scrollbar (e.g. narrow sidebar cards). */
+  fitContainer?: boolean;
 }
 
 function sortIndicator(isSorted: boolean, sortDir: "asc" | "desc" | undefined) {
@@ -46,11 +48,22 @@ export function DataTable<T>({
   sortBy,
   sortDir,
   onSort,
+  fitContainer = false,
 }: DataTableProps<T>) {
+  const cellPad = fitContainer ? "px-3" : "px-6";
+  const colSpanTotal = fitContainer
+    ? columns.reduce((sum, c) => sum + (c.colSpan ?? 1), 0) || 1
+    : 12;
   return (
     <div className="w-full overflow-hidden bg-card">
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[720px] border-collapse text-left">
+      <div className={fitContainer ? "overflow-x-hidden" : "overflow-x-auto"}>
+        <table
+          className={cn(
+            "w-full border-collapse text-left",
+            !fitContainer && "min-w-[720px]",
+            fitContainer && "table-fixed",
+          )}
+        >
           <thead>
             <tr className="h-[52px] border-b border-border bg-[#FAFBFC] dark:border-border dark:bg-muted/40">
               {columns.map((c) => {
@@ -60,10 +73,16 @@ export function DataTable<T>({
                   <th
                     key={c.key}
                     className={cn(
-                      "px-6 text-[13px] font-semibold tracking-wide text-muted-foreground",
+                      cellPad,
+                      "text-[13px] font-semibold tracking-wide text-muted-foreground",
                       c.align === "right" && "text-right",
                       c.sortable && "cursor-pointer select-none hover:text-foreground",
                     )}
+                    style={
+                      fitContainer
+                        ? { width: `${((c.colSpan ?? 1) / colSpanTotal) * 100}%` }
+                        : undefined
+                    }
                     onClick={() => c.sortable && onSort?.(c.key)}
                   >
                     <span
@@ -89,7 +108,7 @@ export function DataTable<T>({
               SKELETON_KEYS.map((k) => (
                 <tr key={k} className="h-16 border-b border-border dark:border-border">
                   {columns.map((c) => (
-                    <td key={`${k}-${c.key}`} className="px-6 py-3">
+                    <td key={`${k}-${c.key}`} className={cn(cellPad, "py-3")}>
                       <Skeleton className="h-4 w-3/4" />
                     </td>
                   ))}
@@ -118,7 +137,9 @@ export function DataTable<T>({
                     <td
                       key={c.key}
                       className={cn(
-                        "min-w-0 px-6 py-3 align-middle text-[15px] font-medium text-foreground",
+                        cellPad,
+                        "min-w-0 py-3 align-middle text-[15px] font-medium text-foreground",
+                        fitContainer && "overflow-hidden",
                         c.align === "right" && "text-right",
                       )}
                     >

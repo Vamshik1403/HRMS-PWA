@@ -60,6 +60,16 @@ function cloudOpacityFromCelestialTop(celestialTop: number) {
   return lerp(0.05, 0.96, nearHorizon);
 }
 
+/**
+ * Clip the lower disc so it never shows below the cloud while rising/setting.
+ * Near the hub → hide most of the bottom; at apex → no clip.
+ */
+function celestialClipBottom(celestialTop: number) {
+  const span = Math.max(1, CELESTIAL_SET_END - CELESTIAL_APEX_TOP);
+  const nearCloud = clamp01((celestialTop - CELESTIAL_APEX_TOP) / span);
+  return Math.round(lerp(0, 64, Math.pow(nearCloud, 0.75)));
+}
+
 /** Night palette — deeper navy, still feathered (not a hard box) */
 const NIGHT_CORE: [number, number, number] = [24, 36, 68];
 const NIGHT_DEEP: [number, number, number] = [35, 52, 92];
@@ -126,7 +136,7 @@ function getWeatherScene(date: Date): WeatherScene {
     sunRight = CLOUD_HUB_RIGHT;
     sunOpacity = clamp01((sunRise - 0.04) / 0.96);
     sunClipTop = 0;
-    sunClipBottom = 0;
+    sunClipBottom = celestialClipBottom(sunTop);
     showSun = sunOpacity > 0.02;
 
     // Moon sinks down into the cloud hub
@@ -135,7 +145,7 @@ function getWeatherScene(date: Date): WeatherScene {
     moonRight = MOON_HUB_RIGHT;
     moonOpacity = clamp01(1 - moonSet * 1.1);
     moonClipTop = 0;
-    moonClipBottom = 0;
+    moonClipBottom = celestialClipBottom(moonTop);
     showMoon = moonOpacity > 0.02;
 
     cloudOpacity = cloudOpacityFromCelestialTop(
@@ -160,7 +170,7 @@ function getWeatherScene(date: Date): WeatherScene {
     sunRight = CLOUD_HUB_RIGHT;
     sunOpacity = 1;
     sunClipTop = 0;
-    sunClipBottom = 0;
+    sunClipBottom = celestialClipBottom(sunTop);
     showSun = true;
 
     cloudOpacity = cloudOpacityFromCelestialTop(sunTop);
@@ -183,7 +193,7 @@ function getWeatherScene(date: Date): WeatherScene {
     sunRight = CLOUD_HUB_RIGHT;
     sunOpacity = lerp(1, 0.08, clamp01((p - 0.72) / 0.28));
     sunClipTop = 0;
-    sunClipBottom = 0;
+    sunClipBottom = celestialClipBottom(sunTop);
     showSun = sunOpacity > 0.04;
 
     cloudOpacity = cloudOpacityFromCelestialTop(sunTop);
@@ -208,7 +218,7 @@ function getWeatherScene(date: Date): WeatherScene {
     moonRight = MOON_HUB_RIGHT;
     moonOpacity = lerp(0.12, 1, moonRise);
     moonClipTop = 0;
-    moonClipBottom = 0;
+    moonClipBottom = celestialClipBottom(moonTop);
     showMoon = moonOpacity > 0.04;
 
     cloudOpacity = cloudOpacityFromCelestialTop(moonTop);
@@ -237,7 +247,7 @@ function getWeatherScene(date: Date): WeatherScene {
       moonRight = MOON_HUB_RIGHT;
       moonOpacity = lerp(1, 0.06, moonSet);
       moonClipTop = 0;
-      moonClipBottom = 0;
+      moonClipBottom = celestialClipBottom(moonTop);
       showMoon = moonOpacity > 0.04;
       starsOpacity = lerp(0.55, 0.2, moonSet);
       cloudOpacity = cloudOpacityFromCelestialTop(moonTop);
@@ -247,7 +257,7 @@ function getWeatherScene(date: Date): WeatherScene {
       moonRight = MOON_HUB_RIGHT;
       moonOpacity = lerp(0.9, 1, moonFull);
       moonClipTop = 0;
-      moonClipBottom = 0;
+      moonClipBottom = celestialClipBottom(moonTop);
       showMoon = true;
 
       cloudOpacity = cloudOpacityFromCelestialTop(moonTop);
@@ -489,7 +499,7 @@ export function HeroMorningCover() {
       {/* Readability shield — keeps name & text fully clear */}
       <div className="emp-hero-cover-shield absolute inset-0 bg-gradient-to-r from-card from-[0%] via-card via-[58%] via-card/95 via-[66%] via-card/50 via-[74%] to-transparent" />
 
-      {/* Celestial elements — right zone with CSS 3D stage */}
+        {/* Celestial elements — right zone with CSS 3D stage */}
       <div
         className="absolute inset-y-0 right-0 w-[34%] min-w-[200px]"
         style={{ perspective: "720px", perspectiveOrigin: "70% 40%" }}
@@ -519,39 +529,54 @@ export function HeroMorningCover() {
           <span className="emp-hero-shooting-star absolute left-[20%] top-[12%] size-1 rounded-full bg-white shadow-[0_0_4px_rgba(255,255,255,0.9)]" />
         </div>
 
-        {/* Sun — realtime 3D orbital motion */}
-        {scene.showSun ? (
-          <div
-            className="emp-hero-celestial emp-hero-celestial-3d absolute z-[1] w-[132px] sm:w-[150px] transition-[top,right,opacity,clip-path,transform] duration-[1000ms] ease-linear"
-            style={{
-              top: `${scene.sunTop}%`,
-              right: `${scene.sunRight}%`,
-              opacity: scene.sunOpacity,
-              clipPath: `inset(${scene.sunClipTop}% 0 ${scene.sunClipBottom}% 0)`,
-              transform: `translateZ(${depthPulse.z}px) rotateY(${depthPulse.sunRotateY}deg) rotateX(${depthPulse.sunRotateX}deg)`,
-              transformStyle: "preserve-3d",
-            }}
-          >
-            <HeroSun uid={uid} className="emp-hero-sun-pulse w-full" />
-          </div>
-        ) : null}
+        {/*
+          Clip stage: while the hub cloud is visible, nothing from sun/moon may paint
+          below the cloud line. At apex the cloud fades out and this clip is disabled
+          so the full disc can show.
+        */}
+        <div
+          className="absolute inset-0 z-[1] overflow-hidden"
+          style={{
+            clipPath:
+              scene.cloudOpacity > 0.28
+                ? `inset(0 0 ${Math.max(8, 100 - scene.cloudTop - 8)}% 0)`
+                : undefined,
+          }}
+        >
+          {/* Sun — realtime 3D orbital motion */}
+          {scene.showSun ? (
+            <div
+              className="emp-hero-celestial emp-hero-celestial-3d absolute z-[1] w-[132px] sm:w-[150px] transition-[top,right,opacity,clip-path,transform] duration-[1000ms] ease-linear"
+              style={{
+                top: `${scene.sunTop}%`,
+                right: `${scene.sunRight}%`,
+                opacity: scene.sunOpacity,
+                clipPath: `inset(${scene.sunClipTop}% 0 ${scene.sunClipBottom}% 0)`,
+                transform: `translateZ(${depthPulse.z}px) rotateY(${depthPulse.sunRotateY}deg) rotateX(${depthPulse.sunRotateX}deg)`,
+                transformStyle: "preserve-3d",
+              }}
+            >
+              <HeroSun uid={uid} className="emp-hero-sun-pulse w-full" />
+            </div>
+          ) : null}
 
-        {/* Moon — realtime 3D orbital motion */}
-        {scene.showMoon ? (
-          <div
-            className="emp-hero-celestial emp-hero-celestial-3d absolute z-[1] w-[118px] sm:w-[134px] transition-[top,right,opacity,clip-path,transform] duration-[1000ms] ease-linear"
-            style={{
-              top: `${scene.moonTop}%`,
-              right: `${scene.moonRight}%`,
-              opacity: scene.moonOpacity,
-              clipPath: `inset(${scene.moonClipTop}% 0 ${scene.moonClipBottom}% 0)`,
-              transform: `translateZ(${depthPulse.z + 4}px) rotateY(${depthPulse.moonRotateY}deg) rotateX(${depthPulse.moonRotateX}deg)`,
-              transformStyle: "preserve-3d",
-            }}
-          >
-            <HeroMoon uid={uid} className="emp-hero-moon-glow w-full" />
-          </div>
-        ) : null}
+          {/* Moon — realtime 3D orbital motion */}
+          {scene.showMoon ? (
+            <div
+              className="emp-hero-celestial emp-hero-celestial-3d absolute z-[1] w-[118px] sm:w-[134px] transition-[top,right,opacity,clip-path,transform] duration-[1000ms] ease-linear"
+              style={{
+                top: `${scene.moonTop}%`,
+                right: `${scene.moonRight}%`,
+                opacity: scene.moonOpacity,
+                clipPath: `inset(${scene.moonClipTop}% 0 ${scene.moonClipBottom}% 0)`,
+                transform: `translateZ(${depthPulse.z + 4}px) rotateY(${depthPulse.moonRotateY}deg) rotateX(${depthPulse.moonRotateX}deg)`,
+                transformStyle: "preserve-3d",
+              }}
+            >
+              <HeroMoon uid={uid} className="emp-hero-moon-glow w-full" />
+            </div>
+          ) : null}
+        </div>
 
         {/* Cloud hub — in front of sun / moon, hides their lower portion */}
         {scene.cloudOpacity > 0.04 ? (

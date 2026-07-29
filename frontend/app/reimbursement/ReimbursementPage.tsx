@@ -1,3 +1,4 @@
+import { hasModuleWriteAccess } from "@/lib/companyAccess";
 "use client"
 
 import { useEffect, useState, useRef, useMemo } from "react"

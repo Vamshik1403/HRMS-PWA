@@ -5,6 +5,7 @@ import { Button } from "../components/ui/button"
 import { Input } from "../components/ui/input"
 import { Label } from "../components/ui/label"
 import { FormDrawer } from "../components/ui/form-drawer";
+import { hasModuleWriteAccess } from "@/lib/companyAccess";
 import { NoticeBanner } from "../components/ui/notice-banner";
 import { FormModal } from "../components/ui/form-modal";
 import { Badge } from "../components/ui/badge"

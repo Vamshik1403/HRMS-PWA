@@ -22,6 +22,7 @@ import { cn } from "@/lib/utils"
 import { format } from "date-fns"
 import { Calendar as CalendarIcon } from "lucide-react"
 import { FixedCalendar as CalendarComponent } from "@/app/components/ui/color-calendar"
+import { hasCompanyAccessFlag } from "@/lib/companyAccess"
 
 // ==================== TYPES ====================
 type ID = number
@@ -341,8 +342,13 @@ export function FactualRosterManagement() {
   const isServiceProviderRole = userRole === "SERVICE_PROVIDER"
   const isServiceProvider = userRole === "COMPANY_ADMIN"
 
-  // Only SUPERADMIN and COMPANY_ADMIN can access factual roster
-  if (userRole && userRole !== "SUPERADMIN" && userRole !== "COMPANY_ADMIN") {
+  // Only SUPERADMIN, COMPANY_ADMIN, and company operators can access factual roster
+  if (
+    userRole &&
+    userRole !== "SUPERADMIN" &&
+    userRole !== "COMPANY_ADMIN" &&
+    !(userRole === "EMPLOYEE" && hasCompanyAccessFlag())
+  ) {
     return null
   }
 

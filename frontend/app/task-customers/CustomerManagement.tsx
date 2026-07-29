@@ -1,5 +1,6 @@
 "use client";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { hasModuleWriteAccess } from "@/lib/companyAccess";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
@@ -58,7 +59,7 @@ const emptyForm = {
 
 export default function CustomerManagement() {
   const user = useCurrentUser();
-  const canManage = user?.role === "SUPERADMIN" || user?.role === "COMPANY_ADMIN";
+  const canManage = user?.role === "SUPERADMIN" || user?.role === "COMPANY_ADMIN" || hasModuleWriteAccess("TASKS");
   const table = useClientTable("customerName");
   const [rows, setRows] = useState<Customer[]>([]);
   const [total, setTotal] = useState(0);

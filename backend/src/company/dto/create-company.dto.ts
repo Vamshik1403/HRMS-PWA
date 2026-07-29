@@ -10,7 +10,8 @@ export class CreateCompanyDto {
 
   
   @IsOptional() @IsString() companyName?: string;
-  @IsOptional() @IsString() companyType?: string; 
+  @IsOptional() @IsString() companyType?: string;
+  @IsOptional() @IsString() legalEntityType?: string;
   @IsOptional() @IsString() address?: string;
   @IsOptional() @IsString() country?: string;
   @IsOptional() @IsString() state?: string;

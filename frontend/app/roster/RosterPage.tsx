@@ -23,6 +23,7 @@ import { format } from "date-fns"
 import { Calendar as CalendarIcon } from "lucide-react"
 import { FixedCalendar as CalendarComponent } from "@/app/components/ui/color-calendar"
 import { getSidebarContext } from "../utils/sidebarContext"
+import { hasCompanyAccessFlag } from "@/lib/companyAccess"
 // ==================== TYPES ====================
 type ID = number
 type RosterLeaveType = "CASUAL" | "SICK" | "LOP" | "PL" | "COMP_OFF"
@@ -286,10 +287,55 @@ const getUserAssignedCompanyIDs = (user: any): number[] => {
   }, [])
 
   useEffect(() => {
-    if ((userRole !== "COMPANY_ADMIN" && userRole !== "SERVICE_PROVIDER") || !user) return
+    const isCompanyOperator =
+      userRole === "COMPANY_ADMIN" ||
+      userRole === "SERVICE_PROVIDER" ||
+      (userRole === "EMPLOYEE" && hasCompanyAccessFlag())
+    if (!isCompanyOperator || !user) return
 
     const loadUserMapping = async () => {
       try {
+        // Company owner / rights employee — map from login payload (not Users table)
+        if (userRole === "EMPLOYEE") {
+          const companyId = Number(user.companyID || 0) || null
+          const spId = Number(user.serviceProviderID || 0) || null
+          const branchId = Number(user.branchesID || 0) || null
+          setCurrentUserMapping({
+            username: user.username,
+            companyID: companyId,
+            serviceProviderID: spId,
+            branchesID: branchId,
+          })
+          if (spId) {
+            setServiceProviderID(spId)
+            setSpList([{ id: spId, companyName: "Service Provider" }])
+          }
+          if (companyId) {
+            const allCompanies = await safeFetch<Company[]>(API.company)
+            const activeCompany = allCompanies.find((c) => Number(c.id) === companyId)
+            if (activeCompany) {
+              setManagerCompanies([activeCompany])
+              setCoList([activeCompany])
+              setServiceProviderID(activeCompany.serviceProviderID)
+              setCompanyID(activeCompany.id)
+            } else {
+              setCompanyID(companyId)
+            }
+            const allBranches = await safeFetch<Branch[]>(API.branches)
+            const companyBranches = allBranches.filter(
+              (b) => Number(b.companyID) === companyId,
+            )
+            setManagerBranches(companyBranches)
+            setBrList(companyBranches)
+            if (branchId && companyBranches.some((b) => Number(b.id) === branchId)) {
+              setBranchesID(branchId)
+            } else {
+              setBranchesID(companyBranches.length === 1 ? companyBranches[0].id : "")
+            }
+          }
+          return
+        }
+
         const res = await fetch(API.users)
         const users = await res.json()
         const me = users.find((u: any) => u.username === user.username)
@@ -374,7 +420,9 @@ const getUserAssignedCompanyIDs = (user: any): number[] => {
 
   const isSuperAdmin = userRole === "SUPERADMIN"
   const isServiceProviderRole = userRole === "SERVICE_PROVIDER"
-  const isServiceProvider = userRole === "COMPANY_ADMIN"
+  const isServiceProvider =
+    userRole === "COMPANY_ADMIN" ||
+    (userRole === "EMPLOYEE" && hasCompanyAccessFlag())
 
   const getActiveRosterCompanyID = () => {
     const ctx = getSidebarContext()
@@ -386,7 +434,7 @@ const getUserAssignedCompanyIDs = (user: any): number[] => {
       return ctx?.companyID ? Number(ctx.companyID) : companyID ? Number(companyID) : null
     }
 
-    if (userRole === "COMPANY_ADMIN") {
+    if (userRole === "COMPANY_ADMIN" || (userRole === "EMPLOYEE" && hasCompanyAccessFlag())) {
       if (
         assignedCompanyIDs.length > 1 &&
         storedActiveCompanyID &&
@@ -431,7 +479,10 @@ const getUserAssignedCompanyIDs = (user: any): number[] => {
   }, [isServiceProvider, currentUserMapping, branchesID])
 
   useEffect(() => {
-    if (userRole !== "COMPANY_ADMIN" || !user || !currentUserMapping) return
+    const isCompanyOperator =
+      userRole === "COMPANY_ADMIN" ||
+      (userRole === "EMPLOYEE" && hasCompanyAccessFlag())
+    if (!isCompanyOperator || !user || !currentUserMapping) return
 
     const syncActiveCompany = async () => {
       const assignedCompanyIDs = getUserAssignedCompanyIDs(currentUserMapping)

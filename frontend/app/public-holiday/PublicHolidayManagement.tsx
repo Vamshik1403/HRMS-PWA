@@ -9,6 +9,7 @@ import { FormDrawer } from "../components/ui/form-drawer"
 import { Icon } from "@iconify/react"
 import { Plus, Calendar } from "lucide-react"
 import { PageHeader } from "../components/app/page-header";
+import { hasModuleWriteAccess } from "@/lib/companyAccess";
 import { FilterBar, FilterSelect } from "../components/app/filter-bar";
 import { EntityListShell } from "../components/app/entity-list-shell";
 import type { DataTableColumn } from "../components/app/data-table";

@@ -14,6 +14,10 @@ import { clearPageCache, clearPageCachesByPrefix } from '../utils/pageCache'
 import { registerPushSubscription } from '@/lib/pushSubscribe'
 import { resolveDesktopManagerAfterLogin } from '@/lib/desktopManager'
 import { isJwtExpired } from '@/lib/jwtUtils'
+import {
+  hasCompanyAccessFlag,
+  persistCompanyAccessFromUser,
+} from '@/lib/companyAccess'
 
 const TERMS_AND_CONDITIONS = `TERMS AND CONDITIONS & END USER LICENSE AGREEMENT
 
@@ -210,7 +214,31 @@ export default function LoginPage() {
       if (basicUser.type === 'employee' || basicUser.role === 'EMPLOYEE') {
         localStorage.setItem('user', JSON.stringify(basicUser))
         await resolveDesktopManagerAfterLogin(accessToken)
-        router.push('/empdashboard')
+        try {
+          const accessRes = await axios.get('/backend/employee-permissions/me', {
+            headers: { Authorization: `Bearer ${accessToken}` },
+          })
+          const access = accessRes.data
+          const enriched = {
+            ...basicUser,
+            isCompanyOwner: !!access?.isCompanyOwner,
+            ownerTitle: access?.ownerTitle ?? basicUser.ownerTitle ?? null,
+            permissions: access?.permissions ?? [],
+            hasAnyCompanyAccess: !!access?.hasAnyCompanyAccess,
+            employee: {
+              ...(basicUser.employee || {}),
+              isCompanyOwner: !!access?.isCompanyOwner,
+              ownerTitle: access?.ownerTitle ?? null,
+            },
+          }
+          localStorage.setItem('user', JSON.stringify(enriched))
+          persistCompanyAccessFromUser(enriched)
+        } catch {
+          persistCompanyAccessFromUser(basicUser)
+        }
+        router.push(
+          hasCompanyAccessFlag() ? '/empCompanyDashboard' : '/empdashboard',
+        )
       } else {
         // For admin/manager users, fetch complete user details with all relations
         try {

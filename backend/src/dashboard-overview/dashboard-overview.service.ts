@@ -843,6 +843,8 @@ export class DashboardOverviewService {
   async getHrWidgets(query: TodayOverviewQuery) {
     const today = new Date();
     const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    const monthStart = new Date(today.getFullYear(), today.getMonth(), 1, 0, 0, 0, 0);
+    const nextMonthStart = new Date(today.getFullYear(), today.getMonth() + 1, 1, 0, 0, 0, 0);
     const employeeWhere: Prisma.ManageEmployeeWhereInput = {
       isDeleted: false,
       OR: [
@@ -906,6 +908,7 @@ export class DashboardOverviewService {
       recentTaskCreates,
       recentPunches,
       recentMobilePunches,
+      newJoinersThisMonth,
     ] = await Promise.all([
       this.prisma.employeeMemo.count({ where: memoWhere }),
       this.prisma.taskProject.count({
@@ -1087,6 +1090,21 @@ export class DashboardOverviewService {
           },
         },
       }),
+      this.prisma.employeeCredentials.count({
+        where: {
+          ...(query.companyID ? { companyID: query.companyID } : {}),
+          ...(query.branchId ? { branchesID: query.branchId } : {}),
+          ...(query.serviceProviderID ? { serviceProviderID: query.serviceProviderID } : {}),
+          createdAt: { gte: monthStart, lt: nextMonthStart },
+          employee: {
+            isDeleted: false,
+            OR: [
+              { employmentStatus: null },
+              { employmentStatus: { not: 'Terminated' } },
+            ],
+          },
+        },
+      }),
     ]);
 
     const upcomingEvents = this.buildUpcomingEvents(employees, today);
@@ -1114,6 +1132,75 @@ export class DashboardOverviewService {
       upcomingEvents,
       newsFeed,
       recentActivities,
+      newJoinersThisMonth,
+    };
+  }
+
+  /** Employees created in the current calendar month (same rule as New Joiners KPI). */
+  async getNewJoiners(query: TodayOverviewQuery) {
+    const today = new Date();
+    const monthStart = new Date(today.getFullYear(), today.getMonth(), 1, 0, 0, 0, 0);
+    const nextMonthStart = new Date(today.getFullYear(), today.getMonth() + 1, 1, 0, 0, 0, 0);
+    const monthLabel = today.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+
+    const rows = await this.prisma.employeeCredentials.findMany({
+      where: {
+        ...(query.companyID ? { companyID: query.companyID } : {}),
+        ...(query.branchId ? { branchesID: query.branchId } : {}),
+        ...(query.serviceProviderID ? { serviceProviderID: query.serviceProviderID } : {}),
+        createdAt: { gte: monthStart, lt: nextMonthStart },
+        employee: {
+          isDeleted: false,
+          OR: [
+            { employmentStatus: null },
+            { employmentStatus: { not: 'Terminated' } },
+          ],
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        createdAt: true,
+        username: true,
+        employee: {
+          select: {
+            id: true,
+            employeeID: true,
+            employeeFirstName: true,
+            employeeLastName: true,
+            joiningDate: true,
+            businessEmail: true,
+            branches: { select: { branchName: true } },
+            departments: { select: { departmentName: true } },
+            designations: { select: { designation: true } },
+          },
+        },
+      },
+    });
+
+    return {
+      month: monthLabel,
+      monthStart: dateKeyLocal(monthStart),
+      count: rows.length,
+      employees: rows.map((r) => {
+        const emp = r.employee;
+        const name =
+          `${emp?.employeeFirstName ?? ''} ${emp?.employeeLastName ?? ''}`.trim() || 'Employee';
+        return {
+          id: emp?.id ?? r.id,
+          employeeCode: emp?.employeeID ?? null,
+          name,
+          employeeFirstName: emp?.employeeFirstName ?? '',
+          employeeLastName: emp?.employeeLastName ?? '',
+          joiningDate: emp?.joiningDate ?? null,
+          createdAt: r.createdAt,
+          username: r.username,
+          email: emp?.businessEmail ?? null,
+          branchName: emp?.branches?.branchName ?? null,
+          departmentName: emp?.departments?.departmentName ?? null,
+          designationName: emp?.designations?.designation ?? null,
+        };
+      }),
     };
   }
 

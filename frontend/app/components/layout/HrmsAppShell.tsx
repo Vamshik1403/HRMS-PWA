@@ -8,6 +8,7 @@ import { authHeaders } from "@/lib/auth";
 import { setSidebarContext, getSidebarContext } from "@/app/utils/sidebarContext";
 import { getPageCache, setPageCache } from "@/app/utils/pageCache";
 import { isDesktopManagerFlagSet } from "@/lib/desktopManager";
+import { hasCompanyAccessFlag } from "@/lib/companyAccess";
 import { dispatchAppRefresh } from "@/app/utils/appRefresh";
 import { ensureFetchRefreshPatch } from "@/app/utils/patchFetchForRefresh";
 import { toast } from "sonner";
@@ -85,7 +86,8 @@ export function HrmsAppShell({ children }: { children: React.ReactNode }) {
     currentUser?.role === "COMPANY_ADMIN" ||
     currentUser?.role === "ADMIN" ||
     currentUser?.role === "BRANCH_ADMIN" ||
-    (desktopManager && currentUser?.role === "EMPLOYEE");
+    (currentUser?.role === "EMPLOYEE" &&
+      (desktopManager || hasCompanyAccessFlag()));
 
   const navContext = buildNavContext(currentUser, desktopManager);
 
@@ -170,9 +172,11 @@ export function HrmsAppShell({ children }: { children: React.ReactNode }) {
       window.dispatchEvent(new Event("sidebar-context-changed"));
       window.dispatchEvent(new Event("app-data-refresh"));
       dispatchAppRefresh();
-      router.push("/dashboard");
+      router.push(
+        currentUser?.role === "EMPLOYEE" ? "/empCompanyDashboard" : "/dashboard",
+      );
     },
-    [router],
+    [router, currentUser?.role],
   );
 
   useEffect(() => {
@@ -205,6 +209,12 @@ export function HrmsAppShell({ children }: { children: React.ReactNode }) {
     localStorage.removeItem("accessToken");
     localStorage.removeItem("token");
     localStorage.removeItem("user");
+    try {
+      localStorage.removeItem("openhrmCompanyAccess");
+      localStorage.removeItem("openhrmDesktopManager");
+    } catch {
+      /* ignore */
+    }
     document.cookie = "accessToken=; path=/; max-age=0; expires=Thu, 01 Jan 1970 00:00:00 UTC; samesite=lax";
     router.push("/login");
   };

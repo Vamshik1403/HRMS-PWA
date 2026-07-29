@@ -30,6 +30,13 @@ export class UsersService {
 
   async create(createUserDto: CreateUserDto) {
     try {
+      const role = (createUserDto.role as UserRole) || UserRole.EMPLOYEE
+      if (role === UserRole.COMPANY_ADMIN) {
+        throw new ConflictException(
+          'COMPANY_ADMIN creation is disabled. Create a Company Owner via POST /company/:id/owner instead.',
+        )
+      }
+
       const existingUser = await this.prisma.user.findUnique({
         where: { username: createUserDto.username },
       })
@@ -37,8 +44,6 @@ export class UsersService {
       if (existingUser) {
         throw new ConflictException('Username already exists')
       }
-
-      const role = (createUserDto.role as UserRole) || UserRole.EMPLOYEE
 
       const companyIDs = this.normalizeCompanyIDs(
         createUserDto.companyID,

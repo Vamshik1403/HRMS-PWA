@@ -35,6 +35,8 @@ import { useClientTable, sortRows } from "../hooks/use-client-table";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import { dispatchAppRefresh, registerDataCacheClearer } from "../utils/appRefresh";
 import { authHeaders } from "@/lib/auth";
+import { canModuleAction, hasModuleWriteAccess, isCompanyOwnerFlag } from "@/lib/companyAccess";
+import { canDesktopManagerManage } from "../utils/scopeContext";
 
 const jsonAuthHeaders = () => authHeaders({ "Content-Type": "application/json" });
 import {
@@ -557,12 +559,21 @@ export function ManageEmployeesManagement() {
   const [error, setError] = useState<string | null>(null);
   const [terminationMap, setTerminationMap] = useState<Record<number, { daysLeft: number; lastWorkingDay: string }>>({});
   const user = useCurrentUser();
-  const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN" || user?.role === "ADMIN" || user?.role === "BRANCH_ADMIN";
+  const canManage =
+    user?.role === "SUPERADMIN" ||
+    user?.role === "SERVICE_PROVIDER" ||
+    user?.role === "COMPANY_ADMIN" ||
+    user?.role === "ADMIN" ||
+    user?.role === "BRANCH_ADMIN" ||
+    canDesktopManagerManage(user) ||
+    hasModuleWriteAccess("EMPLOYEES");
   const isAdmin = user?.role === "ADMIN";
   const isCompanyAdmin = user?.role === "COMPANY_ADMIN";
   const isBranchAdmin = user?.role === "BRANCH_ADMIN";
   const isSuperAdmin = user?.role === "SUPERADMIN";
   const isEmployee = user?.role === "EMPLOYEE";
+  const hasCompanyEmployeeScope =
+    isCompanyOwnerFlag() || canModuleAction("EMPLOYEES", "view");
   const [credentialModalOpen, setCredentialModalOpen] = useState(false);
   const [credentialSaving, setCredentialSaving] = useState(false);
   const [credentialEmployee, setCredentialEmployee] = useState<ManageEmpRead | null>(null);
@@ -1435,15 +1446,16 @@ const [isAddingNew, setIsAddingNew] = useState(false);
       }
     }
     // EMPLOYEE → match via manage-emp/credentials/all
+    // Company owner / EMPLOYEES rights → company-wide (same as COMPANY_ADMIN)
     else if (user?.role === "EMPLOYEE") {
       const credsRes = await fetch("/backend/manage-emp/credentials/all");
       const creds = await credsRes.json();
       const emp = creds.find((c: any) => c.username === user?.username);
       if (emp) {
-        filteredRows = enrichedEmployees.filter(
-          (r: any) =>
-            r.companyID === emp.companyID &&
-            r.branchesID === emp.branchesID
+        filteredRows = enrichedEmployees.filter((r: any) =>
+          hasCompanyEmployeeScope
+            ? r.companyID === emp.companyID
+            : r.companyID === emp.companyID && r.branchesID === emp.branchesID,
         );
       } else {
         filteredRows = [];

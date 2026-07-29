@@ -1,6 +1,7 @@
 "use client";
 import { TableBodySkeleton } from "../components/ui/TableBodySkeleton";
 
+import { hasModuleWriteAccess } from "@/lib/companyAccess";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
 import { Button } from "../components/ui/button";
@@ -237,8 +238,8 @@ export function BranchManagement() {
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [signatureFile, setSignatureFile] = useState<File | null>(null);
   const user = useCurrentUser();
-  const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN" || user?.role === "ADMIN";
-  const canCreate = user?.role === "SUPERADMIN" || user?.role === "COMPANY_ADMIN" || user?.role === "ADMIN";
+  const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN" || user?.role === "ADMIN" || hasModuleWriteAccess("BRANCHES");
+  const canCreate = user?.role === "SUPERADMIN" || user?.role === "COMPANY_ADMIN" || user?.role === "ADMIN" || hasModuleWriteAccess("BRANCHES");
   const isEmployee = user?.role === "EMPLOYEE";
 
   const canManageBranchAdmins =

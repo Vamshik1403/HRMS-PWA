@@ -88,12 +88,8 @@ export const MODULE_WORKSPACES: ModuleWorkspace[] = [
     id: "tasks",
     label: "Tasks",
     basePath: "/empMyTasks",
-    tabs: [
-      { id: "overview", label: "Overview" },
-      { id: "open", label: "Open" },
-      { id: "wip", label: "In Progress" },
-      { id: "completed", label: "Completed" },
-    ],
+    // Single tab — title lives in the portal navbar (no workspace tab strip)
+    tabs: [{ id: "overview", label: "Overview" }],
   },
   {
     id: "profile",

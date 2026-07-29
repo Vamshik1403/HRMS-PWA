@@ -11,6 +11,7 @@ import { EntityDetailHero, EntityDetailLayout } from "../components/app/entity-d
 import { MessageCircle, Plus, AlertTriangle, UserPlus, FileDown, ClipboardList } from "lucide-react";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import { isDesktopManagerFlagSet } from "@/lib/desktopManager";
+import { hasModuleWriteAccess } from "@/lib/companyAccess";
 import { toast } from "sonner";
 import { taskFetch } from "../utils/taskApi";
 import { NEXT_TASK_STATUS } from "../utils/taskStatusFlow";
@@ -94,7 +95,8 @@ export default function TaskManagement() {
   const canManage =
     user?.role === "SUPERADMIN" ||
     user?.role === "COMPANY_ADMIN" ||
-    desktopManager;
+    desktopManager ||
+    hasModuleWriteAccess("TASKS");
   const table = useClientTable("taskCode");
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);

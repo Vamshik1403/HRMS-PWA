@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { Icon } from "@iconify/react";
 import {
   Table,
@@ -88,12 +89,26 @@ function statusBadgeClass(statusType: string): string {
 
 export default function AttendanceLogsPage() {
   const user = useCurrentUser();
+  const searchParams = useSearchParams();
   const [allRows, setAllRows] = useState<OverviewEmployee[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
   const [loading, setLoading] = useState(true);
   const [todayDate, setTodayDate] = useState("");
-  const [presenceFilter, setPresenceFilter] = useState<"present" | "absent" | "all">("present");
+  const initialPresence = (() => {
+    const p = searchParams.get("presence");
+    if (p === "absent" || p === "present" || p === "all") return p;
+    return "present";
+  })();
+  const [presenceFilter, setPresenceFilter] = useState<"present" | "absent" | "all">(initialPresence);
+
+  useEffect(() => {
+    const p = searchParams.get("presence");
+    if (p === "absent" || p === "present" || p === "all") {
+      setPresenceFilter(p);
+    }
+  }, [searchParams]);
+
   const [branchFilter, setBranchFilter] = useState("");
   const [departmentFilter, setDepartmentFilter] = useState("");
   const [currentUserMapping, setCurrentUserMapping] = useState<{
