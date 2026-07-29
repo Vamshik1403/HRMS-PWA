@@ -946,7 +946,12 @@ export function CompanyAdminEnterpriseDashboard({
 
   return (
     <div
-      className="ca-enterprise-dashboard -mx-4 -mt-3 -mb-6 min-h-full bg-background px-4 pb-8 pt-0 text-foreground sm:-mx-6 sm:-mt-4 sm:px-6 lg:-mx-8 lg:-mt-5 lg:px-8"
+      className={cn(
+        "ca-enterprise-dashboard -mx-4 -mb-6 min-h-full bg-background px-4 pb-8 text-foreground sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8",
+        suppressPageTitle
+          ? "-mt-1 pt-2 sm:-mt-1.5 lg:-mt-2"
+          : "-mt-3 pt-0 sm:-mt-4 lg:-mt-5",
+      )}
     >
       <style jsx global>{`
         /* Opacity-only fade — transforms keep a compositor layer and blur text at 100% zoom */
@@ -979,37 +984,67 @@ export function CompanyAdminEnterpriseDashboard({
       `}</style>
 
       {/* Header */}
-      <header className="ca-fade mb-5 flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
-        {suppressPageTitle ? (
-          <div className="min-w-0" />
-        ) : (
-          <div>
-            <h1 className="text-[28px] font-semibold tracking-tight" style={{ color: TEXT }}>
-              Dashboard
-            </h1>
-            <p className="mt-1 text-[15px] font-semibold text-slate-800 dark:text-slate-200">
-              Welcome back, {formatWelcomeName(firstName)}
-            </p>
-          </div>
+      <header
+        className={cn(
+          "ca-fade flex flex-col",
+          suppressPageTitle
+            ? "mb-3 items-stretch gap-1.5"
+            : "mb-5 gap-3 xl:flex-row xl:items-end xl:justify-between",
         )}
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-          <div
-            className="inline-flex h-[42px] items-center gap-2 rounded-[14px] border border-border bg-card px-4 text-sm font-medium text-foreground shadow-sm"
-          >
-            <CalendarDays className="size-4" style={{ color: PRIMARY }} />
-            <span>Today</span>
-            <span style={{ color: MUTED }}>·</span>
-            <span style={{ color: MUTED }}>{displayDate}</span>
-          </div>
-          <Link
-            href="/attendance-reports"
-            className="inline-flex h-[42px] items-center justify-center gap-2 rounded-[14px] px-5 text-sm font-semibold text-white shadow-sm transition-colors duration-200 hover:opacity-95 active:opacity-90"
-            style={{ background: PRIMARY }}
-          >
-            <Download className="size-4" />
-            Generate Report
-          </Link>
-        </div>
+      >
+        {suppressPageTitle ? (
+          <>
+            <h1
+              className="text-[28px] font-semibold tracking-tight text-slate-900 dark:text-slate-100"
+              style={{ color: TEXT }}
+            >
+              Welcome back, {formatWelcomeName(firstName)}
+            </h1>
+            <div className="flex flex-col gap-3 self-end sm:flex-row sm:items-center">
+              <div className="inline-flex h-[42px] items-center gap-2 rounded-[14px] border border-border bg-card px-4 text-sm font-medium text-foreground shadow-sm">
+                <CalendarDays className="size-4" style={{ color: PRIMARY }} />
+                <span>Today</span>
+                <span style={{ color: MUTED }}>·</span>
+                <span style={{ color: MUTED }}>{displayDate}</span>
+              </div>
+              <Link
+                href="/attendance-reports"
+                className="inline-flex h-[42px] items-center justify-center gap-2 rounded-[14px] px-5 text-sm font-semibold text-white shadow-sm transition-colors duration-200 hover:opacity-95 active:opacity-90"
+                style={{ background: PRIMARY }}
+              >
+                <Download className="size-4" />
+                Generate Report
+              </Link>
+            </div>
+          </>
+        ) : (
+          <>
+            <div>
+              <h1 className="text-[28px] font-semibold tracking-tight" style={{ color: TEXT }}>
+                Dashboard
+              </h1>
+              <p className="mt-1 text-[15px] font-semibold text-slate-800 dark:text-slate-200">
+                Welcome back, {formatWelcomeName(firstName)}
+              </p>
+            </div>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+              <div className="inline-flex h-[42px] items-center gap-2 rounded-[14px] border border-border bg-card px-4 text-sm font-medium text-foreground shadow-sm">
+                <CalendarDays className="size-4" style={{ color: PRIMARY }} />
+                <span>Today</span>
+                <span style={{ color: MUTED }}>·</span>
+                <span style={{ color: MUTED }}>{displayDate}</span>
+              </div>
+              <Link
+                href="/attendance-reports"
+                className="inline-flex h-[42px] items-center justify-center gap-2 rounded-[14px] px-5 text-sm font-semibold text-white shadow-sm transition-colors duration-200 hover:opacity-95 active:opacity-90"
+                style={{ background: PRIMARY }}
+              >
+                <Download className="size-4" />
+                Generate Report
+              </Link>
+            </div>
+          </>
+        )}
       </header>
 
       {/* KPIs (4) + Attendance / Trend + tall Calendar */}

@@ -122,11 +122,7 @@ export function EmpCompanyEnterpriseHome({ firstName }: { firstName?: string }) 
   if (!inPortal) return dashboard;
 
   return (
-    <EmpDesktopPage
-      title="Dashboard"
-      description={`Welcome back, ${titleName}`}
-      icon={LayoutDashboard}
-    >
+    <EmpDesktopPage title="Dashboard" icon={LayoutDashboard}>
       {dashboard}
     </EmpDesktopPage>
   );
