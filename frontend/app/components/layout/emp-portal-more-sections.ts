@@ -57,21 +57,11 @@ export const EMP_MORE_SECTIONS: EmpMoreSection[] = [
   {
     id: "company-overview",
     label: "My Company",
-    href: "/empCompany",
+    href: "/empCompanyDashboard",
     icon: "solar:buildings-2-bold-duotone",
     iconClassName: "text-slate-600",
     managerOnly: true,
     group: "team",
-  },
-
-  // ── Company admin — Overview ──
-  {
-    id: "company-dashboard",
-    label: "Company Dashboard",
-    href: "/empCompanyDashboard",
-    icon: "solar:chart-square-bold-duotone",
-    iconClassName: "text-indigo-700",
-    group: "admin",
     show: () => hasCompanyAccessFlag(),
   },
 

@@ -25,6 +25,8 @@ import { useEmpManagerScope } from "@/app/hooks/useEmpManagerScope";
 import { isDesktopBrowser } from "@/lib/desktopManager";
 import { resolveEmpPhoto } from "@/app/utils/empPhotoCache";
 import { getPageCache } from "@/app/utils/pageCache";
+import { setSidebarContext, getSidebarContext } from "@/app/utils/sidebarContext";
+import { hasCompanyAccessFlag } from "@/lib/companyAccess";
 import {
   Dialog,
   DialogContent,
@@ -187,6 +189,37 @@ export default function EmpPortalShell({ children, hideBottomNav = false }: EmpP
           u.employee.employeePhotoUrl = resolveEmpPhoto(empId, apiPhoto) ?? apiPhoto;
         }
         setEmpUser(u);
+
+        // Keep org scope in sync for company owners / module operators so
+        // Branches/Departments/Designations forms resolve company + SP correctly.
+        const companyID = Number(u?.companyID || u?.activeCompanyID || 0);
+        const serviceProviderID = Number(u?.serviceProviderID || 0);
+        if (
+          (hasCompanyAccessFlag() || u?.isCompanyOwner) &&
+          companyID > 0
+        ) {
+          const ctx = getSidebarContext();
+          const companyName =
+            (typeof u?.company === "string" ? u.company : u?.company?.companyName) ||
+            u?.employee?.company ||
+            ctx?.companyName ||
+            "";
+          const serviceProviderName =
+            u?.serviceProvider?.companyName || ctx?.serviceProviderName || "";
+          if (
+            !ctx ||
+            Number(ctx.companyID) !== companyID ||
+            (serviceProviderID > 0 && Number(ctx.serviceProviderID) !== serviceProviderID)
+          ) {
+            setSidebarContext(
+              serviceProviderID || ctx?.serviceProviderID || 0,
+              serviceProviderName,
+              companyID,
+              companyName,
+            );
+          }
+          sessionStorage.setItem("activeCompanyID", String(companyID));
+        }
       } catch {
         /* ignore */
       }

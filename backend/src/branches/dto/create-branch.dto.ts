@@ -9,8 +9,8 @@ export class BankDetailCreateDto {
 }
 
 export class CreateBranchesDto {
-  @IsOptional() @IsInt() serviceProviderID?: number;
-  @IsOptional() @IsInt() companyID?: number;
+  @IsOptional() @Type(() => Number) @IsInt() serviceProviderID?: number;
+  @IsOptional() @Type(() => Number) @IsInt() companyID?: number;
 
   @IsOptional() @IsString() branchName?: string;
   @IsOptional() @IsString() branchType?: string;

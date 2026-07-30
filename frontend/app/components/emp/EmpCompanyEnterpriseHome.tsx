@@ -94,20 +94,29 @@ export function EmpCompanyEnterpriseHome({ firstName }: { firstName?: string }) 
 
   if (!hasCompanyAccessFlag()) return null;
 
+  const summary = overview?.summary ?? overview;
+  const statusCounts = overview?.statusCounts ?? {};
+  const statusBreakdown = Array.isArray(overview?.statusBreakdown)
+    ? overview.statusBreakdown
+    : Object.entries(statusCounts).map(([status, count]) => ({
+        status,
+        count: Number(count) || 0,
+      }));
+
   const dashboard = (
     <CompanyAdminEnterpriseDashboard
       firstName={titleName}
       todayDate={todayIso()}
-      overviewTotal={Number(overview?.total ?? 0)}
-      overviewPresent={Number(overview?.present ?? 0)}
-      overviewAbsent={Number(overview?.absent ?? 0)}
-      overviewOnLeave={Number(overview?.onLeave ?? 0)}
-      overviewHalfDay={Number(overview?.halfDay ?? 0)}
+      overviewTotal={Number(summary?.total ?? overview?.employees?.length ?? 0)}
+      overviewPresent={Number(summary?.present ?? 0)}
+      overviewAbsent={Number(summary?.absent ?? 0)}
+      overviewOnLeave={Number(summary?.onLeave ?? 0)}
+      overviewHalfDay={Number(summary?.halfDay ?? 0)}
       overviewStatsReady={ready}
-      employeesCount={Number(overview?.total ?? 0)}
+      employeesCount={Number(summary?.total ?? overview?.employees?.length ?? 0)}
       presentTrendVsYesterday={Number(overview?.presentTrendVsYesterday ?? 0)}
       newJoinersCount={Number(widgets?.newJoinersThisMonth ?? 0)}
-      statusBreakdown={Array.isArray(overview?.statusBreakdown) ? overview.statusBreakdown : []}
+      statusBreakdown={statusBreakdown}
       attendanceTrend={Array.isArray(overview?.attendanceTrend) ? overview.attendanceTrend : []}
       departmentHeadcounts={deptRows}
       upcomingEvents={widgets?.upcomingEvents ?? []}

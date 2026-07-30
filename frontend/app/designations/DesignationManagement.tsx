@@ -1,7 +1,7 @@
 "use client";
 import { TableBodySkeleton } from "../components/ui/TableBodySkeleton";
 
-import { hasModuleWriteAccess } from "@/lib/companyAccess";
+import { hasCompanyAccessFlag, hasModuleWriteAccess, isCompanyOwnerFlag } from "@/lib/companyAccess";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
 import { Button } from "../components/ui/button";
@@ -40,7 +40,9 @@ import { toast } from "sonner";
 import { getSidebarContext } from "../utils/sidebarContext";
 import {
   canDesktopManagerManage,
-  filterCompanyScopedRecords,
+  isCompanyModuleOperator,
+  resolveScopedCompanyId,
+  resolveScopedServiceProviderId,
   resolveScopeUserMapping,
 } from "../utils/scopeContext";
 // ---------------------------
@@ -151,6 +153,13 @@ export function DesignationManagement() {
 
   const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN" || user?.role === "ADMIN" || user?.role === "BRANCH_ADMIN" || hasModuleWriteAccess("DESIGNATIONS");
   const isEmployee = user?.role === "EMPLOYEE";
+  // Company owners authenticate as EMPLOYEE but still need Branch/Department fields.
+  const showOrgFields =
+    !isEmployee ||
+    isCompanyModuleOperator(user) ||
+    hasCompanyAccessFlag() ||
+    isCompanyOwnerFlag() ||
+    hasModuleWriteAccess("DESIGNATIONS");
 
   // UI
 const table = useClientTable("designation");
@@ -314,10 +323,11 @@ const [filterLoading, setFilterLoading] = useState(false);
       fetchJSONSafe<Department[]>(API.departments),
     ]);
 
-    const ctx = getSidebarContext();
-
     const activeCompanyID =
-      ctx?.companyID ??
+      resolveScopedCompanyId({
+        ...user,
+        companyID: user?.companyID ?? currentUserMapping?.companyID,
+      }) ??
       user?.companyID ??
       currentUserMapping?.companyID ??
       null;
@@ -367,10 +377,11 @@ const [filterLoading, setFilterLoading] = useState(false);
 const mapping = await resolveScopeUserMapping(user);
 if (mapping) setCurrentUserMapping(mapping);
 
-const ctx = getSidebarContext();
-
 const activeCompanyID =
-  ctx?.companyID ??
+  resolveScopedCompanyId({
+    ...user,
+    companyID: mapping?.companyID ?? user?.companyID,
+  }) ??
   mapping?.companyID ??
   user?.companyID;
 
@@ -445,25 +456,50 @@ setRows(filteredRows);
     const ctx = getSidebarContext();
     skipCascadeRef.current = true;
 
-    let serviceProviderID: ID | null = ctx?.serviceProviderID ?? null;
-    let companyID: ID | null = ctx?.companyID ?? null;
+    let serviceProviderID: ID | null = null;
+    let companyID: ID | null = null;
     let branchesID: ID | null = null;
-    let spAutocomplete = ctx?.serviceProviderName ?? "";
-    let coAutocomplete = ctx?.companyName ?? "";
+    let spAutocomplete = "";
+    let coAutocomplete = "";
     let brAutocomplete = "";
 
-if (
-  !ctx &&
-  (user?.role === "COMPANY_ADMIN" || user?.role === "ADMIN") &&
-  currentUserMapping
-) {
-  serviceProviderID = currentUserMapping.serviceProviderID ?? null;
-  companyID = currentUserMapping.companyID ?? null;
-  branchesID = null;
-  spAutocomplete = currentUserMapping.serviceProvider?.companyName ?? "";
-  coAutocomplete = currentUserMapping.company?.companyName ?? "";
-  brAutocomplete = "";
-} else if (user?.role === "BRANCH_ADMIN" && currentUserMapping) {
+    if (isCompanyModuleOperator(user) || user?.role === "EMPLOYEE") {
+      serviceProviderID =
+        (currentUserMapping?.serviceProviderID as ID | null) ??
+        (resolveScopedServiceProviderId(user) as ID | null) ??
+        (user?.serviceProviderID as ID | null) ??
+        null;
+      companyID =
+        (currentUserMapping?.companyID as ID | null) ??
+        (resolveScopedCompanyId(user) as ID | null) ??
+        (user?.companyID as ID | null) ??
+        null;
+      spAutocomplete =
+        currentUserMapping?.serviceProvider?.companyName ||
+        (ctx && Number(ctx.companyID) === Number(companyID)
+          ? ctx.serviceProviderName
+          : "") ||
+        "";
+      coAutocomplete =
+        currentUserMapping?.company?.companyName ||
+        (ctx && Number(ctx.companyID) === Number(companyID)
+          ? ctx.companyName
+          : "") ||
+        "";
+    } else if (ctx) {
+      serviceProviderID = ctx.serviceProviderID ?? null;
+      companyID = ctx.companyID ?? null;
+      spAutocomplete = ctx.serviceProviderName ?? "";
+      coAutocomplete = ctx.companyName ?? "";
+    } else if (
+      (user?.role === "COMPANY_ADMIN" || user?.role === "ADMIN") &&
+      currentUserMapping
+    ) {
+      serviceProviderID = currentUserMapping.serviceProviderID ?? null;
+      companyID = currentUserMapping.companyID ?? null;
+      spAutocomplete = currentUserMapping.serviceProvider?.companyName ?? "";
+      coAutocomplete = currentUserMapping.company?.companyName ?? "";
+    } else if (user?.role === "BRANCH_ADMIN" && currentUserMapping) {
       serviceProviderID = currentUserMapping.serviceProviderID ?? null;
       companyID = currentUserMapping.companyID ?? null;
       branchesID = currentUserMapping.branchesID ?? null;
@@ -570,24 +606,24 @@ if (
     setSaving(true);
     setError(null);
 
-  const ctx = getSidebarContext();
+    const payload: any = {
+      serviceProviderID:
+        formData.serviceProviderID ??
+        resolveScopedServiceProviderId(user) ??
+        currentUserMapping?.serviceProviderID ??
+        user?.serviceProviderID ??
+        undefined,
 
-const payload: any = {
-  serviceProviderID:
-    ctx?.serviceProviderID ??
-    formData.serviceProviderID ??
-    currentUserMapping?.serviceProviderID,
+      companyID:
+        formData.companyID ??
+        resolveScopedCompanyId(user) ??
+        currentUserMapping?.companyID ??
+        user?.companyID ??
+        undefined,
 
-  companyID:
-    ctx?.companyID ??
-    formData.companyID ??
-    currentUserMapping?.companyID,
-
-  branchesID: formData.branchesID,
+      branchesID: formData.branchesID,
       departmentID: formData.departmentID,
       designation: formData.designation,
-      
-      // Updated fields
       otApplicable: formData.otApplicable || null,
       noticePeriodDaysForResignation: formData.noticePeriodDaysForResignation || null,
       noticePeriodDaysForTermination: formData.noticePeriodDaysForTermination || null,
@@ -689,21 +725,28 @@ const handleCancel = () => {
   const fetchBranchSuggestions = (query: string) => {
     if (branchTimerRef.current) clearTimeout(branchTimerRef.current);
     branchTimerRef.current = setTimeout(() => {
-      if (query.length < MIN_CHARS || !formData.serviceProviderID || !formData.companyID) {
+      const companyID =
+        formData.companyID ??
+        resolveScopedCompanyId(user) ??
+        user?.companyID ??
+        null;
+      if (query.length < MIN_CHARS || !companyID) {
         setSuggestedBranches([]);
         return;
       }
 
       setLoadingBranches(true);
-      
-      // Filter from master list based on SP, Company and query
-      const filtered = allBranches.filter(branch => 
-        branch.serviceProviderID === formData.serviceProviderID &&
-        branch.companyID === formData.companyID &&
-        (user?.role !== "BRANCH_ADMIN" || Number(branch.id) === Number(user?.branchesID)) &&
-        branch.branchName.toLowerCase().includes(query.toLowerCase())
+
+      const filtered = allBranches.filter(
+        (branch) =>
+          Number(branch.companyID) === Number(companyID) &&
+          (user?.role !== "BRANCH_ADMIN" ||
+            Number(branch.id) === Number(user?.branchesID)) &&
+          (branch.branchName ?? "")
+            .toLowerCase()
+            .includes(query.toLowerCase()),
       );
-      
+
       setSuggestedBranches(filtered.slice(0, 20));
       setLoadingBranches(false);
     }, DEBOUNCE_MS);
@@ -713,22 +756,27 @@ const handleCancel = () => {
   const fetchDepartmentSuggestions = (query: string) => {
     if (deptTimerRef.current) clearTimeout(deptTimerRef.current);
     deptTimerRef.current = setTimeout(() => {
-      if (query.length < MIN_CHARS || !formData.serviceProviderID || !formData.companyID || !formData.branchesID) {
+      const companyID =
+        formData.companyID ??
+        resolveScopedCompanyId(user) ??
+        user?.companyID ??
+        null;
+      if (query.length < MIN_CHARS || !companyID || !formData.branchesID) {
         setSuggestedDepartments([]);
         return;
       }
 
       setLoadingDepartments(true);
-      
-      // Filter from master list based on SP, Company, Branch and query
-      const filtered = allDepartments.filter(dept => 
-        dept.serviceProviderID === formData.serviceProviderID &&
-        dept.companyID === formData.companyID &&
-        dept.branchesID === formData.branchesID &&
-        dept.departmentName.toLowerCase().includes(query.toLowerCase())
+
+      const filtered = allDepartments.filter(
+        (dept) =>
+          Number(dept.companyID) === Number(companyID) &&
+          Number(dept.branchesID) === Number(formData.branchesID) &&
+          (dept.departmentName ?? "")
+            .toLowerCase()
+            .includes(query.toLowerCase()),
       );
-      
-      console.log("Filtered departments:", filtered); // Debug log
+
       setSuggestedDepartments(filtered.slice(0, 20));
       setLoadingDepartments(false);
     }, DEBOUNCE_MS);
@@ -1014,7 +1062,7 @@ const filtered = useMemo(() => {
               )}
 
               {/* Branch Autocomplete */}
-              {user?.role !== "EMPLOYEE" && (
+              {showOrgFields && (
                 <div ref={brRef} className="space-y-2 relative">
                   <Label>Branch *</Label>
                   <Input
@@ -1027,19 +1075,19 @@ const filtered = useMemo(() => {
                       }
                     }}
                     onFocus={() => {
-                      if (!editing && formData.companyID && formData.brAutocomplete.length >= MIN_CHARS) {
+                      if (!editing && (formData.companyID || resolveScopedCompanyId(user)) && formData.brAutocomplete.length >= MIN_CHARS) {
                         fetchBranchSuggestions(formData.brAutocomplete);
                       }
                     }}
                     placeholder={
-                      !formData.serviceProviderID ? "Select service provider first" :
-                      !formData.companyID ? "Select company first" :
-                      editing ? formData.brAutocomplete || "Branch" :
+                      !(formData.companyID || resolveScopedCompanyId(user) || user?.companyID)
+                        ? "Company not resolved for this account"
+                        : editing ? formData.brAutocomplete || "Branch" :
                       "Type to search branch..."
                     }
                     autoComplete="off"
                     required
-                    disabled={!formData.serviceProviderID || !formData.companyID}
+                    disabled={!(formData.companyID || resolveScopedCompanyId(user) || user?.companyID)}
                   />
                   {suggestedBranches.length > 0 && !editing && (
                     <div className="absolute z-10 bg-popover text-popover-foreground border border-border rounded w-full shadow max-h-48 overflow-y-auto">
@@ -1054,6 +1102,9 @@ const filtered = useMemo(() => {
                               ...p,
                               branchesID: br.id,
                               brAutocomplete: br.branchName,
+                              companyID: p.companyID ?? br.companyID ?? null,
+                              serviceProviderID:
+                                p.serviceProviderID ?? br.serviceProviderID ?? null,
                             }));
                             setSuggestedBranches([]);
                           }}
@@ -1067,7 +1118,7 @@ const filtered = useMemo(() => {
               )}
 
               {/* Department Autocomplete */}
-              {user?.role !== "EMPLOYEE" && (
+              {showOrgFields && (
                 <div ref={deptRef} className="space-y-2 relative">
                   <Label>Department *</Label>
                   <Input
@@ -1085,15 +1136,18 @@ const filtered = useMemo(() => {
                       }
                     }}
                     placeholder={
-                      !formData.serviceProviderID ? "Select service provider first" :
-                      !formData.companyID ? "Select company first" :
-                      !formData.branchesID ? "Select branch first" :
+                      !(formData.companyID || resolveScopedCompanyId(user) || user?.companyID)
+                        ? "Company not resolved for this account"
+                        : !formData.branchesID ? "Select branch first" :
                       editing ? formData.deptAutocomplete || "Department" :
                       "Type to search department..."
                     }
                     autoComplete="off"
                     required
-                    disabled={!formData.serviceProviderID || !formData.companyID || !formData.branchesID}
+                    disabled={
+                      !(formData.companyID || resolveScopedCompanyId(user) || user?.companyID) ||
+                      !formData.branchesID
+                    }
                   />
                   {suggestedDepartments.length > 0 && !editing && (
                     <div className="absolute z-10 bg-popover text-popover-foreground border border-border rounded w-full shadow max-h-48 overflow-y-auto">

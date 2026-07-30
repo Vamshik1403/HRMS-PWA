@@ -72,6 +72,10 @@ export class EmpManagerScopeController {
     joiningDate: true,
     departmentNameID: true,
     designations: { select: { designation: true } },
+    empDepartment: {
+      select: { id: true, departmentNameID: true, effectFrom: true },
+      orderBy: { id: 'desc' as const },
+    },
   } as const;
 
   private async statusForEmployees(
@@ -240,16 +244,25 @@ export class EmpManagerScopeController {
     const grouped = new Map<number, typeof employeesWithStatus>();
     const unassigned: typeof employeesWithStatus = [];
 
+    const resolveDepartmentId = (emp: (typeof employees)[number]): number | null => {
+      if (emp.departmentNameID) return emp.departmentNameID;
+      const latestHistory = Array.isArray(emp.empDepartment)
+        ? emp.empDepartment[0]
+        : null;
+      return latestHistory?.departmentNameID ?? null;
+    };
+
     for (const emp of employees) {
       const row = statusById.get(emp.id);
       if (!row) continue;
-      if (!emp.departmentNameID) {
+      const deptId = resolveDepartmentId(emp);
+      if (!deptId) {
         unassigned.push(row);
         continue;
       }
-      const list = grouped.get(emp.departmentNameID) ?? [];
+      const list = grouped.get(deptId) ?? [];
       list.push(row);
-      grouped.set(emp.departmentNameID, list);
+      grouped.set(deptId, list);
     }
 
     const deptIds = [...grouped.keys()];

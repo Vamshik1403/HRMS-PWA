@@ -1,10 +1,6 @@
-import EmpMobileLayout from "../components/layout/EmpMobileLayout";
-import { EmpCompanyOverviewDashboard } from "../components/emp/EmpCompanyOverviewDashboard";
+import { redirect } from "next/navigation";
 
+/** Legacy Overview route — Dashboard now lives under My Company tabs. */
 export default function EmpCompanyPage() {
-  return (
-    <EmpMobileLayout>
-      <EmpCompanyOverviewDashboard />
-    </EmpMobileLayout>
-  );
+  redirect("/empCompanyDashboard");
 }

@@ -33,7 +33,10 @@ import { useClientTable, sortRows } from "../hooks/use-client-table";
 import { getSidebarContext } from "../utils/sidebarContext";
 import {
   canDesktopManagerManage,
-  filterCompanyScopedRecords,
+  filterBranchesForUser,
+  isCompanyModuleOperator,
+  resolveScopedCompanyId,
+  resolveScopedServiceProviderId,
   resolveScopeUserMapping,
 } from "../utils/scopeContext";
 
@@ -162,23 +165,20 @@ const [branchFilterLoading, setBranchFilterLoading] = useState(false);
       setLoading(true);
       const all = await fetchJSONSafe<DepartmentRead[]>(API.departments);
 
- const mapping = await resolveScopeUserMapping(user);
-if (mapping) setCurrentUserMapping(mapping);
+      const mapping = await resolveScopeUserMapping(user);
+      if (mapping) setCurrentUserMapping(mapping);
 
-const ctx = getSidebarContext();
+      const activeCompanyID =
+        resolveScopedCompanyId({ ...user, companyID: mapping?.companyID ?? user?.companyID }) ??
+        mapping?.companyID ??
+        user?.companyID;
 
-const activeCompanyID =
-  ctx?.companyID ??
-  mapping?.companyID ??
-  user?.companyID;
+      const filteredRows = (all || []).filter((r: any) => {
+        if (!activeCompanyID) return true;
+        return Number(r.companyID) === Number(activeCompanyID);
+      });
 
-const filteredRows = (all || []).filter((r: any) => {
-  if (!activeCompanyID) return true;
-  return Number(r.companyID) === Number(activeCompanyID);
-});
-
-setRows(filteredRows);
-
+      setRows(filteredRows);
     } catch (e: any) {
       console.error("Failed to load departments:", e);
       setRows([]);
@@ -203,26 +203,16 @@ setRows(filteredRows);
       setBranchFilterLoading(true);
 
       const all = await fetchJSONSafe<Branch[]>(API.branches);
-      const ctx = getSidebarContext();
-
-const mapping = await resolveScopeUserMapping(user);
-
-const activeCompanyID =
-  ctx?.companyID ??
-  mapping?.companyID ??
-  user?.companyID ??
-  null;
-  
-      let branches = Array.isArray(all) ? all : [];
-
-      if (activeCompanyID) {
-        branches = branches.filter(
-          (b: any) => Number(b.companyID) === Number(activeCompanyID)
-        );
-      }
+      const mapping = await resolveScopeUserMapping(user);
+      let branches = await filterBranchesForUser(Array.isArray(all) ? all : [], {
+        ...user,
+        companyID: mapping?.companyID ?? user?.companyID,
+        serviceProviderID: mapping?.serviceProviderID ?? user?.serviceProviderID,
+        branchesID: mapping?.branchesID ?? user?.branchesID,
+      });
 
       if (user?.role === "BRANCH_ADMIN") {
-        const branchesID = currentUserMapping?.branchesID ?? user?.branchesID;
+        const branchesID = mapping?.branchesID ?? user?.branchesID;
         if (branchesID) {
           branches = branches.filter(
             (b: any) => Number(b.id) === Number(branchesID)
@@ -366,31 +356,20 @@ const reload = () => {
 
     try {
       const all = await fetchJSONSafe<Branch[]>(API.branches, ctrl.signal);
-      const ctx = getSidebarContext();
+      let filtered = await filterBranchesForUser(Array.isArray(all) ? all : [], user);
 
+      // Prefer form company, then operator credentials — not stale sidebar alone.
       const activeCompanyID =
-        ctx?.companyID ??
         formData.companyID ??
         currentUserMapping?.companyID ??
+        resolveScopedCompanyId(user) ??
         user?.companyID ??
         null;
-
-      let filtered = Array.isArray(all) ? all : [];
 
       if (activeCompanyID) {
         filtered = filtered.filter(
           (b: any) => Number(b.companyID) === Number(activeCompanyID)
         );
-      }
-
-      if (user?.role === "BRANCH_ADMIN") {
-        const branchesID = currentUserMapping?.branchesID ?? user?.branchesID;
-
-        if (branchesID) {
-          filtered = filtered.filter(
-            (b: any) => Number(b.id) === Number(branchesID)
-          );
-        }
       }
 
       filtered = filtered.filter((b) =>
@@ -445,26 +424,53 @@ const reload = () => {
       brAutocomplete: "",
     };
 
-    // Auto-set Service Provider and Company for MANAGER
-   const ctx = getSidebarContext();
+    const ctx = getSidebarContext();
+    const scopedCompanyID = resolveScopedCompanyId(user);
+    const scopedSpID = resolveScopedServiceProviderId(user);
 
-// Sidebar selected company always gets first priority
-if (ctx) {
-  baseFormData.serviceProviderID = ctx.serviceProviderID;
-  baseFormData.companyID = ctx.companyID;
-  baseFormData.spAutocomplete = ctx.serviceProviderName;
-  baseFormData.coAutocomplete = ctx.companyName;
-} else if (currentUserMapping) {
-  baseFormData.serviceProviderID = currentUserMapping.serviceProviderID;
-  baseFormData.companyID = currentUserMapping.companyID;
-  baseFormData.spAutocomplete = currentUserMapping.serviceProvider?.companyName || "";
-  baseFormData.coAutocomplete = currentUserMapping.company?.companyName || "";
+    if (isCompanyModuleOperator(user) || user?.role === "EMPLOYEE") {
+      baseFormData.serviceProviderID =
+        (currentUserMapping?.serviceProviderID as ID | null) ??
+        (scopedSpID as ID | null) ??
+        (user?.serviceProviderID as ID | null) ??
+        null;
+      baseFormData.companyID =
+        (currentUserMapping?.companyID as ID | null) ??
+        (scopedCompanyID as ID | null) ??
+        (user?.companyID as ID | null) ??
+        null;
+      baseFormData.spAutocomplete =
+        currentUserMapping?.serviceProvider?.companyName ||
+        (ctx && Number(ctx.companyID) === Number(baseFormData.companyID)
+          ? ctx.serviceProviderName
+          : "") ||
+        "";
+      baseFormData.coAutocomplete =
+        currentUserMapping?.company?.companyName ||
+        (ctx && Number(ctx.companyID) === Number(baseFormData.companyID)
+          ? ctx.companyName
+          : "") ||
+        "";
+    } else if (ctx) {
+      baseFormData.serviceProviderID = ctx.serviceProviderID;
+      baseFormData.companyID = ctx.companyID;
+      baseFormData.spAutocomplete = ctx.serviceProviderName;
+      baseFormData.coAutocomplete = ctx.companyName;
+    } else if (currentUserMapping) {
+      baseFormData.serviceProviderID = currentUserMapping.serviceProviderID;
+      baseFormData.companyID = currentUserMapping.companyID;
+      baseFormData.spAutocomplete =
+        currentUserMapping.serviceProvider?.companyName || "";
+      baseFormData.coAutocomplete =
+        currentUserMapping.company?.companyName || "";
 
-  if (user?.role === "BRANCH_ADMIN") {
-    baseFormData.branchesID = currentUserMapping.branchesID;
-    baseFormData.brAutocomplete = currentUserMapping.branches?.branchName || "";
-  }
-}
+      if (user?.role === "BRANCH_ADMIN") {
+        baseFormData.branchesID = currentUserMapping.branchesID;
+        baseFormData.brAutocomplete =
+          currentUserMapping.branches?.branchName || "";
+      }
+    }
+
     setFormData(baseFormData);
     setEditing(null);
     setSpList([]);
@@ -553,27 +559,35 @@ if (ctx) {
     setSaving(true);
     setError(null);
 
-    // For MANAGER, ensure serviceProviderID and companyID are set from user mapping
-  const ctx = getSidebarContext();
+    const ctx = getSidebarContext();
 
-let finalServiceProviderID =
-  ctx?.serviceProviderID ??
-  formData.serviceProviderID;
+    let finalServiceProviderID =
+      formData.serviceProviderID ??
+      resolveScopedServiceProviderId(user) ??
+      currentUserMapping?.serviceProviderID ??
+      user?.serviceProviderID ??
+      ctx?.serviceProviderID ??
+      null;
 
-let finalCompanyID =
-  ctx?.companyID ??
-  formData.companyID;
+    let finalCompanyID =
+      formData.companyID ??
+      resolveScopedCompanyId(user) ??
+      currentUserMapping?.companyID ??
+      user?.companyID ??
+      ctx?.companyID ??
+      null;
 
-if (
-  (user?.role === "SERVICE_PROVIDER" ||
-    user?.role === "COMPANY_ADMIN" ||
-    user?.role === "ADMIN") &&
-  !ctx &&
-  currentUserMapping
-) {
-  finalServiceProviderID = currentUserMapping.serviceProviderID;
-  finalCompanyID = currentUserMapping.companyID;
-}
+    if (!finalCompanyID) {
+      toast.error("Company is not selected");
+      setSaving(false);
+      return;
+    }
+
+    if (!formData.branchesID) {
+      toast.error("Please select a Branch");
+      setSaving(false);
+      return;
+    }
 
     const payload: any = {
       serviceProviderID: finalServiceProviderID ?? undefined,
@@ -894,6 +908,9 @@ const handleCancel = () => {
                             ...p,
                             branchesID: br.id,
                             brAutocomplete: br.branchName,
+                            companyID: p.companyID ?? br.companyID ?? null,
+                            serviceProviderID:
+                              p.serviceProviderID ?? br.serviceProviderID ?? null,
                           }));
                           setBrList([]);
                         }}

@@ -1,4 +1,8 @@
-import { Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateBranchesDto } from './dto/create-branch.dto';
 import { UpdateBranchesDto } from './dto/update-branch.dto';
@@ -7,18 +11,58 @@ import { UpdateBranchesDto } from './dto/update-branch.dto';
 export class BranchesService {
   constructor(private prisma: PrismaService) {}
 
-  create(dto: CreateBranchesDto) {
+  private toPositiveId(value: unknown): number | null {
+    const n = Number(value);
+    return Number.isFinite(n) && n > 0 ? n : null;
+  }
+
+  private async resolveCompanyAndSp(
+    companyID?: number | null,
+    serviceProviderID?: number | null,
+  ) {
+    const resolvedCompanyID = this.toPositiveId(companyID);
+    if (!resolvedCompanyID) {
+      throw new BadRequestException('Company is required to create a branch.');
+    }
+
+    const company = await this.prisma.company.findUnique({
+      where: { id: resolvedCompanyID },
+      select: { id: true, serviceProviderID: true, companyName: true },
+    });
+    if (!company) {
+      throw new NotFoundException(
+        `Company with ID ${resolvedCompanyID} was not found.`,
+      );
+    }
+
+    let resolvedSpID = this.toPositiveId(serviceProviderID);
+    if (resolvedSpID) {
+      const sp = await this.prisma.serviceProvider.findUnique({
+        where: { id: resolvedSpID },
+        select: { id: true },
+      });
+      if (!sp) {
+        // Stale sidebar / client SP — fall back to the company's SP.
+        resolvedSpID = this.toPositiveId(company.serviceProviderID);
+      }
+    } else {
+      resolvedSpID = this.toPositiveId(company.serviceProviderID);
+    }
+
+    return { companyID: company.id, serviceProviderID: resolvedSpID };
+  }
+
+  async create(dto: CreateBranchesDto) {
     const { bankDetails = [], serviceProviderID, companyID, ...branch } = dto;
+    const resolved = await this.resolveCompanyAndSp(companyID, serviceProviderID);
 
     return this.prisma.branches.create({
       data: {
         ...branch,
-        ...(serviceProviderID != null
-          ? { serviceProvider: { connect: { id: serviceProviderID } } }
+        ...(resolved.serviceProviderID != null
+          ? { serviceProvider: { connect: { id: resolved.serviceProviderID } } }
           : {}),
-        ...(companyID != null
-          ? { company: { connect: { id: companyID } } }
-          : {}),
+        company: { connect: { id: resolved.companyID } },
         bankDetails: {
           create: bankDetails.map((b) => ({
             bankName: b.bankName ?? null,
@@ -46,24 +90,57 @@ export class BranchesService {
   }
 
   async update(id: number, dto: UpdateBranchesDto) {
-    const { bankDetails, idsToDelete, serviceProviderID, companyID, ...branch } = dto;
+    const { bankDetails, idsToDelete, serviceProviderID, companyID, ...branch } =
+      dto;
 
     return this.prisma.$transaction(async (tx) => {
+      let companyConnect: { connect: { id: number } } | { disconnect: true } | undefined;
+      let spConnect:
+        | { connect: { id: number } }
+        | { disconnect: true }
+        | undefined;
+
+      if (companyID !== undefined) {
+        if (companyID == null) {
+          companyConnect = { disconnect: true };
+        } else {
+          const resolved = await this.resolveCompanyAndSp(
+            companyID,
+            serviceProviderID,
+          );
+          companyConnect = { connect: { id: resolved.companyID } };
+          if (resolved.serviceProviderID != null) {
+            spConnect = { connect: { id: resolved.serviceProviderID } };
+          }
+        }
+      } else if (serviceProviderID !== undefined) {
+        if (serviceProviderID == null) {
+          spConnect = { disconnect: true };
+        } else {
+          const spId = this.toPositiveId(serviceProviderID);
+          if (!spId) {
+            throw new BadRequestException('Invalid service provider ID.');
+          }
+          const sp = await tx.serviceProvider.findUnique({
+            where: { id: spId },
+            select: { id: true },
+          });
+          if (!sp) {
+            throw new NotFoundException(
+              `Service provider with ID ${spId} was not found.`,
+            );
+          }
+          spConnect = { connect: { id: spId } };
+        }
+      }
+
       // 1) update branch scalars and relations
       await tx.branches.update({
         where: { id },
         data: {
           ...branch,
-          ...(serviceProviderID !== undefined
-            ? serviceProviderID == null
-              ? { serviceProvider: { disconnect: true } }
-              : { serviceProvider: { connect: { id: serviceProviderID } } }
-            : {}),
-          ...(companyID !== undefined
-            ? companyID == null
-              ? { company: { disconnect: true } }
-              : { company: { connect: { id: companyID } } }
-            : {}),
+          ...(spConnect ? { serviceProvider: spConnect } : {}),
+          ...(companyConnect ? { company: companyConnect } : {}),
         },
       });
 
@@ -94,7 +171,7 @@ export class BranchesService {
         if (toCreate.length) {
           await tx.bankDetails.createMany({
             data: toCreate.map((b) => ({
-              branchesID: id, 
+              branchesID: id,
               bankName: b.bankName ?? null,
               bankBranchName: b.bankBranchName ?? null,
               accountNo: b.accountNo ?? null,
@@ -115,5 +192,4 @@ export class BranchesService {
   remove(id: number) {
     return this.prisma.branches.delete({ where: { id } });
   }
-
 }

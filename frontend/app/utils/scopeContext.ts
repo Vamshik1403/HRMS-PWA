@@ -1,4 +1,8 @@
 import { isDesktopManagerFlagSet } from "@/lib/desktopManager";
+import {
+  hasCompanyAccessFlag,
+  isCompanyOwnerFlag,
+} from "@/lib/companyAccess";
 import { getSidebarContext } from "./sidebarContext";
 
 export type ScopedUser = {
@@ -24,14 +28,70 @@ export function canDesktopManagerManage(user?: ScopedUser): boolean {
   return isDesktopManagerEmployee(user);
 }
 
+/** Company owners / granted module operators logged in as EMPLOYEE. */
+export function isCompanyModuleOperator(user?: ScopedUser): boolean {
+  if (!user?.role) return false;
+  if (user.role === "COMPANY_ADMIN" || user.role === "ADMIN") return true;
+  if (user.role === "EMPLOYEE") {
+    return (
+      isCompanyOwnerFlag() ||
+      hasCompanyAccessFlag() ||
+      isDesktopManagerEmployee(user)
+    );
+  }
+  return false;
+}
+
+const toPositiveId = (value: unknown): number | undefined => {
+  const n = Number(value);
+  return Number.isFinite(n) && n > 0 ? n : undefined;
+};
+
+/**
+ * Resolve the active company for forms/lists.
+ * Employee operators prefer credentials/user.companyID over stale sidebarContext
+ * left behind by a previous admin session.
+ */
 export function resolveScopedCompanyId(
   user?: ScopedUser,
   ctx = getSidebarContext(),
 ): number | undefined {
   if (!user) return undefined;
-  if (ctx?.companyID != null) return ctx.companyID;
-  if (user.companyID != null) return user.companyID;
-  return undefined;
+
+  const userCompanyId = toPositiveId(user.companyID);
+  const ctxCompanyId = toPositiveId(ctx?.companyID);
+
+  if (user.role === "EMPLOYEE" && (isCompanyModuleOperator(user) || userCompanyId)) {
+    if (userCompanyId) {
+      if (ctxCompanyId && ctxCompanyId === userCompanyId) return ctxCompanyId;
+      return userCompanyId;
+    }
+  }
+
+  if (ctxCompanyId) return ctxCompanyId;
+  return userCompanyId;
+}
+
+export function resolveScopedServiceProviderId(
+  user?: ScopedUser,
+  ctx = getSidebarContext(),
+): number | undefined {
+  if (!user) return undefined;
+  const userSpId = toPositiveId(user.serviceProviderID);
+  const ctxSpId = toPositiveId(ctx?.serviceProviderID);
+  const companyId = resolveScopedCompanyId(user, ctx);
+
+  if (user.role === "EMPLOYEE" && (isCompanyModuleOperator(user) || userSpId)) {
+    if (userSpId) {
+      if (ctxSpId && companyId && toPositiveId(ctx?.companyID) === companyId) {
+        return ctxSpId;
+      }
+      return userSpId;
+    }
+  }
+
+  if (ctxSpId) return ctxSpId;
+  return userSpId;
 }
 
 export async function resolveEmployeeCreds(username?: string): Promise<{
@@ -143,11 +203,25 @@ export async function filterCompanyScopedRecords<T extends ScopeRecord>(
 
   if (user.role === "EMPLOYEE") {
     const creds = await resolveEmployeeCreds(user.username);
-    const companyId = creds?.companyID ?? user.companyID;
-    const branchId = creds?.branchesID ?? user.branchesID;
+    const companyId =
+      toPositiveId(creds?.companyID) ??
+      resolveScopedCompanyId(user) ??
+      toPositiveId(user.companyID);
+
+    // Company owners / module operators are company-scoped (no personal branch).
+    if (isCompanyModuleOperator(user)) {
+      return companyId != null
+        ? all.filter((r) => Number(r.companyID) === Number(companyId))
+        : ([] as T[]);
+    }
+
+    const branchId =
+      toPositiveId(creds?.branchesID) ?? toPositiveId(user.branchesID);
     if (companyId == null || branchId == null) return [] as T[];
     return all.filter(
-      (r) => r.companyID === companyId && r.branchesID === branchId,
+      (r) =>
+        Number(r.companyID) === Number(companyId) &&
+        Number(r.branchesID) === Number(branchId),
     );
   }
 
@@ -195,10 +269,27 @@ export async function filterBranchesForUser<T extends ScopeRecord>(
 
   if (user.role === "EMPLOYEE") {
     const creds = await resolveEmployeeCreds(user.username);
-    const companyId = creds?.companyID ?? user.companyID;
-    const branchId = creds?.branchesID ?? user.branchesID;
+    const companyId =
+      toPositiveId(creds?.companyID) ??
+      resolveScopedCompanyId(user) ??
+      toPositiveId(user.companyID);
+
+    // Company owners / company-module operators see all branches for their company
+    // (they typically have no personal branchesID assigned).
+    if (isCompanyModuleOperator(user)) {
+      return companyId != null
+        ? all.filter((r) => Number(r.companyID) === Number(companyId))
+        : [];
+    }
+
+    const branchId =
+      toPositiveId(creds?.branchesID) ?? toPositiveId(user.branchesID);
     return companyId != null && branchId != null
-      ? all.filter((r) => r.companyID === companyId && r.id === branchId)
+      ? all.filter(
+          (r) =>
+            Number(r.companyID) === Number(companyId) &&
+            Number(r.id) === Number(branchId),
+        )
       : [];
   }
 

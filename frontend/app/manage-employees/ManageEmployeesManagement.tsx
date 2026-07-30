@@ -3050,7 +3050,11 @@ const addCombinedDevMap = () => {
         uanNo: joinMultiValue(formData.uanNos) || undefined,
         esiNo: joinMultiValue(formData.esiNos) || undefined,
 
-        departmentNameID: formData.departmentNameID ?? undefined,
+        departmentNameID:
+          formData.departmentNameID ??
+          (empDepartments.length
+            ? empDepartments[empDepartments.length - 1].departmentNameID
+            : undefined),
         designationID: formData.empDesignationForm.length > 0
           ? (formData.empDesignationForm[formData.empDesignationForm.length - 1].designationID ?? undefined)
           : (formData.designationID ?? undefined),

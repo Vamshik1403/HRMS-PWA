@@ -1,7 +1,7 @@
 "use client";
 import { TableBodySkeleton } from "../components/ui/TableBodySkeleton";
 
-import { hasModuleWriteAccess } from "@/lib/companyAccess";
+import { hasCompanyAccessFlag, hasModuleWriteAccess } from "@/lib/companyAccess";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
 import { Button } from "../components/ui/button";
@@ -180,10 +180,29 @@ const getUserAssignedCompanyIDs = (user: any): number[] => {
   return Array.from(ids);
 };
 
+const toPositiveId = (value: unknown): number | null => {
+  const n = Number(value);
+  return Number.isFinite(n) && n > 0 ? n : null;
+};
+
 async function fetchJSONSafe<T>(url: string, signal?: AbortSignal): Promise<T> {
   const res = await fetch(url, { signal });
-  if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
-  const raw = await res.json();
+  const text = await res.text();
+  let raw: any = null;
+  if (text) {
+    try {
+      raw = JSON.parse(text);
+    } catch {
+      raw = null;
+    }
+  }
+  if (!res.ok) {
+    const msg =
+      (typeof raw === "object" && raw && (raw.message || raw.error)) ||
+      `${res.status} ${res.statusText}`;
+    throw new Error(typeof msg === "string" ? msg : JSON.stringify(msg));
+  }
+  if (raw == null) throw new Error("Empty response");
   return (raw?.data ?? raw) as T; // handle { data: [...] } or [...]
 }
 
@@ -307,8 +326,13 @@ geofenchradius:"",
       if (mapping) setCurrentUserMapping(mapping);
       let visibleBranches = await filterBranchesForUser(all, user);
 
+      // Sidebar company filter is for admin drill-down only. For employee /
+      // company-owner operators, ignore stale sidebarContext so it cannot
+      // wipe the company-scoped list.
+      const isEmployeeOperator =
+        user?.role === "EMPLOYEE" || hasCompanyAccessFlag();
       const ctx = getSidebarContext();
-      if (ctx?.companyID) {
+      if (ctx?.companyID && !isEmployeeOperator) {
         visibleBranches = visibleBranches.filter(
           (b: any) => Number(b.companyID) === Number(ctx.companyID)
         );
@@ -423,96 +447,107 @@ geofenchradius:"",
 
   const getActiveBranchContext = () => {
     const ctx = getSidebarContext();
-
     const userAny = user as any;
-
-    const isCompanyScopedUser =
-      user?.role === "COMPANY_ADMIN" ||
-      user?.role === "ADMIN" ||
-      user?.role === "BRANCH_ADMIN";
 
     const userCompanyList = Array.isArray(userAny?.userCompanies)
       ? userAny.userCompanies
       : [];
 
-    const assignedCompanyIDs = getUserAssignedCompanyIDs(userAny);
+    const mappedCompanyID = toPositiveId(
+      currentUserMapping?.companyID ?? user?.companyID ?? formData.companyID,
+    );
+    const assignedCompanyIDs = Array.from(
+      new Set(
+        [
+          ...getUserAssignedCompanyIDs(userAny),
+          mappedCompanyID,
+          toPositiveId(formData.companyID),
+        ].filter((v): v is number => v != null),
+      ),
+    );
 
-    const hasMultiCompany =
-      userCompanyList.length > 1 || assignedCompanyIDs.length > 1;
+    const isEmployeeOperator =
+      user?.role === "EMPLOYEE" || hasCompanyAccessFlag();
 
-    let companyID: any = null;
+    const isCompanyScopedUser =
+      user?.role === "COMPANY_ADMIN" ||
+      user?.role === "ADMIN" ||
+      user?.role === "BRANCH_ADMIN" ||
+      isEmployeeOperator;
 
-    if (isCompanyScopedUser) {
-      const storedActiveCompanyID = getStoredActiveCompanyID();
+    const storedActiveCompanyID = toPositiveId(getStoredActiveCompanyID());
+    const ctxCompanyID = toPositiveId(ctx?.companyID);
 
-      if (hasMultiCompany) {
-        if (
-          storedActiveCompanyID &&
-          assignedCompanyIDs.includes(Number(storedActiveCompanyID))
-        ) {
-          companyID = storedActiveCompanyID;
-        } else if (
-          ctx?.companyID &&
-          assignedCompanyIDs.includes(Number(ctx.companyID))
-        ) {
-          companyID = ctx.companyID;
-        } else {
-          companyID =
-            currentUserMapping?.companyID ??
-            user?.companyID ??
-            assignedCompanyIDs[0] ??
-            formData.companyID ??
-            null;
-        }
-      } else {
-        companyID =
-          currentUserMapping?.companyID ??
-          user?.companyID ??
-          assignedCompanyIDs[0] ??
-          formData.companyID ??
-          null;
-      }
+    const pickAssigned = (candidate: number | null) =>
+      candidate &&
+      (assignedCompanyIDs.length === 0 || assignedCompanyIDs.includes(candidate))
+        ? candidate
+        : null;
+
+    let companyID: number | null = null;
+
+    if (isEmployeeOperator) {
+      // Company owners / employee operators: never let stale admin sidebarContext
+      // override the company on their credentials.
+      companyID =
+        mappedCompanyID ??
+        pickAssigned(storedActiveCompanyID) ??
+        pickAssigned(ctxCompanyID) ??
+        assignedCompanyIDs[0] ??
+        null;
+    } else if (isCompanyScopedUser) {
+      companyID =
+        pickAssigned(storedActiveCompanyID) ??
+        pickAssigned(ctxCompanyID) ??
+        mappedCompanyID ??
+        assignedCompanyIDs[0] ??
+        toPositiveId(formData.companyID);
     } else {
       companyID =
-        ctx?.companyID ??
-        formData.companyID ??
-        currentUserMapping?.companyID ??
-        user?.companyID ??
-        null;
+        ctxCompanyID ??
+        toPositiveId(formData.companyID) ??
+        mappedCompanyID;
     }
 
     const activeCompanyFromUserCompanies = userCompanyList.find(
-      (uc: any) => Number(uc.companyID) === Number(companyID)
+      (uc: any) => Number(uc.companyID) === Number(companyID),
     );
 
     const companyName =
       Number(ctx?.companyID) === Number(companyID)
         ? ctx?.companyName ?? ""
         : activeCompanyFromUserCompanies?.company?.companyName ??
-        activeCompanyFromUserCompanies?.companyName ??
-        currentUserMapping?.company?.companyName ??
-        userAny?.company?.companyName ??
-        userAny?.companyName ??
-        formData.coAutocomplete ??
-        "";
+          activeCompanyFromUserCompanies?.companyName ??
+          currentUserMapping?.company?.companyName ??
+          (typeof userAny?.company === "string"
+            ? userAny.company
+            : userAny?.company?.companyName) ??
+          userAny?.companyName ??
+          formData.coAutocomplete ??
+          "";
+
+    const mappedSpID = toPositiveId(
+      currentUserMapping?.serviceProviderID ??
+        user?.serviceProviderID ??
+        formData.serviceProviderID,
+    );
+    const ctxSpID = toPositiveId(ctx?.serviceProviderID);
+    const serviceProviderID =
+      mappedSpID ??
+      (ctxCompanyID && companyID && ctxCompanyID === companyID ? ctxSpID : null) ??
+      null;
 
     return {
-      serviceProviderID:
-        ctx?.serviceProviderID ??
-        currentUserMapping?.serviceProviderID ??
-        user?.serviceProviderID ??
-        formData.serviceProviderID ??
-        null,
-
+      serviceProviderID,
       companyID,
-
       serviceProviderName:
-        ctx?.serviceProviderName ??
+        (serviceProviderID && ctxSpID === serviceProviderID
+          ? ctx?.serviceProviderName
+          : null) ??
         currentUserMapping?.serviceProvider?.companyName ??
         userAny?.serviceProvider?.companyName ??
         formData.spAutocomplete ??
         "",
-
       companyName,
     };
   };
@@ -538,7 +573,7 @@ geofenchradius:"",
   // ---------------------------
   const fillBranchFromCompany = async () => {
     const activeCtx = getActiveBranchContext();
-    const companyId = activeCtx.companyID;
+    const companyId = toPositiveId(activeCtx.companyID ?? formData.companyID);
     if (!companyId) {
       toast.error("Company is not selected");
       setSameAsCompany(false);
@@ -548,11 +583,28 @@ geofenchradius:"",
     try {
       setCompanyFillLoading(true);
 
-      const company = await fetchJSONSafe<Company>(`${API.companies}/${companyId}`);
+      let company: Company | null = null;
+      try {
+        company = await fetchJSONSafe<Company>(`${API.companies}/${companyId}`);
+      } catch {
+        // Fallback: list companies and pick by id (handles empty/404 quirks).
+        const all = await fetchJSONSafe<Company[]>(API.companies);
+        company =
+          (Array.isArray(all) ? all : []).find((c) => Number(c.id) === companyId) ??
+          null;
+      }
+
+      if (!company || !company.id) {
+        throw new Error("Company details not found");
+      }
+
+      const companySpID = toPositiveId(
+        (company as any).serviceProviderID ?? activeCtx.serviceProviderID,
+      );
 
       setFormData((p) => ({
         ...p,
-        serviceProviderID: activeCtx.serviceProviderID,
+        serviceProviderID: companySpID ?? activeCtx.serviceProviderID,
         companyID: companyId,
         spAutocomplete: activeCtx.serviceProviderName,
         coAutocomplete: company.companyName ?? activeCtx.companyName,
@@ -686,16 +738,28 @@ geofenchradius:"",
     // For MANAGER/COMPANY_ADMIN, ensure serviceProviderID and companyID are set from user mapping
     const activeCtx = getActiveBranchContext();
 
-    let finalServiceProviderID =
-      activeCtx.serviceProviderID || formData.serviceProviderID;
+    let finalServiceProviderID = toPositiveId(
+      activeCtx.serviceProviderID ?? formData.serviceProviderID,
+    );
 
-    let finalCompanyID =
-      activeCtx.companyID || formData.companyID;
+    let finalCompanyID = toPositiveId(activeCtx.companyID ?? formData.companyID);
 
     if (!finalCompanyID) {
       toast.error("Company is not selected");
       setSaving(false);
       return;
+    }
+
+    // If SP is missing, derive it from the company record so Prisma connect doesn't fail.
+    if (!finalServiceProviderID) {
+      try {
+        const company = await fetchJSONSafe<Company & { serviceProviderID?: number | null }>(
+          `${API.companies}/${finalCompanyID}`,
+        );
+        finalServiceProviderID = toPositiveId(company?.serviceProviderID);
+      } catch {
+        /* continue; backend will also try to resolve */
+      }
     }
 
     // map UI bankDetails to API shape
@@ -714,8 +778,8 @@ geofenchradius:"",
       : [];
 
     const payload: any = {
-      serviceProviderID: finalServiceProviderID ?? undefined, // Use the final IDs
-      companyID: finalCompanyID ?? undefined, // Use the final IDs
+      serviceProviderID: finalServiceProviderID ?? undefined,
+      companyID: finalCompanyID,
       branchName: formData.branchName || undefined,
       branchType: formData.branchType || undefined,
       latitude: formData.latitude || undefined,      
@@ -819,41 +883,51 @@ geofenchradius: formData.geofenchradius || undefined,
 
     const activeCtx = getActiveBranchContext();
 
-    if (user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN" || user?.role === "ADMIN") {
+    if (
+      user?.role === "SERVICE_PROVIDER" ||
+      user?.role === "COMPANY_ADMIN" ||
+      user?.role === "ADMIN" ||
+      user?.role === "EMPLOYEE" ||
+      hasCompanyAccessFlag()
+    ) {
       finalServiceProviderID = b.serviceProviderID ?? activeCtx.serviceProviderID;
       finalCompanyID = b.companyID ?? activeCtx.companyID;
-      spName = activeCtx.serviceProviderName;
-      coName = activeCtx.companyName;
-    } else {
-      // For SUPERADMIN, fetch the names as before
-      if (b.serviceProviderID) {
-        try {
-          const sp = await fetchJSONSafe<ServiceProvider>(`${API.serviceProviders}/${b.serviceProviderID}`);
-          spName = sp.companyName ?? "";
-        } catch (e) {
-          console.warn("Could not fetch service provider name:", e);
-        }
-      }
+      spName = activeCtx.serviceProviderName || spName;
+      coName = activeCtx.companyName || coName;
+    }
 
-      if (b.companyID) {
-        try {
-          const co = await fetchJSONSafe<Company>(`${API.companies}/${b.companyID}`);
-          coName = co.companyName ?? "";
-        } catch (e) {
-          console.warn("Could not fetch company name:", e);
-        }
+    // Always resolve names when missing (covers company-owner edit path).
+    if (!spName && (b.serviceProviderID || finalServiceProviderID)) {
+      try {
+        const sp = await fetchJSONSafe<ServiceProvider>(
+          `${API.serviceProviders}/${b.serviceProviderID ?? finalServiceProviderID}`,
+        );
+        spName = sp.companyName ?? "";
+      } catch (e) {
+        console.warn("Could not fetch service provider name:", e);
+      }
+    }
+
+    let companyForCompare: Company | null = null;
+    if (b.companyID || finalCompanyID) {
+      try {
+        companyForCompare = await fetchJSONSafe<Company>(
+          `${API.companies}/${b.companyID ?? finalCompanyID}`,
+        );
+        if (!coName) coName = companyForCompare.companyName ?? "";
+      } catch (e) {
+        console.warn("Could not fetch company name:", e);
       }
     }
 
     setFormData({
       serviceProviderID: finalServiceProviderID,
       companyID: finalCompanyID,
-
       branchName: b.branchName ?? "",
       branchType: b.branchType ?? "",
-      latitude:  b.latitude ?? "",      
-longitude     :  b.longitude ?? "",
-geofenchradius:  b.geofenchradius ?? "",
+      latitude: b.latitude ?? "",
+      longitude: b.longitude ?? "",
+      geofenchradius: b.geofenchradius ?? "",
       address: b.address ?? "",
       country: b.country ?? "",
       state: b.state ?? "",
@@ -870,18 +944,39 @@ geofenchradius:  b.geofenchradius ?? "",
       msmeNo: (b as any).msmeNo ?? "",
       msmeCertUrl: (b as any).msmeCertUrl ?? "",
       shopRegNo: b.shopRegNo ?? "",
-      shopRegCertHistory: Array.isArray((b as any).shopRegCertHistory) ? (b as any).shopRegCertHistory : [],
+      shopRegCertHistory: Array.isArray((b as any).shopRegCertHistory)
+        ? (b as any).shopRegCertHistory
+        : [],
       contactNo: b.contactNo ?? "",
       emailAdd: b.emailAdd ?? "",
       companyLogoUrl: b.companyLogoUrl ?? "",
       SignatureUrl: b.SignatureUrl ?? "",
       financialYearStart: b.financialYearStart ?? "",
-
       spAutocomplete: spName,
       coAutocomplete: coName,
-
       bankDetailsForm,
     });
+
+    // Restore "Same as Company" when branch compliance/location fields match company.
+    if (companyForCompare) {
+      const norm = (v: unknown) => String(v ?? "").trim().toLowerCase();
+      const matches =
+        norm(b.address) === norm(companyForCompare.address) &&
+        norm(b.country) === norm(companyForCompare.country) &&
+        norm(b.state) === norm(companyForCompare.state) &&
+        norm(b.city) === norm(companyForCompare.city) &&
+        norm(b.pincode) === norm(companyForCompare.pincode) &&
+        norm(b.timeZone) === norm(companyForCompare.timeZone) &&
+        norm(b.currency) === norm(companyForCompare.currency) &&
+        norm(b.pfNo) === norm(companyForCompare.pfNo) &&
+        norm(b.tanNo) === norm(companyForCompare.tanNo) &&
+        norm(b.esiNo) === norm(companyForCompare.esiNo) &&
+        norm(b.linNo) === norm(companyForCompare.linNo) &&
+        norm(b.gstNo) === norm(companyForCompare.gstNo);
+      setSameAsCompany(matches);
+    } else {
+      setSameAsCompany(false);
+    }
 
     setOriginalBankIds(bankDetailsForm.filter(x => x.id != null).map(x => x.id!));
 

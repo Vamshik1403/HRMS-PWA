@@ -5,7 +5,6 @@ import {
   CalendarDays,
   ClipboardCheck,
   Home,
-  LayoutDashboard,
   LayoutGrid,
   ListTodo,
   MessageSquare,
@@ -40,13 +39,6 @@ export const EMP_SIDEBAR_NAVIGATION: EmpSidebarNavGroup[] = [
   {
     label: "Overview",
     items: [
-      {
-        label: "Dashboard",
-        href: "/empCompanyDashboard",
-        icon: LayoutDashboard,
-        moduleId: "company-dashboard",
-        companyAccessOnly: true,
-      },
       {
         label: "Home",
         href: "/empdashboard",
@@ -113,9 +105,10 @@ export const EMP_SIDEBAR_NAVIGATION: EmpSidebarNavGroup[] = [
     items: [
       {
         label: "My Company",
-        href: "/empCompany",
+        href: "/empCompanyDashboard",
         icon: Building2,
         moduleId: "company",
+        companyAccessOnly: true,
       },
     ],
   },
@@ -133,6 +126,7 @@ export const EMP_SIDEBAR_NAVIGATION: EmpSidebarNavGroup[] = [
 ];
 
 const COMPANY_PATH_PREFIXES = [
+  "/empCompanyDashboard",
   "/empCompany",
   "/empHolidays",
   "/empNoticeboard",
@@ -191,7 +185,7 @@ export function isEmpNavItemActive(
     return pathname === "/empMyTasks" || pathname.startsWith("/empMyTasks/");
   }
 
-  if (item.moduleId === "company" || item.href === "/empCompany") {
+  if (item.moduleId === "company" || item.href === "/empCompany" || item.href === "/empCompanyDashboard") {
     return isCompanyPath(pathname);
   }
 

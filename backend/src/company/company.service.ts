@@ -348,7 +348,9 @@ export class CompanyService {
       },
     });
 
-    if (!company) return null;
+    if (!company) {
+      throw new NotFoundException(`Company with ID ${id} not found`);
+    }
 
     return {
       ...company,

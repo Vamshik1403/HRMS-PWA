@@ -123,6 +123,24 @@ export default function EmpRightsPage() {
     );
   };
 
+  const toggleAll = (moduleKey: string) => {
+    if (readOnly) return;
+    setPermissions((prev) =>
+      prev.map((row) => {
+        if (row.moduleKey !== moduleKey) return row;
+        const allOn = !!(row.canView && row.canCreate && row.canEdit && row.canDelete);
+        const nextVal = !allOn;
+        return {
+          ...row,
+          canView: nextVal,
+          canCreate: nextVal,
+          canEdit: nextVal,
+          canDelete: nextVal,
+        };
+      }),
+    );
+  };
+
   const save = async () => {
     if (!employeeId || readOnly) return;
     setSaving(true);
@@ -181,6 +199,7 @@ export default function EmpRightsPage() {
             <thead>
               <tr className="border-b bg-muted/40 text-left">
                 <th className="px-4 py-3 font-semibold">Module</th>
+                <th className="px-3 py-3 font-semibold text-center">All</th>
                 {ACTIONS.map((a) => (
                   <th key={a.key} className="px-3 py-3 font-semibold text-center">
                     {a.label}
@@ -189,9 +208,26 @@ export default function EmpRightsPage() {
               </tr>
             </thead>
             <tbody>
-              {permissions.map((row) => (
+              {permissions.map((row) => {
+                const allChecked = !!(
+                  row.canView &&
+                  row.canCreate &&
+                  row.canEdit &&
+                  row.canDelete
+                );
+                return (
                 <tr key={row.moduleKey} className="border-b last:border-0">
                   <td className="px-4 py-2.5 font-medium">{labelFor(row.moduleKey)}</td>
+                  <td className="px-3 py-2.5 text-center">
+                    <input
+                      type="checkbox"
+                      className="size-4"
+                      checked={allChecked}
+                      disabled={readOnly}
+                      aria-label={`Toggle all permissions for ${labelFor(row.moduleKey)}`}
+                      onChange={() => toggleAll(row.moduleKey)}
+                    />
+                  </td>
                   {ACTIONS.map((a) => (
                     <td key={a.key} className="px-3 py-2.5 text-center">
                       <input
@@ -204,7 +240,8 @@ export default function EmpRightsPage() {
                     </td>
                   ))}
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>

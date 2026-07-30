@@ -145,6 +145,13 @@ export class ManageEmployeeService {
       }
 
       // Create the employee
+      const resolvedDepartmentID =
+        departmentNameID ??
+        empDepartments
+          .filter((item) => item.departmentNameID != null)
+          .at(-1)?.departmentNameID ??
+        null;
+
       const employee = await tx.manageEmployee.create({
         data: {
           ...scalars,
@@ -157,7 +164,7 @@ export class ManageEmployeeService {
           ...(salaryPayGradeType !== undefined ? { salaryPayGradeType } : {}),
 
           // Basic position fields (direct field assignments)
-          ...(departmentNameID != null ? { departmentNameID } : {}),
+          ...(resolvedDepartmentID != null ? { departmentNameID: resolvedDepartmentID } : {}),
           ...(designationID != null ? { designationID } : {}),
           ...(workShiftID != null ? { workShiftID } : {}),
           ...(attendancePolicyID != null ? { attendancePolicyID } : {}),
@@ -1996,6 +2003,26 @@ export class ManageEmployeeService {
           }
           if (toCreate.length) {
             await tx.empDepartment.createMany({ data: toCreate.filter((d) => d.departmentNameID != null).map((d) => ({ manageEmployeeID: id, departmentNameID: d.departmentNameID!, effectFrom: d.effectFrom ?? null })) });
+          }
+
+          // Keep ManageEmployee.departmentNameID in sync with latest history row.
+          const latestDept =
+            [...empDepartments]
+              .reverse()
+              .find((d) => d.departmentNameID != null)?.departmentNameID ??
+            (
+              await tx.empDepartment.findFirst({
+                where: { manageEmployeeID: id },
+                orderBy: { id: 'desc' },
+                select: { departmentNameID: true },
+              })
+            )?.departmentNameID ??
+            null;
+          if (latestDept != null) {
+            await tx.manageEmployee.update({
+              where: { id },
+              data: { departmentNameID: latestDept },
+            });
           }
         }
 
