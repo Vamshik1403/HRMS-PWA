@@ -76,7 +76,7 @@ export function EmpCompanyDepartments() {
   const [departments, setDepartments] = useState<DepartmentGroup[]>([]);
   const [loading, setLoading] = useState(true);
   const [deptFilter, setDeptFilter] = useState<DeptFilter>("all");
-  const [viewMode, setViewMode] = useState<ViewMode>("grid");
+  const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -236,9 +236,9 @@ export function EmpCompanyDepartments() {
   };
 
   const toolbar = (
-    <div className="flex flex-wrap items-center justify-end gap-2">
+    <div className="flex flex-wrap items-center gap-2">
       {searchOpen ? (
-        <div className="relative w-full sm:w-56">
+        <div className="relative w-full sm:w-64">
           <Search className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             autoFocus
@@ -261,7 +261,7 @@ export function EmpCompanyDepartments() {
               : "text-muted-foreground hover:text-foreground",
           )}
         >
-          All {deptFilter === "all" ? totalEmployees : ""}
+          All{totalEmployees ? ` ${totalEmployees}` : ""}
         </button>
         {filterDepartments.map((dept) => (
           <button
@@ -282,52 +282,57 @@ export function EmpCompanyDepartments() {
         ))}
       </div>
 
-      <div className="inline-flex rounded-lg border border-border bg-muted/30 p-1">
-        <button
-          type="button"
-          aria-label="Grid view"
-          onClick={() => setViewMode("grid")}
-          className={cn(
-            "rounded-md p-2 transition-colors",
-            viewMode === "grid"
-              ? "bg-card text-foreground shadow-sm"
-              : "text-muted-foreground hover:text-foreground",
-          )}
-        >
-          <LayoutGrid className="size-4" />
-        </button>
-        <button
-          type="button"
-          aria-label="List view"
-          onClick={() => setViewMode("list")}
-          className={cn(
-            "rounded-md p-2 transition-colors",
-            viewMode === "list"
-              ? "bg-card text-foreground shadow-sm"
-              : "text-muted-foreground hover:text-foreground",
-          )}
-        >
-          <List className="size-4" />
-        </button>
-      </div>
+      {!isDesktop ? (
+        <div className="inline-flex rounded-lg border border-border bg-muted/30 p-1">
+          <button
+            type="button"
+            aria-label="Grid view"
+            onClick={() => setViewMode("grid")}
+            className={cn(
+              "rounded-md p-2 transition-colors",
+              viewMode === "grid"
+                ? "bg-card text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground",
+            )}
+          >
+            <LayoutGrid className="size-4" />
+          </button>
+          <button
+            type="button"
+            aria-label="List view"
+            onClick={() => setViewMode("list")}
+            className={cn(
+              "rounded-md p-2 transition-colors",
+              viewMode === "list"
+                ? "bg-card text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground",
+            )}
+          >
+            <List className="size-4" />
+          </button>
+        </div>
+      ) : null}
 
-      <div className="inline-flex rounded-lg border border-border bg-muted/30 p-1">
-        <button
-          type="button"
-          aria-label="Search employees"
-          onClick={toggleSearch}
-          className={cn(
-            "rounded-md p-2 transition-colors",
-            searchOpen
-              ? "bg-card text-foreground shadow-sm"
-              : "text-muted-foreground hover:text-foreground",
-          )}
-        >
-          <Search className="size-4" />
-        </button>
-      </div>
+      <button
+        type="button"
+        aria-label="Search employees"
+        onClick={toggleSearch}
+        className={cn(
+          "inline-flex size-9 items-center justify-center rounded-lg border border-border bg-muted/30 transition-colors",
+          searchOpen
+            ? "bg-card text-foreground shadow-sm"
+            : "text-muted-foreground hover:text-foreground",
+        )}
+      >
+        <Search className="size-4" />
+      </button>
     </div>
   );
+
+  const tableEmployees =
+    deptFilter === "all" && !searchQuery.trim()
+      ? allEmployees
+      : visibleEmployees;
 
   const content = (
     <>
@@ -337,29 +342,43 @@ export function EmpCompanyDepartments() {
         <div className="rounded-xl border border-border bg-card p-8 text-center text-muted-foreground">
           No departments configured for your company yet.
         </div>
+      ) : isDesktop ? (
+        tableEmployees.length === 0 ? (
+          <div className="rounded-xl border border-border bg-card p-8 text-center text-muted-foreground">
+            {searchQuery.trim()
+              ? `No employees match "${searchQuery.trim()}".`
+              : "No employees found in this department."}
+          </div>
+        ) : (
+          <EmployeeList
+            employees={tableEmployees}
+            onOpen={openMember}
+            showDepartment
+          />
+        )
       ) : deptFilter === "all" && !searchQuery.trim() ? (
         populatedDepartments.length === 0 ? (
           <div className="rounded-xl border border-border bg-card p-8 text-center text-muted-foreground">
             No employees assigned to departments yet.
           </div>
         ) : (
-        <div className="space-y-4">
-          {populatedDepartments.map((dept) => (
-            <section key={dept.id} className="space-y-2">
-              <div className="flex items-center justify-between gap-3">
-                <h3 className="font-semibold text-foreground">{dept.departmentName}</h3>
-                <span className="text-xs text-muted-foreground">
-                  {dept.employeeCount} employee{dept.employeeCount === 1 ? "" : "s"}
-                </span>
-              </div>
-              {viewMode === "grid" ? (
-                <EmployeeGrid employees={dept.employees} onOpen={openMember} />
-              ) : (
-                <EmployeeList employees={dept.employees} onOpen={openMember} showDepartment={false} />
-              )}
-            </section>
-          ))}
-        </div>
+          <div className="space-y-4">
+            {populatedDepartments.map((dept) => (
+              <section key={dept.id} className="space-y-2">
+                <div className="flex items-center justify-between gap-3">
+                  <h3 className="font-semibold text-foreground">{dept.departmentName}</h3>
+                  <span className="text-xs text-muted-foreground">
+                    {dept.employeeCount} employee{dept.employeeCount === 1 ? "" : "s"}
+                  </span>
+                </div>
+                {viewMode === "grid" ? (
+                  <EmployeeGrid employees={dept.employees} onOpen={openMember} />
+                ) : (
+                  <EmployeeList employees={dept.employees} onOpen={openMember} showDepartment={false} />
+                )}
+              </section>
+            ))}
+          </div>
         )
       ) : visibleEmployees.length === 0 ? (
         <div className="rounded-xl border border-border bg-card p-8 text-center text-muted-foreground">
@@ -385,9 +404,9 @@ export function EmpCompanyDepartments() {
         title="Departments"
         description="Browse company departments and their employees"
         icon={Building2}
-        actions={toolbar}
         className="space-y-3"
       >
+        {toolbar}
         {content}
       </EmpDesktopPage>
     );

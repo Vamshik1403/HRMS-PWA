@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { Icon } from "@iconify/react";
 import { Megaphone, Plus } from "lucide-react";
@@ -15,9 +15,14 @@ import { EmpListViewMoreButton } from "../components/emp/EmpListViewMoreButton";
 import { ManagerMemoComposeSheet } from "../components/emp/ManagerMemoComposeSheet";
 import { ManagerMemoComposeInline } from "../components/emp/ManagerMemoComposeInline";
 import { EmpDesktopPage } from "../components/emp/desktop/EmpDesktopPage";
+import {
+  EmpTeamStyleDataSection,
+  useTeamListControls,
+} from "../components/emp/desktop/EmpTeamStyleDataSection";
 import { resolveAttachmentUrl } from "../utils/uploadFile";
 import { useMemoChatPolling } from "../hooks/useMemoChatPolling";
 import { Button } from "../components/ui/button";
+import { cn } from "../utils/cn";
 
 const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL || "/backend";
 
@@ -84,6 +89,17 @@ export default function EmpNoticeboardPage() {
   const [replySaving, setReplySaving] = useState(false);
   const [threadLoading, setThreadLoading] = useState(false);
   const employeeIDRef = useRef<number | null>(null);
+  const listControls = useTeamListControls("emp-noticeboard-view");
+  const {
+    viewMode,
+    selectViewMode,
+    searchOpen,
+    searchQuery,
+    setSearchQuery,
+    toggleSearch,
+    filterOpen,
+    toggleFilter,
+  } = listControls;
 
   const loadMemos = useCallback(async (empId: number) => {
     try {
@@ -159,6 +175,24 @@ export default function EmpNoticeboardPage() {
   const directReportees =
     scope?.reportees.filter((r) => r.id !== scope.employeeId) ?? [];
   const managerName = user?.username || "Manager";
+  const canSendNotice = isManagerView && directReportees.length > 0;
+
+  const filteredMemos = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return memos;
+    return memos.filter((m) => {
+      const subject = (m.subject || "").toLowerCase();
+      const type = (m.memoType || "").toLowerCase();
+      const issuedBy = (m.issuedBy || "").toLowerCase();
+      const description = (m.description || "").toLowerCase();
+      return (
+        subject.includes(q) ||
+        type.includes(q) ||
+        issuedBy.includes(q) ||
+        description.includes(q)
+      );
+    });
+  }, [memos, searchQuery]);
 
   const memoAuthHeaders = useCallback((): Record<string, string> => {
     const token = localStorage.getItem("token");
@@ -380,58 +414,281 @@ export default function EmpNoticeboardPage() {
     );
   };
 
-  const sendNoticeAction =
-    isManagerView && directReportees.length > 0 && !composeOpen ? (
-      <Button type="button" onClick={() => setComposeOpen(true)}>
-        <Plus className="size-4" />
-        Send notice
-      </Button>
-    ) : null;
-
-  const memoListBody =
-    composeOpen && isDesktop ? (
-      <ManagerMemoComposeInline
-        open={composeOpen}
-        onOpenChange={setComposeOpen}
-        managerName={managerName || undefined}
-        onSent={() => {
-          if (employeeIDRef.current) void loadMemos(employeeIDRef.current);
-        }}
-      />
-    ) : loading ? (
-      <div className="flex flex-col items-center justify-center py-20 gap-3">
-        <Icon icon="solar:spinner-bold-duotone" className="w-8 h-8 text-gray-300 animate-spin" />
-        <p className="text-[13px] text-gray-400">Loading notices…</p>
+  const noticeTable = (
+    <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-border bg-muted/40 text-left">
+              <th className="px-4 py-3 font-medium text-muted-foreground">Subject</th>
+              <th className="px-4 py-3 font-medium text-muted-foreground">Type</th>
+              <th className="px-4 py-3 font-medium text-muted-foreground hidden md:table-cell">
+                Issued by
+              </th>
+              <th className="px-4 py-3 font-medium text-muted-foreground">Date</th>
+              <th className="px-4 py-3 font-medium text-muted-foreground hidden sm:table-cell">
+                Attachment
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {filteredMemos.map((memo) => {
+              const colorClass = memoColor(memo.memoType);
+              return (
+                <tr
+                  key={memo.id}
+                  className="border-b border-border last:border-0 hover:bg-muted/30 cursor-pointer"
+                  onClick={() => toggleExpanded(memo.id)}
+                >
+                  <td className="px-4 py-3">
+                    <p className="font-medium text-foreground">{memo.subject || "Notice"}</p>
+                    {expandedId === memo.id && memo.description ? (
+                      <p className="mt-1 text-xs text-muted-foreground line-clamp-3 whitespace-pre-line">
+                        {memo.description}
+                      </p>
+                    ) : null}
+                  </td>
+                  <td className="px-4 py-3">
+                    {memo.memoType ? (
+                      <span
+                        className={cn(
+                          "inline-flex rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider",
+                          colorClass,
+                        )}
+                      >
+                        {memo.memoType}
+                      </span>
+                    ) : (
+                      "—"
+                    )}
+                  </td>
+                  <td className="px-4 py-3 text-muted-foreground hidden md:table-cell">
+                    {memo.issuedBy || "—"}
+                  </td>
+                  <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">
+                    {fmt(memo.createdAt || memo.issuedDate)}
+                  </td>
+                  <td className="px-4 py-3 hidden sm:table-cell">
+                    {memo.attachmentPath ? (
+                      <a
+                        href={resolveAttachmentUrl(memo.attachmentPath)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-primary font-semibold hover:underline"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        Open
+                      </a>
+                    ) : (
+                      <span className="text-muted-foreground">—</span>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
       </div>
-    ) : memos.length === 0 ? (
-      <div className="flex flex-col items-center justify-center py-20 gap-3">
-        <div className="w-16 h-16 rounded-2xl bg-amber-50 flex items-center justify-center">
-          <Icon icon="solar:bell-bold-duotone" className="w-8 h-8 text-amber-400" />
+      {expandedId != null ? (
+        <div className="border-t border-border bg-muted/20 px-4 py-4 space-y-3">
+          {(() => {
+            const memo = filteredMemos.find((m) => m.id === expandedId) ??
+              memos.find((m) => m.id === expandedId);
+            if (!memo) return null;
+            return (
+              <>
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-sm font-semibold text-foreground">
+                    Conversation · {memo.subject || "Notice"}
+                  </p>
+                  <button
+                    type="button"
+                    className="text-xs font-semibold text-muted-foreground hover:text-foreground"
+                    onClick={() => setExpandedId(null)}
+                  >
+                    Close
+                  </button>
+                </div>
+                {threadLoading ? (
+                  <p className="text-xs text-muted-foreground">Loading messages…</p>
+                ) : (
+                  <div className="space-y-2 max-h-56 overflow-y-auto">
+                    {(memo.replies ?? []).length === 0 ? (
+                      <p className="text-xs text-muted-foreground">No replies yet.</p>
+                    ) : (
+                      (memo.replies ?? []).map((rep) => (
+                        <div
+                          key={rep.id}
+                          className="rounded-lg bg-card border border-border px-3 py-2"
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <p className="text-xs font-semibold text-foreground">
+                              {rep.issuedBy || "User"}
+                            </p>
+                            {canUndoReply(rep) ? (
+                              <button
+                                type="button"
+                                className="text-[10px] font-semibold text-primary"
+                                onClick={() => void undoReply(memo.id, rep.id)}
+                              >
+                                Undo
+                              </button>
+                            ) : null}
+                          </div>
+                          <p className="mt-1 text-sm text-muted-foreground whitespace-pre-line">
+                            {rep.description}
+                          </p>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                )}
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={replyText}
+                    onChange={(e) => setReplyText(e.target.value)}
+                    placeholder="Reply…"
+                    className="flex-1 rounded-xl border border-border bg-card px-3 py-2 text-sm"
+                  />
+                  <Button
+                    type="button"
+                    disabled={replySaving || !replyText.trim()}
+                    onClick={() => void sendReply(memo.id)}
+                  >
+                    Send
+                  </Button>
+                </div>
+              </>
+            );
+          })()}
         </div>
-        <p className="text-[15px] font-semibold text-gray-700">No notices yet</p>
-        <p className="text-[13px] text-gray-400 text-center">
-          {isManagerView ? "Send a notice or warning to your team" : "Notices from HR will appear here"}
-        </p>
+      ) : null}
+    </div>
+  );
+
+  const noticeGrid = (
+    <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+      {filteredMemos.map((memo) => {
+        const colorClass = memoColor(memo.memoType);
+        return (
+          <button
+            key={memo.id}
+            type="button"
+            onClick={() => toggleExpanded(memo.id)}
+            className="rounded-xl border border-border bg-card shadow-sm p-4 text-left hover:border-primary/40 transition-colors"
+          >
+            <div className="flex items-start gap-3">
+              <div
+                className={cn(
+                  "w-10 h-10 rounded-xl flex items-center justify-center shrink-0",
+                  colorClass,
+                )}
+              >
+                <Icon icon={memoIcon(memo.memoType)} className="w-5 h-5" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="font-semibold text-foreground line-clamp-2">
+                  {memo.subject || "Notice"}
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {fmt(memo.createdAt || memo.issuedDate)}
+                  {memo.issuedBy ? ` · ${memo.issuedBy}` : ""}
+                </p>
+                {memo.memoType ? (
+                  <span
+                    className={cn(
+                      "mt-2 inline-flex rounded-full px-2 py-0.5 text-[10px] font-bold uppercase",
+                      colorClass,
+                    )}
+                  >
+                    {memo.memoType}
+                  </span>
+                ) : null}
+              </div>
+            </div>
+          </button>
+        );
+      })}
+    </div>
+  );
+
+  const desktopBody = composeOpen ? (
+    <ManagerMemoComposeInline
+      open={composeOpen}
+      onOpenChange={setComposeOpen}
+      managerName={managerName || undefined}
+      onSent={() => {
+        if (employeeIDRef.current) void loadMemos(employeeIDRef.current);
+      }}
+    />
+  ) : (
+    <EmpTeamStyleDataSection
+      title="Notices"
+      actions={
+        canSendNotice ? (
+          <Button type="button" size="sm" onClick={() => setComposeOpen(true)}>
+            <Plus className="size-4" />
+            Send notice
+          </Button>
+        ) : null
+      }
+      searchOpen={searchOpen}
+      onToggleSearch={toggleSearch}
+      searchQuery={searchQuery}
+      onSearchChange={setSearchQuery}
+      searchPlaceholder="Search notices…"
+      filterOpen={filterOpen}
+      onToggleFilter={toggleFilter}
+      viewMode={viewMode}
+      onViewModeChange={selectViewMode}
+      loading={loading}
+      empty={filteredMemos.length === 0}
+      emptyMessage={
+        searchQuery.trim()
+          ? `No notices match "${searchQuery.trim()}".`
+          : isManagerView
+            ? "No notices yet. Send a notice or warning to your team."
+            : "No notices yet."
+      }
+      listContent={noticeTable}
+      gridContent={noticeGrid}
+    />
+  );
+
+  const memoListBody = loading ? (
+    <div className="flex flex-col items-center justify-center py-20 gap-3">
+      <Icon icon="solar:spinner-bold-duotone" className="w-8 h-8 text-gray-300 animate-spin" />
+      <p className="text-[13px] text-gray-400">Loading notices…</p>
+    </div>
+  ) : memos.length === 0 ? (
+    <div className="flex flex-col items-center justify-center py-20 gap-3">
+      <div className="w-16 h-16 rounded-2xl bg-amber-50 flex items-center justify-center">
+        <Icon icon="solar:bell-bold-duotone" className="w-8 h-8 text-amber-400" />
       </div>
-    ) : (
-      <>
-        <div className={isDesktop ? "space-y-3" : "space-y-3"}>{preview.map(renderMemo)}</div>
-        {hasHistory && (
-          <EmpListViewMoreButton count={history.length} onClick={() => setHistoryOpen(true)} />
-        )}
-      </>
-    );
+      <p className="text-[15px] font-semibold text-gray-700">No notices yet</p>
+      <p className="text-[13px] text-gray-400 text-center">
+        {isManagerView ? "Send a notice or warning to your team" : "Notices from HR will appear here"}
+      </p>
+    </div>
+  ) : (
+    <>
+      <div className="space-y-3">{preview.map(renderMemo)}</div>
+      {hasHistory && (
+        <EmpListViewMoreButton count={history.length} onClick={() => setHistoryOpen(true)} />
+      )}
+    </>
+  );
 
   return (
     <EmpMobileLayout>
       {isDesktop ? (
         <EmpDesktopPage
-          title="Internal Messaging"
+          title="Noticeboard"
           description="Notices, warnings, and conversations with your team"
           icon={Megaphone}
-          actions={sendNoticeAction}
         >
-          {memoListBody}
+          {desktopBody}
         </EmpDesktopPage>
       ) : (
         <div className="px-4 pt-5 pb-6 space-y-4">

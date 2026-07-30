@@ -131,7 +131,7 @@ export function EmpCompanyEnterpriseHome({ firstName }: { firstName?: string }) 
   if (!inPortal) return dashboard;
 
   return (
-    <EmpDesktopPage title="Dashboard" icon={LayoutDashboard}>
+    <EmpDesktopPage title="Dashboard" icon={LayoutDashboard} className="space-y-0">
       {dashboard}
     </EmpDesktopPage>
   );

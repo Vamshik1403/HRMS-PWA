@@ -1,6 +1,19 @@
 import { TASK_MANAGEMENT_ENABLED } from "@/app/config/featureFlags";
 import { canViewModule, hasCompanyAccessFlag, isCompanyOwnerFlag } from "@/lib/companyAccess";
 
+export type EmpMoreGroupKey =
+  | "team"
+  | "organization"
+  | "employee"
+  | "contractor"
+  | "tasks"
+  | "attendance"
+  | "leave"
+  | "payroll"
+  | "messaging"
+  | "reports"
+  | "settings";
+
 export type EmpMoreSection = {
   id: string;
   label: string;
@@ -13,7 +26,7 @@ export type EmpMoreSection = {
   /** Only company owner (or RIGHTS viewers for rights entry). */
   ownerOrRightsOnly?: boolean;
   /** Optional group heading in More grid. */
-  group?: "team" | "admin";
+  group?: EmpMoreGroupKey;
   show?: () => boolean;
 };
 
@@ -65,7 +78,7 @@ export const EMP_MORE_SECTIONS: EmpMoreSection[] = [
     show: () => hasCompanyAccessFlag(),
   },
 
-  // ── Company Setup ──
+  // ── Organization setup ──
   {
     id: "admin-branches",
     label: "Branches",
@@ -73,7 +86,7 @@ export const EMP_MORE_SECTIONS: EmpMoreSection[] = [
     icon: "solar:map-point-wave-bold-duotone",
     iconClassName: "text-cyan-700",
     moduleKey: "BRANCHES",
-    group: "admin",
+    group: "organization",
   },
   {
     id: "admin-departments",
@@ -82,7 +95,7 @@ export const EMP_MORE_SECTIONS: EmpMoreSection[] = [
     icon: "solar:widget-2-bold-duotone",
     iconClassName: "text-sky-700",
     moduleKey: "DEPARTMENTS",
-    group: "admin",
+    group: "organization",
   },
   {
     id: "admin-designations",
@@ -91,7 +104,7 @@ export const EMP_MORE_SECTIONS: EmpMoreSection[] = [
     icon: "solar:medal-ribbon-bold-duotone",
     iconClassName: "text-amber-700",
     moduleKey: "DESIGNATIONS",
-    group: "admin",
+    group: "organization",
   },
   {
     id: "admin-devices",
@@ -100,10 +113,10 @@ export const EMP_MORE_SECTIONS: EmpMoreSection[] = [
     icon: "solar:smartphone-bold-duotone",
     iconClassName: "text-slate-700",
     moduleKey: "DEVICES",
-    group: "admin",
+    group: "organization",
   },
 
-  // ── Workforce ──
+  // ── Employee management ──
   {
     id: "admin-employees",
     label: "Employees",
@@ -111,7 +124,7 @@ export const EMP_MORE_SECTIONS: EmpMoreSection[] = [
     icon: "solar:users-group-rounded-bold-duotone",
     iconClassName: "text-blue-700",
     moduleKey: "EMPLOYEES",
-    group: "admin",
+    group: "employee",
   },
   {
     id: "admin-offboarding",
@@ -120,10 +133,37 @@ export const EMP_MORE_SECTIONS: EmpMoreSection[] = [
     icon: "solar:user-minus-bold-duotone",
     iconClassName: "text-rose-700",
     moduleKey: "OFFBOARDING",
-    group: "admin",
+    group: "employee",
+  },
+  {
+    id: "admin-regularisation",
+    label: "Regularisation",
+    href: "/attendance-regularisation",
+    icon: "solar:restart-bold-duotone",
+    iconClassName: "text-teal-700",
+    moduleKey: "REGULARISATION",
+    group: "employee",
+  },
+  {
+    id: "admin-leave-apps",
+    label: "Leave Applications",
+    href: "/leave-applications",
+    icon: "solar:letter-bold-duotone",
+    iconClassName: "text-blue-600",
+    moduleKey: "LEAVE_APPLICATIONS",
+    group: "employee",
+  },
+  {
+    id: "admin-privileged-leave",
+    label: "Privileged Leave",
+    href: "/privileged-leave",
+    icon: "solar:shield-user-bold-duotone",
+    iconClassName: "text-indigo-600",
+    moduleKey: "LEAVE_APPLICATIONS",
+    group: "employee",
   },
 
-  // ── Contractor ──
+  // ── Contractor management ──
   {
     id: "admin-contractors",
     label: "Contractors",
@@ -131,7 +171,7 @@ export const EMP_MORE_SECTIONS: EmpMoreSection[] = [
     icon: "solar:case-bold-duotone",
     iconClassName: "text-orange-700",
     moduleKey: "CONTRACTORS",
-    group: "admin",
+    group: "contractor",
   },
   {
     id: "admin-contractor-rates",
@@ -140,7 +180,7 @@ export const EMP_MORE_SECTIONS: EmpMoreSection[] = [
     icon: "solar:wad-of-money-bold-duotone",
     iconClassName: "text-lime-700",
     moduleKey: "CONTRACTOR_RATES",
-    group: "admin",
+    group: "contractor",
   },
   {
     id: "admin-contractor-payout",
@@ -149,10 +189,10 @@ export const EMP_MORE_SECTIONS: EmpMoreSection[] = [
     icon: "solar:card-transfer-bold-duotone",
     iconClassName: "text-green-700",
     moduleKey: "CONTRACTORS",
-    group: "admin",
+    group: "contractor",
   },
 
-  // ── Task Management ──
+  // ── Task management ──
   {
     id: "admin-customers",
     label: "Customers",
@@ -160,7 +200,7 @@ export const EMP_MORE_SECTIONS: EmpMoreSection[] = [
     icon: "solar:users-group-two-rounded-bold-duotone",
     iconClassName: "text-violet-700",
     moduleKey: "TASKS",
-    group: "admin",
+    group: "tasks",
     show: () => TASK_MANAGEMENT_ENABLED,
   },
   {
@@ -170,7 +210,7 @@ export const EMP_MORE_SECTIONS: EmpMoreSection[] = [
     icon: "solar:map-point-bold-duotone",
     iconClassName: "text-fuchsia-700",
     moduleKey: "TASKS",
-    group: "admin",
+    group: "tasks",
     show: () => TASK_MANAGEMENT_ENABLED,
   },
   {
@@ -180,11 +220,11 @@ export const EMP_MORE_SECTIONS: EmpMoreSection[] = [
     icon: "solar:checklist-minimalistic-bold-duotone",
     iconClassName: "text-rose-600",
     moduleKey: "TASKS",
-    group: "admin",
+    group: "tasks",
     show: () => TASK_MANAGEMENT_ENABLED,
   },
 
-  // ── Shift & Attendance ──
+  // ── Attendance & shifts ──
   {
     id: "admin-work-shifts",
     label: "Work Shifts",
@@ -192,7 +232,7 @@ export const EMP_MORE_SECTIONS: EmpMoreSection[] = [
     icon: "solar:clock-circle-bold-duotone",
     iconClassName: "text-violet-700",
     moduleKey: "WORK_SHIFTS",
-    group: "admin",
+    group: "attendance",
   },
   {
     id: "admin-attendance-policy",
@@ -201,7 +241,7 @@ export const EMP_MORE_SECTIONS: EmpMoreSection[] = [
     icon: "solar:document-text-bold-duotone",
     iconClassName: "text-fuchsia-700",
     moduleKey: "ATTENDANCE_POLICY",
-    group: "admin",
+    group: "attendance",
   },
   {
     id: "admin-roster",
@@ -210,19 +250,10 @@ export const EMP_MORE_SECTIONS: EmpMoreSection[] = [
     icon: "solar:calendar-bold-duotone",
     iconClassName: "text-pink-700",
     moduleKey: "ROSTER",
-    group: "admin",
-  },
-  {
-    id: "admin-regularisation",
-    label: "Regularisation",
-    href: "/attendance-regularisation",
-    icon: "solar:restart-bold-duotone",
-    iconClassName: "text-teal-700",
-    moduleKey: "REGULARISATION",
-    group: "admin",
+    group: "attendance",
   },
 
-  // ── Leave Policy ──
+  // ── Leave policy ──
   {
     id: "admin-holidays",
     label: "Manage Holidays",
@@ -230,7 +261,7 @@ export const EMP_MORE_SECTIONS: EmpMoreSection[] = [
     icon: "solar:confetti-bold-duotone",
     iconClassName: "text-rose-600",
     moduleKey: "HOLIDAYS",
-    group: "admin",
+    group: "leave",
   },
   {
     id: "admin-public-holiday",
@@ -239,7 +270,7 @@ export const EMP_MORE_SECTIONS: EmpMoreSection[] = [
     icon: "solar:calendar-search-bold-duotone",
     iconClassName: "text-cyan-600",
     moduleKey: "HOLIDAYS",
-    group: "admin",
+    group: "leave",
   },
   {
     id: "admin-leave-policy",
@@ -248,10 +279,10 @@ export const EMP_MORE_SECTIONS: EmpMoreSection[] = [
     icon: "solar:clipboard-list-bold-duotone",
     iconClassName: "text-sky-600",
     moduleKey: "LEAVE_POLICY",
-    group: "admin",
+    group: "leave",
   },
 
-  // ── Payroll Policy ──
+  // ── Payroll ──
   {
     id: "admin-salary-cycle",
     label: "Salary Cycle",
@@ -259,7 +290,7 @@ export const EMP_MORE_SECTIONS: EmpMoreSection[] = [
     icon: "solar:calendar-date-bold-duotone",
     iconClassName: "text-emerald-600",
     moduleKey: "PAYROLL",
-    group: "admin",
+    group: "payroll",
   },
   {
     id: "admin-allowances",
@@ -268,7 +299,7 @@ export const EMP_MORE_SECTIONS: EmpMoreSection[] = [
     icon: "solar:hand-money-bold-duotone",
     iconClassName: "text-teal-600",
     moduleKey: "PAYROLL",
-    group: "admin",
+    group: "payroll",
   },
   {
     id: "admin-deductions",
@@ -277,7 +308,7 @@ export const EMP_MORE_SECTIONS: EmpMoreSection[] = [
     icon: "solar:bill-list-bold-duotone",
     iconClassName: "text-orange-600",
     moduleKey: "PAYROLL",
-    group: "admin",
+    group: "payroll",
   },
   {
     id: "admin-paygrade",
@@ -286,7 +317,7 @@ export const EMP_MORE_SECTIONS: EmpMoreSection[] = [
     icon: "solar:tag-price-bold-duotone",
     iconClassName: "text-amber-600",
     moduleKey: "PAYROLL",
-    group: "admin",
+    group: "payroll",
   },
   {
     id: "admin-bonus-rule",
@@ -295,10 +326,8 @@ export const EMP_MORE_SECTIONS: EmpMoreSection[] = [
     icon: "solar:star-bold-duotone",
     iconClassName: "text-yellow-600",
     moduleKey: "PAYROLL",
-    group: "admin",
+    group: "payroll",
   },
-
-  // ── Payroll ──
   {
     id: "admin-bonus-allocations",
     label: "Bonus Allocations",
@@ -306,7 +335,7 @@ export const EMP_MORE_SECTIONS: EmpMoreSection[] = [
     icon: "solar:gift-bold-duotone",
     iconClassName: "text-pink-600",
     moduleKey: "PAYROLL",
-    group: "admin",
+    group: "payroll",
   },
   {
     id: "admin-advances",
@@ -315,7 +344,7 @@ export const EMP_MORE_SECTIONS: EmpMoreSection[] = [
     icon: "solar:hand-money-bold-duotone",
     iconClassName: "text-green-700",
     moduleKey: "SALARY_ADVANCES",
-    group: "admin",
+    group: "payroll",
   },
   {
     id: "admin-reimbursements",
@@ -324,7 +353,7 @@ export const EMP_MORE_SECTIONS: EmpMoreSection[] = [
     icon: "solar:wallet-money-bold-duotone",
     iconClassName: "text-teal-600",
     moduleKey: "REIMBURSEMENTS",
-    group: "admin",
+    group: "payroll",
   },
   {
     id: "admin-payroll",
@@ -333,27 +362,7 @@ export const EMP_MORE_SECTIONS: EmpMoreSection[] = [
     icon: "solar:calculator-bold-duotone",
     iconClassName: "text-emerald-700",
     moduleKey: "PAYROLL",
-    group: "admin",
-  },
-
-  // ── Leave Management ──
-  {
-    id: "admin-leave-apps",
-    label: "Leave Applications",
-    href: "/leave-applications",
-    icon: "solar:letter-bold-duotone",
-    iconClassName: "text-blue-600",
-    moduleKey: "LEAVE_APPLICATIONS",
-    group: "admin",
-  },
-  {
-    id: "admin-privileged-leave",
-    label: "Privileged Leave",
-    href: "/privileged-leave",
-    icon: "solar:shield-user-bold-duotone",
-    iconClassName: "text-indigo-600",
-    moduleKey: "LEAVE_APPLICATIONS",
-    group: "admin",
+    group: "payroll",
   },
 
   // ── Messaging ──
@@ -364,7 +373,7 @@ export const EMP_MORE_SECTIONS: EmpMoreSection[] = [
     icon: "solar:chat-round-line-bold-duotone",
     iconClassName: "text-indigo-600",
     moduleKey: "MESSAGING",
-    group: "admin",
+    group: "messaging",
   },
 
   // ── Reports ──
@@ -375,7 +384,7 @@ export const EMP_MORE_SECTIONS: EmpMoreSection[] = [
     icon: "solar:graph-up-bold-duotone",
     iconClassName: "text-blue-800",
     moduleKey: "REPORTS",
-    group: "admin",
+    group: "reports",
   },
   {
     id: "admin-attendance-logs",
@@ -384,10 +393,8 @@ export const EMP_MORE_SECTIONS: EmpMoreSection[] = [
     icon: "solar:history-bold-duotone",
     iconClassName: "text-slate-700",
     moduleKey: "REPORTS",
-    group: "admin",
+    group: "reports",
   },
-
-  // ── Settings ──
   {
     id: "admin-import-attendance",
     label: "Import Attendance",
@@ -395,8 +402,10 @@ export const EMP_MORE_SECTIONS: EmpMoreSection[] = [
     icon: "solar:upload-bold-duotone",
     iconClassName: "text-slate-600",
     moduleKey: "IMPORT_ATTENDANCE",
-    group: "admin",
+    group: "reports",
   },
+
+  // ── Settings ──
   {
     id: "admin-settings-general",
     label: "General Settings",
@@ -404,7 +413,7 @@ export const EMP_MORE_SECTIONS: EmpMoreSection[] = [
     icon: "solar:settings-bold-duotone",
     iconClassName: "text-gray-700",
     moduleKey: "SETTINGS",
-    group: "admin",
+    group: "settings",
   },
   {
     id: "admin-settings-compliance",
@@ -413,7 +422,7 @@ export const EMP_MORE_SECTIONS: EmpMoreSection[] = [
     icon: "solar:shield-check-bold-duotone",
     iconClassName: "text-emerald-800",
     moduleKey: "SETTINGS",
-    group: "admin",
+    group: "settings",
   },
   {
     id: "admin-settings-email",
@@ -422,7 +431,7 @@ export const EMP_MORE_SECTIONS: EmpMoreSection[] = [
     icon: "solar:letter-opened-bold-duotone",
     iconClassName: "text-sky-800",
     moduleKey: "SETTINGS",
-    group: "admin",
+    group: "settings",
   },
   {
     id: "rights",
@@ -431,7 +440,7 @@ export const EMP_MORE_SECTIONS: EmpMoreSection[] = [
     icon: "solar:shield-keyhole-bold-duotone",
     iconClassName: "text-amber-800",
     ownerOrRightsOnly: true,
-    group: "admin",
+    group: "settings",
   },
 ];
 
@@ -454,15 +463,24 @@ export function groupEmpMoreSections(sections: EmpMoreSection[]): {
   title: string;
   items: EmpMoreSection[];
 }[] {
-  const order: Array<{ key: EmpMoreSection["group"]; title: string }> = [
+  const order: Array<{ key: EmpMoreGroupKey; title: string }> = [
     { key: "team", title: "Team" },
-    { key: "admin", title: "Company admin" },
+    { key: "organization", title: "Organization setup" },
+    { key: "employee", title: "Employee management" },
+    { key: "contractor", title: "Contractor management" },
+    { key: "tasks", title: "Task management" },
+    { key: "attendance", title: "Attendance & shifts" },
+    { key: "leave", title: "Leave policy" },
+    { key: "payroll", title: "Payroll" },
+    { key: "messaging", title: "Messaging" },
+    { key: "reports", title: "Reports" },
+    { key: "settings", title: "Settings" },
   ];
   return order
     .map(({ key, title }) => ({
-      key: key || "admin",
+      key,
       title,
-      items: sections.filter((s) => (s.group || "admin") === key),
+      items: sections.filter((s) => (s.group || "organization") === key),
     }))
     .filter((g) => g.items.length > 0);
 }

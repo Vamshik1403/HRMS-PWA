@@ -1,9 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import Link from "next/link";
 import { Icon } from "@iconify/react";
-import { ArrowLeft } from "lucide-react";
+import { CalendarDays } from "lucide-react";
+import { EmpDesktopPage } from "./desktop/EmpDesktopPage";
+import { useEmpPortalDesktop } from "@/app/components/layout/EmpPortalShell";
 
 const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL || "/backend";
 
@@ -35,6 +36,7 @@ function dateRangeLabel(start: string, end: string): string {
 }
 
 export function EmpHolidayListMobile({ embedded = false }: { embedded?: boolean } = {}) {
+  const isDesktop = useEmpPortalDesktop();
   const [holidays, setHolidays] = useState<EmpHolidayRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -77,6 +79,14 @@ export function EmpHolidayListMobile({ embedded = false }: { embedded?: boolean 
     return { upcoming: up, past: pa.reverse() };
   }, [holidays]);
 
+  const allRows = useMemo(
+    () => [
+      ...upcoming.map((h) => ({ ...h, section: "Upcoming" as const })),
+      ...past.map((h) => ({ ...h, section: "Past" as const })),
+    ],
+    [upcoming, past],
+  );
+
   const renderSection = (title: string, items: EmpHolidayRow[], accent: string) => {
     if (items.length === 0) return null;
     return (
@@ -113,36 +123,10 @@ export function EmpHolidayListMobile({ embedded = false }: { embedded?: boolean 
     );
   };
 
-  return (
-    <div className={embedded ? "space-y-4" : "px-4 pt-3 pb-8"}>
-      {!embedded ? (
-        <div className="flex items-center gap-2 mb-4">
-          <Link
-            href="/empdashboard"
-            className="inline-flex items-center gap-1 text-sm font-medium text-[#4f46e5]"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            Home
-          </Link>
-        </div>
-      ) : null}
-
-      {!embedded ? (
-        <>
-          <h1 className="text-xl font-bold text-gray-900 mb-1">Holiday list</h1>
-          <p className="text-sm text-gray-500 mb-4">
-            Public holidays for your company from the leave policy calendar.
-          </p>
-        </>
-      ) : (
-        <div>
-          <h3 className="text-base font-semibold text-foreground">My holidays</h3>
-          <p className="text-sm text-muted-foreground">Company holidays on your calendar</p>
-        </div>
-      )}
-
+  const body = (
+    <>
       {loading ? (
-        <p className="text-sm text-gray-400 py-8 text-center">Loading holidays…</p>
+        <p className="text-sm text-muted-foreground py-8 text-center">Loading holidays…</p>
       ) : error ? (
         <div className="rounded-xl bg-amber-50 border border-amber-100 px-4 py-3 text-sm text-amber-800">
           {error}
@@ -155,8 +139,49 @@ export function EmpHolidayListMobile({ embedded = false }: { embedded?: boolean 
           </button>
         </div>
       ) : holidays.length === 0 ? (
-        <div className="rounded-[18px] bg-white border border-gray-100 p-6 text-center text-sm text-gray-500">
+        <div className="rounded-xl border border-border bg-card p-8 text-center text-sm text-muted-foreground">
           No public holidays are configured for your branch yet.
+        </div>
+      ) : isDesktop && !embedded ? (
+        <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border bg-muted/40 text-left">
+                  <th className="px-4 py-3 font-medium text-muted-foreground">Holiday</th>
+                  <th className="px-4 py-3 font-medium text-muted-foreground">Date</th>
+                  <th className="px-4 py-3 font-medium text-muted-foreground hidden sm:table-cell">
+                    Financial year
+                  </th>
+                  <th className="px-4 py-3 font-medium text-muted-foreground">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {allRows.map((h) => (
+                  <tr key={h.id} className="border-b border-border last:border-0">
+                    <td className="px-4 py-3 font-medium text-foreground">{h.name}</td>
+                    <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">
+                      {dateRangeLabel(h.startDate, h.endDate)}
+                    </td>
+                    <td className="px-4 py-3 text-muted-foreground hidden sm:table-cell">
+                      {h.financialYear || "—"}
+                    </td>
+                    <td className="px-4 py-3">
+                      <span
+                        className={
+                          h.section === "Upcoming"
+                            ? "inline-flex rounded-full bg-rose-50 px-2.5 py-0.5 text-xs font-semibold text-rose-700"
+                            : "inline-flex rounded-full bg-muted px-2.5 py-0.5 text-xs font-semibold text-muted-foreground"
+                        }
+                      >
+                        {h.section}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       ) : (
         <>
@@ -164,6 +189,40 @@ export function EmpHolidayListMobile({ embedded = false }: { embedded?: boolean 
           {renderSection("Past", past, "bg-gray-50")}
         </>
       )}
+    </>
+  );
+
+  if (embedded) {
+    return (
+      <div className="space-y-4">
+        <div>
+          <h3 className="text-base font-semibold text-foreground">My holidays</h3>
+          <p className="text-sm text-muted-foreground">Company holidays on your calendar</p>
+        </div>
+        {body}
+      </div>
+    );
+  }
+
+  if (isDesktop) {
+    return (
+      <EmpDesktopPage
+        title="Holidays"
+        description="Public holidays for your company from the leave policy calendar"
+        icon={CalendarDays}
+      >
+        {body}
+      </EmpDesktopPage>
+    );
+  }
+
+  return (
+    <div className="px-4 pt-3 pb-8">
+      <h1 className="text-xl font-bold text-gray-900 mb-1">Holiday list</h1>
+      <p className="text-sm text-gray-500 mb-4">
+        Public holidays for your company from the leave policy calendar.
+      </p>
+      {body}
     </div>
   );
 }

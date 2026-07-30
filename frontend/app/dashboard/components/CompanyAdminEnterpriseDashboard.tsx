@@ -949,7 +949,7 @@ export function CompanyAdminEnterpriseDashboard({
       className={cn(
         "ca-enterprise-dashboard -mx-4 -mb-6 min-h-full bg-background px-4 pb-8 text-foreground sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8",
         suppressPageTitle
-          ? "-mt-1 pt-2 sm:-mt-1.5 lg:-mt-2"
+          ? "-mt-3 pt-1 sm:-mt-3.5 lg:-mt-4"
           : "-mt-3 pt-0 sm:-mt-4 lg:-mt-5",
       )}
     >
@@ -986,21 +986,21 @@ export function CompanyAdminEnterpriseDashboard({
       {/* Header */}
       <header
         className={cn(
-          "ca-fade flex flex-col",
+          "ca-fade",
           suppressPageTitle
-            ? "mb-3 items-stretch gap-1.5"
-            : "mb-5 gap-3 xl:flex-row xl:items-end xl:justify-between",
+            ? "mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
+            : "mb-5 flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between",
         )}
       >
         {suppressPageTitle ? (
           <>
             <h1
-              className="text-[28px] font-semibold tracking-tight text-slate-900 dark:text-slate-100"
+              className="text-[28px] font-semibold tracking-tight leading-none text-slate-900 dark:text-slate-100"
               style={{ color: TEXT }}
             >
               Welcome back, {formatWelcomeName(firstName)}
             </h1>
-            <div className="flex flex-col gap-3 self-end sm:flex-row sm:items-center">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center shrink-0">
               <div className="inline-flex h-[42px] items-center gap-2 rounded-[14px] border border-border bg-card px-4 text-sm font-medium text-foreground shadow-sm">
                 <CalendarDays className="size-4" style={{ color: PRIMARY }} />
                 <span>Today</span>

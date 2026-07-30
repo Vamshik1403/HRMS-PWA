@@ -161,8 +161,13 @@ export function isEmpNavItemActive(
 ): boolean {
   const tab = searchParams.get("tab");
 
-  if (item.href === "/empCompanyDashboard") {
-    return pathname === "/empCompanyDashboard" || pathname.startsWith("/empCompanyDashboard/");
+  // Keep My Company highlighted across Dashboard / Departments / Holidays / Noticeboard.
+  if (
+    item.moduleId === "company" ||
+    item.href === "/empCompany" ||
+    item.href === "/empCompanyDashboard"
+  ) {
+    return isCompanyPath(pathname);
   }
 
   if (item.tabMatch === "dashboard") {
@@ -183,10 +188,6 @@ export function isEmpNavItemActive(
 
   if (item.href === "/empMyTasks" || item.moduleId === "tasks") {
     return pathname === "/empMyTasks" || pathname.startsWith("/empMyTasks/");
-  }
-
-  if (item.moduleId === "company" || item.href === "/empCompany" || item.href === "/empCompanyDashboard") {
-    return isCompanyPath(pathname);
   }
 
   if (item.moduleId === "team") {
