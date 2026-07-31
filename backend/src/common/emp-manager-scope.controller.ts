@@ -96,6 +96,9 @@ export class EmpManagerScopeController {
         const checkInIso = status.checkIn?.checkinTime
           ? new Date(status.checkIn.checkinTime).toISOString()
           : null;
+        const checkOutIso = status.checkOut?.checkinTime
+          ? new Date(status.checkOut.checkinTime).toISOString()
+          : null;
         let statusLabel = 'Yet to check-in';
         if (status.isAbsentToday) statusLabel = 'Absent';
         else if (status.isCheckedIn) statusLabel = 'Checked in';
@@ -115,6 +118,7 @@ export class EmpManagerScopeController {
           isCheckedIn: status.isCheckedIn,
           isAbsentToday: status.isAbsentToday,
           checkInTime: checkInIso,
+          checkOutTime: checkOutIso,
           statusLabel,
         };
       }),

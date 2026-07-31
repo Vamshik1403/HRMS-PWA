@@ -29,6 +29,7 @@ export type TeamMemberRow = {
   isCheckedIn?: boolean;
   isAbsentToday?: boolean;
   checkInTime?: string | null;
+  checkOutTime?: string | null;
   statusLabel?: string;
 };
 

@@ -26,6 +26,7 @@ import { resolveEmpPhoto } from "@/app/utils/empPhotoCache";
 import { getPageCache } from "@/app/utils/pageCache";
 import { setSidebarContext, getSidebarContext } from "@/app/utils/sidebarContext";
 import { hasCompanyAccessFlag } from "@/lib/companyAccess";
+import { preloadHeroImages } from "@/app/components/emp/desktop/HeroBackground";
 import {
   Dialog,
   DialogContent,
@@ -160,6 +161,11 @@ export default function EmpPortalShell({ children, hideBottomNav = false }: EmpP
 
   const companyTabs = EMP_COMPANY_TABS;
   const showCompanyTabs = isManagerView && activeZone === "company";
+
+  // Warm the Home hero scene as soon as the portal mounts (often before Home paints).
+  useEffect(() => {
+    preloadHeroImages(false);
+  }, []);
 
   // Track visit history so re-clicking an active sidebar item steps back (Gmail-style).
   useEffect(() => {

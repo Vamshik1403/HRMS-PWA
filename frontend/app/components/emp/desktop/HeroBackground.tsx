@@ -7,49 +7,61 @@ import { cn } from "@/app/utils/cn";
 export const HERO_TIME_RANGES = [
   {
     id: "sunrise",
-    src: "/img/sunrise.png",
+    src: "/img/sunrise.webp",
+    fallbackSrc: "/img/sunrise.jpg",
     start: "05:00",
     end: "08:00",
     period: "morning",
     tint: "rgba(255, 140, 60, 0.22)",
+    /** Approximate dominant color while the image downloads */
+    placeholder: "#3d2a1f",
   },
   {
     id: "daytime",
-    src: "/img/daytime.png",
+    src: "/img/daytime.webp",
+    fallbackSrc: "/img/daytime.jpg",
     start: "08:00",
     end: "16:30",
     period: "afternoon",
     tint: "rgba(56, 120, 200, 0.2)",
+    placeholder: "#5b8fc7",
   },
   {
     id: "sunset",
-    src: "/img/sunset.png",
+    src: "/img/sunset.webp",
+    fallbackSrc: "/img/sunset.jpg",
     start: "16:30",
     end: "18:45",
     period: "evening",
     tint: "rgba(255, 120, 50, 0.24)",
+    placeholder: "#c45a2a",
   },
   {
     id: "moonrise",
-    src: "/img/moonrise.png",
+    src: "/img/moonrise.webp",
+    fallbackSrc: "/img/moonrise.jpg",
     start: "18:45",
     end: "24:00",
     period: "night",
     tint: "rgba(20, 40, 90, 0.32)",
+    placeholder: "#0b1630",
   },
   {
     id: "moonset",
-    src: "/img/moonset.png",
+    src: "/img/moonset.webp",
+    fallbackSrc: "/img/moonset.jpg",
     start: "00:00",
     end: "05:00",
     period: "night",
     tint: "rgba(16, 32, 72, 0.34)",
+    placeholder: "#081022",
   },
 ] as const;
 
 export type HeroSceneId = (typeof HERO_TIME_RANGES)[number]["id"];
 export type HeroSceneSrc = (typeof HERO_TIME_RANGES)[number]["src"];
 export type HeroPeriod = (typeof HERO_TIME_RANGES)[number]["period"];
+type HeroScene = (typeof HERO_TIME_RANGES)[number];
 
 const FADE_MS = 600;
 const KEN_BURNS_MS = 30_000;
@@ -63,7 +75,7 @@ function minutesOfDay(date: Date): number {
   return date.getHours() * 60 + date.getMinutes();
 }
 
-export function resolveHeroScene(date: Date = new Date()) {
+export function resolveHeroScene(date: Date = new Date()): HeroScene {
   const minutes = minutesOfDay(date);
   for (const range of HERO_TIME_RANGES) {
     const start = parseClockToMinutes(range.start);
@@ -91,11 +103,64 @@ function msUntilNextRangeChange(date: Date = new Date()): number {
   return Math.max(1000, minutesUntil * 60_000 - seconds * 1000 - ms);
 }
 
-function preloadHeroImages() {
-  for (const range of HERO_TIME_RANGES) {
+function ensurePreloadLink(href: string, asType: "image", type?: string) {
+  if (typeof document === "undefined") return;
+  const existing = document.querySelector(`link[rel="preload"][href="${href}"]`);
+  if (existing) return;
+  const link = document.createElement("link");
+  link.rel = "preload";
+  link.as = asType;
+  link.href = href;
+  if (type) link.type = type;
+  // Hint browsers that this image is critical for LCP.
+  link.setAttribute("fetchpriority", "high");
+  document.head.appendChild(link);
+}
+
+/** Warm the current period image (and quietly warm the others). Call as early as login. */
+export function preloadHeroImages(priorityOnly = false) {
+  if (typeof window === "undefined") return;
+  const current = resolveHeroScene();
+  ensurePreloadLink(current.src, "image", "image/webp");
+  const warm = (src: string) => {
     const img = new Image();
-    img.src = range.src;
+    img.decoding = "async";
+    img.src = src;
+  };
+  warm(current.src);
+  if (priorityOnly) return;
+  for (const range of HERO_TIME_RANGES) {
+    if (range.src === current.src) continue;
+    warm(range.src);
   }
+}
+
+function HeroPicture({
+  scene,
+  className,
+  priority = false,
+  onLoad,
+}: {
+  scene: Pick<HeroScene, "src" | "fallbackSrc">;
+  className?: string;
+  priority?: boolean;
+  onLoad?: () => void;
+}) {
+  return (
+    <picture>
+      <source srcSet={scene.src} type="image/webp" />
+      <img
+        src={scene.fallbackSrc}
+        alt=""
+        className={className}
+        draggable={false}
+        decoding={priority ? "sync" : "async"}
+        loading={priority ? "eager" : "lazy"}
+        fetchPriority={priority ? "high" : "low"}
+        onLoad={onLoad}
+      />
+    </picture>
+  );
 }
 
 /**
@@ -104,43 +169,38 @@ function preloadHeroImages() {
  */
 export function HeroBackground({ className }: { className?: string }) {
   const initial = resolveHeroScene();
-  const [currentSrc, setCurrentSrc] = useState<HeroSceneSrc>(() => initial.src);
-  const [currentTint, setCurrentTint] = useState(initial.tint);
-  const [outgoingSrc, setOutgoingSrc] = useState<HeroSceneSrc | null>(null);
-  const [outgoingTint, setOutgoingTint] = useState<string | null>(null);
+  const [scene, setScene] = useState<HeroScene>(() => initial);
+  const [outgoingScene, setOutgoingScene] = useState<HeroScene | null>(null);
   const [outgoingVisible, setOutgoingVisible] = useState(false);
+  const [imageReady, setImageReady] = useState(false);
   const [kenBurnsKey, setKenBurnsKey] = useState(0);
   const fadeTimerRef = useRef<number | null>(null);
   const scheduleRef = useRef<number | null>(null);
-  const tintRef = useRef(initial.tint);
+  const sceneRef = useRef(initial);
 
-  const applyScene = useCallback((scene: (typeof HERO_TIME_RANGES)[number]) => {
-    setCurrentSrc((prev) => {
-      if (prev === scene.src) {
-        tintRef.current = scene.tint;
-        setCurrentTint(scene.tint);
-        return prev;
-      }
-      if (fadeTimerRef.current != null) {
-        window.clearTimeout(fadeTimerRef.current);
-        fadeTimerRef.current = null;
-      }
-      setOutgoingSrc(prev);
-      setOutgoingTint(tintRef.current);
-      setOutgoingVisible(true);
-      tintRef.current = scene.tint;
-      setCurrentTint(scene.tint);
-      setKenBurnsKey((k) => k + 1);
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => setOutgoingVisible(false));
-      });
-      fadeTimerRef.current = window.setTimeout(() => {
-        setOutgoingSrc(null);
-        setOutgoingTint(null);
-        fadeTimerRef.current = null;
-      }, FADE_MS);
-      return scene.src;
+  const applyScene = useCallback((next: HeroScene) => {
+    if (sceneRef.current.id === next.id) {
+      sceneRef.current = next;
+      setScene(next);
+      return;
+    }
+    if (fadeTimerRef.current != null) {
+      window.clearTimeout(fadeTimerRef.current);
+      fadeTimerRef.current = null;
+    }
+    setOutgoingScene(sceneRef.current);
+    setOutgoingVisible(true);
+    sceneRef.current = next;
+    setScene(next);
+    setImageReady(false);
+    setKenBurnsKey((k) => k + 1);
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => setOutgoingVisible(false));
     });
+    fadeTimerRef.current = window.setTimeout(() => {
+      setOutgoingScene(null);
+      fadeTimerRef.current = null;
+    }, FADE_MS);
   }, []);
 
   const syncFromClock = useCallback(() => {
@@ -148,7 +208,8 @@ export function HeroBackground({ className }: { className?: string }) {
   }, [applyScene]);
 
   useEffect(() => {
-    preloadHeroImages();
+    // Priority-load the current period image immediately; warm others in background.
+    preloadHeroImages(false);
     syncFromClock();
 
     const scheduleNext = () => {
@@ -180,49 +241,43 @@ export function HeroBackground({ className }: { className?: string }) {
     <div
       className={cn("absolute inset-0 overflow-hidden rounded-[inherit]", className)}
       aria-hidden
+      style={{ backgroundColor: scene.placeholder }}
     >
       <div key={kenBurnsKey} className="emp-hero-kenburns absolute inset-0">
-        <img
-          src={currentSrc}
-          alt=""
-          className="absolute inset-0 size-full object-cover"
-          draggable={false}
+        <HeroPicture
+          scene={scene}
+          priority
+          onLoad={() => setImageReady(true)}
+          className={cn(
+            "absolute inset-0 size-full object-cover transition-opacity duration-300",
+            imageReady ? "opacity-100" : "opacity-0",
+          )}
         />
       </div>
 
-      {outgoingSrc ? (
-        <img
-          src={outgoingSrc}
-          alt=""
+      {outgoingScene ? (
+        <div
           className={cn(
-            "absolute inset-0 z-[1] size-full object-cover transition-opacity ease-in-out",
+            "absolute inset-0 z-[1] transition-opacity ease-in-out",
             outgoingVisible ? "opacity-100" : "opacity-0",
           )}
           style={{ transitionDuration: `${FADE_MS}ms` }}
-          draggable={false}
-        />
+        >
+          <HeroPicture
+            scene={outgoingScene}
+            className="absolute inset-0 size-full object-cover"
+          />
+        </div>
       ) : null}
 
       {/* Period color wash — fades with the scene */}
       <div
         className="pointer-events-none absolute inset-0 z-[2] transition-colors ease-in-out"
         style={{
-          backgroundColor: currentTint,
+          backgroundColor: scene.tint,
           transitionDuration: `${FADE_MS}ms`,
         }}
       />
-      {outgoingTint ? (
-        <div
-          className={cn(
-            "pointer-events-none absolute inset-0 z-[2] transition-opacity ease-in-out",
-            outgoingVisible ? "opacity-100" : "opacity-0",
-          )}
-          style={{
-            backgroundColor: outgoingTint,
-            transitionDuration: `${FADE_MS}ms`,
-          }}
-        />
-      ) : null}
 
       {/* Left readability gradient (~35%) */}
       <div

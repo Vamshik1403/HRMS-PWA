@@ -331,17 +331,21 @@ export class EmpLocationAttendanceService {
 
     // Merge device-punch state when no PWA punches exist yet today
     let deviceCheckIn: { checkinTime: Date } | null = null;
+    let deviceCheckOut: { checkinTime: Date } | null = null;
     let deviceCheckedIn = false;
     if (records.length === 0) {
       const deviceTimes = await this.todayDevicePunchTimes(employeeId, startOfDay, endOfDay);
       if (deviceTimes.length > 0) {
         deviceCheckedIn = this.devicePunchState(deviceTimes) === 'IN';
         deviceCheckIn = { checkinTime: deviceTimes[0] };
+        if (deviceTimes.length > 1 && !deviceCheckedIn) {
+          deviceCheckOut = { checkinTime: deviceTimes[deviceTimes.length - 1] };
+        }
       }
     }
 
     const checkIn = firstIn ?? (deviceCheckIn as typeof checkIns[0] | null);
-    const checkOut = lastOut;
+    const checkOut = lastOut ?? (deviceCheckOut as typeof checkOuts[0] | null);
     const lastPunch = this.getLastPunch(records);
     const punchState = records.length > 0
       ? this.getPunchState(lastPunch?.checkType ?? null)

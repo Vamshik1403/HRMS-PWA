@@ -29,6 +29,7 @@ type MemberToday = {
   employeeLastName?: string;
   isCheckedIn?: boolean;
   checkInTime?: string | null;
+  checkOutTime?: string | null;
   statusLabel?: string;
 };
 
@@ -217,10 +218,17 @@ export function EmpDesktopTeamReportees() {
                   .map((w) => w[0].toUpperCase())
                   .join("") || "?";
               const statusLabel = m.statusLabel || "Yet to check-in";
-              const checkInLabel =
-                m.checkInTime && (m.isCheckedIn || m.statusLabel === "Checked out")
-                  ? formatPunchTime(m.checkInTime)
-                  : null;
+              const inLabel = m.checkInTime ? formatPunchTime(m.checkInTime) : null;
+              const outLabel = m.checkOutTime ? formatPunchTime(m.checkOutTime) : null;
+              let punchLine = statusLabel;
+              if (statusLabel === "Checked out" && (inLabel || outLabel)) {
+                const parts: string[] = ["Checked out"];
+                if (inLabel) parts.push(`IN ${inLabel}`);
+                if (outLabel) parts.push(`OUT ${outLabel}`);
+                punchLine = parts.join(" · ");
+              } else if (statusLabel === "Checked in" && inLabel) {
+                punchLine = `Checked in · IN ${inLabel}`;
+              }
 
               return (
                 <li key={m.id} className="flex items-center gap-3 py-3 first:pt-0 last:pb-0">
@@ -233,8 +241,7 @@ export function EmpDesktopTeamReportees() {
                       <p className="text-[11px] text-muted-foreground truncate">ID: {m.employeeID}</p>
                     ) : null}
                     <p className={cn("text-xs font-semibold mt-0.5", statusTone(statusLabel))}>
-                      {statusLabel}
-                      {checkInLabel ? ` · ${checkInLabel}` : ""}
+                      {punchLine}
                     </p>
                   </div>
                   <DropdownMenu>

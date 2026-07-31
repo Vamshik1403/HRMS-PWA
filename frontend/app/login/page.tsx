@@ -17,6 +17,7 @@ import { isJwtExpired } from '@/lib/jwtUtils'
 import {
   persistCompanyAccessFromUser,
 } from '@/lib/companyAccess'
+import { preloadHeroImages } from '@/app/components/emp/desktop/HeroBackground'
 
 const TERMS_AND_CONDITIONS = `TERMS AND CONDITIONS & END USER LICENSE AGREEMENT
 
@@ -255,6 +256,7 @@ export default function LoginPage() {
         } catch {
           persistCompanyAccessFromUser(basicUser)
         }
+        preloadHeroImages(true)
         router.push('/empdashboard')
       } else {
         // For admin/manager users, fetch complete user details with all relations
@@ -277,6 +279,7 @@ if (role === 'SUPERADMIN') {
 } else if (role === 'SERVICE_PROVIDER' || role === 'COMPANY_ADMIN' || role === 'ADMIN' || role === 'BRANCH_ADMIN') {
   router.push('/dashboard')
 } else {
+  preloadHeroImages(true)
   router.push('/empdashboard')
 }
           }, 100)
@@ -292,6 +295,7 @@ if (role === 'SUPERADMIN') {
 } else if (role === 'SERVICE_PROVIDER' || role === 'COMPANY_ADMIN' || role === 'ADMIN' || role === 'BRANCH_ADMIN') {
   router.push('/dashboard')
 } else {
+  preloadHeroImages(true)
   router.push('/empdashboard')
 }
           }, 100)
