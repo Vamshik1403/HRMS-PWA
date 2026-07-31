@@ -107,27 +107,6 @@ export const EMP_SIDEBAR_NAVIGATION: EmpSidebarNavGroup[] = [
     ],
   },
   {
-    label: "Customer Management",
-    items: [
-      {
-        id: "customers",
-        label: "Customers",
-        href: "/task-customers",
-        icon: Users,
-        moduleId: "customers",
-        show: () => canAccessTasksModule(),
-      },
-      {
-        id: "sites",
-        label: "Sites / Branches",
-        href: "/task-customer-sites",
-        icon: MapPin,
-        moduleId: "customers",
-        show: () => canAccessTasksModule(),
-      },
-    ],
-  },
-  {
     label: "Team Management",
     managerOnly: true,
     items: [
@@ -152,6 +131,27 @@ export const EMP_SIDEBAR_NAVIGATION: EmpSidebarNavGroup[] = [
         icon: ArrowLeftRight,
         moduleId: "promotions",
         managerOnly: true,
+      },
+    ],
+  },
+  {
+    label: "Customer Management",
+    items: [
+      {
+        id: "customers",
+        label: "Customers",
+        href: "/task-customers",
+        icon: Users,
+        moduleId: "customers",
+        show: () => canAccessTasksModule(),
+      },
+      {
+        id: "sites",
+        label: "Sites / Branches",
+        href: "/task-customer-sites",
+        icon: MapPin,
+        moduleId: "customers",
+        show: () => canAccessTasksModule(),
       },
     ],
   },
