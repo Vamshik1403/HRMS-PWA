@@ -15,7 +15,6 @@ import { registerPushSubscription } from '@/lib/pushSubscribe'
 import { resolveDesktopManagerAfterLogin } from '@/lib/desktopManager'
 import { isJwtExpired } from '@/lib/jwtUtils'
 import {
-  hasCompanyAccessFlag,
   persistCompanyAccessFromUser,
 } from '@/lib/companyAccess'
 
@@ -236,9 +235,7 @@ export default function LoginPage() {
         } catch {
           persistCompanyAccessFromUser(basicUser)
         }
-        router.push(
-          hasCompanyAccessFlag() ? '/empCompanyDashboard' : '/empdashboard',
-        )
+        router.push('/empdashboard')
       } else {
         // For admin/manager users, fetch complete user details with all relations
         try {

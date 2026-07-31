@@ -3,12 +3,12 @@
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense } from "react";
-import { Banknote, Calculator, FileText, Wallet } from "lucide-react";
+import { Banknote, FileText, Wallet } from "lucide-react";
 import { EmpWorkspaceContent } from "../EmpWorkspaceTabNav";
 import { EmpPayoutContent } from "../EmpPayoutContent";
+import { EmpProfileSalaryAdvancePanel } from "../EmpProfileSalaryAdvancePanel";
 import { EmpDesktopPage } from "../desktop/EmpDesktopPage";
-import { DashboardSection, actionTileClass, gridGap } from "../../../dashboard/components/dashboard-ui";
-import { Button } from "../../ui/button";
+import { actionTileClass, gridGap } from "../../../dashboard/components/dashboard-ui";
 
 function PayrollOverview() {
   const tiles = [
@@ -24,16 +24,10 @@ function PayrollOverview() {
       label: "Salary advance",
       desc: "Request or track advances",
     },
-    {
-      href: "/empPayout?tab=generate",
-      icon: Calculator,
-      label: "Generate salary",
-      desc: "Salary generation tools",
-    },
   ];
 
   return (
-    <div className={`grid sm:grid-cols-3 ${gridGap}`}>
+    <div className={`grid sm:grid-cols-2 ${gridGap} max-w-3xl`}>
       {tiles.map((t) => {
         const Icon = t.icon;
         return (
@@ -69,26 +63,19 @@ function PayrollWorkspaceInner() {
   if (tab === "salary-advance") {
     return (
       <EmpWorkspaceContent>
-        <EmpDesktopPage title="Salary advance" description="Manage salary advance requests" icon={Wallet}>
-          <DashboardSection className="max-w-lg">
-            <Button asChild>
-              <Link href="/empSalaryAdvance">Open salary advance</Link>
-            </Button>
-          </DashboardSection>
+        <EmpDesktopPage title="Salary advance" description="Request or track your salary advances" icon={Wallet}>
+          <EmpProfileSalaryAdvancePanel />
         </EmpDesktopPage>
       </EmpWorkspaceContent>
     );
   }
 
+  // Legacy generate deep-link — send users to payroll overview (tools live under More)
   if (tab === "generate") {
     return (
       <EmpWorkspaceContent>
-        <EmpDesktopPage title="Generate salary" description="Salary generation tools" icon={Calculator}>
-          <DashboardSection className="max-w-lg">
-            <Button asChild>
-              <Link href="/empGenerateSalary">Open generate salary</Link>
-            </Button>
-          </DashboardSection>
+        <EmpDesktopPage title="Payroll overview" description="Payslips and salary advances" icon={Banknote}>
+          <PayrollOverview />
         </EmpDesktopPage>
       </EmpWorkspaceContent>
     );
@@ -96,7 +83,7 @@ function PayrollWorkspaceInner() {
 
   return (
     <EmpWorkspaceContent>
-      <EmpDesktopPage title="Payroll overview" description="Payslips, advances, and salary tools" icon={Banknote}>
+      <EmpDesktopPage title="Payroll overview" description="Payslips and salary advances" icon={Banknote}>
         <PayrollOverview />
       </EmpDesktopPage>
     </EmpWorkspaceContent>
