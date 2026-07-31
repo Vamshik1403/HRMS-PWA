@@ -14,7 +14,7 @@ const COMPANY_LINKS = [
   {
     label: "Internal messages",
     sub: "Company noticeboard",
-    href: "/empNoticeboard",
+    href: "/empProfile?tab=messaging",
     icon: "solar:bell-bold-duotone",
     color: "bg-amber-50 text-amber-600",
   },

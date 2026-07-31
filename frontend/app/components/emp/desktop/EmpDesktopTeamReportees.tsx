@@ -143,7 +143,7 @@ export function EmpDesktopTeamReportees() {
 
   return (
     <>
-    <Card className={cn(listCardClass, "h-full flex flex-col min-h-[420px]")}>
+    <Card className={cn(listCardClass, "flex h-full min-h-0 flex-col")}>
       <CardHeader className="shrink-0 space-y-4 pb-3">
         <div>
           <CardTitle className="text-xl font-semibold tracking-tight flex items-center gap-2">

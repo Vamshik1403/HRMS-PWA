@@ -19,11 +19,8 @@ function WorkspaceTabBar({
 }) {
   return (
     <div className="shrink-0 bg-white border-b border-gray-200 emp-workspace-tabbar">
-      <div className="px-4 flex items-center gap-1 overflow-x-auto">
-        <span className="text-sm font-semibold text-gray-900 mr-4 whitespace-nowrap py-3 hidden sm:inline">
-          {workspace.label}
-        </span>
-        <div className="flex gap-0.5 min-w-0 overflow-x-auto">
+      <div className="px-4 flex items-center overflow-x-auto">
+        <div className="flex min-w-0 gap-0.5 overflow-x-auto">
           {tabs.map((tab) => {
             const active = activeTab === tab.id;
             return (

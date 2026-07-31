@@ -52,11 +52,34 @@ function statusBadge(
   return <Badge variant="secondary">Not in</Badge>;
 }
 
-function MetricTile({ label, value, className }: { label: string; value: string; className?: string }) {
+function MetricTile({
+  label,
+  value,
+  className,
+  dense,
+}: {
+  label: string;
+  value: string;
+  className?: string;
+  dense?: boolean;
+}) {
   return (
-    <div className="rounded-lg border border-border bg-muted/30 px-4 py-3">
+      <div
+        className={cn(
+          "rounded-lg border border-border bg-muted/30",
+          dense ? "px-3.5 py-2.5" : "px-4 py-3",
+        )}
+      >
       <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{label}</p>
-      <p className={cn("mt-1 text-lg font-semibold tabular-nums text-foreground", className)}>{value}</p>
+      <p
+        className={cn(
+          "font-semibold tabular-nums text-foreground",
+          dense ? "mt-1 text-lg" : "mt-1 text-lg",
+          className,
+        )}
+      >
+        {value}
+      </p>
     </div>
   );
 }
@@ -131,35 +154,122 @@ export function EmpDesktopAttendancePanel({
   const breakLabel =
     todayStatus?.breakMinutes != null ? `${todayStatus.breakMinutes}m` : "0m";
 
+  const actionButtons =
+    showActions && !loading && !isAbsent ? (
+      <>
+        {canCheckIn ? (
+          <>
+            <Button size={compact ? "sm" : "default"} onClick={() => punch("CHECK_IN")} disabled={punchLoading}>
+              <LogIn className="size-4" />
+              {punchLoading ? "Please wait…" : "Check-in"}
+            </Button>
+            {canMarkAbsent ? (
+              <Button
+                size={compact ? "sm" : "default"}
+                variant="outline"
+                onClick={() => setAbsentOpen(true)}
+                disabled={punchLoading}
+              >
+                <UserX className="size-4" />
+                Mark absent
+              </Button>
+            ) : null}
+          </>
+        ) : null}
+        {canCheckOut ? (
+          <Button
+            size={compact ? "sm" : "default"}
+            variant="outline"
+            onClick={() => punch("CHECK_OUT")}
+            disabled={punchLoading}
+          >
+            <LogOut className="size-4" />
+            Check-out
+          </Button>
+        ) : null}
+        {canBreakIn ? (
+          <Button
+            size={compact ? "sm" : "default"}
+            variant="secondary"
+            onClick={() => punch("BREAK_IN")}
+            disabled={punchLoading}
+          >
+            <Coffee className="size-4" />
+            Break in
+          </Button>
+        ) : null}
+        {canBreakOut ? (
+          <Button
+            size={compact ? "sm" : "default"}
+            variant="secondary"
+            onClick={() => punch("BREAK_OUT")}
+            disabled={punchLoading}
+          >
+            <Coffee className="size-4" />
+            Break out
+          </Button>
+        ) : null}
+      </>
+    ) : null;
+
   const content = (
   <>
-    <div className="flex flex-wrap items-start justify-between gap-4">
-      <div>
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <Clock className="size-4" />
-          <span>{dateLabel}</span>
+    {compact ? (
+      <div className="shrink-0 space-y-3">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Clock className="size-4 shrink-0" />
+            <span>{dateLabel}</span>
+          </div>
+          <p className="mt-1.5 font-display text-3xl font-bold tabular-nums tracking-tight">
+            {clock}
+          </p>
         </div>
-        <p className="mt-2 font-display text-3xl font-bold tabular-nums tracking-tight">{clock}</p>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center gap-2">{actionButtons}</div>
+          {statusBadge(loading, isAbsent, isOnBreak, punchState)}
+        </div>
       </div>
-      {statusBadge(loading, isAbsent, isOnBreak, punchState)}
-    </div>
+    ) : (
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Clock className="size-4 shrink-0" />
+            <span>{dateLabel}</span>
+          </div>
+          <p className="mt-2 font-display text-3xl font-bold tabular-nums tracking-tight">
+            {clock}
+          </p>
+        </div>
+        {statusBadge(loading, isAbsent, isOnBreak, punchState)}
+      </div>
+    )}
 
-    <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-      <MetricTile label="Mark in" value={checkIn ? fmt(checkIn.checkinTime) : "—"} />
-      <MetricTile label="Mark out" value={checkOut ? fmt(checkOut.checkinTime) : "—"} />
-      <MetricTile label="Working hours" value={workHours} className="text-emerald-600" />
-      <MetricTile label="Break" value={breakLabel} className="text-amber-600" />
+    <div
+      className={cn(
+        "grid gap-3 sm:grid-cols-2 lg:grid-cols-4",
+        compact
+          ? checkIn || checkOut
+            ? "mt-3 pt-3"
+            : "mt-auto pt-4"
+          : "mt-6",
+      )}
+    >
+      <MetricTile dense={compact} label="Mark in" value={checkIn ? fmt(checkIn.checkinTime) : "—"} />
+      <MetricTile dense={compact} label="Mark out" value={checkOut ? fmt(checkOut.checkinTime) : "—"} />
+      <MetricTile dense={compact} label="Working hours" value={workHours} className="text-emerald-600" />
+      <MetricTile dense={compact} label="Break" value={breakLabel} className="text-amber-600" />
     </div>
 
     {(checkIn || checkOut) && (
-      <div className="mt-6 grid gap-3 lg:grid-cols-2">
+      <div className={cn("grid gap-3 lg:grid-cols-2", compact ? "mt-3" : "mt-6")}>
         {checkIn ? <LocationCard label="Mark in location" punch={checkIn} /> : null}
         {checkOut ? <LocationCard label="Mark out location" punch={checkOut} /> : null}
       </div>
     )}
 
     {(punchError || punchSuccess) && (
-      <div className="mt-4 space-y-2">
+      <div className={cn("space-y-2", compact ? "mt-3" : "mt-4")}>
         {punchSuccess ? <NoticeBanner variant="success">{punchSuccess}</NoticeBanner> : null}
         {punchError ? (
           <NoticeBanner variant="error">
@@ -182,45 +292,14 @@ export function EmpDesktopAttendancePanel({
       </div>
     )}
 
-    {showActions && !loading && !isAbsent ? (
-      <div className="mt-6 flex flex-wrap gap-2">
-        {canCheckIn ? (
-          <>
-            <Button onClick={() => punch("CHECK_IN")} disabled={punchLoading}>
-              <LogIn className="size-4" />
-              {punchLoading ? "Please wait…" : "Mark in"}
-            </Button>
-            {canMarkAbsent ? (
-              <Button variant="outline" onClick={() => setAbsentOpen(true)} disabled={punchLoading}>
-                <UserX className="size-4" />
-                Mark absent
-              </Button>
-            ) : null}
-          </>
-        ) : null}
-        {canCheckOut ? (
-          <Button onClick={() => punch("CHECK_OUT")} disabled={punchLoading}>
-            <LogOut className="size-4" />
-            Mark out
-          </Button>
-        ) : null}
-        {canBreakIn ? (
-          <Button variant="secondary" onClick={() => punch("BREAK_IN")} disabled={punchLoading}>
-            <Coffee className="size-4" />
-            Break in
-          </Button>
-        ) : null}
-        {canBreakOut ? (
-          <Button variant="secondary" onClick={() => punch("BREAK_OUT")} disabled={punchLoading}>
-            <Coffee className="size-4" />
-            Break out
-          </Button>
-        ) : null}
-      </div>
+    {!compact && actionButtons ? (
+      <div className="mt-6 flex flex-wrap gap-2">{actionButtons}</div>
     ) : null}
 
     {isAbsent ? (
-      <p className="mt-4 text-sm text-muted-foreground">You are marked absent for today.</p>
+      <p className={cn("text-sm text-muted-foreground", compact ? "mt-3" : "mt-4")}>
+        You are marked absent for today.
+      </p>
     ) : null}
 
     <Dialog open={absentOpen} onOpenChange={setAbsentOpen}>
@@ -258,12 +337,16 @@ export function EmpDesktopAttendancePanel({
 
   if (compact) {
     return (
-      <Card className="border border-border shadow-sm">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-lg">Today&apos;s attendance</CardTitle>
+      <Card className="flex h-full min-h-0 flex-col overflow-hidden border border-border shadow-sm">
+        <CardHeader className="shrink-0 space-y-0.5 px-5 py-4">
+          <div className="flex items-center justify-between gap-3">
+            <CardTitle className="text-lg">Today&apos;s attendance</CardTitle>
+          </div>
           <CardDescription>Live status and punch actions</CardDescription>
         </CardHeader>
-        <CardContent>{content}</CardContent>
+        <CardContent className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-5 pt-1">
+          <div className="flex min-h-full flex-col">{content}</div>
+        </CardContent>
       </Card>
     );
   }

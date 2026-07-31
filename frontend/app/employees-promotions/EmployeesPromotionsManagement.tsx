@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { hasModuleWriteAccess } from "@/lib/companyAccess";
-import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
@@ -24,8 +23,7 @@ import {
   TableRow,
 } from "../components/ui/table";
 import { Badge } from "../components/ui/badge";
-import { Icon } from "@iconify/react";
-import { Plus, Search, Edit, Trash2, Eye, CheckCircle, History, X } from "lucide-react";
+import { Plus, History, ArrowLeftRight } from "lucide-react";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "../components/ui/select";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import { useEmpManagerScope } from "../hooks/useEmpManagerScope";
@@ -34,8 +32,18 @@ import { FormModal } from "../components/ui/form-modal";
 import { DetailCard } from "../components/app/detail-card";
 import { EntityDetailHero, EntityDetailLayout } from "../components/app/entity-detail-layout";
 import { NoticeBanner } from "../components/ui/notice-banner";
+import { PageHeader } from "../components/app/page-header";
 import { toast } from "sonner";
 import { getSidebarContext } from "../utils/sidebarContext";
+import {
+  EmpTeamStyleDataSection,
+  useTeamListControls,
+} from "../components/emp/desktop/EmpTeamStyleDataSection";
+import { DataTable, type DataTableColumn } from "../components/app/data-table";
+import { EntityRowActions } from "../components/app/entity-row-actions";
+import { listCardClass } from "../components/app/list-ui-styles";
+import { cn } from "@/app/utils/cn";
+import { useClientTable, sortRows } from "../hooks/use-client-table";
 
 /** ========= Types aligned to backend ========= */
 type ID = number;
@@ -202,7 +210,13 @@ export function EmployeesPromotionsManagement({ embedded = false }: { embedded?:
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [searchTerm, setSearchTerm] = useState("");
+  const {
+    viewMode,
+    selectViewMode,
+    searchQuery,
+    setSearchQuery,
+  } = useTeamListControls("promotions-list-view");
+  const table = useClientTable("employeeId");
   const user = useCurrentUser();
   const { isManagerView } = useEmpManagerScope();
   const canManage =
@@ -1128,7 +1142,7 @@ const runFetchBR = (query: string) => {
 
 
   const filteredRows = useMemo(() => {
-    const t = searchTerm.trim().toLowerCase();
+    const t = searchQuery.trim().toLowerCase();
     if (!t) return rows;
     return rows.filter((r) => {
       const empName = `${r.manageEmployee?.employeeFirstName ?? ""} ${r.manageEmployee?.employeeLastName ?? ""}`.toLowerCase();
@@ -1140,7 +1154,29 @@ const runFetchBR = (query: string) => {
       const ptype = (r.salaryPayGradeType ?? "").toLowerCase();
       return [empName, empId, dept, desg, etype, estatus, ptype].some((x) => x.includes(t));
     });
-  }, [rows, searchTerm]);
+  }, [rows, searchQuery]);
+
+  const sortedRows = useMemo(() => {
+    return sortRows(
+      filteredRows,
+      table.sortBy,
+      table.sortDir,
+      (row, key) => {
+        if (key === "status") return row.employmentStatus ?? "";
+        if (key === "employeeId") return row.manageEmployee?.employeeID ?? "";
+        if (key === "employeeName") {
+          return `${row.manageEmployee?.employeeFirstName ?? ""} ${row.manageEmployee?.employeeLastName ?? ""}`.trim();
+        }
+        if (key === "newDept") return row.departments?.departmentName ?? "";
+        if (key === "newDesg") return row.designations?.designation ?? "";
+        if (key === "promotionDate") {
+          return (row as any)?.promotionDate || (row as any)?.createdAt || "";
+        }
+        return (row as any)[key];
+      },
+    );
+  }, [filteredRows, table.sortBy, table.sortDir]);
+
   // History modal state
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [historyRows, setHistoryRows] = useState<EmpPromotionRow[]>([]);
@@ -1717,23 +1753,86 @@ const runFetchBR = (query: string) => {
     setDeptCurrList([]); setDesgCurrList([]); setDeptNewList([]); setDesgNewList([]); setDeptPropList([]); setDesgPropList([]);
   };
 
+  const promotionColumns = useMemo((): DataTableColumn<(typeof filteredRows)[number]>[] => [
+    {
+      key: "status",
+      header: "Status",
+      sortable: true,
+      cell: (r) => (
+        <Badge variant="outline" className="font-medium">
+          {r.employmentStatus ?? "—"}
+        </Badge>
+      ),
+    },
+    {
+      key: "employeeId",
+      header: "Employee",
+      sortable: true,
+      cell: (r) => (
+        <div className="min-w-0">
+          <p className="font-medium text-foreground">{r.manageEmployee?.employeeID ?? "—"}</p>
+          <p className="text-xs text-muted-foreground truncate">
+            {`${r.manageEmployee?.employeeFirstName ?? ""} ${r.manageEmployee?.employeeLastName ?? ""}`.trim() || "—"}
+          </p>
+        </div>
+      ),
+    },
+    {
+      key: "newDept",
+      header: "New Dept",
+      sortable: true,
+      cell: (r) => r.departments?.departmentName?.trim() ?? "—",
+    },
+    {
+      key: "newDesg",
+      header: "New Desg",
+      sortable: true,
+      cell: (r) => r.designations?.designation?.trim() ?? "—",
+    },
+    {
+      key: "promotionDate",
+      header: "Promotion Date",
+      sortable: true,
+      cell: (r) => {
+        const raw = (r as any)?.promotionDate || (r as any)?.createdAt;
+        return raw ? new Date(raw).toLocaleDateString() : "—";
+      },
+    },
+    {
+      key: "actions",
+      header: "Actions",
+      align: "right",
+      cell: (r) => (
+        <EntityRowActions
+          onView={() => handleView(r)}
+          onEdit={canManage ? () => void handleEdit(r) : undefined}
+          onDelete={canManage ? () => void handleDelete(r.id) : undefined}
+          extra={[
+            {
+              icon: History,
+              title: "History",
+              onClick: () => void handleHistory(r),
+            },
+          ]}
+        />
+      ),
+    },
+  ], [canManage]);
+
   return (
     <div className="space-y-6 w-full max-w-none animate-fade-in page-content-enter">
-      {/* Header */}
-      <div className="flex items-center justify-between w-full">
-        <div className="min-w-0 flex-1">
-          <p className="text-gray-600 mt-1 text-sm">Create, read, update, and delete promotion requests & current positions</p>
-        </div>
-
-        {!isAddingNew && !isViewing && canManage && (
-          <Button
-            onClick={() => { resetForm(); setIsAddingNew(true); }}
-            className="flex-shrink-0 text-sm px-3 py-2"
-          >
-            <Plus className="w-4 h-4 mr-1" /> Add Promotion & Transfers
-          </Button>
-        )}
-      </div>
+      <PageHeader
+        icon={ArrowLeftRight}
+        title="Promotions & Transfers"
+        description="Manage promotion requests and current positions"
+        actions={
+          !isAddingNew && !isViewing && canManage ? (
+            <Button onClick={() => { resetForm(); setIsAddingNew(true); }}>
+              <Plus className="w-4 h-4 mr-1" /> Add Promotion & Transfers
+            </Button>
+          ) : null
+        }
+      />
 
       {/* Add/Edit form — inline FormModal in emp portal; FormDrawer in admin */}
       {(!embedded || isAddingNew) && (() => {
@@ -2783,146 +2882,98 @@ const runFetchBR = (query: string) => {
           )}
       </FormDrawer>
 
-      {/* Search + Table - only when neither form nor view is open */}
+      {/* List — FilterBar outside table, with grid/list toggle */}
       {!isAddingNew && !isViewing && (
-        <>
-      {/* Table */}
-      <Card className="w-full">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Icon icon="mdi:trending-up" className="w-5 h-5" />
-            Promotion Requests
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="p-0 w-full">
-          <div className="px-6 pt-2 pb-4">
-            <div className="relative max-w-md">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-              <Input
-                placeholder="Search promotion requests…"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10"
+        <EmpTeamStyleDataSection
+          searchQuery={searchQuery}
+          onSearchChange={setSearchQuery}
+          searchPlaceholder="Search promotion requests…"
+          viewMode={viewMode}
+          onViewModeChange={selectViewMode}
+          loading={loading}
+          empty={!loading && sortedRows.length === 0}
+          emptyMessage="No promotion requests found."
+          listContent={
+            <div className={cn(listCardClass, "overflow-hidden")}>
+              <DataTable
+                columns={promotionColumns}
+                rows={sortedRows}
+                rowKey={(r) => String(r.id)}
+                isLoading={loading}
+                sortBy={table.sortBy}
+                sortDir={table.sortDir}
+                onSort={table.setSort}
+                emptyTitle="No records"
+                emptyDescription="No promotion requests match your search."
               />
+              {!loading && sortedRows.length > 0 ? (
+                <div className="border-t border-border px-6 py-4">
+                  <p className="text-[13px] text-muted-foreground">
+                    Showing {sortedRows.length} of {sortedRows.length}{" "}
+                    {sortedRows.length === 1 ? "record" : "records"}
+                  </p>
+                </div>
+              ) : null}
             </div>
-          </div>
-          <div className="overflow-x-auto w-full">
-            <Table className="w-full">
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-[80px]">Status</TableHead>
-                  <TableHead className="w-[120px]">Employee ID</TableHead>
-                  <TableHead className="w-[120px]">New Dept</TableHead>
-                  <TableHead className="w-[120px]">New Desg</TableHead>
-                  {/* <TableHead className="w-[120px]">Proposed Dept</TableHead>
-                  <TableHead className="w-[120px]">Proposed Desg</TableHead> */}
-                  <TableHead className="w-[120px]">Promotion Date</TableHead>
-                  <TableHead className="w-[100px] text-center">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredRows.length === 0 && !loading && (
-                  <TableRow>
-                    {/* 8 columns in header => colSpan=8 */}
-                    <TableCell colSpan={8} className="text-center text-sm text-gray-500 py-2">
-                      No records
-                    </TableCell>
-                  </TableRow>
-                )}
-
-                {filteredRows.map((r) => {
-                  const empId = r.manageEmployee?.employeeID ?? "—";
-                  const empName = `${r.manageEmployee?.employeeFirstName ?? ""} ${r.manageEmployee?.employeeLastName ?? ""}`.trim();
-
-                  const newDept = r.departments?.departmentName?.trim() ?? "—";
-                  const newDesg = r.designations?.designation?.trim() ?? "—";
-
-                  // Use the same data for proposed fields since they represent the promoted values
-                  const proposedDept = r.departments?.departmentName?.trim() ?? "—";
-                  const proposedDesg = r.designations?.designation?.trim() ?? "—";
-
-                  // /emp-promotion has no official date; try promotionDate if present, else createdAt, else —
-                  const promoDate =
-                    (r as any)?.promotionDate
-                      ? new Date((r as any).promotionDate).toLocaleDateString()
-                      : (r as any)?.createdAt
-                        ? new Date((r as any).createdAt).toLocaleDateString()
-                        : "—";
-
-                  return (
-                    <TableRow key={r.id} className="h-10">
-                      {/* Status */}
-                      <TableCell className="whitespace-nowrap py-2">
-                        {r.employmentStatus ?? "—"}
-                      </TableCell>
-
-                      {/* Employee ID */}
-                      <TableCell className="whitespace-nowrap py-2">
-                        <div className="font-medium">{empId}</div>
-                        <div className="text-xs text-gray-500">{empName || "\u00A0"}</div>
-                      </TableCell>
-
-                      {/* New Dept */}
-                      <TableCell className="whitespace-nowrap py-2">{newDept}</TableCell>
-
-                      {/* New Desg */}
-                      <TableCell className="whitespace-nowrap py-2">{newDesg}</TableCell>
-
-                      {/* Proposed Dept (placeholder) */}
-                      {/* <TableCell className="whitespace-nowrap">{proposedDept}</TableCell> */}
-
-                      {/* Proposed Desg (placeholder) */}
-                      {/* <TableCell className="whitespace-nowrap">{proposedDesg}</TableCell> */}
-
-                      {/* Promotion Date */}
-                      <TableCell className="whitespace-nowrap py-2">{promoDate}</TableCell>
-
-                      {/* Actions */}
-                      <TableCell className="text-right py-1">
-                        <div className="inline-flex items-center gap-1">
-                          {/* 👁 Everyone can view */}
-                          <Button variant="ghost" size="icon" onClick={() => handleView(r)} title="View">
-                            <Eye className="h-4 w-4" />
-                          </Button>
-
-                          {/* ✏️ Only SUPERADMIN and MANAGER can edit */}
-                          {canManage && (
-                            <Button variant="ghost" size="icon" onClick={() => handleEdit(r)} title="Edit">
-                              <Edit className="h-4 w-4" />
-                            </Button>
-                          )}
-
-                          {/* 🕓 Everyone can view history */}
-                          <Button variant="ghost" size="icon" onClick={() => handleHistory(r)} title="History">
-                            <History className="h-4 w-4" />
-                          </Button>
-
-                          {/* 🗑️ Only SUPERADMIN and MANAGER can delete */}
-                          {canManage && (
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => handleDelete(r.id)}
-                              title="Delete"
-                              className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          )}
-                        </div>
-
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-
-
-            </Table>
-          </div>
-        </CardContent>
-      </Card>
-      </>
+          }
+          gridContent={
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {sortedRows.map((r) => {
+                const empId = r.manageEmployee?.employeeID ?? "—";
+                const empName =
+                  `${r.manageEmployee?.employeeFirstName ?? ""} ${r.manageEmployee?.employeeLastName ?? ""}`.trim() ||
+                  "—";
+                const promoDate = (r as any)?.promotionDate
+                  ? new Date((r as any).promotionDate).toLocaleDateString()
+                  : (r as any)?.createdAt
+                    ? new Date((r as any).createdAt).toLocaleDateString()
+                    : "—";
+                return (
+                  <div
+                    key={r.id}
+                    className="rounded-xl border border-border bg-card p-4 shadow-sm transition-colors hover:border-primary/40"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="font-semibold text-foreground truncate">{empId}</p>
+                        <p className="text-sm text-muted-foreground truncate">{empName}</p>
+                      </div>
+                      <Badge variant="outline">{r.employmentStatus ?? "—"}</Badge>
+                    </div>
+                    <div className="mt-3 space-y-1 text-sm">
+                      <p>
+                        <span className="text-muted-foreground">Dept: </span>
+                        {r.departments?.departmentName?.trim() ?? "—"}
+                      </p>
+                      <p>
+                        <span className="text-muted-foreground">Desg: </span>
+                        {r.designations?.designation?.trim() ?? "—"}
+                      </p>
+                      <p>
+                        <span className="text-muted-foreground">Date: </span>
+                        {promoDate}
+                      </p>
+                    </div>
+                    <div className="mt-3 flex justify-end">
+                      <EntityRowActions
+                        onView={() => handleView(r)}
+                        onEdit={canManage ? () => void handleEdit(r) : undefined}
+                        onDelete={canManage ? () => void handleDelete(r.id) : undefined}
+                        extra={[
+                          {
+                            icon: History,
+                            title: "History",
+                            onClick: () => void handleHistory(r),
+                          },
+                        ]}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          }
+        />
       )}
       {/* History Dialog */}
       <Dialog open={isHistoryOpen} onOpenChange={setIsHistoryOpen}>

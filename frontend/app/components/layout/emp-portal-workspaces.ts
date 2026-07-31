@@ -44,9 +44,7 @@ export const MODULE_WORKSPACES: ModuleWorkspace[] = [
     basePath: "/empAttendance",
     tabs: [
       { id: "overview", label: "Overview" },
-      { id: "check-in", label: "Check In / Out" },
       { id: "history", label: "History" },
-      { id: "calendar", label: "Calendar" },
       { id: "reports", label: "Reports" },
     ],
   },
@@ -116,6 +114,7 @@ const PATH_TO_MODULE: { prefix: string; id: EmpModuleId }[] = [
   { prefix: "/empReimbursement", id: "reimbursement" },
   { prefix: "/empHistory", id: "reports" },
   { prefix: "/empMyTasks", id: "tasks" },
+  { prefix: "/task-projects", id: "tasks" },
   { prefix: "/empProfile", id: "profile" },
 ];
 
@@ -136,6 +135,10 @@ export function resolveModuleTab(
   if (tab && workspace.tabs.some((t) => t.id === tab)) return tab;
 
   // Legacy path-based tab hints
+  if (workspace.id === "attendance") {
+    // Check-in / Calendar tabs removed — map old deep-links to Overview.
+    if (tab === "check-in" || tab === "calendar") return "overview";
+  }
   if (workspace.id === "leave" && pathname.includes("/new")) return "apply";
   if (workspace.id === "reimbursement" && pathname.includes("/new")) return "apply";
   if (workspace.id === "payroll" && pathname.startsWith("/empSalaryAdvance")) return "salary-advance";
@@ -197,7 +200,7 @@ export const EMP_SIDEBAR_WORKSPACES = [
 export const EMP_MORE_WORKSPACE_ITEMS = [
   { id: "tasks", label: "Tasks", href: "/empMyTasks", icon: "solar:checklist-bold-duotone", outlineIcon: "solar:checklist-linear" },
   { id: "holidays", label: "Holidays", href: "/empHolidays", icon: "solar:calendar-mark-bold-duotone", outlineIcon: "solar:calendar-mark-linear" },
-  { id: "noticeboard", label: "Internal Messages", href: "/empNoticeboard", icon: "solar:bell-bold-duotone", outlineIcon: "solar:bell-linear" },
+  { id: "noticeboard", label: "Internal Messages", href: "/empProfile?tab=messaging", icon: "solar:bell-bold-duotone", outlineIcon: "solar:bell-linear" },
   { id: "public-holiday", label: "Public Holiday", href: "/empPublicHoliday", icon: "solar:calendar-date-bold-duotone", outlineIcon: "solar:calendar-date-linear" },
   { id: "profile", label: "Profile", href: "/empProfile", icon: "solar:user-circle-bold-duotone", outlineIcon: "solar:user-circle-linear" },
 ];

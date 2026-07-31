@@ -237,7 +237,7 @@ export function EmpCompanyOverviewDashboard() {
                   value: noticeboard.length,
                   unit: "Policy & announcements",
                   icon: Bell,
-                  href: "/empNoticeboard",
+                  href: "/empProfile?tab=messaging",
                   visualization: { type: "timeline", items: noticeTimeline },
                   accentColor: "#7c3aed",
                 }}
@@ -248,7 +248,7 @@ export function EmpCompanyOverviewDashboard() {
                   value: messaging.length,
                   unit: "Team communications",
                   icon: Megaphone,
-                  href: "/empNoticeboard",
+                  href: "/empProfile?tab=messaging",
                   visualization: { type: "stacked", segments: messageSegments },
                   accentColor: "#f59e0b",
                 }}
@@ -293,7 +293,7 @@ export function EmpCompanyOverviewDashboard() {
               <section className={`${cardShell} p-6`}>
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="font-display text-base font-semibold">Noticeboard</h3>
-                  <Link href="/empNoticeboard" className="text-xs font-medium text-primary hover:underline">
+                  <Link href="/empProfile?tab=messaging" className="text-xs font-medium text-primary hover:underline">
                     View all
                   </Link>
                 </div>
@@ -317,7 +317,7 @@ export function EmpCompanyOverviewDashboard() {
               <section className={`${cardShell} p-6`}>
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="font-display text-base font-semibold">Internal messaging</h3>
-                  <Link href="/empNoticeboard" className="text-xs font-medium text-primary hover:underline">
+                  <Link href="/empProfile?tab=messaging" className="text-xs font-medium text-primary hover:underline">
                     View all
                   </Link>
                 </div>

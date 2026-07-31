@@ -36,7 +36,7 @@ function EmpSidebarNavGroup({
       )}
       {group.items.map((item) => (
         <EmpNavLink
-          key={`${group.label}-${item.href}-${item.label}`}
+          key={item.id}
           item={item}
           pathname={pathname}
           collapsed={collapsed}

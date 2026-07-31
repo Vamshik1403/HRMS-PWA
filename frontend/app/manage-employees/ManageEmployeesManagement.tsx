@@ -3895,48 +3895,7 @@ const handleCancel = () => {
      ========== */
 
 
-       const approvalStatusBadge = (
-    status?: OnboardingApprovalStatus | null,
-  ) => {
-    switch (status) {
-      case "PENDING":
-        return (
-          <Badge className="w-fit border border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-50">
-            Pending approval
-          </Badge>
-        );
-
-      case "APPROVED":
-        return (
-          <Badge className="w-fit border border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-50">
-            Approved
-          </Badge>
-        );
-
-      case "REJECTED":
-        return (
-          <Badge className="w-fit border border-red-300 bg-red-50 text-red-700 hover:bg-red-50">
-            Rejected
-          </Badge>
-        );
-
-      case "CANCELLED":
-        return (
-          <Badge className="w-fit border border-gray-300 bg-gray-50 text-gray-600 hover:bg-gray-50">
-            Cancelled
-          </Badge>
-        );
-
-      default:
-        return (
-          <Badge variant="outline">
-            Not submitted
-          </Badge>
-        );
-    }
-  };
-
-  const canManageEmployeeCredentials = (
+       const canManageEmployeeCredentials = (
     employee: ManageEmpRead,
   ) =>
     employee.onboardingApprovalStatus ===
@@ -3955,10 +3914,6 @@ const handleCancel = () => {
             {r.employeeFirstName}{" "}
             {r.employeeLastName}
           </span>
-
-          {approvalStatusBadge(
-            r.onboardingApprovalStatus,
-          )}
 
           {terminationMap[r.id] &&
             terminationMap[r.id].daysLeft > 0 && (
@@ -4011,16 +3966,6 @@ const handleCancel = () => {
       sortable: true,
       colSpan: 2,
       cell: (r) => r.employmentStatus ?? "—",
-    },
-        {
-      key: "approvalStatus",
-      header: "Approval",
-      colSpan: 2,
-
-      cell: (r) =>
-        approvalStatusBadge(
-          r.onboardingApprovalStatus,
-        ),
     },
     {
       key: "actions",

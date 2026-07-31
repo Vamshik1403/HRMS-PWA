@@ -1,8 +1,7 @@
 "use client";
-
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, Suspense } from "react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Eye, EyeOff } from "lucide-react";
 import {
   registerPushSubscription,
@@ -42,6 +41,7 @@ import {
 } from "./emp-portal-workspaces";
 import { EmpSidebar } from "./EmpSidebar";
 import { EmpWorkspaceTabNav } from "../emp/EmpWorkspaceTabNav";
+import { EmpMoreCategoryTabNav } from "../emp/EmpMoreCategoryTabNav";
 import { EmpPortalTopbar } from "./EmpPortalTopbar";
 import { EmpPortalPageProvider } from "./emp-portal-page-context";
 import { applyEmpTheme, readStoredEmpTheme } from "@/app/utils/empTheme";
@@ -49,6 +49,13 @@ import {
   EMP_COMPANY_TABS,
   resolvePortalZone,
 } from "./emp-portal-navigation";
+import {
+  findActiveSidebarItem,
+  fullPortalUrl,
+  getSidebarItemId,
+  recordPortalNavigation,
+} from "./emp-portal-nav-history";
+import { filterEmpSidebarNavigation } from "./emp-portal-sidebar-navigation";
 
 interface EmpPortalShellProps {
   children: React.ReactNode;
@@ -72,10 +79,9 @@ function isRunningStandalone(): boolean {
 }
 
 export function useEmpPortalLayout(): { desktop: boolean; ready: boolean } {
-  const [desktop, setDesktop] = useState(() =>
-    typeof window !== "undefined" ? isDesktopBrowser() : false,
-  );
-  const [ready, setReady] = useState(() => typeof window !== "undefined");
+  // Default to mobile-safe until measured — prevents desktop sidebar flash on PWA launch.
+  const [desktop, setDesktop] = useState(false);
+  const [ready, setReady] = useState(false);
 
   useLayoutEffect(() => {
     setDesktop(isDesktopBrowser());
@@ -85,7 +91,17 @@ export function useEmpPortalLayout(): { desktop: boolean; ready: boolean } {
   useEffect(() => {
     const check = () => setDesktop(isDesktopBrowser());
     window.addEventListener("resize", check);
-    return () => window.removeEventListener("resize", check);
+    let mql: MediaQueryList | null = null;
+    try {
+      mql = window.matchMedia("(display-mode: standalone)");
+      mql.addEventListener?.("change", check);
+    } catch {
+      /* ignore */
+    }
+    return () => {
+      window.removeEventListener("resize", check);
+      mql?.removeEventListener?.("change", check);
+    };
   }, []);
 
   return { desktop, ready };
@@ -120,6 +136,7 @@ function NavTabLink({
 
 export default function EmpPortalShell({ children, hideBottomNav = false }: EmpPortalShellProps) {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const router = useRouter();
   const { isManagerView } = useEmpManagerScope();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -132,6 +149,7 @@ export default function EmpPortalShell({ children, hideBottomNav = false }: EmpP
   const [showNewPwd, setShowNewPwd] = useState(false);
   const [showConfirmPwd, setShowConfirmPwd] = useState(false);
   const syncInFlight = useRef(false);
+  const prevNavRef = useRef<{ url: string; sectionId: string } | null>(null);
 
   const activeZone = resolvePortalZone(pathname);
   const activeModule = resolveModuleWorkspace(pathname);
@@ -142,6 +160,20 @@ export default function EmpPortalShell({ children, hideBottomNav = false }: EmpP
 
   const companyTabs = EMP_COMPANY_TABS;
   const showCompanyTabs = isManagerView && activeZone === "company";
+
+  // Track visit history so re-clicking an active sidebar item steps back (Gmail-style).
+  useEffect(() => {
+    const search = searchParams.toString();
+    const url = fullPortalUrl(pathname || "", search ? `?${search}` : "");
+    const sidebarItems = filterEmpSidebarNavigation(isManagerView).flatMap((g) => g.items);
+    const activeItem = findActiveSidebarItem(pathname || "", searchParams, sidebarItems);
+    const sectionId = activeItem ? getSidebarItemId(activeItem) : "unknown";
+    const prev = prevNavRef.current;
+    if (prev && prev.url !== url) {
+      recordPortalNavigation(prev.url, url, prev.sectionId);
+    }
+    prevNavRef.current = { url, sectionId };
+  }, [pathname, searchParams, isManagerView]);
 
   useEffect(() => {
     ensureFetchRefreshPatch();
@@ -415,6 +447,11 @@ export default function EmpPortalShell({ children, hideBottomNav = false }: EmpP
           </div>
         )}
 
+        {/* More module categories — directly under top navbar */}
+        <Suspense fallback={null}>
+          <EmpMoreCategoryTabNav />
+        </Suspense>
+
         {/* Module workspace tabs — hide on leave/reimb detail & apply routes (no duplicate bars) */}
         {activeModule &&
           activeModule.id !== "home" &&
@@ -427,8 +464,8 @@ export default function EmpPortalShell({ children, hideBottomNav = false }: EmpP
 
         {!hideBottomNav && <EmpMarkoutReminderBanner />}
 
-        <main className="emp-portal-main relative z-0 min-h-0 flex-1 overflow-y-auto overscroll-y-contain bg-background">
-          <div className="hrms-admin-content emp-workspace-shell mx-auto w-full max-w-[1400px] px-8 py-6">
+        <main className="emp-portal-main relative z-0 flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-y-contain bg-background">
+          <div className="hrms-admin-content emp-workspace-shell mx-auto box-border flex min-h-0 w-full max-w-[1400px] flex-1 flex-col px-8 py-5">
             {children}
           </div>
         </main>

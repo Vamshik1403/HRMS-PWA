@@ -33,10 +33,16 @@ interface EmpMobileLayoutProps {
 /** Returns true when the app is running as an installed PWA (standalone mode). */
 function isRunningStandalone(): boolean {
   if (typeof window === "undefined") return false;
-  return (
-    window.matchMedia("(display-mode: standalone)").matches ||
-    (window.navigator as any).standalone === true
-  );
+  const nav = window.navigator as Navigator & { standalone?: boolean };
+  if (nav.standalone === true) return true;
+  try {
+    if (window.matchMedia("(display-mode: standalone)").matches) return true;
+    if (window.matchMedia("(display-mode: fullscreen)").matches) return true;
+    if (window.matchMedia("(display-mode: minimal-ui)").matches) return true;
+  } catch {
+    /* ignore */
+  }
+  return false;
 }
 
 function isIOSDevice(): boolean {

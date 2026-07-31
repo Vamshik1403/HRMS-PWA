@@ -1682,3 +1682,9 @@ html:not(.dark):not([data-emp-theme="dark"]) .emp-portal-desktop .hrms-admin-con
 .im-editorial-panel [class*="font-serif"] {
   font-family: "Playfair Display", Georgia, serif;
 }
+
+/* Mobile / installed PWA — never show desktop portal sidebar chrome */
+html.emp-layout-mobile .emp-portal-desktop,
+html[data-emp-layout="mobile"] .emp-portal-desktop {
+  display: none !important;
+}

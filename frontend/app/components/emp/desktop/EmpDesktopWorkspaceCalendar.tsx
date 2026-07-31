@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Bell, Calendar, CheckSquare, ChevronLeft, ChevronRight, Clock, ListTodo, MapPin } from "lucide-react";
+import { Calendar, CheckSquare, ChevronLeft, ChevronRight, Clock, ListTodo, MapPin } from "lucide-react";
 import { EmpDesktopPage } from "./EmpDesktopPage";
 import {
   EmpCalendarDayDetailPanel,
@@ -58,10 +58,6 @@ function taskDateKey(scheduleDateTime: string) {
   const d = new Date(scheduleDateTime);
   if (Number.isNaN(d.getTime())) return "";
   return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
-}
-
-function memoDateKey(iso: string) {
-  return iso.slice(0, 10);
 }
 
 function buildMonthCells(year: number, month: number) {
@@ -141,7 +137,6 @@ export function EmpDesktopWorkspaceCalendar() {
     { fromDate?: string; toDate?: string; status?: string; appliedLeaveType?: string; dayStatuses?: unknown }[]
   >([]);
   const [tasksByDate, setTasksByDate] = useState<Map<string, number>>(new Map());
-  const [noticesByDate, setNoticesByDate] = useState<Map<string, number>>(new Map());
   const [selectedDateKey, setSelectedDateKey] = useState<string | null>(null);
   const [dayDetailSection, setDayDetailSection] = useState<CalendarDayDetailSection>("punches");
   const monthInputRef = useRef<HTMLInputElement>(null);
@@ -156,7 +151,7 @@ export function EmpDesktopWorkspaceCalendar() {
       const parsedUser = userRaw ? JSON.parse(userRaw) : null;
       const empId = parsedUser?.employee?.id;
 
-      const [attendanceData, holidaysData, leaveData, empData, memoData] = await Promise.all([
+      const [attendanceData, holidaysData, leaveData, empData] = await Promise.all([
         fetch(`${BACKEND}/emp-location-attendance/my?from=${from}&to=${to}`, {
           headers: authHeaders(),
           cache: "no-store",
@@ -174,11 +169,6 @@ export function EmpDesktopWorkspaceCalendar() {
               r.ok ? r.json() : null,
             )
           : Promise.resolve(null),
-        empId != null
-          ? fetch(`${BACKEND}/employee-memo`, { headers: authHeaders(), cache: "no-store" }).then((r) =>
-              r.ok ? r.json() : [],
-            )
-          : Promise.resolve([]),
       ]);
 
       setDays(groupAttendanceByDay(Array.isArray(attendanceData) ? attendanceData : []));
@@ -192,20 +182,6 @@ export function EmpDesktopWorkspaceCalendar() {
         ),
       );
       setLeaves(Array.isArray(leaveData) ? leaveData : []);
-
-      const noticeMap = new Map<string, number>();
-      (Array.isArray(memoData) ? memoData : []).forEach(
-        (m: { employeeID?: number; employeeIDs?: number[]; undoneAt?: string | null; createdAt?: string; issuedDate?: string }) => {
-          if (m.undoneAt || !empId) return;
-          const mine =
-            m.employeeID === empId || (Array.isArray(m.employeeIDs) && m.employeeIDs.includes(empId));
-          if (!mine) return;
-          const key = memoDateKey(m.issuedDate || m.createdAt || "");
-          if (!key || key.length < 10) return;
-          noticeMap.set(key, (noticeMap.get(key) ?? 0) + 1);
-        },
-      );
-      setNoticesByDate(noticeMap);
 
       const workShiftId = empData?.workShiftID ?? empData?.workShift?.id;
       if (workShiftId) {
@@ -250,7 +226,6 @@ export function EmpDesktopWorkspaceCalendar() {
       setLeaves([]);
       setWeekOffDays(new Set());
       setTasksByDate(new Map());
-      setNoticesByDate(new Map());
     } finally {
       setLoading(false);
     }
@@ -293,7 +268,7 @@ export function EmpDesktopWorkspaceCalendar() {
   return (
     <EmpDesktopPage
       title="My Calendar"
-      description="Attendance, tasks, notices, holidays, and week offs"
+      description="Attendance, tasks, holidays, and week offs"
       icon={Calendar}
       className="!space-y-0 h-[calc(100dvh-8.75rem)] max-h-[calc(100dvh-8.75rem)] overflow-hidden"
     >
@@ -427,7 +402,6 @@ export function EmpDesktopWorkspaceCalendar() {
               const isWeekend = idx % 7 === 0 || idx % 7 === 6;
               const isWeekOff = !isOutside && isWeekOffDate(cell.dateKey, weekOffDays);
               const taskCount = tasksByDate.get(cell.dateKey) ?? 0;
-              const noticeCount = noticesByDate.get(cell.dateKey) ?? 0;
               const isHoliday = !isOutside && holidayMap.has(cell.dateKey);
 
               const display = isOutside
@@ -442,7 +416,7 @@ export function EmpDesktopWorkspaceCalendar() {
                   });
 
               const hasStatus = Boolean(display.statusLabel);
-              const hasIcons = taskCount > 0 || noticeCount > 0 || isHoliday || isWeekOff;
+              const hasIcons = taskCount > 0 || isHoliday || isWeekOff;
               const clickable = !isOutside && (hasStatus || hasIcons || true);
 
               const inner = (
@@ -483,12 +457,6 @@ export function EmpDesktopWorkspaceCalendar() {
                         <span className="inline-flex items-center gap-0.5 rounded-md bg-sky-100 px-1.5 py-0.5 text-[9px] font-semibold text-sky-800" title={`${taskCount} task(s)`}>
                           <ListTodo className="size-3" />
                           {taskCount > 1 ? taskCount : null}
-                        </span>
-                      ) : null}
-                      {noticeCount > 0 ? (
-                        <span className="inline-flex items-center gap-0.5 rounded-md bg-violet-100 px-1.5 py-0.5 text-[9px] font-semibold text-violet-800" title={`${noticeCount} notice(s)`}>
-                          <Bell className="size-3" />
-                          {noticeCount > 1 ? noticeCount : null}
                         </span>
                       ) : null}
                       {isHoliday ? (

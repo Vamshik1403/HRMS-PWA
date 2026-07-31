@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import Link from "next/link";
 import { Bell } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../../ui/card";
 import { Button } from "../../ui/button";
@@ -13,7 +12,6 @@ import {
   pruneStoredMemoNotifications,
   type StoredInAppNotification,
 } from "../../../utils/empInAppNotifications";
-import { empPayoutHrefForPeriod } from "../../../utils/empPayslipApi";
 import { getEmployeeIdFromStorage } from "@/lib/pushSubscribe";
 import { empNotifFeedCacheKey, getPageCache, setPageCache } from "../../../utils/pageCache";
 import { useEmpManagerScope } from "../../../hooks/useEmpManagerScope";
@@ -68,15 +66,6 @@ function fmtWhen(iso: string, kind?: string) {
     month: "short",
     year: d.getFullYear() !== now.getFullYear() ? "numeric" : undefined,
   });
-}
-
-function resolveNotificationHref(n: FeedNotification): string | undefined {
-  if (!n.href) return undefined;
-  if (n.kind === "payslip" && n.href === "/empPayout" && n.body) {
-    const periodMatch = n.body.match(/for (.+?) is ready/i) || n.body.match(/for (.+?) has been paid/i);
-    if (periodMatch?.[1]) return empPayoutHrefForPeriod(periodMatch[1].trim());
-  }
-  return n.href;
 }
 
 function collectMemoIds(items: FeedNotification[]): Set<number> {
@@ -195,7 +184,7 @@ export function EmpDesktopNotifications() {
     {
       key: "title",
       header: "Notification",
-      colSpan: 5,
+      colSpan: 8,
       cell: (n) => {
         const copy = isManagerView
           ? formatManagerNotificationCopy(n, scope)
@@ -211,32 +200,17 @@ export function EmpDesktopNotifications() {
     {
       key: "when",
       header: "When",
-      colSpan: 2,
+      colSpan: 4,
+      align: "right",
       cell: (n) => (
         <span className="text-sm text-muted-foreground whitespace-nowrap">{fmtWhen(n.at, n.kind)}</span>
       ),
-    },
-    {
-      key: "action",
-      header: "",
-      colSpan: 1,
-      align: "right",
-      cell: (n) => {
-        const href = resolveNotificationHref(n);
-        return href ? (
-          <Button variant="ghost" size="sm" className="h-8 px-2 text-xs" asChild>
-            <Link href={href}>Open</Link>
-          </Button>
-        ) : (
-          <span className="text-muted-foreground text-xs">—</span>
-        );
-      },
     },
   ];
 
   return (
     <>
-      <Card className={cn(listCardClass, "min-w-0 overflow-hidden")}>
+      <Card className={cn(listCardClass, "flex h-full min-h-0 min-w-0 flex-col overflow-hidden")}>
         <CardHeader className="flex flex-row items-start justify-between gap-4">
           <div>
             <CardTitle className="text-xl font-semibold tracking-tight flex items-center gap-2">

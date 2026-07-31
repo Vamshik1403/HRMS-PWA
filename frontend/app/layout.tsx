@@ -108,6 +108,12 @@ export default function RootLayout({
             __html: `(function(){try{var t=localStorage.getItem('_emp_appearance');if(t==='dark'){document.documentElement.classList.add('dark');document.documentElement.setAttribute('data-emp-theme','dark');document.documentElement.style.colorScheme='dark';}}catch(e){}})();`,
           }}
         />
+        {/* Mark mobile / installed PWA early so desktop chrome never flashes */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{var n=navigator,ua=n.userAgent||"",standalone=false;try{standalone=!!(n.standalone)||window.matchMedia('(display-mode: standalone)').matches||window.matchMedia('(display-mode: fullscreen)').matches||window.matchMedia('(display-mode: minimal-ui)').matches;}catch(e){}var mobile=/Android|webOS|iPhone|iPod|BlackBerry|IEMobile|Opera Mini|Mobile/i.test(ua)||(/Macintosh/i.test(ua)&&(n.maxTouchPoints||0)>1);var remembered=localStorage.getItem('_openhrm_mobile_pwa_layout')==='1';if(standalone){try{localStorage.setItem('_openhrm_mobile_pwa_layout','1');}catch(e){}}if(standalone||mobile||remembered){document.documentElement.setAttribute('data-emp-layout','mobile');document.documentElement.classList.add('emp-layout-mobile');}}catch(e){}})();`,
+          }}
+        />
         {/* Favicon and Apple icons */}
         <link rel="icon" href="/favicon.ico" sizes="any" />
         <link rel="icon" href="/icons/icon-192.png" sizes="192x192" type="image/png" />

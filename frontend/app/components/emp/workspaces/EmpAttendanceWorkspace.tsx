@@ -230,15 +230,12 @@ export function EmpAttendanceWorkspace({ embedded = false }: { embedded?: boolea
     return overviewContent;
   }
 
-  if (tab === "check-in") {
+  // Legacy ?tab=check-in / calendar → same overview (tabs removed from nav).
+  if (tab === "check-in" || tab === "calendar") {
     return (
       <EmpWorkspaceContent>
-        <EmpDesktopPage title="Check in / out" description="Mark attendance for today" icon={MapPin}>
-          <EmpDesktopAttendancePanel
-            todayStatus={todayStatus}
-            loading={statusLoading}
-            onStatusUpdate={handleStatusUpdate}
-          />
+        <EmpDesktopPage title="Attendance overview" description="Today's status, weekly summary, and recent activity" icon={MapPin}>
+          {overviewContent}
         </EmpDesktopPage>
       </EmpWorkspaceContent>
     );

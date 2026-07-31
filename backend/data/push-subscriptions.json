@@ -744,5 +744,15 @@
         "auth": "Wu19llJDP8axMxhJZW8sMA"
       }
     }
+  },
+  {
+    "employeeID": 1,
+    "subscription": {
+      "endpoint": "https://web.push.apple.com/QBYlcFdvGV4yJ1nIaWRDlCpyBdZtkGf0p9ToPwcWkPIj6QLN64BGbynePLUnNbDPdDH0GywvR5z0lmyji-OYXGeX94RVdtOj51gKmOJO7cnVAO48uTTIx3IFZNIofsq17yylg8s9YzxHOJg5k8hh-rz_1LlRdAG3u_-Qr8Uvs04",
+      "keys": {
+        "p256dh": "BN1hA7F-Gs5nfeJvxBtt7j9TEp-p65Aa9otuk66yusuZIpNPxyz31fGbdhI9kIQ3ebkO5QAHv9MWkYHVZu6xkQc",
+        "auth": "vWMqhUHbYfsCs1rGaODK7A"
+      }
+    }
   }
 ]

@@ -86,7 +86,7 @@ export const EMP_MORE_ITEMS: EmpNavItem[] = [
   {
     id: "noticeboard",
     label: "Internal Messages",
-    href: "/empNoticeboard",
+    href: "/empProfile?tab=messaging",
     icon: "solar:bell-bold-duotone",
     outlineIcon: "solar:bell-linear",
   },
@@ -170,12 +170,6 @@ export const EMP_COMPANY_TABS = [
     label: "Holidays",
     href: "/empHolidays",
     match: (p: string) => p === "/empHolidays" || p.startsWith("/empPublicHoliday"),
-  },
-  {
-    id: "noticeboard",
-    label: "Noticeboard",
-    href: "/empNoticeboard",
-    match: (p: string) => p === "/empNoticeboard" || p.startsWith("/empNoticeboard/"),
   },
 ];
 

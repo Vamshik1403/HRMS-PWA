@@ -1,16 +1,12 @@
-import { TASK_MANAGEMENT_ENABLED } from "@/app/config/featureFlags";
-import { canViewModule, hasCompanyAccessFlag, isCompanyOwnerFlag } from "@/lib/companyAccess";
+import { canViewModule, isCompanyOwnerFlag } from "@/lib/companyAccess";
 
 export type EmpMoreGroupKey =
-  | "team"
   | "organization"
   | "employee"
   | "contractor"
-  | "tasks"
   | "attendance"
   | "leave"
   | "payroll"
-  | "messaging"
   | "reports"
   | "settings";
 
@@ -20,6 +16,8 @@ export type EmpMoreSection = {
   href: string;
   icon: string;
   iconClassName: string;
+  /** Optional one-line card description for the More explorer. */
+  description?: string;
   managerOnly?: boolean;
   /** Company module key required for canView (owner always passes). */
   moduleKey?: string;
@@ -34,50 +32,10 @@ const always = () => true;
 
 /**
  * More grid for employees:
- * - Team tiles (managers)
  * - Company-admin modules for owners / rights holders (mirrors HRMS_NAVIGATION company sections)
- * Self-service tiles live under My Profile / sidebar — not duplicated here.
+ * Team, Tasks, Customers, IM live in the sidebar — not duplicated here.
  */
 export const EMP_MORE_SECTIONS: EmpMoreSection[] = [
-  // ── Manager (team) ──
-  {
-    id: "promotions",
-    label: "Promotions and Transfers",
-    href: "/empTeam/promotions",
-    icon: "solar:transfer-horizontal-bold-duotone",
-    iconClassName: "text-indigo-600",
-    managerOnly: true,
-    group: "team",
-  },
-  {
-    id: "my-team",
-    label: "My Team",
-    href: "/empTeam/my-team",
-    icon: "solar:users-group-two-rounded-bold-duotone",
-    iconClassName: "text-violet-500",
-    managerOnly: true,
-    group: "team",
-  },
-  {
-    id: "team-approvals",
-    label: "Team Approvals",
-    href: "/empTeam/approvals",
-    icon: "solar:clipboard-check-bold-duotone",
-    iconClassName: "text-emerald-600",
-    managerOnly: true,
-    group: "team",
-  },
-  {
-    id: "company-overview",
-    label: "My Company",
-    href: "/empCompanyDashboard",
-    icon: "solar:buildings-2-bold-duotone",
-    iconClassName: "text-slate-600",
-    managerOnly: true,
-    group: "team",
-    show: () => hasCompanyAccessFlag(),
-  },
-
   // ── Organization setup ──
   {
     id: "admin-branches",
@@ -162,6 +120,15 @@ export const EMP_MORE_SECTIONS: EmpMoreSection[] = [
     moduleKey: "LEAVE_APPLICATIONS",
     group: "employee",
   },
+  {
+    id: "admin-roster",
+    label: "Workshift Roster",
+    href: "/roster",
+    icon: "solar:calendar-bold-duotone",
+    iconClassName: "text-pink-700",
+    moduleKey: "ROSTER",
+    group: "employee",
+  },
 
   // ── Contractor management ──
   {
@@ -192,39 +159,7 @@ export const EMP_MORE_SECTIONS: EmpMoreSection[] = [
     group: "contractor",
   },
 
-  // ── Task management ──
-  {
-    id: "admin-customers",
-    label: "Customers",
-    href: "/task-customers",
-    icon: "solar:users-group-two-rounded-bold-duotone",
-    iconClassName: "text-violet-700",
-    moduleKey: "TASKS",
-    group: "tasks",
-    show: () => TASK_MANAGEMENT_ENABLED,
-  },
-  {
-    id: "admin-sites",
-    label: "Sites / Branches",
-    href: "/task-customer-sites",
-    icon: "solar:map-point-bold-duotone",
-    iconClassName: "text-fuchsia-700",
-    moduleKey: "TASKS",
-    group: "tasks",
-    show: () => TASK_MANAGEMENT_ENABLED,
-  },
-  {
-    id: "admin-tasks",
-    label: "Tasks / Projects",
-    href: "/task-projects",
-    icon: "solar:checklist-minimalistic-bold-duotone",
-    iconClassName: "text-rose-600",
-    moduleKey: "TASKS",
-    group: "tasks",
-    show: () => TASK_MANAGEMENT_ENABLED,
-  },
-
-  // ── Attendance & shifts ──
+  // ── Work policy (shifts & attendance policy) ──
   {
     id: "admin-work-shifts",
     label: "Work Shifts",
@@ -241,15 +176,6 @@ export const EMP_MORE_SECTIONS: EmpMoreSection[] = [
     icon: "solar:document-text-bold-duotone",
     iconClassName: "text-fuchsia-700",
     moduleKey: "ATTENDANCE_POLICY",
-    group: "attendance",
-  },
-  {
-    id: "admin-roster",
-    label: "Workshift Roster",
-    href: "/roster",
-    icon: "solar:calendar-bold-duotone",
-    iconClassName: "text-pink-700",
-    moduleKey: "ROSTER",
     group: "attendance",
   },
 
@@ -290,7 +216,7 @@ export const EMP_MORE_SECTIONS: EmpMoreSection[] = [
     icon: "solar:calendar-date-bold-duotone",
     iconClassName: "text-emerald-600",
     moduleKey: "PAYROLL",
-    group: "payroll",
+    group: "organization",
   },
   {
     id: "admin-allowances",
@@ -299,7 +225,7 @@ export const EMP_MORE_SECTIONS: EmpMoreSection[] = [
     icon: "solar:hand-money-bold-duotone",
     iconClassName: "text-teal-600",
     moduleKey: "PAYROLL",
-    group: "payroll",
+    group: "organization",
   },
   {
     id: "admin-deductions",
@@ -308,7 +234,7 @@ export const EMP_MORE_SECTIONS: EmpMoreSection[] = [
     icon: "solar:bill-list-bold-duotone",
     iconClassName: "text-orange-600",
     moduleKey: "PAYROLL",
-    group: "payroll",
+    group: "organization",
   },
   {
     id: "admin-paygrade",
@@ -365,17 +291,6 @@ export const EMP_MORE_SECTIONS: EmpMoreSection[] = [
     group: "payroll",
   },
 
-  // ── Messaging ──
-  {
-    id: "admin-messaging",
-    label: "Internal Messaging",
-    href: "/employee-memo",
-    icon: "solar:chat-round-line-bold-duotone",
-    iconClassName: "text-indigo-600",
-    moduleKey: "MESSAGING",
-    group: "messaging",
-  },
-
   // ── Reports ──
   {
     id: "admin-reports",
@@ -395,6 +310,8 @@ export const EMP_MORE_SECTIONS: EmpMoreSection[] = [
     moduleKey: "REPORTS",
     group: "reports",
   },
+
+  // ── Administration ──
   {
     id: "admin-import-attendance",
     label: "Import Attendance",
@@ -402,10 +319,8 @@ export const EMP_MORE_SECTIONS: EmpMoreSection[] = [
     icon: "solar:upload-bold-duotone",
     iconClassName: "text-slate-600",
     moduleKey: "IMPORT_ATTENDANCE",
-    group: "reports",
+    group: "settings",
   },
-
-  // ── Settings ──
   {
     id: "admin-settings-general",
     label: "General Settings",
@@ -459,28 +374,53 @@ export function getVisibleEmpMoreSections(isManager: boolean): EmpMoreSection[] 
 }
 
 export function groupEmpMoreSections(sections: EmpMoreSection[]): {
-  key: string;
+  key: EmpMoreGroupKey;
   title: string;
+  description: string;
   items: EmpMoreSection[];
 }[] {
-  const order: Array<{ key: EmpMoreGroupKey; title: string }> = [
-    { key: "team", title: "Team" },
-    { key: "organization", title: "Organization setup" },
-    { key: "employee", title: "Employee management" },
-    { key: "contractor", title: "Contractor management" },
-    { key: "tasks", title: "Task management" },
-    { key: "attendance", title: "Attendance & shifts" },
-    { key: "leave", title: "Leave policy" },
-    { key: "payroll", title: "Payroll" },
-    { key: "messaging", title: "Messaging" },
-    { key: "reports", title: "Reports" },
-    { key: "settings", title: "Settings" },
+  const order: Array<{ key: EmpMoreGroupKey; title: string; description: string }> = [
+    { key: "organization", title: "Organization Setup", description: "Manage your organization structure and settings." },
+    { key: "employee", title: "Employee Management", description: "Manage employee records and lifecycle." },
+    { key: "contractor", title: "Contractor Management", description: "Manage contractors, rates, and payouts." },
+    { key: "attendance", title: "Work Policy", description: "Work shifts and attendance policies." },
+    { key: "leave", title: "Leave Policy", description: "Leave policies, holidays, and public holidays." },
+    { key: "payroll", title: "Payroll", description: "Salary setup, advances, reimbursements, and run payroll." },
+    { key: "reports", title: "Reports", description: "Attendance reports and logs." },
+    { key: "settings", title: "Administration", description: "Imports, system settings, templates, and permissions." },
   ];
   return order
-    .map(({ key, title }) => ({
+    .map(({ key, title, description }) => ({
       key,
       title,
+      description,
       items: sections.filter((s) => (s.group || "organization") === key),
     }))
     .filter((g) => g.items.length > 0);
+}
+
+/** Category icons for the More module explorer tabs. */
+export const EMP_MORE_GROUP_ICONS: Record<EmpMoreGroupKey, string> = {
+  organization: "solar:buildings-2-bold-duotone",
+  employee: "solar:user-id-bold-duotone",
+  contractor: "solar:handshake-bold-duotone",
+  attendance: "solar:clock-circle-bold-duotone",
+  leave: "solar:calendar-bold-duotone",
+  payroll: "solar:wallet-money-bold-duotone",
+  reports: "solar:graph-up-bold-duotone",
+  settings: "solar:settings-bold-duotone",
+};
+
+export function moreModuleDescription(section: EmpMoreSection): string {
+  if (section.description) return section.description;
+  const defaults: Record<string, string> = {
+    "admin-branches": "Manage company branches",
+    "admin-departments": "Manage departments",
+    "admin-designations": "Manage job titles",
+    "admin-devices": "Configure biometric devices",
+    "admin-holidays": "Manage holidays",
+    "admin-roster": "Plan and assign workshift rosters",
+    "admin-import-attendance": "Import attendance records",
+  };
+  return defaults[section.id] || `Open ${section.label}`;
 }

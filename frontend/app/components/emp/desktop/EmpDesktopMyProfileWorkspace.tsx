@@ -38,7 +38,14 @@ function EmpDesktopMyProfileWorkspaceInner() {
 
   return (
     <>
-      <div className={isMessaging ? undefined : "hidden"} aria-hidden={!isMessaging}>
+      <div
+        className={
+          isMessaging
+            ? "flex h-[calc(100dvh-8.75rem)] max-h-[calc(100dvh-8.75rem)] min-h-0 flex-col overflow-hidden"
+            : "hidden"
+        }
+        aria-hidden={!isMessaging}
+      >
         <EmpProfileMessagingPanel active={isMessaging} />
       </div>
 

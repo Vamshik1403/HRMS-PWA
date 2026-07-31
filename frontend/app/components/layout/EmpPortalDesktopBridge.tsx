@@ -44,17 +44,9 @@ function EmpPortalDesktopBridgeInner({ children }: { children: React.ReactNode }
   }
 
   if (!desktop) {
-    // Mobile: EmpMobileLayout on PWA pages handles chrome; admin pages get a simple wrap.
-    if (EMP_PWA_ROUTE.test(pathname || "")) {
-      return <>{children}</>;
-    }
-    return (
-      <EmpPortalShellProvider active>
-        <Suspense fallback={null}>
-          <EmpPortalShell>{children}</EmpPortalShell>
-        </Suspense>
-      </EmpPortalShellProvider>
-    );
+    // Mobile / PWA: never mount the desktop sidebar shell (avoids flash + wrong chrome).
+    // EmpMobileLayout owns PWA chrome; admin CRUD pages render without desktop shell.
+    return <>{children}</>;
   }
 
   return (

@@ -19,6 +19,7 @@ import { EmpDesktopNotifications } from "./EmpDesktopNotifications";
 import { EmpDesktopPage } from "./EmpDesktopPage";
 import type { TodayStatus } from "../../../hooks/useEmpPunch";
 import { TASK_MANAGEMENT_ENABLED } from "../../../config/featureFlags";
+import { canViewModule } from "@/lib/companyAccess";
 import { useEmpManagerScope } from "../../../hooks/useEmpManagerScope";
 
 const quickLinks = [
@@ -26,8 +27,16 @@ const quickLinks = [
   { key: "leave", label: "Leave", href: "/empLeaveApplication", icon: Calendar },
   { key: "payroll", label: "Payroll", href: "/empPayout", icon: FileText },
   { key: "reimb", label: "Reimbursement", href: "/empReimbursement", icon: Wallet },
-  { key: "notice", label: "Messages", href: "/empNoticeboard", icon: Bell },
+  { key: "notice", label: "Messages", href: "/empProfile?tab=messaging", icon: Bell },
 ];
+
+function tasksQuickLink() {
+  if (!TASK_MANAGEMENT_ENABLED) return null;
+  if (canViewModule("TASKS")) {
+    return { key: "tasks", label: "Tasks", href: "/task-projects", icon: LayoutDashboard };
+  }
+  return { key: "tasks", label: "My Tasks", href: "/empMyTasks", icon: LayoutDashboard };
+}
 
 export function EmpDesktopHomeOverview({
   empFullName,
@@ -71,18 +80,29 @@ export function EmpDesktopHomeOverview({
     [taskBadge, noticeBadge, reimbBadge, leaveBadge],
   );
 
+  const tasksLink = tasksQuickLink();
   const quickAccessItems = [
     ...quickLinks,
-    ...(TASK_MANAGEMENT_ENABLED
-      ? [{ key: "tasks", label: "Tasks", href: "/empMyTasks", icon: LayoutDashboard }]
-      : []),
+    ...(tasksLink ? [tasksLink] : []),
   ];
 
   return (
-    <EmpDesktopPage title="Home" description="Your workspace overview" icon={LayoutDashboard}>
-      <div className="space-y-6">
-        <div className={`grid lg:grid-cols-3 ${gridGap} items-stretch`}>
-          <div className="lg:col-span-2 space-y-6">
+    <EmpDesktopPage
+      title="Home"
+      description="Your workspace overview"
+      icon={LayoutDashboard}
+      className="flex h-full min-h-0 flex-1 flex-col !space-y-0 overflow-hidden"
+    >
+      <div
+        className={cn(
+          "grid h-full min-h-0 flex-1 lg:grid-cols-3",
+          gridGap,
+          "items-stretch",
+        )}
+      >
+        {/* auto / auto / 1fr so attendance always fills remaining height */}
+        <div className="lg:col-span-2 grid h-full min-h-0 grid-rows-[auto_auto_minmax(0,1fr)] gap-4">
+          <div className="min-h-0 shrink-0">
             <EmpDesktopHomeProfileHero
               empFullName={empFullName}
               empPhoto={empPhoto}
@@ -93,52 +113,54 @@ export function EmpDesktopHomeOverview({
               loadingStatus={loadingStatus}
               onStatusUpdate={onStatusUpdate}
             />
+          </div>
 
-            <div className="rounded-lg border border-border/60 bg-card px-3 py-2 shadow-sm">
-              <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none">
-                <span className="shrink-0 pr-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                  Quick access
-                </span>
-                {quickAccessItems.map((item) => {
-                  const badge = badgeFor(item.key);
-                  const Icon = item.icon;
-                  return (
-                    <Link
-                      key={item.key}
-                      href={item.href}
-                      onClick={item.key === "notice" ? onNoticeClick : undefined}
-                      className={cn(
-                        "inline-flex shrink-0 items-center gap-1.5 rounded-md border border-transparent px-2.5 py-1.5",
-                        "text-xs font-medium text-foreground hover:border-border hover:bg-muted/50 transition-colors",
-                      )}
-                    >
-                      <span className="grid size-6 place-items-center rounded-md bg-primary/10 text-primary">
-                        <Icon className="size-3.5" />
+          <div className="shrink-0 rounded-lg border border-border/60 bg-card px-3 py-2 shadow-sm">
+            <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none">
+              <span className="shrink-0 pr-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                Quick access
+              </span>
+              {quickAccessItems.map((item) => {
+                const badge = badgeFor(item.key);
+                const Icon = item.icon;
+                return (
+                  <Link
+                    key={item.key}
+                    href={item.href}
+                    onClick={item.key === "notice" ? onNoticeClick : undefined}
+                    className={cn(
+                      "inline-flex shrink-0 items-center gap-1.5 rounded-md border border-transparent px-2.5 py-1.5",
+                      "text-xs font-medium text-foreground hover:border-border hover:bg-muted/50 transition-colors",
+                    )}
+                  >
+                    <span className="grid size-6 place-items-center rounded-md bg-primary/10 text-primary">
+                      <Icon className="size-3.5" />
+                    </span>
+                    <span>{item.label}</span>
+                    {badge > 0 ? (
+                      <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary">
+                        {badge}
                       </span>
-                      <span>{item.label}</span>
-                      {badge > 0 ? (
-                        <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary">
-                          {badge}
-                        </span>
-                      ) : null}
-                    </Link>
-                  );
-                })}
-              </div>
+                    ) : null}
+                  </Link>
+                );
+              })}
             </div>
+          </div>
 
+          <div className="min-h-0 h-full">
             <EmpDesktopAttendancePanel
               todayStatus={todayStatus}
               loading={loadingStatus}
               onStatusUpdate={onStatusUpdate}
               compact
-              showActions={false}
+              showActions
             />
           </div>
+        </div>
 
-          <div className="min-w-0 lg:col-span-1 flex">
-            {isManagerView ? <EmpDesktopTeamReportees /> : <EmpDesktopNotifications />}
-          </div>
+        <div className="flex h-full min-h-0 min-w-0 lg:col-span-1">
+          {isManagerView ? <EmpDesktopTeamReportees /> : <EmpDesktopNotifications />}
         </div>
       </div>
     </EmpDesktopPage>

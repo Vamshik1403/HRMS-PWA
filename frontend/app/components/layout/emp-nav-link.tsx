@@ -5,6 +5,10 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { cn } from "@/app/utils/cn";
 import type { EmpSidebarNavItem } from "./emp-portal-sidebar-navigation";
 import { isEmpNavItemActive } from "./emp-portal-sidebar-navigation";
+import {
+  fullPortalUrl,
+  popPortalNavHistory,
+} from "./emp-portal-nav-history";
 
 interface EmpNavLinkProps {
   item: EmpSidebarNavItem;
@@ -28,12 +32,12 @@ export function EmpNavLink({ item, pathname, collapsed, badgeCount = 0 }: EmpNav
         collapsed ? "mx-1.5 justify-center rounded-[10px] px-0" : "pl-2.5 pr-2 py-2",
         active
           ? "border-l-[3px] border-primary bg-primary/10 font-semibold text-primary"
-          : "border-l-[3px] border-transparent text-slate-600 hover:bg-muted hover:text-slate-800",
+          : "border-l-[3px] border-transparent text-muted-foreground hover:bg-muted hover:text-foreground",
       )}
     >
       <span className="relative shrink-0">
         <Icon
-          className={cn("size-[18px]", active ? "text-primary" : "text-slate-500")}
+          className={cn("size-[18px]", active ? "text-primary" : "text-muted-foreground group-hover:text-foreground")}
           strokeWidth={1.75}
         />
         {collapsed && showBadge ? (
@@ -59,8 +63,16 @@ export function EmpNavLink({ item, pathname, collapsed, badgeCount = 0 }: EmpNav
     <Link
       href={item.href}
       onClick={(e) => {
-        if (active) {
-          e.preventDefault();
+        if (!active) return;
+        // Re-clicking the active sidebar item = step back through visit history
+        // (Profile → Delegation → Work Report → click Profile → Delegation → … → Home).
+        e.preventDefault();
+        const search = searchParams.toString();
+        const currentUrl = fullPortalUrl(pathname, search ? `?${search}` : "");
+        const backUrl = popPortalNavHistory(currentUrl);
+        if (backUrl) {
+          router.push(backUrl);
+        } else {
           router.refresh();
         }
       }}

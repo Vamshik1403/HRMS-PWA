@@ -253,7 +253,7 @@ export class EmployeeMemoService {
 
         try {
           await this.pushService.sendToEmployee(empId, pushTitle, pushBody, {
-            url: '/empNoticeboard',
+            url: '/empProfile?tab=messaging',
             kind: 'memo',
             memoId: memo.id,
             tag: `memo-${memo.id}`,
@@ -360,7 +360,7 @@ export class EmployeeMemoService {
       if (isEmployeeReply && empId === dto.senderEmployeeId) continue;
       try {
         await this.pushService.sendToEmployee(empId, pushTitle, pushBody, {
-          url: '/empNoticeboard',
+          url: '/empProfile?tab=messaging',
           kind: 'memo',
           memoId: parentId,
           tag: `memo-reply-${reply.id}`,

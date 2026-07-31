@@ -71,7 +71,8 @@ export async function clearEmpBadgesForVisitedPath(
     path.startsWith("/empNoticeboard") ||
     path.startsWith("/empCompany") ||
     path.startsWith("/empHolidays") ||
-    path.startsWith("/empPublicHoliday")
+    path.startsWith("/empPublicHoliday") ||
+    (path.startsWith("/empProfile") && qs.get("tab") === "messaging")
   ) {
     markNoticesViewed();
   }

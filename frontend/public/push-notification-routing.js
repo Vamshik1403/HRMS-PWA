@@ -26,7 +26,7 @@ function resolveNotificationPath(inner) {
   var kind = String(inner.kind || "").toLowerCase();
   switch (kind) {
     case "memo":
-      return "/empNoticeboard";
+      return "/empProfile?tab=messaging";
     case "attendance":
       return "/empdashboard";
     case "leave":

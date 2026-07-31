@@ -179,6 +179,26 @@ export default function LoginPage() {
     }
   }, [router])
 
+  // Lock page scroll on mobile / PWA login (prevents empty rubber-band scroll).
+  useEffect(() => {
+    const html = document.documentElement
+    const body = document.body
+    const prevHtmlOverflow = html.style.overflow
+    const prevBodyOverflow = body.style.overflow
+    const prevHtmlOverscroll = html.style.overscrollBehavior
+    const prevBodyOverscroll = body.style.overscrollBehavior
+    html.style.overflow = 'hidden'
+    body.style.overflow = 'hidden'
+    html.style.overscrollBehavior = 'none'
+    body.style.overscrollBehavior = 'none'
+    return () => {
+      html.style.overflow = prevHtmlOverflow
+      body.style.overflow = prevBodyOverflow
+      html.style.overscrollBehavior = prevHtmlOverscroll
+      body.style.overscrollBehavior = prevBodyOverscroll
+    }
+  }, [])
+
   if (!authChecked) return null
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -293,12 +313,12 @@ if (role === 'SUPERADMIN') {
       {showTermsModal && (
         <TermsModal onClose={() => { setShowTermsModal(false); setTermsAccepted(true) }} />
       )}
-      <div className="min-h-screen grid lg:grid-cols-[1.05fr_1fr]">
+      <div className="fixed inset-0 z-0 grid overflow-hidden overscroll-none lg:relative lg:inset-auto lg:min-h-screen lg:h-auto lg:overflow-visible lg:grid-cols-[1.05fr_1fr]">
         <LoginBrandPanel />
-        <main className="flex items-center justify-center p-6 sm:p-12 dotted-bg bg-background">
-          <div className="w-full max-w-md space-y-8 animate-fade-in">
+        <main className="flex h-full min-h-0 flex-col items-center justify-center overflow-hidden overscroll-none p-6 dotted-bg bg-background sm:p-12">
+          <div className="w-full max-w-md space-y-6 animate-fade-in sm:space-y-8">
             <div className="space-y-2">
-              <div className="flex items-center gap-2 lg:hidden mb-6">
+              <div className="mb-6 flex items-center gap-2 lg:hidden">
                 <img src="/img/OpenHRM_Logo.png" alt="OpenHRM" className="size-9 rounded-lg object-cover shadow-sm" />
                 <span className="font-display text-lg font-semibold">OpenHRM</span>
               </div>

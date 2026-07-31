@@ -200,7 +200,7 @@ const menuCards = [
   ...(TASK_MANAGEMENT_ENABLED
     ? [{ key: "tasks", label: "Tasks", sub: "Open & WIP", icon: "solar:checklist-bold-duotone", color: "bg-violet-50", iconColor: "text-violet-600", href: "/empMyTasks" }]
     : []),
-  { key: "notice", label: "IM", sub: "Internal messages", icon: "solar:bell-bold-duotone", color: "bg-amber-50", iconColor: "text-amber-600", href: "/empNoticeboard" },
+  { key: "notice", label: "IM", sub: "Internal messages", icon: "solar:bell-bold-duotone", color: "bg-amber-50", iconColor: "text-amber-600", href: "/empProfile?tab=messaging" },
   { key: "reimb", label: "Reimbursement", sub: "Pending approval", icon: "solar:wallet-bold-duotone", color: "bg-emerald-50", iconColor: "text-emerald-600", href: "/empReimbursement" },
   { key: "holidays", label: "Holiday list", sub: "Company public holidays", icon: "solar:calendar-mark-bold-duotone", color: "bg-rose-50", iconColor: "text-rose-600", href: "/empHolidays" },
   { key: "leave", label: "Leaves", sub: "Pending approval", icon: "solar:calendar-bold-duotone", color: "bg-blue-50", iconColor: "text-blue-600", href: "/empLeaveApplication" },
@@ -689,7 +689,7 @@ function EmpDashboardPageInner() {
         </DialogContent>
       </Dialog>
 
-      <div className={isPortalDesktop ? "" : "px-4 pt-4 pb-2"}>
+      <div className={isPortalDesktop ? "flex h-full min-h-0 flex-col" : "px-4 pt-4 pb-2"}>
         {!isPortalDesktop && (
         <>
         {/* Header — greeting block and avatar share one vertical center line */}
@@ -724,27 +724,29 @@ function EmpDashboardPageInner() {
         )}
 
         {isPortalDesktop && homeTab === "dashboard" && (
-          <EmpDesktopHomeOverview
-            empFullName={empFullName}
-            empPhoto={empPhoto}
-            empInitials={empInitials}
-            designation={designation}
-            department={department}
-            todayStatus={todayStatus}
-            loadingStatus={loadingStatus}
-            onStatusUpdate={(d) => {
-              setTodayStatus(d);
-              setPageCache("todayAttendance", d);
-            }}
-            taskBadge={taskBadge}
-            noticeBadge={noticeBadge}
-            reimbBadge={reimbBadge}
-            leaveBadge={leaveBadge}
-            onNoticeClick={() => {
-              localStorage.setItem("_notice_last_viewed", Date.now().toString());
-              setNoticeBadge(0);
-            }}
-          />
+          <div className="flex min-h-0 flex-1 flex-col">
+            <EmpDesktopHomeOverview
+              empFullName={empFullName}
+              empPhoto={empPhoto}
+              empInitials={empInitials}
+              designation={designation}
+              department={department}
+              todayStatus={todayStatus}
+              loadingStatus={loadingStatus}
+              onStatusUpdate={(d) => {
+                setTodayStatus(d);
+                setPageCache("todayAttendance", d);
+              }}
+              taskBadge={taskBadge}
+              noticeBadge={noticeBadge}
+              reimbBadge={reimbBadge}
+              leaveBadge={leaveBadge}
+              onNoticeClick={() => {
+                localStorage.setItem("_notice_last_viewed", Date.now().toString());
+                setNoticeBadge(0);
+              }}
+            />
+          </div>
         )}
 
         {isPortalDesktop && homeTab === "calendar" && <EmpDesktopWorkspaceCalendar />}

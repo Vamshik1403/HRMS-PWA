@@ -1,13 +1,16 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Icon } from "@iconify/react";
-import { LayoutGrid, Search } from "lucide-react";
-import { Input } from "@/app/components/ui/input";
+import { LayoutGrid } from "lucide-react";
 import {
+  EMP_MORE_GROUP_ICONS,
   getVisibleEmpMoreSections,
   groupEmpMoreSections,
+  type EmpMoreGroupKey,
+  type EmpMoreSection,
 } from "@/app/components/layout/emp-portal-more-sections";
 import { useEmpManagerScope } from "@/app/hooks/useEmpManagerScope";
 import {
@@ -16,95 +19,170 @@ import {
 } from "@/app/hooks/useEmpSidebarBadges";
 import { EmpDesktopPage } from "./desktop/EmpDesktopPage";
 import { useEmpPortalDesktop } from "@/app/components/layout/EmpPortalShell";
+import { moreGroupHref, resolveMoreGroupParam } from "./EmpMoreCategoryTabNav";
 import { cn } from "@/app/utils/cn";
+
+function ModuleCard({
+  section,
+  badge,
+  index,
+}: {
+  section: EmpMoreSection;
+  badge: number;
+  index: number;
+}) {
+  return (
+    <Link
+      href={section.href}
+      className={cn(
+        "group relative flex w-[104px] flex-col items-center gap-2 outline-none",
+        "transition-transform duration-200 ease-out hover:-translate-y-0.5",
+      )}
+      style={{ animationDelay: `${Math.min(index, 12) * 35}ms` }}
+    >
+      <div
+        className={cn(
+          "relative flex aspect-square w-full items-center justify-center rounded-2xl",
+          "bg-[#F3F4F6] transition-colors duration-200 group-hover:bg-[#E8ECF1]",
+        )}
+      >
+        <Icon
+          icon={section.icon}
+          className={cn("size-11", section.iconClassName)}
+        />
+        {badge > 0 ? (
+          <span className="absolute right-1.5 top-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-[10px] font-bold text-primary-foreground shadow-sm">
+            {badge > 99 ? "99+" : badge}
+          </span>
+        ) : null}
+      </div>
+      <p className="w-full text-center text-[12px] font-medium leading-snug text-foreground">
+        {section.label}
+      </p>
+    </Link>
+  );
+}
 
 export function EmpMoreServicesGrid() {
   const isDesktop = useEmpPortalDesktop();
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const { isManagerView } = useEmpManagerScope();
   const badges = useEmpSidebarBadges();
-  const [query, setQuery] = useState("");
+  const [mobileGroup, setMobileGroup] = useState<EmpMoreGroupKey | null>(null);
 
   const sections = useMemo(
     () => getVisibleEmpMoreSections(isManagerView),
     [isManagerView],
   );
 
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return sections;
-    return sections.filter((s) => s.label.toLowerCase().includes(q));
-  }, [sections, query]);
+  const allGroups = useMemo(() => groupEmpMoreSections(sections), [sections]);
+  const availableKeys = useMemo(() => allGroups.map((g) => g.key), [allGroups]);
 
-  const groups = useMemo(() => groupEmpMoreSections(filtered), [filtered]);
+  const urlGroup = resolveMoreGroupParam(searchParams, availableKeys);
 
-  const body = (
-    <div className="space-y-8">
-      <div className="relative max-w-xl">
-        <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-        <Input
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search modules"
-          className="h-11 pl-10 rounded-xl bg-card border-border shadow-sm"
-        />
-      </div>
+  useEffect(() => {
+    if (allGroups.length === 0) return;
+    if (isDesktop) {
+      if (!searchParams.get("group") && allGroups[0]) {
+        router.replace(moreGroupHref(allGroups[0].key), { scroll: false });
+      }
+      return;
+    }
+    if (!mobileGroup || !availableKeys.includes(mobileGroup)) {
+      setMobileGroup(allGroups[0]?.key ?? null);
+    }
+  }, [allGroups, availableKeys, isDesktop, mobileGroup, router, searchParams]);
 
-      {groups.length === 0 ? (
-        <p className="text-sm text-muted-foreground py-8 text-center">
-          No modules match &ldquo;{query.trim()}&rdquo;.
-        </p>
-      ) : (
-        groups.map((group) => (
-          <div key={group.key}>
-            <h2 className="text-sm font-semibold text-foreground mb-4">{group.title}</h2>
-            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-x-3 gap-y-6">
-              {group.items.map((section) => {
-                const badge = moreSectionBadgeCount(section.id, badges);
-                return (
-                  <Link
-                    key={section.id}
-                    href={section.href}
-                    className="group flex flex-col items-center gap-2.5 text-center"
-                  >
-                    <div
-                      className={cn(
-                        "relative w-full max-w-[92px] aspect-square rounded-xl border border-border bg-card shadow-sm",
-                        "flex items-center justify-center transition-all duration-150",
-                        "group-hover:border-primary/30 group-hover:shadow-md group-hover:-translate-y-0.5",
-                      )}
-                    >
-                      <Icon icon={section.icon} className={cn("size-9", section.iconClassName)} />
-                      {badge > 0 ? (
-                        <span className="absolute -right-1.5 -top-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-bold text-primary-foreground shadow-sm">
-                          {badge > 99 ? "99+" : badge}
-                        </span>
-                      ) : null}
-                    </div>
-                    <span className="text-[11px] sm:text-xs font-medium text-muted-foreground leading-snug px-1 group-hover:text-foreground">
-                      {section.label}
-                    </span>
-                  </Link>
-                );
-              })}
-            </div>
+  const activeGroup = isDesktop ? urlGroup : mobileGroup ?? urlGroup;
+  const activeMeta = allGroups.find((g) => g.key === activeGroup) || allGroups[0] || null;
+
+  const categoryContent = activeMeta ? (
+    <div key={activeMeta.key} className="animate-fade-in">
+      {activeMeta.items.length === 0 ? (
+        <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border bg-muted/30 px-6 py-16 text-center">
+          <div className="mb-3 flex size-14 items-center justify-center rounded-2xl bg-muted">
+            <LayoutGrid className="size-6 text-muted-foreground" />
           </div>
-        ))
+          <p className="text-sm font-semibold text-foreground">No modules available in this category.</p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Choose another category or ask your admin for access.
+          </p>
+        </div>
+      ) : (
+        <div className="flex flex-wrap gap-x-8 gap-y-8 sm:gap-x-10 sm:gap-y-10">
+          {activeMeta.items.map((section, index) => (
+            <ModuleCard
+              key={section.id}
+              section={section}
+              badge={moreSectionBadgeCount(section.id, badges)}
+              index={index}
+            />
+          ))}
+        </div>
       )}
     </div>
+  ) : (
+    <p className="py-12 text-center text-sm text-muted-foreground">No modules available.</p>
   );
 
   if (isDesktop) {
     return (
       <EmpDesktopPage title="More" description="Browse modules and services" icon={LayoutGrid}>
-        {body}
+        {categoryContent}
       </EmpDesktopPage>
     );
   }
 
   return (
-    <div className="px-4 pt-6 pb-8">
-      <h1 className="text-[22px] font-bold text-foreground mb-6">More</h1>
-      {body}
+    <div className="px-4 pt-6 pb-8 space-y-5">
+      <div>
+        <h1 className="text-[22px] font-bold text-foreground">More</h1>
+        <p className="mt-0.5 text-sm text-muted-foreground">Browse modules and services</p>
+      </div>
+
+      <div className="overflow-hidden border-b border-border">
+        <div
+          className="emp-more-mobile-tabs flex gap-0.5 overflow-x-auto pb-4 -mb-4"
+          role="tablist"
+        >
+          {allGroups.map((group) => {
+            const active = group.key === activeGroup;
+            return (
+              <button
+                key={group.key}
+                type="button"
+                role="tab"
+                aria-selected={active}
+                onClick={() => setMobileGroup(group.key)}
+                className={cn(
+                  "inline-flex shrink-0 items-center gap-2 border-b-2 px-3 py-2.5 text-[13px] font-medium transition-colors",
+                  active
+                    ? "border-primary text-primary"
+                    : "border-transparent text-muted-foreground",
+                )}
+              >
+                <Icon icon={EMP_MORE_GROUP_ICONS[group.key]} className="size-4" />
+                {group.title}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+      <style>{`
+        .emp-more-mobile-tabs {
+          scrollbar-width: none;
+          -ms-overflow-style: none;
+        }
+        .emp-more-mobile-tabs::-webkit-scrollbar {
+          display: none !important;
+          width: 0 !important;
+          height: 0 !important;
+          background: transparent;
+        }
+      `}</style>
+
+      {categoryContent}
     </div>
   );
 }

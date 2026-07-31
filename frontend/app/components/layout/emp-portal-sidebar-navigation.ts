@@ -7,20 +7,24 @@ import {
   Home,
   LayoutGrid,
   ListTodo,
+  MapPin,
   MessageSquare,
+  ArrowLeftRight,
   UserCircle,
   Users,
   type LucideIcon,
 } from "lucide-react";
 import type { EmpModuleId } from "./emp-portal-workspaces";
-import { hasCompanyAccessFlag } from "@/lib/companyAccess";
+import { canViewModule, hasCompanyAccessFlag } from "@/lib/companyAccess";
 import { TASK_MANAGEMENT_ENABLED } from "@/app/config/featureFlags";
 
 export interface EmpSidebarNavItem {
+  /** Stable section key for sidebar back-history (must be unique). */
+  id: string;
   label: string;
   href: string;
   icon: LucideIcon;
-  moduleId?: EmpModuleId | "more" | "team" | "company" | "company-dashboard" | "tasks";
+  moduleId?: EmpModuleId | "more" | "team" | "company" | "company-dashboard" | "tasks" | "customers" | "promotions";
   tabMatch?: string | null;
   managerOnly?: boolean;
   companyAccessOnly?: boolean;
@@ -35,11 +39,20 @@ export interface EmpSidebarNavGroup {
 
 const always = () => true;
 
+function canAccessTasksModule(): boolean {
+  return TASK_MANAGEMENT_ENABLED && canViewModule("TASKS");
+}
+
+function canAccessMyTasksOnly(): boolean {
+  return TASK_MANAGEMENT_ENABLED && !canViewModule("TASKS");
+}
+
 export const EMP_SIDEBAR_NAVIGATION: EmpSidebarNavGroup[] = [
   {
     label: "Overview",
     items: [
       {
+        id: "home",
         label: "Home",
         href: "/empdashboard",
         icon: Home,
@@ -52,6 +65,7 @@ export const EMP_SIDEBAR_NAVIGATION: EmpSidebarNavGroup[] = [
     label: "My Workspace",
     items: [
       {
+        id: "profile",
         label: "My Profile",
         href: "/empProfile",
         icon: UserCircle,
@@ -59,6 +73,7 @@ export const EMP_SIDEBAR_NAVIGATION: EmpSidebarNavGroup[] = [
         tabMatch: "profile",
       },
       {
+        id: "calendar",
         label: "My Calendar",
         href: "/empdashboard?tab=calendar",
         icon: CalendarDays,
@@ -66,13 +81,23 @@ export const EMP_SIDEBAR_NAVIGATION: EmpSidebarNavGroup[] = [
         tabMatch: "calendar",
       },
       {
+        id: "my-tasks",
         label: "My Tasks",
         href: "/empMyTasks",
         icon: ListTodo,
         moduleId: "tasks",
-        show: () => TASK_MANAGEMENT_ENABLED,
+        show: () => canAccessMyTasksOnly(),
       },
       {
+        id: "tasks",
+        label: "Tasks",
+        href: "/task-projects",
+        icon: ListTodo,
+        moduleId: "tasks",
+        show: () => canAccessTasksModule(),
+      },
+      {
+        id: "im",
         label: "IM",
         href: "/empProfile?tab=messaging",
         icon: MessageSquare,
@@ -82,20 +107,51 @@ export const EMP_SIDEBAR_NAVIGATION: EmpSidebarNavGroup[] = [
     ],
   },
   {
+    label: "Customer Management",
+    items: [
+      {
+        id: "customers",
+        label: "Customers",
+        href: "/task-customers",
+        icon: Users,
+        moduleId: "customers",
+        show: () => canAccessTasksModule(),
+      },
+      {
+        id: "sites",
+        label: "Sites / Branches",
+        href: "/task-customer-sites",
+        icon: MapPin,
+        moduleId: "customers",
+        show: () => canAccessTasksModule(),
+      },
+    ],
+  },
+  {
     label: "Team Management",
     managerOnly: true,
     items: [
       {
+        id: "team",
         label: "My Team",
         href: "/empTeam/my-team",
         icon: Users,
         moduleId: "team",
       },
       {
+        id: "team-approvals",
         label: "Team Approvals",
         href: "/empTeam/approvals",
         icon: ClipboardCheck,
         moduleId: "team",
+      },
+      {
+        id: "promotions",
+        label: "Promotions & Transfers",
+        href: "/empTeam/promotions",
+        icon: ArrowLeftRight,
+        moduleId: "promotions",
+        managerOnly: true,
       },
     ],
   },
@@ -104,6 +160,7 @@ export const EMP_SIDEBAR_NAVIGATION: EmpSidebarNavGroup[] = [
     managerOnly: true,
     items: [
       {
+        id: "company",
         label: "My Company",
         href: "/empCompanyDashboard",
         icon: Building2,
@@ -116,6 +173,7 @@ export const EMP_SIDEBAR_NAVIGATION: EmpSidebarNavGroup[] = [
     label: "More",
     items: [
       {
+        id: "more",
         label: "More",
         href: "/empMore",
         icon: LayoutGrid,
@@ -161,7 +219,7 @@ export function isEmpNavItemActive(
 ): boolean {
   const tab = searchParams.get("tab");
 
-  // Keep My Company highlighted across Dashboard / Departments / Holidays / Noticeboard.
+  // Keep My Company highlighted across Dashboard / Departments / Holidays.
   if (
     item.moduleId === "company" ||
     item.href === "/empCompany" ||
@@ -186,8 +244,34 @@ export function isEmpNavItemActive(
     return pathname === "/empProfile" && tab === "messaging";
   }
 
-  if (item.href === "/empMyTasks" || item.moduleId === "tasks") {
+  if (item.href === "/empMyTasks" || item.id === "my-tasks") {
     return pathname === "/empMyTasks" || pathname.startsWith("/empMyTasks/");
+  }
+
+  if (item.href === "/task-projects" || item.id === "tasks") {
+    return pathname === "/task-projects" || pathname.startsWith("/task-projects/");
+  }
+
+  if (item.moduleId === "tasks") {
+    return (
+      pathname === "/task-projects" ||
+      pathname.startsWith("/task-projects/") ||
+      pathname === "/empMyTasks" ||
+      pathname.startsWith("/empMyTasks/")
+    );
+  }
+
+  if (item.moduleId === "customers") {
+    return pathname === item.href || pathname.startsWith(`${item.href}/`);
+  }
+
+  if (item.moduleId === "promotions" || item.href === "/empTeam/promotions") {
+    return (
+      pathname === "/empTeam/promotions" ||
+      pathname.startsWith("/empTeam/promotions/") ||
+      pathname === "/employees-promotions" ||
+      pathname.startsWith("/employees-promotions/")
+    );
   }
 
   if (item.moduleId === "team") {
@@ -237,10 +321,6 @@ export function isEmpNavItemActive(
       "/generate-salary",
       "/reimbursement",
       "/salary-advance",
-      "/task-customers",
-      "/task-customer-sites",
-      "/task-projects",
-      "/employee-memo",
       "/attendance-reports",
       "/attendance-logs",
       "/import-attendance",

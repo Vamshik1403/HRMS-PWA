@@ -641,7 +641,11 @@ export function EmpProfileMessagingPanel({
   const [sending, setSending] = useState(false);
   const [attachmentFile, setAttachmentFile] = useState<File | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [isCompact, setIsCompact] = useState(false);
+  const [isCompact, setIsCompact] = useState(() => {
+    if (typeof window === "undefined") return false;
+    if (document.documentElement.getAttribute("data-emp-layout") === "mobile") return true;
+    return window.matchMedia("(max-width: 1023px)").matches;
+  });
   const [showCreateGroup, setShowCreateGroup] = useState(false);
   const [groupNameDraft, setGroupNameDraft] = useState("");
   const [groupMemberIds, setGroupMemberIds] = useState<number[]>([]);
@@ -934,8 +938,10 @@ export function EmpProfileMessagingPanel({
   useEffect(() => {
     const compactMq = window.matchMedia("(max-width: 1023px)");
     const onChange = () => {
-      setIsCompact(compactMq.matches);
-      if (compactMq.matches) setSidebarOpen(true);
+      const forceMobile = document.documentElement.getAttribute("data-emp-layout") === "mobile";
+      const compact = forceMobile || compactMq.matches;
+      setIsCompact(compact);
+      if (compact) setSidebarOpen(true);
     };
     onChange();
     compactMq.addEventListener("change", onChange);
@@ -1636,10 +1642,16 @@ export function EmpProfileMessagingPanel({
     const stillValid = selectedKey != null && visible.some((conversation) => conversation.key === selectedKey);
     if (stillValid) return;
 
+    // Mobile: stay on conversation list until the user taps a profile.
+    if (isCompact) {
+      setSelectedKey(null);
+      return;
+    }
+
     const withMessages =
       visible.find((conversation) => conversation.memoIds.length > 0 || conversation.lastMessageAt) ?? visible[0];
     setSelectedKey(withMessages.key);
-  }, [filteredConversations, selectedKey, employeeId]);
+  }, [filteredConversations, selectedKey, employeeId, isCompact]);
 
   const portalHeader = useMemo(
     () =>
@@ -1870,6 +1882,8 @@ export function EmpProfileMessagingPanel({
     teamMembers.length === 0;
 
   const showSidebar = !isCompact || sidebarOpen;
+  // Mobile: list and chat are mutually exclusive — never side-by-side (prevents right-edge bleed).
+  const showChatPane = !isCompact || !sidebarOpen;
 
   const closeCreateGroup = useCallback(() => {
     setShowCreateGroup(false);
@@ -2036,7 +2050,9 @@ export function EmpProfileMessagingPanel({
         "im-workspace relative flex overflow-hidden rounded-2xl border border-[#EEF2F7] bg-white font-['Inter',sans-serif] text-[#111827] shadow-[0_2px_10px_rgba(15,23,42,0.05)]",
         isAdminVariant
           ? "h-full max-h-full"
-          : "-mx-8 -mb-8 -mt-4 min-h-[calc(100dvh-10rem)]",
+          : isCompact
+            ? "h-full min-h-0 w-full rounded-none border-0 shadow-none"
+            : "h-full min-h-0 w-full",
       )}
     >
       {createGroupModal}
@@ -2046,7 +2062,12 @@ export function EmpProfileMessagingPanel({
         </div>
       ) : null}
       {showSidebar ? (
-        <aside className="flex w-full shrink-0 flex-col border-r border-[#EEF2F7] bg-white md:w-[360px]">
+        <aside
+          className={cn(
+            "flex shrink-0 flex-col border-r border-[#EEF2F7] bg-white",
+            isCompact ? "h-full w-full max-w-full border-r-0" : "h-full w-full md:w-[360px]",
+          )}
+        >
           <div className="border-b border-[#EEF2F7] px-5 py-5">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
@@ -2155,7 +2176,8 @@ export function EmpProfileMessagingPanel({
         </aside>
       ) : null}
 
-      <section className="flex min-w-0 flex-1 flex-col bg-[#F8F9FC]">
+      {showChatPane ? (
+      <section className={cn("flex min-h-0 min-w-0 flex-col bg-[#F8F9FC]", isCompact ? "h-full w-full" : "h-full flex-1")}>
         {selectedConversation ? (
           <>
             <header className="flex h-[72px] items-center justify-between border-b border-[#EEF2F7] bg-white px-4 md:px-5">
@@ -2384,6 +2406,7 @@ export function EmpProfileMessagingPanel({
           </div>
         )}
       </section>
+      ) : null}
     </div>
   );
 }

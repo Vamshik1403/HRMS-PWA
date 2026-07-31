@@ -43,7 +43,12 @@ export function EmpDesktopPage({
   const showInContentHeader = Boolean(title) && !inPortal;
 
   return (
-    <div className={cn("space-y-4 w-full max-w-none animate-fade-in page-content-enter", className)}>
+    <div
+      className={cn(
+        "w-full max-w-none animate-fade-in page-content-enter space-y-4",
+        className,
+      )}
+    >
       {showInContentHeader ? (
         <PageHeader icon={icon} title={title!} description={description} actions={actions} />
       ) : actions ? (

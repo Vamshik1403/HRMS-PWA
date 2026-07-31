@@ -11,7 +11,7 @@ import { EntityDetailHero, EntityDetailLayout } from "../components/app/entity-d
 import { MessageCircle, Plus, AlertTriangle, UserPlus, FileDown, ClipboardList } from "lucide-react";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import { isDesktopManagerFlagSet } from "@/lib/desktopManager";
-import { hasModuleWriteAccess } from "@/lib/companyAccess";
+import { hasModuleWriteAccess, canViewModule } from "@/lib/companyAccess";
 import { toast } from "sonner";
 import { taskFetch } from "../utils/taskApi";
 import { NEXT_TASK_STATUS } from "../utils/taskStatusFlow";
@@ -97,6 +97,11 @@ export default function TaskManagement() {
     user?.role === "COMPANY_ADMIN" ||
     desktopManager ||
     hasModuleWriteAccess("TASKS");
+  const canView =
+    canManage ||
+    user?.role === "SUPERADMIN" ||
+    user?.role === "COMPANY_ADMIN" ||
+    canViewModule("TASKS");
   const table = useClientTable("taskCode");
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
@@ -623,15 +628,19 @@ useAppRefresh(() => {
       cell: (t) => (
         <EntityRowActions
           onView={() => openDetail(t)}
-          onEdit={() => openEdit(t)}
-          onDelete={() => removeTask(t.id)}
+          onEdit={canManage ? () => openEdit(t) : undefined}
+          onDelete={canManage ? () => removeTask(t.id) : undefined}
           extra={[
-            {
-              icon: UserPlus,
-              title: "Assign Employees",
-              onClick: () => openAssign(t),
-              className: "text-violet-600",
-            },
+            ...(canManage
+              ? [
+                  {
+                    icon: UserPlus,
+                    title: "Assign Employees",
+                    onClick: () => openAssign(t),
+                    className: "text-violet-600",
+                  },
+                ]
+              : []),
             {
               icon: MessageCircle,
               title: "Remarks",
@@ -648,10 +657,10 @@ useAppRefresh(() => {
         />
       ),
     },
-  ], []);
+  ], [canManage]);
 
   if (!user) return <div className="p-6"><TaskBoardSkeleton /></div>;
-  if (!canManage) return <div className="p-6 text-gray-500">Access denied. Use My Tasks on mobile for assigned tasks.</div>;
+  if (!canView) return <div className="p-6 text-gray-500">Access denied. You need Tasks module rights to manage tasks here.</div>;
 
   return (
     <div className="space-y-6 w-full max-w-none animate-fade-in page-content-enter">
@@ -662,6 +671,7 @@ useAppRefresh(() => {
             title="Tasks / Projects"
             description="Manage tasks and project assignments"
             actions={
+              canManage ? (
               <Button
                 onClick={() => {
                   closeTaskPagePanels();
@@ -670,6 +680,7 @@ useAppRefresh(() => {
               >
                 <Plus className="w-4 h-4 mr-1" /> Create Task
               </Button>
+              ) : undefined
             }
           />
 

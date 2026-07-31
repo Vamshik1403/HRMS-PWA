@@ -172,7 +172,7 @@ export default function EmpRightsPage() {
   const grantable = employees.filter((e) => !e.isCompanyOwner);
 
   const body = (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-10">
       <div className="max-w-md space-y-2">
         <Label>Employee</Label>
         <Select value={employeeId} onValueChange={setEmployeeId} disabled={loading}>
@@ -248,7 +248,7 @@ export default function EmpRightsPage() {
       ) : null}
 
       {employeeId && !readOnly ? (
-        <div className="flex justify-end">
+        <div className="flex justify-end pt-2 pb-2">
           <Button onClick={save} disabled={saving}>
             {saving ? "Saving…" : "Save permissions"}
           </Button>

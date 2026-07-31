@@ -3,83 +3,55 @@
 import { Suspense } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { EmpProfileWorkspaceTabNav, profileTabHref, resolveProfileWorkspaceTab } from "./desktop/EmpProfileWorkspaceTabNav";
-import { EmpDesktopProfilePanel } from "./desktop/EmpDesktopProfilePanel";
-import { EmpProfileAttendanceView } from "./desktop/EmpProfileAttendanceView";
-import { EmpProfileWorkReportView } from "./desktop/EmpProfileWorkReportView";
-import { EmpLeaveMobile } from "./EmpLeaveMobile";
-import { EmpReimbursementMobile } from "./EmpReimbursementMobile";
-import { EmpWorkspaceDelegation } from "./EmpWorkspaceDelegation";
-import { EmpPayoutContent } from "./EmpPayoutContent";
-import { EmpProfileSalaryAdvancePanel } from "./EmpProfileSalaryAdvancePanel";
-import { EmpHolidayListMobile } from "./EmpHolidayListMobile";
 import { EmpProfileMessagingPanel } from "./EmpProfileMessagingPanel";
+import { EmpMobileSimpleProfile } from "./EmpMobileSimpleProfile";
 import { Icon } from "@iconify/react";
 
 function EmpProfileMobileWorkspaceInner() {
   const searchParams = useSearchParams();
-  const activeTab = resolveProfileWorkspaceTab(searchParams);
+  const tab = searchParams.get("tab");
+  const isMessaging = tab === "messaging";
 
-  const tabs = [
-    { id: "profile", label: "Profile", href: profileTabHref("profile") },
-    { id: "attendance", label: "Attendance", href: profileTabHref("attendance") },
-    { id: "work-report", label: "Work Report", href: profileTabHref("work-report") },
-    { id: "leave", label: "Leave", href: profileTabHref("leave") },
-    { id: "reimbursement", label: "Reimbursement", href: profileTabHref("reimbursement") },
-    { id: "delegation", label: "Delegation", href: profileTabHref("delegation") },
-    { id: "payslips", label: "Payslips", href: profileTabHref("payslips") },
-    { id: "salary-advance", label: "Advances", href: profileTabHref("salary-advance") },
-    { id: "holidays", label: "Holidays", href: profileTabHref("holidays") },
-  ];
-
-  const isMessaging = activeTab === "messaging";
-
-  return (
-    <>
-      <div className={isMessaging ? "pb-8" : "hidden"} aria-hidden={!isMessaging}>
-        <div className="mb-4 px-1">
-          <Link href="/empdashboard" className="text-[14px] font-medium text-[#6D4AFF]">
-            ← Home
+  // Mobile / PWA IM — same WhatsApp-style panel as desktop (compact list ↔ chat).
+  if (isMessaging) {
+    return (
+      <div
+        className="flex min-h-0 flex-col overflow-hidden bg-white"
+        style={{
+          height:
+            "calc(100dvh - env(safe-area-inset-top, 0px) - 56px - env(safe-area-inset-bottom, 0px))",
+        }}
+      >
+        <div className="flex shrink-0 items-center gap-2 border-b border-border px-3 py-2.5">
+          <Link
+            href="/empdashboard"
+            className="inline-flex size-9 items-center justify-center rounded-xl text-muted-foreground active:bg-muted"
+            aria-label="Back to Home"
+          >
+            <Icon icon="solar:arrow-left-linear" className="size-5" />
           </Link>
+          <div className="min-w-0">
+            <h1 className="truncate text-[17px] font-bold text-foreground">Messages</h1>
+            <p className="truncate text-[11px] text-muted-foreground">Internal Messaging</p>
+          </div>
         </div>
-        <EmpProfileMessagingPanel active={isMessaging} />
+        <div className="min-h-0 min-w-0 flex-1 overflow-hidden">
+          <EmpProfileMessagingPanel active />
+        </div>
       </div>
+    );
+  }
 
-      {!isMessaging ? (
-    <div className="px-4 pt-4 pb-8 space-y-4">
-      <div className="flex items-center gap-2">
-        <Link href="/empdashboard" className="text-sm font-medium text-primary">
-          ← Home
-        </Link>
-      </div>
-      <h1 className="text-[22px] font-bold text-gray-900">My Profile</h1>
-      <EmpProfileWorkspaceTabNav tabs={tabs} activeTab={activeTab} />
-
-      {activeTab === "profile" && <EmpDesktopProfilePanel embedded />}
-      {activeTab === "attendance" && <EmpProfileAttendanceView />}
-      {activeTab === "work-report" && <EmpProfileWorkReportView />}
-      {activeTab === "leave" && <EmpLeaveMobile embedded compactBalance />}
-      {activeTab === "reimbursement" && <EmpReimbursementMobile embedded />}
-      {activeTab === "delegation" && <EmpWorkspaceDelegation embedded />}
-      {activeTab === "payslips" && (
-        <Suspense fallback={<p className="text-sm text-muted-foreground">Loading…</p>}>
-          <EmpPayoutContent embedded />
-        </Suspense>
-      )}
-      {activeTab === "salary-advance" && <EmpProfileSalaryAdvancePanel />}
-      {activeTab === "holidays" && <EmpHolidayListMobile embedded />}
-    </div>
-      ) : null}
-    </>
-  );
+  // Mobile / PWA profile is a single simple screen (no desktop tab strip).
+  return <EmpMobileSimpleProfile />;
 }
 
 export function EmpProfileMobileWorkspace() {
   return (
     <Suspense
       fallback={
-        <div className="p-8 flex justify-center">
-          <Icon icon="solar:refresh-bold-duotone" className="w-8 h-8 animate-spin text-blue-400" />
+        <div className="px-4 pt-6 pb-8 flex justify-center py-16">
+          <Icon icon="solar:refresh-bold-duotone" className="w-8 h-8 text-blue-400 animate-spin" />
         </div>
       }
     >

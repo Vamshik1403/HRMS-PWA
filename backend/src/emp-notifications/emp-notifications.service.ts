@@ -719,7 +719,7 @@ export class EmpNotificationsService {
           body,
           emoji,
           at: new Date(at).toISOString(),
-          href: '/empNoticeboard',
+          href: '/empProfile?tab=messaging',
           ...(forReportee
             ? {
                 isTeamItem: true,
