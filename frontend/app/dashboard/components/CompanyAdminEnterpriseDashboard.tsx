@@ -1200,12 +1200,12 @@ export function CompanyAdminEnterpriseDashboard({
                       {item.name}
                     </span>
                   </div>
-                  <div className="flex shrink-0 items-center gap-2.5 font-bold tabular-nums" style={{ color: TEXT }}>
-                    <span className="text-[14px]">{overviewStatsReady ? item.value : "—"}</span>
-                    <span className="w-11 text-right text-[13px] font-semibold" style={{ color: MUTED }}>
-                      {overviewStatsReady ? `${item.percent}%` : "—"}
-                    </span>
-                  </div>
+                  <span
+                    className="shrink-0 pr-3 text-right text-[14px] font-bold tabular-nums"
+                    style={{ color: TEXT }}
+                  >
+                    {overviewStatsReady ? item.value : "—"}
+                  </span>
                 </div>
               ))}
             </div>
