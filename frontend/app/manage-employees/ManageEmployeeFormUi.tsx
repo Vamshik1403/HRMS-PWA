@@ -12,7 +12,7 @@ export const EMPLOYEE_FORM_SECTIONS: FormSectionTab[] = [
   { id: "documents", label: "Documents" },
   { id: "additional", label: "Additional Information" },
   { id: "attendance", label: "Attendance & Selfcare Setup" },
-  { id: "roles&permissions", label: "Roles & Permissions" },
+  { id: "roles&permissions", label: "Rights & Permissions" },
 ];
 
 export function EmployeeFormSectionNav({

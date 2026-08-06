@@ -17,6 +17,7 @@ import { toast } from "sonner";
 import { Download, Loader2, ScrollText } from "lucide-react";
 import { TableBodySkeleton } from "../components/ui/TableBodySkeleton";
 import { authHeaders, getAccessToken } from "@/lib/auth";
+import { isCompanyOwnerFlag, canViewModule } from "@/lib/companyAccess";
 
 const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL || "/backend";
 
@@ -47,6 +48,9 @@ function fmtWhen(iso: string) {
 
 export function AuditLogsManagement() {
   const user = useCurrentUser();
+  const canAccess =
+    user?.role === "SUPERADMIN" ||
+    (user?.role === "EMPLOYEE" && (isCompanyOwnerFlag() || canViewModule("SETTINGS")));
   const [items, setItems] = useState<AuditRow[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -95,8 +99,8 @@ export function AuditLogsManagement() {
   }, [page, moduleFilter, actionFilter, usernameFilter, fromDate, toDate]);
 
   useEffect(() => {
-    if (user?.role === "SUPERADMIN") void load();
-  }, [user, load]);
+    if (canAccess) void load();
+  }, [canAccess, load]);
 
   const exportCsv = async () => {
     try {
@@ -123,9 +127,9 @@ export function AuditLogsManagement() {
     }
   };
 
-  if (user?.role !== "SUPERADMIN") {
+  if (!canAccess) {
     return (
-      <div className="p-6 text-gray-500 text-sm">Only Super Admin can view audit logs.</div>
+      <div className="p-6 text-gray-500 text-sm">You do not have access to system logs.</div>
     );
   }
 

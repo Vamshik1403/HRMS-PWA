@@ -260,6 +260,29 @@ export class SubscriptionService {
     });
   }
 
+  /**
+   * Returns true if the company has at least one subscription assigned and its
+   * most recent subscription has expired (past endDate). Companies with no
+   * subscription assigned at all are treated as not-expired (unrestricted),
+   * since subscription enforcement only applies once a plan has been assigned.
+   */
+  async isCompanySubscriptionExpired(companyID: number): Promise<boolean> {
+    if (!companyID) return false;
+
+    const latest = await this.prisma.companySubscription.findFirst({
+      where: { companyID },
+      orderBy: { endDate: 'desc' },
+    });
+
+    if (!latest) return false;
+
+    if (latest.status === SubscriptionStatus.EXPIRED || latest.status === SubscriptionStatus.CANCELLED) {
+      return true;
+    }
+
+    return new Date(latest.endDate).getTime() < Date.now();
+  }
+
   async autoExpireSubscriptions() {
     const now = new Date();
 

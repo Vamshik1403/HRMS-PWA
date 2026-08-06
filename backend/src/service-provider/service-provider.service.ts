@@ -7,6 +7,36 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CreateServiceProviderDto } from './dto/create-service-provider.dto';
 import { UpdateServiceProviderDto } from './dto/update-service-provider.dto';
 
+const SP_FIELDS = [
+  'companyName',
+  'companyAddress',
+  'country',
+  'state',
+  'city',
+  'pincode',
+  'countryCode',
+  'gstNo',
+  'contactNo',
+  'emailAdd',
+  'website',
+  'companyLogoUrl',
+] as const;
+
+type SpField = (typeof SP_FIELDS)[number];
+
+function pickServiceProviderData(
+  data: CreateServiceProviderDto | UpdateServiceProviderDto,
+): Partial<Record<SpField, string | undefined>> {
+  const out: Partial<Record<SpField, string | undefined>> = {};
+  for (const key of SP_FIELDS) {
+    if (Object.prototype.hasOwnProperty.call(data, key)) {
+      const value = (data as Record<string, unknown>)[key];
+      out[key] = value == null ? undefined : String(value);
+    }
+  }
+  return out;
+}
+
 @Injectable()
 export class ServiceProviderService {
   constructor(private prisma: PrismaService) {}
@@ -18,7 +48,9 @@ export class ServiceProviderService {
         'Only one Service Provider is allowed. Edit the existing record instead.',
       );
     }
-    return this.prisma.serviceProvider.create({ data });
+    return this.prisma.serviceProvider.create({
+      data: pickServiceProviderData(data),
+    });
   }
 
   findAll() {
@@ -32,7 +64,7 @@ export class ServiceProviderService {
   update(id: number, data: UpdateServiceProviderDto) {
     return this.prisma.serviceProvider.update({
       where: { id },
-      data,
+      data: pickServiceProviderData(data),
     });
   }
 

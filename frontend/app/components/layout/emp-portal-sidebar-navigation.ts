@@ -5,17 +5,34 @@ import {
   CalendarDays,
   ClipboardCheck,
   Home,
-  LayoutGrid,
   ListTodo,
   MapPin,
   MessageSquare,
   ArrowLeftRight,
   UserCircle,
   Users,
+  RotateCcw,
+  CalendarClock,
+  UserMinus,
+  FileText,
+  Wallet,
+  Coins,
+  Gift,
+  Briefcase,
+  BadgeDollarSign,
+  Truck,
+  BarChart3,
+  CalendarRange,
+  Receipt,
+  ScrollText,
+  Sliders,
+  ClipboardList,
+  History,
+  DollarSign,
   type LucideIcon,
 } from "lucide-react";
 import type { EmpModuleId } from "./emp-portal-workspaces";
-import { canViewModule, hasCompanyAccessFlag } from "@/lib/companyAccess";
+import { canViewModule, hasCompanyAccessFlag, isCompanyOwnerFlag } from "@/lib/companyAccess";
 import { TASK_MANAGEMENT_ENABLED } from "@/app/config/featureFlags";
 
 export interface EmpSidebarNavItem {
@@ -34,6 +51,8 @@ export interface EmpSidebarNavItem {
 export interface EmpSidebarNavGroup {
   label: string;
   managerOnly?: boolean;
+  /** Optional group-level visibility gate (e.g. requires any company access). */
+  show?: () => boolean;
   items: EmpSidebarNavItem[];
 }
 
@@ -45,6 +64,19 @@ function canAccessTasksModule(): boolean {
 
 function canAccessMyTasksOnly(): boolean {
   return TASK_MANAGEMENT_ENABLED && !canViewModule("TASKS");
+}
+
+/** Any admin/company-scoped group is only relevant once the login has some company access. */
+function hasAnyCompanyAccess(): boolean {
+  return hasCompanyAccessFlag();
+}
+
+function canModule(moduleKey: string): () => boolean {
+  return () => canViewModule(moduleKey);
+}
+
+function canRights(): boolean {
+  return isCompanyOwnerFlag() || canViewModule("RIGHTS");
 }
 
 export const EMP_SIDEBAR_NAVIGATION: EmpSidebarNavGroup[] = [
@@ -156,6 +188,162 @@ export const EMP_SIDEBAR_NAVIGATION: EmpSidebarNavGroup[] = [
     ],
   },
   {
+    label: "Employee Management",
+    show: hasAnyCompanyAccess,
+    items: [
+      {
+        id: "admin-employees",
+        label: "Employees",
+        href: "/manage-employees",
+        icon: Users,
+        show: canModule("EMPLOYEES"),
+      },
+      {
+        id: "admin-regularisation",
+        label: "Regularisation",
+        href: "/attendance-regularisation",
+        icon: RotateCcw,
+        show: canModule("REGULARISATION"),
+      },
+      {
+        id: "admin-roster",
+        label: "Workshift Roster",
+        href: "/roster",
+        icon: CalendarClock,
+        show: canModule("ROSTER"),
+      },
+      {
+        id: "admin-offboarding",
+        label: "Offboarding",
+        href: "/termination",
+        icon: UserMinus,
+        show: canModule("OFFBOARDING"),
+      },
+    ],
+  },
+  {
+    label: "Leave Management",
+    show: hasAnyCompanyAccess,
+    items: [
+      {
+        id: "admin-leave-applications",
+        label: "Leave Applications",
+        href: "/leave-applications",
+        icon: FileText,
+        show: canModule("LEAVE_APPLICATIONS"),
+      },
+    ],
+  },
+  {
+    label: "Payroll Management",
+    show: hasAnyCompanyAccess,
+    items: [
+      {
+        id: "admin-run-payroll",
+        label: "Payroll",
+        href: "/generate-salary",
+        icon: Wallet,
+        show: canModule("PAYROLL"),
+      },
+      {
+        id: "admin-salary-advance",
+        label: "Salary Advances",
+        href: "/salary-advance",
+        icon: Coins,
+        show: canModule("SALARY_ADVANCES"),
+      },
+      {
+        id: "admin-reimbursement",
+        label: "Reimbursements",
+        href: "/reimbursement",
+        icon: BadgeDollarSign,
+        show: canModule("REIMBURSEMENTS"),
+      },
+      {
+        id: "admin-bonus-allocations",
+        label: "Bonus Allocations",
+        href: "/bonus-allocations",
+        icon: Gift,
+        show: canModule("PAYROLL"),
+      },
+    ],
+  },
+  {
+    label: "Contract Management",
+    show: hasAnyCompanyAccess,
+    items: [
+      {
+        id: "admin-contract-employee",
+        label: "Contract Employee",
+        href: "/contract-employee",
+        icon: Briefcase,
+        show: canModule("CONTRACTORS"),
+      },
+      {
+        id: "admin-contractors",
+        label: "Contractors",
+        href: "/contractors",
+        icon: Truck,
+        show: canModule("CONTRACTORS"),
+      },
+      {
+        id: "admin-contractor-rates",
+        label: "Contractor Rates",
+        href: "/contractor-rates",
+        icon: DollarSign,
+        show: canModule("CONTRACTOR_RATES"),
+      },
+      {
+        id: "admin-contractor-payout",
+        label: "Contractor Payout",
+        href: "/contractor-payout",
+        icon: BadgeDollarSign,
+        show: canModule("CONTRACTORS"),
+      },
+    ],
+  },
+  {
+    label: "Reports",
+    show: hasAnyCompanyAccess,
+    items: [
+      {
+        id: "admin-attendance-reports",
+        label: "Attendance Reports",
+        href: "/attendance-reports",
+        icon: BarChart3,
+        show: canModule("REPORTS"),
+      },
+      {
+        id: "admin-leave-reports",
+        label: "Leave Reports",
+        href: "/leave-reports",
+        icon: CalendarRange,
+        show: canModule("REPORTS"),
+      },
+      {
+        id: "admin-payroll-reports",
+        label: "Payroll Reports",
+        href: "/payroll-reports",
+        icon: Receipt,
+        show: canModule("REPORTS"),
+      },
+      {
+        id: "admin-statutory-reports",
+        label: "Statutory Reports & Challans",
+        href: "/statutory-reports",
+        icon: ScrollText,
+        show: canModule("REPORTS"),
+      },
+      {
+        id: "admin-contractor-reports",
+        label: "Contractors Reports",
+        href: "/contractor-reports",
+        icon: ClipboardList,
+        show: canModule("REPORTS"),
+      },
+    ],
+  },
+  {
     label: "My Company",
     managerOnly: true,
     items: [
@@ -170,14 +358,42 @@ export const EMP_SIDEBAR_NAVIGATION: EmpSidebarNavGroup[] = [
     ],
   },
   {
-    label: "More",
+    label: "Administration",
+    show: hasAnyCompanyAccess,
     items: [
       {
-        id: "more",
-        label: "More",
-        href: "/empMore",
-        icon: LayoutGrid,
-        moduleId: "more",
+        id: "admin-company-setup",
+        label: "Company Setup",
+        href: "/company-setup",
+        icon: Sliders,
+        show: () =>
+          isCompanyOwnerFlag() ||
+          ["EMPLOYEES", "BRANCHES", "DEPARTMENTS", "DESIGNATIONS", "DEVICES", "SETTINGS", "IMPORT_ATTENDANCE"].some((k) =>
+            canViewModule(k),
+          ),
+      },
+      {
+        id: "admin-policy-setup",
+        label: "Policy Setup",
+        href: "/policy-setup",
+        icon: ClipboardList,
+        show: () =>
+          isCompanyOwnerFlag() ||
+          ["WORK_SHIFTS", "ATTENDANCE_POLICY", "HOLIDAYS", "LEAVE_POLICY"].some((k) => canViewModule(k)),
+      },
+      {
+        id: "admin-payroll-setup",
+        label: "Payroll Setup",
+        href: "/payroll-setup",
+        icon: Wallet,
+        show: () => isCompanyOwnerFlag() || canViewModule("PAYROLL"),
+      },
+      {
+        id: "admin-system-logs",
+        label: "System Logs",
+        href: "/audit-logs",
+        icon: History,
+        show: () => isCompanyOwnerFlag() || canViewModule("SETTINGS"),
       },
     ],
   },
@@ -201,6 +417,7 @@ export function filterEmpSidebarNavigation(isManager: boolean): EmpSidebarNavGro
   const hasAccess = hasCompanyAccessFlag();
   return EMP_SIDEBAR_NAVIGATION.map((group) => {
     if (group.managerOnly && !isManager) return { ...group, items: [] };
+    if (group.show && !group.show()) return { ...group, items: [] };
     return {
       ...group,
       items: group.items.filter((item) => {
@@ -291,43 +508,9 @@ export function isEmpNavItemActive(
     return true;
   }
 
-  // Admin CRUD pages opened from More — keep More highlighted for company operators.
+  // Remaining admin pages not yet promoted to their own sidebar item — keep More highlighted.
   if (item.href === "/empMore" && hasCompanyAccessFlag()) {
-    const adminPrefixes = [
-      "/manage-employees",
-      "/termination",
-      "/branches",
-      "/departments",
-      "/designations",
-      "/devices",
-      "/contractors",
-      "/contractor-rates",
-      "/contractor-payout",
-      "/work-shifts",
-      "/attendance-policy",
-      "/roster",
-      "/attendance-regularisation",
-      "/manage-holidays",
-      "/public-holiday",
-      "/leave-policy",
-      "/leave-applications",
-      "/privileged-leave",
-      "/monthly-salary-cycle",
-      "/salary-allowances",
-      "/salary-deductions",
-      "/monthly-pay-grade",
-      "/bonus-setup",
-      "/bonus-allocations",
-      "/generate-salary",
-      "/reimbursement",
-      "/salary-advance",
-      "/attendance-reports",
-      "/attendance-logs",
-      "/import-attendance",
-      "/system-settings",
-      "/new-joiners",
-      "/empRights",
-    ];
+    const adminPrefixes = ["/attendance-logs", "/new-joiners"];
     if (adminPrefixes.some((p) => pathname === p || pathname.startsWith(`${p}/`))) {
       return true;
     }

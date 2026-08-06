@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { ForbiddenException, Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import type { Request } from 'express';
 import { UsersService } from '../users/users.service';
@@ -7,6 +7,9 @@ import { AuditLogService } from '../audit-log/audit-log.service';
 import * as bcrypt from 'bcrypt';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
+import { SubscriptionStatus } from '@prisma/client';
+
+const SUBSCRIPTION_EXEMPT_ROLES = ['SUPERADMIN', 'SERVICE_PROVIDER'];
 
 @Injectable()
 export class AuthService {
@@ -114,6 +117,20 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
+    // Block login for companies whose subscription has expired.
+    // SuperAdmin / Service Provider accounts are exempt.
+    const companyIDForCheck =
+      userType === 'user' ? user.companyID : user.companyID;
+    const roleForCheck = userType === 'user' ? user.role : 'EMPLOYEE';
+    if (!SUBSCRIPTION_EXEMPT_ROLES.includes(roleForCheck) && companyIDForCheck) {
+      try {
+        await this.assertCompanySubscriptionActive(companyIDForCheck);
+      } catch (err) {
+        await logFailed('Subscription expired');
+        throw err;
+      }
+    }
+
     // Generate JWT payload based on user type
     let payload: any;
     let userData: any;
@@ -123,7 +140,8 @@ export class AuthService {
         sub: user.id, 
         username: user.username, 
         role: user.role,
-        type: 'user'
+        type: 'user',
+        companyID: user.companyID ?? undefined,
       };
       userData = {
         id: user.id,
@@ -221,6 +239,31 @@ export class AuthService {
       module: 'AUTH',
     });
     return { ok: true };
+  }
+
+  /**
+   * Throws ForbiddenException if the given company's most recent subscription
+   * has passed its end date. SuperAdmin / Service Provider logins never call
+   * this (they have no companyID / are exempt by role).
+   */
+  async assertCompanySubscriptionActive(companyID?: number | null) {
+    if (!companyID) return;
+
+    const latest = await this.prisma.companySubscription.findFirst({
+      where: { companyID },
+      orderBy: { endDate: 'desc' },
+    });
+
+    if (!latest) return;
+
+    const expired =
+      latest.status === SubscriptionStatus.EXPIRED ||
+      latest.status === SubscriptionStatus.CANCELLED ||
+      new Date(latest.endDate).getTime() < Date.now();
+
+    if (expired) {
+      throw new ForbiddenException('SUBSCRIPTION_EXPIRED');
+    }
   }
 
   // Optional: Method to get user profile from token

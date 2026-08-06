@@ -464,7 +464,6 @@ const approvers =
                   designation: true,
                   companyID: true,
                   branchesID: true,
-                  departmentID: true,
                 },
               },
             },
@@ -707,7 +706,6 @@ private conditionMatches(
     designationID: number;
 
     designation: {
-      departmentID: number | null;
       branchesID: number | null;
     };
   },

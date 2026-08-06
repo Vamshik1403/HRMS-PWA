@@ -199,6 +199,7 @@ model Company {
   SignatureUrl                   String?                   @db.VarChar
   companyType                    String?                   @db.VarChar
   legalEntityType                String?                   @db.VarChar
+  defaultOwnerTitle              String?                   @db.VarChar
   noticePeriodDaysForResignation String?                   @db.VarChar
   noticePeriodDaysForTermination String?                   @db.VarChar
   pwaShowLeaveBalance            Boolean                   @default(true)
@@ -407,7 +408,6 @@ model Departments {
   branches                                                            Branches?                   @relation(fields: [branchesID], references: [id], onDelete: NoAction, onUpdate: NoAction)
   company                                                             Company?                    @relation(fields: [companyID], references: [id], onDelete: NoAction, onUpdate: NoAction)
   serviceProvider                                                     ServiceProvider?            @relation(fields: [serviceProviderID], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  designations                                                        Designations[]
   empCurrentPosition                                                  EmpCurrentPosition[]
   empPromotion                                                        EmpPromotion[]
   manageEmployees                                                     ManageEmployee[]            @relation("EmployeeDepartment")
@@ -428,7 +428,6 @@ model Designations {
   companyID                                                             Int?
   branchesID                                                            Int?
   designation                                                           String?                     @db.VarChar
-  departmentID                                                          Int?
   isManager                                                             Boolean?                    @default(false)
   maxHoursPerDay                                                        String?                     @db.VarChar
   nightShiftEligibility                                                 String?                     @db.VarChar
@@ -439,7 +438,6 @@ model Designations {
   otApplicable                                                          String?                     @db.VarChar
   branches                                                              Branches?                   @relation(fields: [branchesID], references: [id], onDelete: NoAction, onUpdate: NoAction)
   company                                                               Company?                    @relation(fields: [companyID], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  departments                                                           Departments?                @relation(fields: [departmentID], references: [id], onDelete: NoAction, onUpdate: NoAction)
   serviceProvider                                                       ServiceProvider?            @relation(fields: [serviceProviderID], references: [id], onDelete: NoAction, onUpdate: NoAction)
   empCurrentPosition                                                    EmpCurrentPosition[]
   empDesignation                                                        EmpDesignation[]            @relation("EmpDesignationLink")
@@ -765,11 +763,13 @@ model ManageEmployee {
   employeeID                         String?                             @db.VarChar
   joiningDate                        String?                             @db.VarChar
   contractorID                       Int?
+  salaryPayoutTo                     String?                             @db.VarChar
   businessPhoneNo                    String?                             @db.VarChar
   businessEmail                      String?                             @db.VarChar
   personalPhoneNo                    String?                             @db.VarChar
   personalEmail                      String?                             @db.VarChar
   emergancyContact                   String?                             @db.VarChar
+  emergencyContacts                  Json?
   presentAddress                     String?                             @db.VarChar
   permenantAddress                   String?                             @db.VarChar
   employeePhotoUrl                   String?                             @db.VarChar
@@ -2396,6 +2396,7 @@ model EmailTemplate {
 model AuditLog {
   id            Int      @id @default(autoincrement())
   userId        Int?
+  companyID     Int?
   username      String?  @db.VarChar(255)
   employeeName  String?  @db.VarChar(255)
   userRole      String?  @db.VarChar(64)
@@ -2419,6 +2420,7 @@ model AuditLog {
   @@index([userId, createdAt])
   @@index([action, createdAt])
   @@index([username, createdAt])
+  @@index([companyID, createdAt])
   @@index([createdAt])
 }
 

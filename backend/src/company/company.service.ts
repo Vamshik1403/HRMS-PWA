@@ -53,6 +53,42 @@ export class CompanyService {
     });
   }
 
+  /**
+   * Employee ID prefix from the company name: first word of the company
+   * name, up to 3 characters (e.g. "Electrohelps Pvt Ltd" -> "Ele",
+   * "3s Infocom" -> "3s" since the first word is only 2 characters long).
+   */
+  private employeeIdPrefixFromCompanyName(companyName?: string | null): string {
+    const firstWord = (companyName || '').trim().split(/\s+/)[0] || 'EMP';
+    return firstWord.slice(0, 3);
+  }
+
+  private async generateNextEmployeeCode(
+    companyId: number,
+    companyName?: string | null,
+  ): Promise<string> {
+    const prefix = this.employeeIdPrefixFromCompanyName(companyName);
+
+    const existing = await this.prisma.manageEmployee.findMany({
+      where: {
+        companyID: companyId,
+        employeeID: { startsWith: prefix },
+      },
+      select: { employeeID: true },
+    });
+
+    let maxSeq = 0;
+    for (const row of existing) {
+      const match = String(row.employeeID || '').slice(prefix.length).match(/^\d+/);
+      if (match) {
+        const num = parseInt(match[0], 10);
+        if (num > maxSeq) maxSeq = num;
+      }
+    }
+
+    return `${prefix}${String(maxSeq + 1).padStart(3, '0')}`;
+  }
+
   async createOwner(companyId: number, dto: CreateCompanyOwnerDto) {
     const company = await this.prisma.company.findUnique({
       where: { id: companyId },
@@ -60,6 +96,7 @@ export class CompanyService {
         id: true,
         companyName: true,
         legalEntityType: true,
+        defaultOwnerTitle: true,
         serviceProviderID: true,
       },
     });
@@ -76,10 +113,12 @@ export class CompanyService {
     });
     if (existingUser) throw new ConflictException('Username already exists');
 
-    const ownerTitle = ownerTitleForLegalEntity(company.legalEntityType);
+    const ownerTitle =
+      (company.defaultOwnerTitle || '').trim() ||
+      ownerTitleForLegalEntity(company.legalEntityType);
     const employeeCode =
       (dto.employeeCode || '').trim() ||
-      `OWN-${companyId}-${Date.now().toString().slice(-6)}`;
+      (await this.generateNextEmployeeCode(companyId, company.companyName));
 
     const codeTaken = await this.prisma.manageEmployee.findFirst({
       where: {

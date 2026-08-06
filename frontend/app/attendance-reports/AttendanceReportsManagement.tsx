@@ -11,6 +11,7 @@ import * as XLSX from "xlsx-js-style";
 import { formatDevicePunchForDisplay } from "../utils/devicePunchTime";
 import { formatWorkedDuration } from "../utils/attendanceDuration";
 import { getSidebarContext } from "@/app/utils/sidebarContext";
+import { canViewModule } from "@/lib/companyAccess";
 
 type ReportMode = "actual" | "factual";
 
@@ -990,8 +991,10 @@ export function AttendanceReportsManagement({ mode = "actual" }: { mode?: Report
   const canGenerateReports = !user
     ? true
     : isFactualMode
-      ? ["SUPERADMIN", "COMPANY_ADMIN", "BRANCH_ADMIN", "ADMIN"].includes(user.role)
-      : ["SUPERADMIN", "COMPANY_ADMIN", "BRANCH_ADMIN"].includes(user.role);
+      ? ["SUPERADMIN", "COMPANY_ADMIN", "BRANCH_ADMIN", "ADMIN"].includes(user.role) ||
+        canViewModule("REPORTS")
+      : ["SUPERADMIN", "COMPANY_ADMIN", "BRANCH_ADMIN"].includes(user.role) ||
+        canViewModule("REPORTS");
 
   const getActiveReportContext = () => {
     const ctx = getSidebarContext();

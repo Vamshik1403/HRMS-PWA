@@ -14,9 +14,6 @@ export class CreateDesignationsDto {
   branchesID?: number;
 
   @IsOptional()
-  @IsInt()  departmentID?: number;
-
-  @IsOptional()
   @IsString()
   designation?: string;
   

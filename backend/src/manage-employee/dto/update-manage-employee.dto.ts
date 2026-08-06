@@ -99,6 +99,7 @@ export class UpdateManageEmployeeDto {
   @IsOptional() @IsInt() companyID?: number | null;
   @IsOptional() @IsInt() branchesID?: number | null;
   @IsOptional() @IsInt() contractorID?: number | null;
+  @IsOptional() @IsString() salaryPayoutTo?: string | null;
 
   // Scalars
   @IsOptional() @IsString() employeeFirstName?: string | null;
@@ -112,6 +113,7 @@ export class UpdateManageEmployeeDto {
   @IsOptional() @IsString() personalPhoneNo?: string | null;
   @IsOptional() @IsEmail() personalEmail?: string | null;
   @IsOptional() @IsString() emergancyContact?: string | null;
+  @IsOptional() @IsArray() emergencyContacts?: { name?: string; relation?: string; contactNo?: string }[];
 
   @IsOptional() @IsString() presentAddress?: string | null;
   @IsOptional() @IsString() permenantAddress?: string | null;

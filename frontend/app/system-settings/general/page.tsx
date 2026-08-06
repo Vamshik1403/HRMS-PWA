@@ -5,6 +5,7 @@ import { useCurrentUser } from "../../hooks/useCurrentUser";
 import { getSidebarContext } from "../../utils/sidebarContext";
 import { NoticeBanner } from "../../components/ui/notice-banner";
 import { toast } from "sonner";
+import { isCompanyOwnerFlag, canViewModule } from "@/lib/companyAccess";
 
 const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL || "/backend";
 
@@ -15,9 +16,18 @@ export default function GeneralSettingsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
+  const canAccess =
+    user?.role === "SUPERADMIN" ||
+    user?.role === "COMPANY_ADMIN" ||
+    (user?.role === "EMPLOYEE" && (isCompanyOwnerFlag() || canViewModule("SETTINGS")));
+
   const resolveCompanyId = useCallback(async () => {
     const ctx = getSidebarContext();
     if (ctx?.companyID) return ctx.companyID;
+
+    if (user?.role === "EMPLOYEE" && user?.companyID) {
+      return user.companyID;
+    }
 
     if (user?.role === "COMPANY_ADMIN" || user?.role === "ADMIN") {
       const res = await fetch(`${BACKEND}/users`, { cache: "no-store" });
@@ -31,7 +41,7 @@ export default function GeneralSettingsPage() {
 
   useEffect(() => {
     if (!user) return;
-    if (user.role !== "SUPERADMIN" && user.role !== "COMPANY_ADMIN") {
+    if (!canAccess) {
       setLoading(false);
       return;
     }
@@ -82,7 +92,7 @@ export default function GeneralSettingsPage() {
     }
   };
 
-  if (user && user.role !== "SUPERADMIN" && user.role !== "COMPANY_ADMIN") {
+  if (user && !canAccess) {
     return (
       <div className="p-8 text-center text-gray-500">Access restricted.</div>
     );

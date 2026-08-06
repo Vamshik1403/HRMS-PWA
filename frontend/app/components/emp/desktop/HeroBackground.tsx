@@ -316,12 +316,6 @@ const PERIOD_GREETING: Record<HeroPeriod, string> = {
   night: "Good Night,",
 };
 
-function firstNameFrom(fullName: string): string {
-  const trimmed = fullName.trim();
-  if (!trimmed) return "there";
-  return trimmed.split(/\s+/)[0] ?? trimmed;
-}
-
 export function useHeroCopy(empFullName: string) {
   const [now, setNow] = useState(() => new Date());
 
@@ -343,10 +337,10 @@ export function useHeroCopy(empFullName: string) {
 
   return useMemo(() => {
     const period = resolveHeroScene(now).period;
-    const first = firstNameFrom(empFullName);
+    const name = empFullName.trim() || "there";
     return {
       greeting: PERIOD_GREETING[period],
-      headline: `Welcome back, ${first}.`,
+      headline: name,
       period,
     };
   }, [empFullName, now]);

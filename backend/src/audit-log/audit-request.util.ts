@@ -6,6 +6,7 @@ export type AuditActor = {
   username?: string | null;
   employeeName?: string | null;
   userRole?: string | null;
+  companyID?: number | null;
 };
 
 export function resolveClientIp(req?: Request | null): string | null {
@@ -47,7 +48,9 @@ export function actorFromJwtUser(user?: Record<string, unknown> | null): AuditAc
   const userRole = typeof user.role === 'string' ? user.role : null;
   const sub = user.sub != null ? Number(user.sub) : null;
   const userId = Number.isFinite(sub) ? sub : null;
-  return { userId, username, userRole };
+  const companyIDRaw = user.companyID != null ? Number(user.companyID) : null;
+  const companyID = Number.isFinite(companyIDRaw) ? companyIDRaw : null;
+  return { userId, username, userRole, companyID };
 }
 
 export function safeJson(data: unknown): string | null {

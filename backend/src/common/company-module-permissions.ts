@@ -28,14 +28,32 @@ export const COMPANY_MODULE_KEYS = [
 export type CompanyModuleKey = (typeof COMPANY_MODULE_KEYS)[number];
 
 export const LEGAL_ENTITY_TYPES = [
-  'PRIVATE_LIMITED',
-  'PUBLIC_LIMITED',
   'SOLE_PROPRIETORSHIP',
   'PARTNERSHIP',
   'LLP',
   'OPC',
-  'OTHER',
+  'PRIVATE_LIMITED',
+  'PUBLIC_LIMITED',
+  'SECTION_8',
+  'TRUST',
+  'SOCIETY',
+  'GOVERNMENT_PSU',
+  'COOPERATIVE_SOCIETY',
 ] as const;
+
+export const USER_TYPE_OPTIONS_BY_ENTITY: Record<string, string[]> = {
+  SOLE_PROPRIETORSHIP: ['Proprietor', 'Owner', 'Founder', 'Company Administrator', 'HR Head'],
+  PARTNERSHIP: ['Partner', 'Managing Partner', 'Company Administrator', 'HR Head'],
+  LLP: ['Designated Partner', 'Partner', 'Managing Partner', 'Company Administrator', 'HR Head'],
+  OPC: ['Director', 'Owner', 'Founder', 'Company Administrator', 'HR Head'],
+  PRIVATE_LIMITED: ['Director', 'Managing Director', 'CEO', 'Founder', 'Company Administrator', 'HR Head'],
+  PUBLIC_LIMITED: ['Director', 'Chairman', 'Managing Director', 'CEO', 'Company Secretary', 'HR Head'],
+  SECTION_8: ['Director', 'CEO', 'Chairman', 'Managing Trustee', 'Secretary', 'Executive Director', 'Company Administrator', 'HR Head'],
+  TRUST: ['Managing Trustee', 'Trustee', 'Secretary', 'Company Administrator', 'HR Head'],
+  SOCIETY: ['Secretary', 'President', 'Treasurer', 'Company Administrator'],
+  GOVERNMENT_PSU: ['HR Officer', 'Establishment Officer', 'Company Administrator'],
+  COOPERATIVE_SOCIETY: ['Secretary', 'President', 'Treasurer', 'Company Administrator'],
+};
 
 export type ModulePermissionDto = {
   moduleKey: string;
@@ -46,21 +64,8 @@ export type ModulePermissionDto = {
 };
 
 export function ownerTitleForLegalEntity(legalEntityType?: string | null): string {
-  switch ((legalEntityType || '').toUpperCase()) {
-    case 'SOLE_PROPRIETORSHIP':
-      return 'Proprietor';
-    case 'PARTNERSHIP':
-      return 'Partner';
-    case 'LLP':
-      return 'Designated Partner';
-    case 'PRIVATE_LIMITED':
-    case 'PUBLIC_LIMITED':
-      return 'CEO';
-    case 'OPC':
-      return 'Director';
-    default:
-      return 'Owner';
-  }
+  const options = USER_TYPE_OPTIONS_BY_ENTITY[(legalEntityType || '').toUpperCase()];
+  return options?.[0] || 'Owner';
 }
 
 export function fullOwnerPermissions(): ModulePermissionDto[] {

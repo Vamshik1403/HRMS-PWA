@@ -126,6 +126,13 @@ export default function ProfilePage() {
       return;
     }
 
+    if (u.role === "SUPERADMIN") {
+      setProfileType("COMPANY");
+      setRecordId(null);
+      setLoading(false);
+      return;
+    }
+
     if (u.role === "SERVICE_PROVIDER") {
       if (!u.serviceProviderID) {
         setLoading(false);
@@ -350,6 +357,17 @@ export default function ProfilePage() {
 
   if (loading) {
     return <div className="p-8 text-muted-foreground">Loading profile...</div>;
+  }
+
+  if (user?.role === "SUPERADMIN") {
+    return (
+      <div className="rounded-xl border bg-card p-8">
+        <h1 className="text-2xl font-bold">Profile</h1>
+        <p className="text-muted-foreground mt-2">
+          SuperAdmin is a universal account and is not linked to any company or branch.
+        </p>
+      </div>
+    );
   }
 
   if (!recordId) {

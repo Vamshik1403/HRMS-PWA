@@ -152,29 +152,45 @@ export function moduleKeyForPath(pathname: string): string | null {
 }
 
 export const LEGAL_ENTITY_OPTIONS = [
-  { value: "PRIVATE_LIMITED", label: "Private Limited" },
-  { value: "PUBLIC_LIMITED", label: "Public Limited" },
   { value: "SOLE_PROPRIETORSHIP", label: "Sole Proprietorship" },
-  { value: "PARTNERSHIP", label: "Partnership" },
+  { value: "PARTNERSHIP", label: "Partnership Firm" },
   { value: "LLP", label: "LLP" },
   { value: "OPC", label: "OPC" },
-  { value: "OTHER", label: "Other" },
+  { value: "PRIVATE_LIMITED", label: "Private Limited" },
+  { value: "PUBLIC_LIMITED", label: "Public Limited" },
+  { value: "SECTION_8", label: "Section 8 Company" },
+  { value: "TRUST", label: "Trust" },
+  { value: "SOCIETY", label: "Society" },
+  { value: "GOVERNMENT_PSU", label: "Government / PSU" },
+  { value: "COOPERATIVE_SOCIETY", label: "Cooperative Society" },
 ] as const;
 
+/**
+ * User Type / Employee Type options shown after selecting a Company Type
+ * in the tenant form. The first option in each list is the default.
+ */
+export const USER_TYPE_OPTIONS_BY_ENTITY: Record<string, string[]> = {
+  SOLE_PROPRIETORSHIP: ["Proprietor", "Owner", "Founder", "Company Administrator", "HR Head"],
+  PARTNERSHIP: ["Partner", "Managing Partner", "Company Administrator", "HR Head"],
+  LLP: ["Designated Partner", "Partner", "Managing Partner", "Company Administrator", "HR Head"],
+  OPC: ["Director", "Owner", "Founder", "Company Administrator", "HR Head"],
+  PRIVATE_LIMITED: ["Director", "Managing Director", "CEO", "Founder", "Company Administrator", "HR Head"],
+  PUBLIC_LIMITED: ["Director", "Chairman", "Managing Director", "CEO", "Company Secretary", "HR Head"],
+  SECTION_8: ["Director", "CEO", "Chairman", "Managing Trustee", "Secretary", "Executive Director", "Company Administrator", "HR Head"],
+  TRUST: ["Managing Trustee", "Trustee", "Secretary", "Company Administrator", "HR Head"],
+  SOCIETY: ["Secretary", "President", "Treasurer", "Company Administrator"],
+  GOVERNMENT_PSU: ["HR Officer", "Establishment Officer", "Company Administrator"],
+  COOPERATIVE_SOCIETY: ["Secretary", "President", "Treasurer", "Company Administrator"],
+};
+
+export function userTypeOptionsForEntity(legalEntityType?: string | null): string[] {
+  return USER_TYPE_OPTIONS_BY_ENTITY[(legalEntityType || "").toUpperCase()] || [];
+}
+
+export function defaultUserTypeForEntity(legalEntityType?: string | null): string {
+  return userTypeOptionsForEntity(legalEntityType)[0] || "Owner";
+}
+
 export function ownerTitleForLegalEntity(legalEntityType?: string | null): string {
-  switch ((legalEntityType || "").toUpperCase()) {
-    case "SOLE_PROPRIETORSHIP":
-      return "Proprietor";
-    case "PARTNERSHIP":
-      return "Partner";
-    case "LLP":
-      return "Designated Partner";
-    case "PRIVATE_LIMITED":
-    case "PUBLIC_LIMITED":
-      return "CEO";
-    case "OPC":
-      return "Director";
-    default:
-      return "Owner";
-  }
+  return defaultUserTypeForEntity(legalEntityType);
 }

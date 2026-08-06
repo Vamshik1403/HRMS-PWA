@@ -597,7 +597,6 @@ setRows(filteredRows);
     const validationErrors: string[] = [];
     if (!formData.designation?.trim()) validationErrors.push("Designation is required");
     if (!formData.branchesID) validationErrors.push("Please select a Branch");
-    if (!formData.departmentID) validationErrors.push("Please select a Department");
     if (validationErrors.length > 0) {
       validationErrors.forEach(msg => toast.error(msg));
       return;
@@ -622,7 +621,6 @@ setRows(filteredRows);
         undefined,
 
       branchesID: formData.branchesID,
-      departmentID: formData.departmentID,
       designation: formData.designation,
       otApplicable: formData.otApplicable || null,
       noticePeriodDaysForResignation: formData.noticePeriodDaysForResignation || null,
@@ -900,13 +898,6 @@ const filtered = useMemo(() => {
       cell: (r) => brName(r),
     },
     {
-      key: "department",
-      header: "Department",
-      sortable: true,
-      colSpan: 3,
-      cell: (r) => deptName(r),
-    },
-    {
       key: "actions",
       header: "Actions",
       colSpan: 2,
@@ -1117,64 +1108,6 @@ const filtered = useMemo(() => {
                 </div>
               )}
 
-              {/* Department Autocomplete */}
-              {showOrgFields && (
-                <div ref={deptRef} className="space-y-2 relative">
-                  <Label>Department *</Label>
-                  <Input
-                    value={formData.deptAutocomplete}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      setFormData((p) => ({ ...p, deptAutocomplete: val, departmentID: null }));
-                      if (!editing) {
-                        fetchDepartmentSuggestions(val);
-                      }
-                    }}
-                    onFocus={() => {
-                      if (!editing && formData.branchesID && formData.deptAutocomplete.length >= MIN_CHARS) {
-                        fetchDepartmentSuggestions(formData.deptAutocomplete);
-                      }
-                    }}
-                    placeholder={
-                      !(formData.companyID || resolveScopedCompanyId(user) || user?.companyID)
-                        ? "Company not resolved for this account"
-                        : !formData.branchesID ? "Select branch first" :
-                      editing ? formData.deptAutocomplete || "Department" :
-                      "Type to search department..."
-                    }
-                    autoComplete="off"
-                    required
-                    disabled={
-                      !(formData.companyID || resolveScopedCompanyId(user) || user?.companyID) ||
-                      !formData.branchesID
-                    }
-                  />
-                  {suggestedDepartments.length > 0 && !editing && (
-                    <div className="absolute z-10 bg-popover text-popover-foreground border border-border rounded w-full shadow max-h-48 overflow-y-auto">
-                      {loadingDepartments && <div className="px-3 py-2 text-sm text-gray-500">Loading…</div>}
-                      {suggestedDepartments.map((dept) => (
-                        <div
-                          key={dept.id}
-                          className="px-3 py-2 hover:bg-accent cursor-pointer"
-                          onMouseDown={(e) => e.preventDefault()}
-                          onClick={() => {
-                            setFormData((p) => ({
-                              ...p,
-                              departmentID: dept.id,
-                              deptAutocomplete: dept.departmentName,
-                            }));
-                            setSuggestedDepartments([]);
-                          }}
-                        >
-                          {dept.departmentName}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                 
-                </div>
-              )}
-
               {/* Designation Name */}
               <div className="space-y-2">
                 <Label>Designation *</Label>
@@ -1259,7 +1192,7 @@ const filtered = useMemo(() => {
             hero={
               <EntityDetailHero
                 title={viewRow.designation || "Designation"}
-                subtitle={<span>{deptName(viewRow)} · {brName(viewRow)}</span>}
+                subtitle={<span>{brName(viewRow)}</span>}
               />
             }
           >
@@ -1271,7 +1204,6 @@ const filtered = useMemo(() => {
                 { label: "Service Provider", value: spName(viewRow) },
                 { label: "Company", value: coName(viewRow) },
                 { label: "Branch", value: brName(viewRow) },
-                { label: "Department", value: deptName(viewRow) },
               ]}
             />
             <DetailCard
@@ -1299,18 +1231,10 @@ const filtered = useMemo(() => {
               <FilterSelect
                 id="designations-branch"
                 value={branchFilter}
-                onChange={(v) => { setBranchFilter(v); setDepartmentFilter("ALL"); }}
+                onChange={setBranchFilter}
                 options={branchFilterOptions}
                 width="w-56"
                 ariaLabel="Filter by branch"
-              />
-              <FilterSelect
-                id="designations-department"
-                value={departmentFilter}
-                onChange={setDepartmentFilter}
-                options={departmentFilterOptions}
-                width="w-56"
-                ariaLabel="Filter by department"
               />
             </>
           }

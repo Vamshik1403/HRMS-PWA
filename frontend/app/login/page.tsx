@@ -134,6 +134,23 @@ export default function LoginPage() {
   const [showTermsModal, setShowTermsModal] = useState(false)
   const [authChecked, setAuthChecked] = useState(false)
 
+  useEffect(() => {
+    try {
+      const params = new URLSearchParams(window.location.search)
+      if (params.get('subscriptionExpired') === '1') {
+        const msg = params.get('msg')
+        setError(
+          msg
+            ? decodeURIComponent(msg)
+            : 'Your company subscription has expired. Please contact your administrator to renew it.',
+        )
+        window.history.replaceState({}, '', '/login')
+      }
+    } catch {
+      /* ignore */
+    }
+  }, [])
+
   const setAccessTokenCookie = (token: string) => {
     const secure = window.location.protocol === 'https:' ? '; secure' : ''
     // Session cookie — cleared when the browser session ends (browser/tab closed).
@@ -306,7 +323,12 @@ if (role === 'SUPERADMIN') {
       
     } catch (err: any) {
       console.error(err)
-      setError(err.response?.data?.message || 'Invalid username or password')
+      const serverMsg = err.response?.data?.message
+      if (serverMsg === 'SUBSCRIPTION_EXPIRED') {
+        setError('Your company subscription has expired. Please contact your administrator to renew it.')
+      } else {
+        setError(serverMsg || 'Invalid username or password')
+      }
     } finally {
       setLoading(false)
     }
@@ -323,8 +345,8 @@ if (role === 'SUPERADMIN') {
           <div className="w-full max-w-md space-y-6 animate-fade-in sm:space-y-8">
             <div className="space-y-2">
               <div className="mb-6 flex items-center gap-2 lg:hidden">
-                <img src="/img/OpenHRM_Logo.png" alt="OpenHRM" className="size-9 rounded-lg object-cover shadow-sm" />
-                <span className="font-display text-lg font-semibold">OpenHRM</span>
+                <img src="/img/OpenHRM_Logo.png" alt="OpenHRM" className="size-11 rounded-lg object-cover shadow-sm" />
+                <span className="font-display text-xl font-semibold">OpenHRM</span>
               </div>
               <h2 className="font-display text-3xl font-medium tracking-tight">Sign in</h2>
               <p className="text-sm text-muted-foreground">Enter your credentials to continue</p>

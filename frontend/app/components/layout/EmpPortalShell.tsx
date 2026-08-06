@@ -43,6 +43,7 @@ import {
 import { EmpSidebar } from "./EmpSidebar";
 import { EmpWorkspaceTabNav } from "../emp/EmpWorkspaceTabNav";
 import { EmpMoreCategoryTabNav } from "../emp/EmpMoreCategoryTabNav";
+import { EmpSetupCategoryTabNav } from "../emp/EmpSetupCategoryTabNav";
 import { EmpPortalTopbar } from "./EmpPortalTopbar";
 import { EmpPortalPageProvider } from "./emp-portal-page-context";
 import { applyEmpTheme, readStoredEmpTheme } from "@/app/utils/empTheme";
@@ -456,6 +457,11 @@ export default function EmpPortalShell({ children, hideBottomNav = false }: EmpP
         {/* More module categories — directly under top navbar */}
         <Suspense fallback={null}>
           <EmpMoreCategoryTabNav />
+        </Suspense>
+
+        {/* Administration setup categories — directly under top navbar */}
+        <Suspense fallback={null}>
+          <EmpSetupCategoryTabNav />
         </Suspense>
 
         {/* Module workspace tabs — hide on leave/reimb detail & apply routes (no duplicate bars) */}

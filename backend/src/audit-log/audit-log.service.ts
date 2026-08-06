@@ -39,6 +39,7 @@ export class AuditLogService {
       await this.prisma.auditLog.create({
         data: {
           userId: input.actor?.userId ?? null,
+          companyID: input.actor?.companyID ?? null,
           username: input.actor?.username ?? null,
           employeeName: input.actor?.employeeName ?? null,
           userRole: input.actor?.userRole ?? null,
@@ -91,10 +92,12 @@ export class AuditLogService {
     to?: string;
     page?: number;
     limit?: number;
+    companyID?: number;
   }) {
     const page = Math.max(filters.page ?? 1, 1);
     const limit = Math.min(Math.max(filters.limit ?? 50, 1), 200);
     const where: Record<string, unknown> = {};
+    if (filters.companyID != null) where.companyID = filters.companyID;
     if (filters.module) where.module = filters.module;
     if (filters.action) where.action = filters.action;
     if (filters.username) {
@@ -124,6 +127,7 @@ export class AuditLogService {
     username?: string;
     from?: string;
     to?: string;
+    companyID?: number;
   }): Promise<string> {
     const { items } = await this.list({ ...filters, page: 1, limit: 5000 });
     const header = [

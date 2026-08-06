@@ -109,7 +109,7 @@ export const HRMS_NAVIGATION: NavGroup[] = [
     label: "System",
     show: (c) => c.isSuperAdmin || c.isServiceProvider,
     items: [
-      { label: "Service Provider", href: "/service-providers", icon: Building2, show: (c) => c.isSuperAdmin },
+      { label: "Service Provider", href: "/service-providers", icon: Building2, show: () => false },
       { label: "Tenants", href: "/company", icon: Building2, show: always },
     ],
   },
@@ -250,7 +250,7 @@ export const HRMS_NAVIGATION: NavGroup[] = [
         label: "Approval Workflows",
         href: "/approval-workflows",
         icon: ClipboardList,
-        show: (c) => c.isSuperAdmin || c.isServiceProvider,
+        show: (c) => c.isServiceProvider,
       },
 
 
@@ -259,7 +259,7 @@ export const HRMS_NAVIGATION: NavGroup[] = [
   },
   {
     label: "Personal",
-    show: (c) => c.isServiceProvider || c.isCompanyAdmin || c.isAdmin || c.isBranchAdmin || c.isDesktopManager || c.isSuperAdmin,
+    show: (c) => c.isServiceProvider || c.isCompanyAdmin || c.isAdmin || c.isBranchAdmin || c.isDesktopManager,
     items: [
       { label: "Profile", href: "/profile", icon: UserCog, show: always },
     ],

@@ -48,7 +48,7 @@ export function EmpDesktopHomeProfileHero({
             {greeting}
           </p>
           <h1
-            className="m-0 mt-1 text-white"
+            className="m-0 mt-1.5 text-white"
             style={{
               fontSize: 32,
               fontWeight: 700,

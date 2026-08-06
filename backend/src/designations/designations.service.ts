@@ -19,7 +19,6 @@ export class DesignationsService {
         serviceProviderID: true,
         companyID: true,
         branchesID: true,
-        departmentID: true,
         shiftEligibility: true,
         nightShiftEligibility: true,
         maxHoursPerDay: true,
@@ -27,7 +26,6 @@ export class DesignationsService {
         noticePeriodDaysForResignation: true,
         noticePeriodDaysForTermination: true,
         branches: { select: { id: true, branchName: true } },
-        departments: { select: { id: true, departmentName: true } },
         company: { select: { id: true, companyName: true } },
         serviceProvider: { select: { id: true, companyName: true } },
       },
@@ -41,7 +39,6 @@ export class DesignationsService {
         branches: true,
         company: true,
         serviceProvider: true,
-        departments: true,
       },
     });
   }
@@ -53,7 +50,6 @@ export class DesignationsService {
         branches: true,
         company: true,
         serviceProvider: true,
-        departments: true,
       },
     });
   }

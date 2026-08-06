@@ -76,7 +76,9 @@ export default function EmailTemplatesSettingsPage() {
     (async () => {
       if (!user) return;
       let cid: number | null = null;
-      if (user.role !== "SUPERADMIN") {
+      if (user.role === "EMPLOYEE") {
+        cid = user.companyID ?? null;
+      } else if (user.role !== "SUPERADMIN") {
         const res = await fetch(`${BACKEND_URL}/users`, { cache: "no-store" });
         const users = await res.json();
         const me = users.find((u: { username?: string }) => u.username === user.username);

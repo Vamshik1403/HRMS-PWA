@@ -9,6 +9,7 @@ import { FormDrawer } from "../../components/ui/form-drawer";
 import { useCurrentUser } from "../../hooks/useCurrentUser";
 import { Plus, Sparkles, Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import { isCompanyOwnerFlag, canViewModule } from "@/lib/companyAccess";
 
 const RULES_API = "/backend/compliance-rules";
 const COMPANIES_API = "/backend/company";
@@ -47,7 +48,10 @@ function ToggleSwitch({ checked, onChange }: { checked: boolean; onChange: () =>
 
 export function ComplianceRulesManagement() {
   const user = useCurrentUser();
-  const canAccess = user?.role === "SUPERADMIN" || user?.role === "COMPANY_ADMIN";
+  const canAccess =
+    user?.role === "SUPERADMIN" ||
+    user?.role === "COMPANY_ADMIN" ||
+    (user?.role === "EMPLOYEE" && (isCompanyOwnerFlag() || canViewModule("SETTINGS")));
   const isSuperAdmin = user?.role === "SUPERADMIN";
 
   const [rules, setRules] = useState<ComplianceRuleRow[]>([]);

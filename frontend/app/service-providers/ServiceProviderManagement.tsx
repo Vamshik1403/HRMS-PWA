@@ -117,18 +117,48 @@ const [editingSpUser, setEditingSpUser] = useState<any | null>(null)
 
     try {
 
+      const {
+        companyName,
+        companyAddress,
+        country,
+        state,
+        city,
+        pincode,
+        countryCode,
+        gstNo,
+        contactNo,
+        emailAdd,
+        website,
+        companyLogoUrl,
+      } = formData as typeof formData & { currency?: string }
+
+      const payload = {
+        companyName,
+        companyAddress,
+        country,
+        state,
+        city,
+        pincode,
+        countryCode,
+        gstNo,
+        contactNo,
+        emailAdd,
+        website,
+        companyLogoUrl,
+      }
+
       let res
       if (editingProvider) {
         res = await fetch(`/backend/service-provider/${editingProvider.id}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(formData),
+          body: JSON.stringify(payload),
         })
       } else {
         res = await fetch("/backend/service-provider", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(formData),
+          body: JSON.stringify(payload),
         })
       }
 

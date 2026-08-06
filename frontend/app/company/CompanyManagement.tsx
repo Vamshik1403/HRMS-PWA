@@ -8,7 +8,7 @@ import { Label } from "../components/ui/label"
 import { Textarea } from "../components/ui/textarea"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../components/ui/table"
 import { Badge } from "../components/ui/badge"
-import { Plus, Edit, Trash2, Eye, ArrowLeft, X, Save, UserPlus, Building2, Store, Factory } from "lucide-react"
+import { Plus, Edit, Trash2, Eye, ArrowLeft, X, Save, UserPlus } from "lucide-react"
 import { useCurrentUser } from "../hooks/useCurrentUser"
 import { useRouter } from "next/navigation"
 import { TimezoneSelect } from "../components/ui/timezone-select"
@@ -38,10 +38,9 @@ import {
   FINANCIAL_YEAR_EMPTY,
   mapCompanyToFormData,
 } from "../utils/companyFormPayload"
-import { LEGAL_ENTITY_OPTIONS, ownerTitleForLegalEntity } from "@/lib/companyAccess"
+import { LEGAL_ENTITY_OPTIONS, ownerTitleForLegalEntity, defaultUserTypeForEntity, userTypeOptionsForEntity } from "@/lib/companyAccess"
 import { FormSection } from "../components/ui/form-section"
 import { FormField } from "../components/ui/form-field"
-import { OptionCardGroup } from "../components/ui/option-card-group"
 import { FileDropzone } from "../components/ui/file-dropzone"
 import {
   Select,
@@ -57,6 +56,7 @@ interface Company {
   companyName?: string
   companyType?: string
   legalEntityType?: string
+  defaultOwnerTitle?: string
   noticePeriodDaysForResignation?: string
   noticePeriodDaysForTermination?: string
   address?: string
@@ -158,7 +158,6 @@ export function CompanyManagement() {
   const [serviceProviders, setServiceProviders] = useState<ServiceProvider[]>([])
   const [spDropdownOpen, setSpDropdownOpen] = useState(false)
   const [logoFile, setLogoFile] = useState<File | null>(null)
-  const [signatureFile, setSignatureFile] = useState<File | null>(null)
   const [isAddingNew, setIsAddingNew] = useState(false)
   const [companyFormTab, setCompanyFormTab] = useState("basic")
   const [isViewing, setIsViewing] = useState(false)
@@ -419,13 +418,10 @@ let filtered =
 
     try {
       let companyLogoUrl = formData.companyLogoUrl || "";
-      let SignatureUrl = formData.SignatureUrl || "";
+      const SignatureUrl = formData.SignatureUrl || "";
 
       if (logoFile) {
         companyLogoUrl = await uploadImage(logoFile);
-      }
-      if (signatureFile) {
-        SignatureUrl = await uploadImage(signatureFile);
       }
 
       // Always bind the sole live service provider (never stale localStorage / typed text).
@@ -600,7 +596,6 @@ setEditingCompany(null);
       autocompleteName: "",
     })
     setLogoFile(null)
-    setSignatureFile(null)
     setEditingCompany(null)
     setServiceProviders([])
     setSpDropdownOpen(false)
@@ -995,7 +990,7 @@ setEditingCompany(null);
                   }}
                   className="text-sm px-3 py-2"
                 >
-                  <Plus className="w-4 h-4 mr-1" /> Add Company
+                  <Plus className="w-4 h-4 mr-1" /> Add Tenant
                 </Button>
               )}
             </div>
@@ -1005,7 +1000,7 @@ setEditingCompany(null);
           <FormDrawer
             open={isAddingNew}
             onOpenChange={(v) => { if (!v) handleCancel(); }}
-            title={editingCompany ? "Edit Company" : "Add New Company"}
+            title={editingCompany ? "Edit Tenant" : "Add New Tenant"}
           >
             <div>
               <form onSubmit={handleSubmit} className="space-y-8 pb-2">
@@ -1014,39 +1009,13 @@ setEditingCompany(null);
                   onChange={setCompanyFormTab}
                   sections={[
                     { id: "basic", label: "Company Information" },
-                    { id: "location", label: "Location & Settings" },
+                    { id: "location", label: "Additional Information" },
                     { id: "compliance", label: "Compliance & Tax" },
-                    { id: "contact", label: "Contact & Branding" },
                   ]}
                 />
 
                 {companyFormTab === "basic" && (
                   <>
-{user?.role === "SUPERADMIN" && (
-                    <FormSection
-                      title="Service provider"
-                      description="Tenants are linked to the platform service provider automatically."
-                    >
-                    <div ref={wrapperRef} className="relative">
-                      <FormField label="Service Provider" required>
-                        <Input
-                          value={formData.autocompleteName || ""}
-                          readOnly
-                          disabled
-                          placeholder="No service provider found — create one first"
-                          autoComplete="off"
-                          className="bg-muted cursor-not-allowed"
-                        />
-                      </FormField>
-                      {!formData.serviceProviderID ? (
-                        <p className="text-xs text-amber-700 mt-1.5">
-                          Create a Service Provider under System → Service Provider, then reopen this form.
-                        </p>
-                      ) : null}
-                    </div>
-                  </FormSection>
-                )}
-
                 <FormSection
                   title="Company information"
                   description="Manage your organization's core details and classification."
@@ -1059,22 +1028,16 @@ setEditingCompany(null);
                     />
                   </FormField>
 
-                  <FormField label="Establishment Type" description="Select all that apply to this organization.">
-                    <OptionCardGroup
-                      options={[
-                        { value: "office", label: "Office", description: "Corporate HQ", icon: Building2 },
-                        { value: "shop", label: "Shop", description: "Retail outlet", icon: Store },
-                        { value: "factory", label: "Factory", description: "Manufacturing", icon: Factory },
-                      ]}
-                      value={(formData.companyType || "").split(",").map((s) => s.trim()).filter(Boolean)}
-                      onChange={(types) => setFormData((p) => ({ ...p, companyType: types.join(", ") }))}
-                    />
-                  </FormField>
-
                   <FormField label="Company Type" description="Legal entity type for this tenant." required>
                     <Select
                       value={formData.legalEntityType || ""}
-                      onValueChange={(v) => setFormData((p) => ({ ...p, legalEntityType: v }))}
+                      onValueChange={(v) =>
+                        setFormData((p) => ({
+                          ...p,
+                          legalEntityType: v,
+                          defaultOwnerTitle: defaultUserTypeForEntity(v),
+                        }))
+                      }
                     >
                       <SelectTrigger>
                         <SelectValue placeholder="Select company type" />
@@ -1088,6 +1051,26 @@ setEditingCompany(null);
                       </SelectContent>
                     </Select>
                   </FormField>
+
+                  {formData.legalEntityType && userTypeOptionsForEntity(formData.legalEntityType).length > 0 && (
+                    <FormField label="User Type" description="Default designation for the company owner / first user.">
+                      <Select
+                        value={formData.defaultOwnerTitle || defaultUserTypeForEntity(formData.legalEntityType)}
+                        onValueChange={(v) => setFormData((p) => ({ ...p, defaultOwnerTitle: v }))}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select user type" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {userTypeOptionsForEntity(formData.legalEntityType).map((opt) => (
+                            <SelectItem key={opt} value={opt}>
+                              {opt}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </FormField>
+                  )}
 
                   <FormField label="Company Address">
                     <Textarea
@@ -1141,6 +1124,28 @@ setEditingCompany(null);
                   </div>
                 </FormSection>
 
+                <FormSection title="Contact" description="Primary contact details for this company.">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <FormField label="Contact Number">
+                      <Input value={formData.contactNo || ""} onChange={(e) => setFormData((p) => ({ ...p, contactNo: e.target.value }))} />
+                    </FormField>
+                    <FormField label="Email Address">
+                      <Input type="email" value={formData.emailAdd || ""} onChange={(e) => setFormData((p) => ({ ...p, emailAdd: e.target.value }))} />
+                    </FormField>
+                  </div>
+                </FormSection>
+
+                <FormSection title="Branding" description="Logo used on documents and payslips.">
+                  <FileDropzone
+                    label="Company Logo"
+                    accept="image/*"
+                    hint="PNG or JPG"
+                    value={logoFile}
+                    onChange={setLogoFile}
+                    variant="image"
+                  />
+                </FormSection>
+
                   </>
                 )}
 
@@ -1184,45 +1189,10 @@ setEditingCompany(null);
                 </FormSection>
                 )}
 
-                {companyFormTab === "contact" && (
-                  <>
-                <FormSection title="Contact" description="Primary contact details for this company.">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <FormField label="Contact Number">
-                      <Input value={formData.contactNo || ""} onChange={(e) => setFormData((p) => ({ ...p, contactNo: e.target.value }))} />
-                    </FormField>
-                    <FormField label="Email Address">
-                      <Input type="email" value={formData.emailAdd || ""} onChange={(e) => setFormData((p) => ({ ...p, emailAdd: e.target.value }))} />
-                    </FormField>
-                  </div>
-                </FormSection>
-
-                <FormSection title="Branding" description="Logo and signature used on documents and payslips.">
-                  <FileDropzone
-                    label="Company Logo"
-                    accept="image/*"
-                    hint="PNG or JPG"
-                    value={logoFile}
-                    onChange={setLogoFile}
-                    variant="image"
-                  />
-                  <FileDropzone
-                    label="Signature Upload"
-                    accept="image/*"
-                    hint="PNG or JPG"
-                    value={signatureFile}
-                    onChange={setSignatureFile}
-                    variant="image"
-                  />
-                </FormSection>
-
-                  </>
-                )}
-
                 <div className="flex justify-end gap-2 border-t border-border pt-5">
                   <Button type="submit" disabled={saving}>
                     <Save className="w-4 h-4 mr-1" />
-                    {editingCompany ? "Save Changes" : "Add Company"}
+                    {editingCompany ? "Save Changes" : "Add Tenant"}
                   </Button>
                 </div>
               </form>
@@ -1477,7 +1447,8 @@ setEditingCompany(null);
                         <p className="text-xs text-muted-foreground mt-1">
                           Owner title:{" "}
                           <span className="font-medium text-foreground">
-                            {ownerTitleForLegalEntity(selectedCompanyForAdmin.legalEntityType)}
+                            {(selectedCompanyForAdmin as any).defaultOwnerTitle ||
+                              ownerTitleForLegalEntity(selectedCompanyForAdmin.legalEntityType)}
                           </span>
                         </p>
                       ) : null}

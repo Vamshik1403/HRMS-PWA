@@ -23,9 +23,9 @@ export function LoginBrandPanel() {
         <img
           src="/img/OpenHRM_Logo.png"
           alt="OpenHRM"
-          className="size-10 rounded-xl object-cover shadow-lg"
+          className="size-14 rounded-xl object-cover shadow-lg"
         />
-        <span className="font-display text-xl font-semibold tracking-tight">OpenHRM</span>
+        <span className="font-display text-3xl font-semibold tracking-tight">OpenHRM</span>
       </div>
 
       <div className="relative space-y-8 max-w-md">
@@ -33,8 +33,13 @@ export function LoginBrandPanel() {
           <Sparkles className="size-3.5" />
           Enterprise HRMS Platform
         </div>
-        <h1 className="font-display text-5xl xl:text-6xl leading-[1.05] font-medium text-white">
-          Run payroll, attendance, leave & people ops{" "}
+        <h1 className="font-display text-4xl xl:text-[2.75rem] leading-[1.15] font-medium text-white">
+          Run payroll,
+          <br />
+          attendance, leave
+          <br />
+          &amp; people operations
+          <br />
           <span className="text-sky-300">— end to end.</span>
         </h1>
         <p className="text-base text-white/65 leading-relaxed">

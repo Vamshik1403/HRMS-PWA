@@ -61,9 +61,10 @@ interface UserRow {
   manageEmployeeId?: number;
 }
 
-// Roles available based on the current user's role
-const SUPERADMIN_ROLES = ["SUPERADMIN", "COMPANY_OWNER"];
-const SERVICE_PROVIDER_ROLES = ["SERVICE_PROVIDER", "COMPANY_OWNER"];
+// Roles available based on the current user's role.
+// COMPANY_OWNER logins are created only via the Tenants "Company Owners" icon.
+const SUPERADMIN_ROLES = ["SUPERADMIN"];
+const SERVICE_PROVIDER_ROLES = ["SERVICE_PROVIDER"];
 
 const ADMIN_ROLES = ["BRANCH_ADMIN"];
 
@@ -121,33 +122,14 @@ const canAccess = isSuperAdmin || isServiceProvider || isAdmin;
   const fetchRows = async () => {
     setLoading(true);
     try {
-      const [res, ownersRes] = await Promise.all([
-        fetch(API),
-        fetch("/backend/company/owners"),
-      ]);
+      // System Users is exclusively for SuperAdmin/platform-level logins.
+      // Company-owner users created via the Tenants "Company Owners" icon
+      // are intentionally excluded here — they are only visible on their
+      // respective company record.
+      const res = await fetch(API);
       const data = await res.json();
       const users: UserRow[] = Array.isArray(data) ? data : data?.data ?? [];
-      let owners: UserRow[] = [];
-      if (ownersRes.ok) {
-        const ownerRows = await ownersRes.json();
-        owners = (Array.isArray(ownerRows) ? ownerRows : []).map((o: any) => ({
-          id: o.id,
-          manageEmployeeId: o.id,
-          username: o.employeeCredentials?.username || o.employeeID || `owner-${o.id}`,
-          role: "COMPANY_OWNER",
-          firstName: o.employeeFirstName,
-          lastName: o.employeeLastName,
-          contactNo: o.personalPhoneNo,
-          email: o.businessEmail,
-          isActive: o.employeeCredentials?.isActive !== false,
-          serviceProviderID: o.serviceProviderID,
-          companyID: o.companyID,
-          company: o.company,
-          isOwnerEmployee: true,
-          ownerTitle: o.ownerTitle,
-        }));
-      }
-      setRows([...owners, ...users]);
+      setRows(users);
     } catch {
       setRows([]);
     } finally {

@@ -76,7 +76,7 @@ export function LocationFields({
               country: display,
               state: "",
               city: "",
-              ...(item?.currency && !values.currency
+              ...(showCurrency && item?.currency && !values.currency
                 ? { currency: item.currency }
                 : {}),
             })

@@ -429,7 +429,8 @@ export function EmpDesktopProfilePanel({
   const workEmail = officialEmail || personalEmail;
   const phoneNumber = officialPhone || personalPhone;
   const employmentType = emp?.employmentType || emp?.empType || emp?.typeOfEmployee || null;
-  const roleSubtitle = designation || department || "Employee";
+  const ownerTitle = emp?.ownerTitle || (empUser?.employee as any)?.ownerTitle || empUser?.ownerTitle || null;
+  const roleSubtitle = designation || ownerTitle || department || "Employee";
 
   const heroInfoItems: {
     icon: LucideIcon;

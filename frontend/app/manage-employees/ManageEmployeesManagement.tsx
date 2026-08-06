@@ -56,7 +56,13 @@ import {
   EMPLOYEE_FORM_SECTIONS,
   type EmpFormSectionId,
 } from "./ManageEmployeeFormUi";
+import { EmployeeRightsPanel } from "../components/emp/EmployeeRightsPanel";
 import { MultiValueField } from "../components/ui/multi-value-field";
+import {
+  EmergencyContactsField,
+  EMPTY_EMERGENCY_CONTACT,
+  type EmergencyContactEntry,
+} from "../components/ui/emergency-contacts-field";
 import { joinMultiValue, parseMultiValue, primaryMultiValue } from "../utils/multiValue";
 
 function parsePayGradeNames(shiftEligibility: string | null | undefined): string[] {
@@ -218,6 +224,7 @@ interface ManageEmpRead {
   companyID?: ID | null;
   branchesID?: ID | null;
   contractorID?: ID | null;
+  salaryPayoutTo?: string | null;
 
   // Scalars
   employeeFirstName?: string | null;
@@ -262,6 +269,7 @@ interface ManageEmpRead {
   personalPhoneNo?: string | null;
   personalEmail?: string | null;
   emergancyContact?: string | null;
+  emergencyContacts?: EmergencyContactEntry[] | null;
   presentAddress?: string | null;
   permenantAddress?: string | null;
   employeePhotoUrl?: string | null;
@@ -1150,6 +1158,7 @@ const [isAddingNew, setIsAddingNew] = useState(false);
     companyID: null as ID | null,
     branchesID: null as ID | null,
     contractorID: null as ID | null,
+    salaryPayoutTo: "Company" as string,
     spAutocomplete: "",
     coAutocomplete: "",
     brAutocomplete: "",
@@ -1201,7 +1210,7 @@ const [isAddingNew, setIsAddingNew] = useState(false);
     emergancyContact: "",
     personalPhones: [""] as string[],
     personalEmails: [""] as string[],
-    emergencyContacts: [""] as string[],
+    emergencyContacts: [{ ...EMPTY_EMERGENCY_CONTACT }] as EmergencyContactEntry[],
     uanNos: [""] as string[],
     esiNos: [""] as string[],
     businessPhones: [""] as string[],
@@ -1745,12 +1754,6 @@ const runFetchCombinedDev = (q: string) => {
     }, DEBOUNCE_MS);
   };
 
-  const getActiveDepartmentId = (): ID | null => {
-    if (stagingDept.departmentNameID) return stagingDept.departmentNameID;
-    const latest = formData.empDepartmentForm[formData.empDepartmentForm.length - 1];
-    return latest?.departmentNameID ?? formData.departmentNameID ?? null;
-  };
-
   const runFetchDesg = (q: string) => {
     if (desgTimerRef.current) clearTimeout(desgTimerRef.current);
     desgTimerRef.current = setTimeout(async () => {
@@ -1764,10 +1767,6 @@ const runFetchCombinedDev = (q: string) => {
           all = filterForManager(all);
         } else if (formData.companyID) {
           all = all.filter(x => x.companyID === formData.companyID);
-        }
-        const activeDeptId = getActiveDepartmentId();
-        if (activeDeptId) {
-          all = all.filter(x => x.departmentID === activeDeptId);
         }
         const filtered = (all || []).filter(d => (d.designation ?? "").toLowerCase().includes(q.toLowerCase()));
         setDesgList(filtered.slice(0, 20));
@@ -2334,6 +2333,7 @@ const addCombinedDevMap = () => {
       companyID: activeCompanyID ?? ctx?.companyID ?? null,
       branchesID: null,
       contractorID: null,
+      salaryPayoutTo: "Company",
 
       spAutocomplete: ctx?.serviceProviderName ?? "",
       coAutocomplete: ctx?.companyName ?? "",
@@ -2383,7 +2383,7 @@ const addCombinedDevMap = () => {
       emergancyContact: "",
       personalPhones: [""],
       personalEmails: [""],
-      emergencyContacts: [""],
+      emergencyContacts: [{ ...EMPTY_EMERGENCY_CONTACT }],
       uanNos: [""],
       esiNos: [""],
       businessPhones: [""],
@@ -2853,12 +2853,12 @@ const addCombinedDevMap = () => {
     const validationErrors: string[] = [];
     if (!formData.employeeFirstName?.trim()) validationErrors.push("Employee First Name is mandatory");
     if (!formData.employeeLastName?.trim()) validationErrors.push("Employee Last Name is mandatory");
-    if (!formData.employeeID?.trim()) validationErrors.push("Employee ID is mandatory");
     if (!isAdmin && !primaryMultiValue(formData.personalPhones).trim()) validationErrors.push("Mobile Number is mandatory");
     if (!isAdmin && !formData.joiningDate?.trim()) validationErrors.push("Joining Date is mandatory");
 
-    // Duplicate Employee ID check (within the same company)
-    if (formData.employeeID?.trim()) {
+    // Duplicate Employee ID check (within the same company) — only relevant when editing,
+    // since new employees get an auto-generated, non-editable ID from the backend.
+    if (editingRow && formData.employeeID?.trim()) {
       try {
         const res = await fetch("/backend/manage-emp");
         const allEmps = await res.json();
@@ -3037,6 +3037,10 @@ const addCombinedDevMap = () => {
           formData.promotion?.employmentType === "Contract"
             ? (formData.contractorID ?? undefined)
             : null,
+        salaryPayoutTo:
+          formData.promotion?.employmentType === "Contract"
+            ? (formData.salaryPayoutTo || "Company")
+            : "Company",
 
         employeeFirstName: formData.employeeFirstName || undefined,
         employeeLastName: formData.employeeLastName || undefined,
@@ -3091,7 +3095,14 @@ const addCombinedDevMap = () => {
         businessEmail: joinMultiValue(formData.businessEmails) || undefined,
         personalPhoneNo: joinMultiValue(formData.personalPhones) || undefined,
         personalEmail: joinMultiValue(formData.personalEmails) || undefined,
-        emergancyContact: joinMultiValue(formData.emergencyContacts) || undefined,
+        emergancyContact:
+          formData.emergencyContacts
+            .filter((c) => c.name.trim() || c.relation.trim() || c.contactNo.trim())
+            .map((c) => [c.name, c.relation, c.contactNo].filter(Boolean).join(" - "))
+            .join(", ") || undefined,
+        emergencyContacts: formData.emergencyContacts.filter(
+          (c) => c.name.trim() || c.relation.trim() || c.contactNo.trim(),
+        ),
         presentAddress: formData.presentAddress || undefined,
         permenantAddress: formData.permenantAddress || undefined,
         employeePhotoUrl: uploadedPhotoUrl ?? (formData.employeePhotoUrl || undefined),
@@ -3457,6 +3468,7 @@ const addCombinedDevMap = () => {
       departmentNameID: effectiveDeptID,
       designationID: effectiveDesgID,
       contractorID: freshData.contractorID ?? freshData.contractor?.id ?? null,
+      salaryPayoutTo: freshData.salaryPayoutTo || "Company",
       spAutocomplete: freshData.serviceProvider?.companyName ?? freshData.serviceProviderName ?? "",
       coAutocomplete: freshData.company?.companyName ?? freshData.companyName ?? "",
       brAutocomplete: freshData.branches?.branchName ?? freshData.branchName ?? "",
@@ -3500,7 +3512,14 @@ const addCombinedDevMap = () => {
       emergancyContact: freshData.emergancyContact ?? "",
       personalPhones: parseMultiValue(freshData.personalPhoneNo),
       personalEmails: parseMultiValue(freshData.personalEmail),
-      emergencyContacts: parseMultiValue(freshData.emergancyContact),
+      emergencyContacts:
+        Array.isArray(freshData.emergencyContacts) && freshData.emergencyContacts.length
+          ? freshData.emergencyContacts.map((c: Partial<EmergencyContactEntry>) => ({
+              name: c?.name ?? "",
+              relation: c?.relation ?? "",
+              contactNo: c?.contactNo ?? "",
+            }))
+          : [{ ...EMPTY_EMERGENCY_CONTACT, contactNo: primaryMultiValue(parseMultiValue(freshData.emergancyContact)) }],
       businessPhones: parseMultiValue(freshData.businessPhoneNo),
       businessEmails: parseMultiValue(freshData.businessEmail),
       presentAddress: freshData.presentAddress ?? "",
@@ -3790,11 +3809,8 @@ const handleCancel = () => {
     if (branchFilter !== "ALL") {
       list = list.filter((d) => String(d.branchesID) === branchFilter);
     }
-    if (departmentFilter !== "ALL") {
-      list = list.filter((d) => String(d.departmentID) === departmentFilter);
-    }
     return list;
-  }, [designationFilterList, branchFilter, departmentFilter]);
+  }, [designationFilterList, branchFilter]);
 
   const branchFilterOptions = useMemo(
     () => [
@@ -4174,12 +4190,16 @@ const handleCancel = () => {
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label>Employee ID <span className="text-red-500">*</span></Label>
+                  <Label>Employee ID</Label>
                   <Input
-                    value={formData.employeeID}
-                    onChange={(e) => setFormData((p) => ({ ...p, employeeID: e.target.value }))}
-                    required
+                    value={editingRow ? formData.employeeID : formData.employeeID || "Auto-generated on save"}
+                    readOnly
+                    disabled
+                    className="bg-muted cursor-not-allowed"
                   />
+                  <p className="text-xs text-muted-foreground">
+                    Auto-generated from the company name and cannot be edited.
+                  </p>
                 </div>
                 {!isAdmin && (
                   <MultiValueField
@@ -4289,14 +4309,16 @@ const handleCancel = () => {
                     />
                   </div>
                 </div>
-                <MultiValueField
-                  label="Emergency Contact No."
+                <EmergencyContactsField
+                  label="Emergency Contact"
                   values={formData.emergencyContacts}
                   onChange={(emergencyContacts) =>
                     setFormData((p) => ({
                       ...p,
                       emergencyContacts,
-                      emergancyContact: primaryMultiValue(emergencyContacts),
+                      emergancyContact: primaryMultiValue(
+                        emergencyContacts.map((c) => c.contactNo),
+                      ),
                     }))
                   }
                 />
@@ -4556,19 +4578,15 @@ const handleCancel = () => {
                 <div className="flex items-end gap-2">
                   <div ref={desgRef} className="flex-1 space-y-2 relative">
                     <Label>Designation Name</Label>
-                    {!getActiveDepartmentId() && (
-                      <p className="text-xs text-amber-600">Select a department first to load matching designations.</p>
-                    )}
                     <Input
                       value={stagingDesg.label}
-                      disabled={!getActiveDepartmentId()}
                       onChange={(e) => {
                         const val = e.target.value;
                         setStagingDesg(p => ({ ...p, label: val, designationID: null }));
                         runFetchDesg(val);
                       }}
-                      onFocus={(e) => { if (getActiveDepartmentId() && e.target.value.length >= MIN_CHARS) runFetchDesg(e.target.value); }}
-                      placeholder={getActiveDepartmentId() ? "Search designation…" : "Select department first"}
+                      onFocus={(e) => { if (e.target.value.length >= MIN_CHARS) runFetchDesg(e.target.value); }}
+                      placeholder="Search designation…"
                       autoComplete="off"
                     />
                     {desgList.length > 0 && (
@@ -4726,7 +4744,8 @@ const handleCancel = () => {
                 </div>
               </div>
 
-              {/* Contractor - Search & Add with History */}
+              {/* Contractor - Search & Add with History (only for Contract employment type) */}
+              {formData.promotion?.employmentType === "Contract" && (
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <h3 className="text-lg font-semibold">Contractor</h3>
@@ -4788,7 +4807,27 @@ const handleCancel = () => {
                     ))
                   )}
                 </div>
+
+                <div className="space-y-2">
+                  <Label>Salary Payout</Label>
+                  <Select
+                    value={formData.salaryPayoutTo || "Company"}
+                    onValueChange={(val) => setFormData(p => ({ ...p, salaryPayoutTo: val }))}
+                  >
+                    <SelectTrigger className="w-full"><SelectValue placeholder="Select payout…" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Company">Company</SelectItem>
+                      <SelectItem value="Contractor">Contractor</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  {formData.salaryPayoutTo === "Contractor" && (
+                    <p className="text-xs text-muted-foreground">
+                      This employee will also appear in the Contract Employee section.
+                    </p>
+                  )}
+                </div>
               </div>
+              )}
 
               {/* Employment Status - Search & Add with History */}
               <div className="space-y-3">
@@ -5713,12 +5752,6 @@ const handleCancel = () => {
               <div className="space-y-4">
               <div className="space-y-3 rounded-lg border border-gray-200 p-4">
                 <h3 className="text-sm font-semibold text-gray-800">Mobile app & selfcare</h3>
-                <div className="space-y-2">
-                  <Label>Employee Type</Label>
-                  <select className="w-full rounded-md border px-3 py-2" value={formData.typeOfEmployee || "employee"} onChange={(e) => setFormData((p) => ({ ...p, typeOfEmployee: e.target.value }))}>
-                    <option value="employee">Employee</option>
-                  </select>
-                </div>
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input
                     type="checkbox"
@@ -5731,19 +5764,6 @@ const handleCancel = () => {
                 </label>
                 <p className="text-xs text-gray-500 -mt-1 ml-6">
                   When enabled, this employee punches in/out only via the mobile app and their device punches are ignored. When disabled, they punch in/out only via the assigned attendance device.
-                </p>
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={formData.mobileBreakEnabled !== false}
-                    disabled={!formData.mobileAttendanceEnabled}
-                    onChange={(e) => setFormData((p) => ({ ...p, mobileBreakEnabled: e.target.checked }))}
-                    className="rounded border-gray-300"
-                  />
-                  <span className="text-sm text-gray-700">Enable break-in / break-out on mobile app</span>
-                </label>
-                <p className="text-xs text-gray-500 -mt-1 ml-6">
-                  When enabled, break-in and break-out buttons appear in the employee selfcare app during an active work session. Requires mobile attendance to be enabled.
                 </p>
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input
@@ -5870,18 +5890,19 @@ const handleCancel = () => {
               </div>
               )}
 
+              {activeFormSection === "roles&permissions" && (
+                <div className="space-y-4">
+                  {editingRow?.id ? (
+                    <EmployeeRightsPanel employeeId={Number(editingRow.id)} />
+                  ) : (
+                    <p className="text-sm text-muted-foreground py-6 text-center">
+                      Save this employee first, then reopen their profile to assign rights & permissions.
+                    </p>
+                  )}
+                </div>
+              )}
+
               <div className="flex flex-wrap justify-end gap-2 pt-4 border-t border-gray-200">
-                {editingRow && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="mr-auto gap-1.5"
-                    onClick={() => void downloadJoiningForm(editingRow)}
-                  >
-                    <Download className="w-4 h-4" />
-                    Download joining form
-                  </Button>
-                )}
                 <Button type="button" variant="outline" onClick={handleCancel}>
                   Cancel
                 </Button>
@@ -5997,7 +6018,15 @@ const handleCancel = () => {
                   { label: "Personal email", value: viewRow.personalEmail },
                   { label: "Business phone", value: viewRow.businessPhoneNo },
                   { label: "Mobile", value: viewRow.personalPhoneNo },
-                  { label: "Emergency contact", value: viewRow.emergancyContact },
+                  {
+                    label: "Emergency contact",
+                    value: Array.isArray(viewRow.emergencyContacts) && viewRow.emergencyContacts.length
+                      ? viewRow.emergencyContacts
+                          .filter((c) => c.name || c.relation || c.contactNo)
+                          .map((c) => [c.name, c.relation, c.contactNo].filter(Boolean).join(" - "))
+                          .join(", ")
+                      : viewRow.emergancyContact,
+                  },
                   { label: "Present address", value: viewRow.presentAddress },
                   { label: "Permanent address", value: viewRow.permenantAddress },
                 ]}

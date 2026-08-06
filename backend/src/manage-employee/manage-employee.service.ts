@@ -93,6 +93,51 @@ export class ManageEmployeeService {
     return Array.from({ length }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
   }
 
+  /**
+   * Employee ID prefix from the company name: first word of the company
+   * name, up to 3 characters (e.g. "Electrohelps Pvt Ltd" -> "Ele",
+   * "3s Infocom" -> "3s" since the first word is only 2 characters long).
+   */
+  private employeeIdPrefixFromCompanyName(companyName?: string | null): string {
+    const firstWord = (companyName || '').trim().split(/\s+/)[0] || 'EMP';
+    return firstWord.slice(0, 3);
+  }
+
+  /**
+   * Auto-generates the next sequential employee code for a company, e.g.
+   * Ele001, Ele002, ... based on the company name prefix.
+   */
+  private async generateNextEmployeeCode(
+    tx: any,
+    companyID: number,
+  ): Promise<string> {
+    const company = await tx.company.findUnique({
+      where: { id: companyID },
+      select: { companyName: true },
+    });
+    const prefix = this.employeeIdPrefixFromCompanyName(company?.companyName);
+
+    const existing = await tx.manageEmployee.findMany({
+      where: {
+        companyID,
+        employeeID: { startsWith: prefix },
+      },
+      select: { employeeID: true },
+    });
+
+    let maxSeq = 0;
+    for (const row of existing) {
+      const match = String(row.employeeID || '').slice(prefix.length).match(/^\d+/);
+      if (match) {
+        const num = parseInt(match[0], 10);
+        if (num > maxSeq) maxSeq = num;
+      }
+    }
+
+    const nextSeq = maxSeq + 1;
+    return `${prefix}${String(nextSeq).padStart(3, '0')}`;
+  }
+
   // CREATE employee with nested rows AND credentials with hashed password
   async create(dto: CreateManageEmployeeDto, req?: Request) {
     const {
@@ -134,6 +179,13 @@ export class ManageEmployeeService {
     } = dto;
 
     const created = await this.prisma.$transaction(async (tx) => {
+      // Auto-generate the employee ID from the company name prefix when not
+      // already supplied. The field is read-only/locked on the frontend, so
+      // this is the source of truth for employee codes.
+      if (!scalars.employeeID && companyID) {
+        scalars.employeeID = await this.generateNextEmployeeCode(tx, companyID);
+      }
+
       // Check for duplicate employeeID within the same company
       if (scalars.employeeID && companyID) {
         const existing = await tx.manageEmployee.findFirst({
@@ -1166,6 +1218,8 @@ export class ManageEmployeeService {
         lifecycleStatus: true,
         onboardingApprovalStatus: true,
         joiningDate: true,
+        salaryPayoutTo: true,
+        personalPhoneNo: true,
 
         employeeCredentials: {
           select: {
@@ -1500,8 +1554,11 @@ export class ManageEmployeeService {
       empFactualAttendancePolicyIdsToDelete = [],
       empLeavePolicyIdsToDelete = [],
       empContractorIdsToDelete = [],
+      employeeID: _lockedEmployeeID,
       ...scalars
     } = dto;
+    // Employee ID is auto-generated on create and locked from edits.
+    void _lockedEmployeeID;
 
     const beforeUpdate =
       await this.prisma.manageEmployee.findUnique({

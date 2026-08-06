@@ -235,6 +235,7 @@ export class CreateManageEmployeeDto {
   @IsOptional() @IsInt() companyID?: number;
   @IsOptional() @IsInt() branchesID?: number;
   @IsOptional() @IsInt() contractorID?: number;
+  @IsOptional() @IsString() salaryPayoutTo?: string;
 
   // Scalars
   @IsOptional() @IsString() employeeFirstName?: string;
@@ -266,6 +267,7 @@ export class CreateManageEmployeeDto {
 
   @IsOptional() @IsEmail() personalEmail?: string;
   @IsOptional() @IsString() emergancyContact?: string;
+  @IsOptional() @IsArray() emergencyContacts?: { name?: string; relation?: string; contactNo?: string }[];
 
   @IsOptional() @IsString() presentAddress?: string;
   @IsOptional() @IsString() permenantAddress?: string;
