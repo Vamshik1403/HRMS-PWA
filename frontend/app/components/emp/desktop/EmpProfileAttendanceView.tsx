@@ -420,12 +420,6 @@ export function EmpProfileAttendanceView({ employeeId: viewEmployeeId }: { emplo
 
   return (
     <div className="space-y-8">
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 xl:grid-cols-5">
-        {statCards.map((card) => (
-          <StatCard key={card.label} {...card} />
-        ))}
-      </div>
-
       <div className="overflow-hidden rounded-xl border border-[#E5E7EB] bg-white">
         <div className="flex flex-wrap items-center justify-between gap-4 border-b border-[#E5E7EB] px-6 py-5">
           <div className="flex items-center gap-3">
@@ -490,7 +484,15 @@ export function EmpProfileAttendanceView({ employeeId: viewEmployeeId }: { emplo
             </Button>
           </div>
         </div>
+      </div>
 
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 xl:grid-cols-5">
+        {statCards.map((card) => (
+          <StatCard key={card.label} {...card} />
+        ))}
+      </div>
+
+      <div className="overflow-hidden rounded-xl border border-[#E5E7EB] bg-white">
         {loading ? (
           <div className="py-20 text-center text-sm text-[#6B7280]">Loading attendance…</div>
         ) : (

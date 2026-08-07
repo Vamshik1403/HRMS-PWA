@@ -51,7 +51,7 @@ export function ContractEmployeeManagement() {
       const ctx = getSidebarContext();
       const activeCompanyID = ctx?.companyID ?? user?.companyID ?? null;
 
-      const res = await fetch(`${BACKEND}/manage-employee/list`, {
+      const res = await fetch(`${BACKEND}/manage-emp/list`, {
         headers: authHeaders(),
         cache: "no-store",
       });

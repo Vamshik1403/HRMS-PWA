@@ -1,18 +1,33 @@
 "use client";
 
-import { CheckSquare, Clock, ListTodo, MapPin } from "lucide-react";
+import { useEffect, useState } from "react";
+import { CheckSquare, Clock, ListTodo, MapPin, Plus, Trash2 } from "lucide-react";
 import { Icon } from "@iconify/react";
 import { Badge } from "../../ui/badge";
+import { Button } from "../../ui/button";
+import { Input } from "../../ui/input";
 import { DashboardSection } from "@/app/dashboard/components/dashboard-ui";
 import { useEmpCalendarDayDetail } from "@/app/hooks/useEmpCalendarDayDetail";
+import { useCurrentUser } from "@/app/hooks/useCurrentUser";
 import {
   formatLocationLines,
   formatPunchTime,
   punchTypeLabel,
 } from "@/app/utils/empAttendanceHistory";
+import {
+  addTodoForDate,
+  listTodosForDate,
+  removeTodoForDate,
+  toggleTodoForDate,
+  type EmpCalendarTodoItem,
+} from "@/app/utils/empCalendarTodos";
 import { cn } from "@/app/utils/cn";
 
-export type CalendarDayDetailSection = "punches" | "sites" | "tasks" | "todo";
+export type CalendarDayDetailSection = "punches" | "sites" | "tasks" | "todo" | "all";
+
+function resolveEmployeeId(user: any): number {
+  return Number(user?.employee?.id ?? user?.employeeID ?? user?.manageEmployeeID ?? 0) || 0;
+}
 
 export function EmpCalendarDayDetailPanel({
   dateKey,
@@ -21,8 +36,50 @@ export function EmpCalendarDayDetailPanel({
   dateKey: string;
   section: CalendarDayDetailSection;
 }) {
+  const user = useCurrentUser();
+  const employeeId = resolveEmployeeId(user);
   const { dayTitle, loading, records, siteVisits, tasks, todos, summary, dayPunches } =
     useEmpCalendarDayDetail(dateKey);
+
+  const [personalTodos, setPersonalTodos] = useState<EmpCalendarTodoItem[]>([]);
+  const [draft, setDraft] = useState("");
+  const [adding, setAdding] = useState(false);
+  const showPunches = section === "punches" || section === "all";
+  const showSites = section === "sites" || section === "all";
+  const showTasks = section === "tasks" || section === "all";
+  const showTodo = section === "todo" || section === "all";
+
+  const refreshPersonalTodos = () => {
+    if (!employeeId || !dateKey) {
+      setPersonalTodos([]);
+      return;
+    }
+    setPersonalTodos(listTodosForDate(employeeId, dateKey));
+  };
+
+  useEffect(() => {
+    refreshPersonalTodos();
+    const onChange = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail?.employeeId && Number(detail.employeeId) !== employeeId) return;
+      refreshPersonalTodos();
+    };
+    window.addEventListener("emp-calendar-todos-changed", onChange);
+    return () => window.removeEventListener("emp-calendar-todos-changed", onChange);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [employeeId, dateKey]);
+
+  const handleAdd = () => {
+    if (!employeeId || !dateKey || !draft.trim()) return;
+    try {
+      addTodoForDate(employeeId, dateKey, draft);
+      setDraft("");
+      setAdding(false);
+      refreshPersonalTodos();
+    } catch {
+      /* ignore */
+    }
+  };
 
   if (loading) {
     return (
@@ -46,7 +103,7 @@ export function EmpCalendarDayDetailPanel({
       </div>
 
       <div className="p-5 space-y-6">
-        {summary && section === "punches" ? (
+        {summary && showPunches ? (
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             {[
               { label: "Mark in", value: formatPunchTime(dayPunches.checkIn?.checkinTime) },
@@ -64,7 +121,7 @@ export function EmpCalendarDayDetailPanel({
           </div>
         ) : null}
 
-        {section === "punches" ? (
+        {showPunches ? (
           <DashboardSection className="p-0 border-0 shadow-none">
             <h4 className="text-sm font-semibold text-foreground flex items-center gap-2">
               <Clock className="size-4 text-primary" />
@@ -104,7 +161,7 @@ export function EmpCalendarDayDetailPanel({
           </DashboardSection>
         ) : null}
 
-        {section === "sites" ? (
+        {showSites ? (
           <DashboardSection className="p-0 border-0 shadow-none">
             <h4 className="text-sm font-semibold text-foreground flex items-center gap-2">
               <MapPin className="size-4 text-primary" />
@@ -120,21 +177,15 @@ export function EmpCalendarDayDetailPanel({
                   <div key={t.id} className="rounded-xl border border-border p-4">
                     <p className="font-semibold text-foreground">{t.taskName}</p>
                     <p className="text-xs text-muted-foreground mt-0.5">
-                      {t.site?.branchName || t.site?.city || "Site"} · {t.status}
+                      {t.site?.branchName || t.site?.city || t.taskType || "Site visit"}
                     </p>
-                    <div className="mt-3 grid grid-cols-2 gap-2 text-xs border-t border-border pt-3">
-                      <div>
-                        <p className="text-muted-foreground">Site in</p>
-                        <p className="font-semibold mt-0.5">
-                          {t.punchesLoading ? "…" : t.markIn ? formatPunchTime(t.markIn) : "—"}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-muted-foreground">Site out</p>
-                        <p className="font-semibold mt-0.5">
-                          {t.punchesLoading ? "…" : t.markOut ? formatPunchTime(t.markOut) : "—"}
-                        </p>
-                      </div>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      <Badge variant="secondary" className="text-[10px]">
+                        In {t.markIn || "—"}
+                      </Badge>
+                      <Badge variant="secondary" className="text-[10px]">
+                        Out {t.markOut || "—"}
+                      </Badge>
                     </div>
                   </div>
                 ))}
@@ -143,7 +194,7 @@ export function EmpCalendarDayDetailPanel({
           </DashboardSection>
         ) : null}
 
-        {section === "tasks" ? (
+        {showTasks ? (
           <DashboardSection className="p-0 border-0 shadow-none">
             <h4 className="text-sm font-semibold text-foreground flex items-center gap-2">
               <ListTodo className="size-4 text-primary" />
@@ -151,31 +202,22 @@ export function EmpCalendarDayDetailPanel({
             </h4>
             {tasks.length === 0 ? (
               <p className="text-sm text-muted-foreground mt-3 py-6 text-center rounded-xl border border-dashed border-border">
-                No tasks scheduled this day
+                No tasks for this day
               </p>
             ) : (
               <div className="mt-3 space-y-2">
                 {tasks.map((t) => (
                   <div
                     key={t.id}
-                    className={cn(
-                      "flex items-center justify-between gap-3 rounded-xl border border-border px-4 py-3",
-                    )}
+                    className="flex items-center justify-between gap-3 rounded-xl border border-border px-4 py-3"
                   >
                     <div className="min-w-0">
                       <p className="font-medium text-foreground truncate">{t.taskName}</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">{t.taskType || "Task"}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">{t.taskType}</p>
                     </div>
-                    <div className="text-right shrink-0">
-                      <Badge variant="secondary" className="text-[10px]">
-                        {t.status}
-                      </Badge>
-                      {t.scheduleDateTime ? (
-                        <p className="text-[11px] text-muted-foreground mt-1 tabular-nums">
-                          {formatPunchTime(t.scheduleDateTime)}
-                        </p>
-                      ) : null}
-                    </div>
+                    <Badge variant="secondary" className="text-[10px] shrink-0">
+                      {t.status}
+                    </Badge>
                   </div>
                 ))}
               </div>
@@ -183,21 +225,94 @@ export function EmpCalendarDayDetailPanel({
           </DashboardSection>
         ) : null}
 
-        {section === "todo" ? (
+        {showTodo ? (
           <DashboardSection className="p-0 border-0 shadow-none">
-            <h4 className="text-sm font-semibold text-foreground flex items-center gap-2">
-              <CheckSquare className="size-4 text-primary" />
-              ToDo
-            </h4>
-            {todos.length === 0 ? (
+            <div className="flex items-center justify-between gap-3">
+              <h4 className="text-sm font-semibold text-foreground flex items-center gap-2">
+                <CheckSquare className="size-4 text-primary" />
+                ToDo
+              </h4>
+              {employeeId ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="h-8 gap-1 rounded-lg px-2.5"
+                  onClick={() => setAdding((v) => !v)}
+                >
+                  <Plus className="size-3.5" />
+                  Add
+                </Button>
+              ) : null}
+            </div>
+
+            {adding ? (
+              <div className="mt-3 flex gap-2">
+                <Input
+                  autoFocus
+                  value={draft}
+                  onChange={(e) => setDraft(e.target.value)}
+                  placeholder="Write a to-do for this date…"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      handleAdd();
+                    }
+                  }}
+                />
+                <Button type="button" size="sm" className="shrink-0" onClick={handleAdd} disabled={!draft.trim()}>
+                  Save
+                </Button>
+              </div>
+            ) : null}
+
+            {personalTodos.length === 0 && todos.length === 0 ? (
               <p className="text-sm text-muted-foreground mt-3 py-6 text-center rounded-xl border border-dashed border-border">
-                No to-do items for this day
+                No to-do items for this day. Tap + to add one.
               </p>
             ) : (
               <div className="mt-3 space-y-2">
-                {todos.map((t) => (
+                {personalTodos.map((t) => (
                   <div
                     key={t.id}
+                    className="flex items-center gap-3 rounded-xl border border-border px-4 py-3"
+                  >
+                    <button
+                      type="button"
+                      aria-label={t.done ? "Mark incomplete" : "Mark complete"}
+                      className={cn(
+                        "size-4 shrink-0 rounded border",
+                        t.done ? "border-primary bg-primary" : "border-muted-foreground/40",
+                      )}
+                      onClick={() => {
+                        toggleTodoForDate(employeeId, dateKey, t.id);
+                        refreshPersonalTodos();
+                      }}
+                    />
+                    <p
+                      className={cn(
+                        "min-w-0 flex-1 text-sm font-medium text-foreground",
+                        t.done && "line-through text-muted-foreground",
+                      )}
+                    >
+                      {t.text}
+                    </p>
+                    <button
+                      type="button"
+                      aria-label="Delete to-do"
+                      className="text-muted-foreground hover:text-destructive"
+                      onClick={() => {
+                        removeTodoForDate(employeeId, dateKey, t.id);
+                        refreshPersonalTodos();
+                      }}
+                    >
+                      <Trash2 className="size-3.5" />
+                    </button>
+                  </div>
+                ))}
+                {todos.map((t) => (
+                  <div
+                    key={`task-${t.id}`}
                     className="flex items-center justify-between gap-3 rounded-xl border border-border px-4 py-3"
                   >
                     <div className="min-w-0">

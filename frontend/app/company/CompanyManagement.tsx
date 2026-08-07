@@ -8,7 +8,8 @@ import { Label } from "../components/ui/label"
 import { Textarea } from "../components/ui/textarea"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../components/ui/table"
 import { Badge } from "../components/ui/badge"
-import { Plus, Edit, Trash2, Eye, ArrowLeft, X, Save, UserPlus } from "lucide-react"
+import { PageHeader } from "../components/app/page-header"
+import { Building2, Plus, Edit, Trash2, Eye, ArrowLeft, X, Save, UserPlus } from "lucide-react"
 import { useCurrentUser } from "../hooks/useCurrentUser"
 import { useRouter } from "next/navigation"
 import { TimezoneSelect } from "../components/ui/timezone-select"
@@ -112,6 +113,7 @@ interface CompanyAdminUser {
   role: string
   firstName?: string
   lastName?: string
+  ownerTitle?: string | null
 
   serviceProviderID?: number | null
   contactNo?: string | null
@@ -142,6 +144,7 @@ const emptyCompanyAdminForm = {
   lastName: "",
   contactNo: "",
   email: "",
+  designation: "",
   serviceProviderID: "" as string | number,
   companyID: "" as string | number,
   isActive: true,
@@ -483,6 +486,11 @@ setEditingCompany(null);
       lastName: user.lastName || "",
       contactNo: user.contactNo || "",
       email: user.email || "",
+      designation:
+        (user as any).ownerTitle ||
+        (selectedCompanyForAdmin as any)?.defaultOwnerTitle ||
+        defaultUserTypeForEntity(selectedCompanyForAdmin?.legalEntityType) ||
+        "",
       serviceProviderID: selectedCompanyForAdmin?.serviceProviderID || "",
       companyID: selectedCompanyForAdmin?.id || "",
       isActive: user.isActive,
@@ -851,6 +859,11 @@ setEditingCompany(null);
       serviceProviderID: company.serviceProviderID || "",
       companyID: company.id,
       isActive: true,
+      designation:
+        (company as any).defaultOwnerTitle ||
+        defaultUserTypeForEntity(company.legalEntityType) ||
+        ownerTitleForLegalEntity(company.legalEntityType) ||
+        "",
     })
 
     setCompanyAdminFormOpen(false)
@@ -907,6 +920,11 @@ setEditingCompany(null);
         personalPhoneNo: companyAdminForm.contactNo || undefined,
         businessEmail: companyAdminForm.email || undefined,
         isActive: companyAdminForm.isActive,
+        ownerTitle:
+          companyAdminForm.designation?.trim() ||
+          (selectedCompanyForAdmin as any)?.defaultOwnerTitle ||
+          ownerTitleForLegalEntity(selectedCompanyForAdmin.legalEntityType) ||
+          undefined,
       }
 
       if (companyAdminForm.password.trim()) {
@@ -973,28 +991,24 @@ setEditingCompany(null);
         <>
 
           {/* Header with Dropdown */}
-          <div className="flex items-center justify-between w-full">
-            <div className="min-w-0 flex-1">
-              <p className="text-gray-600 mt-1 text-sm">Manage registered companies</p>
-            </div>
-
-            <div className="flex items-center gap-3">
-              {/* Compliance Dropdown */}
-
-              {!isAddingNew && !isViewing && !isModuleDrawerOpen && user?.role === "SUPERADMIN" && (
+          <PageHeader
+            icon={Building2}
+            title="Tenants"
+            description="Manage registered companies"
+            actions={
+              !isAddingNew && !isViewing && !isModuleDrawerOpen && user?.role === "SUPERADMIN" ? (
                 <Button
                   onClick={async () => {
                     resetForm()
                     setIsAddingNew(true)
                     await applySoleServiceProviderToForm()
                   }}
-                  className="text-sm px-3 py-2"
                 >
                   <Plus className="w-4 h-4 mr-1" /> Add Tenant
                 </Button>
-              )}
-            </div>
-          </div>
+              ) : null
+            }
+          />
 
           {/* Add/Edit Form - Drawer */}
           <FormDrawer
@@ -1051,26 +1065,6 @@ setEditingCompany(null);
                       </SelectContent>
                     </Select>
                   </FormField>
-
-                  {formData.legalEntityType && userTypeOptionsForEntity(formData.legalEntityType).length > 0 && (
-                    <FormField label="User Type" description="Default designation for the company owner / first user.">
-                      <Select
-                        value={formData.defaultOwnerTitle || defaultUserTypeForEntity(formData.legalEntityType)}
-                        onValueChange={(v) => setFormData((p) => ({ ...p, defaultOwnerTitle: v }))}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select user type" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {userTypeOptionsForEntity(formData.legalEntityType).map((opt) => (
-                            <SelectItem key={opt} value={opt}>
-                              {opt}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </FormField>
-                  )}
 
                   <FormField label="Company Address">
                     <Textarea
@@ -1386,6 +1380,11 @@ setEditingCompany(null);
                             serviceProviderID: selectedCompanyForAdmin?.serviceProviderID || "",
                             companyID: selectedCompanyForAdmin?.id || "",
                             isActive: true,
+                            designation:
+                              (selectedCompanyForAdmin as any)?.defaultOwnerTitle ||
+                              defaultUserTypeForEntity(selectedCompanyForAdmin?.legalEntityType) ||
+                              ownerTitleForLegalEntity(selectedCompanyForAdmin?.legalEntityType) ||
+                              "",
                           })
                           setCompanyAdminFormOpen(true)
                         }}
@@ -1441,20 +1440,52 @@ setEditingCompany(null);
                       <p className="text-sm text-gray-500">
                         {editingCompanyAdmin
                           ? "Update owner employee login. Leave password blank to keep existing password."
-                          : "Creates an employee login with full company owner rights (title from company type)."}
+                          : "Creates an employee login with full company owner rights."}
                       </p>
-                      {selectedCompanyForAdmin ? (
-                        <p className="text-xs text-muted-foreground mt-1">
-                          Owner title:{" "}
-                          <span className="font-medium text-foreground">
-                            {(selectedCompanyForAdmin as any).defaultOwnerTitle ||
-                              ownerTitleForLegalEntity(selectedCompanyForAdmin.legalEntityType)}
-                          </span>
-                        </p>
-                      ) : null}
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-2 md:col-span-2">
+                        <Label>Designation *</Label>
+                        {selectedCompanyForAdmin?.legalEntityType &&
+                        userTypeOptionsForEntity(selectedCompanyForAdmin.legalEntityType).length > 0 ? (
+                          <Select
+                            value={
+                              companyAdminForm.designation ||
+                              (selectedCompanyForAdmin as any).defaultOwnerTitle ||
+                              defaultUserTypeForEntity(selectedCompanyForAdmin.legalEntityType)
+                            }
+                            onValueChange={(v) =>
+                              setCompanyAdminForm((p) => ({ ...p, designation: v }))
+                            }
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select designation" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {userTypeOptionsForEntity(selectedCompanyForAdmin.legalEntityType).map(
+                                (opt) => (
+                                  <SelectItem key={opt} value={opt}>
+                                    {opt}
+                                  </SelectItem>
+                                ),
+                              )}
+                            </SelectContent>
+                          </Select>
+                        ) : (
+                          <Input
+                            value={companyAdminForm.designation}
+                            onChange={(e) =>
+                              setCompanyAdminForm((p) => ({
+                                ...p,
+                                designation: e.target.value,
+                              }))
+                            }
+                            placeholder="e.g. Proprietor / Director"
+                          />
+                        )}
+                      </div>
+
                       <div className="space-y-2">
                         <Label>Username *</Label>
                         <Input

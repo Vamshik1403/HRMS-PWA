@@ -12,6 +12,7 @@ import { formatDevicePunchForDisplay } from "../utils/devicePunchTime";
 import { formatWorkedDuration } from "../utils/attendanceDuration";
 import { getSidebarContext } from "@/app/utils/sidebarContext";
 import { canViewModule } from "@/lib/companyAccess";
+import { PageHeader } from "../components/app/page-header";
 
 type ReportMode = "actual" | "factual";
 
@@ -2479,12 +2480,11 @@ if (!hasPunchesEffective) return { type: "ABSENT", label: "Absent", hasPunches: 
   }
 
   return (
-    <div className="space-y-6 w-full max-w-7xl mx-auto px-4">
-      <div className="flex items-center justify-between w-full"><div className="min-w-0 flex-1"><p className="text-gray-600 mt-1 text-sm">Generate and view attendance logs by company, branch, department and date range.</p></div></div>
+    <div className="space-y-6 w-full max-w-none animate-fade-in page-content-enter">
+      <PageHeader icon={FileText} title="Attendance Reports" />
 
       <Card>
-        <CardHeader><CardTitle className="flex items-center gap-2">Attendance Filters</CardTitle></CardHeader>
-        <CardContent>
+        <CardContent className="pt-6">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
             {user?.role === "SUPERADMIN" && (
               <div className="space-y-2">

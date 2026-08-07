@@ -39,7 +39,7 @@ import { useClientTable, sortRows } from "../hooks/use-client-table";
 
 const STATUSES = TASK_STATUSES;
 const PRIORITIES = ["Urgent", "Medium", "Low"];
-const TASK_TYPES = ["Site Visit", "Meeting", "Job / Work Task"];
+const TASK_TYPES = ["Internal Task", "Customer Visit"];
 
 interface Task {
   id: number; taskCode: string; taskName: string; taskType: string;
@@ -128,7 +128,7 @@ export default function TaskManagement() {
   const [assignIds, setAssignIds] = useState<number[]>([]);
   const [assignSaving, setAssignSaving] = useState(false);
   const [form, setForm] = useState({
-    departmentID: "", taskType: "Site Visit", customerID: "", siteID: "",
+    departmentID: "", taskType: "Internal Task", customerID: "", siteID: "",
     taskName: "", description: "", scheduleDateTime: "", priority: "Medium",
     dueDateTime: "",
   });
@@ -285,7 +285,7 @@ useAppRefresh(() => {
   }, [tasks]);
 
   const resetForm = () => {
-    setForm({ departmentID: "", taskType: "Site Visit", customerID: "", siteID: "", taskName: "", description: "", scheduleDateTime: "", priority: "Medium", dueDateTime: "" });
+    setForm({ departmentID: "", taskType: "Internal Task", customerID: "", siteID: "", taskName: "", description: "", scheduleDateTime: "", priority: "Medium", dueDateTime: "" });
     customerIdRef.current = "";
     setCustomerLabel(""); setBranchLabel(""); setDepartmentLabel(""); setEditingTask(null);
   };
@@ -368,11 +368,12 @@ useAppRefresh(() => {
     e.preventDefault();
     if (!form.taskName.trim()) { toast.error("Task name required"); return; }
     setSaving(true);
+    const isCustomerVisit = form.taskType === "Customer Visit";
     const payload = {
       departmentID: form.departmentID ? Number(form.departmentID) : undefined,
       taskType: form.taskType,
-      customerID: form.customerID ? Number(form.customerID) : undefined,
-      siteID: form.siteID ? Number(form.siteID) : undefined,
+      customerID: isCustomerVisit && form.customerID ? Number(form.customerID) : undefined,
+      siteID: isCustomerVisit && form.siteID ? Number(form.siteID) : undefined,
       taskName: form.taskName, description: form.description,
       scheduleDateTime: form.scheduleDateTime || undefined, priority: form.priority,
       dueDateTime: form.dueDateTime || undefined,
@@ -773,11 +774,29 @@ useAppRefresh(() => {
               onSelect={({ value }) => { setForm((p) => ({ ...p, departmentID: String(value) })); }} />
             <div className="space-y-2">
               <Label>Task Type</Label>
-              <select className="app-select w-full" value={form.taskType} onChange={(e) => setForm((p) => ({ ...p, taskType: e.target.value }))}>
+              <select
+                className="app-select w-full"
+                value={form.taskType}
+                onChange={(e) => {
+                  const nextType = e.target.value;
+                  const isCustomerVisit = nextType === "Customer Visit";
+                  setForm((p) => ({
+                    ...p,
+                    taskType: nextType,
+                    ...(isCustomerVisit ? {} : { customerID: "", siteID: "" }),
+                  }));
+                  if (!isCustomerVisit) {
+                    customerIdRef.current = "";
+                    setCustomerLabel("");
+                    setBranchLabel("");
+                  }
+                }}
+              >
                 {TASK_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
               </select>
             </div>
           </div>
+          {form.taskType === "Customer Visit" ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <SearchSuggestInput label="Customer" placeholder="Search customer…" value={customerLabel} onChange={setCustomerLabel}
               fetchData={searchCustomers} displayField="label" valueField="id"
@@ -809,6 +828,7 @@ useAppRefresh(() => {
               }}
             />
           </div>
+          ) : null}
           <div className="space-y-2">
             <Label>Task Name *</Label>
             <Input value={form.taskName} onChange={(e) => setForm((p) => ({ ...p, taskName: e.target.value }))} required />

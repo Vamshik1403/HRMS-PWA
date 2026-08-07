@@ -58,7 +58,7 @@ export function EmpPortalTopbar({
             ) : null}
           </div>
         ) : (
-          <div className="text-[16px] font-bold text-foreground">OpenHRM</div>
+          <div className="min-w-0" aria-hidden />
         )}
 
         <div className="flex shrink-0 items-center gap-3">

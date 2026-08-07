@@ -1573,7 +1573,7 @@ export function GenerateSalaryManagement() {
   const user = useCurrentUser()
   const [items, setItems] = useState<GenerateSalaryRow[]>([])
   const [listLoading, setListLoading] = useState(true)
-  const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN" || user?.role === "BRANCH_ADMIN"
+  const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN" || user?.role === "BRANCH_ADMIN" || hasModuleWriteAccess("PAYROLL")
 
   const [spList, setSpList] = useState<SP[]>([]);
   const [coList, setCoList] = useState<CO[]>([]);

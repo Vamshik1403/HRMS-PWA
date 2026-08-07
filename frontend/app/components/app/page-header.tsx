@@ -1,8 +1,17 @@
 "use client";
 
-import { type LucideIcon } from "lucide-react";
-import { type ReactNode } from "react";
+import { useMemo, type ReactNode } from "react";
+import { LayoutGrid, type LucideIcon } from "lucide-react";
 import { cn } from "@/app/utils/cn";
+import {
+  useAdminPageHeader,
+  useOptionalAdminPageHeaderContext,
+} from "@/app/components/layout/admin-page-header-context";
+import {
+  useEmpPortalPageHeader,
+  useOptionalEmpPortalPageContext,
+} from "@/app/components/layout/emp-portal-page-context";
+import { useRegisterListToolbarActions } from "@/app/components/layout/list-toolbar-actions-context";
 
 interface PageHeaderProps {
   icon?: LucideIcon;
@@ -10,6 +19,8 @@ interface PageHeaderProps {
   description?: ReactNode;
   actions?: ReactNode;
   className?: string;
+  /** Keep the large in-content title even when topbar sync is active. */
+  keepInContentTitle?: boolean;
 }
 
 export function PageHeader({
@@ -18,11 +29,41 @@ export function PageHeader({
   description,
   actions,
   className,
+  keepInContentTitle = false,
 }: PageHeaderProps) {
+  const inPortal = Boolean(useOptionalEmpPortalPageContext());
+  const hasAdminHeaderCtx = Boolean(useOptionalAdminPageHeaderContext());
+  const subtitle = typeof description === "string" ? description : "";
+  const PageIcon = Icon ?? LayoutGrid;
+
+  const portalHeader = useMemo(() => {
+    if (!inPortal || !title) return null;
+    return { icon: PageIcon, title, subtitle };
+  }, [inPortal, title, subtitle, PageIcon]);
+
+  const adminHeader = useMemo(() => {
+    if (inPortal || !hasAdminHeaderCtx || !title) return null;
+    return { title, subtitle: subtitle || undefined };
+  }, [inPortal, hasAdminHeaderCtx, title, subtitle]);
+
+  useEmpPortalPageHeader(portalHeader);
+  useAdminPageHeader(adminHeader);
+
+  const syncedToTopbar = Boolean(portalHeader || adminHeader);
+  const showInContentTitle = keepInContentTitle || !syncedToTopbar;
+
+  // When title is in the navbar, Add/actions render on the FilterBar row.
+  useRegisterListToolbarActions(syncedToTopbar && !keepInContentTitle ? actions ?? null : null);
+
+  if (!showInContentTitle) {
+    return null;
+  }
+
   return (
     <div
+      data-hrms-page-header
       className={cn(
-        "mb-6 flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between",
+        "flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between",
         className,
       )}
     >

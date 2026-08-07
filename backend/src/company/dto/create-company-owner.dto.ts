@@ -41,6 +41,11 @@ export class CreateCompanyOwnerDto {
   @IsOptional()
   @IsString()
   joiningDate?: string;
+
+  /** Designation / owner title for the company owner (shown as Designation). */
+  @IsOptional()
+  @IsString()
+  ownerTitle?: string;
 }
 
 export class CreateCompanyWithOwnerDto {

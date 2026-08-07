@@ -8,6 +8,7 @@ import { Label } from "../components/ui/label";
 import { Search, Download, FileText } from "lucide-react";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import * as XLSX from "xlsx";
+import { PageHeader } from "../components/app/page-header";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "/backend";
 
@@ -343,21 +344,12 @@ export function PayrollReportsManagement() {
   // ── Render ──
 
   return (
-    <div className="space-y-6 w-full max-w-7xl mx-auto px-4">
-      <div className="flex items-center justify-between w-full">
-        <div className="min-w-0 flex-1">
-          <p className="text-gray-600 mt-1 text-sm">
-            Generate and view payroll reports by company, branch, department and date range.
-          </p>
-        </div>
-      </div>
+    <div className="space-y-6 w-full max-w-none animate-fade-in page-content-enter">
+      <PageHeader icon={FileText} title="Payroll Reports" />
 
       {/* Filter Card */}
       <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">Payroll Filters</CardTitle>
-        </CardHeader>
-        <CardContent>
+        <CardContent className="pt-6">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
             {/* Company */}
             {user?.role === "SUPERADMIN" && (

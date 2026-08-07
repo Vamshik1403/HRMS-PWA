@@ -151,8 +151,6 @@ export function EmpDesktopAttendancePanel({
   };
 
   const workHours = formatWorkHoursDecimal(todayStatus?.workSeconds ?? 0);
-  const breakLabel =
-    todayStatus?.breakMinutes != null ? `${todayStatus.breakMinutes}m` : "0m";
 
   const actionButtons =
     showActions && !loading && !isAbsent ? (
@@ -247,7 +245,7 @@ export function EmpDesktopAttendancePanel({
 
     <div
       className={cn(
-        "grid gap-3 sm:grid-cols-2 lg:grid-cols-4",
+        "grid gap-3 sm:grid-cols-2 lg:grid-cols-3",
         compact
           ? checkIn || checkOut
             ? "mt-3 pt-3"
@@ -258,7 +256,6 @@ export function EmpDesktopAttendancePanel({
       <MetricTile dense={compact} label="Mark in" value={checkIn ? fmt(checkIn.checkinTime) : "—"} />
       <MetricTile dense={compact} label="Mark out" value={checkOut ? fmt(checkOut.checkinTime) : "—"} />
       <MetricTile dense={compact} label="Working hours" value={workHours} className="text-emerald-600" />
-      <MetricTile dense={compact} label="Break" value={breakLabel} className="text-amber-600" />
     </div>
 
     {(checkIn || checkOut) && (

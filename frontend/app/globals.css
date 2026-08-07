@@ -1008,7 +1008,21 @@ html[data-emp-theme="dark"] .emp-pwa-shell .emp-mobile-date-field input[type="da
   to   { opacity: 1; transform: translateY(0); }
 }
 .page-content-enter {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
   animation: page-fade-in 0.18s ease-out both;
+}
+/* Neutralize Tailwind space-y margins so flex `order` can swap toolbar/actions. */
+.page-content-enter > * {
+  margin-block-start: 0 !important;
+  order: 50;
+}
+.page-content-enter > [data-hrms-page-header] {
+  order: 5;
+}
+.page-content-enter > [data-hrms-filter-bar] {
+  order: 10;
 }
 
 /* ── Skeleton pulse override for table rows ────────────────────────────── */

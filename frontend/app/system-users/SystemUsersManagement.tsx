@@ -85,7 +85,7 @@ const emptyUserForm = {
   email: "",
   username: "",
   password: "",
-  role: "",
+  role: "SUPERADMIN",
   serviceProviderID: "" as string | number,
   companyID: "" as string | number,
   companyIDs: [] as number[],
@@ -159,7 +159,7 @@ const canAccess = isSuperAdmin || isServiceProvider || isAdmin;
   }, []);
 
   const resetForm = () => {
-    setForm({ ...emptyUserForm });
+    setForm({ ...emptyUserForm, role: isSuperAdmin ? "SUPERADMIN" : "" });
     setEditingRow(null);
     setIsViewing(false);
     setViewRow(null);
@@ -240,8 +240,8 @@ const filteredCompanies = useMemo(() => {
     e.preventDefault();
     if (!form.username) { toast.error("Username is required"); return; }
     if (!editingRow && !form.password) { toast.error("Password is required"); return; }
-if ((form.role === "COMPANY_OWNER" || form.role === "SUPERADMIN") && form.companyIDs.length === 0 && form.role === "SUPERADMIN") {
-        toast.error("Select at least one company");
+if ((form.role === "COMPANY_OWNER") && form.companyIDs.length === 0 && !form.companyID) {
+        toast.error("Select a company for the Company Owner");
       return;
     }
     if (form.role === "COMPANY_OWNER" && !form.companyID && form.companyIDs.length === 0) {
@@ -285,7 +285,7 @@ if ((form.role === "COMPANY_OWNER" || form.role === "SUPERADMIN") && form.compan
         toast.success("Company Owner created — they log in as an employee");
         resetForm();
         setTimeout(() => {
-          setForm({ ...emptyUserForm });
+          setForm({ ...emptyUserForm, role: isSuperAdmin ? "SUPERADMIN" : "" });
         }, 0);
         setIsAddingNew(false);
         fetchRows();
@@ -305,8 +305,8 @@ serviceProviderID: isServiceProvider
     ? Number(form.serviceProviderID)
     : undefined,
     
-    companyID: form.companyID ? Number(form.companyID) : undefined,
-companyIDs: form.role === "SUPERADMIN" ? form.companyIDs : undefined,
+    companyID: form.role === "SUPERADMIN" ? undefined : form.companyID ? Number(form.companyID) : undefined,
+companyIDs: form.role === "SUPERADMIN" ? undefined : form.companyIDs?.length ? form.companyIDs : undefined,
         branchesID: form.branchesID ? Number(form.branchesID) : undefined,
         isActive: form.isActive,
       };
@@ -319,7 +319,7 @@ companyIDs: form.role === "SUPERADMIN" ? form.companyIDs : undefined,
       toast.success(editingRow ? "User updated" : "User created");
       resetForm();
       setTimeout(() => {
-  setForm({ ...emptyUserForm });
+  setForm({ ...emptyUserForm, role: isSuperAdmin ? "SUPERADMIN" : "" });
 }, 0);
       setIsAddingNew(false);
       fetchRows();
@@ -673,6 +673,9 @@ if (isAdmin && user?.companyID) {
 
           <div className="space-y-2">
             <Label>Role</Label>
+            {isSuperAdmin ? (
+              <Input value="SUPERADMIN" readOnly className="bg-muted/40" />
+            ) : (
             <Select
               value={form.role}
               onValueChange={(v) =>
@@ -688,13 +691,14 @@ if (isAdmin && user?.companyID) {
             >
                 <SelectTrigger><SelectValue placeholder="Select role…" /></SelectTrigger>
               <SelectContent>
-{(isSuperAdmin ? SUPERADMIN_ROLES : isServiceProvider ? SERVICE_PROVIDER_ROLES : isAdmin ? ADMIN_ROLES : []).map((r) => (
+{(isServiceProvider ? SERVICE_PROVIDER_ROLES : isAdmin ? ADMIN_ROLES : []).map((r) => (
   <SelectItem key={r} value={r}>
     {ROLE_DISPLAY[r] || r}
   </SelectItem>
 ))}
               </SelectContent>
             </Select>
+            )}
           </div>
 
           {/* SP field: shown for SERVICE_PROVIDER, COMPANY_OWNER, ADMIN, BRANCH_ADMIN */}
@@ -722,89 +726,12 @@ if (isAdmin && user?.companyID) {
           )}
 
                    {/* Company field */}
-{(form.role === "SUPERADMIN" || form.role === "COMPANY_OWNER" || form.role === "ADMIN" || form.role === "BRANCH_ADMIN") && (
+{(form.role === "COMPANY_OWNER" || form.role === "ADMIN" || form.role === "BRANCH_ADMIN") && (
             <div className="space-y-2">
               <Label>
-{form.role === "SUPERADMIN" ? "Companies" : "Company"}
+Company
               </Label>
 
-{form.role === "SUPERADMIN" ? (
-                <div className="space-y-3">
-                  <div className="relative">
-                  <Input
-  value={companySearch}
-  onFocus={() => setCompanyDropdownOpen(true)}
-  onChange={(e) => {
-    setCompanySearch(e.target.value);
-    setCompanyDropdownOpen(true);
-  }}
-  placeholder="Search and select company..."
-  autoComplete="off"
-/>
-                    {companyDropdownOpen && companySuggestions.length > 0 && (
-                      <div className="absolute z-50 mt-1 w-full rounded-md border bg-white shadow-lg max-h-56 overflow-auto">
-                        {companySuggestions.map((company: any) => (
-                          <button
-                            key={company.id}
-                            type="button"
-                            onClick={() => addCompanyToUser(company)}
-                            className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100"
-                          >
-                            {company.companyName}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-
-                  {selectedCompanies.length > 0 && (
-                    <div className="space-y-2">
-                      {selectedCompanies.map((company: any, index: number) => (
-                        <div
-                          key={company.id}
-                          className="flex items-center justify-between rounded-md border px-3 py-2 bg-gray-50"
-                        >
-                          <div>
-                            <p className="text-sm font-medium">{company.companyName}</p>
-                            {Number(form.companyID) === Number(company.id) ? (
-                              <p className="text-xs text-green-600">Primary company</p>
-                            ) : (
-                              <button
-                                type="button"
-                                className="text-xs text-blue-600 hover:underline"
-                                onClick={() =>
-                                  setForm((p) => ({
-                                    ...p,
-                                    companyID: company.id,
-                                  }))
-                                }
-                              >
-                                Set as primary
-                              </button>
-                            )}
-                          </div>
-
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => removeCompanyFromUser(Number(company.id))}
-                            className="text-red-500 hover:text-red-700"
-                            disabled={selectedCompanies.length === 1 && !editingRow}
-                          >
-                            <X className="w-4 h-4" />
-                          </Button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  {selectedCompanies.length === 0 && (
-                    <p className="text-xs text-gray-500">
-Select at least one company from dropdown. First selected company becomes primary.                    </p>
-                  )}
-                </div>
-              ) : (
                 <Select
                   value={String(form.companyID)}
                   onValueChange={(v) =>
@@ -827,7 +754,6 @@ Select at least one company from dropdown. First selected company becomes primar
                     ))}
                   </SelectContent>
                 </Select>
-              )}
               {form.role === "COMPANY_OWNER" && form.companyID ? (
                 <p className="text-xs text-muted-foreground">
                   Owner title:{" "}

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Calendar, CheckSquare, ChevronLeft, ChevronRight, Clock, ListTodo, MapPin } from "lucide-react";
+import { Calendar, CheckSquare, Clock, ListTodo, MapPin } from "lucide-react";
 import { EmpDesktopPage } from "./EmpDesktopPage";
 import {
   EmpCalendarDayDetailPanel,
@@ -30,16 +30,25 @@ import type { EmpHolidayRow } from "../EmpHolidayListMobile";
 import { useCurrentUser } from "@/app/hooks/useCurrentUser";
 import { taskFetch } from "@/app/utils/taskApi";
 import { cn } from "@/app/utils/cn";
+import { todoTextsByDate } from "@/app/utils/empCalendarTodos";
 
 const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL || "/backend";
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+type CalendarViewMode = "month" | "week" | "day";
 
 const LEGEND: { kind: CalendarDayKind; label: string; dot: string }[] = [
   { kind: "present", label: "Present", dot: "bg-emerald-500" },
   { kind: "absent", label: "Absent", dot: "bg-rose-500" },
   { kind: "leave", label: "Leave", dot: "bg-sky-500" },
   { kind: "holiday", label: "Holiday", dot: "bg-violet-500" },
-  { kind: "weekoff", label: "Week off", dot: "bg-amber-500" },
+  { kind: "weekoff", label: "Weekend", dot: "bg-amber-500" },
+];
+
+const VIEW_MODES: { id: CalendarViewMode; label: string }[] = [
+  { id: "month", label: "Month" },
+  { id: "week", label: "Week" },
+  { id: "day", label: "Day" },
 ];
 
 function pad2(n: number) {
@@ -58,6 +67,15 @@ function taskDateKey(scheduleDateTime: string) {
   const d = new Date(scheduleDateTime);
   if (Number.isNaN(d.getTime())) return "";
   return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+}
+
+function parseDateKey(dateKey: string) {
+  const [y, m, d] = dateKey.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, d));
+}
+
+function toDateKey(d: Date) {
+  return `${d.getUTCFullYear()}-${pad2(d.getUTCMonth() + 1)}-${pad2(d.getUTCDate())}`;
 }
 
 function buildMonthCells(year: number, month: number) {
@@ -87,6 +105,24 @@ function buildMonthCells(year: number, month: number) {
   return cells;
 }
 
+function buildWeekCells(anchorKey: string) {
+  const anchor = parseDateKey(anchorKey);
+  const dow = anchor.getUTCDay();
+  const start = new Date(anchor);
+  start.setUTCDate(anchor.getUTCDate() - dow);
+  const cells: { dateKey: string; day: number; outside?: boolean }[] = [];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(start);
+    d.setUTCDate(start.getUTCDate() + i);
+    cells.push({
+      dateKey: toDateKey(d),
+      day: d.getUTCDate(),
+      outside: d.getUTCMonth() !== anchor.getUTCMonth(),
+    });
+  }
+  return cells;
+}
+
 function authHeaders(): Record<string, string> {
   const token =
     typeof window !== "undefined"
@@ -95,26 +131,39 @@ function authHeaders(): Record<string, string> {
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
-const kindAccent: Record<CalendarDayKind, string> = {
-  present: "border-l-emerald-500 bg-emerald-50/40",
-  absent: "border-l-rose-400 bg-rose-50/30",
-  holiday: "border-l-violet-500 bg-violet-50/40",
-  weekoff: "border-l-amber-500 bg-amber-50/40",
-  leave: "border-l-sky-500 bg-sky-50/40",
-  none: "border-l-transparent",
-};
-
-const kindBadge: Record<CalendarDayKind, string> = {
-  present: "bg-emerald-100 text-emerald-800",
-  absent: "bg-rose-100 text-rose-700",
-  holiday: "bg-violet-100 text-violet-800",
-  weekoff: "bg-amber-100 text-amber-800",
-  leave: "bg-sky-100 text-sky-800",
-  none: "",
-};
+function resolveStatusKind(args: {
+  dateKey: string;
+  todayKey: string;
+  isOutside: boolean;
+  isWeekend: boolean;
+  isWeekOff: boolean;
+  isHoliday: boolean;
+  dayMap: Map<string, AttendanceDaySummary>;
+  weekOffDays: Set<string>;
+  holidayMap: Map<string, string>;
+  leaves: { fromDate?: string; toDate?: string; status?: string; appliedLeaveType?: string; dayStatuses?: unknown }[];
+}): CalendarDayKind {
+  const { dateKey, todayKey, isOutside, isWeekend, isWeekOff, isHoliday, dayMap, weekOffDays, holidayMap, leaves } =
+    args;
+  if (isOutside) return "none";
+  const display = resolveCalendarDayDisplay({
+    dateKey,
+    todayKey,
+    attendance: dayMap.get(dateKey),
+    weekOffDays,
+    holidayMap,
+    leaves,
+  });
+  if (display.kind === "leave") return "leave";
+  if (display.kind === "holiday" || isHoliday) return "holiday";
+  if (display.kind === "weekoff" || isWeekOff || isWeekend) return "weekoff";
+  if (display.kind === "present") return "present";
+  if (display.kind === "absent") return "absent";
+  return "none";
+}
 
 const DAY_DETAIL_TABS: {
-  id: CalendarDayDetailSection;
+  id: Exclude<CalendarDayDetailSection, "all">;
   label: string;
   icon: typeof Clock;
 }[] = [
@@ -129,6 +178,8 @@ export function EmpDesktopWorkspaceCalendar() {
   const today = new Date();
   const [viewYear, setViewYear] = useState(today.getFullYear());
   const [viewMonth, setViewMonth] = useState(today.getMonth() + 1);
+  const [viewMode, setViewMode] = useState<CalendarViewMode>("month");
+  const [focusDateKey, setFocusDateKey] = useState(todayPunchDateKey());
   const [loading, setLoading] = useState(true);
   const [days, setDays] = useState<AttendanceDaySummary[]>([]);
   const [weekOffDays, setWeekOffDays] = useState<Set<string>>(new Set());
@@ -137,118 +188,153 @@ export function EmpDesktopWorkspaceCalendar() {
     { fromDate?: string; toDate?: string; status?: string; appliedLeaveType?: string; dayStatuses?: unknown }[]
   >([]);
   const [tasksByDate, setTasksByDate] = useState<Map<string, number>>(new Map());
+  const [todosByDate, setTodosByDate] = useState<Map<string, string[]>>(new Map());
   const [selectedDateKey, setSelectedDateKey] = useState<string | null>(null);
-  const [dayDetailSection, setDayDetailSection] = useState<CalendarDayDetailSection>("punches");
+  const [dayDetailSection, setDayDetailSection] = useState<Exclude<CalendarDayDetailSection, "all">>("punches");
   const monthInputRef = useRef<HTMLInputElement>(null);
 
   const todayKey = todayPunchDateKey();
 
-  const loadMonth = useCallback(async (year: number, month: number) => {
-    setLoading(true);
-    const { from, to } = monthRange(year, month);
-    try {
-      const userRaw = typeof window !== "undefined" ? localStorage.getItem("user") : null;
-      const parsedUser = userRaw ? JSON.parse(userRaw) : null;
-      const empId = parsedUser?.employee?.id;
+  const refreshTodosByDate = useCallback(() => {
+    const empId = Number(user?.employee?.id ?? 0) || 0;
+    setTodosByDate(empId ? todoTextsByDate(empId) : new Map());
+  }, [user?.employee?.id]);
 
-      const [attendanceData, holidaysData, leaveData, empData] = await Promise.all([
-        fetch(`${BACKEND}/emp-location-attendance/my?from=${from}&to=${to}`, {
-          headers: authHeaders(),
-          cache: "no-store",
-        }).then((r) => (r.ok ? r.json() : [])),
-        fetch(`${BACKEND}/emp-notifications/holidays`, { headers: authHeaders(), cache: "no-store" }).then((r) =>
-          r.ok ? r.json() : [],
-        ),
-        empId != null
-          ? fetch(`${BACKEND}/leave-application/employee/${empId}`, { headers: authHeaders(), cache: "no-store" }).then(
-              (r) => (r.ok ? r.json() : []),
-            )
-          : Promise.resolve([]),
-        empId != null
-          ? fetch(`${BACKEND}/manage-emp/${empId}`, { headers: authHeaders(), cache: "no-store" }).then((r) =>
-              r.ok ? r.json() : null,
-            )
-          : Promise.resolve(null),
-      ]);
+  useEffect(() => {
+    refreshTodosByDate();
+    const onChange = () => refreshTodosByDate();
+    window.addEventListener("emp-calendar-todos-changed", onChange);
+    return () => window.removeEventListener("emp-calendar-todos-changed", onChange);
+  }, [refreshTodosByDate]);
 
-      setDays(groupAttendanceByDay(Array.isArray(attendanceData) ? attendanceData : []));
-      setHolidayMap(
-        expandHolidayDateMap(
-          (Array.isArray(holidaysData) ? holidaysData : []).map((h: EmpHolidayRow) => ({
-            name: h.name,
-            startDate: h.startDate,
-            endDate: h.endDate,
-          })),
-        ),
-      );
-      setLeaves(Array.isArray(leaveData) ? leaveData : []);
+  const loadMonth = useCallback(
+    async (year: number, month: number) => {
+      setLoading(true);
+      const { from, to } = monthRange(year, month);
+      try {
+        const userRaw = typeof window !== "undefined" ? localStorage.getItem("user") : null;
+        const parsedUser = userRaw ? JSON.parse(userRaw) : null;
+        const empId = parsedUser?.employee?.id;
 
-      const workShiftId = empData?.workShiftID ?? empData?.workShift?.id;
-      if (workShiftId) {
-        const shiftRes = await fetch(`${BACKEND}/work-shift/${workShiftId}`, {
-          headers: authHeaders(),
-          cache: "no-store",
-        });
-        if (shiftRes.ok) {
-          const shift = await shiftRes.json();
-          const shiftDays: WorkShiftDayRow[] = Array.isArray(shift?.workShiftDay) ? shift.workShiftDay : [];
-          setWeekOffDays(buildWeekOffDayNames(shiftDays));
+        const [attendanceData, holidaysData, leaveData, empData] = await Promise.all([
+          fetch(`${BACKEND}/emp-location-attendance/my?from=${from}&to=${to}`, {
+            headers: authHeaders(),
+            cache: "no-store",
+          }).then((r) => (r.ok ? r.json() : [])),
+          fetch(`${BACKEND}/emp-notifications/holidays`, { headers: authHeaders(), cache: "no-store" }).then((r) =>
+            r.ok ? r.json() : [],
+          ),
+          empId != null
+            ? fetch(`${BACKEND}/leave-application/employee/${empId}`, { headers: authHeaders(), cache: "no-store" }).then(
+                (r) => (r.ok ? r.json() : []),
+              )
+            : Promise.resolve([]),
+          empId != null
+            ? fetch(`${BACKEND}/manage-emp/${empId}`, { headers: authHeaders(), cache: "no-store" }).then((r) =>
+                r.ok ? r.json() : null,
+              )
+            : Promise.resolve(null),
+        ]);
+
+        setDays(groupAttendanceByDay(Array.isArray(attendanceData) ? attendanceData : []));
+        setHolidayMap(
+          expandHolidayDateMap(
+            (Array.isArray(holidaysData) ? holidaysData : []).map((h: EmpHolidayRow) => ({
+              name: h.name,
+              startDate: h.startDate,
+              endDate: h.endDate,
+            })),
+          ),
+        );
+        setLeaves(Array.isArray(leaveData) ? leaveData : []);
+
+        const workShiftId = empData?.workShiftID ?? empData?.workShift?.id;
+        if (workShiftId) {
+          const shiftRes = await fetch(`${BACKEND}/work-shift/${workShiftId}`, {
+            headers: authHeaders(),
+            cache: "no-store",
+          });
+          if (shiftRes.ok) {
+            const shift = await shiftRes.json();
+            const shiftDays: WorkShiftDayRow[] = Array.isArray(shift?.workShiftDay) ? shift.workShiftDay : [];
+            setWeekOffDays(buildWeekOffDayNames(shiftDays));
+          } else {
+            setWeekOffDays(new Set());
+          }
         } else {
           setWeekOffDays(new Set());
         }
-      } else {
-        setWeekOffDays(new Set());
-      }
 
-      if (user) {
-        try {
-          const taskData = await taskFetch<{ items: { scheduleDateTime?: string | null }[] }>(
-            "/task-projects",
-            user,
-            undefined,
-            { limit: 200 },
-          );
-          const taskMap = new Map<string, number>();
-          (taskData.items || []).forEach((t) => {
-            if (!t.scheduleDateTime) return;
-            const key = taskDateKey(t.scheduleDateTime);
-            if (!key) return;
-            taskMap.set(key, (taskMap.get(key) ?? 0) + 1);
-          });
-          setTasksByDate(taskMap);
-        } catch {
-          setTasksByDate(new Map());
+        if (user) {
+          try {
+            const taskData = await taskFetch<{ items: { scheduleDateTime?: string | null }[] }>(
+              "/task-projects",
+              user,
+              undefined,
+              { limit: 200 },
+            );
+            const taskMap = new Map<string, number>();
+            (taskData.items || []).forEach((t) => {
+              if (!t.scheduleDateTime) return;
+              const key = taskDateKey(t.scheduleDateTime);
+              if (!key) return;
+              taskMap.set(key, (taskMap.get(key) ?? 0) + 1);
+            });
+            setTasksByDate(taskMap);
+          } catch {
+            setTasksByDate(new Map());
+          }
         }
+      } catch {
+        setDays([]);
+        setHolidayMap(new Map());
+        setLeaves([]);
+        setWeekOffDays(new Set());
+        setTasksByDate(new Map());
+      } finally {
+        setLoading(false);
       }
-    } catch {
-      setDays([]);
-      setHolidayMap(new Map());
-      setLeaves([]);
-      setWeekOffDays(new Set());
-      setTasksByDate(new Map());
-    } finally {
-      setLoading(false);
-    }
-  }, [user]);
+    },
+    [user],
+  );
 
   useEffect(() => {
     void loadMonth(viewYear, viewMonth);
   }, [viewYear, viewMonth, loadMonth]);
 
   const dayMap = useMemo(() => new Map(days.map((d) => [d.dateKey, d])), [days]);
-  const cells = useMemo(() => buildMonthCells(viewYear, viewMonth), [viewYear, viewMonth]);
+  const monthCells = useMemo(() => buildMonthCells(viewYear, viewMonth), [viewYear, viewMonth]);
+  const weekCells = useMemo(() => buildWeekCells(focusDateKey), [focusDateKey]);
 
-  const monthLabel = new Date(Date.UTC(viewYear, viewMonth - 1, 1)).toLocaleDateString("en-IN", {
-    month: "long",
-    year: "numeric",
-    timeZone: "UTC",
-  });
-
-  const shiftMonth = (delta: number) => {
-    const d = new Date(Date.UTC(viewYear, viewMonth - 1 + delta, 1));
-    setViewYear(d.getUTCFullYear());
-    setViewMonth(d.getUTCMonth() + 1);
-  };
+  const headerLabel = useMemo(() => {
+    if (viewMode === "day") {
+      return parseDateKey(focusDateKey).toLocaleDateString("en-IN", {
+        weekday: "long",
+        day: "numeric",
+        month: "long",
+        year: "numeric",
+        timeZone: "UTC",
+      });
+    }
+    if (viewMode === "week") {
+      const start = weekCells[0]?.dateKey;
+      const end = weekCells[6]?.dateKey;
+      if (!start || !end) return "Week";
+      const a = parseDateKey(start).toLocaleDateString("en-IN", { day: "numeric", month: "short", timeZone: "UTC" });
+      const b = parseDateKey(end).toLocaleDateString("en-IN", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+        timeZone: "UTC",
+      });
+      return `${a} – ${b}`;
+    }
+    return new Date(Date.UTC(viewYear, viewMonth - 1, 1)).toLocaleDateString("en-IN", {
+      month: "long",
+      year: "numeric",
+      timeZone: "UTC",
+    });
+  }, [viewMode, focusDateKey, weekCells, viewYear, viewMonth]);
 
   const openMonthPicker = () => {
     const el = monthInputRef.current;
@@ -265,6 +351,157 @@ export function EmpDesktopWorkspaceCalendar() {
     el.click();
   };
 
+  const openDaySheet = (dateKey: string, section: Exclude<CalendarDayDetailSection, "all"> = "punches") => {
+    setFocusDateKey(dateKey);
+    setDayDetailSection(section);
+    setSelectedDateKey(dateKey);
+  };
+
+  const renderDayCell = (
+    cell: { dateKey: string; day: number; outside?: boolean },
+    idx: number,
+    compact: boolean,
+  ) => {
+    const isToday = cell.dateKey === todayKey;
+    const isOutside = cell.outside === true;
+    const isWeekend = idx % 7 === 0 || idx % 7 === 6;
+    const isWeekOff = !isOutside && isWeekOffDate(cell.dateKey, weekOffDays);
+    const taskCount = tasksByDate.get(cell.dateKey) ?? 0;
+    const todoTexts = todosByDate.get(cell.dateKey) ?? [];
+    const todoCount = todoTexts.length;
+    const todoTooltip = todoTexts.length > 0 ? todoTexts.join("\n") : "";
+    const isHoliday = !isOutside && holidayMap.has(cell.dateKey);
+    const badgeKind = resolveStatusKind({
+      dateKey: cell.dateKey,
+      todayKey,
+      isOutside,
+      isWeekend,
+      isWeekOff,
+      isHoliday,
+      dayMap,
+      weekOffDays,
+      holidayMap,
+      leaves,
+    });
+    const hasStatus = badgeKind !== "none";
+    const clickable = !isOutside;
+    const legend = LEGEND.find((l) => l.kind === badgeKind);
+
+    const inner = (
+      <div
+        className={cn(
+          "flex h-full min-h-0 w-full flex-col overflow-hidden bg-card p-1.5 text-left transition-colors",
+          clickable && "hover:bg-muted/10 cursor-pointer",
+          compact && "min-h-[88px]",
+        )}
+      >
+        <div className="inline-flex flex-col items-center self-start">
+          <span
+            className={cn(
+              "inline-flex size-6 items-center justify-center rounded-full text-xs font-semibold sm:size-7 sm:text-sm",
+              isToday
+                ? "bg-primary text-primary-foreground shadow-sm"
+                : isOutside
+                  ? "text-muted-foreground/70"
+                  : "text-foreground",
+            )}
+          >
+            {cell.day}
+          </span>
+          {!isOutside && hasStatus ? (
+            <span
+              className={cn("mt-0.5 size-1 rounded-full", legend?.dot)}
+              title={legend?.label}
+              aria-label={legend?.label}
+            />
+          ) : null}
+        </div>
+
+        {!isOutside ? (
+          <div className="mt-auto flex flex-wrap items-center gap-1 pt-1">
+            {taskCount > 0 ? (
+              <span
+                className="inline-flex items-center gap-0.5 rounded-md bg-sky-100 px-1.5 py-0.5 text-[9px] font-semibold text-sky-800"
+                title={`${taskCount} task(s)`}
+              >
+                <ListTodo className="size-3" />
+                {taskCount > 1 ? taskCount : null}
+              </span>
+            ) : null}
+            {todoCount > 0 ? (
+              <span
+                role="button"
+                tabIndex={0}
+                className="inline-flex items-center gap-0.5 rounded-md bg-emerald-100 px-1.5 py-0.5 text-[9px] font-semibold text-emerald-800 hover:bg-emerald-200"
+                title={todoTooltip}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  if (viewMode === "day") {
+                    setFocusDateKey(cell.dateKey);
+                    return;
+                  }
+                  openDaySheet(cell.dateKey, "todo");
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    openDaySheet(cell.dateKey, "todo");
+                  }
+                }}
+              >
+                <CheckSquare className="size-3" />
+                {todoCount > 1 ? todoCount : null}
+              </span>
+            ) : null}
+          </div>
+        ) : (
+          <div className="flex-1" />
+        )}
+      </div>
+    );
+
+    if (!clickable) {
+      return (
+        <div key={cell.dateKey} className="h-full min-h-0 bg-card">
+          {inner}
+        </div>
+      );
+    }
+
+    return (
+      <div
+        key={cell.dateKey}
+        role="button"
+        tabIndex={0}
+        onClick={() => {
+          setFocusDateKey(cell.dateKey);
+          if (viewMode === "day") return;
+          if (viewMode === "week") {
+            setViewMode("day");
+            return;
+          }
+          openDaySheet(cell.dateKey, "punches");
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            setFocusDateKey(cell.dateKey);
+            if (viewMode === "month") openDaySheet(cell.dateKey, "punches");
+            if (viewMode === "week") setViewMode("day");
+          }
+        }}
+        className={cn(
+          "block h-full min-h-0 w-full bg-card text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
+          cell.dateKey === focusDateKey && viewMode !== "month" && "ring-1 ring-primary/40",
+        )}
+      >
+        {inner}
+      </div>
+    );
+  };
+
   return (
     <EmpDesktopPage
       title="My Calendar"
@@ -272,7 +509,7 @@ export function EmpDesktopWorkspaceCalendar() {
       icon={Calendar}
       className="!space-y-0 h-[calc(100dvh-8.75rem)] max-h-[calc(100dvh-8.75rem)] overflow-hidden"
     >
-      {selectedDateKey ? (
+      {selectedDateKey && viewMode === "month" ? (
         <Sheet
           open={!!selectedDateKey}
           onOpenChange={(open) => {
@@ -337,178 +574,116 @@ export function EmpDesktopWorkspaceCalendar() {
                 if (y && m) {
                   setViewYear(y);
                   setViewMonth(m);
+                  setFocusDateKey(`${y}-${pad2(m)}-01`);
                 }
               }}
               className="sr-only"
               aria-hidden
               tabIndex={-1}
             />
-            <Button type="button" variant="outline" size="icon" className="size-8" onClick={openMonthPicker} aria-label="Select month">
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              className="size-8"
+              onClick={openMonthPicker}
+              aria-label="Select month"
+            >
               <Calendar className="size-4" />
             </Button>
-            <Button type="button" variant="outline" size="icon" className="size-8" onClick={() => shiftMonth(-1)} aria-label="Previous month">
-              <ChevronLeft className="size-4" />
-            </Button>
-            <Button type="button" variant="outline" size="icon" className="size-8" onClick={() => shiftMonth(1)} aria-label="Next month">
-              <ChevronRight className="size-4" />
-            </Button>
-            <h2 className="ml-1 text-lg font-semibold text-foreground">{monthLabel}</h2>
-          </div>
-          <div className="flex flex-wrap items-center gap-3">
-            {LEGEND.map((item) => (
-              <span key={item.kind} className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground">
-                <span className={cn("size-2 rounded-full", item.dot)} />
-                {item.label}
-              </span>
-            ))}
-          </div>
-        </div>
-
-        <div className="grid shrink-0 grid-cols-7 border-b border-border bg-muted/30">
-          {WEEKDAYS.map((w, i) => (
-            <div
-              key={w}
-              className={cn(
-                "py-2 text-center text-[11px] font-semibold uppercase tracking-wide",
-                i === 0 || i === 6 ? "text-muted-foreground/70" : "text-muted-foreground",
-              )}
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-8 rounded-lg px-3 text-xs"
+              onClick={() => {
+                setFocusDateKey(todayKey);
+                const [y, m] = todayKey.split("-").map(Number);
+                setViewYear(y);
+                setViewMonth(m);
+              }}
             >
-              {w}
-            </div>
-          ))}
-        </div>
-
-        {loading ? (
-          <div
-            className="grid min-h-0 flex-1 grid-cols-7 gap-px bg-border p-px"
-            style={{ gridTemplateRows: "repeat(5, minmax(0, 1fr))" }}
-          >
-            {Array.from({ length: 35 }).map((_, i) => (
-              <div key={i} className="h-full min-h-0 bg-card animate-pulse" />
-            ))}
+              Today
+            </Button>
+            <h2 className="ml-1 text-lg font-semibold text-foreground">{headerLabel}</h2>
           </div>
-        ) : (
-          <div
-            className="grid min-h-0 flex-1 grid-cols-7 gap-px bg-border"
-            style={{ gridTemplateRows: `repeat(${Math.max(1, Math.ceil(cells.length / 7))}, minmax(0, 1fr))` }}
-          >
-            {cells.map((cell, idx) => {
-              if (!cell.dateKey || cell.day == null) {
-                return <div key={`empty-${idx}`} className="h-full min-h-0 bg-muted/20" />;
-              }
 
-              const isToday = cell.dateKey === todayKey;
-              const isOutside = cell.outside === true;
-              const isWeekend = idx % 7 === 0 || idx % 7 === 6;
-              const isWeekOff = !isOutside && isWeekOffDate(cell.dateKey, weekOffDays);
-              const taskCount = tasksByDate.get(cell.dateKey) ?? 0;
-              const isHoliday = !isOutside && holidayMap.has(cell.dateKey);
-
-              const display = isOutside
-                ? { kind: "none" as const, statusLabel: "", detailLine: "", hoursLine: "" }
-                : resolveCalendarDayDisplay({
-                    dateKey: cell.dateKey,
-                    todayKey,
-                    attendance: dayMap.get(cell.dateKey),
-                    weekOffDays,
-                    holidayMap,
-                    leaves,
-                  });
-
-              const hasStatus = Boolean(display.statusLabel);
-              const hasIcons = taskCount > 0 || isHoliday || isWeekOff;
-              const clickable = !isOutside && (hasStatus || hasIcons || true);
-
-              const inner = (
-                <div
-                  className={cn(
-                    "flex h-full min-h-0 w-full flex-col overflow-hidden bg-card p-1.5 text-left transition-colors",
-                    isOutside && "bg-muted/15 opacity-60",
-                    isWeekend && !isOutside && "bg-muted/10",
-                    isWeekOff && !isOutside && "bg-amber-50/30",
-                    hasStatus && !isOutside && "border-l-[3px]",
-                    hasStatus && !isOutside && kindAccent[display.kind],
-                    clickable && !isOutside && "hover:bg-muted/20 cursor-pointer",
-                  )}
-                >
-                  <div className="flex items-center justify-between gap-1">
-                    <span
-                      className={cn(
-                        "inline-flex size-6 items-center justify-center rounded-full text-xs font-semibold sm:size-7 sm:text-sm",
-                        isToday
-                          ? "bg-primary text-primary-foreground shadow-sm"
-                          : isOutside
-                            ? "text-muted-foreground"
-                            : "text-foreground",
-                      )}
-                    >
-                      {cell.day}
-                    </span>
-                    {hasStatus && !isOutside ? (
-                      <span className={cn("rounded-full px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide", kindBadge[display.kind])}>
-                        {display.statusLabel}
-                      </span>
-                    ) : null}
-                  </div>
-
-                  {!isOutside ? (
-                    <div className="mt-auto flex flex-wrap items-center gap-1 pt-1">
-                      {taskCount > 0 ? (
-                        <span className="inline-flex items-center gap-0.5 rounded-md bg-sky-100 px-1.5 py-0.5 text-[9px] font-semibold text-sky-800" title={`${taskCount} task(s)`}>
-                          <ListTodo className="size-3" />
-                          {taskCount > 1 ? taskCount : null}
-                        </span>
-                      ) : null}
-                      {isHoliday ? (
-                        <span className="rounded-md bg-violet-50 px-1.5 py-0.5 text-[9px] font-semibold text-violet-700" title={holidayMap.get(cell.dateKey)}>
-                          Hol
-                        </span>
-                      ) : null}
-                      {isWeekOff ? (
-                        <span className="rounded-md bg-amber-50 px-1.5 py-0.5 text-[9px] font-semibold text-amber-800">
-                          Off
-                        </span>
-                      ) : null}
-                    </div>
-                  ) : (
-                    <div className="flex-1" />
-                  )}
-
-                  {hasStatus && !isOutside ? (
-                    <div className="mt-0.5 min-w-0 space-y-0.5">
-                      {display.detailLine ? (
-                        <p className="line-clamp-1 text-[10px] leading-snug text-muted-foreground" title={display.detailLine}>
-                          {display.detailLine}
-                        </p>
-                      ) : null}
-                      {display.hoursLine ? (
-                        <p className="text-[10px] font-semibold text-emerald-700">{display.hoursLine}</p>
-                      ) : null}
-                    </div>
-                  ) : null}
-                </div>
-              );
-
-              if (!clickable) {
-                return <div key={cell.dateKey} className="h-full min-h-0">{inner}</div>;
-              }
-
+          <div className="inline-flex rounded-lg border border-border/80 bg-muted/30 p-1" role="tablist">
+            {VIEW_MODES.map((mode) => {
+              const active = viewMode === mode.id;
               return (
                 <button
-                  key={cell.dateKey}
+                  key={mode.id}
                   type="button"
+                  role="tab"
+                  aria-selected={active}
                   onClick={() => {
-                    setDayDetailSection("punches");
-                    setSelectedDateKey(cell.dateKey);
+                    setViewMode(mode.id);
+                    if (mode.id === "day" && !focusDateKey) setFocusDateKey(todayKey);
                   }}
-                  className="block h-full min-h-0 w-full text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+                  className={cn(
+                    "rounded-md px-3 py-1.5 text-xs font-medium transition-all",
+                    active
+                      ? "bg-primary text-primary-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground",
+                  )}
                 >
-                  {inner}
+                  {mode.label}
                 </button>
               );
             })}
           </div>
+        </div>
+
+        {viewMode !== "day" ? (
+          <div className="grid shrink-0 grid-cols-7 border-b border-border bg-card">
+            {WEEKDAYS.map((w) => (
+              <div
+                key={w}
+                className="py-2 text-center text-[11px] font-semibold uppercase tracking-wide text-muted-foreground"
+              >
+                {w}
+              </div>
+            ))}
+          </div>
+        ) : null}
+
+        {loading ? (
+          <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">Loading…</div>
+        ) : viewMode === "day" ? (
+          <div className="min-h-0 flex-1 overflow-y-auto p-3">
+            <EmpCalendarDayDetailPanel dateKey={focusDateKey} section="all" />
+          </div>
+        ) : viewMode === "week" ? (
+          <div className="grid min-h-0 flex-1 grid-cols-7 gap-px bg-border">
+            {weekCells.map((cell, idx) => renderDayCell(cell, idx, true))}
+          </div>
+        ) : (
+          <div
+            className="grid min-h-0 flex-1 grid-cols-7 gap-px bg-border"
+            style={{ gridTemplateRows: `repeat(${Math.max(1, Math.ceil(monthCells.length / 7))}, minmax(0, 1fr))` }}
+          >
+            {monthCells.map((cell, idx) => {
+              if (!cell.dateKey || cell.day == null) {
+                return <div key={`empty-${idx}`} className="h-full min-h-0 bg-card" />;
+              }
+              return renderDayCell(
+                { dateKey: cell.dateKey, day: cell.day, outside: cell.outside },
+                idx,
+                false,
+              );
+            })}
+          </div>
         )}
+
+        <div className="flex shrink-0 flex-wrap items-center gap-4 border-t border-border px-5 py-3">
+          {LEGEND.map((item) => (
+            <span key={item.kind} className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground">
+              <span className={cn("size-1 rounded-full", item.dot)} />
+              {item.label}
+            </span>
+          ))}
+        </div>
       </div>
     </EmpDesktopPage>
   );

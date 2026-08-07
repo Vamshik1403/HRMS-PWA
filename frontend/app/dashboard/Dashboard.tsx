@@ -54,11 +54,14 @@ import {
   Wallet,
   IndianRupee,
   LineChart,
+  LayoutGrid,
 } from "lucide-react";
 import { formatDevicePunchForDisplay } from "../utils/devicePunchTime";
 import { useAppRefresh } from "../hooks/useAppRefresh";
 import { isDesktopManagerFlagSet } from "@/lib/desktopManager";
 import { getSidebarContext } from "../utils/sidebarContext";
+import { useAdminPageHeader } from "@/app/components/layout/admin-page-header-context";
+import { useEmpPortalPageHeader } from "@/app/components/layout/emp-portal-page-context";
 
 function resolveDashboardCompanyId(
   user: ReturnType<typeof useCurrentUser>,
@@ -225,6 +228,15 @@ interface ActivityComment {
 
 export default function DashboardPage({ embeddedInEmpPortal = false }: { embeddedInEmpPortal?: boolean } = {}) {
   const user = useCurrentUser();
+
+  useAdminPageHeader(
+    embeddedInEmpPortal ? null : { title: "Home", subtitle: "Your workspace overview" },
+  );
+  useEmpPortalPageHeader(
+    embeddedInEmpPortal
+      ? { icon: LayoutGrid, title: "Home", subtitle: "Your workspace overview" }
+      : null,
+  );
 
   const BACKEND_URL =
     process.env.NEXT_PUBLIC_BACKEND_URL || "/backend";

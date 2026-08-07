@@ -10,6 +10,7 @@ import { Search, Download, FileText } from "lucide-react";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import { getSidebarContext } from "../utils/sidebarContext";
 import * as XLSX from "xlsx";
+import { PageHeader } from "../components/app/page-header";
 
 // ─── Interfaces ─────────────────────────────────────────────
 
@@ -594,21 +595,12 @@ export function LeaveReportsManagement() {
   // ─── Render ───────────────────────────────────────────────
 
   return (
-    <div className="space-y-6 w-full max-w-7xl mx-auto px-4">
-      <div className="flex items-center justify-between w-full">
-        <div className="min-w-0 flex-1">
-          <p className="text-gray-600 mt-1 text-sm">
-            Generate and view leave reports by company, branch, department and date range.
-          </p>
-        </div>
-      </div>
+    <div className="space-y-6 w-full max-w-none animate-fade-in page-content-enter">
+      <PageHeader icon={FileText} title="Leave Reports" />
 
       {/* ── Filters Card ── */}
       <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">Leave Filters</CardTitle>
-        </CardHeader>
-        <CardContent>
+        <CardContent className="pt-6">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
             {user?.role === "SUPERADMIN" && (
               <div className="space-y-2">

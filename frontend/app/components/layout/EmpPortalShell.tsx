@@ -46,6 +46,7 @@ import { EmpMoreCategoryTabNav } from "../emp/EmpMoreCategoryTabNav";
 import { EmpSetupCategoryTabNav } from "../emp/EmpSetupCategoryTabNav";
 import { EmpPortalTopbar } from "./EmpPortalTopbar";
 import { EmpPortalPageProvider } from "./emp-portal-page-context";
+import { ListToolbarActionsProvider } from "./list-toolbar-actions-context";
 import { applyEmpTheme, readStoredEmpTheme } from "@/app/utils/empTheme";
 import {
   EMP_COMPANY_TABS,
@@ -410,6 +411,7 @@ export default function EmpPortalShell({ children, hideBottomNav = false }: EmpP
 
   return (
     <EmpPortalPageProvider>
+    <ListToolbarActionsProvider>
     <div className="emp-pwa-shell emp-portal-desktop flex h-dvh max-h-dvh overflow-hidden bg-background" data-theme={theme}>
 
       <EmpSidebar
@@ -553,6 +555,7 @@ export default function EmpPortalShell({ children, hideBottomNav = false }: EmpP
         </DialogContent>
       </Dialog>
     </div>
+    </ListToolbarActionsProvider>
     </EmpPortalPageProvider>
   );
 }

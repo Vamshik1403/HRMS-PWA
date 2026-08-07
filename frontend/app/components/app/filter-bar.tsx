@@ -17,6 +17,7 @@ import {
 } from "./list-ui-styles";
 import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
 import { cn } from "@/app/utils/cn";
+import { useListToolbarActions } from "@/app/components/layout/list-toolbar-actions-context";
 
 export interface FilterOption {
   value: string;
@@ -44,7 +45,7 @@ export function FilterSelect({
     <Select value={value} onValueChange={onChange}>
       <SelectTrigger
         data-hrms-list-control
-        className={cn(listSelectTriggerClass, width ?? "w-44 shrink-0")}
+        className={cn(listSelectTriggerClass, width ?? "w-full min-w-[11rem]")}
         aria-label={ariaLabel ?? id}
       >
         <SelectValue />
@@ -95,8 +96,8 @@ interface FilterBarProps {
   };
   filters?: ReactNode;
   /**
-   * inline = filters sit beside search (admin lists).
-   * popover = filters open from the Filter icon (employee portal lists).
+   * inline = filters sit beside search.
+   * popover = filters open from the Filter icon (default — keeps Add on the same row).
    */
   filtersPlacement?: "inline" | "popover";
   trailing?: ReactNode;
@@ -111,7 +112,7 @@ interface FilterBarProps {
 export function FilterBar({
   search,
   filters,
-  filtersPlacement = "inline",
+  filtersPlacement = "popover",
   trailing,
   onFilterClick,
   onExport,
@@ -120,7 +121,11 @@ export function FilterBar({
   const barRef = useRef<HTMLDivElement>(null);
   const filtersRef = useRef<HTMLDivElement>(null);
   const [filterPopoverOpen, setFilterPopoverOpen] = useState(false);
-  const popoverMode = filtersPlacement === "popover" && !!filters;
+  const registeredActions = useListToolbarActions();
+  const trailingNode = trailing ?? registeredActions;
+  const hasFilters = Boolean(filters);
+  const popoverMode = filtersPlacement === "popover" && hasFilters;
+  const showFilterButton = !hideToolbarActions && (hasFilters || !!onFilterClick || filtersPlacement === "inline");
 
   const handleFilterClick = () => {
     if (onFilterClick) {
@@ -143,58 +148,65 @@ export function FilterBar({
   };
 
   return (
-    <div ref={barRef} className={listToolbarClass}>
+    <div ref={barRef} data-hrms-filter-bar className={listToolbarClass}>
       {search ? (
         <SearchBar
           value={search.value}
           onChange={search.onChange}
           placeholder={search.placeholder}
+          className="min-w-0 flex-1 basis-0 sm:min-w-[220px]"
         />
-      ) : null}
-      <div className="flex w-full shrink-0 flex-wrap items-center gap-3 sm:w-auto">
-        {!popoverMode ? (
+      ) : (
+        <div className="min-w-0 flex-1" />
+      )}
+      <div className="flex shrink-0 flex-wrap items-center justify-end gap-2.5 sm:gap-3">
+        {!popoverMode && hasFilters ? (
           <div ref={filtersRef} className="flex flex-wrap items-center gap-3">
             {filters}
           </div>
         ) : null}
         {!hideToolbarActions ? (
           <div className="flex shrink-0 items-center gap-2.5">
-            {popoverMode ? (
-              <Popover open={filterPopoverOpen} onOpenChange={setFilterPopoverOpen}>
-                <PopoverTrigger asChild>
-                  <button
-                    type="button"
-                    className={cn(
-                      listIconButtonClass,
-                      filterPopoverOpen && "bg-muted text-foreground",
-                    )}
-                    aria-label="Filters"
-                    title="Filters"
+            {showFilterButton ? (
+              popoverMode ? (
+                <Popover open={filterPopoverOpen} onOpenChange={setFilterPopoverOpen}>
+                  <PopoverTrigger asChild>
+                    <button
+                      type="button"
+                      className={cn(
+                        listIconButtonClass,
+                        filterPopoverOpen && "bg-muted text-foreground",
+                      )}
+                      aria-label="Filters"
+                      title="Filters"
+                    >
+                      <ListFilter className="size-4" strokeWidth={1.75} />
+                    </button>
+                  </PopoverTrigger>
+                  <PopoverContent
+                    align="end"
+                    className="w-[min(92vw,320px)] border border-border bg-popover p-3 shadow-md"
                   >
-                    <ListFilter className="size-4" strokeWidth={1.75} />
-                  </button>
-                </PopoverTrigger>
-                <PopoverContent
-                  align="end"
-                  className="w-auto max-w-[min(92vw,420px)] border border-border bg-popover p-3 shadow-md"
+                    <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                      Filters
+                    </p>
+                    <div className="flex flex-col gap-2.5 [&_[data-hrms-list-control]]:w-full">
+                      {filters}
+                    </div>
+                  </PopoverContent>
+                </Popover>
+              ) : (
+                <button
+                  type="button"
+                  className={listIconButtonClass}
+                  aria-label="Filters"
+                  title="Filters"
+                  onClick={handleFilterClick}
                 >
-                  <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                    Filters
-                  </p>
-                  <div className="flex flex-wrap items-center gap-2">{filters}</div>
-                </PopoverContent>
-              </Popover>
-            ) : (
-              <button
-                type="button"
-                className={listIconButtonClass}
-                aria-label="Filters"
-                title="Filters"
-                onClick={handleFilterClick}
-              >
-                <ListFilter className="size-4" strokeWidth={1.75} />
-              </button>
-            )}
+                  <ListFilter className="size-4" strokeWidth={1.75} />
+                </button>
+              )
+            ) : null}
             <button
               type="button"
               className={listIconButtonClass}
@@ -206,7 +218,11 @@ export function FilterBar({
             </button>
           </div>
         ) : null}
-        {trailing ? <div className="flex shrink-0 items-center gap-3">{trailing}</div> : null}
+        {trailingNode ? (
+          <div className="flex shrink-0 flex-wrap items-center gap-3 [&_button]:h-[46px] [&_button]:rounded-xl [&_button]:px-6">
+            {trailingNode}
+          </div>
+        ) : null}
       </div>
     </div>
   );

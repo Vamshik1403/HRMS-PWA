@@ -7,7 +7,7 @@ import { taskFetch } from "@/app/utils/taskApi";
 import type { CurrentUserLike } from "@/app/utils/taskApi";
 import { toast } from "sonner";
 
-const TASK_TYPES = ["Site Visit", "Meeting", "Job / Work Task"];
+const TASK_TYPES = ["Internal Task", "Customer Visit"];
 const PRIORITIES = ["Urgent", "Medium", "Low"];
 
 type Dept = { id: number; departmentName?: string | null; companyID?: number | null };
@@ -56,7 +56,7 @@ function empLabel(e: AssignEmployee): string {
 function defaultForm(departmentId?: number | null): MobileTaskCreateFormState {
   return {
     departmentID: departmentId ? String(departmentId) : "",
-    taskType: "Job / Work Task",
+    taskType: "Internal Task",
     customerID: "",
     siteID: "",
     taskName: "",
@@ -94,7 +94,7 @@ export function MobileTaskCreateSheet({
   const [loadingMeta, setLoadingMeta] = useState(false);
   const [creating, setCreating] = useState(false);
 
-  const isSiteVisit = form.taskType.toLowerCase().includes("site visit");
+  const isCustomerVisit = form.taskType === "Customer Visit";
 
   const reset = useCallback(() => {
     setForm(defaultForm(creatorEmp?.departmentNameID));
@@ -193,7 +193,7 @@ export function MobileTaskCreateSheet({
         assignedEmployeeIds:
           form.assignedEmployeeIds.length > 0 ? form.assignedEmployeeIds : undefined,
       };
-      if (isSiteVisit) {
+      if (isCustomerVisit) {
         if (form.customerID) payload.customerID = Number(form.customerID);
         if (form.siteID) payload.siteID = Number(form.siteID);
       }
@@ -329,7 +329,7 @@ export function MobileTaskCreateSheet({
             </select>
           </div>
 
-          {isSiteVisit && (
+          {isCustomerVisit && (
             <>
               <div>
                 <label className={labelClass}>Customer</label>

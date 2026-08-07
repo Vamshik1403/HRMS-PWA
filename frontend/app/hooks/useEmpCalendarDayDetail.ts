@@ -105,7 +105,10 @@ export function useEmpCalendarDayDetail(dateKey: string | null) {
         const dayTasks = items.filter((t) => t.scheduleDateTime && taskDateKey(t.scheduleDateTime) === dateKey);
         setTasks(dayTasks);
 
-        const visits = dayTasks.filter((t) => (t.taskType || "").toLowerCase().includes("site visit"));
+        const visits = dayTasks.filter((t) => {
+          const type = (t.taskType || "").toLowerCase();
+          return type.includes("site visit") || type.includes("customer visit");
+        });
         const withLoading: SiteVisitWithPunches[] = visits.map((t) => ({
           ...t,
           markIn: null,
@@ -168,7 +171,11 @@ export function useEmpCalendarDayDetail(dateKey: string | null) {
   const dayPunches = extractDayPunchTimes(records);
 
   const nonSiteTasks = useMemo(
-    () => tasks.filter((t) => !(t.taskType || "").toLowerCase().includes("site visit")),
+    () =>
+      tasks.filter((t) => {
+        const type = (t.taskType || "").toLowerCase();
+        return !(type.includes("site visit") || type.includes("customer visit"));
+      }),
     [tasks],
   );
 

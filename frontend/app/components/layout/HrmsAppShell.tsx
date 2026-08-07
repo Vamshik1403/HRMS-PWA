@@ -14,6 +14,8 @@ import { ensureFetchRefreshPatch } from "@/app/utils/patchFetchForRefresh";
 import { toast } from "sonner";
 import { HrmsSidebar } from "@/app/components/app/hrms-sidebar";
 import { HrmsTopbar } from "@/app/components/app/hrms-topbar";
+import { AdminPageHeaderProvider } from "@/app/components/layout/admin-page-header-context";
+import { ListToolbarActionsProvider } from "@/app/components/layout/list-toolbar-actions-context";
 import { buildNavContext } from "@/app/components/app/hrms-navigation";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/app/components/ui/dialog";
 import { Button } from "@/app/components/ui/button";
@@ -298,6 +300,8 @@ export function HrmsAppShell({ children }: { children: React.ReactNode }) {
   };
 
   return (
+    <AdminPageHeaderProvider>
+    <ListToolbarActionsProvider>
     <div className="flex h-dvh max-h-dvh overflow-hidden bg-background">
       <HrmsSidebar
         collapsed={collapsed}
@@ -370,5 +374,7 @@ export function HrmsAppShell({ children }: { children: React.ReactNode }) {
         </DialogContent>
       </Dialog>
     </div>
+    </ListToolbarActionsProvider>
+    </AdminPageHeaderProvider>
   );
 }

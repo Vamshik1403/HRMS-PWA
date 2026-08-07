@@ -114,6 +114,7 @@ export class CompanyService {
     if (existingUser) throw new ConflictException('Username already exists');
 
     const ownerTitle =
+      (dto.ownerTitle || '').trim() ||
       (company.defaultOwnerTitle || '').trim() ||
       ownerTitleForLegalEntity(company.legalEntityType);
     const employeeCode =
@@ -241,6 +242,10 @@ export class CompanyService {
           businessEmail:
             dto.businessEmail !== undefined
               ? dto.businessEmail.trim() || null
+              : undefined,
+          ownerTitle:
+            dto.ownerTitle !== undefined
+              ? dto.ownerTitle.trim() || null
               : undefined,
         },
       });

@@ -9,16 +9,18 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "../components/ui/table"
 import { Badge } from "../components/ui/badge"
-import { RefreshCw, Save, Users, Calendar, Filter, Trash2, AlertCircle } from "lucide-react"
+import { RefreshCw, Save, Users, Calendar, Filter, Trash2, AlertCircle, CalendarDays } from "lucide-react"
 import { Skeleton } from "../components/ui/skeleton"
 import { toast } from "sonner"
+import { PageHeader } from "../components/app/page-header"
+import { listCardClass, listPrimaryButtonClass } from "../components/app/list-ui-styles"
+import { cn } from "@/lib/utils"
 
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "@/app/components/ui/popover"
-import { cn } from "@/lib/utils"
 import { format } from "date-fns"
 import { Calendar as CalendarIcon } from "lucide-react"
 import { FixedCalendar as CalendarComponent } from "@/app/components/ui/color-calendar"
@@ -1205,80 +1207,32 @@ const getUserAssignedCompanyIDs = (user: any): number[] => {
   }
 
   return (
-    <div className="space-y-6 w-full max-w-[95vw] mx-auto px-4 overflow-hidden">
-      {/* HEADER */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <p className="text-sm text-gray-600 mt-1">
-            {isServiceProvider ? (
-              `👨‍💼 Manager: ${user?.username || "Unknown"} - Role: ${userRole}`
-            ) : isSuperAdmin ? (
-              `👑 Super Admin: ${user?.username || "Unknown"}`
-            ) : (
-              "Manage employee work schedules, shifts, and assignments"
-            )}
-          </p>
-        </div>
-
-        <div className="flex gap-2">
+    <div className="space-y-6 w-full max-w-none animate-fade-in page-content-enter px-1 overflow-hidden">
+      <PageHeader
+        icon={CalendarDays}
+        title="Workshift Roster"
+        description="Manage employee work schedules, shifts, and assignments"
+        actions={
           <Button
             variant="outline"
-            size="sm"
             onClick={() => fetchRosterData(employees.map(e => e.id))}
             disabled={isLoading.roster || employees.length === 0}
           >
             <RefreshCw className={`w-4 h-4 mr-2 ${isLoading.roster ? 'animate-spin' : ''}`} />
             {isLoading.roster ? 'Refreshing...' : 'Refresh Data'}
           </Button>
-        </div>
-      </div>
-
-      {/* From Date and To Date Display */}
-      <div className="flex items-center gap-4 p-4 bg-[#eef2ff]/40 rounded-lg border border-[#d1d5db]">
-        <div className="flex items-center gap-2">
-          <Calendar className="w-4 h-4 text-gray-600" />
-          <span className="font-medium">From Date:</span>
-          <span className="text-gray-700">{formatDateCustom(fromDate)}</span>
-        </div>
-        <div className="h-4 w-px bg-gray-300"></div>
-        <div className="flex items-center gap-2">
-          <Calendar className="w-4 h-4 text-gray-600" />
-          <span className="font-medium">To Date:</span>
-          <span className="text-gray-700">{formatDateCustom(toDate)}</span>
-        </div>
-        <div className="h-4 w-px bg-gray-300"></div>
-        <div className="flex items-center gap-2">
-          <span className="font-medium">Total Days:</span>
-          <Badge variant="outline" className="px-3 py-1">
-            {dates.length} days
-          </Badge>
-        </div>
-        {userRole && (
-          <>
-            <div className="h-4 w-px bg-gray-300"></div>
-            <div className="flex items-center gap-2">
-              <span className="font-medium">Role:</span>
-              <Badge className={`px-3 py-1 ${userRole === "SUPERADMIN" ? "bg-purple-100 text-purple-700 border-purple-300" :
-                userRole === "COMPANY_ADMIN" ? "bg-blue-100 text-blue-700 border-blue-300" :
-                  "bg-gray-100 text-gray-700 border-gray-300"
-                }`}>
-                {userRole}
-              </Badge>
-            </div>
-          </>
-        )}
-      </div>
+        }
+      />
 
       {/* FILTERS CARD */}
-      <Card className="shadow-sm">
-        <CardHeader className="bg-[#eef2ff]/40 border-b border-[#d1d5db]">
+      <div className={cn(listCardClass)}>
+        <div className="border-b border-border bg-muted/30 px-6 py-3">
           <div className="flex items-center gap-2">
-            <Filter className="w-5 h-5 text-gray-600" />
-            <CardTitle className="text-lg">Filters & Selection</CardTitle>
+            <Filter className="w-4 h-4 text-muted-foreground" />
+            <h3 className="text-sm font-semibold text-foreground">Filters & Selection</h3>
           </div>
-        </CardHeader>
-
-        <CardContent className="pt-4">
+        </div>
+        <div className="p-6">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
             {/* Service Provider - SUPERADMIN ONLY */}
             {isSuperAdmin && (
@@ -1446,7 +1400,7 @@ const getUserAssignedCompanyIDs = (user: any): number[] => {
 
             <div className="space-y-2">
               <Button
-                className="w-full h-10 bg-[#4f46e5] hover:bg-[#4338ca]"
+                className={cn(listPrimaryButtonClass, "w-full")}
                 onClick={fetchEmployees}
                 disabled={!canLoadEmployees || isLoading.employees}
               >
@@ -1492,30 +1446,19 @@ const getUserAssignedCompanyIDs = (user: any): number[] => {
                 Approved Leaves: {leaveApplications.length}
               </Badge>
             )}
-            {isServiceProvider && (
-              <Badge variant="outline" className="px-3 py-1 bg-[#eef2ff] text-[#4338ca] border-[#d1d5db]">
-                <Users className="w-3 h-3 mr-1" />
-                Manager Mode
-              </Badge>
-            )}
-            {isServiceProvider && currentUserMapping && (
-              <Badge variant="outline" className="px-3 py-1 bg-green-100 text-green-700 border-green-300">
-                Companies: {managerCompanies.length}
-              </Badge>
-            )}
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
       {/* ROSTER GRID */}
       {employees.length > 0 && (
-        <Card>
-          <CardHeader className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-            <CardTitle className="text-base">
+        <div className={cn(listCardClass)}>
+          <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 border-b border-border px-6 py-4">
+            <h3 className="text-sm font-semibold text-foreground">
               Roster Grid - {selectedCompany?.companyName || "Company"}
-            </CardTitle>
+            </h3>
             <div className="flex items-center gap-4">
-              <div className="text-sm text-gray-600">
+              <div className="text-sm text-muted-foreground">
                 Total {dates.length} days
                 {dates.length > 0 && (
                   <span className="ml-2">
@@ -1524,15 +1467,15 @@ const getUserAssignedCompanyIDs = (user: any): number[] => {
                 )}
               </div>
             </div>
-          </CardHeader>
+          </div>
 
-          <CardContent>
-            <div className="w-full overflow-x-auto border rounded-md">
+          <div className="p-0">
+            <div className="w-full overflow-x-auto">
               <div className="min-w-max">
                 <Table>
-                  <TableHeader className="sticky top-0 z-20 bg-white">
+                  <TableHeader className="sticky top-0 z-20 bg-muted/30">
                     <TableRow>
-                      <TableHead className="w-[50px] sticky left-0 bg-white z-30 border-r shadow-sm">
+                      <TableHead className="w-[50px] sticky left-0 bg-muted/30 z-30 border-r">
                         <input
                           type="checkbox"
                           checked={selectAll}
@@ -1540,7 +1483,7 @@ const getUserAssignedCompanyIDs = (user: any): number[] => {
                           className="h-4 w-4 rounded"
                         />
                       </TableHead>
-                      <TableHead className="min-w-[200px] sticky left-[50px] bg-white z-30 border-r shadow-sm">
+                      <TableHead className="min-w-[200px] sticky left-[50px] bg-muted/30 z-30 border-r">
                         Employee
                       </TableHead>
                       {dates.map((d) => (
@@ -1562,8 +1505,8 @@ const getUserAssignedCompanyIDs = (user: any): number[] => {
                     {employees.map((emp) => {
                       const checked = selectedEmpIds.has(emp.id)
                       return (
-                        <TableRow key={emp.id} className="hover:bg-[#eef2ff]/40">
-                          <TableCell className="sticky left-0 bg-white z-20 border-r shadow-sm">
+                        <TableRow key={emp.id} className="hover:bg-muted/40">
+                          <TableCell className="sticky left-0 bg-card z-20 border-r">
                             <input
                               type="checkbox"
                               checked={checked}
@@ -1572,12 +1515,12 @@ const getUserAssignedCompanyIDs = (user: any): number[] => {
                             />
                           </TableCell>
 
-                          <TableCell className="sticky left-[50px] bg-white z-20 border-r shadow-sm">
+                          <TableCell className="sticky left-[50px] bg-card z-20 border-r">
                             <div className="flex flex-col">
-                              <span className="font-semibold text-gray-900 truncate">
+                              <span className="font-semibold text-foreground truncate">
                                 {empName(emp)}
                               </span>
-                              <span className="text-xs text-gray-600 truncate">
+                              <span className="text-xs text-muted-foreground truncate">
                                 ID: {emp.employeeID || emp.id}
                               </span>
                             </div>
@@ -1649,8 +1592,8 @@ const getUserAssignedCompanyIDs = (user: any): number[] => {
                 </Table>
               </div>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       )}
 
       {/* BULK ASSIGNMENT */}
