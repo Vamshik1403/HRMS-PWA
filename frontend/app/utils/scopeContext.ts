@@ -98,13 +98,30 @@ export async function resolveEmployeeCreds(username?: string): Promise<{
   companyID?: number;
   branchesID?: number;
   serviceProviderID?: number;
+  companyName?: string;
+  branchName?: string;
+  serviceProviderName?: string;
+  manageEmployeeID?: number;
 } | null> {
   if (!username) return null;
   try {
     const res = await fetch("/backend/manage-emp/credentials/all");
     const creds = await res.json();
     if (!Array.isArray(creds)) return null;
-    return creds.find((c: { username?: string }) => c.username === username) ?? null;
+    const row = creds.find((c: { username?: string }) => c.username === username);
+    if (!row) return null;
+    return {
+      companyID: toPositiveId(row.companyID ?? row.company?.id),
+      branchesID: toPositiveId(row.branchesID ?? row.branches?.id),
+      serviceProviderID: toPositiveId(
+        row.serviceProviderID ?? row.serviceProvider?.id,
+      ),
+      companyName: row.companyName || row.company?.companyName || "",
+      branchName: row.branchName || row.branches?.branchName || "",
+      serviceProviderName:
+        row.serviceProviderName || row.serviceProvider?.companyName || "",
+      manageEmployeeID: toPositiveId(row.employeeID ?? row.employee?.id),
+    };
   } catch {
     return null;
   }
@@ -173,32 +190,48 @@ export async function filterCompanyScopedRecords<T extends ScopeRecord>(
     return all;
   }
 
-  if (isDesktopManagerEmployee(user)) {
-    const companyId = resolveScopedCompanyId(user);
-    return companyId ? all.filter((r) => r.companyID === companyId) : ([] as T[]);
-  }
-
   if (user.role === "COMPANY_ADMIN" || user.role === "ADMIN") {
     const companyId = resolveScopedCompanyId(user);
-    return companyId ? all.filter((r) => r.companyID === companyId) : ([] as T[]);
+    return companyId != null
+      ? all.filter((r) => Number(r.companyID) === Number(companyId))
+      : ([] as T[]);
   }
 
   if (user.role === "SERVICE_PROVIDER") {
     const ctx = getSidebarContext();
-    if (ctx?.companyID) return all.filter((r) => r.companyID === ctx.companyID);
+    if (ctx?.companyID) {
+      return all.filter((r) => Number(r.companyID) === Number(ctx.companyID));
+    }
     const mapping = await resolveAdminUserMapping(user.username);
     const spId = mapping?.serviceProviderID ?? user.serviceProviderID;
-    return spId ? all.filter((r) => r.serviceProviderID === spId) : ([] as T[]);
+    return spId != null
+      ? all.filter((r) => Number(r.serviceProviderID) === Number(spId))
+      : ([] as T[]);
   }
 
   if (user.role === "BRANCH_ADMIN") {
     const mapping = await resolveAdminUserMapping(user.username);
-    const companyId = mapping?.companyID ?? user.companyID;
-    const branchId = mapping?.branchesID ?? user.branchesID;
+    const companyId = toPositiveId(mapping?.companyID ?? user.companyID);
+    const branchId = toPositiveId(mapping?.branchesID ?? user.branchesID);
     if (companyId == null || branchId == null) return [] as T[];
     return all.filter(
-      (r) => r.companyID === companyId && r.branchesID === branchId,
+      (r) =>
+        Number(r.companyID) === Number(companyId) &&
+        Number(r.branchesID) === Number(branchId),
     );
+  }
+
+  // Desktop managers + company owners / module operators share company-wide scope.
+  // Resolve company from user, sidebar, then credentials (owners often lack branchesID).
+  if (user.role === "EMPLOYEE" && isCompanyModuleOperator(user)) {
+    const creds = await resolveEmployeeCreds(user.username);
+    const companyId =
+      resolveScopedCompanyId(user) ??
+      toPositiveId(creds?.companyID) ??
+      toPositiveId(user.companyID);
+    return companyId != null
+      ? all.filter((r) => Number(r.companyID) === Number(companyId))
+      : ([] as T[]);
   }
 
   if (user.role === "EMPLOYEE") {
@@ -207,14 +240,6 @@ export async function filterCompanyScopedRecords<T extends ScopeRecord>(
       toPositiveId(creds?.companyID) ??
       resolveScopedCompanyId(user) ??
       toPositiveId(user.companyID);
-
-    // Company owners / module operators are company-scoped (no personal branch).
-    if (isCompanyModuleOperator(user)) {
-      return companyId != null
-        ? all.filter((r) => Number(r.companyID) === Number(companyId))
-        : ([] as T[]);
-    }
-
     const branchId =
       toPositiveId(creds?.branchesID) ?? toPositiveId(user.branchesID);
     if (companyId == null || branchId == null) return [] as T[];
@@ -241,29 +266,46 @@ export async function filterBranchesForUser<T extends ScopeRecord>(
     return all;
   }
 
-  if (
-    isDesktopManagerEmployee(user) ||
-    user.role === "COMPANY_ADMIN" ||
-    user.role === "ADMIN"
-  ) {
+  if (user.role === "COMPANY_ADMIN" || user.role === "ADMIN") {
     const companyId = resolveScopedCompanyId(user);
-    return companyId ? all.filter((r) => r.companyID === companyId) : [];
+    return companyId != null
+      ? all.filter((r) => Number(r.companyID) === Number(companyId))
+      : [];
   }
 
   if (user.role === "SERVICE_PROVIDER") {
     const ctx = getSidebarContext();
-    if (ctx?.companyID) return all.filter((r) => r.companyID === ctx.companyID);
+    if (ctx?.companyID) {
+      return all.filter((r) => Number(r.companyID) === Number(ctx.companyID));
+    }
     const mapping = await resolveAdminUserMapping(user.username);
     const spId = mapping?.serviceProviderID ?? user.serviceProviderID;
-    return spId ? all.filter((r) => r.serviceProviderID === spId) : [];
+    return spId != null
+      ? all.filter((r) => Number(r.serviceProviderID) === Number(spId))
+      : [];
   }
 
   if (user.role === "BRANCH_ADMIN") {
     const mapping = await resolveAdminUserMapping(user.username);
-    const companyId = mapping?.companyID ?? user.companyID;
-    const branchId = mapping?.branchesID ?? user.branchesID;
+    const companyId = toPositiveId(mapping?.companyID ?? user.companyID);
+    const branchId = toPositiveId(mapping?.branchesID ?? user.branchesID);
     return companyId != null && branchId != null
-      ? all.filter((r) => r.companyID === companyId && r.id === branchId)
+      ? all.filter(
+          (r) =>
+            Number(r.companyID) === Number(companyId) &&
+            Number(r.id) === Number(branchId),
+        )
+      : [];
+  }
+
+  if (user.role === "EMPLOYEE" && isCompanyModuleOperator(user)) {
+    const creds = await resolveEmployeeCreds(user.username);
+    const companyId =
+      resolveScopedCompanyId(user) ??
+      toPositiveId(creds?.companyID) ??
+      toPositiveId(user.companyID);
+    return companyId != null
+      ? all.filter((r) => Number(r.companyID) === Number(companyId))
       : [];
   }
 
@@ -273,15 +315,6 @@ export async function filterBranchesForUser<T extends ScopeRecord>(
       toPositiveId(creds?.companyID) ??
       resolveScopedCompanyId(user) ??
       toPositiveId(user.companyID);
-
-    // Company owners / company-module operators see all branches for their company
-    // (they typically have no personal branchesID assigned).
-    if (isCompanyModuleOperator(user)) {
-      return companyId != null
-        ? all.filter((r) => Number(r.companyID) === Number(companyId))
-        : [];
-    }
-
     const branchId =
       toPositiveId(creds?.branchesID) ?? toPositiveId(user.branchesID);
     return companyId != null && branchId != null
@@ -319,19 +352,25 @@ export async function filterCompaniesForUser<
   }
 
   if (
-    isDesktopManagerEmployee(user) ||
     user.role === "COMPANY_ADMIN" ||
     user.role === "ADMIN" ||
     user.role === "BRANCH_ADMIN"
   ) {
     const companyId = resolveScopedCompanyId(user);
-    return companyId ? all.filter((c) => c.id === companyId) : [];
+    return companyId != null
+      ? all.filter((c) => Number(c.id) === Number(companyId))
+      : [];
   }
 
   if (user.role === "EMPLOYEE") {
     const creds = await resolveEmployeeCreds(user.username);
-    const companyId = creds?.companyID ?? user.companyID;
-    return companyId ? all.filter((c) => c.id === companyId) : [];
+    const companyId =
+      resolveScopedCompanyId(user) ??
+      toPositiveId(creds?.companyID) ??
+      toPositiveId(user.companyID);
+    return companyId != null
+      ? all.filter((c) => Number(c.id) === Number(companyId))
+      : [];
   }
 
   return [];

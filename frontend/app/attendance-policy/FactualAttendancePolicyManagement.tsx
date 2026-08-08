@@ -13,6 +13,7 @@ import { EntityRowActions } from "../components/app/entity-row-actions";
 import { useClientTable, sortRows } from "../hooks/use-client-table";
 import { Plus, Info, Clock } from "lucide-react";
 import { SearchSuggestInput } from "../components/SearchSuggestInput";
+import { CompanyBranchField } from "../components/app/company-branch-field";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import { toast } from "sonner";
 import { getSidebarContext } from "../utils/sidebarContext";
@@ -79,7 +80,11 @@ export function FactualAttendancePolicyManagement() {
   );
   const user = useCurrentUser();
   if (user && user.role !== "SUPERADMIN" && user.role !== "COMPANY_ADMIN") return null;
-  const canManage = user?.role === "SUPERADMIN" || user?.role === "COMPANY_ADMIN" || canDesktopManagerManage(user)
+  const canManage =
+    user?.role === "SUPERADMIN" ||
+    user?.role === "COMPANY_ADMIN" ||
+    canDesktopManagerManage(user) ||
+    hasModuleWriteAccess("ATTENDANCE_POLICY");
   const isEmployee = user?.role === "EMPLOYEE";
 
   const [currentUserMapping, setCurrentUserMapping] = useState<any>(null);
@@ -219,15 +224,18 @@ export function FactualAttendancePolicyManagement() {
       const res = await fetch(`${BACKEND_URL}/branches`, { cache: "no-store" });
       const data = await res.json();
       const q = query.toLowerCase();
+      const rows = Array.isArray(data) ? data : [];
+      const seen = new Set<number>();
 
-      return Array.isArray(data)
-        ? data.filter(
-          (b: any) =>
-            b.companyID === resolvedCompanyID &&
-            (user?.role !== "BRANCH_ADMIN" || Number(b.id) === Number(user?.branchesID)) &&
-            (b.branchName || "").toLowerCase().includes(q)
-        )
-        : [];
+      return rows.filter((b: any) => {
+        const id = Number(b.id);
+        if (!Number.isFinite(id) || seen.has(id)) return false;
+        if (Number(b.companyID) !== Number(resolvedCompanyID)) return false;
+        if (user?.role === "BRANCH_ADMIN" && Number(b.id) !== Number(user?.branchesID)) return false;
+        if (!(b.branchName || "").toLowerCase().includes(q)) return false;
+        seen.add(id);
+        return true;
+      });
     } catch (error) {
       console.error("Error fetching branches:", error);
       toast.error("Failed to load data.");
@@ -650,7 +658,7 @@ export function FactualAttendancePolicyManagement() {
                 )}
 
                 {user?.role === "SERVICE_PROVIDER" && (
-                  <SearchSuggestInput
+                  <CompanyBranchField
                     label="Branch Name"
                     placeholder="Select Branch"
                     value={formData.branchName}
@@ -667,12 +675,13 @@ export function FactualAttendancePolicyManagement() {
                     fetchData={fetchBranches}
                     displayField="branchName"
                     valueField="id"
+                    companyID={formData.companyID ?? resolvedCompanyID}
                     required
                   />
                 )}
 
                 {user?.role === "SUPERADMIN" && (
-                  <SearchSuggestInput
+                  <CompanyBranchField
                     label="Branch Name"
                     placeholder="Select Branch"
                     value={formData.branchName}
@@ -683,6 +692,7 @@ export function FactualAttendancePolicyManagement() {
                     fetchData={fetchBranches}
                     displayField="branchName"
                     valueField="id"
+                    companyID={formData.companyID ?? resolvedCompanyID}
                     required
                   />
                 )}

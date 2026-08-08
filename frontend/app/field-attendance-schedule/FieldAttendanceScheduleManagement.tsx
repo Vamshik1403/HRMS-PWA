@@ -18,6 +18,7 @@ import { Badge } from "../components/ui/badge"
 import { Icon } from "@iconify/react"
 import { Plus, Search, Edit, Trash2, MapPin } from "lucide-react"
 import { SearchSuggestInput } from "../components/SearchSuggestInput"
+import { CompanyBranchField } from "../components/app/company-branch-field"
 import { toast } from "sonner"
 import { getSidebarContext } from "../utils/sidebarContext"
 
@@ -116,7 +117,7 @@ export function FieldAttendanceScheduleManagement() {
       const q = query.toLowerCase()
       let filtered = Array.isArray(data) ? data : []
       if (formData.companyID) {
-        filtered = filtered.filter((item: any) => item.companyID === formData.companyID)
+        filtered = filtered.filter((item: any) => Number(item.companyID) === Number(formData.companyID))
       }
       // 🔒 BRANCH_ADMIN — restrict to their own branch only
       try {
@@ -125,9 +126,16 @@ export function FieldAttendanceScheduleManagement() {
           filtered = filtered.filter((item: any) => Number(item.id) === Number(_u.branchesID));
         }
       } catch { /* ignore */ }
-      return filtered.filter((item: any) =>
+      const matched = filtered.filter((item: any) =>
         (item?.branchName || "").toLowerCase().includes(q)
       )
+      const seen = new Set<number>()
+      return matched.filter((item: any) => {
+        const id = Number(item.id)
+        if (!Number.isFinite(id) || seen.has(id)) return false
+        seen.add(id)
+        return true
+      })
     } catch (error) {
       console.error("Error fetching branches:", error)
       return []
@@ -448,7 +456,7 @@ createdAt: schedule.createdAt
                       required
                     />
                     </>)}
-                    <SearchSuggestInput
+                    <CompanyBranchField
                       label="Branch Name"
                       placeholder="Select Branch"
                       value={formData.branchName}
@@ -459,6 +467,7 @@ createdAt: schedule.createdAt
                       fetchData={fetchBranches}
                       displayField="branchName"
                       valueField="id"
+                      companyID={formData.companyID}
                       required
                     />
                   </div>

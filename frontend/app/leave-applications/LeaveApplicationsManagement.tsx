@@ -22,6 +22,7 @@ import { useCurrentUser } from "../hooks/useCurrentUser"
 import { SearchSuggestInput } from "../components/SearchSuggestInput"
 import { toast } from "sonner";
 import { getSidebarContext } from "../utils/sidebarContext";
+import { useCompanyBranches } from "../hooks/useCompanyBranches";
 
 interface LeaveApplication {
   /** Database leave_application.id (use for API delete/update). */
@@ -86,6 +87,7 @@ const BALANCE_LIMITED_LEAVE_TYPES: Record<string, keyof LeaveBalance> = {
 }
 
 export function LeaveApplicationsManagement() {
+  const { isSingleBranch, autoBranchId, autoBranchName } = useCompanyBranches();
   const [leaveApplications, setLeaveApplications] = useState<LeaveApplication[]>([])
   const [listLoading, setListLoading] = useState(true)
   const table = useClientTable("employeeName")
@@ -835,119 +837,63 @@ export function LeaveApplicationsManagement() {
     }
   }
 
-  // Updated fetchEmployees function with strict filtering
+  // Search employees by name or employee ID. Owners see all company employees;
+  // managers/team leads see reportees for putting leave on behalf of their team.
   const fetchEmployees = async (query: string) => {
     try {
       const res = await fetch(`${BACKEND_URL}/manage-emp`, { cache: "no-store" })
-      let data = await res.json()
+      const data = await res.json()
       const q = query.toLowerCase()
+      const ctx = getSidebarContext();
+      const companyID = formData.companyID ?? ctx?.companyID ?? user?.companyID ?? managerData?.companyID;
+      const isOwner = !!(user as any)?.employee?.isCompanyOwner || !!(user as any)?.isCompanyOwner;
 
-      // SUPERADMIN → Filter by selected company AND branch
-      if (user?.role === "SUPERADMIN") {
-        const ctx = getSidebarContext();
-        const companyID = formData.companyID ?? ctx?.companyID;
-        // SUPERADMIN REQUIREMENT: Must have both companyID AND branchesID
-        if (!companyID || !formData.branchesID) {
-          return [] // No employees shown until both are selected
-        }
-        
-        const filteredData = data.filter((item: any) => 
-          item.companyID === companyID && 
-          item.branchesID === formData.branchesID
-        )
-        
-        return filteredData
-          .filter((item: any) => {
-            const fullName = `${item?.employeeFirstName || ""} ${item?.employeeLastName || ""}`.trim().toLowerCase()
-            const employeeId = (item?.employeeID || "").toLowerCase()
-            return fullName.includes(q) || employeeId.includes(q)
+      let filtered = Array.isArray(data) ? data : []
+      if (companyID) {
+        filtered = filtered.filter((item: any) => Number(item.companyID) === Number(companyID))
+      }
+      if (formData.branchesID) {
+        filtered = filtered.filter((item: any) => Number(item.branchesID) === Number(formData.branchesID))
+      }
+
+      if (user?.role === "EMPLOYEE" && !isOwner) {
+        try {
+          const token = localStorage.getItem("token") || localStorage.getItem("accessToken") || ""
+          const scopeRes = await fetch(`${BACKEND_URL}/emp-manager-scope/reportees`, {
+            headers: token ? { Authorization: `Bearer ${token}` } : {},
+            cache: "no-store",
           })
-          .map((item: any) => ({
-            ...item,
-            displayName: `${item?.employeeFirstName || ""} ${item?.employeeLastName || ""}`.trim() + (item?.employeeID ? ` (${item.employeeID})` : "")
-          }))
-      }
-
-      // SERVICE_PROVIDER → Filter by company AND selected branch
-      if (user?.role === "SERVICE_PROVIDER") {
-        if (!formData.branchesID) {
-          return [] // No employees shown until branch is selected
-        }
-        
-        const ctx = getSidebarContext();
-        const companyID = managerData?.companyID ?? ctx?.companyID ?? user?.companyID;
-        const spID = managerData?.serviceProviderID ?? ctx?.serviceProviderID ?? user?.serviceProviderID;
-
-        let filteredData;
-        if (companyID) {
-          filteredData = data.filter((item: any) => 
-            item.companyID === companyID && 
-            item.branchesID === formData.branchesID
-          )
-        } else if (spID) {
-          filteredData = data.filter((item: any) => 
-            item.serviceProviderID === spID && 
-            item.branchesID === formData.branchesID
-          )
-        } else {
-          filteredData = []
-        }
-        
-        return filteredData
-          .filter((item: any) => {
-            const fullName = `${item?.employeeFirstName || ""} ${item?.employeeLastName || ""}`.trim().toLowerCase()
-            const employeeId = (item?.employeeID || "").toLowerCase()
-            return fullName.includes(q) || employeeId.includes(q)
-          })
-          .map((item: any) => ({
-            ...item,
-            displayName: `${item?.employeeFirstName || ""} ${item?.employeeLastName || ""}`.trim() + (item?.employeeID ? ` (${item.employeeID})` : "")
-          }))
-      }
-
-      // EMPLOYEE → only show themselves
-      if (user?.role === "EMPLOYEE" && empCreds) {
-        const filtered = data.filter(
-          (item: any) => item.id === empCreds.manageEmployeeID
-        )
-        return filtered
-          .filter((item: any) => {
-            const fullName = `${item?.employeeFirstName || ""} ${item?.employeeLastName || ""}`.trim().toLowerCase()
-            const employeeId = (item?.employeeID || "").toLowerCase()
-            return fullName.includes(q) || employeeId.includes(q)
-          })
-          .map((item: any) => ({
-            ...item,
-            displayName: `${item?.employeeFirstName || ""} ${item?.employeeLastName || ""}`.trim() + (item?.employeeID ? ` (${item.employeeID})` : "")
-          }))
-      }
-
-      // COMPANY_ADMIN / BRANCH_ADMIN → filter by formData or sidebar context
-      {
-        const ctx = getSidebarContext();
-        const companyID = formData.companyID ?? ctx?.companyID ?? user?.companyID;
-        if (companyID && formData.branchesID) {
-          const filteredData = data.filter((item: any) =>
-            item.companyID === companyID &&
-            item.branchesID === formData.branchesID
-          )
-          return filteredData
-            .filter((item: any) => {
-              const fullName = `${item?.employeeFirstName || ""} ${item?.employeeLastName || ""}`.trim().toLowerCase()
-              const employeeId = (item?.employeeID || "").toLowerCase()
-              return fullName.includes(q) || employeeId.includes(q)
-            })
-            .map((item: any) => ({
-              ...item,
-              displayName: `${item?.employeeFirstName || ""} ${item?.employeeLastName || ""}`.trim() + (item?.employeeID ? ` (${item.employeeID})` : "")
-            }))
+          if (scopeRes.ok) {
+            const scope = await scopeRes.json()
+            const ids: number[] = Array.isArray(scope?.directReporteeIds) && scope.directReporteeIds.length
+              ? scope.directReporteeIds
+              : Array.isArray(scope?.reporteeIds) ? scope.reporteeIds : []
+            if (ids.length > 0) {
+              filtered = filtered.filter((item: any) => ids.includes(Number(item.id)))
+            } else if (empCreds?.manageEmployeeID) {
+              filtered = filtered.filter((item: any) => item.id === empCreds.manageEmployeeID)
+            }
+          }
+        } catch {
+          if (empCreds?.manageEmployeeID) {
+            filtered = filtered.filter((item: any) => item.id === empCreds.manageEmployeeID)
+          }
         }
       }
 
-      return []
+      return filtered
+        .filter((item: any) => {
+          if (!q) return true
+          const fullName = `${item?.employeeFirstName || ""} ${item?.employeeLastName || ""}`.trim().toLowerCase()
+          const employeeId = (item?.employeeID || "").toLowerCase()
+          return fullName.includes(q) || employeeId.includes(q)
+        })
+        .map((item: any) => ({
+          ...item,
+          displayName: `${item?.employeeFirstName || ""} ${item?.employeeLastName || ""}`.trim() + (item?.employeeID ? ` (${item.employeeID})` : "")
+        }))
     } catch (error) {
       console.error("Error fetching employees:", error)
-      toast.error("Failed to load data.");
       return []
     }
   }
@@ -1658,7 +1604,7 @@ useEffect(() => {
     setFormData({
       serviceProvider: ctx?.serviceProviderName ?? "",
       companyName: ctx?.companyName ?? "",
-      branchName: "",
+      branchName: isSingleBranch ? (autoBranchName || "") : "",
       employeeName: isNormalUser ? `${empCreds?.employeeFirstName || ""} ${empCreds?.employeeLastName || ""}`.trim() : "",
       leaveType: "",
       childNumber: "",
@@ -1668,7 +1614,7 @@ useEffect(() => {
       purpose: "",
       serviceProviderID: ctx?.serviceProviderID ?? undefined,
       companyID: ctx?.companyID ?? undefined,
-      branchesID: undefined,
+      branchesID: isSingleBranch && autoBranchId ? autoBranchId : undefined,
       manageEmployeeID: isNormalUser ? empCreds?.manageEmployeeID : undefined,
     })
     setSelectedEmployee(null)
@@ -1902,7 +1848,7 @@ useEffect(() => {
     isManagerApprovalDialogOpen;
 
   return (
-    <div className="space-y-6 w-full max-w-none animate-fade-in page-content-enter overflow-hidden">
+    <div className="space-y-6 w-full max-w-none animate-fade-in page-content-enter overflow-x-hidden">
       <PageHeader
         icon={Calendar}
         title="Leave Applications"
@@ -1917,10 +1863,8 @@ useEffect(() => {
         }
       />
       {/* FormDrawer for Add/Edit */}
-      <FormDrawer open={isDialogOpen} onOpenChange={setIsDialogOpen} title={editingApplication ? "Edit Leave Application" : "Submit Leave Application"} description={editingApplication 
-                    ? "Update the leave application information below." 
-                    : "Fill in the details to submit a new leave application."}>
-              <form onSubmit={handleSubmit} className="space-y-6">
+      <FormDrawer open={isDialogOpen} onOpenChange={setIsDialogOpen} title={editingApplication ? "Edit Leave Application" : "Leave Application"}>
+              <form onSubmit={handleSubmit} className="space-y-4">
                 {/* Organization Selection */}
                 <div className="space-y-4">
                   <h3 className="text-lg font-semibold">Organization Selection</h3>
@@ -1959,10 +1903,20 @@ useEffect(() => {
                       />
                     )}
 
-                    {/* Branch Name - Always visible */}
+                    {/* Branch Name - hidden when company has only one branch */}
                     <div style={{ 
                       gridColumn: user?.role !== "SUPERADMIN" ? "span 3" : "span 1"
                     }}>
+                      {isSingleBranch ? (
+                        <div className="space-y-2">
+                          <Label>Branch</Label>
+                          <Input
+                            value={formData.branchName || autoBranchName || ""}
+                            readOnly
+                            className="bg-muted"
+                          />
+                        </div>
+                      ) : (
                       <SearchSuggestInput
                         label="Branch Name"
                         placeholder="Start typing branch name..."
@@ -1976,10 +1930,6 @@ useEffect(() => {
                         valueField="id"
                         required
                       />
-                      {(user?.role === "SERVICE_PROVIDER" || user?.role === "EMPLOYEE") && (
-                        <p className="text-xs text-gray-500 mt-1">
-                          You can only select from your assigned branches
-                        </p>
                       )}
                     </div>
                   </div>
@@ -1991,8 +1941,8 @@ useEffect(() => {
                     <h3 className="text-lg font-semibold">Employee Selection</h3>
                     <div className="space-y-2">
                       <SearchSuggestInput
-                        label="Employee Name"
-                        placeholder="Select Employee"
+                        label="Employee"
+                        placeholder="Search by employee name or employee ID…"
                         value={formData.employeeName}
                         onChange={(value) =>
                           setFormData((prev) => ({ ...prev, employeeName: value }))
@@ -2003,12 +1953,6 @@ useEffect(() => {
                         valueField="id"
                         required
                       />
-                      <p className="text-xs text-gray-500">Show FirstName + LastName + Emp ID</p>
-                      {user?.role === "SERVICE_PROVIDER" && (
-                        <p className="text-xs text-gray-500">
-                          You can only select employees from your assigned branch
-                        </p>
-                      )}
                     </div>
                   </div>
                 )}
@@ -2107,7 +2051,7 @@ useEffect(() => {
                     </div>
                   )}
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="fromDate">From Date *</Label>
                       <Input
@@ -2130,8 +2074,6 @@ useEffect(() => {
                         required
                       />
                     </div>
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label>Calculated Days</Label>
                       <div className="w-full px-3 py-2 border border-[#d0d0d0] rounded-sm bg-gray-50 text-gray-600">

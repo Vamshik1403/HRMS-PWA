@@ -29,6 +29,7 @@ import { EntityRowActions } from "../components/app/entity-row-actions";
 import { useClientTable, sortRows } from "../hooks/use-client-table";
 import { toast } from "sonner";
 import { getSidebarContext } from "../utils/sidebarContext";
+import { AutocompleteBranchField } from "../components/app/autocomplete-branch-field";
 import {
   canDesktopManagerManage,
   filterCompanyScopedRecords,
@@ -410,7 +411,15 @@ const handler = () => {
         (b.branchName ?? "").toLowerCase().includes(query.toLowerCase())
       );
 
-      setBrList(filtered.slice(0, 20));
+      const seen = new Set<number>();
+      setBrList(
+        filtered.filter((b) => {
+          const id = Number(b.id);
+          if (!Number.isFinite(id) || seen.has(id)) return false;
+          seen.add(id);
+          return true;
+        }).slice(0, 20)
+      );
     } catch (e) {
       if ((e as any).name !== "AbortError") {
         console.error("Branches fetch error:", e);
@@ -1011,46 +1020,31 @@ onDelete={canDelete ? () => handleDelete(d) : undefined}
             )}
 
             {/* Branch Autocomplete */}
-            <div ref={brRef} className="space-y-2 relative">
-              <Label>Branch *</Label>
-              <Input
-                value={formData.brAutocomplete}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  setFormData((p) => ({ ...p, brAutocomplete: val, branchesID: null }));
-                  runFetchBranches(val);
-                }}
-                onFocus={(e) => {
-                  const val = e.target.value;
-                  if (val.length >= MIN_CHARS) runFetchBranches(val);
-                }}
-                placeholder="Start typing branch..."
-                autoComplete="off"
-                required
-              />
-              {brList.length > 0 && (
-                <div className="absolute z-10 bg-white border rounded w-full shadow max-h-48 overflow-y-auto">
-                  {brLoading && <div className="px-3 py-2 text-sm text-gray-500">Loading…</div>}
-                  {brList.map((br) => (
-                    <div
-                      key={br.id}
-                      className="px-3 py-2 hover:bg-gray-100 cursor-pointer"
-                      onMouseDown={(e) => e.preventDefault()}
-                      onClick={() => {
-                        setFormData((p) => ({
-                          ...p,
-                          branchesID: br.id,
-                          brAutocomplete: br.branchName,
-                        }));
-                        setBrList([]);
-                      }}
-                    >
-                      {br.branchName}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+            <AutocompleteBranchField
+              label="Branch *"
+              placeholder="Start typing branch..."
+              value={formData.brAutocomplete}
+              branchId={formData.branchesID}
+              companyID={
+                formData.companyID ??
+                currentUserMapping?.companyID ??
+                user?.companyID
+              }
+              onInputChange={(display) =>
+                setFormData((p) => ({ ...p, brAutocomplete: display, branchesID: null }))
+              }
+              onBranchSelect={({ id, branchName }) => {
+                setFormData((p) => ({
+                  ...p,
+                  branchesID: id,
+                  brAutocomplete: branchName,
+                }));
+                setBrList([]);
+              }}
+              onFetch={(q) => runFetchBranches(q)}
+              options={brList}
+              optionsLoading={brLoading}
+            />
 
             {/* Device fields */}
             <div className="space-y-2">

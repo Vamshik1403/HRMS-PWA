@@ -15,6 +15,7 @@ import type { DataTableColumn } from "../components/app/data-table";
 import { EntityRowActions } from "../components/app/entity-row-actions";
 import { useClientTable, sortRows } from "../hooks/use-client-table";
 import { SearchSuggestInput } from "../components/SearchSuggestInput";
+import { CompanyBranchField } from "../components/app/company-branch-field";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import { toast } from "sonner";
 import { getWorkShiftTypeLabel } from "../utils/workShiftLabels";
@@ -83,7 +84,13 @@ export function WorkShiftsManagement() {
     null
   );
   const user = useCurrentUser();
-  const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN" || user?.role === "BRANCH_ADMIN" || canDesktopManagerManage(user)
+  const canManage =
+    user?.role === "SUPERADMIN" ||
+    user?.role === "SERVICE_PROVIDER" ||
+    user?.role === "COMPANY_ADMIN" ||
+    user?.role === "BRANCH_ADMIN" ||
+    canDesktopManagerManage(user) ||
+    hasModuleWriteAccess("WORK_SHIFTS");
   const [currentUserMapping, setCurrentUserMapping] = useState<any>(null);
 
 
@@ -245,7 +252,12 @@ export function WorkShiftsManagement() {
 
     return filtered.filter((item: any) =>
       (item.branchName || "").toLowerCase().includes(q)
-    );
+    ).reduce((acc: any[], item: any) => {
+      const id = Number(item.id);
+      if (!Number.isFinite(id) || acc.some((x) => Number(x.id) === id)) return acc;
+      acc.push(item);
+      return acc;
+    }, []);
   } catch (error) {
     console.error("Error fetching branches:", error);
     toast.error("Failed to load data.");
@@ -850,7 +862,7 @@ await loadBranchFilterList();
 {(user?.role === "SERVICE_PROVIDER" ||
   user?.role === "COMPANY_ADMIN" ||
   user?.role === "BRANCH_ADMIN") && (
-                  <SearchSuggestInput
+                  <CompanyBranchField
                     label="Branch Name"
                     placeholder="Select Branch"
                     value={formData.branchName}
@@ -867,13 +879,14 @@ await loadBranchFilterList();
                fetchData={fetchBranches}
                     displayField="branchName"
                     valueField="id"
+                    companyID={formData.companyID ?? currentUserMapping?.companyID ?? user?.companyID}
                     required
                   />
                 )}
 
                 {/* SUPERADMIN → Branch input */}
                 {user?.role === "SUPERADMIN" && (
-                  <SearchSuggestInput
+                  <CompanyBranchField
   label="Branch Name"
   placeholder="Select Branch"
   value={formData.branchName}
@@ -890,6 +903,7 @@ await loadBranchFilterList();
   fetchData={fetchBranches}
   displayField="branchName"
   valueField="id"
+  companyID={formData.companyID}
   required
 />
                 )}

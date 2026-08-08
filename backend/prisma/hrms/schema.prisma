@@ -815,6 +815,7 @@ model ManageEmployee {
   allowRotatingShift                 Boolean                             @default(false)
   allowCreateTaskOnMobile            Boolean                             @default(false)
   pwaShowLeaveBalance                Boolean                             @default(true)
+  pwaShowLoanAdvances                Boolean                             @default(true)
   mobileAttendanceEnabled            Boolean                             @default(false)
   mobileBreakEnabled                 Boolean                             @default(true)
   bonusAllocation                    BonusAllocation[]

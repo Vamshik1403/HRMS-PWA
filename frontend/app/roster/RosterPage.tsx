@@ -1207,7 +1207,7 @@ const getUserAssignedCompanyIDs = (user: any): number[] => {
   }
 
   return (
-    <div className="space-y-6 w-full max-w-none animate-fade-in page-content-enter px-1 overflow-hidden">
+    <div className="space-y-6 w-full max-w-none animate-fade-in page-content-enter px-1">
       <PageHeader
         icon={CalendarDays}
         title="Workshift Roster"

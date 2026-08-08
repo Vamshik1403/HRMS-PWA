@@ -149,6 +149,7 @@ const empRef = useRef<HTMLDivElement>(null);
     resignationDate: "",
     initiatedOn: new Date().toISOString().split("T")[0],
     noticePeriod: "",
+    noticeStartDate: new Date().toISOString().split("T")[0],
   });
 
   // -------------------
@@ -304,6 +305,7 @@ if (user?.role === "BRANCH_ADMIN" && user?.branchesID) {
     resignationDate: "",
     initiatedOn: new Date().toISOString().split("T")[0],
     noticePeriod: "",
+    noticeStartDate: new Date().toISOString().split("T")[0],
   });
 
   setApproveModalOpen(false);
@@ -395,7 +397,7 @@ useEffect(() => {
   exitType: form.exitType,
           reasonCategory: form.reasonCategory,
           resignationDate: form.resignationDate || undefined,
-          noticeStartDate: form.initiatedOn || undefined,
+          noticeStartDate: form.noticeStartDate || form.initiatedOn || undefined,
           noticeDays:
             requiresNotice && form.noticePeriod
               ? Number(form.noticePeriod)
@@ -410,8 +412,8 @@ useEffect(() => {
         let lastWorkingDay: string;
         if (requiresNotice && form.noticePeriod) {
           const noticeDays = Number(form.noticePeriod);
-          const startDate = form.initiatedOn
-            ? new Date(form.initiatedOn)
+          const startDate = form.noticeStartDate || form.initiatedOn
+            ? new Date(form.noticeStartDate || form.initiatedOn)
             : new Date();
           startDate.setDate(startDate.getDate() + noticeDays);
           lastWorkingDay = startDate.toISOString().split("T")[0];
@@ -441,6 +443,7 @@ setForm({
         resignationDate: "",
         initiatedOn: new Date().toISOString().split("T")[0],
         noticePeriod: "",
+        noticeStartDate: new Date().toISOString().split("T")[0],
       });
       fetchData();
     } catch {
@@ -913,18 +916,29 @@ setForm({
             </FormField>
 
               {exitTypeRequiresNotice(form.exitType) && (
-              <FormField label="Notice Period (Days)">
-                  <Input
-                    type="number"
-                    min="0"
-                    value={form.noticePeriod}
-                    onChange={(e) =>
-                      setForm({ ...form, noticePeriod: e.target.value })
-                    }
-                    placeholder="e.g. 30"
-                  />
-              </FormField>
-            )}
+                <>
+                  <FormField label="Notice Days">
+                    <Input
+                      type="number"
+                      min="0"
+                      value={form.noticePeriod}
+                      onChange={(e) =>
+                        setForm({ ...form, noticePeriod: e.target.value })
+                      }
+                      placeholder="e.g. 30"
+                    />
+                  </FormField>
+                  <FormField label="Notice Period Start From">
+                    <Input
+                      type="date"
+                      value={form.noticeStartDate}
+                      onChange={(e) =>
+                        setForm({ ...form, noticeStartDate: e.target.value })
+                      }
+                    />
+                  </FormField>
+                </>
+              )}
           </div>
 
           <div className="flex justify-end gap-2 border-t border-border pt-5">

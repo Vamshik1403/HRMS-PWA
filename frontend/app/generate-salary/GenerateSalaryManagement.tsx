@@ -25,6 +25,11 @@ import { getSidebarContext } from "../utils/sidebarContext";
 import { formatPayslipPeriodLabel } from "../utils/payslipPeriodLabel";
 import { dispatchAppRefresh, registerDataCacheClearer } from "../utils/appRefresh";
 import { useListAutoRefresh } from "../hooks/useListAutoRefresh";
+import { AutocompleteBranchField } from "../components/app/autocomplete-branch-field";
+import {
+  isCompanyModuleOperator,
+  resolveScopedCompanyId,
+} from "../utils/scopeContext";
 
 /* =======================
    Types (aligned to API)
@@ -2060,11 +2065,6 @@ export function GenerateSalaryManagement() {
   };
 
   const runFetchBR = async (q: string) => {
-    if (!q || q.length < MIN_CHARS) {
-      setBrList([]);
-      return;
-    }
-
     setBrLoading(true);
     try {
       let data: BR[] = await robustGet(API.br);
@@ -2072,9 +2072,8 @@ export function GenerateSalaryManagement() {
       // Filter based on company for SUPERADMIN
       if (user?.role === "SUPERADMIN") {
         if (formData.companyID) {
-          data = data.filter(b => b.companyID === formData.companyID);
+          data = data.filter(b => Number(b.companyID) === Number(formData.companyID));
         } else {
-          // If no company selected, show all but indicate company required
           setBrList([]);
           return;
         }
@@ -2082,28 +2081,47 @@ export function GenerateSalaryManagement() {
 
       // For MANAGER, show branches from their assigned company only
       if (user?.role === "SERVICE_PROVIDER" && managerScope?.companyID) {
-        data = data.filter(b => b.companyID === managerScope.companyID);
+        data = data.filter(b => Number(b.companyID) === Number(managerScope.companyID));
       }
 
-      // For COMPANY_ADMIN / BRANCH_ADMIN, show branches from their company only
-      if (user?.role === "COMPANY_ADMIN" || user?.role === "BRANCH_ADMIN") {
-        const companyID = formData.companyID ?? user?.companyID;
+      // COMPANY_ADMIN / BRANCH_ADMIN / company operators
+      if (
+        user?.role === "COMPANY_ADMIN" ||
+        user?.role === "BRANCH_ADMIN" ||
+        user?.role === "ADMIN" ||
+        (user?.role === "EMPLOYEE" && isCompanyModuleOperator(user))
+      ) {
+        const companyID =
+          formData.companyID ??
+          resolveScopedCompanyId(user) ??
+          user?.companyID;
         if (companyID) {
-          data = data.filter(b => b.companyID === companyID);
+          data = data.filter(b => Number(b.companyID) === Number(companyID));
         } else {
           setBrList([]);
           return;
         }
-        // 🔒 BRANCH_ADMIN — restrict to their own branch only
         if (user?.role === "BRANCH_ADMIN" && user?.branchesID) {
           data = data.filter(b => Number(b.id) === Number(user.branchesID));
         }
       }
 
-      const low = q.toLowerCase();
-      const filtered = data.filter(b =>
-        (b.branchName ?? "").toLowerCase().includes(low)
-      );
+      // Dedupe by id, then by company+name
+      const byId = new Map<number, BR>();
+      for (const b of data) {
+        if (!byId.has(b.id)) byId.set(b.id, b);
+      }
+      const byName = new Map<string, BR>();
+      for (const b of byId.values()) {
+        const key = `${Number(b.companyID) || 0}::${String(b.branchName || "").trim().toLowerCase()}`;
+        if (!byName.has(key)) byName.set(key, b);
+      }
+      data = Array.from(byName.values());
+
+      const low = (q || "").toLowerCase();
+      const filtered = low
+        ? data.filter(b => (b.branchName ?? "").toLowerCase().includes(low))
+        : data;
 
       setBrList(filtered);
     } finally {
@@ -2949,58 +2967,46 @@ export function GenerateSalaryManagement() {
                       </div>
                     )}
 
-                    {/* Branch - Always visible, but MANAGER can only see their assigned branch */}
+                    {/* Branch - Always visible; auto-fills when company has one branch */}
                     <div
-                      ref={brRef}
                       className="space-y-2 relative"
                       style={{
                         gridColumn: user?.role === "SERVICE_PROVIDER" ? "span 3" : "span 1"
                       }}
                     >
-                      <Label>Branch Name *</Label>
-                      <Input
-                        value={formData.brAutocomplete}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          setFormData((p) => ({ ...p, brAutocomplete: val, branchesID: null }));
-
-                          // Only fetch suggestions when user types (minimum 1 character)
-                          if (val.length >= 1) {
-                            runFetchBR(val);
-                          } else {
-                            setBrList([]); // Clear suggestions when input is empty
-                          }
-                        }}
-                        onFocus={(e) => {
-                          // Only show suggestions if there's already text in the input
-                          if (formData.brAutocomplete.length >= 1) {
-                            runFetchBR(formData.brAutocomplete);
-                          }
-                        }}
+                      <AutocompleteBranchField
+                        label="Branch Name *"
                         placeholder="Start typing branch…"
-                        autoComplete="off"
+                        value={formData.brAutocomplete}
+                        branchId={formData.branchesID}
+                        companyID={
+                          formData.companyID ??
+                          managerScope?.companyID ??
+                          resolveScopedCompanyId(user) ??
+                          user?.companyID
+                        }
+                        onInputChange={(display) =>
+                          setFormData((p) => ({
+                            ...p,
+                            brAutocomplete: display,
+                            branchesID: null,
+                          }))
+                        }
+                        onBranchSelect={({ id, branchName }) => {
+                          setBrList([]);
+                          void handleBranchSelect(id, branchName);
+                        }}
+                        onFetch={(q) => void runFetchBR(q)}
+                        options={brList}
+                        optionsLoading={brLoading}
+                        hint={
+                          user?.role === "SERVICE_PROVIDER" ? (
+                            <p className="text-xs text-gray-500">
+                              You can only select from your assigned branches
+                            </p>
+                          ) : null
+                        }
                       />
-                      {brList.length > 0 && (
-                        <div className="absolute z-10 bg-white border rounded w-full shadow max-h-48 overflow-y-auto">
-                          {brLoading && <div className="px-3 py-2 text-sm text-gray-500">Loading…</div>}
-                          {brList.map((br) => (
-                            <div
-                              key={br.id}
-                              className="px-3 py-2 hover:bg-gray-100 cursor-pointer"
-                              onMouseDown={(e) => {
-                                e.preventDefault();
-                                void handleBranchSelect(br.id, br.branchName || "");
-                                setBrList([]); // Clear suggestions after selection
-                              }}
-                            >
-                              {br.branchName}
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                      {user?.role === "SERVICE_PROVIDER" && (
-                        <p className="text-xs text-gray-500">You can only select from your assigned branches</p>
-                      )}
                     </div>
                   </div>
                 </div>

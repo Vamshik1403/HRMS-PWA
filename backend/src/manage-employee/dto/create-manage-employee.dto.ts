@@ -321,8 +321,15 @@ export class CreateManageEmployeeDto {
 
   @IsOptional() @IsBoolean()
   allowRotatingShift?: boolean;
+
+  @IsOptional() @IsBoolean()
   allowCreateTaskOnMobile?: boolean;
+
+  @IsOptional() @IsBoolean()
   pwaShowLeaveBalance?: boolean;
+
+  @IsOptional() @IsBoolean()
+  pwaShowLoanAdvances?: boolean;
 
   @IsOptional() @IsBoolean()
   mobileAttendanceEnabled?: boolean;

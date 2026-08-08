@@ -779,8 +779,14 @@ export function ContractorManagement() {
 
     const selectedIds = new Set(formData.branchIDs.map(Number));
 
+    const seen = new Set<number>();
     return filtered
-      .filter((b) => !selectedIds.has(Number(b.id)))
+      .filter((b) => {
+        const id = Number(b.id);
+        if (!Number.isFinite(id) || seen.has(id) || selectedIds.has(id)) return false;
+        seen.add(id);
+        return true;
+      })
       .slice(0, 20);
   };
 
@@ -1416,6 +1422,7 @@ export function ContractorManagement() {
               fetchData={fetchBranchSuggestions}
               displayField="branchName"
               valueField="id"
+              autoSelectIfSingle
             />
 
             <div className="flex flex-wrap gap-2">

@@ -14,7 +14,10 @@ import { Activity, Clock, LineChart as LineChartIcon, Timer } from "lucide-react
 import {
   formatPunchTime,
   groupAttendanceByDay,
+  lastCalendarYearRange,
   lastNDaysRange,
+  lastNMonthsRange,
+  lastQuarterRange,
   type AttendanceDaySummary,
   type AttendanceLocationRecord,
 } from "@/app/utils/empAttendanceHistory";
@@ -27,20 +30,30 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/app/components/ui/select";
+import { Input } from "@/app/components/ui/input";
+import { Button } from "@/app/components/ui/button";
 import { cn } from "@/app/utils/cn";
 
 const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL || "/backend";
 
-type RangeMode = "week" | "month";
+type PeriodPreset =
+  | "custom"
+  | "last-month"
+  | "last-quarter"
+  | "last-six-months"
+  | "last-year";
 type MetricMode = "hours" | "checkin" | "checkout";
 
-function dateKeyToLabel(dateKey: string, mode: RangeMode) {
+function dateKeyToLabel(dateKey: string, spanDays: number) {
   const d = new Date(`${dateKey}T12:00:00Z`);
   if (Number.isNaN(d.getTime())) return dateKey;
-  if (mode === "week") {
+  if (spanDays <= 14) {
     return d.toLocaleDateString("en-IN", { weekday: "short", day: "numeric", timeZone: "UTC" });
   }
-  return d.toLocaleDateString("en-IN", { day: "numeric", month: "short", timeZone: "UTC" });
+  if (spanDays <= 62) {
+    return d.toLocaleDateString("en-IN", { day: "numeric", month: "short", timeZone: "UTC" });
+  }
+  return d.toLocaleDateString("en-IN", { month: "short", year: "2-digit", timeZone: "UTC" });
 }
 
 function punchHourDecimal(iso: string | null | undefined): number | null {
@@ -55,19 +68,28 @@ function formatHoursLabel(hours: number) {
   return formatWorkedDuration(totalMin);
 }
 
-function buildRange(mode: RangeMode) {
-  return lastNDaysRange(mode === "week" ? 7 : 30);
+function resolvePeriodRange(
+  preset: PeriodPreset,
+  fromDate: string,
+  toDate: string,
+): { from: string; to: string } {
+  if (preset === "last-year") return lastCalendarYearRange();
+  if (preset === "last-six-months") return lastNMonthsRange(6);
+  if (preset === "last-quarter") return lastQuarterRange();
+  if (preset === "last-month") return lastNDaysRange(30);
+  if (fromDate && toDate) return { from: fromDate, to: toDate };
+  return lastNDaysRange(30);
 }
 
 function fillDaySeries(
   days: AttendanceDaySummary[],
-  mode: RangeMode,
+  range: { from: string; to: string },
 ): AttendanceDaySummary[] {
-  const range = buildRange(mode);
   const byKey = new Map(days.map((d) => [d.dateKey, d]));
   const out: AttendanceDaySummary[] = [];
   const start = new Date(`${range.from}T12:00:00Z`);
   const end = new Date(`${range.to}T12:00:00Z`);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || start > end) return out;
   for (let t = start.getTime(); t <= end.getTime(); t += 86_400_000) {
     const d = new Date(t);
     const key = d.toISOString().slice(0, 10);
@@ -117,13 +139,17 @@ export function EmpProfileWorkReportView({
 }: {
   employeeId?: number;
 } = {}) {
-  const [rangeMode, setRangeMode] = useState<RangeMode>("week");
+  const defaultRange = lastNDaysRange(30);
+  const [periodPreset, setPeriodPreset] = useState<PeriodPreset>("last-month");
+  const [fromDate, setFromDate] = useState(defaultRange.from);
+  const [toDate, setToDate] = useState(defaultRange.to);
+  const [appliedRange, setAppliedRange] = useState(defaultRange);
   const [metric, setMetric] = useState<MetricMode>("hours");
   const [days, setDays] = useState<AttendanceDaySummary[]>([]);
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(
-    async (mode: RangeMode) => {
+    async (range: { from: string; to: string }) => {
       const token =
         typeof window !== "undefined"
           ? localStorage.getItem("token") || localStorage.getItem("accessToken") || ""
@@ -134,7 +160,6 @@ export function EmpProfileWorkReportView({
         return;
       }
       setLoading(true);
-      const range = buildRange(mode);
       try {
         const attUrl = viewEmployeeId
           ? `${BACKEND}/emp-manager-scope/member/${viewEmployeeId}/attendance-history?from=${range.from}&to=${range.to}`
@@ -165,10 +190,19 @@ export function EmpProfileWorkReportView({
   );
 
   useEffect(() => {
-    void load(rangeMode);
-  }, [load, rangeMode]);
+    void load(appliedRange);
+  }, [load, appliedRange]);
 
-  const seriesDays = useMemo(() => fillDaySeries(days, rangeMode), [days, rangeMode]);
+  const applyPeriod = (preset: PeriodPreset, from = fromDate, to = toDate) => {
+    const range = resolvePeriodRange(preset, from, to);
+    setPeriodPreset(preset);
+    setFromDate(range.from);
+    setToDate(range.to);
+    setAppliedRange(range);
+  };
+
+  const seriesDays = useMemo(() => fillDaySeries(days, appliedRange), [days, appliedRange]);
+  const spanDays = seriesDays.length || 30;
 
   const chartData = useMemo(() => {
     return seriesDays.map((d) => {
@@ -185,7 +219,7 @@ export function EmpProfileWorkReportView({
             : checkIn ?? 0;
       return {
         key: d.dateKey,
-        label: dateKeyToLabel(d.dateKey, rangeMode),
+        label: dateKeyToLabel(d.dateKey, spanDays),
         primary: Number(primary.toFixed(2)),
         secondary: Number(secondary.toFixed(2)),
         workLabel: formatHoursLabel(hours),
@@ -194,7 +228,7 @@ export function EmpProfileWorkReportView({
         present: d.workSeconds > 0 || !!d.checkIn,
       };
     });
-  }, [seriesDays, metric, rangeMode]);
+  }, [seriesDays, metric, spanDays]);
 
   const stats = useMemo(() => {
     const worked = seriesDays.filter((d) => d.workSeconds > 0 || d.checkIn);
@@ -227,7 +261,7 @@ export function EmpProfileWorkReportView({
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {[
           {
-            label: rangeMode === "week" ? "Hours this week" : "Hours this month",
+            label: "Hours in period",
             value: stats.totalHours,
             icon: Clock,
           },
@@ -272,16 +306,29 @@ export function EmpProfileWorkReportView({
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2.5">
-            <Select value={rangeMode} onValueChange={(v) => setRangeMode(v as RangeMode)}>
-              <SelectTrigger className={cn(listSelectTriggerClass, "w-[140px]")} aria-label="Period">
+            <Select
+              value={periodPreset}
+              onValueChange={(v) => {
+                const preset = v as PeriodPreset;
+                if (preset === "custom") {
+                  setPeriodPreset("custom");
+                  return;
+                }
+                applyPeriod(preset);
+              }}
+            >
+              <SelectTrigger className={cn(listSelectTriggerClass, "w-[180px]")} aria-label="Period">
                 <div className="flex items-center gap-2">
                   <Clock className="size-3.5 text-muted-foreground" />
                   <SelectValue />
                 </div>
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="week">Week</SelectItem>
-                <SelectItem value="month">Month</SelectItem>
+                <SelectItem value="custom">From / To date</SelectItem>
+                <SelectItem value="last-month">Last Month</SelectItem>
+                <SelectItem value="last-quarter">Last Quarter</SelectItem>
+                <SelectItem value="last-six-months">Last Six Months</SelectItem>
+                <SelectItem value="last-year">Last Year</SelectItem>
               </SelectContent>
             </Select>
             <Select value={metric} onValueChange={(v) => setMetric(v as MetricMode)}>
@@ -300,66 +347,80 @@ export function EmpProfileWorkReportView({
           </div>
         </div>
 
-        {loading ? (
-          <p className="py-16 text-center text-sm text-muted-foreground">Loading work report…</p>
-        ) : (
-          <div className="h-[270px] w-full sm:h-[320px]">
+        {periodPreset === "custom" ? (
+          <div className="mb-5 flex flex-wrap items-end gap-3">
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-muted-foreground">From Date</label>
+              <Input
+                type="date"
+                value={fromDate}
+                onChange={(e) => setFromDate(e.target.value)}
+                className="w-[160px]"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-muted-foreground">To Date</label>
+              <Input
+                type="date"
+                value={toDate}
+                onChange={(e) => setToDate(e.target.value)}
+                className="w-[160px]"
+              />
+            </div>
+            <Button
+              type="button"
+              size="sm"
+              disabled={!fromDate || !toDate || fromDate > toDate}
+              onClick={() => applyPeriod("custom", fromDate, toDate)}
+            >
+              Apply
+            </Button>
+          </div>
+        ) : null}
+
+        <div className="h-[280px] w-full">
+          {loading ? (
+            <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+              Loading…
+            </div>
+          ) : (
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={chartData} margin={{ top: 12, right: 8, left: -12, bottom: 0 }}>
+              <AreaChart data={chartData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
                 <defs>
-                  <linearGradient id="workReportPrimary" x1="0" y1="0" x2="0" y2="1">
+                  <linearGradient id="workReportFill" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="0%" stopColor="#3B82F6" stopOpacity={0.35} />
                     <stop offset="100%" stopColor="#3B82F6" stopOpacity={0.02} />
                   </linearGradient>
-                  <linearGradient id="workReportSecondary" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#93C5FD" stopOpacity={0.28} />
-                    <stop offset="100%" stopColor="#93C5FD" stopOpacity={0.02} />
-                  </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(0,0,0,0.05)" />
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
                 <XAxis
                   dataKey="label"
+                  tick={{ fontSize: 11, fill: "#9CA3AF" }}
                   axisLine={false}
                   tickLine={false}
-                  tick={{ fontSize: 12, fill: "#6B7280", fontWeight: 500 }}
-                  interval={rangeMode === "month" ? 3 : 0}
+                  interval={spanDays > 90 ? Math.floor(spanDays / 12) : "preserveStartEnd"}
                 />
                 <YAxis
+                  domain={yDomain as unknown as [number, number | "auto"]}
+                  tick={{ fontSize: 11, fill: "#9CA3AF" }}
                   axisLine={false}
                   tickLine={false}
-                  tick={{ fontSize: 12, fill: "#9CA3AF" }}
-                  domain={yDomain as unknown as [number, number | "auto"]}
-                  tickFormatter={(v) =>
-                    metric === "hours" ? String(v) : `${Math.floor(Number(v))}:00`
-                  }
+                  width={36}
                 />
-                <Tooltip
-                  content={<WorkReportTooltip metric={metric} />}
-                  cursor={{ stroke: "#9CA3AF", strokeDasharray: "4 4" }}
-                />
-                <Area
-                  type="monotone"
-                  dataKey="secondary"
-                  stroke="#93C5FD"
-                  strokeWidth={2}
-                  fill="url(#workReportSecondary)"
-                  isAnimationActive
-                  animationDuration={800}
-                />
+                <Tooltip content={<WorkReportTooltip metric={metric} />} />
                 <Area
                   type="monotone"
                   dataKey="primary"
                   stroke="#3B82F6"
-                  strokeWidth={2.5}
-                  fill="url(#workReportPrimary)"
-                  activeDot={{ r: 5, fill: "#3B82F6", strokeWidth: 0 }}
-                  isAnimationActive
-                  animationDuration={900}
+                  fill="url(#workReportFill)"
+                  strokeWidth={2}
+                  dot={false}
+                  activeDot={{ r: 4 }}
                 />
               </AreaChart>
             </ResponsiveContainer>
-          </div>
-        )}
+          )}
+        </div>
       </div>
     </div>
   );

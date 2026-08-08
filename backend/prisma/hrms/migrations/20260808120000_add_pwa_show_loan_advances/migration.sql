@@ -1,0 +1,1 @@
+ALTER TABLE "ManageEmployee" ADD COLUMN IF NOT EXISTS "pwaShowLoanAdvances" BOOLEAN NOT NULL DEFAULT true;

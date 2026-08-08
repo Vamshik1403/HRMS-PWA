@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Briefcase,
   Building2,
@@ -13,6 +13,7 @@ import {
   Heart,
   Mail,
   MapPin,
+  Pencil,
   Phone,
   Trash2,
   User,
@@ -21,8 +22,18 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { Icon } from "@iconify/react";
+import { toast } from "sonner";
 import { EmpDesktopPage } from "./EmpDesktopPage";
 import { Button } from "../../ui/button";
+import { Input } from "../../ui/input";
+import { Label } from "../../ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../../ui/select";
 import {
   Dialog,
   DialogContent,
@@ -33,6 +44,7 @@ import { getPageCache, setPageCache } from "../../../utils/pageCache";
 import { getEmpPhoto } from "../../../utils/empPhotoCache";
 import { displayValue } from "../../../utils/display";
 import { fmtJoined, useEmpProfile } from "../../../hooks/useEmpProfile";
+import { isCompanyOwnerFlag } from "@/lib/companyAccess";
 import { cn } from "../../../utils/cn";
 
 const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL || "/backend";
@@ -43,6 +55,78 @@ type ProfileField = {
   icon: LucideIcon;
   href?: string;
 };
+
+type ProfileEditForm = {
+  personalPhoneNo: string;
+  personalEmail: string;
+  businessPhoneNo: string;
+  businessEmail: string;
+  presentAddress: string;
+  permenantAddress: string;
+  gender: string;
+  dateOfBirth: string;
+  bloodGroup: string;
+  maritalStatus: string;
+  employeeFatherName: string;
+  employeeMotherName: string;
+  employeeSpouseName: string;
+  aadharNo: string;
+  panNo: string;
+  emergancyContact: string;
+};
+
+function toDateInputValue(dateStr: string | undefined | null) {
+  if (!dateStr) return "";
+  try {
+    const d = new Date(dateStr.includes("T") ? dateStr : `${dateStr}T12:00:00`);
+    if (Number.isNaN(d.getTime())) return "";
+    return d.toISOString().slice(0, 10);
+  } catch {
+    return "";
+  }
+}
+
+function emptyEditForm(): ProfileEditForm {
+  return {
+    personalPhoneNo: "",
+    personalEmail: "",
+    businessPhoneNo: "",
+    businessEmail: "",
+    presentAddress: "",
+    permenantAddress: "",
+    gender: "",
+    dateOfBirth: "",
+    bloodGroup: "",
+    maritalStatus: "",
+    employeeFatherName: "",
+    employeeMotherName: "",
+    employeeSpouseName: "",
+    aadharNo: "",
+    panNo: "",
+    emergancyContact: "",
+  };
+}
+
+function formFromEmp(emp: any): ProfileEditForm {
+  return {
+    personalPhoneNo: emp?.personalPhoneNo ?? "",
+    personalEmail: emp?.personalEmail ?? "",
+    businessPhoneNo: emp?.businessPhoneNo ?? "",
+    businessEmail: emp?.businessEmail ?? "",
+    presentAddress: emp?.presentAddress ?? "",
+    permenantAddress: emp?.permenantAddress ?? "",
+    gender: emp?.gender ?? "",
+    dateOfBirth: toDateInputValue(emp?.dateOfBirth),
+    bloodGroup: emp?.bloodGroup ?? "",
+    maritalStatus: emp?.maritalStatus ?? "",
+    employeeFatherName: emp?.employeeFatherName ?? "",
+    employeeMotherName: emp?.employeeMotherName ?? "",
+    employeeSpouseName: emp?.employeeSpouseName ?? "",
+    aadharNo: emp?.aadharNo ?? "",
+    panNo: emp?.panNo ?? "",
+    emergancyContact: emp?.emergancyContact ?? "",
+  };
+}
 
 function fmtDob(dateStr: string | undefined | null) {
   if (!dateStr) return "—";
@@ -131,6 +215,45 @@ function ProfileDetailSection({ title, fields }: { title: string; fields: Profil
           <ProfileFieldRow key={field.label} {...field} />
         ))}
       </div>
+    </section>
+  );
+}
+
+function ProfileEditField({
+  label,
+  icon: Icon,
+  children,
+}: {
+  label: string;
+  icon: LucideIcon;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex items-start gap-4 px-6 py-4">
+      <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-muted/80">
+        <Icon className="size-4 text-muted-foreground" />
+      </div>
+      <div className="min-w-0 flex-1 space-y-1.5">
+        <Label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</Label>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function ProfileEditableSection({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="overflow-hidden rounded-2xl border border-[#e5eeff] bg-white shadow-[0px_4px_20px_rgba(0,0,0,0.05)]">
+      <div className="border-b border-[#e5eeff] px-6 py-4">
+        <h3 className="font-display text-base font-semibold text-foreground">{title}</h3>
+      </div>
+      <div className="divide-y divide-border">{children}</div>
     </section>
   );
 }
@@ -308,6 +431,9 @@ export function EmpDesktopProfilePanel({
   const [loading, setLoading] = useState(viewEmployeeId ? true : !empData);
   const [viewPhotoFailed, setViewPhotoFailed] = useState(false);
   const [reportingManager, setReportingManager] = useState<string | null>(null);
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [editForm, setEditForm] = useState<ProfileEditForm>(emptyEditForm);
 
   const isViewingOther = viewEmployeeId != null;
 
@@ -335,6 +461,7 @@ export function EmpDesktopProfilePanel({
     setEmpData(null);
     setLoading(true);
     setViewPhotoFailed(false);
+    setEditing(false);
   }, [viewEmployeeId]);
 
   useEffect(() => {
@@ -390,6 +517,93 @@ export function EmpDesktopProfilePanel({
   const emp = isViewingOther ? empData : empData || empUser?.employee || null;
   const empId = isViewingOther ? viewEmployeeId : emp?.id || empUser?.employee?.id;
 
+  const isCompanyOwner = useMemo(() => {
+    if (isViewingOther || readOnly) return false;
+    return (
+      isCompanyOwnerFlag() ||
+      !!(emp?.isCompanyOwner || empUser?.isCompanyOwner || empUser?.employee?.isCompanyOwner) ||
+      !!(emp?.ownerTitle || empUser?.ownerTitle || empUser?.employee?.ownerTitle)
+    );
+  }, [isViewingOther, readOnly, emp, empUser]);
+
+  const canEditProfile = isCompanyOwner && !readOnly && !isViewingOther;
+
+  const startEditing = useCallback(() => {
+    setEditForm(formFromEmp(emp));
+    setEditing(true);
+  }, [emp]);
+
+  const cancelEditing = useCallback(() => {
+    setEditing(false);
+    setEditForm(emptyEditForm());
+  }, []);
+
+  const updateEditField = useCallback(<K extends keyof ProfileEditForm>(key: K, value: ProfileEditForm[K]) => {
+    setEditForm((prev) => ({ ...prev, [key]: value }));
+  }, []);
+
+  const saveProfile = useCallback(async () => {
+    if (!empId) {
+      toast.error("Employee record not found");
+      return;
+    }
+    const token = localStorage.getItem("token") || localStorage.getItem("accessToken") || "";
+    if (!token) {
+      toast.error("Please sign in again");
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const payload = {
+        personalPhoneNo: editForm.personalPhoneNo.trim() || null,
+        personalEmail: editForm.personalEmail.trim() || null,
+        businessPhoneNo: editForm.businessPhoneNo.trim() || null,
+        businessEmail: editForm.businessEmail.trim() || null,
+        presentAddress: editForm.presentAddress.trim() || null,
+        permenantAddress: editForm.permenantAddress.trim() || null,
+        gender: editForm.gender.trim() || null,
+        dateOfBirth: editForm.dateOfBirth.trim() || null,
+        bloodGroup: editForm.bloodGroup.trim() || null,
+        maritalStatus: editForm.maritalStatus.trim() || null,
+        employeeFatherName: editForm.employeeFatherName.trim() || null,
+        employeeMotherName: editForm.employeeMotherName.trim() || null,
+        employeeSpouseName: editForm.employeeSpouseName.trim() || null,
+        aadharNo: editForm.aadharNo.trim() || null,
+        panNo: editForm.panNo.trim() || null,
+        emergancyContact: editForm.emergancyContact.trim() || null,
+      };
+
+      const res = await fetch(`${BACKEND}/manage-emp/${empId}`, {
+        method: "PATCH",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) {
+        const errText = await res.text().catch(() => "");
+        throw new Error(errText || `Save failed (${res.status})`);
+      }
+
+      const data = await res.json().catch(() => null);
+      if (data && typeof data === "object") {
+        setEmpData(data);
+        setPageCache("empProfileData", data);
+      } else {
+        await fetchEmpData(empUser, token);
+      }
+      setEditing(false);
+      toast.success("Profile updated");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to save profile");
+    } finally {
+      setSaving(false);
+    }
+  }, [empId, editForm, empUser, fetchEmpData]);
+
   const displayName = emp
     ? `${emp.employeeFirstName || emp.firstName || ""} ${emp.employeeLastName || emp.lastName || ""}`.trim()
     : empUser?.username || "Employee";
@@ -430,7 +644,11 @@ export function EmpDesktopProfilePanel({
   const phoneNumber = officialPhone || personalPhone;
   const employmentType = emp?.employmentType || emp?.empType || emp?.typeOfEmployee || null;
   const ownerTitle = emp?.ownerTitle || (empUser?.employee as any)?.ownerTitle || empUser?.ownerTitle || null;
-  const roleSubtitle = designation || ownerTitle || department || "Employee";
+  // Company owner: show "Sales Manager(Proprietor)" when both designation and user type exist.
+  const roleSubtitle =
+    designation && ownerTitle
+      ? `${designation}(${ownerTitle})`
+      : designation || ownerTitle || department || "Employee";
 
   const heroInfoItems: {
     icon: LucideIcon;
@@ -596,6 +814,26 @@ export function EmpDesktopProfilePanel({
                 <HeroInfoItem key={item.label} {...item} />
               ))}
             </div>
+
+            {canEditProfile ? (
+              <div className="flex shrink-0 flex-wrap gap-2 xl:flex-col xl:items-stretch">
+                {editing ? (
+                  <>
+                    <Button type="button" onClick={() => void saveProfile()} disabled={saving}>
+                      {saving ? "Saving…" : "Save"}
+                    </Button>
+                    <Button type="button" variant="outline" onClick={cancelEditing} disabled={saving}>
+                      Cancel
+                    </Button>
+                  </>
+                ) : (
+                  <Button type="button" variant="outline" onClick={startEditing}>
+                    <Pencil className="size-4" />
+                    Edit
+                  </Button>
+                )}
+              </div>
+            ) : null}
           </div>
 
           {!readOnly && photoProfile.uploadError ? (
@@ -610,7 +848,27 @@ export function EmpDesktopProfilePanel({
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
-        <ProfileDetailSection title="Official contact" fields={officialContactFields} />
+        {editing && canEditProfile ? (
+          <ProfileEditableSection title="Official contact">
+            <ProfileEditField label="Official email" icon={Mail}>
+              <Input
+                type="email"
+                value={editForm.businessEmail}
+                onChange={(e) => updateEditField("businessEmail", e.target.value)}
+                placeholder="Business email"
+              />
+            </ProfileEditField>
+            <ProfileEditField label="Official phone" icon={Phone}>
+              <Input
+                value={editForm.businessPhoneNo}
+                onChange={(e) => updateEditField("businessPhoneNo", e.target.value)}
+                placeholder="Business phone"
+              />
+            </ProfileEditField>
+          </ProfileEditableSection>
+        ) : (
+          <ProfileDetailSection title="Official contact" fields={officialContactFields} />
+        )}
         <ProfileRepeaterSection title="Work experience" emptyMessage="No work experience on file.">
           {experienceRows.length > 0 ? (
             <div className="divide-y divide-border">
@@ -668,23 +926,179 @@ export function EmpDesktopProfilePanel({
             </div>
           ) : null}
         </ProfileRepeaterSection>
-        <ProfileDetailSection title="Nominee details" fields={nomineeFields} />
+        {editing && canEditProfile ? (
+          <ProfileEditableSection title="Nominee details">
+            <ProfileEditField label="Nominee name" icon={User}>
+              <Input
+                value={editForm.employeeSpouseName}
+                onChange={(e) => updateEditField("employeeSpouseName", e.target.value)}
+                placeholder="Spouse / nominee name"
+              />
+            </ProfileEditField>
+            <ProfileFieldRow
+              label="Relationship"
+              value={editForm.employeeSpouseName ? "Spouse" : null}
+              icon={Users}
+            />
+            <ProfileEditField label="Emergency contact" icon={Phone}>
+              <Input
+                value={editForm.emergancyContact}
+                onChange={(e) => updateEditField("emergancyContact", e.target.value)}
+                placeholder="Emergency contact"
+              />
+            </ProfileEditField>
+            <ProfileFieldRow label="Bank name" value={primaryBank?.bankName} icon={Building2} />
+            <ProfileFieldRow label="Account number" value={primaryBank?.accNumber} icon={CreditCard} />
+          </ProfileEditableSection>
+        ) : (
+          <ProfileDetailSection title="Nominee details" fields={nomineeFields} />
+        )}
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
-        <ProfileDetailSection title="Identity information" fields={identityFields} />
-        <ProfileDetailSection title="Personal details" fields={personalFields} />
+        {editing && canEditProfile ? (
+          <ProfileEditableSection title="Identity information">
+            <ProfileEditField label="Aadhaar number" icon={Fingerprint}>
+              <Input
+                value={editForm.aadharNo}
+                onChange={(e) =>
+                  updateEditField("aadharNo", e.target.value.replace(/\D/g, "").slice(0, 12))
+                }
+                placeholder="12-digit Aadhaar"
+                inputMode="numeric"
+              />
+            </ProfileEditField>
+            <ProfileEditField label="PAN number" icon={CreditCard}>
+              <Input
+                value={editForm.panNo}
+                onChange={(e) => updateEditField("panNo", e.target.value.toUpperCase().slice(0, 10))}
+                placeholder="ABCDE1234F"
+                maxLength={10}
+              />
+            </ProfileEditField>
+            <ProfileFieldRow label="UAN number" value={emp?.uanNo} icon={Hash} />
+            <ProfileFieldRow label="ESI number" value={emp?.esiNo} icon={Hash} />
+            <ProfileFieldRow label="PF number" value={emp?.pfNumber} icon={Hash} />
+          </ProfileEditableSection>
+        ) : (
+          <ProfileDetailSection title="Identity information" fields={identityFields} />
+        )}
+        {editing && canEditProfile ? (
+          <ProfileEditableSection title="Personal details">
+            <ProfileEditField label="Gender" icon={User}>
+              <Select
+                value={editForm.gender || undefined}
+                onValueChange={(val) => updateEditField("gender", val)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select gender…" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Male">Male</SelectItem>
+                  <SelectItem value="Female">Female</SelectItem>
+                  <SelectItem value="Transgender">Transgender</SelectItem>
+                </SelectContent>
+              </Select>
+            </ProfileEditField>
+            <ProfileEditField label="Date of birth" icon={Calendar}>
+              <Input
+                type="date"
+                value={editForm.dateOfBirth}
+                onChange={(e) => updateEditField("dateOfBirth", e.target.value)}
+              />
+            </ProfileEditField>
+            <ProfileEditField label="Blood group" icon={Heart}>
+              <Input
+                value={editForm.bloodGroup}
+                onChange={(e) => updateEditField("bloodGroup", e.target.value)}
+                placeholder="e.g. O+"
+              />
+            </ProfileEditField>
+            <ProfileEditField label="Marital status" icon={Users}>
+              <Select
+                value={editForm.maritalStatus || undefined}
+                onValueChange={(val) => updateEditField("maritalStatus", val)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select marital status…" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Single">Single</SelectItem>
+                  <SelectItem value="Married">Married</SelectItem>
+                  <SelectItem value="Divorcee">Divorcee</SelectItem>
+                </SelectContent>
+              </Select>
+            </ProfileEditField>
+            <ProfileEditField label="Father's name" icon={User}>
+              <Input
+                value={editForm.employeeFatherName}
+                onChange={(e) => updateEditField("employeeFatherName", e.target.value)}
+              />
+            </ProfileEditField>
+            <ProfileEditField label="Mother's name" icon={User}>
+              <Input
+                value={editForm.employeeMotherName}
+                onChange={(e) => updateEditField("employeeMotherName", e.target.value)}
+              />
+            </ProfileEditField>
+            <ProfileEditField label="Spouse name" icon={User}>
+              <Input
+                value={editForm.employeeSpouseName}
+                onChange={(e) => updateEditField("employeeSpouseName", e.target.value)}
+              />
+            </ProfileEditField>
+          </ProfileEditableSection>
+        ) : (
+          <ProfileDetailSection title="Personal details" fields={personalFields} />
+        )}
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
-        <ProfileDetailSection title="Personal contact" fields={personalContactFields} />
-        <ProfileDetailSection
-          title="Address"
-          fields={[
-            { label: "Present address", value: emp?.presentAddress, icon: MapPin },
-            { label: "Permanent address", value: emp?.permenantAddress, icon: MapPin },
-          ]}
-        />
+        {editing && canEditProfile ? (
+          <ProfileEditableSection title="Personal contact">
+            <ProfileEditField label="Personal email" icon={Mail}>
+              <Input
+                type="email"
+                value={editForm.personalEmail}
+                onChange={(e) => updateEditField("personalEmail", e.target.value)}
+                placeholder="Personal email"
+              />
+            </ProfileEditField>
+            <ProfileEditField label="Personal phone" icon={Phone}>
+              <Input
+                value={editForm.personalPhoneNo}
+                onChange={(e) => updateEditField("personalPhoneNo", e.target.value)}
+                placeholder="Personal phone"
+              />
+            </ProfileEditField>
+          </ProfileEditableSection>
+        ) : (
+          <ProfileDetailSection title="Personal contact" fields={personalContactFields} />
+        )}
+        {editing && canEditProfile ? (
+          <ProfileEditableSection title="Address">
+            <ProfileEditField label="Present address" icon={MapPin}>
+              <Input
+                value={editForm.presentAddress}
+                onChange={(e) => updateEditField("presentAddress", e.target.value)}
+              />
+            </ProfileEditField>
+            <ProfileEditField label="Permanent address" icon={MapPin}>
+              <Input
+                value={editForm.permenantAddress}
+                onChange={(e) => updateEditField("permenantAddress", e.target.value)}
+              />
+            </ProfileEditField>
+          </ProfileEditableSection>
+        ) : (
+          <ProfileDetailSection
+            title="Address"
+            fields={[
+              { label: "Present address", value: emp?.presentAddress, icon: MapPin },
+              { label: "Permanent address", value: emp?.permenantAddress, icon: MapPin },
+            ]}
+          />
+        )}
       </div>
     </div>
   );

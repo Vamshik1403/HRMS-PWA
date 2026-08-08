@@ -18,6 +18,7 @@ import { SearchSuggestInput } from "../components/SearchSuggestInput"
 import { useCurrentUser } from "../hooks/useCurrentUser"
 import { toast } from "sonner";
 import { getSidebarContext } from "../utils/sidebarContext";
+import { useCompanyBranches } from "../hooks/useCompanyBranches";
 import { formatDevicePunchForDisplay } from "../utils/devicePunchTime";
 
 interface AttendanceRegularisation {
@@ -56,6 +57,7 @@ interface SelectedItem {
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "/backend"
 
 export function AttendanceRegularisationManagement() {
+  const { isSingleBranch, autoBranchId, autoBranchName } = useCompanyBranches();
   const [listLoading, setListLoading] = useState(true);
   const [regularisations, setRegularisations] = useState<AttendanceRegularisation[]>([])
   const table = useClientTable("employeeName")
@@ -270,7 +272,8 @@ manageEmployeeID: undefined as number | undefined,
   }
 }
 
-  // Updated fetchEmployees with role-based filtering
+  // Updated fetchEmployees: search by name/employee ID; no department filter.
+  // Company owner sees all company employees; others see reportees (or self).
   const fetchEmployees = async (query: string) => {
     try {
       const res = await fetch(`${BACKEND_URL}/manage-emp`, { cache: "no-store" })
@@ -282,75 +285,51 @@ manageEmployeeID: undefined as number | undefined,
         displayName: `${item?.employeeFirstName || ""} ${item?.employeeLastName || ""}`.trim() + (item?.employeeID ? ` (${item.employeeID})` : "")
       })
       const applySearch = (arr: any[]) => arr.filter((item: any) => {
+        if (!q) return true
         const fullName = `${item?.employeeFirstName || ""} ${item?.employeeLastName || ""}`.trim().toLowerCase()
         const employeeId = (item?.employeeID || "").toLowerCase()
         return fullName.includes(q) || employeeId.includes(q)
       }).map(mapDisplay)
 
-      // SUPERADMIN → filter by sidebar context company + selected branch
-      if (user?.role === "SUPERADMIN") {
-        const ctx = getSidebarContext();
-        const companyID = formData.companyID ?? ctx?.companyID;
-      if (!companyID || !formData.branchesID || !formData.departmentID) return []
-return applySearch(
-  data.filter(
-    (item: any) =>
-      Number(item.companyID) === Number(companyID) &&
-      Number(item.branchesID) === Number(formData.branchesID) &&
-      Number(item.departmentNameID ?? item.departmentID ?? item.departments?.id) === Number(formData.departmentID)
-  )
-)
+      const ctx = getSidebarContext();
+      const companyID = formData.companyID ?? ctx?.companyID ?? user?.companyID ?? managerData?.companyID;
+      const isOwner = !!(user as any)?.employee?.isCompanyOwner || !!(user as any)?.isCompanyOwner;
+
+      let filtered = Array.isArray(data) ? data : []
+      if (companyID) {
+        filtered = filtered.filter((item: any) => Number(item.companyID) === Number(companyID))
+      }
+      if (formData.branchesID) {
+        filtered = filtered.filter((item: any) => Number(item.branchesID) === Number(formData.branchesID))
       }
 
-      // SERVICE_PROVIDER → filter by company + selected branch
-      if (user?.role === "SERVICE_PROVIDER") {
-if (!formData.branchesID || !formData.departmentID) return []
-        const ctx = getSidebarContext();
-        const companyID = managerData?.companyID ?? ctx?.companyID ?? user?.companyID;
-        const spID = managerData?.serviceProviderID ?? ctx?.serviceProviderID ?? user?.serviceProviderID;
-        let filtered;
-        if (companyID) {
-filtered = data.filter(
-  (item: any) =>
-    Number(item.companyID) === Number(companyID) &&
-    Number(item.branchesID) === Number(formData.branchesID) &&
-    Number(item.departmentNameID ?? item.departmentID ?? item.departments?.id) === Number(formData.departmentID)
-)
-        } else if (spID) {
-filtered = data.filter(
-  (item: any) =>
-    Number(item.serviceProviderID) === Number(spID) &&
-    Number(item.branchesID) === Number(formData.branchesID) &&
-    Number(item.departmentNameID ?? item.departmentID ?? item.departments?.id) === Number(formData.departmentID)
-)
-        } else {
-          filtered = []
+      // Non-owners with employee role: prefer reportee list when available
+      if (user?.role === "EMPLOYEE" && !isOwner) {
+        try {
+          const token = localStorage.getItem("token") || localStorage.getItem("accessToken") || ""
+          const scopeRes = await fetch(`${BACKEND_URL}/emp-manager-scope/reportees`, {
+            headers: token ? { Authorization: `Bearer ${token}` } : {},
+            cache: "no-store",
+          })
+          if (scopeRes.ok) {
+            const scope = await scopeRes.json()
+            const ids: number[] = Array.isArray(scope?.directReporteeIds) && scope.directReporteeIds.length
+              ? scope.directReporteeIds
+              : Array.isArray(scope?.reporteeIds) ? scope.reporteeIds : []
+            if (ids.length > 0) {
+              filtered = filtered.filter((item: any) => ids.includes(Number(item.id)))
+            } else if (empCreds?.manageEmployeeID) {
+              filtered = filtered.filter((item: any) => item.id === empCreds.manageEmployeeID)
+            }
+          }
+        } catch {
+          if (empCreds?.manageEmployeeID) {
+            filtered = filtered.filter((item: any) => item.id === empCreds.manageEmployeeID)
+          }
         }
-        return applySearch(filtered)
       }
 
-      // EMPLOYEE → only themselves
-      if (user?.role === "EMPLOYEE" && empCreds) {
-        return applySearch(data.filter((item: any) => item.id === empCreds.manageEmployeeID))
-      }
-
-      // COMPANY_ADMIN / BRANCH_ADMIN → filter by sidebar context company + selected branch
-      {
-        const ctx = getSidebarContext();
-        const companyID = formData.companyID ?? ctx?.companyID ?? user?.companyID;
-       if (companyID && formData.branchesID && formData.departmentID) {
-  return applySearch(
-    data.filter(
-      (item: any) =>
-        Number(item.companyID) === Number(companyID) &&
-        Number(item.branchesID) === Number(formData.branchesID) &&
-        Number(item.departmentNameID ?? item.departmentID ?? item.departments?.id) === Number(formData.departmentID)
-    )
-  )
-}
-      }
-
-      return []
+      return applySearch(filtered)
     } catch (error) {
       console.error("Error fetching employees:", error)
       return []
@@ -1225,10 +1204,20 @@ employeeName: "",
                       />
                     )}
 
-                    {/* Branch Name - Always visible */}
+                    {/* Branch Name - hidden when company has only one branch */}
                     <div style={{ 
                       gridColumn: user?.role !== "SUPERADMIN" ? "span 3" : "span 1"
                     }}>
+                      {isSingleBranch ? (
+                        <div className="space-y-2">
+                          <Label>Branch</Label>
+                          <Input
+                            value={formData.branchName || autoBranchName || ""}
+                            readOnly
+                            className="bg-muted"
+                          />
+                        </div>
+                      ) : (
                       <SearchSuggestInput
                         label="Branch Name"
                         placeholder="Start typing branch name..."
@@ -1242,52 +1231,17 @@ employeeName: "",
                         valueField="id"
                         required
                       />
-                      {(user?.role === "SERVICE_PROVIDER" || user?.role === "EMPLOYEE") && (
-                        <p className="text-xs text-gray-500 mt-1">
-                          You can only select from your assigned branches
-                        </p>
                       )}
                     </div>
                   </div>
                 </div>
 
                 <div className="space-y-4">
-  <h3 className="text-lg font-semibold">Department Selection</h3>
-  <SearchSuggestInput
-    label="Department Name"
-    placeholder={
-      !formData.branchesID
-        ? "Select branch first"
-        : "Start typing department name..."
-    }
-    value={formData.departmentName}
-    onChange={(value) =>
-      setFormData((prev) => ({ ...prev, departmentName: value }))
-    }
-    onSelect={(selected) =>
-      setFormData((prev) => ({
-        ...prev,
-        departmentName: selected.display,
-        departmentID: selected.value,
-        employeeName: "",
-        manageEmployeeID: undefined,
-      }))
-    }
-    fetchData={fetchDepartments}
-    displayField="departmentName"
-    valueField="id"
-    required
-    disabled={!formData.branchesID}
-  />
-</div>
-
-                {/* Employee Selection */}
-                <div className="space-y-4">
                   <h3 className="text-lg font-semibold">Employee Selection</h3>
                   <div className="space-y-2">
                     <SearchSuggestInput
-                      label="Employee Name"
-                      placeholder="Select Employee"
+                      label="Employee"
+                      placeholder="Search by employee name or employee ID…"
                       value={formData.employeeName}
                       onChange={(value) =>
                         setFormData((prev) => ({ ...prev, employeeName: value }))
@@ -1298,14 +1252,6 @@ employeeName: "",
                       valueField="id"
                       required
                     />
-                    <p className="text-xs text-gray-500">Show FirstName + LastName + Emp ID</p>
-                    {(user?.role === "SERVICE_PROVIDER" || user?.role === "EMPLOYEE") && (
-                      <p className="text-xs text-gray-500">
-                        {user?.role === "SERVICE_PROVIDER" 
-                          ? "You can only select employees from your assigned branch" 
-                          : "You can only select yourself"}
-                      </p>
-                    )}
                   </div>
                 </div>
 

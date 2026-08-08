@@ -1012,7 +1012,7 @@ export function FactualRosterManagement() {
   }
 
   return (
-    <div className="space-y-6 w-full max-w-[95vw] mx-auto px-4 overflow-hidden page-content-enter">
+    <div className="space-y-6 w-full max-w-[95vw] mx-auto px-4 page-content-enter">
       {/* HEADER */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>

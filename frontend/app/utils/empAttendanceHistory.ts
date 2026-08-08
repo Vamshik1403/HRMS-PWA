@@ -189,3 +189,31 @@ export function lastNDaysRange(days: number) {
     to: to.toISOString().slice(0, 10),
   };
 }
+
+/** Inclusive calendar range between two YYYY-MM-DD strings. */
+export function dateRangeFromTo(from: string, to: string) {
+  return { from, to };
+}
+
+/** Last completed calendar year (Jan 1 – Dec 31 of previous year). */
+export function lastCalendarYearRange() {
+  const y = new Date().getFullYear() - 1;
+  return { from: `${y}-01-01`, to: `${y}-12-31` };
+}
+
+/** Last N months ending today. */
+export function lastNMonthsRange(months: number) {
+  const to = new Date();
+  const from = new Date();
+  from.setMonth(from.getMonth() - months);
+  from.setDate(from.getDate() + 1);
+  return {
+    from: from.toISOString().slice(0, 10),
+    to: to.toISOString().slice(0, 10),
+  };
+}
+
+/** Current or last completed quarter relative to today (rolling last 3 months ≈ quarter). */
+export function lastQuarterRange() {
+  return lastNMonthsRange(3);
+}

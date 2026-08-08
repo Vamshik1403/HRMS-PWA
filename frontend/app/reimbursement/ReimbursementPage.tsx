@@ -13,6 +13,7 @@ import { FormModal } from "../components/ui/form-modal"
 import { Badge } from "../components/ui/badge"
 import { Edit, Trash2, Check, X, Plus, PlusCircle, MinusCircle, Settings, Download, CreditCard, User, MapPin, Calendar, Loader2, Eye, Wallet } from "lucide-react"
 import { SearchSuggestInput } from "../components/SearchSuggestInput"
+import { CompanyBranchField } from "../components/app/company-branch-field"
 import { PageHeader } from "../components/app/page-header"
 import { FilterBar } from "../components/app/filter-bar"
 import { EntityListShell } from "../components/app/entity-list-shell"
@@ -25,6 +26,7 @@ import { useCurrentUser } from "../hooks/useCurrentUser"
 import { toast } from "sonner"
 import { getSidebarContext } from "../utils/sidebarContext"
 import { displayStatusLabel, isPartiallyApprovedStatus } from "../utils/statusDisplay"
+import { resolveScopedCompanyId } from "../utils/scopeContext"
 
 
 interface ReimbursementItem {
@@ -494,7 +496,13 @@ const isEmployee = !canManage
 const resolvedCompanyID =
   user?.role === "SERVICE_PROVIDER"
     ? (managerData?.companyID ?? ctx?.companyID ?? user?.companyID)
-    : formData.companyID;
+    : (
+        formData.companyID ??
+        resolveScopedCompanyId(user) ??
+        ctx?.companyID ??
+        user?.companyID ??
+        empCreds?.companyID
+      );
 
 const resolvedBranchID = formData.branchesID;
 
@@ -754,12 +762,16 @@ const fetchBranches = async (q: string) => {
 
     if (!Array.isArray(data)) return [];
 
-    return data.filter(
-      (b) =>
-        b.companyID === resolvedCompanyID &&
-        (user?.role !== "BRANCH_ADMIN" || Number(b.id) === Number(user?.branchesID)) &&
-        (b.branchName ?? b.name ?? "").toLowerCase().includes(query)
-    );
+    const seen = new Set<number>();
+    return data.filter((b) => {
+      const id = Number(b.id);
+      if (!Number.isFinite(id) || seen.has(id)) return false;
+      if (Number(b.companyID) !== Number(resolvedCompanyID)) return false;
+      if (user?.role === "BRANCH_ADMIN" && Number(b.id) !== Number(user?.branchesID)) return false;
+      if (!(b.branchName ?? b.name ?? "").toLowerCase().includes(query)) return false;
+      seen.add(id);
+      return true;
+    });
   } catch (error) {
     console.error("Error fetching branches:", error);
     return [];
@@ -768,21 +780,29 @@ const fetchBranches = async (q: string) => {
 
   
 const fetchEmployees = async (q: string) => {
-  if (!resolvedCompanyID || !resolvedBranchID) return [];
+  if (!resolvedCompanyID) return [];
 
   const data = await robustGet<any[]>(`${BACKEND_URL}/manage-emp`);
   const query = q.toLowerCase();
 
-  return data.filter((e) => {
+  let filtered = Array.isArray(data) ? data : [];
+  filtered = filtered.filter(
+    (e) => Number(e.companyID) === Number(resolvedCompanyID),
+  );
+
+  if (resolvedBranchID) {
+    filtered = filtered.filter(
+      (e) => Number(e.branchesID) === Number(resolvedBranchID),
+    );
+  }
+
+  return filtered.filter((e) => {
     const name = `${e.employeeFirstName ?? ""} ${e.employeeLastName ?? ""}`
+      .trim()
       .toLowerCase();
     const empId = (e.employeeID ?? "").toLowerCase();
-
-    return (
-      e.companyID === resolvedCompanyID &&
-      e.branchesID === resolvedBranchID &&
-      (name.includes(query) || empId.includes(query))
-    );
+    if (!query) return true;
+    return name.includes(query) || empId.includes(query);
   });
 };
 
@@ -1550,7 +1570,8 @@ return (
 
               if (user?.role === "COMPANY_ADMIN" || user?.role === "BRANCH_ADMIN") {
                 const ctx = getSidebarContext();
-                const companyID = ctx?.companyID ?? user?.companyID;
+                const companyID =
+                  resolveScopedCompanyId(user) ?? ctx?.companyID ?? user?.companyID;
                 setFormData((p) => ({
                   ...p,
                   serviceProviderID: ctx?.serviceProviderID ?? undefined,
@@ -1568,11 +1589,22 @@ return (
                 if (emp) {
                   setFormData((p) => ({
                     ...p,
-                    serviceProviderID: emp.serviceProviderID,
-                    companyID: emp.companyID,
-                    branchesID: emp.branchesID,
-                    manageEmployeeID: emp.employeeID,
-                    branchName: emp.branchName,
+                    serviceProviderID: emp.serviceProviderID ?? emp.serviceProvider?.id,
+                    companyID:
+                      emp.companyID ??
+                      emp.company?.id ??
+                      resolveScopedCompanyId(user) ??
+                      user?.companyID,
+                    branchesID: emp.branchesID ?? emp.branches?.id,
+                    manageEmployeeID: emp.employeeID ?? emp.employee?.id,
+                    branchName: emp.branchName || emp.branches?.branchName || "",
+                    companyName: emp.companyName || emp.company?.companyName || "",
+                  }));
+                } else {
+                  const companyID = resolveScopedCompanyId(user) ?? user?.companyID;
+                  setFormData((p) => ({
+                    ...p,
+                    companyID: companyID ?? undefined,
                   }));
                 }
               }
@@ -1670,54 +1702,7 @@ return (
     />
 
     {/* Branch */}
-    <SearchSuggestInput
-      label="Branch"
-      placeholder="Search branch..."
-      value={formData.branchName}
-      onChange={(v) => setFormData((p) => ({ ...p, branchName: v }))}
-      onSelect={(s) =>
-        setFormData((p) => ({
-          ...p,
-          branchesID: s.value,
-          branchName: s.display,
-        }))
-      }
-fetchData={(q) => fetchBranches(q)}
-      displayField="branchName"
-      valueField="id"
-      required
-    />
-  </div>
-  </div>
-)}
-
-{/* MANAGER → only Branch input, SP + Company hidden */}
-{user?.role === "SERVICE_PROVIDER" && (
-  <div className="grid grid-cols-1 gap-4">
-    <SearchSuggestInput
-      label="Branch"
-      placeholder="Select Branch"
-      value={formData.branchName}
-      onChange={(v) => setFormData((p) => ({ ...p, branchName: v }))}
-      onSelect={(s) =>
-        setFormData((p) => ({
-          ...p,
-          branchesID: s.value,
-          branchName: s.display,
-        }))
-      }
-fetchData={(q) => fetchBranches(q)}
-      displayField="branchName"
-      valueField="id"
-      required
-    />
-  </div>
-)}
-
-{/* COMPANY_ADMIN / BRANCH_ADMIN → only Branch input */}
-{(user?.role === "COMPANY_ADMIN" || user?.role === "BRANCH_ADMIN") && (
-  <div className="grid grid-cols-1 gap-4">
-    <SearchSuggestInput
+    <CompanyBranchField
       label="Branch"
       placeholder="Search branch..."
       value={formData.branchName}
@@ -1732,6 +1717,56 @@ fetchData={(q) => fetchBranches(q)}
       fetchData={(q) => fetchBranches(q)}
       displayField="branchName"
       valueField="id"
+      companyID={formData.companyID ?? resolvedCompanyID}
+      required
+    />
+  </div>
+  </div>
+)}
+
+{/* MANAGER → only Branch input, SP + Company hidden */}
+{user?.role === "SERVICE_PROVIDER" && (
+  <div className="grid grid-cols-1 gap-4">
+    <CompanyBranchField
+      label="Branch"
+      placeholder="Select Branch"
+      value={formData.branchName}
+      onChange={(v) => setFormData((p) => ({ ...p, branchName: v }))}
+      onSelect={(s) =>
+        setFormData((p) => ({
+          ...p,
+          branchesID: s.value,
+          branchName: s.display,
+        }))
+      }
+      fetchData={(q) => fetchBranches(q)}
+      displayField="branchName"
+      valueField="id"
+      companyID={formData.companyID ?? resolvedCompanyID}
+      required
+    />
+  </div>
+)}
+
+{/* COMPANY_ADMIN / BRANCH_ADMIN → only Branch input */}
+{(user?.role === "COMPANY_ADMIN" || user?.role === "BRANCH_ADMIN") && (
+  <div className="grid grid-cols-1 gap-4">
+    <CompanyBranchField
+      label="Branch"
+      placeholder="Search branch..."
+      value={formData.branchName}
+      onChange={(v) => setFormData((p) => ({ ...p, branchName: v }))}
+      onSelect={(s) =>
+        setFormData((p) => ({
+          ...p,
+          branchesID: s.value,
+          branchName: s.display,
+        }))
+      }
+      fetchData={(q) => fetchBranches(q)}
+      displayField="branchName"
+      valueField="id"
+      companyID={formData.companyID ?? resolvedCompanyID}
       required
     />
   </div>

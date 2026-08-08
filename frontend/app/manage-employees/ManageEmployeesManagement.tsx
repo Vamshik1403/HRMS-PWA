@@ -35,8 +35,11 @@ import { useClientTable, sortRows } from "../hooks/use-client-table";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import { dispatchAppRefresh, registerDataCacheClearer } from "../utils/appRefresh";
 import { authHeaders } from "@/lib/auth";
-import { canModuleAction, hasModuleWriteAccess, isCompanyOwnerFlag } from "@/lib/companyAccess";
-import { canDesktopManagerManage } from "../utils/scopeContext";
+import { hasModuleWriteAccess } from "@/lib/companyAccess";
+import {
+  canDesktopManagerManage,
+  filterCompanyScopedRecords,
+} from "../utils/scopeContext";
 
 const jsonAuthHeaders = () => authHeaders({ "Content-Type": "application/json" });
 import {
@@ -49,7 +52,6 @@ import { FormDrawer } from "../components/ui/form-drawer";
 import { NoticeBanner } from "../components/ui/notice-banner";
 import { toast } from "sonner";
 import { getSidebarContext } from "../utils/sidebarContext";
-import { isDesktopManagerEmployee, resolveScopedCompanyId } from "../utils/scopeContext";
 import {
   CollapsibleFormGroup,
   EmployeeFormSectionNav,
@@ -580,8 +582,6 @@ export function ManageEmployeesManagement() {
   const isBranchAdmin = user?.role === "BRANCH_ADMIN";
   const isSuperAdmin = user?.role === "SUPERADMIN";
   const isEmployee = user?.role === "EMPLOYEE";
-  const hasCompanyEmployeeScope =
-    isCompanyOwnerFlag() || canModuleAction("EMPLOYEES", "view");
   const [credentialModalOpen, setCredentialModalOpen] = useState(false);
   const [credentialSaving, setCredentialSaving] = useState(false);
   const [credentialEmployee, setCredentialEmployee] = useState<ManageEmpRead | null>(null);
@@ -1192,6 +1192,7 @@ const [isAddingNew, setIsAddingNew] = useState(false);
     allowRotatingShift: false,
     allowCreateTaskOnMobile: false,
     pwaShowLeaveBalance: true,
+    pwaShowLoanAdvances: true,
     mobileAttendanceEnabled: false,
     mobileBreakEnabled: true,
 
@@ -1389,88 +1390,20 @@ const [isAddingNew, setIsAddingNew] = useState(false);
       tokenDeviceMapping: emp.tokenDeviceMapping ?? [],
     }));
 
-    let filteredRows = enrichedEmployees;
+    // Company owners / module operators are company-scoped (includes null-branch owners).
+    // Use shared helper so Number() compares and owner scope stay consistent app-wide.
+    let filteredRows = await filterCompanyScopedRecords(enrichedEmployees, user);
 
-    // SUPERADMIN → filter by sidebar context
-    if (user?.role === "SUPERADMIN") {
-      const ctx = getSidebarContext();
-      if (ctx?.companyID) {
-          filteredRows = enrichedEmployees.filter((r: any) => Number(r.companyID) === Number(ctx.companyID));
-        } else {
-        filteredRows = enrichedEmployees;
-      }
-    }
-    // MANAGER → filter by serviceProviderID
-    else if (user?.role === "SERVICE_PROVIDER") {
-      const ctx = getSidebarContext();
-      if (ctx?.companyID) {
-        filteredRows = enrichedEmployees.filter(
-          (r: any) => r.companyID === ctx.companyID
-        );
-      } else {
-        const usersRes = await fetch("/backend/users");
-        const users = await usersRes.json();
-        const currentUser = users.find((u: any) => u.username === user.username);
-        if (currentUser) {
-          filteredRows = enrichedEmployees.filter(
-            (r: any) => r.serviceProviderID === currentUser.serviceProviderID
-          );
-        }
-      }
-    }
-    // COMPANY_ADMIN / ADMIN → filter by companyID
-       // COMPANY_ADMIN / ADMIN → filter by active selected company
-    else if (user?.role === "COMPANY_ADMIN" || user?.role === "ADMIN") {
+    // COMPANY_ADMIN / ADMIN may switch active company — prefer that over generic scope.
+    if (user?.role === "COMPANY_ADMIN" || user?.role === "ADMIN") {
       const activeCompanyID = getActiveEmployeeCompanyID();
-
-      if (activeCompanyID) {
-        filteredRows = enrichedEmployees.filter(
-          (r: any) => Number(r.companyID) === Number(activeCompanyID)
-        );
-      } else {
-        filteredRows = [];
-      }
+      filteredRows = activeCompanyID
+        ? enrichedEmployees.filter(
+            (r: any) => Number(r.companyID) === Number(activeCompanyID),
+          )
+        : [];
     }
 
-    // BRANCH_ADMIN → filter by companyID + branchesID
-    else if (user?.role === "BRANCH_ADMIN") {
-      const usersRes = await fetch("/backend/users");
-      const users = await usersRes.json();
-      const currentUser = users.find((u: any) => u.username === user.username);
-      if (currentUser) {
-        filteredRows = enrichedEmployees.filter(
-          (r: any) => r.companyID === currentUser.companyID && r.branchesID === currentUser.branchesID
-        );
-      }
-    }
-    // Desktop manager → company-wide like COMPANY_ADMIN
-    else if (isDesktopManagerEmployee(user)) {
-      const companyId = resolveScopedCompanyId(user);
-      if (companyId) {
-        filteredRows = enrichedEmployees.filter(
-          (r: any) => r.companyID === companyId
-        );
-      } else {
-        filteredRows = [];
-      }
-    }
-    // EMPLOYEE → match via manage-emp/credentials/all
-    // Company owner / EMPLOYEES rights → company-wide (same as COMPANY_ADMIN)
-    else if (user?.role === "EMPLOYEE") {
-      const credsRes = await fetch("/backend/manage-emp/credentials/all");
-      const creds = await credsRes.json();
-      const emp = creds.find((c: any) => c.username === user?.username);
-      if (emp) {
-        filteredRows = enrichedEmployees.filter((r: any) =>
-          hasCompanyEmployeeScope
-            ? r.companyID === emp.companyID
-            : r.companyID === emp.companyID && r.branchesID === emp.branchesID,
-        );
-      } else {
-        filteredRows = [];
-      }
-    }
-    
     setRows(filteredRows);
   } catch (e) {
     console.error("Failed to load employees:", e);
@@ -2367,6 +2300,7 @@ const addCombinedDevMap = () => {
       allowRotatingShift: false,
       allowCreateTaskOnMobile: false,
       pwaShowLeaveBalance: true,
+      pwaShowLoanAdvances: true,
       mobileAttendanceEnabled: false,
       mobileBreakEnabled: true,
 
@@ -3085,6 +3019,7 @@ const addCombinedDevMap = () => {
         allowRotatingShift: formData.allowRotatingShift,
         allowCreateTaskOnMobile: formData.allowCreateTaskOnMobile,
         pwaShowLeaveBalance: formData.pwaShowLeaveBalance,
+        pwaShowLoanAdvances: formData.pwaShowLoanAdvances,
         mobileAttendanceEnabled: formData.mobileAttendanceEnabled,
         mobileBreakEnabled: formData.mobileBreakEnabled,
 
@@ -3499,6 +3434,7 @@ const addCombinedDevMap = () => {
       allowRotatingShift: freshData.allowRotatingShift ?? false,
       allowCreateTaskOnMobile: freshData.allowCreateTaskOnMobile ?? false,
       pwaShowLeaveBalance: freshData.pwaShowLeaveBalance ?? true,
+      pwaShowLoanAdvances: freshData.pwaShowLoanAdvances ?? true,
       mobileAttendanceEnabled: freshData.mobileAttendanceEnabled ?? false,
       mobileBreakEnabled: freshData.mobileBreakEnabled !== false,
       typeOfEmployee: freshData.typeOfEmployee ?? "",
@@ -5773,6 +5709,15 @@ const handleCancel = () => {
                     className="rounded border-gray-300"
                   />
                   <span className="text-sm text-gray-700">Show leave status bar in mobile app</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={!!formData.pwaShowLoanAdvances}
+                    onChange={(e) => setFormData((p) => ({ ...p, pwaShowLoanAdvances: e.target.checked }))}
+                    className="rounded border-gray-300"
+                  />
+                  <span className="text-sm text-gray-700">Show Loan & Advances in My Profile</span>
                 </label>
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input

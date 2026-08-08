@@ -164,6 +164,14 @@ export const EMP_SIDEBAR_NAVIGATION: EmpSidebarNavGroup[] = [
         moduleId: "promotions",
         managerOnly: true,
       },
+      {
+        id: "team-leave-applications",
+        label: "Leave Applications",
+        href: "/leave-applications",
+        icon: FileText,
+        moduleId: "team",
+        show: () => canViewModule("LEAVE_APPLICATIONS") || isCompanyOwnerFlag(),
+      },
     ],
   },
   {
@@ -218,19 +226,6 @@ export const EMP_SIDEBAR_NAVIGATION: EmpSidebarNavGroup[] = [
         href: "/termination",
         icon: UserMinus,
         show: canModule("OFFBOARDING"),
-      },
-    ],
-  },
-  {
-    label: "Leave Management",
-    show: hasAnyCompanyAccess,
-    items: [
-      {
-        id: "admin-leave-applications",
-        label: "Leave Applications",
-        href: "/leave-applications",
-        icon: FileText,
-        show: canModule("LEAVE_APPLICATIONS"),
       },
     ],
   },

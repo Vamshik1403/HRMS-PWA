@@ -16,6 +16,7 @@ import type { DataTableColumn } from "../components/app/data-table";
 import { EntityRowActions } from "../components/app/entity-row-actions";
 import { useClientTable, sortRows } from "../hooks/use-client-table";
 import { SearchSuggestInput } from "../components/SearchSuggestInput"
+import { CompanyBranchField } from "../components/app/company-branch-field"
 import { toast } from "sonner";
 import { getSidebarContext } from "../utils/sidebarContext";
 
@@ -253,7 +254,7 @@ window.addEventListener("sidebar-context-changed", handler);
 
       // Filter branches by company
       const filteredByCompany = allBranches.filter((b: any) => 
-        b.companyID === companyIdToUse
+        Number(b.companyID) === Number(companyIdToUse)
       );
       // 🔒 BRANCH_ADMIN — restrict to their own branch only
       const branchScope =
@@ -262,15 +263,21 @@ window.addEventListener("sidebar-context-changed", handler);
           : filteredByCompany;
 
       // Apply search filter if query provided
-      if (q) {
-        return branchScope.filter((b: any) =>
-          (b.branchName || "")
-            .toLowerCase()
-            .includes(q.toLowerCase())
-        );
-      }
+      const matched = q
+        ? branchScope.filter((b: any) =>
+            (b.branchName || "")
+              .toLowerCase()
+              .includes(q.toLowerCase())
+          )
+        : branchScope;
 
-      return branchScope;
+      const seen = new Set<number>();
+      return matched.filter((b: any) => {
+        const id = Number(b.id);
+        if (!Number.isFinite(id) || seen.has(id)) return false;
+        seen.add(id);
+        return true;
+      });
     } catch (error) {
       console.error("Error fetching branches:", error);
       return [];
@@ -844,7 +851,7 @@ window.addEventListener("sidebar-context-changed", handler);
                   {/* Branch - For SUPERADMIN, MANAGER, and COMPANY_ADMIN */}
                   {(user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN") && (
                     <div className={`${user?.role === "SUPERADMIN" ? "col-span-1" : "col-span-3"}`}>
-                      <SearchSuggestInput 
+                      <CompanyBranchField 
                         label="Branch Name" 
                         placeholder="Start typing branch name..." 
                         value={formData.branchName} 
@@ -852,7 +859,9 @@ window.addEventListener("sidebar-context-changed", handler);
                         onSelect={handleBranchSelect} 
                         fetchData={fetchBranches} 
                         displayField="branchName" 
-                        valueField="id" 
+                        valueField="id"
+                        companyID={formData.companyID}
+                        required
                       />
                       {user?.role === "SERVICE_PROVIDER" && (
                         <p className="text-xs text-gray-500 mt-1">

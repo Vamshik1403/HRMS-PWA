@@ -11,6 +11,11 @@ import { useCurrentUser } from "../hooks/useCurrentUser";
 import { getSidebarContext } from "../utils/sidebarContext";
 import * as XLSX from "xlsx";
 import { PageHeader } from "../components/app/page-header";
+import {
+  isCompanyModuleOperator,
+  resolveEmployeeCreds,
+  resolveScopedCompanyId,
+} from "../utils/scopeContext";
 
 // ─── Interfaces ─────────────────────────────────────────────
 
@@ -248,9 +253,7 @@ export function LeaveReportsManagement() {
           const me = users.find((u: any) => u.username === user.username);
           setManagerData(me || null);
         } else if (user.role === "EMPLOYEE") {
-          const credsRes = await fetch(`${BACKEND_URL}/manage-emp/credentials/all`);
-          const creds = await credsRes.json();
-          const me = creds.find((u: any) => u.username === user.username);
+          const me = await resolveEmployeeCreds(user.username);
           setEmpCreds(me || null);
         }
       } catch (err) {
@@ -268,17 +271,36 @@ export function LeaveReportsManagement() {
     if (user.role === "SERVICE_PROVIDER") {
       const ctx = getSidebarContext();
       if (ctx?.companyID) {
-        data = data.filter((b) => b.companyID === ctx.companyID);
+        data = data.filter((b) => Number(b.companyID) === Number(ctx.companyID));
       } else if (managerData?.serviceProviderID) {
-        data = data.filter((b: any) => b.serviceProviderID === managerData.serviceProviderID);
+        data = data.filter((b: any) => Number(b.serviceProviderID) === Number(managerData.serviceProviderID));
+      }
+    } else if (
+      user.role === "COMPANY_ADMIN" ||
+      user.role === "ADMIN" ||
+      user.role === "BRANCH_ADMIN" ||
+      (user.role === "EMPLOYEE" && isCompanyModuleOperator(user))
+    ) {
+      const companyId =
+        resolveScopedCompanyId(user) ??
+        (empCreds?.companyID != null ? Number(empCreds.companyID) : undefined) ??
+        (formData.companyID != null ? Number(formData.companyID) : undefined) ??
+        user.companyID;
+      if (companyId != null) {
+        data = data.filter((b) => Number(b.companyID) === Number(companyId));
+      }
+      if (user.role === "BRANCH_ADMIN" && user.branchesID != null) {
+        data = data.filter((b) => Number(b.id) === Number(user.branchesID));
       }
     } else if (user.role === "EMPLOYEE" && empCreds) {
-      data = data.filter((b) => b.companyID === empCreds.companyID);
+      data = data.filter(
+        (b) => Number(b.companyID) === Number(empCreds.companyID),
+      );
     } else if (user.role === "SUPERADMIN" && formData.companyID) {
-      data = data.filter((b) => b.companyID === formData.companyID);
+      data = data.filter((b) => Number(b.companyID) === Number(formData.companyID));
     }
     setBranches(data);
-    if (user.role !== "SUPERADMIN" && data.length > 0) {
+    if (user.role !== "SUPERADMIN" && data.length > 0 && !formData.branchName) {
       const b = data[0];
       setFormData((prev) => ({ ...prev, companyID: b.companyID, branchName: b.branchName }));
       loadDepartmentsForBranch(b.id, b.companyID);
@@ -325,22 +347,63 @@ export function LeaveReportsManagement() {
       let selectedCompanyID: number | null = null;
       let selectedBranchID: number | null = null;
 
+      const ctx = getSidebarContext();
+      const branchFromForm = formData.branchName
+        ? allBranches.find((b) => b.branchName === formData.branchName)
+        : undefined;
+
+      // Always prefer the branch selected in the filter UI when present.
+      if (branchFromForm) {
+        selectedBranchID = Number(branchFromForm.id);
+        selectedCompanyID = Number(
+          formData.companyID ?? branchFromForm.companyID,
+        );
+      }
+
       if (user?.role === "SUPERADMIN") {
-        selectedCompanyID = formData.companyID;
-        const branch = allBranches.find((b) => b.branchName === formData.branchName);
-        selectedBranchID = branch?.id ?? null;
+        selectedCompanyID =
+          formData.companyID != null
+            ? Number(formData.companyID)
+            : selectedCompanyID;
+        if (!selectedBranchID && formData.branchName) {
+          selectedBranchID = branchFromForm?.id ?? null;
+        }
       } else if (user?.role === "SERVICE_PROVIDER") {
-        const ctx = getSidebarContext();
-        selectedCompanyID = ctx?.companyID || managerData?.companyID;
-        selectedBranchID = managerData?.branchesID;
-        if (!selectedCompanyID && managerData?.serviceProviderID) {
-          const branch = allBranches.find((b) => b.branchName === formData.branchName);
-          selectedCompanyID = branch?.companyID ?? null;
-          selectedBranchID = branch?.id ?? null;
+        selectedCompanyID =
+          selectedCompanyID ??
+          (ctx?.companyID != null ? Number(ctx.companyID) : null) ??
+          (managerData?.companyID != null ? Number(managerData.companyID) : null);
+        selectedBranchID =
+          selectedBranchID ??
+          (managerData?.branchesID != null
+            ? Number(managerData.branchesID)
+            : null);
+      } else if (
+        user?.role === "COMPANY_ADMIN" ||
+        user?.role === "ADMIN" ||
+        user?.role === "BRANCH_ADMIN" ||
+        (user?.role === "EMPLOYEE" && isCompanyModuleOperator(user))
+      ) {
+        selectedCompanyID =
+          selectedCompanyID ??
+          resolveScopedCompanyId(user) ??
+          (empCreds?.companyID != null ? Number(empCreds.companyID) : null) ??
+          (user?.companyID != null ? Number(user.companyID) : null);
+        if (!selectedBranchID && user?.role === "BRANCH_ADMIN") {
+          selectedBranchID =
+            user.branchesID != null
+              ? Number(user.branchesID)
+              : managerData?.branchesID != null
+                ? Number(managerData.branchesID)
+                : null;
         }
       } else if (user?.role === "EMPLOYEE" && empCreds) {
-        selectedCompanyID = empCreds.companyID;
-        selectedBranchID = empCreds.branchesID;
+        selectedCompanyID =
+          selectedCompanyID ??
+          (empCreds.companyID != null ? Number(empCreds.companyID) : null);
+        selectedBranchID =
+          selectedBranchID ??
+          (empCreds.branchesID != null ? Number(empCreds.branchesID) : null);
       }
 
       if (!selectedCompanyID || !selectedBranchID) {
@@ -362,15 +425,17 @@ export function LeaveReportsManagement() {
 
       // Filter employees
       let filteredEmployees = employees.filter(
-        (e: any) => e.companyID === selectedCompanyID && e.branchesID === selectedBranchID
+        (e: any) =>
+          Number(e.companyID) === Number(selectedCompanyID) &&
+          Number(e.branchesID) === Number(selectedBranchID),
       );
 
       if (formData.department) {
         const dept = departmentsData.find(
           (d: any) =>
             d.departmentName === formData.department &&
-            d.companyID === selectedCompanyID &&
-            d.branchesID === selectedBranchID
+            Number(d.companyID) === Number(selectedCompanyID) &&
+            Number(d.branchesID) === Number(selectedBranchID),
         );
         if (dept) {
           filteredEmployees = filteredEmployees.filter((e: any) => e.departmentNameID === dept.id);
@@ -393,7 +458,10 @@ export function LeaveReportsManagement() {
       const typeFilter = REPORT_TYPE_FILTER[formData.reportType] || [];
 
       const filteredLeaves: LeaveApplication[] = (leaveApps || []).filter((la: any) => {
-        if (la.companyID !== selectedCompanyID || la.branchesID !== selectedBranchID)
+        if (
+          Number(la.companyID) !== Number(selectedCompanyID) ||
+          Number(la.branchesID) !== Number(selectedBranchID)
+        )
           return false;
         if (la.status !== "Approved") return false;
 

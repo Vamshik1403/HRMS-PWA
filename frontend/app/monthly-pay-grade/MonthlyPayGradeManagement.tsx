@@ -17,6 +17,7 @@ import { useClientTable, sortRows } from "../hooks/use-client-table";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import { toast } from "sonner";
 import { getSidebarContext } from "../utils/sidebarContext";
+import { AutocompleteBranchField } from "../components/app/autocomplete-branch-field";
 import {
   canDesktopManagerManage,
   filterCompanyScopedRecords,
@@ -645,12 +646,16 @@ miniOTTime: x.miniOTTime ?? 0,
   try {
     const list: BR[] = await robustGet(API.branches, val);
 
-    const filtered = list.filter(
-      (b) =>
-        b.companyID === resolvedCompanyID &&
-        (user?.role !== "BRANCH_ADMIN" || Number(b.id) === Number(user?.branchesID)) &&
-        (b.branchName ?? "").toLowerCase().includes(val.toLowerCase())
-    );
+    const seen = new Set<number>();
+    const filtered = list.filter((b) => {
+      const id = Number(b.id);
+      if (!Number.isFinite(id) || seen.has(id)) return false;
+      if (Number(b.companyID) !== Number(resolvedCompanyID)) return false;
+      if (user?.role === "BRANCH_ADMIN" && Number(b.id) !== Number(user?.branchesID)) return false;
+      if (!(b.branchName ?? "").toLowerCase().includes(val.toLowerCase())) return false;
+      seen.add(id);
+      return true;
+    });
 
     setBrList(filtered.slice(0, 50));
   } catch (e) {
@@ -995,79 +1000,53 @@ miniOTTime: x.miniOTTime ?? 0,
                   </div>
 
                   {/* Branch */}
-                  <div ref={brRef} className="space-y-2 relative">
-                    <Label>Branch *</Label>
-                    <Input
-                      value={formData.brAutocomplete}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        setFormData((p) => ({ ...p, brAutocomplete: val, branchesID: null }));
-                        runFetchBR(val);
-                      }}
-                      placeholder="Start typing branch…"
-                      autoComplete="off"
-                    />
-                    {brList.length > 0 && (
-                      <div className="absolute z-10 bg-white border rounded w-full shadow max-h-48 overflow-y-auto">
-                        {brList.map((br) => (
-                          <div
-                            key={br.id}
-                            className="px-3 py-2 hover:bg-gray-100 cursor-pointer"
-                            onMouseDown={(e) => e.preventDefault()}
-                            onClick={() => {
-                              setFormData((p) => ({
-                                ...p,
-                                branchesID: br.id,
-                                brAutocomplete: br.branchName ?? "",
-                              }));
-                              setBrList([]);
-                            }}
-                          >
-                            {br.branchName}
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
+                  <AutocompleteBranchField
+                    label="Branch *"
+                    placeholder="Start typing branch…"
+                    value={formData.brAutocomplete}
+                    branchId={formData.branchesID}
+                    companyID={formData.companyID ?? resolvedCompanyID ?? currentUserMapping?.companyID}
+                    onInputChange={(display) =>
+                      setFormData((p) => ({ ...p, brAutocomplete: display, branchesID: null }))
+                    }
+                    onBranchSelect={({ id, branchName }) => {
+                      setFormData((p) => ({
+                        ...p,
+                        branchesID: id,
+                        brAutocomplete: branchName,
+                      }));
+                      setBrList([]);
+                    }}
+                    onFetch={(q) => runFetchBR(q)}
+                    options={brList}
+                    optionsLoading={brLoading}
+                  />
                 </div>
 
-              {/* MANAGER → Only Branch input */}
-              {user?.role === "SERVICE_PROVIDER" && (
+              {/* MANAGER → Only Branch input - disabled, Branch now always visible above */}
+              {false && user?.role === "SERVICE_PROVIDER" && (
                 <div className="grid grid-cols-1 gap-4">
-                  <div ref={brRef} className="space-y-2 relative">
-                    <Label>Branch *</Label>
-                    <Input
-                      value={formData.brAutocomplete}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        setFormData((p) => ({ ...p, brAutocomplete: val, branchesID: null }));
-                        runFetchBR(val);
-                      }}
-                      placeholder="Start typing branch…"
-                      autoComplete="off"
-                    />
-                    {brList.length > 0 && (
-                      <div className="absolute z-10 bg-white border rounded w-full shadow max-h-48 overflow-y-auto">
-                        {brList.map((br) => (
-                          <div
-                            key={br.id}
-                            className="px-3 py-2 hover:bg-gray-100 cursor-pointer"
-                            onMouseDown={(e) => e.preventDefault()}
-                            onClick={() => {
-                              setFormData((p) => ({
-                                ...p,
-                                branchesID: br.id,
-                                brAutocomplete: br.branchName ?? "",
-                              }));
-                              setBrList([]);
-                            }}
-                          >
-                            {br.branchName}
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
+                  <AutocompleteBranchField
+                    label="Branch *"
+                    placeholder="Start typing branch…"
+                    value={formData.brAutocomplete}
+                    branchId={formData.branchesID}
+                    companyID={formData.companyID ?? resolvedCompanyID ?? currentUserMapping?.companyID}
+                    onInputChange={(display) =>
+                      setFormData((p) => ({ ...p, brAutocomplete: display, branchesID: null }))
+                    }
+                    onBranchSelect={({ id, branchName }) => {
+                      setFormData((p) => ({
+                        ...p,
+                        branchesID: id,
+                        brAutocomplete: branchName,
+                      }));
+                      setBrList([]);
+                    }}
+                    onFetch={(q) => runFetchBR(q)}
+                    options={brList}
+                    optionsLoading={brLoading}
+                  />
                 </div>
               )}
 

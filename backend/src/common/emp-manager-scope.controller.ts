@@ -4,6 +4,7 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { EmpLocationAttendanceService } from '../emp-location-attendance/emp-location-attendance.service';
 import { EmpManagerScopeService } from './emp-manager-scope.service';
+import { MailService } from '../mail/mail.service';
 
 @Controller('emp-manager-scope')
 @UseGuards(AuthGuard('jwt'))
@@ -12,6 +13,7 @@ export class EmpManagerScopeController {
     private readonly scope: EmpManagerScopeService,
     private readonly prisma: PrismaService,
     private readonly attendance: EmpLocationAttendanceService,
+    private readonly mailService: MailService,
   ) {}
 
   private getEmployeeId(req: { user?: { employeeId?: number; sub?: number } }): number {
@@ -576,7 +578,14 @@ export class EmpManagerScopeController {
 
     const self = await this.prisma.manageEmployee.findUnique({
       where: { id: employeeId },
-      select: { companyID: true, branchesID: true, serviceProviderID: true },
+      select: {
+        companyID: true,
+        branchesID: true,
+        serviceProviderID: true,
+        employeeFirstName: true,
+        employeeLastName: true,
+        employeeID: true,
+      },
     });
     if (!self) throw new UnauthorizedException('Employee not found');
 
@@ -595,6 +604,51 @@ export class EmpManagerScopeController {
       },
       select: this.delegationSelect,
     });
+
+    const delegatorName =
+      `${self.employeeFirstName ?? ''} ${self.employeeLastName ?? ''}`.trim() ||
+      self.employeeID ||
+      `Employee #${employeeId}`;
+    const dateRange =
+      body.startDate && body.endDate
+        ? ` from ${body.startDate} to ${body.endDate}`
+        : delegationType === 'PERMANENT'
+          ? ' (permanent)'
+          : '';
+    const subject = 'Delegation assignment';
+    const description = `${delegatorName} has assigned you as their delegatee${dateRange}.${
+      body.description?.trim() ? ` Note: ${body.description.trim()}` : ''
+    }`;
+
+    // Always notify the delegatee (email + IM). BOTH also keeps preference on the row.
+    void this.mailService
+      .sendToEmployeeWithManagerCc({
+        employeeId: delegateeId,
+        companyID: self.companyID ?? undefined,
+        eventType: 'GENERAL',
+        vars: { subject, description },
+      })
+      .catch(() => undefined);
+
+    try {
+      await this.prisma.employeeMemo.create({
+        data: {
+          serviceProviderID: self.serviceProviderID,
+          companyID: self.companyID,
+          branchesID: self.branchesID,
+          employeeID: delegateeId,
+          employeeIDs: [delegateeId],
+          memoType: 'Information',
+          subject,
+          description,
+          issuedDate: new Date(),
+          issuedBy: delegatorName,
+          senderEmployeeId: employeeId,
+        },
+      });
+    } catch {
+      // Non-fatal: delegation is already created
+    }
 
     return this.formatDelegation(created);
   }

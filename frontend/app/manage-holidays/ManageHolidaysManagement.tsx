@@ -15,13 +15,17 @@ import type { DataTableColumn } from "../components/app/data-table";
 import { EntityRowActions } from "../components/app/entity-row-actions";
 import { useClientTable, sortRows } from "../hooks/use-client-table";
 import { SearchSuggestInput } from "../components/SearchSuggestInput"
+import { CompanyBranchField } from "../components/app/company-branch-field"
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import { toast } from "sonner";
 import { getSidebarContext } from "../utils/sidebarContext";
 import {
   canDesktopManagerManage,
   filterCompanyScopedRecords,
+  isCompanyModuleOperator,
   isDesktopManagerEmployee,
+  resolveEmployeeCreds,
+  resolveScopedCompanyId,
   resolveScopeUserMapping,
 } from "../utils/scopeContext";
 
@@ -173,19 +177,16 @@ const [isDialogOpen, setIsDialogOpen] = useState(false)
             serviceProviderID: user.serviceProviderID,
             branchesID: user.branchesID,
           });
-          return;
+          // Fall through so credentials still load (branch/company display names).
         }
 
-        // --- EMPLOYEE ---
+        // --- EMPLOYEE (includes company owners / desktop managers) ---
         if (user.role === "EMPLOYEE") {
-          const credsRes = await fetch(`${BACKEND_URL}/manage-emp/credentials/all`);
-          const creds = await credsRes.json();
-          const me = creds.find((u: any) => u.username === user.username);
+          const me = await resolveEmployeeCreds(user.username);
           setEmpCreds(me || null);
-          
-          // Auto-populate form data for EMPLOYEE
+
           if (me) {
-            setFormData(prev => ({
+            setFormData((prev) => ({
               ...prev,
               serviceProviderID: me.serviceProviderID,
               companyID: me.companyID,
@@ -481,9 +482,9 @@ const handler = () => {
         serviceProviderID: empCreds.serviceProviderID,
         companyID: empCreds.companyID,
         branchesID: empCreds.branchesID,
-        serviceProvider: empCreds.serviceProviderName || "",
-        companyName: empCreds.companyName || "",
-        branchName: empCreds.branchName || "",
+        serviceProvider: empCreds.serviceProviderName || empCreds.serviceProvider?.companyName || "",
+        companyName: empCreds.companyName || empCreds.company?.companyName || "",
+        branchName: empCreds.branchName || empCreds.branches?.branchName || "",
       });
     } else {
       const ctx = getSidebarContext();
@@ -631,23 +632,26 @@ const handler = () => {
   // Branch fetch (filtered by company)
   const fetchBranches = async (searchQuery: string = "") => {
     try {
-      // For SUPERADMIN, use formData.companyID
-      // For MANAGER, use managerData.companyID
-      // For EMPLOYEE, use empCreds.companyID (and auto-select their branch)
-      
       let companyIdToUse: number | undefined;
-      
+
       if (user?.role === "SUPERADMIN") {
         companyIdToUse = formData.companyID;
       } else if (user?.role === "SERVICE_PROVIDER") {
         const ctx = getSidebarContext();
         companyIdToUse = managerData?.companyID ?? ctx?.companyID ?? user?.companyID;
       } else if (user?.role === "EMPLOYEE") {
-        companyIdToUse = empCreds?.companyID;
+        companyIdToUse =
+          empCreds?.companyID ??
+          resolveScopedCompanyId(user) ??
+          formData.companyID ??
+          user?.companyID;
       } else {
-        // COMPANY_ADMIN / BRANCH_ADMIN
         const ctx = getSidebarContext();
-        companyIdToUse = formData.companyID ?? ctx?.companyID ?? user?.companyID;
+        companyIdToUse =
+          formData.companyID ??
+          resolveScopedCompanyId(user) ??
+          ctx?.companyID ??
+          user?.companyID;
       }
 
       if (!companyIdToUse) return [];
@@ -655,12 +659,10 @@ const handler = () => {
       const data = await fetch(`${BACKEND_URL}/branches`).then(r => r.json());
       const allBranches = Array.isArray(data) ? data : [];
 
-      // Filter branches by company
-      const filtered = allBranches.filter((b: any) => 
-        b.companyID === companyIdToUse
+      const filtered = allBranches.filter(
+        (b: any) => Number(b.companyID) === Number(companyIdToUse),
       );
 
-      // Apply search filter if query provided
       if (searchQuery) {
         return filtered.filter((b: any) =>
           (b.branchName || "")
@@ -735,10 +737,14 @@ const handler = () => {
 
                      
 
-                    {/* Branch - For SUPERADMIN, MANAGER, and COMPANY_ADMIN */}
-                    {(user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN") && (
+                    {/* Branch - admins and company operators pick a branch */}
+                    {(user?.role === "SUPERADMIN" ||
+                      user?.role === "SERVICE_PROVIDER" ||
+                      user?.role === "COMPANY_ADMIN" ||
+                      user?.role === "ADMIN" ||
+                      (user?.role === "EMPLOYEE" && isCompanyModuleOperator(user))) && (
                       <div className={`${user?.role === "SUPERADMIN" ? "col-span-1" : "col-span-3"}`}>
-                        <SearchSuggestInput
+                        <CompanyBranchField
                           label="Branch Name"
                           placeholder="Start typing branch name..."
                           value={formData.branchName}
@@ -747,6 +753,7 @@ const handler = () => {
                           fetchData={fetchBranches}
                           displayField="branchName"
                           valueField="id"
+                          companyID={formData.companyID}
                           required
                         />
                         {user?.role === "SERVICE_PROVIDER" && (
@@ -757,14 +764,16 @@ const handler = () => {
                       </div>
                     )}
 
-                    {/* Display assigned branch for EMPLOYEE */}
-                    {user?.role === "EMPLOYEE" && (
+                    {/* Display assigned branch for non-operator employees */}
+                    {user?.role === "EMPLOYEE" && !isCompanyModuleOperator(user) && (
                       <div className="col-span-3 space-y-2">
                         <Label>Assigned Branch</Label>
                         <div className="p-2 border rounded bg-gray-50">
                           <div className="flex items-center gap-2">
                             <Icon icon="mdi:map-marker" className="w-4 h-4 text-gray-500" />
-                            <span className="font-medium">{formData.branchName || "Loading..."}</span>
+                            <span className="font-medium">
+                              {formData.branchName || "Not assigned"}
+                            </span>
                           </div>
                         </div>
                       </div>

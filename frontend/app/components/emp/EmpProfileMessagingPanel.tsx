@@ -23,6 +23,7 @@ import { useCurrentUser } from "@/app/hooks/useCurrentUser";
 import { useEmpManagerScope } from "@/app/hooks/useEmpManagerScope";
 import { useMemoChatPolling } from "@/app/hooks/useMemoChatPolling";
 import { authHeaders } from "@/lib/auth";
+import { isCompanyOwnerFlag } from "@/lib/companyAccess";
 import { useEmpPortalPageHeader } from "@/app/components/layout/emp-portal-page-context";
 import { reporteeDisplayName } from "@/app/utils/empManagerDisplay";
 import { resolveAttachmentUrl, uploadAttachmentFile } from "@/app/utils/uploadFile";
@@ -105,7 +106,7 @@ type ChatBubble = {
 
 type Conversation = {
   key: string;
-  kind: "dm" | "group";
+  kind: "dm" | "group" | "broadcast";
   employeeId: number | null;
   groupId: string | null;
   groupName: string | null;
@@ -116,9 +117,11 @@ type Conversation = {
   unreadCount: number;
   memoIds: number[];
   isArchived: boolean;
+  readOnly?: boolean;
 };
 
 const GROUP_SUBJECT_PREFIX = "IM_GROUP::";
+const COMPANY_BROADCAST_PREFIX = "IM_COMPANY::";
 
 function dmConversationKey(employeeId: number) {
   return `dm:${employeeId}`;
@@ -126,6 +129,10 @@ function dmConversationKey(employeeId: number) {
 
 function groupConversationKey(groupId: string) {
   return `group:${groupId}`;
+}
+
+function companyBroadcastKey(companyId: number) {
+  return `broadcast:${companyId}`;
 }
 
 function parseGroupSubject(subject: string | null | undefined): { groupId: string; groupName: string } | null {
@@ -143,8 +150,25 @@ function encodeGroupSubject(groupId: string, groupName: string) {
   return `${GROUP_SUBJECT_PREFIX}${groupId}::${groupName.trim()}`;
 }
 
+function parseCompanyBroadcastSubject(
+  subject: string | null | undefined,
+): { companyId: number; companyName: string } | null {
+  if (!subject?.startsWith(COMPANY_BROADCAST_PREFIX)) return null;
+  const rest = subject.slice(COMPANY_BROADCAST_PREFIX.length);
+  const sep = rest.indexOf("::");
+  if (sep <= 0) return null;
+  const companyId = Number(rest.slice(0, sep).trim());
+  const companyName = rest.slice(sep + 2).trim();
+  if (!Number.isFinite(companyId) || companyId <= 0 || !companyName) return null;
+  return { companyId, companyName };
+}
+
+function encodeCompanyBroadcastSubject(companyId: number, companyName: string) {
+  return `${COMPANY_BROADCAST_PREFIX}${companyId}::${companyName.trim()}`;
+}
+
 function isGroupMemo(memo: MemoItem) {
-  return parseGroupSubject(memo.subject) != null;
+  return parseGroupSubject(memo.subject) != null || parseCompanyBroadcastSubject(memo.subject) != null;
 }
 
 function createGroupId() {
@@ -630,7 +654,10 @@ export function EmpProfileMessagingPanel({
     companyID?: number | null;
     branchesID?: number | null;
     serviceProviderID?: number | null;
+    companyName?: string | null;
   }>({});
+  const isOwnerUser = isCompanyOwnerFlag();
+  const canComposeBroadcast = isOwnerUser;
   const [managerName, setManagerName] = useState("Manager");
   const [searchQuery, setSearchQuery] = useState("");
   const [conversationFilter, setConversationFilter] = useState<ConversationFilter>("all");
@@ -887,6 +914,7 @@ export function EmpProfileMessagingPanel({
           setSenderContext((prev) => ({
             ...prev,
             companyID: Number(companyID),
+            companyName: prev.companyName || getSidebarContext()?.companyName || null,
           }));
         }
 
@@ -997,6 +1025,11 @@ export function EmpProfileMessagingPanel({
             normalizeId(
               creds?.serviceProviderID ?? ctx?.serviceProviderID ?? user?.serviceProviderID,
             ) ?? undefined,
+          companyName:
+            creds?.employee?.company?.companyName ||
+            creds?.company?.companyName ||
+            ctx?.companyName ||
+            null,
         };
         // Prefer company from /users when credentials are missing (typical COMPANY_ADMIN).
         if (!nextSenderContext.companyID && user?.username) {
@@ -1327,6 +1360,50 @@ export function EmpProfileMessagingPanel({
     });
 
     messages.forEach((memo) => {
+      const broadcastMeta = parseCompanyBroadcastSubject(memo.subject);
+      if (broadcastMeta) {
+        const key = companyBroadcastKey(broadcastMeta.companyId);
+        const existing =
+          groupMap.get(key) ||
+          ({
+            key,
+            kind: "broadcast",
+            employeeId: null,
+            groupId: String(broadcastMeta.companyId),
+            groupName: broadcastMeta.companyName,
+            memberIds: [],
+            profile: {
+              id: 0,
+              name: broadcastMeta.companyName,
+              designation: "Company announcements",
+              department: "Everyone",
+            },
+            lastMessage: "",
+            lastMessageAt: null,
+            unreadCount: 0,
+            memoIds: [],
+            isArchived: false,
+            readOnly: !isOwnerUser,
+          } satisfies Conversation);
+
+        existing.groupName = broadcastMeta.companyName;
+        existing.profile.name = broadcastMeta.companyName;
+        if (!existing.memoIds.includes(memo.id)) existing.memoIds.push(memo.id);
+        const preview = messagePreview(memo);
+        const date = memoTimestamp(memo);
+        if (
+          !existing.lastMessageAt ||
+          new Date(date || 0).getTime() > new Date(existing.lastMessageAt).getTime()
+        ) {
+          existing.lastMessage = preview;
+          existing.lastMessageAt = date;
+        }
+        if (rowStatus(memo) === "Unread") existing.unreadCount += 1;
+        existing.isArchived = existing.memoIds.every((id) => archivedIds.has(id));
+        groupMap.set(key, existing);
+        return;
+      }
+
       const groupMeta = parseGroupSubject(memo.subject);
       if (groupMeta) {
         const memberIds = Array.from(
@@ -1425,15 +1502,49 @@ export function EmpProfileMessagingPanel({
       dmMap.set(cp, existing);
     });
 
+    const companyId = normalizeId(senderContext.companyID);
+    const companyName =
+      senderContext.companyName?.trim() ||
+      getSidebarContext()?.companyName?.trim() ||
+      null;
+    if (companyId && companyName) {
+      const key = companyBroadcastKey(companyId);
+      if (!groupMap.has(key)) {
+        groupMap.set(key, {
+          key,
+          kind: "broadcast",
+          employeeId: null,
+          groupId: String(companyId),
+          groupName: companyName,
+          memberIds: teamMembers.map((m) => Number(m.id)).filter(Boolean),
+          profile: {
+            id: 0,
+            name: companyName,
+            designation: "Company announcements",
+            department: "Everyone",
+          },
+          lastMessage: "",
+          lastMessageAt: null,
+          unreadCount: 0,
+          memoIds: [],
+          isArchived: false,
+          readOnly: !isOwnerUser,
+        });
+      }
+    }
+
     return [...dmMap.values(), ...groupMap.values()]
       .filter((conversation) => {
-        if (conversation.kind === "group") return true;
+        if (conversation.kind === "group" || conversation.kind === "broadcast") return true;
         if (isSelfConversation(conversation.employeeId, selfProfile)) return false;
         const profileName = conversation.profile.name.trim().toLowerCase();
         const selfName = selfProfile.fullName?.trim().toLowerCase();
         return !(selfName && profileName === selfName);
       })
       .sort((a, b) => {
+        // Keep company broadcast pinned at the top of the team list.
+        if (a.kind === "broadcast" && b.kind !== "broadcast") return -1;
+        if (b.kind === "broadcast" && a.kind !== "broadcast") return 1;
         const aTime = a.lastMessageAt ? new Date(a.lastMessageAt).getTime() : 0;
         const bTime = b.lastMessageAt ? new Date(b.lastMessageAt).getTime() : 0;
         if (aTime !== bTime) {
@@ -1443,7 +1554,7 @@ export function EmpProfileMessagingPanel({
         }
         return a.profile.name.localeCompare(b.profile.name);
       });
-  }, [employeeId, isCompanyScope, teamMembers, departmentLabel, messages, profileMap, resolveActiveCounterpart, rowStatus, archivedIds, selfProfile]);
+  }, [employeeId, isCompanyScope, teamMembers, departmentLabel, messages, profileMap, resolveActiveCounterpart, rowStatus, archivedIds, selfProfile, senderContext.companyID, senderContext.companyName, isOwnerUser]);
 
   const filteredConversations = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
@@ -1493,6 +1604,17 @@ export function EmpProfileMessagingPanel({
   const conversationMemos = useMemo(() => {
     const self = normalizeId(employeeId);
     if (!self || !selectedConversation) return [] as MemoItem[];
+
+    if (selectedConversation.kind === "broadcast" && selectedConversation.groupId) {
+      const companyId = Number(selectedConversation.groupId);
+      return messages
+        .filter((memo) => parseCompanyBroadcastSubject(memo.subject)?.companyId === companyId)
+        .sort(
+          (a, b) =>
+            new Date(a.createdAt || a.issuedDate || 0).getTime() -
+            new Date(b.createdAt || b.issuedDate || 0).getTime(),
+        );
+    }
 
     if (selectedConversation.kind === "group" && selectedConversation.groupId) {
       return messages
@@ -1736,6 +1858,68 @@ export function EmpProfileMessagingPanel({
     const text = draft.trim();
     const self = normalizeId(employeeId);
     if (!text || !canCompose || !selectedConversation) return;
+
+    if (selectedConversation.kind === "broadcast") {
+      if (!canComposeBroadcast) {
+        toast.error("Only the company owner can post company announcements");
+        return;
+      }
+      const companyId = Number(selectedConversation.groupId);
+      const companyName = selectedConversation.groupName || senderContext.companyName || "Company";
+      if (!Number.isFinite(companyId) || companyId <= 0) return;
+
+      const recipients = teamMembers
+        .map((m) => Number(m.id))
+        .filter((id) => Number.isFinite(id) && id > 0 && id !== self);
+      if (recipients.length === 0) {
+        toast.error("No employees found to notify");
+        return;
+      }
+
+      setSending(true);
+      try {
+        let attachmentPath: string | undefined;
+        if (attachmentFile) {
+          attachmentPath = await uploadAttachmentFile(attachmentFile);
+        }
+
+        const res = await fetch(`${BACKEND}/employee-memo`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", ...authHeaders() },
+          body: JSON.stringify({
+            employeeIDs: recipients,
+            memoType: "Information",
+            subject: encodeCompanyBroadcastSubject(companyId, companyName),
+            description: text,
+            issuedDate: new Date().toISOString().slice(0, 10),
+            issuedBy: managerName,
+            issuedByRole: issuedByRoleLabel,
+            ...(self ? { senderEmployeeId: self } : {}),
+            attachmentPath,
+            companyID: companyId,
+            ...(senderContext.branchesID ? { branchesID: senderContext.branchesID } : {}),
+            ...(senderContext.serviceProviderID ? { serviceProviderID: senderContext.serviceProviderID } : {}),
+          }),
+        });
+        if (!res.ok) {
+          const errText = await res.text().catch(() => "");
+          throw new Error(errText || "Send failed");
+        }
+
+        setDraft("");
+        setAttachmentFile(null);
+        if (typeof window !== "undefined") {
+          sessionStorage.removeItem(`_pc_${panelCacheKey}`);
+        }
+        await load({ silent: true });
+        setSelectedKey(selectedConversation.key);
+      } catch {
+        toast.error("Could not send company announcement");
+      } finally {
+        setSending(false);
+      }
+      return;
+    }
 
     if (selectedConversation.kind === "group") {
       if (!selectedConversation.groupId || !selectedConversation.groupName) return;
@@ -2195,7 +2379,7 @@ export function EmpProfileMessagingPanel({
                 <ConversationAvatar
                   profile={selectedConversation.profile}
                   size="lg"
-                  isGroup={selectedConversation.kind === "group"}
+                  isGroup={selectedConversation.kind === "group" || selectedConversation.kind === "broadcast"}
                   showPresence={selectedConversation.kind === "dm"}
                 />
                 <div className="min-w-0">
@@ -2203,13 +2387,17 @@ export function EmpProfileMessagingPanel({
                     {selectedConversation.profile.name}
                   </p>
                   <p className="truncate text-[13px] text-[#6B7280]">
-                    {selectedConversation.kind === "group"
+                    {selectedConversation.kind === "group" || selectedConversation.kind === "broadcast"
                       ? selectedConversation.profile.department
                       : `${selectedConversation.profile.designation} • ${selectedConversation.profile.department}`}
                   </p>
                   {selectedConversation.kind === "dm" ? (
                     <p className="text-[12px] font-medium text-[#6B7280]">
                       {presenceLabel(selectedPresence)}
+                    </p>
+                  ) : selectedConversation.kind === "broadcast" ? (
+                    <p className="text-[12px] font-medium text-[#6B7280]">
+                      Company announcements{canComposeBroadcast ? "" : " · read only"}
                     </p>
                   ) : (
                     <p className="text-[12px] font-medium text-[#6B7280]">Group conversation</p>
@@ -2314,6 +2502,12 @@ export function EmpProfileMessagingPanel({
             </div>
 
             <footer className="border-t border-[#EEF2F7] bg-white px-4 py-4 md:px-5">
+              {selectedConversation.kind === "broadcast" && !canComposeBroadcast ? (
+                <p className="text-center text-[13px] text-[#6B7280]">
+                  Only the company owner can post messages here. You can view announcements.
+                </p>
+              ) : (
+              <>
               {attachmentFile ? (
                 <div className="mb-3 flex items-center gap-2">
                   <Paperclip className="size-4 shrink-0 text-primary" />
@@ -2382,6 +2576,8 @@ export function EmpProfileMessagingPanel({
                   <SendHorizontal className="size-4" />
                 </button>
               </div>
+              </>
+              )}
             </footer>
           </>
         ) : (

@@ -145,6 +145,34 @@ export class CompanyService {
       new Date().toISOString().slice(0, 10);
 
     const created = await this.prisma.$transaction(async (tx) => {
+      // Ensure the owner title also exists as a Designation master record
+      // (user types like Proprietor / Partner are treated as designations).
+      let designationId: number | null = null;
+      if (ownerTitle) {
+        const existingDesg = await tx.designations.findFirst({
+          where: {
+            companyID: company.id,
+            designation: { equals: ownerTitle, mode: 'insensitive' },
+          },
+          select: { id: true },
+        });
+        if (existingDesg) {
+          designationId = existingDesg.id;
+        } else {
+          const createdDesg = await tx.designations.create({
+            data: {
+              designation: ownerTitle,
+              companyID: company.id,
+              serviceProviderID: company.serviceProviderID ?? null,
+              branchesID: defaultBranch?.id ?? null,
+              isManager: true,
+            },
+            select: { id: true },
+          });
+          designationId = createdDesg.id;
+        }
+      }
+
       const employee = await tx.manageEmployee.create({
         data: {
           employeeID: employeeCode,
@@ -156,6 +184,7 @@ export class CompanyService {
           companyID: company.id,
           serviceProviderID: company.serviceProviderID,
           branchesID: defaultBranch?.id ?? null,
+          designationID: designationId,
           isCompanyOwner: true,
           ownerTitle,
           employmentStatus: 'Active',
@@ -163,6 +192,16 @@ export class CompanyService {
           lifecycleStatus: 'ACTIVE',
         },
       });
+
+      if (designationId) {
+        await tx.empDesignation.create({
+          data: {
+            manageEmployeeID: employee.id,
+            designationID: designationId,
+            effectFrom: joiningDate,
+          },
+        });
+      }
 
       await tx.employeeCredentials.create({
         data: {
@@ -182,6 +221,9 @@ export class CompanyService {
         include: {
           company: {
             select: { id: true, companyName: true, legalEntityType: true },
+          },
+          designations: {
+            select: { id: true, designation: true },
           },
           employeeCredentials: {
             select: {

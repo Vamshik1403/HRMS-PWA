@@ -19,9 +19,11 @@ import type { DataTableColumn } from "../components/app/data-table"
 import { EntityRowActions } from "../components/app/entity-row-actions"
 import { useClientTable, sortRows } from "../hooks/use-client-table"
 import { SearchSuggestInput } from "../components/SearchSuggestInput"
+import { CompanyBranchField } from "../components/app/company-branch-field"
 import { useCurrentUser } from "../hooks/useCurrentUser"
 import { toast } from "sonner"
 import { getSidebarContext } from "../utils/sidebarContext"
+import { resolveScopedCompanyId } from "../utils/scopeContext"
 
 // ============ Type Definitions ============
 type AdvanceStatus = "Pending" | "Approved" | "Rejected" | "Paid"
@@ -153,7 +155,12 @@ const resolvedCompanyID =
     ? (managerData?.companyID ?? ctx?.companyID ?? user?.companyID)
     : (user?.role === "COMPANY_ADMIN" || user?.role === "BRANCH_ADMIN")
     ? (formData.companyID ?? ctx?.companyID ?? user?.companyID)
-    : formData.companyID;
+    : (
+        formData.companyID ??
+        resolveScopedCompanyId(user) ??
+        ctx?.companyID ??
+        user?.companyID
+      );
 
 const resolvedBranchID = formData.branchesID;
 
@@ -238,13 +245,18 @@ const fetchCompanies = useCallback(
 
     const data = await robustGet<any[]>(`${BACKEND_URL}/branches`);
     const query = q.toLowerCase();
+    const rows = Array.isArray(data) ? data : [];
+    const seen = new Set<number>();
 
-    return data.filter(
-      (b) =>
-        b.companyID === resolvedCompanyID &&
-        (user?.role !== "BRANCH_ADMIN" || Number(b.id) === Number(user?.branchesID)) &&
-        (b.branchName || "").toLowerCase().includes(query)
-    );
+    return rows.filter((b) => {
+      const id = Number(b.id);
+      if (!Number.isFinite(id) || seen.has(id)) return false;
+      if (Number(b.companyID) !== Number(resolvedCompanyID)) return false;
+      if (user?.role === "BRANCH_ADMIN" && Number(b.id) !== Number(user?.branchesID)) return false;
+      if (!(b.branchName || "").toLowerCase().includes(query)) return false;
+      seen.add(id);
+      return true;
+    });
   },
   [robustGet, resolvedCompanyID, user?.role, user?.branchesID]
 );
@@ -252,7 +264,7 @@ const fetchCompanies = useCallback(
 
  const fetchEmployees = useCallback(
   async (q: string) => {
-    if (!resolvedCompanyID || !resolvedBranchID) return [];
+    if (!resolvedCompanyID) return [];
 
     const data = await robustGet<any[]>(`${BACKEND_URL}/manage-emp`);
     const query = q.toLowerCase();
@@ -263,10 +275,14 @@ const fetchCompanies = useCallback(
         .toLowerCase();
       const empId = (e.employeeID || "").toLowerCase();
 
+      const matchesCompany = Number(e.companyID) === Number(resolvedCompanyID);
+      const matchesBranch =
+        !resolvedBranchID || Number(e.branchesID) === Number(resolvedBranchID);
+
       return (
-        e.companyID === resolvedCompanyID &&
-        e.branchesID === resolvedBranchID &&
-        (name.includes(query) || empId.includes(query))
+        matchesCompany &&
+        matchesBranch &&
+        (name.includes(query) || empId.includes(query) || !query)
       );
     });
   },
@@ -617,6 +633,11 @@ const fetchCompanies = useCallback(
 
   const resetForm = useCallback(() => {
     const ctx = getSidebarContext();
+    const scopedCompany =
+      resolveScopedCompanyId(user) ??
+      ctx?.companyID ??
+      user?.companyID ??
+      undefined;
     setFormData({
       serviceProvider: "", 
       companyName: user?.role === "SERVICE_PROVIDER" ? managerData?.companyName || "" : "", 
@@ -629,14 +650,14 @@ const fetchCompanies = useCallback(
       serviceProviderID: user?.role === "SERVICE_PROVIDER" ? managerData?.serviceProviderID : undefined,
       companyID: user?.role === "SERVICE_PROVIDER"
         ? managerData?.companyID
-        : (user?.role === "COMPANY_ADMIN" || user?.role === "BRANCH_ADMIN")
-        ? (ctx?.companyID ?? user?.companyID ?? undefined)
+        : (user?.role === "COMPANY_ADMIN" || user?.role === "BRANCH_ADMIN" || user?.role === "EMPLOYEE")
+        ? scopedCompany
         : undefined,
       branchesID: user?.role === "SERVICE_PROVIDER" ? managerData?.branchesID : undefined,
       manageEmployeeID: undefined
     })
     setEditingAdvance(null)
-  }, [user?.role, user?.companyID, managerData])
+  }, [user, managerData])
 
   const handleEdit = useCallback((a: SalaryAdvance) => {
     setFormData({
@@ -993,7 +1014,7 @@ const fetchCompanies = useCallback(
                     displayField="companyName" 
                     valueField="id"  
                   />
-                  <SearchSuggestInput 
+                  <CompanyBranchField 
                     label="Branch" 
                     placeholder="Select Branch" 
                     value={formData.branchName} 
@@ -1001,7 +1022,8 @@ const fetchCompanies = useCallback(
                     onSelect={s => setFormData(p => ({ ...p, branchName: s.display, branchesID: s.value }))} 
                     fetchData={fetchBranches} 
                     displayField="branchName" 
-                    valueField="id" 
+                    valueField="id"
+                    companyID={formData.companyID ?? resolvedCompanyID}
                   />
                 </div>
               )}
@@ -1010,7 +1032,7 @@ const fetchCompanies = useCallback(
               {user?.role === "SERVICE_PROVIDER" && (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                  
-                  <SearchSuggestInput 
+                  <CompanyBranchField 
                     label="Branch" 
                     placeholder="Select Branch" 
                     value={formData.branchName} 
@@ -1018,7 +1040,8 @@ const fetchCompanies = useCallback(
                     onSelect={s => setFormData(p => ({ ...p, branchName: s.display, branchesID: s.value }))} 
                     fetchData={fetchBranches} 
                     displayField="branchName" 
-                    valueField="id" 
+                    valueField="id"
+                    companyID={formData.companyID ?? resolvedCompanyID}
                   />
                 </div>
               )}
@@ -1026,7 +1049,7 @@ const fetchCompanies = useCallback(
               {/* For COMPANY_ADMIN / BRANCH_ADMIN - Show branch input */}
               {(user?.role === "COMPANY_ADMIN" || user?.role === "BRANCH_ADMIN") && (
                 <div className="grid grid-cols-1 gap-4">
-                  <SearchSuggestInput 
+                  <CompanyBranchField 
                     label="Branch" 
                     placeholder="Select Branch" 
                     value={formData.branchName} 
@@ -1034,7 +1057,8 @@ const fetchCompanies = useCallback(
                     onSelect={s => setFormData(p => ({ ...p, branchName: s.display, branchesID: s.value }))} 
                     fetchData={fetchBranches} 
                     displayField="branchName" 
-                    valueField="id" 
+                    valueField="id"
+                    companyID={formData.companyID ?? resolvedCompanyID}
                   />
                 </div>
               )}

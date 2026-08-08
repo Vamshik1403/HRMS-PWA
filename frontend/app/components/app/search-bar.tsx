@@ -23,12 +23,13 @@ export function SearchBar({ value, onChange, placeholder, className }: SearchBar
     >
       <Search className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
       <Input
-        type="search"
+        type="text"
         data-hrms-list-control
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder || "Search…"}
         className={cn(listControlClass, "w-full pl-10 pr-4")}
+        autoComplete="off"
       />
     </div>
   );

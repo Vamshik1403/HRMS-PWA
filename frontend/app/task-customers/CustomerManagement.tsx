@@ -22,6 +22,7 @@ import { EntityRowActions } from "../components/app/entity-row-actions";
 import { DetailCard } from "../components/app/detail-card";
 import { EntityDetailHero, EntityDetailLayout } from "../components/app/entity-detail-layout";
 import { useClientTable, sortRows } from "../hooks/use-client-table";
+import { useCompanyBranches } from "../hooks/useCompanyBranches";
 
 interface Contact { id?: number; contactPerson: string; contactNumber: string; designation?: string | null; email?: string | null; }
 interface Customer {
@@ -77,6 +78,7 @@ export default function CustomerManagement() {
   const [saving, setSaving] = useState(false);
 
   const [branchFilterList, setBranchFilterList] = useState<Branch[]>([]);
+  const { isSingleBranch, autoBranchId, autoBranchName } = useCompanyBranches();
 
   const getActiveCompanyID = () => {
     const ctx = getSidebarContext();
@@ -192,10 +194,27 @@ export default function CustomerManagement() {
   };
 
   const filteredRows = useMemo(() => {
-    const list = rows.filter((r) =>
-      branchFilter === "ALL" ||
-      branchFilter === String(r.branchesID ?? r.branches?.id ?? "")
-    );
+    const t = table.search.trim().toLowerCase();
+    const list = rows.filter((r) => {
+      const matchesBranch =
+        branchFilter === "ALL" ||
+        branchFilter === String(r.branchesID ?? r.branches?.id ?? "");
+      if (!matchesBranch) return false;
+      if (!t) return true;
+      return [
+        r.customerCode,
+        r.customerName,
+        r.branchName,
+        r.branches?.branchName,
+        r.city,
+        r.state,
+        r.pincode,
+        r.address,
+      ]
+        .filter(Boolean)
+        .map((x) => String(x).toLowerCase())
+        .some((f) => f.includes(t));
+    });
     return sortRows(list, table.sortBy, table.sortDir, (row, key) => {
       const r = row as Customer;
       if (key === "customerCode") return r.customerCode ?? "";
@@ -206,7 +225,7 @@ export default function CustomerManagement() {
       if (key === "sites") return r._count?.sites ?? 0;
       return "";
     });
-  }, [rows, branchFilter, table.sortBy, table.sortDir]);
+  }, [rows, branchFilter, table.search, table.sortBy, table.sortDir]);
 
   const branchFilterOptions = useMemo(
     () => [
@@ -219,7 +238,17 @@ export default function CustomerManagement() {
     [branchFilterList],
   );
 
-  const openCreate = () => { setEditing(null); setForm(emptyForm); setContacts([]); setFormOpen(true); };
+  const openCreate = () => {
+    setEditing(null);
+    setForm({
+      ...emptyForm,
+      ...(isSingleBranch && autoBranchId
+        ? { branchesID: autoBranchId, branchName: autoBranchName || "" }
+        : {}),
+    });
+    setContacts([]);
+    setFormOpen(true);
+  };
 
   const openEdit = async (r: Customer) => {
     try {
@@ -427,29 +456,36 @@ export default function CustomerManagement() {
               placeholder="Enter customer ID" required disabled={!!editing} />
           </div>
 
-              <SearchSuggestInput
-            label="Branch *"
-            placeholder="Search branch..."
-            value={form.branchName}
-            onChange={(value) =>
-              setForm((p) => ({
-                ...p,
-                branchName: value,
-                branchesID: undefined,
-              }))
-            }
-            onSelect={(selected: { display: string; value: number; item: Branch }) =>
-              setForm((p) => ({
-                ...p,
-                branchName: selected.display,
-                branchesID: Number(selected.value),
-              }))
-            }
-            fetchData={fetchBranchSuggestions}
-            displayField="branchName"
-            valueField="id"
-            required
-          />
+          {isSingleBranch ? (
+            <div className="space-y-2">
+              <Label>Branch</Label>
+              <Input value={form.branchName || autoBranchName || ""} readOnly className="bg-muted" />
+            </div>
+          ) : (
+            <SearchSuggestInput
+              label="Branch *"
+              placeholder="Search branch..."
+              value={form.branchName}
+              onChange={(value) =>
+                setForm((p) => ({
+                  ...p,
+                  branchName: value,
+                  branchesID: undefined,
+                }))
+              }
+              onSelect={(selected: { display: string; value: number; item: Branch }) =>
+                setForm((p) => ({
+                  ...p,
+                  branchName: selected.display,
+                  branchesID: Number(selected.value),
+                }))
+              }
+              fetchData={fetchBranchSuggestions}
+              displayField="branchName"
+              valueField="id"
+              required
+            />
+          )}
           
           <div className="space-y-2">
             <Label>Customer Name *</Label>

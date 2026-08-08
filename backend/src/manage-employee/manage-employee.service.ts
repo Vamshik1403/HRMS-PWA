@@ -713,6 +713,7 @@ export class ManageEmployeeService {
             businessEmail: true,
             companyID: true,
             pwaShowLeaveBalance: true,
+            pwaShowLoanAdvances: true,
           }
         },
         serviceProvider: {

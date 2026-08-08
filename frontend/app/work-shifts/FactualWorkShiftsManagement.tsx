@@ -14,6 +14,7 @@ import { useClientTable, sortRows } from "../hooks/use-client-table";
 import { Badge } from "../components/ui/badge";
 import { Plus, Edit, CalendarCheck2 } from "lucide-react";
 import { SearchSuggestInput } from "../components/SearchSuggestInput";
+import { CompanyBranchField } from "../components/app/company-branch-field";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import { toast } from "sonner";
 import { getWorkShiftTypeLabel } from "../utils/workShiftLabels";
@@ -81,7 +82,11 @@ export function FactualWorkShiftsManagement() {
   );
   const user = useCurrentUser();
   if (user && user.role !== "SUPERADMIN" && user.role !== "COMPANY_ADMIN") return null;
-  const canManage = user?.role === "SUPERADMIN" || user?.role === "COMPANY_ADMIN" || canDesktopManagerManage(user)
+  const canManage =
+    user?.role === "SUPERADMIN" ||
+    user?.role === "COMPANY_ADMIN" ||
+    canDesktopManagerManage(user) ||
+    hasModuleWriteAccess("WORK_SHIFTS");
   const [currentUserMapping, setCurrentUserMapping] = useState<any>(null);
 
 
@@ -220,15 +225,23 @@ export function FactualWorkShiftsManagement() {
       const res = await fetch(`${BACKEND_URL}/branches`, { cache: "no-store" });
       const data = await res.json();
       const q = query.toLowerCase();
+      const rows = Array.isArray(data) ? data : [];
+      const seen = new Set<number>();
 
-      return Array.isArray(data)
-        ? data.filter(
-          (item: any) =>
-            item.companyID === companyID &&
-            (user?.role !== "BRANCH_ADMIN" || Number(item.id) === Number(currentUserMapping?.branchesID ?? user?.branchesID)) &&
-            (item.branchName || "").toLowerCase().includes(q)
-        )
-        : [];
+      return rows.filter((item: any) => {
+        const id = Number(item.id);
+        if (!Number.isFinite(id) || seen.has(id)) return false;
+        if (Number(item.companyID) !== Number(companyID)) return false;
+        if (
+          user?.role === "BRANCH_ADMIN" &&
+          Number(item.id) !== Number(currentUserMapping?.branchesID ?? user?.branchesID)
+        ) {
+          return false;
+        }
+        if (!(item.branchName || "").toLowerCase().includes(q)) return false;
+        seen.add(id);
+        return true;
+      });
     } catch (error) {
       console.error("Error fetching branches:", error);
       toast.error("Failed to load data.");
@@ -698,7 +711,7 @@ export function FactualWorkShiftsManagement() {
 
                 {/* MANAGER → Only Branch input */}
                 {user?.role === "SERVICE_PROVIDER" && (
-                  <SearchSuggestInput
+                  <CompanyBranchField
                     label="Branch Name"
                     placeholder="Select Branch"
                     value={formData.branchName}
@@ -716,22 +729,27 @@ export function FactualWorkShiftsManagement() {
                       const res = await fetch(`${BACKEND_URL}/branches`);
                       const data = await res.json();
                       const q = query.toLowerCase();
-                      return data
-                        .filter(
-                          (b: any) =>
-                            b.companyID === currentUserMapping?.companyID &&
-                            (b.branchName || "").toLowerCase().includes(q)
-                        );
+                      const rows = Array.isArray(data) ? data : [];
+                      const seen = new Set<number>();
+                      return rows.filter((b: any) => {
+                        const id = Number(b.id);
+                        if (!Number.isFinite(id) || seen.has(id)) return false;
+                        if (Number(b.companyID) !== Number(currentUserMapping?.companyID)) return false;
+                        if (!(b.branchName || "").toLowerCase().includes(q)) return false;
+                        seen.add(id);
+                        return true;
+                      });
                     }}
                     displayField="branchName"
                     valueField="id"
+                    companyID={formData.companyID ?? currentUserMapping?.companyID}
                     required
                   />
                 )}
 
                 {/* SUPERADMIN → Branch input */}
                 {user?.role === "SUPERADMIN" && (
-                  <SearchSuggestInput
+                  <CompanyBranchField
                     label="Branch Name"
                     placeholder="Select Branch"
                     value={formData.branchName}
@@ -742,6 +760,7 @@ export function FactualWorkShiftsManagement() {
                     fetchData={fetchBranches}
                     displayField="branchName"
                     valueField="id"
+                    companyID={formData.companyID}
                     required
                   />
                 )}

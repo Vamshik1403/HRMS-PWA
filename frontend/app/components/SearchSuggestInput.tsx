@@ -18,6 +18,8 @@ interface SearchSuggestInputProps {
   valueField: string;
   required?: boolean;
   disabled?: boolean;
+  /** When true, auto-selects if fetchData("") returns exactly one unique row. */
+  autoSelectIfSingle?: boolean;
 }
 
 export function SearchSuggestInput({
@@ -31,33 +33,23 @@ export function SearchSuggestInput({
   valueField,
   required = false,
   disabled = false,
+  autoSelectIfSingle = false,
 }: SearchSuggestInputProps) {
   const [suggestions, setSuggestions] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const timeoutRef = useRef<NodeJS.Timeout>();
+  const autoSelectedRef = useRef(false);
 
-  const handleInputChange = async (inputValue: string) => {
-    onChange(inputValue);
-    
-    if (timeoutRef.current) {
-      clearTimeout(timeoutRef.current);
-    }
-
-    timeoutRef.current = setTimeout(async () => {
-      setIsLoading(true);
-      try {
-        const data = await fetchData(inputValue);
-        setSuggestions(data.slice(0, 10));
-        setShowSuggestions(true);
-      } catch (error) {
-        console.error("Error fetching suggestions:", error);
-        setSuggestions([]);
-      } finally {
-        setIsLoading(false);
-      }
-    }, 300);
+  const dedupe = (data: any[]) => {
+    const seen = new Set<string>();
+    return (Array.isArray(data) ? data : []).filter((item) => {
+      const key = String(item?.[valueField] ?? "");
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
   };
 
   const handleSelect = (item: any) => {
@@ -75,17 +67,38 @@ export function SearchSuggestInput({
     setSuggestions([]);
   };
 
+  const handleInputChange = async (inputValue: string) => {
+    onChange(inputValue);
+    
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+    }
+
+    timeoutRef.current = setTimeout(async () => {
+      setIsLoading(true);
+      try {
+        const data = dedupe(await fetchData(inputValue));
+        setSuggestions(data.slice(0, 10));
+        setShowSuggestions(true);
+      } catch (error) {
+        console.error("Error fetching suggestions:", error);
+        setSuggestions([]);
+      } finally {
+        setIsLoading(false);
+      }
+    }, 300);
+  };
+
   const handleFocus = async (e: React.FocusEvent<HTMLInputElement>) => {
     const target = e.target;
     const len = target.value.length;
     requestAnimationFrame(() => {
       target.setSelectionRange(len, len);
     });
-    // Show suggestions on focus even without typing
     if (!showSuggestions) {
       setIsLoading(true);
       try {
-        const data = await fetchData(value);
+        const data = dedupe(await fetchData(value));
         setSuggestions(data.slice(0, 10));
         setShowSuggestions(true);
       } catch (error) {
@@ -96,6 +109,29 @@ export function SearchSuggestInput({
       }
     }
   };
+
+  useEffect(() => {
+    if (!value) autoSelectedRef.current = false;
+  }, [value]);
+
+  useEffect(() => {
+    if (!autoSelectIfSingle || disabled || autoSelectedRef.current || value) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const data = dedupe(await fetchData(""));
+        if (cancelled || data.length !== 1) return;
+        autoSelectedRef.current = true;
+        handleSelect(data[0]);
+      } catch {
+        /* ignore */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoSelectIfSingle, disabled, value]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -146,9 +182,9 @@ export function SearchSuggestInput({
           {isLoading ? (
             <div className="px-3 py-2.5 text-sm text-muted-foreground">Searching…</div>
           ) : suggestions.length > 0 ? (
-            suggestions.map((item, index) => (
+            suggestions.map((item) => (
               <div
-                key={index}
+                key={String(item[valueField])}
                 className={formDropdownItemClass}
                 onMouseDown={(e) => {
                   e.preventDefault();

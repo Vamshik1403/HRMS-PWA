@@ -14,6 +14,7 @@ import type { DataTableColumn } from "../components/app/data-table"
 import { EntityRowActions } from "../components/app/entity-row-actions"
 import { useClientTable, sortRows } from "../hooks/use-client-table"
 import { SearchSuggestInput } from "../components/SearchSuggestInput"
+import { CompanyBranchField } from "../components/app/company-branch-field"
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import { hasModuleWriteAccess } from "@/lib/companyAccess";
 import { toast } from "sonner";
@@ -423,9 +424,16 @@ const fetchBranches = async (query: string) => {
       }
     }
 
-    return branches.filter((b: any) =>
+    const matched = branches.filter((b: any) =>
       (b.branchName ?? "").toLowerCase().includes(q)
     );
+    const seen = new Set<number>();
+    return matched.filter((b: any) => {
+      const id = Number(b.id);
+      if (!Number.isFinite(id) || seen.has(id)) return false;
+      seen.add(id);
+      return true;
+    });
   } catch (error) {
     console.error("Error fetching branches:", error);
     toast.error("Failed to load data.");
@@ -968,7 +976,7 @@ const handleCompanySelect = (selected: SelectedItem) => {
         />
       </>
     ) : (
-      <SearchSuggestInput
+      <CompanyBranchField
         label="Branch Name *"
         value={formData.branchName}
         onChange={(value) =>
@@ -981,6 +989,7 @@ const handleCompanySelect = (selected: SelectedItem) => {
         }
         displayField="branchName"
         valueField="id"
+        companyID={formData.companyID ?? resolvedCompanyID}
         required
       />
     )}

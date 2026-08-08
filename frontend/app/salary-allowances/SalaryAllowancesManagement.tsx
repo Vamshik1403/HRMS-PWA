@@ -21,7 +21,9 @@ import {
   canDesktopManagerManage,
   filterCompanyScopedRecords,
   resolveScopeUserMapping,
+  resolveScopedCompanyId,
 } from "../utils/scopeContext";
+import { AutocompleteBranchField } from "../components/app/autocomplete-branch-field";
 
 
 interface SalaryAllowance {
@@ -349,9 +351,6 @@ const handler = () => {
 
 
   const runFetchBR = debounce(async (val: string) => {
-  if (!val || val.length < MIN_CHARS) return setBrList([]);
-
-  // ❗ must know Company
   if (!resolvedCompanyID) {
     setBrList([]);
     return;
@@ -359,16 +358,20 @@ const handler = () => {
 
   setBrLoading(true);
   try {
-    const list: BR[] = await robustGet(API.branches, val);
+    const list: BR[] = await robustGet(API.branches, val || undefined);
 
-    const filtered = list.filter(
-      (b) =>
-        b.companyID === resolvedCompanyID &&
+    const byId = new Map<number, BR>();
+    for (const b of list) {
+      if (
+        Number(b.companyID) === Number(resolvedCompanyID) &&
         (user?.role !== "BRANCH_ADMIN" || Number(b.id) === Number(user?.branchesID)) &&
-        (b.branchName ?? "").toLowerCase().includes(val.toLowerCase())
-    );
+        (!val || (b.branchName ?? "").toLowerCase().includes(val.toLowerCase()))
+      ) {
+        if (!byId.has(b.id)) byId.set(b.id, b);
+      }
+    }
 
-    setBrList(filtered.slice(0, 50));
+    setBrList(Array.from(byId.values()).slice(0, 50));
   } catch (e) {
     console.error("BR fetch error:", e);
     toast.error("Failed to load data.");
@@ -695,44 +698,32 @@ const handler = () => {
   )}
 
   {/* Branch */}
-  <div ref={brRef} className="space-y-2 relative">
-    <Label>Branch *</Label>
-    <Input
-      value={formData.brAutocomplete}
-      onChange={(e) => {
-        const val = e.target.value;
-        setFormData((p) => ({ ...p, brAutocomplete: val, branchesID: null }));
-        runFetchBR(val);
-      }}
-      onFocus={() => formData.brAutocomplete && runFetchBR(formData.brAutocomplete)}
-      placeholder="Start typing branch…"
-      autoComplete="off"
-      required
-    />
-
-    {brList.length > 0 && (
-      <div className="absolute z-10 bg-white border rounded w-full shadow max-h-48 overflow-y-auto">
-        {brLoading && <div className="px-3 py-2 text-sm text-gray-500">Loading…</div>}
-        {brList.map((br) => (
-          <div
-            key={br.id}
-            className="px-3 py-2 hover:bg-gray-100 cursor-pointer"
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={() => {
-              setFormData((p) => ({
-                ...p,
-                branchesID: br.id,
-                brAutocomplete: br.branchName ?? "",
-              }));
-              setBrList([]);
-            }}
-          >
-            {br.branchName}
-          </div>
-        ))}
-      </div>
-    )}
-  </div>
+  <AutocompleteBranchField
+    label="Branch *"
+    placeholder="Start typing branch…"
+    value={formData.brAutocomplete}
+    branchId={formData.branchesID}
+    companyID={
+      formData.companyID ??
+      currentUserMapping?.companyID ??
+      resolveScopedCompanyId(user) ??
+      user?.companyID
+    }
+    onInputChange={(display) => {
+      setFormData((p) => ({ ...p, brAutocomplete: display, branchesID: null }));
+    }}
+    onBranchSelect={({ id, branchName }) => {
+      setFormData((p) => ({
+        ...p,
+        branchesID: id,
+        brAutocomplete: branchName,
+      }));
+      setBrList([]);
+    }}
+    onFetch={(q) => runFetchBR(q)}
+    options={brList}
+    optionsLoading={brLoading}
+  />
 </div>
 
 

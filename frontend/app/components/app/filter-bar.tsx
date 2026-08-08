@@ -219,7 +219,7 @@ export function FilterBar({
           </div>
         ) : null}
         {trailingNode ? (
-          <div className="flex shrink-0 flex-wrap items-center gap-3 [&_button]:h-[46px] [&_button]:rounded-xl [&_button]:px-6">
+          <div className="flex shrink-0 flex-wrap items-center gap-3 [&_button]:h-[46px] [&_button]:rounded-xl [&_button:not(.size-11)]:px-6">
             {trailingNode}
           </div>
         ) : null}
