@@ -386,8 +386,19 @@ function memoRecipientIds(memo: MemoItem): number[] {
   return ids.map(normalizeId).filter((id): id is number => id != null);
 }
 
-function isGeneralMemo(memo: { memoType?: string | null; undoneAt?: string | null }) {
+function isGeneralMemo(memo: {
+  memoType?: string | null;
+  subject?: string | null;
+  undoneAt?: string | null;
+}) {
   if (memo.undoneAt) return false;
+  // Company broadcast channel posts (system notifications + legacy announcements).
+  if (
+    memo.subject?.startsWith(COMPANY_BROADCAST_PREFIX) ||
+    memo.subject?.startsWith(`Re: ${COMPANY_BROADCAST_PREFIX}`)
+  ) {
+    return true;
+  }
   const type = (memo.memoType || "General").trim().toLowerCase();
   return type === "general";
 }
@@ -657,7 +668,8 @@ export function EmpProfileMessagingPanel({
     companyName?: string | null;
   }>({});
   const isOwnerUser = isCompanyOwnerFlag();
-  const canComposeBroadcast = isOwnerUser;
+  // Company profile chat is a system notifications channel — view only for everyone.
+  const canComposeBroadcast = false;
   const [managerName, setManagerName] = useState("Manager");
   const [searchQuery, setSearchQuery] = useState("");
   const [conversationFilter, setConversationFilter] = useState<ConversationFilter>("all");
@@ -1375,7 +1387,7 @@ export function EmpProfileMessagingPanel({
             profile: {
               id: 0,
               name: broadcastMeta.companyName,
-              designation: "Company announcements",
+              designation: "Company notifications",
               department: "Everyone",
             },
             lastMessage: "",
@@ -1383,11 +1395,13 @@ export function EmpProfileMessagingPanel({
             unreadCount: 0,
             memoIds: [],
             isArchived: false,
-            readOnly: !isOwnerUser,
+            readOnly: true,
           } satisfies Conversation);
 
         existing.groupName = broadcastMeta.companyName;
         existing.profile.name = broadcastMeta.companyName;
+        existing.profile.designation = "Company notifications";
+        existing.readOnly = true;
         if (!existing.memoIds.includes(memo.id)) existing.memoIds.push(memo.id);
         const preview = messagePreview(memo);
         const date = memoTimestamp(memo);
@@ -1520,7 +1534,7 @@ export function EmpProfileMessagingPanel({
           profile: {
             id: 0,
             name: companyName,
-            designation: "Company announcements",
+            designation: "Company notifications",
             department: "Everyone",
           },
           lastMessage: "",
@@ -1528,7 +1542,7 @@ export function EmpProfileMessagingPanel({
           unreadCount: 0,
           memoIds: [],
           isArchived: false,
-          readOnly: !isOwnerUser,
+          readOnly: true,
         });
       }
     }
@@ -1861,7 +1875,7 @@ export function EmpProfileMessagingPanel({
 
     if (selectedConversation.kind === "broadcast") {
       if (!canComposeBroadcast) {
-        toast.error("Only the company owner can post company announcements");
+        toast.error("Company channel is view-only. Notifications are posted by the system.");
         return;
       }
       const companyId = Number(selectedConversation.groupId);
@@ -2397,7 +2411,7 @@ export function EmpProfileMessagingPanel({
                     </p>
                   ) : selectedConversation.kind === "broadcast" ? (
                     <p className="text-[12px] font-medium text-[#6B7280]">
-                      Company announcements{canComposeBroadcast ? "" : " · read only"}
+                      Company notifications · read only
                     </p>
                   ) : (
                     <p className="text-[12px] font-medium text-[#6B7280]">Group conversation</p>
@@ -2504,7 +2518,7 @@ export function EmpProfileMessagingPanel({
             <footer className="border-t border-[#EEF2F7] bg-white px-4 py-4 md:px-5">
               {selectedConversation.kind === "broadcast" && !canComposeBroadcast ? (
                 <p className="text-center text-[13px] text-[#6B7280]">
-                  Only the company owner can post messages here. You can view announcements.
+                  This is a company notifications channel. Holidays, tasks, payroll, and leave updates appear here. Messaging is view-only.
                 </p>
               ) : (
               <>

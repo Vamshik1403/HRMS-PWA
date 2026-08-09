@@ -191,7 +191,81 @@ export class EmployeeMemoService {
     return { ...memo, replies };
   }
 
+  private static readonly COMPANY_BROADCAST_PREFIX = 'IM_COMPANY::';
+
+  private isCompanyBroadcastSubject(subject?: string | null): boolean {
+    const s = subject?.trim() ?? '';
+    return (
+      s.startsWith(EmployeeMemoService.COMPANY_BROADCAST_PREFIX) ||
+      s.startsWith(`Re: ${EmployeeMemoService.COMPANY_BROADCAST_PREFIX}`)
+    );
+  }
+
+  /**
+   * System-only company notifications channel post (holidays, tasks, payroll, leave).
+   * Skips push/email — callers already notify via those channels.
+   */
+  async createSystemCompanyBroadcast(opts: {
+    companyID: number;
+    description: string;
+    branchesID?: number | null;
+    serviceProviderID?: number | null;
+  }): Promise<void> {
+    const companyID = Number(opts.companyID);
+    if (!Number.isFinite(companyID) || companyID <= 0) return;
+
+    const description = opts.description?.trim();
+    if (!description) return;
+
+    try {
+      const company = await this.prisma.company.findUnique({
+        where: { id: companyID },
+        select: { companyName: true },
+      });
+      const companyName = company?.companyName?.trim() || 'Company';
+
+      const employees = await this.prisma.manageEmployee.findMany({
+        where: {
+          companyID,
+          isDeleted: false,
+          lifecycleStatus: 'ACTIVE',
+        },
+        select: { id: true },
+      });
+      const employeeIDs = employees.map((e) => e.id);
+      if (employeeIDs.length === 0) return;
+
+      await this.prisma.employeeMemo.create({
+        data: {
+          companyID,
+          branchesID: opts.branchesID ?? null,
+          serviceProviderID: opts.serviceProviderID ?? null,
+          employeeID: employeeIDs[0],
+          employeeIDs,
+          memoType: 'General',
+          subject: `${EmployeeMemoService.COMPANY_BROADCAST_PREFIX}${companyID}::${companyName}`,
+          description,
+          issuedDate: new Date(),
+          issuedBy: 'System',
+          senderEmployeeId: null,
+        },
+      });
+    } catch (err: unknown) {
+      this.logger.warn(
+        `Company broadcast failed for company ${companyID}: ${
+          err instanceof Error ? err.message : err
+        }`,
+      );
+    }
+  }
+
   async create(dto: CreateEmployeeMemoDto) {
+    if (this.isCompanyBroadcastSubject(dto.subject)) {
+      throw new ForbiddenException(
+        'Company channel is view-only. Notifications are posted by the system.',
+      );
+    }
+
     const requestedIds =
       dto.employeeIDs && dto.employeeIDs.length > 0
         ? dto.employeeIDs
@@ -321,6 +395,11 @@ export class EmployeeMemoService {
     });
     if (!parent || parent.undoneAt) {
       throw new NotFoundException('Parent message not found');
+    }
+    if (this.isCompanyBroadcastSubject(parent.subject)) {
+      throw new ForbiddenException(
+        'Company channel is view-only. Replies are not allowed.',
+      );
     }
 
     const reply = await this.prisma.employeeMemo.create({

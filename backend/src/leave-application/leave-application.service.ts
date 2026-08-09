@@ -10,6 +10,7 @@ import {
   leavePushTitle,
   senderLabelFromRole,
 } from '../common/notification-sender.util';
+import { EmployeeMemoService } from '../employee-memo/employee-memo.service';
 
 @Injectable()
 export class LeaveApplicationService {
@@ -19,7 +20,49 @@ export class LeaveApplicationService {
     private leaveBalanceService: EmpLeaveBalanceService,
     private mailService: MailService,
     private managerScope: EmpManagerScopeService,
+    private employeeMemoService: EmployeeMemoService,
   ) {}
+
+  private employeeDisplayName(emp?: {
+    employeeFirstName?: string | null;
+    employeeLastName?: string | null;
+    employeeID?: string | null;
+  } | null): string {
+    if (!emp) return 'An employee';
+    const name = `${emp.employeeFirstName ?? ''} ${emp.employeeLastName ?? ''}`.trim();
+    return name || emp.employeeID || 'An employee';
+  }
+
+  private formatLeaveDates(fromDate?: unknown, toDate?: unknown): string {
+    const from = fromDate ? String(fromDate).slice(0, 10) : '';
+    const to = toDate ? String(toDate).slice(0, 10) : '';
+    if (from && to && from !== to) return `${from} to ${to}`;
+    return from || to || '';
+  }
+
+  private postLeaveCompanyBroadcast(opts: {
+    companyID?: number | null;
+    branchesID?: number | null;
+    serviceProviderID?: number | null;
+    employeeName: string;
+    leaveType?: string | null;
+    fromDate?: unknown;
+    toDate?: unknown;
+    status: string;
+  }): void {
+    if (!opts.companyID) return;
+    const dates = this.formatLeaveDates(opts.fromDate, opts.toDate);
+    const type = opts.leaveType?.trim() ? ` (${opts.leaveType.trim()})` : '';
+    const datePart = dates ? ` for ${dates}` : '';
+    void this.employeeMemoService
+      .createSystemCompanyBroadcast({
+        companyID: opts.companyID,
+        branchesID: opts.branchesID,
+        serviceProviderID: opts.serviceProviderID,
+        description: `Leave ${opts.status}: ${opts.employeeName}${type}${datePart}`,
+      })
+      .catch(() => null);
+  }
 
   private parsePayload(data: Record<string, unknown>) {
     const payload = { ...data };
@@ -52,6 +95,16 @@ export class LeaveApplicationService {
           status: String(created.status ?? 'Pending'),
           purpose: String(created.purpose ?? ''),
         },
+      });
+      this.postLeaveCompanyBroadcast({
+        companyID: created.companyID,
+        branchesID: created.branchesID,
+        serviceProviderID: created.serviceProviderID,
+        employeeName: this.employeeDisplayName(created.manageEmployee),
+        leaveType: created.appliedLeaveType,
+        fromDate: created.fromDate,
+        toDate: created.toDate,
+        status: String(created.status ?? 'Pending'),
       });
     }
     return created;
@@ -392,6 +445,16 @@ export class LeaveApplicationService {
             status: String(newStatus),
             purpose: String(updated.purpose ?? ''),
           },
+        });
+        this.postLeaveCompanyBroadcast({
+          companyID: updated.companyID,
+          branchesID: updated.branchesID,
+          serviceProviderID: updated.serviceProviderID,
+          employeeName: this.employeeDisplayName(updated.manageEmployee),
+          leaveType: updated.appliedLeaveType,
+          fromDate: updated.fromDate,
+          toDate: updated.toDate,
+          status: String(newStatus),
         });
       }
     }

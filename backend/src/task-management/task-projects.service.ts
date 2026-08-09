@@ -13,6 +13,7 @@ import {
 } from './dto/create-task-project.dto';
 import { canManageTaskModule, parseViewer, TaskViewerContext } from './task-context';
 import { nextTaskCode } from './task-code.util';
+import { EmployeeMemoService } from '../employee-memo/employee-memo.service';
 
 function taskListInclude(viewer: TaskViewerContext) {
   return {
@@ -78,6 +79,7 @@ export class TaskProjectsService {
     private pushService: PushNotificationsService,
     private mailService: MailService,
     private managerScope: EmpManagerScopeService,
+    private employeeMemoService: EmployeeMemoService,
   ) {}
 
   private async visibilityWhere(viewer: TaskViewerContext, companyID?: number) {
@@ -264,6 +266,41 @@ export class TaskProjectsService {
         })
         .catch(() => false);
     }
+    void this.postTaskCompanyBroadcast(taskID, manageEmployeeIDs, taskLabel).catch(
+      () => null,
+    );
+  }
+
+  private async postTaskCompanyBroadcast(
+    taskID: number,
+    manageEmployeeIDs: number[],
+    taskLabel: string,
+  ): Promise<void> {
+    const task = await this.prisma.taskProject.findUnique({
+      where: { id: taskID },
+      select: { companyID: true, serviceProviderID: true },
+    });
+    if (!task?.companyID) return;
+
+    const assignees = await this.prisma.manageEmployee.findMany({
+      where: { id: { in: manageEmployeeIDs } },
+      select: { employeeFirstName: true, employeeLastName: true, employeeID: true },
+    });
+    const names = assignees
+      .map((e) => {
+        const name = `${e.employeeFirstName ?? ''} ${e.employeeLastName ?? ''}`.trim();
+        return name || e.employeeID || '';
+      })
+      .filter(Boolean)
+      .join(', ');
+
+    await this.employeeMemoService.createSystemCompanyBroadcast({
+      companyID: task.companyID,
+      serviceProviderID: task.serviceProviderID,
+      description: names
+        ? `Task assigned: ${taskLabel} → ${names}`
+        : `Task assigned: ${taskLabel}`,
+    });
   }
 
   /** Push to assignees (or targeted recipient) when someone posts in task chat. */

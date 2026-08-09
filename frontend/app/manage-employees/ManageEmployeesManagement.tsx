@@ -5708,7 +5708,7 @@ const handleCancel = () => {
                     onChange={(e) => setFormData((p) => ({ ...p, pwaShowLeaveBalance: e.target.checked }))}
                     className="rounded border-gray-300"
                   />
-                  <span className="text-sm text-gray-700">Show leave status bar in mobile app</span>
+                  <span className="text-sm text-gray-700">Show leave status bar</span>
                 </label>
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input

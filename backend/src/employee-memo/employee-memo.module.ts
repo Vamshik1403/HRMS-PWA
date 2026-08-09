@@ -8,5 +8,6 @@ import { PrismaModule } from '../prisma/prisma.module';
   imports: [PrismaModule, PushNotificationsModule],
   controllers: [EmployeeMemoController],
   providers: [EmployeeMemoService],
+  exports: [EmployeeMemoService],
 })
 export class EmployeeMemoModule {}
