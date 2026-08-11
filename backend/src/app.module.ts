@@ -7,6 +7,7 @@ import { ServiceProviderModule } from './service-provider/service-provider.modul
 import { CompanyModule } from './company/company.module';
 import { BranchesModule } from './branches/branches.module';
 import { DepartmentsModule } from './departments/departments.module';
+import { CompanyHierarchyModule } from './company-hierarchy/company-hierarchy.module';
 import { DesignationsModule } from './designations/designations.module';
 import { BankDetailsModule } from './bank-details/bank-details.module';
 import { ContractorsModule } from './contractors/contractors.module';
@@ -97,6 +98,7 @@ import { EmployeePermissionsModule } from './employee-permissions/employee-permi
     CompanyModule,
     BranchesModule,
     DepartmentsModule,
+    CompanyHierarchyModule,
     DesignationsModule,
     BankDetailsModule,
     ContractorsModule,

@@ -31,7 +31,13 @@ import { DetailCard } from "../components/app/detail-card";
 import { EntityDetailHero, EntityDetailLayout } from "../components/app/entity-detail-layout";
 import { useClientTable, sortRows } from "../hooks/use-client-table";
 import { getSidebarContext } from "../utils/sidebarContext";
-import { AutocompleteBranchField } from "../components/app/autocomplete-branch-field";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../components/ui/select";
 import {
   canDesktopManagerManage,
   filterBranchesForUser,
@@ -51,6 +57,7 @@ interface DepartmentRead {
   serviceProviderID?: ID | null;
   companyID?: ID | null;
   branchesID?: ID | null;
+  parentDepartmentID?: ID | null;
   departmentName?: string | null;
   createdAt?: string | null;
 
@@ -58,6 +65,8 @@ interface DepartmentRead {
   serviceProvider?: { id: ID; companyName?: string | null } | null;
   company?: { id: ID; companyName?: string | null } | null;
   branches?: { id: ID; branchName?: string | null } | null;
+  parentDepartment?: { id: ID; departmentName?: string | null } | null;
+  departmentBranches?: { branchesID: number; branches?: { id: number; branchName?: string | null } | null }[];
 
   // optional denormalized names some APIs add
   serviceProviderName?: string | null;
@@ -150,12 +159,15 @@ const [branchFilterLoading, setBranchFilterLoading] = useState(false);
     serviceProviderID: null as ID | null,
     companyID: null as ID | null,
     branchesID: null as ID | null,
+    parentDepartmentID: null as ID | null,
+    branchIDs: [] as number[],
 
     departmentName: "",
 
     spAutocomplete: "",
     coAutocomplete: "",
     brAutocomplete: "",
+    parentAutocomplete: "",
   });
 
   // ---------------------------
@@ -422,10 +434,13 @@ const reload = () => {
       serviceProviderID: null as ID | null,
       companyID: null as ID | null,
       branchesID: null as ID | null,
+      parentDepartmentID: null as ID | null,
+      branchIDs: [] as number[],
       departmentName: "",
       spAutocomplete: "",
       coAutocomplete: "",
       brAutocomplete: "",
+      parentAutocomplete: "",
     };
 
     const ctx = getSidebarContext();
@@ -472,6 +487,9 @@ const reload = () => {
         baseFormData.branchesID = currentUserMapping.branchesID;
         baseFormData.brAutocomplete =
           currentUserMapping.branches?.branchName || "";
+        if (currentUserMapping.branchesID != null) {
+          baseFormData.branchIDs = [Number(currentUserMapping.branchesID)];
+        }
       }
     }
 
@@ -516,16 +534,34 @@ if (ctx) {
         ?? (r.companyID != null ? coMap[r.companyID] ?? "" : "");
     }
 
+    const branchIDs =
+      r.departmentBranches && r.departmentBranches.length > 0
+        ? r.departmentBranches.map((b) => Number(b.branchesID)).filter((id) => !Number.isNaN(id))
+        : r.branchesID != null
+          ? [Number(r.branchesID)]
+          : [];
+
+    const brNames = branchIDs
+      .map((id) => {
+        const fromRel = r.departmentBranches?.find((b) => Number(b.branchesID) === id)?.branches?.branchName;
+        return fromRel ?? brMap[id] ?? (r.branchesID === id ? (r.branches?.branchName ?? r.branchName ?? "") : "");
+      })
+      .filter(Boolean);
+
     setFormData({
       serviceProviderID: finalServiceProviderID,
       companyID: finalCompanyID,
-      branchesID: r.branchesID ?? r.branches?.id ?? null,
+      branchesID: branchIDs[0] ?? r.branchesID ?? r.branches?.id ?? null,
+      parentDepartmentID: r.parentDepartmentID ?? r.parentDepartment?.id ?? null,
+      branchIDs,
       departmentName: r.departmentName ?? "",
       spAutocomplete: spName,
       coAutocomplete: coName,
-      brAutocomplete: r.branches?.branchName 
-        ?? r.branchName 
-        ?? (r.branchesID != null ? brMap[r.branchesID] ?? "" : ""),
+      brAutocomplete: brNames.join(", ")
+        || r.branches?.branchName
+        || r.branchName
+        || (r.branchesID != null ? brMap[r.branchesID] ?? "" : ""),
+      parentAutocomplete: r.parentDepartment?.departmentName ?? "",
     });
   };
 
@@ -587,17 +623,13 @@ if (ctx) {
       return;
     }
 
-    if (!formData.branchesID) {
-      toast.error("Please select a Branch");
-      setSaving(false);
-      return;
-    }
-
     const payload: any = {
       serviceProviderID: finalServiceProviderID ?? undefined,
       companyID: finalCompanyID ?? undefined,
-      branchesID: formData.branchesID ?? undefined,
       departmentName: formData.departmentName || undefined,
+      parentDepartmentID: formData.parentDepartmentID || null,
+      branchIDs: formData.branchIDs,
+      branchesID: formData.branchIDs[0] ?? formData.branchesID ?? undefined,
     };
 
     try {
@@ -713,36 +745,6 @@ const handleCancel = () => {
     [branchFilterList],
   );
 
-  const departmentColumns = useMemo((): DataTableColumn<DepartmentRead>[] => [
-    {
-      key: "departmentName",
-      header: "Name",
-      sortable: true,
-      colSpan: 5,
-      cell: (r) => <span className="font-medium">{r.departmentName || "—"}</span>,
-    },
-    {
-      key: "branch",
-      header: "Branch",
-      sortable: true,
-      colSpan: 4,
-      cell: (r) => brName(r),
-    },
-    {
-      key: "actions",
-      header: "Actions",
-      colSpan: 3,
-      align: "right",
-      cell: (r) => (
-        <EntityRowActions
-          onView={() => handleView(r)}
-          onEdit={canManage ? () => handleEdit(r) : undefined}
-          onDelete={canManage ? () => handleDelete(r.id) : undefined}
-        />
-      ),
-    },
-  ], [canManage]);
-
   // ---------------------------
   // Name helpers for table
   // ---------------------------
@@ -760,6 +762,80 @@ const handleCancel = () => {
     r.branches?.branchName
     ?? r.branchName
     ?? (r.branchesID != null ? (brMap[r.branchesID] ?? "—") : "—");
+
+  const parentDeptName = (r: DepartmentRead) =>
+    r.parentDepartment?.departmentName
+    ?? (r.parentDepartmentID != null
+      ? (rows.find((d) => d.id === r.parentDepartmentID)?.departmentName ?? "—")
+      : "—");
+
+  const branchesDisplay = (r: DepartmentRead) => {
+    const multi = (r.departmentBranches || [])
+      .map((b) => b.branches?.branchName || brMap[b.branchesID] || null)
+      .filter(Boolean) as string[];
+    if (multi.length > 0) return multi.join(", ");
+    return brName(r);
+  };
+
+  const parentDepartmentOptions = useMemo(() => {
+    const companyID =
+      formData.companyID ??
+      resolveScopedCompanyId(user) ??
+      currentUserMapping?.companyID ??
+      user?.companyID ??
+      null;
+    return rows.filter((d) => {
+      if (editing && d.id === editing.id) return false;
+      if (companyID != null && Number(d.companyID) !== Number(companyID)) return false;
+      return true;
+    });
+  }, [rows, formData.companyID, editing, user, currentUserMapping]);
+
+  const toggleBranchID = (id: number) => {
+    setFormData((p) => {
+      const exists = p.branchIDs.includes(id);
+      const branchIDs = exists ? p.branchIDs.filter((x) => x !== id) : [...p.branchIDs, id];
+      const names = branchIDs
+        .map((bid) => branchFilterList.find((b) => b.id === bid)?.branchName || brMap[bid] || String(bid))
+        .filter(Boolean);
+      return {
+        ...p,
+        branchIDs,
+        branchesID: branchIDs[0] ?? null,
+        brAutocomplete: names.join(", "),
+      };
+    });
+  };
+
+  const departmentColumns = useMemo((): DataTableColumn<DepartmentRead>[] => [
+    {
+      key: "departmentName",
+      header: "Name",
+      sortable: true,
+      colSpan: 5,
+      cell: (r) => <span className="font-medium">{r.departmentName || "—"}</span>,
+    },
+    {
+      key: "branch",
+      header: "Branch",
+      sortable: true,
+      colSpan: 4,
+      cell: (r) => branchesDisplay(r),
+    },
+    {
+      key: "actions",
+      header: "Actions",
+      colSpan: 3,
+      align: "right",
+      cell: (r) => (
+        <EntityRowActions
+          onView={() => handleView(r)}
+          onEdit={canManage ? () => handleEdit(r) : undefined}
+          onDelete={canManage ? () => handleDelete(r.id) : undefined}
+        />
+      ),
+    },
+  ], [canManage, brMap, rows]);
 
   return (
     <div className="space-y-6 w-full max-w-none animate-fade-in page-content-enter">
@@ -880,37 +956,6 @@ const handleCancel = () => {
                 </div>
               )}
 
-              {/* Branch Autocomplete */}
-              <AutocompleteBranchField
-                label="Branch *"
-                placeholder="Start typing branch..."
-                value={formData.brAutocomplete}
-                branchId={formData.branchesID}
-                companyID={
-                  formData.companyID ??
-                  currentUserMapping?.companyID ??
-                  resolveScopedCompanyId(user) ??
-                  user?.companyID
-                }
-                onInputChange={(display) =>
-                  setFormData((p) => ({ ...p, brAutocomplete: display, branchesID: null }))
-                }
-                onBranchSelect={({ id, branchName, item }) => {
-                  setFormData((p) => ({
-                    ...p,
-                    branchesID: id,
-                    brAutocomplete: branchName,
-                    companyID: p.companyID ?? item?.companyID ?? null,
-                    serviceProviderID:
-                      p.serviceProviderID ?? item?.serviceProviderID ?? null,
-                  }));
-                  setBrList([]);
-                }}
-                onFetch={(q) => runFetchBranches(q)}
-                options={brList}
-                optionsLoading={brLoading}
-              />
-
               {/* Department Name */}
               <div className="space-y-2">
                 <Label>Department Name *</Label>
@@ -919,6 +964,96 @@ const handleCancel = () => {
                   onChange={(e) => setFormData((p) => ({ ...p, departmentName: e.target.value }))}
                   required
                 />
+              </div>
+
+              {/* Branches multi-select */}
+              <div className="space-y-2">
+                <Label>Branches (optional — multi-select)</Label>
+                {branchFilterLoading ? (
+                  <div className="text-sm text-gray-500">Loading branches…</div>
+                ) : branchFilterList.length === 0 ? (
+                  <div className="text-sm text-gray-500">No branches available for this company.</div>
+                ) : (
+                  <div className="max-h-40 overflow-y-auto border rounded p-2 space-y-1">
+                    {branchFilterList.map((b) => {
+                      const checked = formData.branchIDs.includes(b.id);
+                      return (
+                        <label
+                          key={b.id}
+                          className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-gray-50 cursor-pointer text-sm"
+                        >
+                          <input
+                            type="checkbox"
+                            className="rounded border-gray-300"
+                            checked={checked}
+                            onChange={() => toggleBranchID(b.id)}
+                          />
+                          <span>{b.branchName || `Branch #${b.id}`}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                )}
+                {formData.branchIDs.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 pt-1">
+                    {formData.branchIDs.map((id) => {
+                      const name =
+                        branchFilterList.find((b) => b.id === id)?.branchName ||
+                        brMap[id] ||
+                        `Branch #${id}`;
+                      return (
+                        <Badge key={id} variant="secondary" className="gap-1 pr-1">
+                          {name}
+                          <button
+                            type="button"
+                            className="ml-1 rounded hover:bg-black/10 p-0.5"
+                            onClick={() => toggleBranchID(id)}
+                            aria-label={`Remove ${name}`}
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        </Badge>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* Parent Department */}
+              <div className="space-y-2">
+                <Label>Parent Department</Label>
+                <Select
+                  value={formData.parentDepartmentID != null ? String(formData.parentDepartmentID) : "none"}
+                  onValueChange={(value) => {
+                    if (value === "none") {
+                      setFormData((p) => ({
+                        ...p,
+                        parentDepartmentID: null,
+                        parentAutocomplete: "",
+                      }));
+                      return;
+                    }
+                    const id = Number(value);
+                    const match = parentDepartmentOptions.find((d) => d.id === id);
+                    setFormData((p) => ({
+                      ...p,
+                      parentDepartmentID: id,
+                      parentAutocomplete: match?.departmentName ?? "",
+                    }));
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="No Parent" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">No Parent</SelectItem>
+                    {parentDepartmentOptions.map((d) => (
+                      <SelectItem key={d.id} value={String(d.id)}>
+                        {d.departmentName || `Department #${d.id}`}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
 
               <div className="flex justify-end gap-2 pt-4 border-t border-gray-200">
@@ -947,7 +1082,7 @@ const handleCancel = () => {
             hero={
               <EntityDetailHero
                 title={viewRow.departmentName || "Department"}
-                subtitle={<span>{coName(viewRow)} · {brName(viewRow)}</span>}
+                subtitle={<span>{coName(viewRow)} · {branchesDisplay(viewRow)}</span>}
               />
             }
             columns={1}
@@ -958,7 +1093,8 @@ const handleCancel = () => {
               rows={[
                 { label: "Department", value: viewRow.departmentName },
                 { label: "Company", value: coName(viewRow) },
-                { label: "Branch", value: brName(viewRow) },
+                { label: "Parent Department", value: parentDeptName(viewRow) },
+                { label: "Branches", value: branchesDisplay(viewRow) },
               ]}
             />
           </EntityDetailLayout>

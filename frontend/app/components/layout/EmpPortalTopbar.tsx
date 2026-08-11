@@ -42,14 +42,14 @@ export function EmpPortalTopbar({
   const [searchOpen, setSearchOpen] = useState(false);
   const [localSearch, setLocalSearch] = useState("");
   const searchValue = header?.navbarSearch?.value ?? localSearch;
-  const searchPlaceholder = header?.navbarSearch?.placeholder ?? "Search...";
+  const searchPlaceholder = header?.navbarSearch?.placeholder ?? "Search modules…";
   const onSearchChange = header?.navbarSearch?.onChange ?? setLocalSearch;
 
   return (
-    <header className="h-[72px] shrink-0 border-b border-border/80 bg-background/90 backdrop-blur-md">
+    <header className="h-[72px] shrink-0 overflow-x-clip border-b border-border/80 bg-background/90 backdrop-blur-md">
       <div className="flex h-full items-center justify-between gap-6 px-8">
         {header ? (
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <h1 className="truncate text-[17px] font-semibold tracking-tight text-foreground">
               {header.title}
             </h1>
@@ -58,10 +58,10 @@ export function EmpPortalTopbar({
             ) : null}
           </div>
         ) : (
-          <div className="min-w-0" aria-hidden />
+          <div className="min-w-0 flex-1" aria-hidden />
         )}
 
-        <div className="flex shrink-0 items-center gap-3">
+        <div className="relative z-20 flex shrink-0 items-center gap-3">
           <EmpPortalExpandableSearch
             open={searchOpen}
             onOpenChange={setSearchOpen}

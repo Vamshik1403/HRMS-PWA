@@ -193,8 +193,10 @@ const eligibleApprovers =
 if (!eligibleApprovers.length) {
   throw new BadRequestException(
     `Employee cannot be created because no active approved "${
-      workflowStep.designation.designation ||
-      `Designation ${workflowStep.designationID}`
+      workflowStep.approverType === 'REPORTING_MANAGER'
+        ? 'Reporting Manager'
+        : workflowStep.designation?.designation ||
+          `Designation ${workflowStep.designationID}`
     }" approver with active credentials exists in the selected company and branch for approval step ${workflowStep.stepNo}`,
   );
 }
@@ -211,9 +213,17 @@ const approvers =
   workflow.allowAnySameDesignation
     ? eligibleApprovers
     : eligibleApprovers.slice(0, 1);
-      const designationName =
-        workflowStep.designation.designation?.trim() ||
-        `Designation ${workflowStep.designationID}`;
+
+      const isReportingManager =
+        (workflowStep.approverType || 'DESIGNATION').toUpperCase() ===
+        'REPORTING_MANAGER';
+
+      const designationName = isReportingManager
+        ? 'Reporting Manager'
+        : workflowStep.designation?.designation?.trim() ||
+          `Designation ${workflowStep.designationID}`;
+
+      const designationIdSnapshot = workflowStep.designationID ?? 0;
 
       const requestStep =
         await tx.approvalRequestStep.create({
@@ -228,7 +238,7 @@ const approvers =
               workflowStep.stepNo,
 
             designationID:
-              workflowStep.designationID,
+              designationIdSnapshot,
 
             stepNameSnapshot:
               workflowStep.stepName,
@@ -272,7 +282,7 @@ const approvers =
             approver.id,
 
           designationIDSnapshot:
-            workflowStep.designationID,
+            designationIdSnapshot,
 
           designationNameSnapshot:
             designationName,
@@ -603,6 +613,13 @@ private conditionMatches(
         condition.operator,
       );
 
+    case 'BRANCH':
+      return this.compareEquality(
+        employee.branchesID,
+        condition.branchesID,
+        condition.operator,
+      );
+
     case 'DESIGNATION':
       return this.compareEquality(
         employee.designationID,
@@ -703,14 +720,56 @@ private conditionMatches(
   tx: TransactionClient,
   employee: EmployeeApprovalSubject,
   workflowStep: {
-    designationID: number;
-
+    designationID: number | null;
+    approverType?: string | null;
     designation: {
       branchesID: number | null;
-    };
+      designation?: string | null;
+    } | null;
   },
 ) {
   if (!employee.companyID) {
+    return [];
+  }
+
+  const approverType = (workflowStep.approverType || 'DESIGNATION').toUpperCase();
+
+  // Reporting manager via EmployeeLink (employeeId → linkedEmployeeId = manager)
+  if (approverType === 'REPORTING_MANAGER') {
+    const links = await tx.employeeLink.findMany({
+      where: { employeeId: employee.id },
+      select: { linkedEmployeeId: true },
+    });
+    const managerIds = [
+      ...new Set(
+        links
+          .map((l) => Number(l.linkedEmployeeId))
+          .filter((id) => Number.isFinite(id) && id > 0 && id !== employee.id),
+      ),
+    ];
+    if (!managerIds.length) return [];
+
+    return tx.manageEmployee.findMany({
+      where: {
+        id: { in: managerIds },
+        companyID: employee.companyID,
+        lifecycleStatus: 'ACTIVE',
+        onboardingApprovalStatus: 'APPROVED',
+        isDeleted: false,
+        employeeCredentials: { is: { isActive: true } },
+      },
+      select: {
+        id: true,
+        companyID: true,
+        branchesID: true,
+        departmentNameID: true,
+        designationID: true,
+      },
+      orderBy: { id: 'asc' },
+    });
+  }
+
+  if (!workflowStep.designationID) {
     return [];
   }
 
@@ -718,72 +777,32 @@ private conditionMatches(
    * A workflow with branchesID = null applies to employees
    * from every branch, but approvers are resolved from the
    * newly created employee's branch.
-   *
-   * This prevents a Technical Head from another branch from
-   * approving an employee unintentionally.
    */
   const approverBranchID =
     employee.branchesID ??
-    workflowStep.designation.branchesID ??
+    workflowStep.designation?.branchesID ??
     null;
 
   return tx.manageEmployee.findMany({
     where: {
-      companyID:
-        employee.companyID,
-
-      /*
-       * Never allow the newly created pending employee
-       * to approve themselves.
-       */
-      id: {
-        not: employee.id,
-      },
-
+      companyID: employee.companyID,
+      id: { not: employee.id },
       ...(approverBranchID != null
-        ? {
-            branchesID:
-              approverBranchID,
-          }
+        ? { branchesID: approverBranchID }
         : {}),
-
-      /*
-       * Resolve designation using either the direct current
-       * field or employee designation history.
-       */
       OR: [
-        {
-          designationID:
-            workflowStep.designationID,
-        },
-
+        { designationID: workflowStep.designationID },
         {
           empDesignation: {
-            some: {
-              designationID:
-                workflowStep.designationID,
-            },
+            some: { designationID: workflowStep.designationID },
           },
         },
       ],
-
-      lifecycleStatus:
-        'ACTIVE',
-
-      onboardingApprovalStatus:
-        'APPROVED',
-
-      isDeleted:
-        false,
-
-      employeeCredentials: {
-        is: {
-          isActive:
-            true,
-        },
-      },
+      lifecycleStatus: 'ACTIVE',
+      onboardingApprovalStatus: 'APPROVED',
+      isDeleted: false,
+      employeeCredentials: { is: { isActive: true } },
     },
-
     select: {
       id: true,
       companyID: true,
@@ -791,10 +810,7 @@ private conditionMatches(
       departmentNameID: true,
       designationID: true,
     },
-
-    orderBy: {
-      id: 'asc',
-    },
+    orderBy: { id: 'asc' },
   });
 }
 }

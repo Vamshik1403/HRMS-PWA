@@ -433,7 +433,7 @@ html[data-emp-theme="dark"] .emp-pwa-shell select:-webkit-autofill {
 
 /* ── Form Drawer – structured, aligned form layout ── */
 .form-drawer-body {
-  margin-top: 1.5rem;
+  margin-top: 0;
 }
 
 .form-drawer-body form {
@@ -1680,6 +1680,14 @@ html:not(.dark):not([data-emp-theme="dark"]) .emp-portal-desktop .hrms-admin-con
 html:not(.dark):not([data-emp-theme="dark"]) .emp-portal-desktop .hrms-admin-content thead th,
 html:not(.dark):not([data-emp-theme="dark"]) .emp-portal-desktop .hrms-admin-content tbody td {
   background-color: #ffffff !important;
+}
+
+/* Report matrix headers — keep muted teal tint readable in light mode */
+html:not(.dark):not([data-emp-theme="dark"]) .emp-portal-desktop .hrms-admin-content thead[data-hrms-report-header],
+html:not(.dark):not([data-emp-theme="dark"]) .emp-portal-desktop .hrms-admin-content thead[data-hrms-report-header] tr,
+html:not(.dark):not([data-emp-theme="dark"]) .emp-portal-desktop .hrms-admin-content thead[data-hrms-report-header] th {
+  background-color: #f0f7f6 !important;
+  color: #0f766e !important;
 }
 
 html:not(.dark):not([data-emp-theme="dark"]) .emp-portal-desktop .hrms-admin-content .bg-card {

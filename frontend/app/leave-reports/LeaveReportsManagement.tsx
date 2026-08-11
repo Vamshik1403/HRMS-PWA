@@ -886,16 +886,16 @@ export function LeaveReportsManagement() {
           <CardContent className="p-0">
             <div className="overflow-x-auto w-full border-t border-gray-200">
               <table className="min-w-full border-collapse text-xs">
-                <thead className="bg-gray-900 text-white">
+                <thead data-hrms-report-header className="bg-teal-50 text-teal-900 border-b border-teal-100">
                   <tr>
                     {visibleColumns.sno && <th
-                      className="sticky z-30 bg-gray-900 px-3 py-2 text-center"
+                      className="sticky z-30 bg-teal-50 text-teal-900 px-3 py-2 text-center border-r border-teal-100"
                       style={{ left: getStickyLeft("sno"), width: LEFT_WIDTHS.sno, minWidth: LEFT_WIDTHS.sno }}
                     >
                       S.NO
                     </th>}
                     {visibleColumns.company && <th
-                      className="sticky z-30 bg-gray-900 px-3 py-2 text-left"
+                      className="sticky z-30 bg-teal-50 text-teal-900 px-3 py-2 text-left border-r border-teal-100"
                       style={{
                         left: getStickyLeft("company"),
                         width: LEFT_WIDTHS.company,
@@ -905,7 +905,7 @@ export function LeaveReportsManagement() {
                       COMPANY
                     </th>}
                     {visibleColumns.branch && <th
-                      className="sticky z-30 bg-gray-900 px-3 py-2 text-left"
+                      className="sticky z-30 bg-teal-50 text-teal-900 px-3 py-2 text-left border-r border-teal-100"
                       style={{
                         left: getStickyLeft("branch"),
                         width: LEFT_WIDTHS.branch,
@@ -915,7 +915,7 @@ export function LeaveReportsManagement() {
                       BRANCH
                     </th>}
                     {visibleColumns.dept && <th
-                      className="sticky z-30 bg-gray-900 px-3 py-2 text-left"
+                      className="sticky z-30 bg-teal-50 text-teal-900 px-3 py-2 text-left border-r border-teal-100"
                       style={{
                         left: getStickyLeft("dept"),
                         width: LEFT_WIDTHS.dept,
@@ -925,7 +925,7 @@ export function LeaveReportsManagement() {
                       DEPT
                     </th>}
                     {visibleColumns.emp && <th
-                      className="sticky z-30 bg-gray-900 px-3 py-2 text-left"
+                      className="sticky z-30 bg-teal-50 text-teal-900 px-3 py-2 text-left border-r border-teal-100"
                       style={{
                         left: getStickyLeft("emp"),
                         width: LEFT_WIDTHS.emp,

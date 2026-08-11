@@ -56,6 +56,7 @@ interface DesignationRead {
   companyID?: ID | null;
   branchesID?: ID | null;
   departmentID?: ID | null;
+  parentDesignationID?: ID | null;
   designation?: string | null;
   shiftEligibility?: string | null;
   nightShiftEligibility?: string | null;
@@ -70,6 +71,7 @@ interface DesignationRead {
   company?: { id: ID; companyName?: string | null } | null;
   branches?: { id: ID; branchName?: string | null } | null;
   departments?: { id: ID; departmentName?: string | null } | null;
+  parentDesignation?: { id: ID; designation?: string | null } | null;
 
   // optional denormalized name fallbacks
   serviceProviderName?: string | null;
@@ -207,6 +209,7 @@ const [filterLoading, setFilterLoading] = useState(false);
     companyID: null as ID | null,
     branchesID: null as ID | null,
     departmentID: null as ID | null,
+    parentDesignationID: null as ID | null,
 
     designation: "",
     otApplicable: "",
@@ -217,6 +220,7 @@ const [filterLoading, setFilterLoading] = useState(false);
     coAutocomplete: "",
     brAutocomplete: "",
     deptAutocomplete: "",
+    parentAutocomplete: "",
   });
 
   // Flag to skip cascade clearing during programmatic resets
@@ -271,9 +275,11 @@ const [filterLoading, setFilterLoading] = useState(false);
           companyID: null,
           branchesID: null,
           departmentID: null,
+          parentDesignationID: null,
           coAutocomplete: "",
           brAutocomplete: "",
           deptAutocomplete: "",
+          parentAutocomplete: "",
         }));
         setSuggestedCompanies([]);
         setSuggestedBranches([]);
@@ -290,8 +296,10 @@ const [filterLoading, setFilterLoading] = useState(false);
           ...prev,
           branchesID: null,
           departmentID: null,
+          parentDesignationID: null,
           brAutocomplete: "",
           deptAutocomplete: "",
+          parentAutocomplete: "",
         }));
         setSuggestedBranches([]);
         setSuggestedDepartments([]);
@@ -305,10 +313,9 @@ const [filterLoading, setFilterLoading] = useState(false);
       if (formData.branchesID) {
         setFormData(prev => ({
           ...prev,
-          departmentID: null,
-          deptAutocomplete: "",
+          parentDesignationID: null,
+          parentAutocomplete: "",
         }));
-        setSuggestedDepartments([]);
       }
     }
   }, [formData.branchesID, editing]);
@@ -513,6 +520,7 @@ setRows(filteredRows);
       companyID,
       branchesID,
       departmentID: null,
+      parentDesignationID: null,
       designation: "",
       otApplicable: "",
       noticePeriodDaysForResignation: "",
@@ -521,6 +529,7 @@ setRows(filteredRows);
       coAutocomplete,
       brAutocomplete,
       deptAutocomplete: "",
+      parentAutocomplete: "",
     });
     setEditing(null);
     setSuggestedCompanies([]);
@@ -542,6 +551,7 @@ setRows(filteredRows);
       companyID: r.companyID ?? r.company?.id ?? null,
       branchesID: r.branchesID ?? r.branches?.id ?? null,
       departmentID: r.departmentID ?? null,
+      parentDesignationID: r.parentDesignationID ?? r.parentDesignation?.id ?? null,
 
       designation: r.designation ?? "",
       otApplicable: (r as any).otApplicable ?? "",
@@ -563,6 +573,11 @@ setRows(filteredRows);
       deptAutocomplete: r.departments?.departmentName
         ?? r.departmentName
         ?? (r.departmentID != null ? deptMap[r.departmentID] ?? "" : ""),
+
+      parentAutocomplete: r.parentDesignation?.designation
+        ?? (r.parentDesignationID != null
+          ? (rows.find((d) => d.id === r.parentDesignationID)?.designation ?? "")
+          : ""),
     };
     
     setFormData(newFormData);
@@ -596,7 +611,7 @@ setRows(filteredRows);
     // Validation
     const validationErrors: string[] = [];
     if (!formData.designation?.trim()) validationErrors.push("Designation is required");
-    if (!formData.branchesID) validationErrors.push("Please select a Branch");
+    if (!formData.departmentID) validationErrors.push("Please select a Department");
     if (validationErrors.length > 0) {
       validationErrors.forEach(msg => toast.error(msg));
       return;
@@ -620,7 +635,9 @@ setRows(filteredRows);
         user?.companyID ??
         undefined,
 
-      branchesID: formData.branchesID,
+      branchesID: formData.branchesID || null,
+      departmentID: formData.departmentID,
+      parentDesignationID: formData.parentDesignationID || null,
       designation: formData.designation,
       otApplicable: formData.otApplicable || null,
       noticePeriodDaysForResignation: formData.noticePeriodDaysForResignation || null,
@@ -759,7 +776,7 @@ const handleCancel = () => {
         resolveScopedCompanyId(user) ??
         user?.companyID ??
         null;
-      if (query.length < MIN_CHARS || !companyID || !formData.branchesID) {
+      if (query.length < MIN_CHARS || !companyID) {
         setSuggestedDepartments([]);
         return;
       }
@@ -769,7 +786,9 @@ const handleCancel = () => {
       const filtered = allDepartments.filter(
         (dept) =>
           Number(dept.companyID) === Number(companyID) &&
-          Number(dept.branchesID) === Number(formData.branchesID) &&
+          (formData.branchesID == null ||
+            Number(dept.branchesID) === Number(formData.branchesID) ||
+            dept.branchesID == null) &&
           (dept.departmentName ?? "")
             .toLowerCase()
             .includes(query.toLowerCase()),
@@ -882,36 +901,6 @@ const filtered = useMemo(() => {
     [visibleDepartmentFilterList],
   );
 
-  const designationColumns = useMemo((): DataTableColumn<DesignationRead>[] => [
-    {
-      key: "designation",
-      header: "Name",
-      sortable: true,
-      colSpan: 4,
-      cell: (r) => <span className="font-medium">{r.designation || "—"}</span>,
-    },
-    {
-      key: "branch",
-      header: "Branch",
-      sortable: true,
-      colSpan: 3,
-      cell: (r) => brName(r),
-    },
-    {
-      key: "actions",
-      header: "Actions",
-      colSpan: 2,
-      align: "right",
-      cell: (r) => (
-        <EntityRowActions
-          onView={() => handleView(r)}
-          onEdit={canManage ? () => handleEdit(r) : undefined}
-          onDelete={canManage ? () => handleDelete(r.id) : undefined}
-        />
-      ),
-    },
-  ], [canManage]);
-
   // ---------------------------
   // Name helpers for table
   // ---------------------------
@@ -934,6 +923,43 @@ const filtered = useMemo(() => {
     r.departments?.departmentName
     ?? r.departmentName
     ?? (r.departmentID != null ? (deptMap[r.departmentID] ?? "—") : "—");
+
+  const designationColumns = useMemo((): DataTableColumn<DesignationRead>[] => [
+    {
+      key: "designation",
+      header: "Name",
+      sortable: true,
+      colSpan: 3,
+      cell: (r) => <span className="font-medium">{r.designation || "—"}</span>,
+    },
+    {
+      key: "department",
+      header: "Department",
+      sortable: true,
+      colSpan: 3,
+      cell: (r) => deptName(r),
+    },
+    {
+      key: "branch",
+      header: "Branch",
+      sortable: true,
+      colSpan: 2,
+      cell: (r) => brName(r),
+    },
+    {
+      key: "actions",
+      header: "Actions",
+      colSpan: 2,
+      align: "right",
+      cell: (r) => (
+        <EntityRowActions
+          onView={() => handleView(r)}
+          onEdit={canManage ? () => handleEdit(r) : undefined}
+          onDelete={canManage ? () => handleDelete(r.id) : undefined}
+        />
+      ),
+    },
+  ], [canManage, deptMap, brMap]);
 
   return (
     <div className="space-y-6 w-full max-w-none animate-fade-in page-content-enter">
@@ -1055,7 +1081,7 @@ const filtered = useMemo(() => {
               {/* Branch Autocomplete */}
               {showOrgFields && (
                 <div ref={brRef} className="space-y-2 relative">
-                  <Label>Branch *</Label>
+                  <Label>Branch</Label>
                   <Input
                     value={formData.brAutocomplete}
                     onChange={(e) => {
@@ -1077,7 +1103,6 @@ const filtered = useMemo(() => {
                       "Type to search branch..."
                     }
                     autoComplete="off"
-                    required
                     disabled={!(formData.companyID || resolveScopedCompanyId(user) || user?.companyID)}
                   />
                   {suggestedBranches.length > 0 && !editing && (
@@ -1105,6 +1130,123 @@ const filtered = useMemo(() => {
                       ))}
                     </div>
                   )}
+                </div>
+              )}
+
+              {/* Department Autocomplete */}
+              {showOrgFields && (
+                <div ref={deptRef} className="space-y-2 relative">
+                  <Label>Department *</Label>
+                  <Input
+                    value={formData.deptAutocomplete}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setFormData((p) => ({
+                        ...p,
+                        deptAutocomplete: val,
+                        departmentID: null,
+                        parentDesignationID: null,
+                        parentAutocomplete: "",
+                      }));
+                      if (!editing) {
+                        fetchDepartmentSuggestions(val);
+                      }
+                    }}
+                    onFocus={() => {
+                      if (
+                        !editing &&
+                        (formData.companyID || resolveScopedCompanyId(user)) &&
+                        formData.deptAutocomplete.length >= MIN_CHARS
+                      ) {
+                        fetchDepartmentSuggestions(formData.deptAutocomplete);
+                      }
+                    }}
+                    placeholder={
+                      !(formData.companyID || resolveScopedCompanyId(user) || user?.companyID)
+                        ? "Company not resolved for this account"
+                        : editing
+                          ? formData.deptAutocomplete || "Department"
+                          : "Type to search department..."
+                    }
+                    autoComplete="off"
+                    required
+                    disabled={!(formData.companyID || resolveScopedCompanyId(user) || user?.companyID)}
+                  />
+                  {suggestedDepartments.length > 0 && !editing && (
+                    <div className="absolute z-10 bg-popover text-popover-foreground border border-border rounded w-full shadow max-h-48 overflow-y-auto">
+                      {loadingDepartments && <div className="px-3 py-2 text-sm text-gray-500">Loading…</div>}
+                      {suggestedDepartments.map((dept) => (
+                        <div
+                          key={dept.id}
+                          className="px-3 py-2 hover:bg-accent cursor-pointer"
+                          onMouseDown={(e) => e.preventDefault()}
+                          onClick={() => {
+                            setFormData((p) => ({
+                              ...p,
+                              departmentID: dept.id,
+                              deptAutocomplete: dept.departmentName,
+                              parentDesignationID: null,
+                              parentAutocomplete: "",
+                            }));
+                            setSuggestedDepartments([]);
+                          }}
+                        >
+                          {dept.departmentName}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Parent Designation */}
+              {showOrgFields && (
+                <div className="space-y-2">
+                  <Label>Parent Designation</Label>
+                  <Select
+                    value={
+                      formData.parentDesignationID != null
+                        ? String(formData.parentDesignationID)
+                        : "none"
+                    }
+                    onValueChange={(value) => {
+                      if (value === "none") {
+                        setFormData((p) => ({
+                          ...p,
+                          parentDesignationID: null,
+                          parentAutocomplete: "",
+                        }));
+                        return;
+                      }
+                      const id = Number(value);
+                      const match = rows.find((d) => d.id === id);
+                      setFormData((p) => ({
+                        ...p,
+                        parentDesignationID: id,
+                        parentAutocomplete: match?.designation ?? "",
+                      }));
+                    }}
+                    disabled={!formData.departmentID}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder={formData.departmentID ? "No Parent" : "Select department first"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">No Parent</SelectItem>
+                      {rows
+                        .filter((d) => {
+                          if (!formData.departmentID) return false;
+                          if (Number(d.departmentID) !== Number(formData.departmentID)) return false;
+                          if (editing && d.id === editing.id) return false;
+                          return true;
+                        })
+                        .map((d) => (
+                          <SelectItem key={d.id} value={String(d.id)}>
+                            {d.designation || `Designation #${d.id}`}
+                          </SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
                 </div>
               )}
 
@@ -1203,7 +1345,16 @@ const filtered = useMemo(() => {
                 { label: "Designation", value: viewRow.designation },
                 { label: "Service Provider", value: spName(viewRow) },
                 { label: "Company", value: coName(viewRow) },
+                { label: "Department", value: deptName(viewRow) },
                 { label: "Branch", value: brName(viewRow) },
+                {
+                  label: "Parent Designation",
+                  value:
+                    viewRow.parentDesignation?.designation ??
+                    (viewRow.parentDesignationID != null
+                      ? (rows.find((d) => d.id === viewRow.parentDesignationID)?.designation ?? "—")
+                      : "—"),
+                },
               ]}
             />
             <DetailCard

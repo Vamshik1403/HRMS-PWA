@@ -2135,54 +2135,76 @@ export function GenerateSalaryManagement() {
       return;
     }
 
-    // Check if we have the required filters
-    let shouldFetch = false;
-    let companyId = null;
-    let branchId = null;
+    let companyId: number | null = null;
+    let branchId: number | null = null;
 
     if (user?.role === "SUPERADMIN") {
-      // SUPERADMIN needs both company and branch
       if (formData.companyID && formData.branchesID) {
-        shouldFetch = true;
-        companyId = formData.companyID;
-        branchId = formData.branchesID;
+        companyId = Number(formData.companyID);
+        branchId = Number(formData.branchesID);
       }
     } else if (user?.role === "SERVICE_PROVIDER") {
-      // MANAGER needs at least branch (company is auto-filled)
       if (formData.branchesID && managerScope?.companyID) {
-        shouldFetch = true;
-        companyId = managerScope.companyID;
-        branchId = formData.branchesID;
+        companyId = Number(managerScope.companyID);
+        branchId = Number(formData.branchesID);
       }
-    } else if (user?.role === "COMPANY_ADMIN" || user?.role === "BRANCH_ADMIN") {
-      // COMPANY_ADMIN / BRANCH_ADMIN: use their company + selected branch
-      const resolvedCompanyID = formData.companyID ?? user?.companyID ?? null;
+    } else if (
+      user?.role === "COMPANY_ADMIN" ||
+      user?.role === "BRANCH_ADMIN" ||
+      user?.role === "ADMIN" ||
+      (user?.role === "EMPLOYEE" && isCompanyModuleOperator(user))
+    ) {
+      const resolvedCompanyID =
+        formData.companyID ??
+        resolveScopedCompanyId(user) ??
+        user?.companyID ??
+        null;
       if (resolvedCompanyID && formData.branchesID) {
-        shouldFetch = true;
-        companyId = resolvedCompanyID;
-        branchId = formData.branchesID;
+        companyId = Number(resolvedCompanyID);
+        branchId = Number(formData.branchesID);
       }
+    } else if (formData.companyID || user?.companyID) {
+      companyId = Number(formData.companyID ?? user?.companyID);
+      branchId = formData.branchesID != null ? Number(formData.branchesID) : null;
     }
 
-    if (!shouldFetch) {
+    if (companyId == null || !Number.isFinite(companyId) || companyId <= 0) {
       setEmpList([]);
       return;
     }
 
     setEmpLoading(true);
     try {
-      const data: Emp[] = await robustGet(API.emp);
+      let data: Emp[] = [];
+      try {
+        data = await robustGet("/backend/manage-emp/list");
+      } catch {
+        data = await robustGet(API.emp);
+      }
+      if (!Array.isArray(data)) data = [];
 
-      const filtered = data.filter(e =>
-        e.companyID === companyId &&
-        e.branchesID === branchId
-      );
+      const empBranchId = (e: any): number | null => {
+        const raw =
+          e?.branchesID ??
+          e?.branches?.id ??
+          e?.empBranch?.[0]?.branchesID ??
+          e?.empBranch?.[0]?.branches?.id ??
+          null;
+        const n = Number(raw);
+        return Number.isFinite(n) && n > 0 ? n : null;
+      };
+
+      const filtered = data.filter((e) => {
+        if (Number(e.companyID) !== Number(companyId)) return false;
+        if (branchId == null || !Number.isFinite(branchId)) return true;
+        return empBranchId(e) === Number(branchId);
+      });
 
       const low = q.toLowerCase();
       const searched = filtered.filter(
-        e =>
+        (e) =>
           empName(e).toLowerCase().includes(low) ||
-          (e.employeeID ?? "").toLowerCase().includes(low)
+          String(e.employeeID ?? "").toLowerCase().includes(low),
       );
 
       setEmpList(searched);

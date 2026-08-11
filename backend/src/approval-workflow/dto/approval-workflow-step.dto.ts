@@ -5,6 +5,7 @@ import {
   IsString,
   MaxLength,
   Min,
+  ValidateIf,
 } from 'class-validator';
 
 export class ApprovalWorkflowStepDto {
@@ -12,9 +13,16 @@ export class ApprovalWorkflowStepDto {
   @Min(1)
   stepNo: number;
 
+  /** DESIGNATION (default) or REPORTING_MANAGER */
+  @IsOptional()
+  @IsString()
+  @MaxLength(32)
+  approverType?: string;
+
+  @ValidateIf((o) => (o.approverType || 'DESIGNATION').toUpperCase() !== 'REPORTING_MANAGER')
   @IsInt()
   @Min(1)
-  designationID: number;
+  designationID?: number;
 
   @IsOptional()
   @IsString()

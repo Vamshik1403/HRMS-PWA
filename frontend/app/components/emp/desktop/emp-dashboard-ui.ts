@@ -25,8 +25,8 @@ export type DayPhase = "morning" | "afternoon" | "evening" | "night";
 
 export function dayPhase(): DayPhase {
   const h = new Date().getHours();
-  if (h >= 5 && h < 11) return "morning";
-  if (h >= 11 && h < 17) return "afternoon";
+  if (h >= 5 && h < 12) return "morning";
+  if (h >= 12 && h < 17) return "afternoon";
   if (h >= 17 && h < 20) return "evening";
   return "night";
 }

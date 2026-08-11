@@ -2447,7 +2447,7 @@ if (!hasPunchesEffective) return { type: "ABSENT", label: "Absent", hasPunches: 
   const renderDateHeaders = () => dateColumns.map(date => {
     const { dayName, dateStr } = formatHeaderDate(date);
     return (
-      <th key={date} className="px-2 py-1 text-center min-w-[90px] border-l border-gray-500 text-[11px] bg-gray-900">
+      <th key={date} className="px-2 py-1 text-center min-w-[90px] border-l border-teal-100 text-[11px] bg-teal-50 text-teal-900">
         <div className="font-semibold">{dateStr}</div>
         <div className="text-[10px] opacity-80 mt-1">{dayName}</div>
       </th>
@@ -2583,34 +2583,34 @@ if (!hasPunchesEffective) return { type: "ABSENT", label: "Absent", hasPunches: 
           <CardContent className="p-0">
             <div className="overflow-x-auto w-full border-t border-gray-200">
               <table className="min-w-full border-collapse text-xs">
-                <thead className="bg-gray-900 text-white sticky top-0 z-20">
+                <thead data-hrms-report-header className="bg-teal-50 text-teal-900 sticky top-0 z-20 border-b border-teal-100">
                   <tr>
                     <th 
-                      className="sticky left-0 z-30 bg-gray-900 px-2 py-2 text-center border-r border-gray-700" 
+                      className="sticky left-0 z-30 bg-teal-50 text-teal-900 px-2 py-2 text-center border-r border-teal-100" 
                       style={{ left: 0, width: responsiveLeftWidths.sno, minWidth: responsiveLeftWidths.sno }}
                     >
                       S.NO
                     </th>
                     {!isMobile && <th 
-                      className="sticky z-30 bg-gray-900 px-2 py-2 text-left border-r border-gray-700" 
+                      className="sticky z-30 bg-teal-50 text-teal-900 px-2 py-2 text-left border-r border-teal-100" 
                       style={{ left: responsiveLeftWidths.sno, width: responsiveLeftWidths.company, minWidth: responsiveLeftWidths.company }}
                     >
                       COMPANY
                     </th>}
                     {!isMobile && <th 
-                      className="sticky z-30 bg-gray-900 px-2 py-2 text-left border-r border-gray-700" 
+                      className="sticky z-30 bg-teal-50 text-teal-900 px-2 py-2 text-left border-r border-teal-100" 
                       style={{ left: responsiveLeftWidths.sno + responsiveLeftWidths.company, width: responsiveLeftWidths.branch, minWidth: responsiveLeftWidths.branch }}
                     >
                       BRANCH
                     </th>}
                     {!isMobile && <th 
-                      className="sticky z-30 bg-gray-900 px-2 py-2 text-left border-r border-gray-700" 
+                      className="sticky z-30 bg-teal-50 text-teal-900 px-2 py-2 text-left border-r border-teal-100" 
                       style={{ left: responsiveLeftWidths.sno + responsiveLeftWidths.company + responsiveLeftWidths.branch, width: responsiveLeftWidths.dept, minWidth: responsiveLeftWidths.dept }}
                     >
                       DEPT
                     </th>}
                     <th 
-                      className="sticky z-30 bg-gray-900 px-2 py-2 text-left border-r border-gray-700" 
+                      className="sticky z-30 bg-teal-50 text-teal-900 px-2 py-2 text-left border-r border-teal-100" 
                       style={{ left: responsiveLeftWidths.sno + (isMobile ? 0 : responsiveLeftWidths.company + responsiveLeftWidths.branch + responsiveLeftWidths.dept), width: responsiveLeftWidths.emp, minWidth: responsiveLeftWidths.emp }}
                     >
                       EMPLOYEE

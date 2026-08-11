@@ -1,6 +1,7 @@
 export const WORKFLOW_CONDITION_CONFIG = {
   EMPLOYEE_ONBOARDING_MODULE: {
     fields: [
+      'BRANCH',
       'DEPARTMENT',
       'DESIGNATION',
       'EMPLOYEE',
@@ -9,6 +10,7 @@ export const WORKFLOW_CONDITION_CONFIG = {
 
   REIMBURSEMENT_MODULE: {
     fields: [
+      'BRANCH',
       'DEPARTMENT',
       'DESIGNATION',
       'EMPLOYEE',
@@ -18,6 +20,7 @@ export const WORKFLOW_CONDITION_CONFIG = {
 
   LEAVE_MODULE: {
     fields: [
+      'BRANCH',
       'DEPARTMENT',
       'DESIGNATION',
       'EMPLOYEE',
@@ -28,6 +31,7 @@ export const WORKFLOW_CONDITION_CONFIG = {
 
   PAYROLL_MODULE: {
     fields: [
+      'BRANCH',
       'DEPARTMENT',
       'DESIGNATION',
       'EMPLOYEE',
@@ -37,6 +41,7 @@ export const WORKFLOW_CONDITION_CONFIG = {
 
   OFF_BOARDING_MODULE: {
     fields: [
+      'BRANCH',
       'DEPARTMENT',
       'DESIGNATION',
       'EMPLOYEE',
@@ -46,6 +51,7 @@ export const WORKFLOW_CONDITION_CONFIG = {
 
   ATTENDANCE_MODULE: {
     fields: [
+      'BRANCH',
       'DEPARTMENT',
       'DESIGNATION',
       'EMPLOYEE',
@@ -60,6 +66,7 @@ export const WORKFLOW_CONDITION_CONFIG = {
    */
   SALARY_MANAGEMENT: {
     fields: [
+      'BRANCH',
       'DEPARTMENT',
       'DESIGNATION',
       'EMPLOYEE',
@@ -69,6 +76,7 @@ export const WORKFLOW_CONDITION_CONFIG = {
 
   REIMBURSEMENT: {
     fields: [
+      'BRANCH',
       'DEPARTMENT',
       'DESIGNATION',
       'EMPLOYEE',
@@ -78,6 +86,7 @@ export const WORKFLOW_CONDITION_CONFIG = {
 
   LEAVE_MANAGEMENT: {
     fields: [
+      'BRANCH',
       'DEPARTMENT',
       'DESIGNATION',
       'EMPLOYEE',
@@ -88,6 +97,7 @@ export const WORKFLOW_CONDITION_CONFIG = {
 
   OFF_BOARDING: {
     fields: [
+      'BRANCH',
       'DEPARTMENT',
       'DESIGNATION',
       'EMPLOYEE',
@@ -97,6 +107,7 @@ export const WORKFLOW_CONDITION_CONFIG = {
 
   ATTENDANCE_REGULARISATION: {
     fields: [
+      'BRANCH',
       'DEPARTMENT',
       'DESIGNATION',
       'EMPLOYEE',

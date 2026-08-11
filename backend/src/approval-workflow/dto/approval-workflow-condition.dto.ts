@@ -13,6 +13,7 @@ import {
 } from 'class-validator';
 
 export enum WorkflowConditionFieldDto {
+  BRANCH = 'BRANCH',
   DEPARTMENT = 'DEPARTMENT',
   DESIGNATION = 'DESIGNATION',
   EMPLOYEE = 'EMPLOYEE',
@@ -52,6 +53,7 @@ export enum WorkflowConditionOperatorDto {
 }
 
 export enum WorkflowConditionValueTypeDto {
+  BRANCH = 'BRANCH',
   DEPARTMENT = 'DEPARTMENT',
   DESIGNATION = 'DESIGNATION',
   EMPLOYEE_LIST = 'EMPLOYEE_LIST',
@@ -85,6 +87,11 @@ export class ApprovalWorkflowConditionDto {
   @IsInt()
   @Min(1)
   designationID?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  branchesID?: number;
 
   @IsOptional()
   @IsArray()

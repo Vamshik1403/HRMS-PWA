@@ -506,7 +506,7 @@ export function ContractorReportsManagement() {
           <CardContent className="p-0">
             <div className="overflow-x-auto w-full border-t border-gray-200">
               <table className="min-w-full border-collapse text-xs">
-                <thead className="bg-gray-900 text-white">
+                <thead data-hrms-report-header className="bg-teal-50 text-teal-900 border-b border-teal-100">
                   <tr>
                     {visibleColumns.sno && <th className="px-3 py-2 text-center">S.NO</th>}
                     {visibleColumns.employeeID && <th className="px-3 py-2 text-left">EMPLOYEE ID</th>}

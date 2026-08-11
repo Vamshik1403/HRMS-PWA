@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
@@ -563,6 +564,9 @@ function upsertHistoryEntry<T extends { _localId: string; id?: ID; effectFrom?: 
    ========================= */
 export function ManageEmployeesManagement() {
   // Data
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const openedCreateFromQuery = useRef(false);
   const [rows, setRows] = useState<ManageEmpRead[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -1701,6 +1705,15 @@ const runFetchCombinedDev = (q: string) => {
         } else if (formData.companyID) {
           all = all.filter(x => x.companyID === formData.companyID);
         }
+        const deptId =
+          formData.departmentNameID ??
+          formData.empDepartmentForm?.[formData.empDepartmentForm.length - 1]?.departmentNameID ??
+          null;
+        if (!deptId) {
+          setDesgList([]);
+          return;
+        }
+        all = all.filter((x) => Number(x.departmentID) === Number(deptId));
         const filtered = (all || []).filter(d => (d.designation ?? "").toLowerCase().includes(q.toLowerCase()));
         setDesgList(filtered.slice(0, 20));
       } finally { setDesgLoading(false); }
@@ -2134,12 +2147,47 @@ const addCombinedDevMap = () => {
   const removeEmpDepartment = (lid: string) => setFormData(p => {
     const updated = p.empDepartmentForm.filter(x => x._localId !== lid);
     const last = updated[updated.length - 1];
-    return { ...p, empDepartmentForm: updated, departmentNameID: last?.departmentNameID ?? null, deptAutocomplete: last?._deptAutocomplete ?? "", promotion: { ...p.promotion, departmentNameID: last?.departmentNameID ?? null } };
+    const nextDeptId = last?.departmentNameID ?? null;
+    const deptChanged = Number(nextDeptId) !== Number(p.departmentNameID);
+    return {
+      ...p,
+      empDepartmentForm: updated,
+      departmentNameID: nextDeptId,
+      deptAutocomplete: last?._deptAutocomplete ?? "",
+      ...(deptChanged
+        ? {
+            designationID: null as ID | null,
+            desgAutocomplete: "",
+            empDesignationForm: [] as EmpDesignationForm[],
+            promotion: { ...p.promotion, departmentNameID: nextDeptId, designationID: null },
+          }
+        : {
+            promotion: { ...p.promotion, departmentNameID: nextDeptId },
+          }),
+    };
   });
   const updateEmpDepartment = (lid: string, patch: Partial<EmpDepartmentForm>) => setFormData(p => {
     const updated = p.empDepartmentForm.map(x => x._localId === lid ? { ...x, ...patch } : x);
     const last = updated[updated.length - 1];
-    return { ...p, empDepartmentForm: updated, departmentNameID: last?.departmentNameID ?? null, deptAutocomplete: last?._deptAutocomplete ?? "", promotion: { ...p.promotion, departmentNameID: last?.departmentNameID ?? null } };
+    const nextDeptId = last?.departmentNameID ?? null;
+    const deptChanged =
+      patch.departmentNameID !== undefined && Number(patch.departmentNameID) !== Number(p.departmentNameID);
+    return {
+      ...p,
+      empDepartmentForm: updated,
+      departmentNameID: nextDeptId,
+      deptAutocomplete: last?._deptAutocomplete ?? "",
+      ...(deptChanged
+        ? {
+            designationID: null as ID | null,
+            desgAutocomplete: "",
+            empDesignationForm: [] as EmpDesignationForm[],
+            promotion: { ...p.promotion, departmentNameID: nextDeptId, designationID: null },
+          }
+        : {
+            promotion: { ...p.promotion, departmentNameID: nextDeptId },
+          }),
+    };
   });
 
   // Branch multi-entry helpers
@@ -2422,6 +2470,17 @@ const addCombinedDevMap = () => {
     setError(null);
   };
 
+  // Open create form when navigated with ?create=1 (e.g. My Team → Add Employee)
+  useEffect(() => {
+    if (openedCreateFromQuery.current) return;
+    if (!canManage) return;
+    if (searchParams.get("create") !== "1") return;
+    openedCreateFromQuery.current = true;
+    resetForm();
+    setIsAddingNew(true);
+    router.replace("/manage-employees", { scroll: false });
+  }, [canManage, searchParams, router]);
+
   // Helpers for rendering names in table
   const spName = (r: ManageEmpRead) =>
     r.serviceProvider?.companyName ?? r.serviceProviderName ?? "—";
@@ -2501,8 +2560,13 @@ const addCombinedDevMap = () => {
           ),
           departmentNameID: item.id,
           deptAutocomplete: item.departmentName ?? "",
-          promotion: { ...p.promotion, departmentNameID: item.id },
+          designationID: null,
+          desgAutocomplete: "",
+          empDesignationForm: [],
+          promotion: { ...p.promotion, departmentNameID: item.id, designationID: null },
         }));
+        setStagingDesg({ designationID: null, label: "", effectFrom: defaultEffectFrom() });
+        setDesgList([]);
         break;
       case "designation":
         setFormData((p) => ({
@@ -2597,8 +2661,13 @@ const addCombinedDevMap = () => {
             ),
             departmentNameID: item.id,
             deptAutocomplete: item.departmentName ?? quickAddValue,
-            promotion: { ...p.promotion, departmentNameID: item.id },
+            designationID: null,
+            desgAutocomplete: "",
+            empDesignationForm: [],
+            promotion: { ...p.promotion, departmentNameID: item.id, designationID: null },
           }));
+          setStagingDesg({ designationID: null, label: "", effectFrom: defaultEffectFrom() });
+          setDesgList([]);
           break;
         case "designation":
           setFormData((p) => ({
@@ -4479,7 +4548,24 @@ const handleCancel = () => {
                     setFormData(p => {
                       const updated = upsertHistoryEntry(p.empDepartmentForm, newEntry, (item) => item.departmentNameID === newEntry.departmentNameID);
                       const last = updated[updated.length - 1];
-                      return { ...p, empDepartmentForm: updated, departmentNameID: last?.departmentNameID ?? null, deptAutocomplete: last?._deptAutocomplete ?? "", promotion: { ...p.promotion, departmentNameID: last?.departmentNameID ?? null } };
+                      const nextDeptId = last?.departmentNameID ?? null;
+                      const deptChanged = Number(nextDeptId) !== Number(p.departmentNameID);
+                      return {
+                        ...p,
+                        empDepartmentForm: updated,
+                        departmentNameID: nextDeptId,
+                        deptAutocomplete: last?._deptAutocomplete ?? "",
+                        ...(deptChanged
+                          ? {
+                              designationID: null,
+                              desgAutocomplete: "",
+                              empDesignationForm: [],
+                              promotion: { ...p.promotion, departmentNameID: nextDeptId, designationID: null },
+                            }
+                          : {
+                              promotion: { ...p.promotion, departmentNameID: nextDeptId },
+                            }),
+                      };
                     });
                     setStagingDept({ departmentNameID: null, label: "", effectFrom: defaultEffectFrom() });
                     setStagingDesg({ designationID: null, label: "", effectFrom: defaultEffectFrom() });

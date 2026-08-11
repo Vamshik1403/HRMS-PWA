@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateDepartmentsDto } from './dto/create-department.dto';
 import { UpdateDepartmentsDto } from './dto/update-department.dto';
@@ -7,8 +7,51 @@ import { UpdateDepartmentsDto } from './dto/update-department.dto';
 export class DepartmentsService {
   constructor(private prisma: PrismaService) {}
 
-  create(data: CreateDepartmentsDto) {
-    return this.prisma.departments.create({ data });
+  private async syncBranches(departmentID: number, branchIDs?: number[], fallbackBranchID?: number | null) {
+    const ids = [
+      ...new Set(
+        (branchIDs?.length ? branchIDs : fallbackBranchID ? [fallbackBranchID] : [])
+          .map((id) => Number(id))
+          .filter((id) => Number.isFinite(id) && id > 0),
+      ),
+    ];
+
+    await this.prisma.departmentBranch.deleteMany({ where: { departmentID } });
+    if (ids.length) {
+      await this.prisma.departmentBranch.createMany({
+        data: ids.map((branchesID) => ({ departmentID, branchesID })),
+        skipDuplicates: true,
+      });
+    }
+
+    // Keep legacy branchesID in sync with first mapped branch (or null).
+    await this.prisma.departments.update({
+      where: { id: departmentID },
+      data: { branchesID: ids[0] ?? null },
+    });
+  }
+
+  async create(data: CreateDepartmentsDto) {
+    const { branchIDs, parentDepartmentID, ...rest } = data;
+    if (parentDepartmentID) {
+      const parent = await this.prisma.departments.findUnique({
+        where: { id: parentDepartmentID },
+        select: { id: true, companyID: true },
+      });
+      if (!parent) throw new BadRequestException('Parent department not found');
+      if (rest.companyID && parent.companyID && parent.companyID !== rest.companyID) {
+        throw new BadRequestException('Parent department must belong to the same company');
+      }
+    }
+
+    const created = await this.prisma.departments.create({
+      data: {
+        ...rest,
+        parentDepartmentID: parentDepartmentID ?? null,
+      },
+    });
+    await this.syncBranches(created.id, branchIDs, rest.branchesID ?? null);
+    return this.findOne(created.id);
   }
 
   findAll() {
@@ -17,11 +60,15 @@ export class DepartmentsService {
         branches: true,
         company: true,
         serviceProvider: true,
+        parentDepartment: { select: { id: true, departmentName: true } },
+        departmentBranches: {
+          include: { branches: { select: { id: true, branchName: true } } },
+        },
       },
+      orderBy: { id: 'desc' },
     });
   }
 
-  /** Departments with active employee counts (primary departmentNameID on ManageEmployee). */
   async findAllWithHeadcount() {
     const depts = await this.prisma.departments.findMany({
       select: {
@@ -29,6 +76,7 @@ export class DepartmentsService {
         departmentName: true,
         companyID: true,
         branchesID: true,
+        parentDepartmentID: true,
       },
     });
     const counts = await this.prisma.manageEmployee.groupBy({
@@ -49,6 +97,7 @@ export class DepartmentsService {
       departmentName: d.departmentName ?? 'Unnamed',
       companyID: d.companyID,
       branchesID: d.branchesID,
+      parentDepartmentID: d.parentDepartmentID,
       employeeCount: countMap.get(d.id) ?? 0,
     }));
   }
@@ -60,15 +109,41 @@ export class DepartmentsService {
         branches: true,
         company: true,
         serviceProvider: true,
+        parentDepartment: { select: { id: true, departmentName: true } },
+        departmentBranches: {
+          include: { branches: { select: { id: true, branchName: true } } },
+        },
+        childDepartments: { select: { id: true, departmentName: true } },
       },
     });
   }
 
-  update(id: number, data: UpdateDepartmentsDto) {
-    return this.prisma.departments.update({
+  async update(id: number, data: UpdateDepartmentsDto) {
+    const { branchIDs, parentDepartmentID, ...rest } = data as CreateDepartmentsDto & UpdateDepartmentsDto;
+    if (parentDepartmentID != null && Number(parentDepartmentID) === Number(id)) {
+      throw new BadRequestException('Department cannot be its own parent');
+    }
+    if (parentDepartmentID) {
+      const parent = await this.prisma.departments.findUnique({
+        where: { id: parentDepartmentID },
+        select: { id: true, companyID: true },
+      });
+      if (!parent) throw new BadRequestException('Parent department not found');
+    }
+
+    await this.prisma.departments.update({
       where: { id },
-      data,
+      data: {
+        ...rest,
+        ...(parentDepartmentID !== undefined ? { parentDepartmentID: parentDepartmentID ?? null } : {}),
+      },
     });
+
+    if (branchIDs !== undefined || rest.branchesID !== undefined) {
+      await this.syncBranches(id, branchIDs, rest.branchesID ?? null);
+    }
+
+    return this.findOne(id);
   }
 
   remove(id: number) {

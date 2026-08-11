@@ -110,6 +110,7 @@ export const ROUTE_MODULE_MAP: { prefix: string; moduleKey: CompanyModuleKey }[]
   { prefix: '/branches', moduleKey: 'BRANCHES' },
   { prefix: '/departments', moduleKey: 'DEPARTMENTS' },
   { prefix: '/designations', moduleKey: 'DESIGNATIONS' },
+  { prefix: '/company-hierarchy', moduleKey: 'DEPARTMENTS' },
   { prefix: '/devices', moduleKey: 'DEVICES' },
   { prefix: '/contractors', moduleKey: 'CONTRACTORS' },
   { prefix: '/contractor-rates', moduleKey: 'CONTRACTOR_RATES' },

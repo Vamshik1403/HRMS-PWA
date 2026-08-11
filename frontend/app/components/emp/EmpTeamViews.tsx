@@ -2,18 +2,20 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { LayoutGrid, List, Users } from "lucide-react";
+import { LayoutGrid, List, Plus, Users } from "lucide-react";
 import { useEmpManagerScope } from "@/app/hooks/useEmpManagerScope";
 import { reporteeDisplayName } from "@/app/utils/empManagerDisplay";
 import { formatPunchTime } from "@/app/utils/empAttendanceHistory";
 import { useEmpPortalDesktop } from "@/app/components/layout/EmpPortalShell";
 import { EmpTeamApprovalsPanel } from "./EmpTeamApprovalsPanel";
 import { EmpDesktopPage } from "./desktop/EmpDesktopPage";
-import { FilterBar, FilterSelect } from "@/app/components/app/filter-bar";
+import { FilterBar } from "@/app/components/app/filter-bar";
 import { listCardClass, listIconButtonClass } from "@/app/components/app/list-ui-styles";
 import { cn } from "@/app/utils/cn";
 import { fmtJoined } from "@/app/hooks/useEmpProfile";
 import { authHeaders } from "@/lib/auth";
+import { hasModuleWriteAccess } from "@/lib/companyAccess";
+import { Button } from "@/app/components/ui/button";
 
 const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL || "/backend";
 
@@ -91,6 +93,7 @@ export function EmpTeamMyTeam() {
   const searchParams = useSearchParams();
   const isDesktop = useEmpPortalDesktop();
   const { loading, isManagerView } = useEmpManagerScope();
+  const canAddEmployee = hasModuleWriteAccess("EMPLOYEES");
   const initialScope: TeamScope =
     searchParams.get("scope") === "team" ? "team" : "reportees";
   const [scope, setScope] = useState<TeamScope>(initialScope);
@@ -181,34 +184,61 @@ export function EmpTeamMyTeam() {
 
   const body = (
     <div className="space-y-4 page-content-enter">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div
+          role="tablist"
+          aria-label="Team scope"
+          className="inline-flex rounded-lg border border-border bg-muted/40 p-1"
+        >
+          <button
+            type="button"
+            role="tab"
+            aria-selected={scope === "reportees"}
+            onClick={() => setScopeAndUrl("reportees")}
+            className={cn(
+              "rounded-md px-3.5 py-1.5 text-[13px] font-medium transition-colors",
+              scope === "reportees"
+                ? "bg-background text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground",
+            )}
+          >
+            My Reportees
+            {directCount != null ? ` (${directCount})` : ""}
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={scope === "team"}
+            onClick={() => setScopeAndUrl("team")}
+            className={cn(
+              "rounded-md px-3.5 py-1.5 text-[13px] font-medium transition-colors",
+              scope === "team"
+                ? "bg-background text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground",
+            )}
+          >
+            My Team{scope === "team" ? ` (${members.length})` : ""}
+          </button>
+        </div>
+
+        {scope === "team" && canAddEmployee ? (
+          <Button
+            type="button"
+            onClick={() => router.push("/manage-employees?create=1")}
+            className="h-9"
+          >
+            <Plus className="mr-1.5 size-4" />
+            Add Employee
+          </Button>
+        ) : null}
+      </div>
+
       <FilterBar
         search={{
           value: searchQuery,
           onChange: setSearchQuery,
           placeholder: "Search by name, ID, email…",
         }}
-        filters={
-          <FilterSelect
-            id="team-scope"
-            ariaLabel="Team scope"
-            value={scope}
-            onChange={(v) => setScopeAndUrl(v as TeamScope)}
-            options={[
-              {
-                value: "reportees",
-                label:
-                  directCount != null
-                    ? `My Reportees (${directCount})`
-                    : "My Reportees",
-              },
-              {
-                value: "team",
-                label: `My Team (${members.length})`,
-              },
-            ]}
-            width="w-52"
-          />
-        }
         filtersPlacement="popover"
         trailing={
           <div className="flex items-center gap-2.5">

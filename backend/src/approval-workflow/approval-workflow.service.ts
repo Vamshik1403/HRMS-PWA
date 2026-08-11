@@ -16,7 +16,8 @@ export class ApprovalWorkflowService {
   private validateSteps(
     steps: Array<{
       stepNo: number;
-      designationID: number;
+      designationID?: number | null;
+      approverType?: string | null;
     }>,
   ) {
     if (!steps?.length) {
@@ -48,7 +49,9 @@ export class ApprovalWorkflowService {
     });
 
     for (const step of steps) {
-      if (!Number.isInteger(step.designationID) || step.designationID <= 0) {
+      const approverType = (step.approverType || 'DESIGNATION').toUpperCase();
+      if (approverType === 'REPORTING_MANAGER') continue;
+      if (!Number.isInteger(step.designationID) || !step.designationID || step.designationID <= 0) {
         throw new BadRequestException(
           `Invalid designation for step ${step.stepNo}`,
         );
@@ -62,7 +65,8 @@ export class ApprovalWorkflowService {
     companyModuleID: number;
     steps: Array<{
       stepNo: number;
-      designationID: number;
+      designationID?: number | null;
+      approverType?: string | null;
     }>;
   }) {
     const {
@@ -124,9 +128,15 @@ export class ApprovalWorkflowService {
     }
 
     const designationIDs = [
-      ...new Set(steps.map((step) => step.designationID)),
+      ...new Set(
+        steps
+          .map((step) => step.designationID)
+          .filter((id): id is number => Number.isInteger(id) && Number(id) > 0)
+          .map((id) => Number(id)),
+      ),
     ];
 
+    if (designationIDs.length) {
     const designations =
       await this.prisma.designations.findMany({
         where: {
@@ -171,6 +181,7 @@ export class ApprovalWorkflowService {
         );
       }
     }
+    } // end if (designationIDs.length)
 
     return {
       company,
@@ -301,7 +312,8 @@ export class ApprovalWorkflowService {
               .sort((a, b) => a.stepNo - b.stepNo)
               .map((step) => ({
                 stepNo: step.stepNo,
-                designationID: step.designationID,
+                designationID: step.designationID ?? null,
+                approverType: (step.approverType || 'DESIGNATION').toUpperCase(),
                 stepName:
                   step.stepName?.trim() || null,
                 isMandatory:
@@ -340,6 +352,9 @@ export class ApprovalWorkflowService {
 
                   designationID:
                     condition.designationID ?? null,
+
+                  branchesID:
+                    condition.branchesID ?? null,
 
                   numberValue:
                     condition.numberValue ?? null,
@@ -761,6 +776,30 @@ export class ApprovalWorkflowService {
     } = params;
 
     switch (condition.fieldKey) {
+      case 'BRANCH': {
+        if (!condition.branchesID) {
+          throw new BadRequestException(
+            `Branch is required for condition ${condition.conditionNo}`,
+          );
+        }
+
+        const branch = await this.prisma.branches.findFirst({
+          where: {
+            id: condition.branchesID,
+            companyID,
+          },
+          select: { id: true },
+        });
+
+        if (!branch) {
+          throw new BadRequestException(
+            'Selected branch does not belong to the workflow company',
+          );
+        }
+
+        break;
+      }
+
       case 'DEPARTMENT': {
         if (!condition.departmentID) {
           throw new BadRequestException(
@@ -773,9 +812,6 @@ export class ApprovalWorkflowService {
             where: {
               id: condition.departmentID,
               companyID,
-              ...(branchesID
-                ? { branchesID }
-                : {}),
             },
             select: {
               id: true,
@@ -1553,6 +1589,9 @@ export class ApprovalWorkflowService {
                   designationID:
                     condition.designationID ?? null,
 
+                  branchesID:
+                    condition.branchesID ?? null,
+
                   numberValue:
                     condition.numberValue ?? null,
 
@@ -1607,7 +1646,9 @@ export class ApprovalWorkflowService {
                   stepNo:
                     step.stepNo,
                   designationID:
-                    step.designationID,
+                    step.designationID ?? null,
+                  approverType:
+                    (step.approverType || 'DESIGNATION').toUpperCase(),
                   stepName:
                     step.stepName?.trim() ||
                     null,
@@ -1874,6 +1915,14 @@ export class ApprovalWorkflowService {
               branchesID: true,
               departmentID: true,
               isManager: true,
+            },
+          },
+
+          branches: {
+            select: {
+              id: true,
+              branchName: true,
+              companyID: true,
             },
           },
 

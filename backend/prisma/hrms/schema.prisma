@@ -170,6 +170,8 @@ model Branches {
   taskCustomers           TaskCustomer[]
   employeeDocuments       EmployeeDocument[]
   approvalWorkflows       ApprovalWorkflow[]
+  departmentBranches      DepartmentBranch[]
+  approvalWorkflowConditions ApprovalWorkflowCondition[]
 }
 
 model Company {
@@ -404,10 +406,15 @@ model Departments {
   serviceProviderID                                                   Int?
   companyID                                                           Int?
   branchesID                                                          Int?
+  parentDepartmentID                                                  Int?
   departmentName                                                      String?                     @db.VarChar
   branches                                                            Branches?                   @relation(fields: [branchesID], references: [id], onDelete: NoAction, onUpdate: NoAction)
   company                                                             Company?                    @relation(fields: [companyID], references: [id], onDelete: NoAction, onUpdate: NoAction)
   serviceProvider                                                     ServiceProvider?            @relation(fields: [serviceProviderID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  parentDepartment                                                    Departments?                @relation("DepartmentHierarchy", fields: [parentDepartmentID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  childDepartments                                                    Departments[]               @relation("DepartmentHierarchy")
+  departmentBranches                                                  DepartmentBranch[]
+  designations                                                        Designations[]
   empCurrentPosition                                                  EmpCurrentPosition[]
   empPromotion                                                        EmpPromotion[]
   manageEmployees                                                     ManageEmployee[]            @relation("EmployeeDepartment")
@@ -420,6 +427,22 @@ model Departments {
   bonusAllocation                                                     BonusAllocation[]
   reimbursement                                                       Reimbursement[]
   approvalWorkflowConditions                                          ApprovalWorkflowCondition[]
+
+  @@index([companyID])
+  @@index([parentDepartmentID])
+}
+
+model DepartmentBranch {
+  id           Int @id @default(autoincrement())
+  departmentID Int
+  branchesID   Int
+
+  department Departments @relation(fields: [departmentID], references: [id], onDelete: Cascade)
+  branches   Branches   @relation(fields: [branchesID], references: [id], onDelete: Cascade)
+
+  @@unique([departmentID, branchesID])
+  @@index([departmentID])
+  @@index([branchesID])
 }
 
 model Designations {
@@ -427,6 +450,8 @@ model Designations {
   serviceProviderID                                                     Int?
   companyID                                                             Int?
   branchesID                                                            Int?
+  departmentID                                                          Int?
+  parentDesignationID                                                   Int?
   designation                                                           String?                     @db.VarChar
   isManager                                                             Boolean?                    @default(false)
   maxHoursPerDay                                                        String?                     @db.VarChar
@@ -439,6 +464,9 @@ model Designations {
   branches                                                              Branches?                   @relation(fields: [branchesID], references: [id], onDelete: NoAction, onUpdate: NoAction)
   company                                                               Company?                    @relation(fields: [companyID], references: [id], onDelete: NoAction, onUpdate: NoAction)
   serviceProvider                                                       ServiceProvider?            @relation(fields: [serviceProviderID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  department                                                            Departments?                @relation(fields: [departmentID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  parentDesignation                                                     Designations?               @relation("DesignationHierarchy", fields: [parentDesignationID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  childDesignations                                                     Designations[]              @relation("DesignationHierarchy")
   empCurrentPosition                                                    EmpCurrentPosition[]
   empDesignation                                                        EmpDesignation[]            @relation("EmpDesignationLink")
   empPromotion                                                          EmpPromotion[]
@@ -448,6 +476,10 @@ model Designations {
   roster                                                                Roster[]
   approvalWorkflowSteps                                                 ApprovalWorkflowStep[]
   approvalWorkflowConditions                                            ApprovalWorkflowCondition[]
+
+  @@index([companyID])
+  @@index([departmentID])
+  @@index([parentDesignationID])
 }
 
 model Devices {
@@ -2538,6 +2570,7 @@ enum WorkflowConditionMatchType {
 }
 
 enum WorkflowConditionField {
+  BRANCH
   DEPARTMENT
   DESIGNATION
   EMPLOYEE
@@ -2577,6 +2610,7 @@ enum WorkflowConditionOperator {
 }
 
 enum WorkflowConditionValueType {
+  BRANCH
   DEPARTMENT
   DESIGNATION
   EMPLOYEE_LIST
@@ -2812,6 +2846,7 @@ model ApprovalWorkflowCondition {
 
   departmentID  Int?
   designationID Int?
+  branchesID    Int?
 
   numberValue   Decimal? @db.Decimal(18, 2)
   numberValueTo Decimal? @db.Decimal(18, 2)
@@ -2830,6 +2865,7 @@ model ApprovalWorkflowCondition {
   approvalWorkflow ApprovalWorkflow @relation(fields: [approvalWorkflowID], references: [id], onDelete: Cascade)
   department       Departments?     @relation(fields: [departmentID], references: [id], onDelete: Restrict)
   designation      Designations?    @relation(fields: [designationID], references: [id], onDelete: Restrict)
+  branches         Branches?        @relation(fields: [branchesID], references: [id], onDelete: Restrict)
 
   employees ApprovalWorkflowConditionEmployee[]
 
@@ -2838,6 +2874,7 @@ model ApprovalWorkflowCondition {
   @@index([fieldKey])
   @@index([departmentID])
   @@index([designationID])
+  @@index([branchesID])
   @@map("approval_workflow_conditions")
 }
 
@@ -2863,7 +2900,9 @@ model ApprovalWorkflowStep {
 
   approvalWorkflowID Int
   stepNo             Int
-  designationID      Int
+  /// DESIGNATION = approve by matching designation; REPORTING_MANAGER = subject's manager via EmployeeLink
+  approverType       String  @default("DESIGNATION") @db.VarChar(32)
+  designationID      Int?
 
   stepName        String?
   isMandatory     Boolean @default(true)
@@ -2875,7 +2914,7 @@ model ApprovalWorkflowStep {
   updatedAt DateTime @updatedAt
 
   approvalWorkflow ApprovalWorkflow @relation(fields: [approvalWorkflowID], references: [id], onDelete: Cascade)
-  designation      Designations     @relation(fields: [designationID], references: [id], onDelete: Restrict)
+  designation      Designations?    @relation(fields: [designationID], references: [id], onDelete: Restrict)
 
   @@unique([approvalWorkflowID, stepNo])
   @@index([approvalWorkflowID])

@@ -66,7 +66,7 @@ export function FormDrawer({
           </Button>
         )}
       </div>
-      <div className="form-drawer-body max-h-[calc(100dvh-14rem)] overflow-y-auto pr-1">{children}</div>
+      <div className="form-drawer-body pr-1">{children}</div>
     </div>
   );
 }

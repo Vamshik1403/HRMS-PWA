@@ -14,35 +14,42 @@ export class CreateDesignationsDto {
   branchesID?: number;
 
   @IsOptional()
+  @IsInt()
+  departmentID?: number | null;
+
+  @IsOptional()
+  @IsInt()
+  parentDesignationID?: number | null;
+
+  @IsOptional()
   @IsString()
   designation?: string;
-  
-    @IsOptional()
-    @IsString()
-    shiftEligibility?: string;
 
-    @IsOptional()
-    @IsString()
-    nightShiftEligibility?: string;
+  @IsOptional()
+  @IsString()
+  shiftEligibility?: string;
 
-    @IsOptional()
-    @IsString()
-    maxHoursPerDay?: string;
+  @IsOptional()
+  @IsString()
+  nightShiftEligibility?: string;
 
-    @IsOptional()
-    @IsString()
-    weeklyOffPattern?: string;
+  @IsOptional()
+  @IsString()
+  maxHoursPerDay?: string;
 
-    @IsOptional()
-    @IsString()
-    noticePeriodDaysForResignation?: string;
+  @IsOptional()
+  @IsString()
+  weeklyOffPattern?: string;
 
-    @IsOptional()
-    @IsString()
-    noticePeriodDaysForTermination?: string;
+  @IsOptional()
+  @IsString()
+  noticePeriodDaysForResignation?: string;
 
-    @IsOptional()
-    @IsString()
-    otApplicable?: string;
-    
+  @IsOptional()
+  @IsString()
+  noticePeriodDaysForTermination?: string;
+
+  @IsOptional()
+  @IsString()
+  otApplicable?: string;
 }

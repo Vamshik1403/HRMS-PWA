@@ -45,6 +45,14 @@ export const COMPANY_SETUP_TABS: EmpSetupTab[] = [
         show: () => canViewModule("DESIGNATIONS"),
       },
       {
+        id: "company-hierarchy",
+        label: "Company Hierarchy",
+        href: "/company-hierarchy",
+        icon: "solar:share-circle-bold-duotone",
+        iconClassName: "text-teal-700",
+        show: () => canViewModule("DEPARTMENTS") || canViewModule("DESIGNATIONS") || isCompanyOwnerFlag(),
+      },
+      {
         id: "devices",
         label: "Attendance Devices",
         href: "/devices",

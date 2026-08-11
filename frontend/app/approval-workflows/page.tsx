@@ -116,7 +116,8 @@ interface WorkflowStepRead {
   id?: ID;
   approvalWorkflowID?: ID;
   stepNo: number;
-  designationID: ID;
+  designationID?: ID | null;
+  approverType?: string | null;
   stepName?: string | null;
   isMandatory?: boolean;
   canReject?: boolean;
@@ -146,6 +147,7 @@ interface WorkflowStepRead {
 type ConditionMatchType = "ALL" | "ANY";
 
 type WorkflowConditionField =
+  | "BRANCH"
   | "DEPARTMENT"
   | "DESIGNATION"
   | "EMPLOYEE"
@@ -174,6 +176,7 @@ type WorkflowConditionOperator =
   | "IS_NOT_EMPTY";
 
 type WorkflowConditionValueType =
+  | "BRANCH"
   | "DEPARTMENT"
   | "DESIGNATION"
   | "EMPLOYEE_LIST"
@@ -199,6 +202,7 @@ interface WorkflowConditionRead {
 
   departmentID?: ID | null;
   designationID?: ID | null;
+  branchesID?: ID | null;
 
   numberValue?: string | number | null;
   numberValueTo?: string | number | null;
@@ -209,6 +213,7 @@ interface WorkflowConditionRead {
 
   department?: DepartmentRead | null;
   designation?: DesignationRead | null;
+  branches?: BranchRead | null;
   employees?: WorkflowConditionEmployeeRead[];
 }
 
@@ -250,6 +255,7 @@ interface WorkflowStepForm {
   id?: ID;
   localID: string;
   stepNo: number;
+  approverType: "DESIGNATION" | "REPORTING_MANAGER";
   designationID: ID | null;
   designationName: string;
   stepName: string;
@@ -296,6 +302,9 @@ interface WorkflowConditionForm {
   designationID: ID | null;
   designationName: string;
 
+  branchesID: ID | null;
+  branchName: string;
+
   employeeIDs: ID[];
   selectedEmployees: EmployeeRead[];
   employeeSearch: string;
@@ -318,6 +327,7 @@ const API = {
 } as const;
 
 const COMMON_ORG_CONDITION_FIELDS: WorkflowConditionField[] = [
+  "BRANCH",
   "DEPARTMENT",
   "DESIGNATION",
   "EMPLOYEE",
@@ -421,12 +431,14 @@ const MODULE_CONDITION_FIELDS: Record<
 > = {
 
   EMPLOYEE_ONBOARDING_MODULE: [
+    'BRANCH',
     'DEPARTMENT',
     'DESIGNATION',
     'EMPLOYEE',
   ],
 
   REIMBURSEMENT_MODULE: [
+    'BRANCH',
     'DEPARTMENT',
     'DESIGNATION',
     'EMPLOYEE',
@@ -434,6 +446,7 @@ const MODULE_CONDITION_FIELDS: Record<
   ],
 
   LEAVE_MODULE: [
+    'BRANCH',
     'DEPARTMENT',
     'DESIGNATION',
     'EMPLOYEE',
@@ -442,6 +455,7 @@ const MODULE_CONDITION_FIELDS: Record<
   ],
 
   PAYROLL_MODULE: [
+    'BRANCH',
     'DEPARTMENT',
     'DESIGNATION',
     'EMPLOYEE',
@@ -449,6 +463,7 @@ const MODULE_CONDITION_FIELDS: Record<
   ],
 
   REIMBURSEMENT: [
+    "BRANCH",
     "DEPARTMENT",
     "DESIGNATION",
     "EMPLOYEE",
@@ -458,6 +473,7 @@ const MODULE_CONDITION_FIELDS: Record<
 
 
   PAYROLL: [
+    "BRANCH",
     "DEPARTMENT",
     "DESIGNATION",
     "EMPLOYEE",
@@ -467,6 +483,7 @@ const MODULE_CONDITION_FIELDS: Record<
 
 
   SALARY_MANAGEMENT: [
+    "BRANCH",
     "DEPARTMENT",
     "DESIGNATION",
     "EMPLOYEE",
@@ -474,6 +491,7 @@ const MODULE_CONDITION_FIELDS: Record<
   ],
 
   LEAVE: [
+    "BRANCH",
     "DEPARTMENT",
     "DESIGNATION",
     "EMPLOYEE",
@@ -484,6 +502,7 @@ const MODULE_CONDITION_FIELDS: Record<
  
 
   LEAVE_MANAGEMENT: [
+    "BRANCH",
     "DEPARTMENT",
     "DESIGNATION",
     "EMPLOYEE",
@@ -492,6 +511,7 @@ const MODULE_CONDITION_FIELDS: Record<
   ],
 
   OFF_BOARDING: [
+    "BRANCH",
     "DEPARTMENT",
     "DESIGNATION",
     "EMPLOYEE",
@@ -499,6 +519,7 @@ const MODULE_CONDITION_FIELDS: Record<
   ],
 
   OFFBOARDING: [
+    "BRANCH",
     "DEPARTMENT",
     "DESIGNATION",
     "EMPLOYEE",
@@ -506,6 +527,7 @@ const MODULE_CONDITION_FIELDS: Record<
   ],
 
   OFF_BOARDING_MODULE: [
+    "BRANCH",
     "DEPARTMENT",
     "DESIGNATION",
     "EMPLOYEE",
@@ -513,6 +535,7 @@ const MODULE_CONDITION_FIELDS: Record<
   ],
 
   ATTENDANCE_REGULARISATION: [
+    "BRANCH",
     "DEPARTMENT",
     "DESIGNATION",
     "EMPLOYEE",
@@ -521,6 +544,7 @@ const MODULE_CONDITION_FIELDS: Record<
   ],
 
   ATTENDANCE_REGULARIZATION: [
+    "BRANCH",
     "DEPARTMENT",
     "DESIGNATION",
     "EMPLOYEE",
@@ -529,6 +553,7 @@ const MODULE_CONDITION_FIELDS: Record<
   ],
 
   ATTENDANCE_MODULE: [
+    "BRANCH",
     "DEPARTMENT",
     "DESIGNATION",
     "EMPLOYEE",
@@ -542,6 +567,7 @@ const CONDITION_FIELD_LABELS: Record<
   string
 > = {
 
+  BRANCH: "Branch",
   DEPARTMENT: "Department",
   DESIGNATION: "Designation",
   EMPLOYEE: "Employee",
@@ -580,6 +606,11 @@ const FIELD_OPERATOR_MAP: Record<
   WorkflowConditionField,
   WorkflowConditionOperator[]
 > = {
+  BRANCH: [
+    "EQUALS",
+    "NOT_EQUALS",
+  ],
+
   DEPARTMENT: [
     "EQUALS",
     "NOT_EQUALS",
@@ -662,6 +693,9 @@ function getConditionValueType(
   fieldKey: WorkflowConditionField,
 ): WorkflowConditionValueType {
   switch (fieldKey) {
+    case "BRANCH":
+      return "BRANCH";
+
     case "DEPARTMENT":
       return "DEPARTMENT";
 
@@ -726,6 +760,7 @@ function createEmptyStep(stepNo: number): WorkflowStepForm {
     id: undefined,
     localID: createLocalID(),
     stepNo,
+    approverType: "DESIGNATION",
     designationID: null,
     designationName: "",
     stepName: "",
@@ -753,6 +788,9 @@ function createEmptyCondition(
 
     designationID: null,
     designationName: "",
+
+    branchesID: null,
+    branchName: "",
 
     employeeIDs: [],
     selectedEmployees: [],
@@ -954,6 +992,11 @@ export default function ApprovalWorkflowsPage() {
     conditionDepartmentSuggestions,
     setConditionDepartmentSuggestions,
   ] = useState<Record<string, DepartmentRead[]>>({});
+
+  const [
+    conditionBranchSuggestions,
+    setConditionBranchSuggestions,
+  ] = useState<Record<string, BranchRead[]>>({});
 
   const [
     conditionDesignationSuggestions,
@@ -1735,6 +1778,44 @@ if (!conditionContainer) {
   };
 
 
+  const runConditionBranchSuggestions = (
+    localID: string,
+    query: string,
+  ) => {
+    const normalized = query.trim().toLowerCase();
+    const companyID = getCurrentCompanyID();
+    let filtered = [...allBranches];
+
+    if (companyID) {
+      filtered = filtered.filter(
+        (branch) =>
+          Number(branch.companyID) === Number(companyID),
+      );
+    }
+
+    if (user?.role === "BRANCH_ADMIN") {
+      const permittedBranchID =
+        currentUserMapping?.branchesID ?? user?.branchesID;
+      if (permittedBranchID) {
+        filtered = filtered.filter(
+          (branch) =>
+            Number(branch.id) === Number(permittedBranchID),
+        );
+      }
+    }
+
+    if (normalized.length >= MIN_CHARS) {
+      filtered = filtered.filter((branch) =>
+        branch.branchName?.toLowerCase().includes(normalized),
+      );
+    }
+
+    setConditionBranchSuggestions((current) => ({
+      ...current,
+      [localID]: filtered.slice(0, 20),
+    }));
+  };
+
   const runConditionDepartmentSuggestions = (
   localID: string,
   query: string,
@@ -2012,6 +2093,9 @@ if (!conditionContainer) {
       designationID: null,
       designationName: "",
 
+      branchesID: null,
+      branchName: "",
+
       employeeIDs: [],
       selectedEmployees: [],
       employeeSearch: "",
@@ -2115,6 +2199,12 @@ if (!conditionContainer) {
   localID: createLocalID(),
   stepNo: index + 1,
 
+          approverType:
+            (step.approverType || "DESIGNATION").toUpperCase() ===
+            "REPORTING_MANAGER"
+              ? "REPORTING_MANAGER"
+              : "DESIGNATION",
+
           designationID:
             step.designationID ?? null,
 
@@ -2197,6 +2287,15 @@ if (!conditionContainer) {
             designationName:
               condition.designation
                 ?.designation ??
+              "",
+
+            branchesID:
+              condition.branchesID ??
+              null,
+
+            branchName:
+              condition.branches
+                ?.branchName ??
               "",
 
             employeeIDs: (
@@ -2306,6 +2405,7 @@ if (!conditionContainer) {
     setConditionDepartmentSuggestions(
   {},
 );
+setConditionBranchSuggestions({});
 setConditionDesignationSuggestions(
   {},
 );
@@ -2316,6 +2416,7 @@ setConditionEmployeeLoading({});
     setConditionDepartmentSuggestions(
   {},
 );
+setConditionBranchSuggestions({});
 setConditionDesignationSuggestions(
   {},
 );
@@ -2394,7 +2495,10 @@ setConditionEmployeeLoading({});
       (step, index) => {
         const stepNumber = index + 1;
 
-        if (!step.designationID) {
+        if (
+          step.approverType !== "REPORTING_MANAGER" &&
+          !step.designationID
+        ) {
           errors.push(
             `Designation is required for step ${stepNumber}`,
           );
@@ -2424,6 +2528,11 @@ setConditionEmployeeLoading({});
 
     const designationIDs =
       formData.steps
+        .filter(
+          (step) =>
+            step.approverType !==
+            "REPORTING_MANAGER",
+        )
         .map(
           (step) =>
             step.designationID,
@@ -2465,6 +2574,16 @@ setConditionEmployeeLoading({});
         if (!condition.valueType) {
           errors.push(
             `Value type is required for condition ${conditionNumber}`,
+          );
+        }
+
+        if (
+          condition.fieldKey ===
+          "BRANCH" &&
+          !condition.branchesID
+        ) {
+          errors.push(
+            `Branch is required for condition ${conditionNumber}`,
           );
         }
 
@@ -2739,16 +2858,18 @@ steps: formData.steps.map(
         : undefined,
           stepNo: index + 1,
 
+          approverType: step.approverType,
+
           designationID:
-            Number(
-              step.designationID,
-            ),
+            step.approverType === "REPORTING_MANAGER"
+              ? undefined
+              : Number(step.designationID),
 
           stepName:
             step.stepName.trim() ||
-            `${step.designationName ||
-            "Approver"
-            } Approval`,
+            (step.approverType === "REPORTING_MANAGER"
+              ? "Reporting Manager Approval"
+              : `${step.designationName || "Approver"} Approval`),
 
           isMandatory:
             step.isMandatory,
@@ -2828,6 +2949,16 @@ steps: formData.steps.map(
                   null
                   ? Number(
                     condition.designationID,
+                  )
+                  : undefined,
+
+              branchesID:
+                condition.fieldKey ===
+                  "BRANCH" &&
+                  condition.branchesID !=
+                  null
+                  ? Number(
+                    condition.branchesID,
                   )
                   : undefined,
 
@@ -3152,6 +3283,10 @@ steps: formData.steps.map(
   const conditionValueLabel = (
   condition: WorkflowConditionRead,
 ): string => {
+  if (condition.branches?.branchName) {
+    return condition.branches.branchName;
+  }
+
   if (
     condition.department
       ?.departmentName
@@ -3993,118 +4128,44 @@ steps: formData.steps.map(
                       </div>
 
                       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                        <div
-                          className="relative space-y-2"
-                          data-designation-autocomplete
-                        >
-                          <Label>
-                            Approver Designation *
-                          </Label>
-
-                          <Input
-                            value={
-                              step.designationName
-                            }
+                        <div className="space-y-2">
+                          <Label>Approver Type *</Label>
+                          <select
+                            value={step.approverType}
                             onChange={(event) => {
-                              const value =
-                                event.target.value;
-
-                              updateStep(
-                                step.localID,
-                                {
-                                  designationID:
-                                    null,
-                                  designationName:
-                                    value,
-                                },
-                              );
-
-                              runDesignationSuggestions(
-                                step.localID,
-                                value,
-                              );
+                              const approverType =
+                                event.target.value as
+                                  | "DESIGNATION"
+                                  | "REPORTING_MANAGER";
+                              updateStep(step.localID, {
+                                approverType,
+                                designationID:
+                                  approverType ===
+                                  "REPORTING_MANAGER"
+                                    ? null
+                                    : step.designationID,
+                                designationName:
+                                  approverType ===
+                                  "REPORTING_MANAGER"
+                                    ? ""
+                                    : step.designationName,
+                                stepName:
+                                  step.stepName ||
+                                  (approverType ===
+                                  "REPORTING_MANAGER"
+                                    ? "Reporting Manager Approval"
+                                    : step.stepName),
+                              });
                             }}
-                            onFocus={() =>
-                              runDesignationSuggestions(
-                                step.localID,
-                                step.designationName,
-                              )
-                            }
-                            placeholder={
-                              formData.branchesID
-                                ? "Search branch designation..."
-                                : "Search designation..."
-                            }
-                            autoComplete="off"
-                          />
-
-                          {(suggestions.length > 0 ||
-                            loadingDesignation) && (
-                              <div className="absolute z-40 max-h-52 w-full overflow-y-auto rounded-md border bg-white shadow-lg">
-                                {loadingDesignation && (
-                                  <div className="px-3 py-2 text-sm text-gray-500">
-                                    Loading…
-                                  </div>
-                                )}
-
-                                {suggestions.map(
-                                  (designation) => (
-                                    <button
-                                      key={
-                                        designation.id
-                                      }
-                                      type="button"
-                                      className="block w-full px-3 py-2 text-left hover:bg-gray-50"
-                                      onMouseDown={(
-                                        event,
-                                      ) =>
-                                        event.preventDefault()
-                                      }
-                                      onClick={() => {
-                                        updateStep(
-                                          step.localID,
-                                          {
-                                            designationID:
-                                              designation.id,
-                                            designationName:
-                                              designation.designation ?? "",
-                                            stepName:
-                                              step.stepName ||
-                                              `${designation.designation} Approval`,
-                                          },
-                                        );
-
-                                        setDesignationSuggestionMap(
-                                          (current) => ({
-                                            ...current,
-                                            [step.localID]:
-                                              [],
-                                          }),
-                                        );
-                                      }}
-                                    >
-                                      <div className="text-sm font-medium">
-                                        {
-                                          designation.designation
-                                        }
-                                      </div>
-
-                                      {designation
-                                        .departments
-                                        ?.departmentName && (
-                                          <div className="mt-0.5 text-xs text-gray-500">
-                                            {
-                                              designation
-                                                .departments
-                                                .departmentName
-                                            }
-                                          </div>
-                                        )}
-                                    </button>
-                                  ),
-                                )}
-                              </div>
-                            )}
+                            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                          >
+                            <option value="DESIGNATION">
+                              Designation
+                            </option>
+                            <option value="REPORTING_MANAGER">
+                              Reporting Manager
+                            </option>
+                          </select>
                         </div>
 
                         <div className="space-y-2">
@@ -4129,6 +4190,122 @@ steps: formData.steps.map(
                           />
                         </div>
 
+                        {step.approverType !==
+                          "REPORTING_MANAGER" && (
+                          <div
+                            className="relative space-y-2 md:col-span-2"
+                            data-designation-autocomplete
+                          >
+                            <Label>
+                              Approver Designation *
+                            </Label>
+
+                            <Input
+                              value={
+                                step.designationName
+                              }
+                              onChange={(event) => {
+                                const value =
+                                  event.target.value;
+
+                                updateStep(
+                                  step.localID,
+                                  {
+                                    designationID:
+                                      null,
+                                    designationName:
+                                      value,
+                                  },
+                                );
+
+                                runDesignationSuggestions(
+                                  step.localID,
+                                  value,
+                                );
+                              }}
+                              onFocus={() =>
+                                runDesignationSuggestions(
+                                  step.localID,
+                                  step.designationName,
+                                )
+                              }
+                              placeholder={
+                                formData.branchesID
+                                  ? "Search branch designation..."
+                                  : "Search designation..."
+                              }
+                              autoComplete="off"
+                            />
+
+                            {(suggestions.length > 0 ||
+                              loadingDesignation) && (
+                                <div className="absolute z-40 max-h-52 w-full overflow-y-auto rounded-md border bg-white shadow-lg">
+                                  {loadingDesignation && (
+                                    <div className="px-3 py-2 text-sm text-gray-500">
+                                      Loading…
+                                    </div>
+                                  )}
+
+                                  {suggestions.map(
+                                    (designation) => (
+                                      <button
+                                        key={
+                                          designation.id
+                                        }
+                                        type="button"
+                                        className="block w-full px-3 py-2 text-left hover:bg-gray-50"
+                                        onMouseDown={(
+                                          event,
+                                        ) =>
+                                          event.preventDefault()
+                                        }
+                                        onClick={() => {
+                                          updateStep(
+                                            step.localID,
+                                            {
+                                              designationID:
+                                                designation.id,
+                                              designationName:
+                                                designation.designation ?? "",
+                                              stepName:
+                                                step.stepName ||
+                                                `${designation.designation} Approval`,
+                                            },
+                                          );
+
+                                          setDesignationSuggestionMap(
+                                            (current) => ({
+                                              ...current,
+                                              [step.localID]:
+                                                [],
+                                            }),
+                                          );
+                                        }}
+                                      >
+                                        <div className="text-sm font-medium">
+                                          {
+                                            designation.designation
+                                          }
+                                        </div>
+
+                                        {designation
+                                          .departments
+                                          ?.departmentName && (
+                                            <div className="mt-0.5 text-xs text-gray-500">
+                                              {
+                                                designation
+                                                  .departments
+                                                  .departmentName
+                                              }
+                                            </div>
+                                          )}
+                                      </button>
+                                    ),
+                                  )}
+                                </div>
+                              )}
+                          </div>
+                        )}
 
                       </div>
                     </div>
@@ -4353,6 +4530,70 @@ steps: formData.steps.map(
                             )}
                           </select>
                         </div>
+
+                        {condition.fieldKey ===
+                          "BRANCH" && (
+                            <div
+                              className="relative space-y-2 md:col-span-2"
+                              data-condition-autocomplete
+                            >
+                              <Label>Branch *</Label>
+                              <Input
+                                value={condition.branchName}
+                                onChange={(event) => {
+                                  const value = event.target.value;
+                                  updateCondition(condition.localID, {
+                                    branchesID: null,
+                                    branchName: value,
+                                  });
+                                  runConditionBranchSuggestions(
+                                    condition.localID,
+                                    value,
+                                  );
+                                }}
+                                onFocus={() =>
+                                  runConditionBranchSuggestions(
+                                    condition.localID,
+                                    condition.branchName,
+                                  )
+                                }
+                                placeholder="Search branch..."
+                              />
+                              {(conditionBranchSuggestions[
+                                condition.localID
+                              ] || []).length > 0 && (
+                                <div className="absolute z-40 max-h-52 w-full overflow-y-auto rounded-md border bg-white shadow-lg">
+                                  {(conditionBranchSuggestions[
+                                    condition.localID
+                                  ] || []).map((branch) => (
+                                    <button
+                                      key={branch.id}
+                                      type="button"
+                                      className="block w-full px-3 py-2 text-left text-sm hover:bg-gray-50"
+                                      onClick={() => {
+                                        updateCondition(
+                                          condition.localID,
+                                          {
+                                            branchesID: branch.id,
+                                            branchName:
+                                              branch.branchName ?? "",
+                                          },
+                                        );
+                                        setConditionBranchSuggestions(
+                                          (current) => ({
+                                            ...current,
+                                            [condition.localID]: [],
+                                          }),
+                                        );
+                                      }}
+                                    >
+                                      {branch.branchName}
+                                    </button>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          )}
 
                         {condition.fieldKey ===
                           "DEPARTMENT" && (
@@ -4954,13 +5195,21 @@ steps: formData.steps.map(
                       <div className="flex-1 rounded-lg border p-3">
                         <div className="font-medium">
                           {step.stepName ||
-                            `${step.designation?.designation || "Designation"} Approval`}
+                            (step.approverType ===
+                            "REPORTING_MANAGER"
+                              ? "Reporting Manager Approval"
+                              : `${step.designation?.designation || "Designation"} Approval`)}
                         </div>
 
                         <div className="mt-1 text-sm text-gray-600">
-                          {step.designation
-                            ?.designation ||
-                            `Designation #${step.designationID}`}
+                          {step.approverType ===
+                          "REPORTING_MANAGER"
+                            ? "Reporting Manager"
+                            : step.designation
+                                ?.designation ||
+                              (step.designationID
+                                ? `Designation #${step.designationID}`
+                                : "—")}
                         </div>
 
                         <div className="mt-2 flex flex-wrap gap-2">

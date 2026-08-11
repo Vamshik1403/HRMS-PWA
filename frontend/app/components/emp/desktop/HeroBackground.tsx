@@ -17,10 +17,20 @@ export const HERO_TIME_RANGES = [
     placeholder: "#3d2a1f",
   },
   {
-    id: "daytime",
+    id: "daytime-morning",
     src: "/img/daytime.webp",
     fallbackSrc: "/img/daytime.jpg",
     start: "08:00",
+    end: "12:00",
+    period: "morning",
+    tint: "rgba(56, 120, 200, 0.2)",
+    placeholder: "#5b8fc7",
+  },
+  {
+    id: "daytime-afternoon",
+    src: "/img/daytime.webp",
+    fallbackSrc: "/img/daytime.jpg",
+    start: "12:00",
     end: "16:30",
     period: "afternoon",
     tint: "rgba(56, 120, 200, 0.2)",
@@ -316,13 +326,37 @@ const PERIOD_GREETING: Record<HeroPeriod, string> = {
   night: "Good Night,",
 };
 
+/**
+ * Enterprise greeting slots (local time):
+ * Morning 05:00–11:59 · Afternoon 12:00–16:59 · Evening 17:00–19:59 · Night otherwise.
+ * Matches common workplace apps (Outlook / Slack-style dayparts).
+ */
+export function resolveGreetingPeriod(date: Date = new Date()): HeroPeriod {
+  const h = date.getHours();
+  if (h >= 5 && h < 12) return "morning";
+  if (h >= 12 && h < 17) return "afternoon";
+  if (h >= 17 && h < 20) return "evening";
+  return "night";
+}
+
+function msUntilNextGreetingChange(date: Date = new Date()): number {
+  const h = date.getHours();
+  const m = date.getMinutes();
+  const s = date.getSeconds();
+  const ms = date.getMilliseconds();
+  const boundaries = [5, 12, 17, 20, 24];
+  const nextHour = boundaries.find((b) => b > h) ?? 5 + 24;
+  const minutesUntil = (nextHour - h) * 60 - m;
+  return Math.max(1000, minutesUntil * 60_000 - s * 1000 - ms);
+}
+
 export function useHeroCopy(empFullName: string) {
   const [now, setNow] = useState(() => new Date());
 
   useEffect(() => {
     const sync = () => setNow(new Date());
     sync();
-    const id = window.setTimeout(sync, msUntilNextRangeChange());
+    const id = window.setTimeout(sync, msUntilNextGreetingChange());
     const onVisibility = () => {
       if (document.visibilityState === "visible") sync();
     };
@@ -336,7 +370,7 @@ export function useHeroCopy(empFullName: string) {
   }, []);
 
   return useMemo(() => {
-    const period = resolveHeroScene(now).period;
+    const period = resolveGreetingPeriod(now);
     const name = empFullName.trim() || "there";
     return {
       greeting: PERIOD_GREETING[period],
