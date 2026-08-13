@@ -655,21 +655,59 @@ const MultiSelect = ({ options, selectedValues, onChange, placeholder, disabled 
 const DateCell = ({ punches, date, employeeID, formData, reportData, selectedCompanyID, selectedBranchID, getComprehensiveStatus }: any) => {
   const punchesKey = punches.join(',');
   const cacheKey = buildStatusCacheKey(date, employeeID, punches);
-  const [status, setStatus] = useState<any>(null);
+  const cached = globalStatusCache.get(cacheKey);
+  const [status, setStatus] = useState<any>(cached ?? null);
+
+  const isPunchOnlyReport =
+    formData.reportType === "All Punches Logs" ||
+    formData.reportType === "FILO Punches Logs";
+  const canPaintPunchesImmediately = isPunchOnlyReport && punches.length > 0;
 
   useEffect(() => {
+    if (canPaintPunchesImmediately) return;
+    let cancelled = false;
     const fetchStatus = async () => {
       if (globalStatusCache.has(cacheKey)) {
-        setStatus(globalStatusCache.get(cacheKey));
-      } else {
-        const statusesMap = new Map<string, string>();
-        const result = await getComprehensiveStatus(date, employeeID, punches, selectedCompanyID, selectedBranchID, statusesMap);
-        globalStatusCache.set(cacheKey, result);
-        setStatus(result);
+        if (!cancelled) setStatus(globalStatusCache.get(cacheKey));
+        return;
       }
+      const statusesMap = new Map<string, string>();
+      const result = await getComprehensiveStatus(date, employeeID, punches, selectedCompanyID, selectedBranchID, statusesMap);
+      globalStatusCache.set(cacheKey, result);
+      if (!cancelled) setStatus(result);
     };
     fetchStatus();
-  }, [cacheKey, date, employeeID, punchesKey, selectedCompanyID, selectedBranchID]);
+    return () => { cancelled = true; };
+  }, [canPaintPunchesImmediately, cacheKey, date, employeeID, punchesKey, selectedCompanyID, selectedBranchID]);
+
+  // Fast path: punch times are already in props — paint immediately (no "...").
+  if (canPaintPunchesImmediately) {
+    if (formData.reportType === "FILO Punches Logs") {
+      const firstPunch = punches[0];
+      const lastPunch = punches.length >= 2 ? punches[punches.length - 1] : null;
+      return (
+        <td className="px-2 py-1 border-b min-w-[100px] text-center align-top">
+          <div className="flex flex-col gap-1">
+            <span className="inline-block px-2 py-0.5 bg-green-600 text-white text-[9px] font-medium rounded-full">{firstPunch}</span>
+            {lastPunch ? (
+              <span className="inline-block px-2 py-0.5 bg-red-600 text-white text-[9px] font-medium rounded-full">{lastPunch}</span>
+            ) : null}
+          </div>
+        </td>
+      );
+    }
+    return (
+      <td className="px-2 py-1 border-b min-w-[100px] text-center align-top">
+        <div className="flex flex-wrap justify-center gap-1">
+          {punches.map((time: string, idx: number) => (
+            <span key={idx} className="inline-block px-2 py-0.5 bg-gray-800 text-white text-[9px] font-medium rounded-full">
+              {time}
+            </span>
+          ))}
+        </div>
+      </td>
+    );
+  }
 
   if (!status) {
     return <td className="px-2 py-1 border-b min-w-[80px] text-center align-top"><div className="text-[10px] text-gray-400">...</div></td>;
@@ -1502,11 +1540,8 @@ const employeeOptions = filteredEmployees.map((e: Employee) => ({
     let workShift: WorkShift | undefined = empShift?.workShift;
     
     if (workShift && (!workShift.workShiftDay || workShift.workShiftDay.length === 0)) {
-      try {
-        const shiftEndpoint = sourceIsFactualMode ? "factual-work-shift" : "work-shift";
-        const res = await fetch(`${BACKEND_URL}/${shiftEndpoint}/${workShift.id}`);
-        if (res.ok) workShift = normalizeWorkShift(await res.json());
-      } catch (err) {}
+      const fullShift = sourceWorkShifts.find((ws) => ws.id === workShift!.id);
+      if (fullShift) workShift = fullShift;
     }
 
     // Check roster for a date-specific work shift override.
@@ -1666,16 +1701,7 @@ if (approvedLeave) {
 if (!hasPunchesEffective) return { type: "ABSENT", label: "Absent", hasPunches: false };
     
     let policy = sourceAttendancePolicy;
-    if (!policy) {
-      try {
-        const policyEndpoint = sourceIsFactualMode ? "factual-attendance-policy" : "attendance-policy";
-        const res = await fetch(`${BACKEND_URL}/${policyEndpoint}?companyID=${selectedCompanyID}&branchesID=${selectedBranchID}`);
-        if (res.ok) {
-          const policies = await res.json();
-          policy = policies.find((p: AttendancePolicy) => p.companyID === selectedCompanyID && p.branchesID === selectedBranchID) || null;
-        }
-      } catch (err) {}
-    }
+    // Policy is loaded once in generateReport — never N+1 fetch per cell.
 
     // Handle single punch (No Check-out Punch Rule with count conditioning)
     if (!hasPunchesEffective) return { type: "ABSENT", label: "Absent", hasPunches: false };
@@ -2116,8 +2142,6 @@ if (!hasPunchesEffective) return { type: "ABSENT", label: "Absent", hasPunches: 
         };
       });
 
-      setReportData(rows);
-
       const dateColumnsFull = buildDateRangeColumns();
 
       const enrichedShifts = shifts.map(s => {
@@ -2149,14 +2173,22 @@ if (!hasPunchesEffective) return { type: "ABSENT", label: "Absent", hasPunches: 
         isFactualMode,
       };
 
-      await precomputeReportStatuses(
-        rows,
-        dateColumnsFull,
-        selectedCompanyID,
-        selectedBranchID,
-        newFactualWeekoffOverrides,
-      );
+      // Precompute statuses before painting so empty cells don't flash "..."
+      // (punch cells render immediately from props regardless).
+      if (
+        formData.reportType !== "All Punches Logs" &&
+        formData.reportType !== "FILO Punches Logs"
+      ) {
+        await precomputeReportStatuses(
+          rows,
+          dateColumnsFull,
+          selectedCompanyID,
+          selectedBranchID,
+          newFactualWeekoffOverrides,
+        );
+      }
 
+      setReportData(rows);
       setFactualWeekoffOverrides(newFactualWeekoffOverrides);
       setSandwichOverrides(new Map());
     } catch (err) {

@@ -1,12 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
 import { Textarea } from "@/app/components/ui/textarea";
+import { EmpDesktopPage } from "@/app/components/emp/desktop/EmpDesktopPage";
 import { useCurrentUser } from "@/app/hooks/useCurrentUser";
+import { Mail } from "lucide-react";
 import { toast } from "sonner";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "/backend";
@@ -115,50 +117,20 @@ export default function EmailTemplatesSettingsPage() {
     await load(companyID);
   };
 
-  const placeholders = useMemo(
-    () => [
-      "companyName",
-      "employeeName",
-      "eventLabel",
-      "status",
-      "subject",
-      "description",
-      "purpose",
-      "fromDate",
-      "toDate",
-      "amount",
-      "details",
-    ],
-    [],
-  );
-
   return (
-    <div className="max-w-3xl mx-auto p-4 sm:p-6 space-y-6">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">Email template</h1>
-            <p className="text-sm text-gray-500 mt-1 max-w-2xl">
-              This single template is used for <strong>every</strong> system email — leave
-              application, reimbursement, offboarding, notice board and warning notices. Unused
-              placeholders are simply left blank for events that don&apos;t have them.
-            </p>
-            <p className="text-xs text-gray-500 mt-2">
-              Placeholders:{" "}
-              {placeholders.map((p) => (
-                <code key={p} className="text-xs bg-gray-100 px-1 rounded mr-1">{`{{${p}}}`}</code>
-              ))}
-            </p>
-            <p className="text-xs text-gray-500 mt-1">
-              Configure SMTP in <code className="text-xs bg-gray-100 px-1 rounded">backend/.env</code>.
-            </p>
-          </div>
-          <Button type="button" variant="outline" onClick={resetDefaults}>
-            Reset to default
-          </Button>
-        </div>
-
+    <EmpDesktopPage
+      title="Email template"
+      description="This single template is used for every system email — leave application, reimbursement, offboarding, notice board and warning notices."
+      icon={Mail}
+      actions={
+        <Button type="button" variant="outline" onClick={resetDefaults}>
+          Reset to default
+        </Button>
+      }
+    >
+      <div className="w-full max-w-none space-y-6">
         {loading ? (
-          <p className="text-sm text-gray-500">Loading…</p>
+          <p className="text-sm text-muted-foreground">Loading…</p>
         ) : (
           <Card>
             <CardHeader className="pb-2">
@@ -197,5 +169,6 @@ export default function EmailTemplatesSettingsPage() {
           </Card>
         )}
       </div>
+    </EmpDesktopPage>
   );
 }

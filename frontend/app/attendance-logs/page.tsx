@@ -1,9 +1,8 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { Icon } from "@iconify/react";
+import { Clock } from "lucide-react";
 import {
   Table,
   TableBody,
@@ -16,6 +15,7 @@ import { useCurrentUser } from "../hooks/useCurrentUser";
 import { getSidebarContext } from "../utils/sidebarContext";
 import { isDesktopManagerFlagSet } from "@/lib/desktopManager";
 import { TableBodySkeleton } from "@/app/components/ui/TableBodySkeleton";
+import { EmpDesktopPage } from "../components/emp/desktop/EmpDesktopPage";
 
 const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL || "/backend";
 
@@ -235,25 +235,11 @@ export default function AttendanceLogsPage() {
   }, [rows.length, presenceFilter]);
 
   return (
-    <div className="p-4 sm:p-6 max-w-7xl mx-auto">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
-          <div className="flex items-center gap-3">
-            <Link
-              href="/dashboard"
-              className="w-10 h-10 rounded-full border border-gray-200 flex items-center justify-center text-gray-500 hover:bg-gray-50"
-              aria-label="Back to dashboard"
-            >
-              <Icon icon="mdi:arrow-left" className="w-5 h-5" />
-            </Link>
-            <div>
-              <h1 className="text-xl font-bold text-gray-900">Today&apos;s attendance</h1>
-              <p className="text-sm text-gray-500">
-                Employee punch logs
-                {todayDate ? ` · ${todayDate}` : ""}
-              </p>
-            </div>
-          </div>
-
+    <EmpDesktopPage
+      title="Today's attendance"
+      description={`Employee punch logs${todayDate ? ` · ${todayDate}` : ""}`}
+      icon={Clock}
+      actions={
           <div className="flex flex-wrap items-center gap-2">
             <select
               value={presenceFilter}
@@ -296,8 +282,8 @@ export default function AttendanceLogsPage() {
               ))}
             </select>
           </div>
-        </div>
-
+      }
+    >
         <div className="rounded-xl border border-[#e5e7eb] bg-white shadow-sm overflow-hidden">
           <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
             <span className="text-sm font-semibold text-gray-800">{countLabel}</span>
@@ -389,6 +375,6 @@ export default function AttendanceLogsPage() {
             </Table>
           </div>
         </div>
-      </div>
+    </EmpDesktopPage>
   );
 }

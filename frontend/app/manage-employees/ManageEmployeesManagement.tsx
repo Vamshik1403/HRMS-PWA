@@ -1700,21 +1700,32 @@ const runFetchCombinedDev = (q: string) => {
       setDesgLoading(true);
       try {
         let all = await fetchRefCached<Desg[]>(API.designations, ctrl.signal);
+        const companyId =
+          formData.companyID ??
+          getActiveEmployeeCompanyID() ??
+          currentUserMapping?.companyID ??
+          user?.companyID ??
+          null;
         if (user?.role === "SERVICE_PROVIDER" && currentUserMapping) {
           all = filterForManager(all);
-        } else if (formData.companyID) {
-          all = all.filter(x => x.companyID === formData.companyID);
+        } else if (companyId) {
+          all = all.filter((x) => Number(x.companyID) === Number(companyId));
         }
         const deptId =
           formData.departmentNameID ??
           formData.empDepartmentForm?.[formData.empDepartmentForm.length - 1]?.departmentNameID ??
           null;
-        if (!deptId) {
-          setDesgList([]);
-          return;
+        // Edit forms usually already have a department; create forms often do not yet.
+        // Only narrow by department when one is selected — otherwise show company designations.
+        if (deptId) {
+          all = all.filter((x) => {
+            if (x.departmentID == null) return true;
+            return Number(x.departmentID) === Number(deptId);
+          });
         }
-        all = all.filter((x) => Number(x.departmentID) === Number(deptId));
-        const filtered = (all || []).filter(d => (d.designation ?? "").toLowerCase().includes(q.toLowerCase()));
+        const filtered = (all || []).filter((d) =>
+          (d.designation ?? "").toLowerCase().includes(q.toLowerCase()),
+        );
         setDesgList(filtered.slice(0, 20));
       } finally { setDesgLoading(false); }
     }, DEBOUNCE_MS);

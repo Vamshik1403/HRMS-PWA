@@ -4,6 +4,7 @@ import { useState, useRef, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
 import { Button } from "../components/ui/button";
 import { NoticeBanner } from "../components/ui/notice-banner";
+import { EmpDesktopPage } from "../components/emp/desktop/EmpDesktopPage";
 import { Upload, Download, Trash2, FileSpreadsheet, CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -115,18 +116,14 @@ export function ImportAttendanceManagement() {
   }, []);
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold">Import Attendance</h2>
-          <p className="text-sm text-gray-500 mt-1">
-            Import attendance logs from CSV or Excel files into the system.
-          </p>
-        </div>
-      </div>
+    <EmpDesktopPage
+      title="Import Attendance"
+      description="Import attendance logs from CSV or Excel files into the system."
+      icon={FileSpreadsheet}
+    >
+    <div className="space-y-6 w-full max-w-none">
 
       {/* Instructions Card */}
-{/* Instructions Card */}
 <Card>
   <CardHeader>
     <CardTitle className="text-lg flex items-center gap-2">
@@ -323,5 +320,6 @@ export function ImportAttendanceManagement() {
         </CardContent>
       </Card>
     </div>
+    </EmpDesktopPage>
   );
 }

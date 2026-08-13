@@ -64,12 +64,22 @@ export function EmpNavLink({ item, pathname, collapsed, badgeCount = 0 }: EmpNav
       href={item.href}
       onClick={(e) => {
         if (!active) return;
-        // Re-clicking the active sidebar item = step back through visit history
-        // (Profile → Delegation → Work Report → click Profile → Delegation → … → Home).
+        // Re-clicking the active sidebar item = step back within THIS section only
+        // (e.g. employee form → employee list). Never jumps to another sidebar section.
         e.preventDefault();
         const search = searchParams.toString();
         const currentUrl = fullPortalUrl(pathname, search ? `?${search}` : "");
-        const backUrl = popPortalNavHistory(currentUrl);
+        const backUrl = popPortalNavHistory(currentUrl, item.id);
+
+        // Close nested form/detail panels on the current page when URL does not change.
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(
+            new CustomEvent("sidebar-main-page-click", {
+              detail: { path: pathname },
+            }),
+          );
+        }
+
         if (backUrl) {
           router.push(backUrl);
         } else {

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { Icon } from "@iconify/react";
+import { UserPlus } from "lucide-react";
 import {
   Table,
   TableBody,
@@ -16,6 +16,7 @@ import { getSidebarContext } from "../utils/sidebarContext";
 import { isDesktopManagerFlagSet } from "@/lib/desktopManager";
 import { TableBodySkeleton } from "@/app/components/ui/TableBodySkeleton";
 import { authHeaders } from "@/lib/auth";
+import { EmpDesktopPage } from "../components/emp/desktop/EmpDesktopPage";
 
 const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL || "/backend";
 
@@ -140,32 +141,19 @@ export default function NewJoinersPage() {
   }, [rows.length, monthLabel]);
 
   return (
-    <div className="mx-auto max-w-7xl p-4 sm:p-6">
-      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-3">
-          <Link
-            href="/dashboard"
-            className="flex h-10 w-10 items-center justify-center rounded-full border border-gray-200 text-gray-500 hover:bg-gray-50"
-            aria-label="Back to dashboard"
-          >
-            <Icon icon="mdi:arrow-left" className="h-5 w-5" />
-          </Link>
-          <div>
-            <h1 className="text-xl font-bold text-gray-900">New joiners</h1>
-            <p className="text-sm text-gray-500">
-              Employees created this month
-              {monthLabel ? ` · ${monthLabel}` : ""}
-            </p>
-          </div>
-        </div>
+    <EmpDesktopPage
+      title="New joiners"
+      description={`Employees created this month${monthLabel ? ` · ${monthLabel}` : ""}`}
+      icon={UserPlus}
+      actions={
         <Link
           href="/manage-employees"
           className="inline-flex items-center justify-center rounded-full border border-gray-200 bg-white px-4 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50"
         >
           Manage employees
         </Link>
-      </div>
-
+      }
+    >
       <div className="overflow-hidden rounded-xl border border-[#e5e7eb] bg-white shadow-sm">
         <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
           <span className="text-sm font-semibold text-gray-800">{countLabel}</span>
@@ -237,6 +225,6 @@ export default function NewJoinersPage() {
           </Table>
         </div>
       </div>
-    </div>
+    </EmpDesktopPage>
   );
 }

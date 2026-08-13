@@ -137,7 +137,22 @@ async function main() {
         lte: new Date(`${TEST_DATE_ISO}T23:59:59.999Z`),
       },
     },
+    orderBy: { punch_time: 'asc' },
   });
+
+  const utcHours = importedLogs
+    .map((l) => (l.punch_time ? l.punch_time.getUTCHours() : null))
+    .filter((h) => h != null);
+  const testTimePass =
+    utcHours.includes(9) &&
+    utcHours.includes(18) &&
+    !utcHours.includes(3) &&
+    !utcHours.includes(12);
+  console.log(
+    testTimePass
+      ? `✓ stored wall-clock times (UTC getters show 09:00 & 18:00): PASS [${utcHours.join(', ')}]`
+      : `✗ stored wall-clock times: FAIL got UTC hours [${utcHours.join(', ')}] (expected 9 and 18)`,
+  );
 
   const withEmployeeLink = importedLogs.filter((l) => l.manage_employee_id != null);
   const test2Pass =
@@ -212,7 +227,7 @@ async function main() {
   });
   fs.unlinkSync(csvPath);
 
-  const allPass = [test1Pass, test2Pass, test3Pass, test4Pass, test5Pass, test6Pass].every(Boolean);
+  const allPass = [test1Pass, test2Pass, testTimePass, test3Pass, test4Pass, test5Pass, test6Pass].every(Boolean);
   console.log(`\n=== ${allPass ? 'ALL TESTS PASSED' : 'SOME TESTS FAILED'} ===\n`);
   if (!allPass) process.exit(1);
 }

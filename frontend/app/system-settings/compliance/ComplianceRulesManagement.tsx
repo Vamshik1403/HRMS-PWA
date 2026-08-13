@@ -6,8 +6,9 @@ import { Card, CardContent } from "../../components/ui/card";
 import { Label } from "../../components/ui/label";
 import { Textarea } from "../../components/ui/textarea";
 import { FormDrawer } from "../../components/ui/form-drawer";
+import { EmpDesktopPage } from "../../components/emp/desktop/EmpDesktopPage";
 import { useCurrentUser } from "../../hooks/useCurrentUser";
-import { Plus, Sparkles, Trash2 } from "lucide-react";
+import { Plus, ShieldCheck, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { isCompanyOwnerFlag, canViewModule } from "@/lib/companyAccess";
 
@@ -187,67 +188,45 @@ export function ComplianceRulesManagement() {
     return <div className="p-8 text-center text-gray-500">Access restricted.</div>;
   }
 
+  const addRuleButton = (
+    <Button
+      onClick={() => {
+        resetForm();
+        setIsDrawerOpen(true);
+      }}
+      className="text-sm px-4 py-2"
+    >
+      <Plus className="w-4 h-4 mr-1" />
+      Add Rule
+    </Button>
+  );
+
   return (
-    <div className="space-y-6 w-full max-w-6xl mx-auto px-4">
-      <div className="rounded-2xl border border-slate-200 bg-[linear-gradient(135deg,#ffffff_0%,#f8fafc_65%,#eef2ff_100%)] p-6 shadow-sm">
-        <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
-          <div className="space-y-2">
-            <div className="flex items-center gap-2 text-slate-500">
-              <Sparkles className="h-4 w-4" />
-              <span className="text-xs font-semibold uppercase tracking-[0.18em]">Settings / Compliance</span>
-            </div>
-            <div>
-              <h1 className="text-3xl font-semibold tracking-tight text-slate-900">Compliance</h1>
-              <p className="mt-2 max-w-2xl text-sm text-slate-600">
-                Create compliance rules, review them in one place, and turn each rule on or off with a single toggle.
-              </p>
-            </div>
+    <EmpDesktopPage
+      title="Compliance"
+      description="Create compliance rules, review them in one place, and turn each rule on or off with a single toggle."
+      icon={ShieldCheck}
+      actions={
+        <div className="flex items-center gap-3">
+          <div className="rounded-xl border border-border bg-card px-4 py-2 text-center shadow-sm">
+            <div className="text-[10px] uppercase tracking-[0.16em] text-muted-foreground">Rules</div>
+            <div className="text-lg font-semibold text-foreground leading-tight">{rules.length}</div>
           </div>
-          <div className="flex items-center gap-3">
-            <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-center shadow-sm">
-              <div className="text-xs uppercase tracking-[0.16em] text-slate-400">Rules</div>
-              <div className="text-2xl font-semibold text-slate-900">{rules.length}</div>
-            </div>
-            <Button
-              onClick={() => {
-                resetForm();
-                setIsDrawerOpen(true);
-              }}
-              className="text-sm px-4 py-2"
-            >
-              <Plus className="w-4 h-4 mr-1" />
-              Add Rule
-            </Button>
-          </div>
+          {addRuleButton}
         </div>
-      </div>
-
-      <div className="flex items-center justify-between gap-4">
-        <div>
-          <p className="text-gray-600 text-sm">Use the toggle on each rule card to activate or deactivate it.</p>
-        </div>
-        <Button
-          onClick={() => {
-            resetForm();
-            setIsDrawerOpen(true);
-          }}
-          className="text-sm px-3 py-2 md:hidden"
-        >
-          <Plus className="w-4 h-4 mr-1" />
-          Add Rule
-        </Button>
-      </div>
-
-      {isSuperAdmin && (
-        <Card className="border-slate-200 shadow-sm">
+      }
+    >
+      <div className="space-y-6 w-full max-w-none">
+      {isSuperAdmin && !isDrawerOpen && (
+        <Card className="border-border shadow-sm">
           <CardContent className="pt-6">
             <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-              <Label htmlFor="companyFilter" className="min-w-fit text-slate-600">Company Filter</Label>
+              <Label htmlFor="companyFilter" className="min-w-fit text-muted-foreground">Company Filter</Label>
               <select
                 id="companyFilter"
                 value={companyFilter}
                 onChange={(e) => setCompanyFilter(e.target.value)}
-                className="w-full sm:w-72 h-11 px-3 py-2 text-sm border rounded-xl border-slate-200 bg-white shadow-sm"
+                className="w-full sm:w-72 h-11 px-3 py-2 text-sm border rounded-xl border-border bg-background shadow-sm"
               >
                 <option value="all">All Rules</option>
                 <option value="global">Global Rules</option>
@@ -262,43 +241,44 @@ export function ComplianceRulesManagement() {
         </Card>
       )}
 
+      {!isDrawerOpen && (
       <div className="space-y-4">
         {loading ? (
-          <div className="rounded-2xl border border-slate-200 bg-white px-5 py-10 text-center text-sm text-slate-500 shadow-sm">Loading rules...</div>
+          <div className="rounded-2xl border border-border bg-card px-5 py-10 text-center text-sm text-muted-foreground shadow-sm">Loading rules...</div>
         ) : visibleRules.length === 0 ? (
-          <Card className="border-dashed border-slate-300 shadow-none">
-            <CardContent className="py-14 text-center text-sm text-slate-500">
+          <Card className="border-dashed border-border shadow-none">
+            <CardContent className="py-14 text-center text-sm text-muted-foreground">
               No compliance rules created yet.
             </CardContent>
           </Card>
         ) : (
           visibleRules.map((rule) => (
-            <Card key={rule.id} className="border-slate-200 shadow-sm">
+            <Card key={rule.id} className="border-border shadow-sm">
               <CardContent className="py-5">
                 <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
                   <div className="min-w-0 flex-1 space-y-3">
                     <div className="flex items-start justify-between gap-4">
-                      <p className="text-sm font-medium leading-6 text-slate-900 whitespace-pre-wrap">{rule.ruleText}</p>
+                      <p className="text-sm font-medium leading-6 text-foreground whitespace-pre-wrap">{rule.ruleText}</p>
                       <div className="flex shrink-0 items-center gap-3">
                         <div className="text-right">
-                          <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Active</div>
-                          <div className={`text-xs font-medium ${rule.isActive ? "text-emerald-600" : "text-slate-500"}`}>{rule.isActive ? "On" : "Off"}</div>
+                          <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">Active</div>
+                          <div className={`text-xs font-medium ${rule.isActive ? "text-emerald-600" : "text-muted-foreground"}`}>{rule.isActive ? "On" : "Off"}</div>
                         </div>
                         <ToggleSwitch checked={rule.isActive} onChange={() => toggleRule(rule)} />
                       </div>
                     </div>
-                    <div className="flex flex-wrap gap-2 text-xs text-gray-500">
-                      <span className="px-2 py-1 rounded-full bg-gray-100 text-gray-700">
+                    <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+                      <span className="px-2 py-1 rounded-full bg-muted text-foreground">
                         {rule.company?.companyName || "Global"}
                       </span>
-                      <span className="px-2 py-1 rounded-full bg-gray-100 text-gray-700">
+                      <span className="px-2 py-1 rounded-full bg-muted text-foreground">
                         Created {new Date(rule.createdAt).toLocaleDateString()}
                       </span>
                     </div>
                   </div>
 
                   <div className="flex items-center gap-2 md:min-w-fit">
-                    <Button type="button" variant="outline" onClick={() => deleteRule(rule.id)} className="border-slate-200">
+                    <Button type="button" variant="outline" onClick={() => deleteRule(rule.id)} className="border-border">
                       <Trash2 className="w-4 h-4" />
                     </Button>
                   </div>
@@ -308,6 +288,7 @@ export function ComplianceRulesManagement() {
           ))
         )}
       </div>
+      )}
 
       <FormDrawer
         open={isDrawerOpen}
@@ -363,6 +344,7 @@ export function ComplianceRulesManagement() {
           </div>
         </form>
       </FormDrawer>
-    </div>
+      </div>
+    </EmpDesktopPage>
   );
 }

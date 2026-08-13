@@ -1,8 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { usePathname, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { Icon } from "@iconify/react";
 import { cn } from "@/app/utils/cn";
 import { EmpDesktopPage } from "./desktop/EmpDesktopPage";
@@ -74,7 +74,6 @@ export function EmpSetupTabsGrid({
   icon: LucideIcon;
   tabs: EmpSetupTab[];
 }) {
-  const pathname = usePathname();
   const searchParams = useSearchParams();
   const [openModalId, setOpenModalId] = useState<string | null>(null);
 
@@ -84,6 +83,12 @@ export function EmpSetupTabsGrid({
     visibleTabs.map((t) => t.key),
   );
   const activeTab = visibleTabs.find((t) => t.key === active) || visibleTabs[0];
+
+  // Close any in-page view/form modal when switching setup category tabs
+  // (Company Setup, Policy Setup, Payroll Setup, Statutory Reports, etc.).
+  useEffect(() => {
+    setOpenModalId(null);
+  }, [active]);
 
   return (
     <EmpDesktopPage title={title} description={description} icon={icon}>

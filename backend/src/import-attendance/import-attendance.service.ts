@@ -1,6 +1,7 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import * as XLSX from 'xlsx';
+import { devicePunchToStorageDate } from '../common/device-punch-time';
 
 type ResolvedImportEmployee = {
   manageEmployeeID: number;
@@ -513,51 +514,16 @@ export class ImportAttendanceService {
     throw new Error(`Invalid date format: "${rawString}". Expected format: DD/MM/YYYY HH:mm:ss (e.g., 01/02/2026 09:00:00 for 1st Feb 2026)`);
   }
 
+  /**
+   * Store punch as UTC wall-clock (same convention as device ingest).
+   * Do NOT use `new Date(y, m, d, h, …)` — on IST servers that shifts display by -5:30.
+   */
   private parseStringToDate(dateString: string | null): Date | null {
     if (!dateString) return null;
-    
-    // Handle YYYY-MM-DD HH:mm:ss format
-    let match = dateString.match(/^(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2}):(\d{2})$/);
-    if (match) {
-      const [, year, month, day, hour, minute, second] = match;
-      // Note: month is 0-indexed in JavaScript Date
-      const date = new Date(
-        parseInt(year),
-        parseInt(month) - 1,
-        parseInt(day),
-        parseInt(hour),
-        parseInt(minute),
-        parseInt(second)
-      );
-      
-      // Validate the date is valid
-      if (isNaN(date.getTime())) {
-        throw new Error(`Invalid date: ${dateString}`);
-      }
-      
-      return date;
+    const stored = devicePunchToStorageDate(dateString);
+    if (!stored || Number.isNaN(stored.getTime())) {
+      throw new Error(`Cannot parse date: ${dateString}`);
     }
-    
-    // Handle DD/MM/YYYY HH:mm:ss format as fallback
-    match = dateString.match(/^(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2}):(\d{2})$/);
-    if (match) {
-      const [, day, month, year, hour, minute, second] = match;
-      const date = new Date(
-        parseInt(year),
-        parseInt(month) - 1,
-        parseInt(day),
-        parseInt(hour),
-        parseInt(minute),
-        parseInt(second)
-      );
-      
-      if (isNaN(date.getTime())) {
-        throw new Error(`Invalid date: ${dateString}`);
-      }
-      
-      return date;
-    }
-    
-    throw new Error(`Cannot parse date: ${dateString}`);
+    return stored;
   }
 }

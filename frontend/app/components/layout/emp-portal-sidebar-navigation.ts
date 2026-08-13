@@ -32,8 +32,20 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import type { EmpModuleId } from "./emp-portal-workspaces";
+import { EMP_SETUP_TABS_REGISTRY } from "./emp-setup-tabs-registry";
 import { canViewModule, hasCompanyAccessFlag, isCompanyOwnerFlag } from "@/lib/companyAccess";
 import { TASK_MANAGEMENT_ENABLED } from "@/app/config/featureFlags";
+
+/** Paths that belong under a setup hub (Company / Policy / Payroll / Statutory). */
+function isSetupHubChildPath(hubHref: string, pathname: string): boolean {
+  const tabs = EMP_SETUP_TABS_REGISTRY[hubHref];
+  if (!tabs) return false;
+  return tabs.some((tab) =>
+    tab.items.some(
+      (item) => pathname === item.href || pathname.startsWith(`${item.href}/`),
+    ),
+  );
+}
 
 export interface EmpSidebarNavItem {
   /** Stable section key for sidebar back-history (must be unique). */
@@ -400,9 +412,19 @@ const COMPANY_PATH_PREFIXES = [
   "/empHolidays",
   "/empNoticeboard",
   "/empPublicHoliday",
+  "/company-hierarchy",
 ];
 
 function isCompanyPath(pathname: string): boolean {
+  // Drill-down pages from My Company KPIs are standalone views, not My Company itself.
+  if (
+    pathname === "/attendance-logs" ||
+    pathname.startsWith("/attendance-logs/") ||
+    pathname === "/new-joiners" ||
+    pathname.startsWith("/new-joiners/")
+  ) {
+    return false;
+  }
   return COMPANY_PATH_PREFIXES.some(
     (p) => pathname === p || pathname.startsWith(`${p}/`),
   );
@@ -431,7 +453,7 @@ export function isEmpNavItemActive(
 ): boolean {
   const tab = searchParams.get("tab");
 
-  // Keep My Company highlighted across Dashboard / Departments / Holidays.
+  // Keep My Company highlighted across Dashboard / Departments / Holidays only.
   if (
     item.moduleId === "company" ||
     item.href === "/empCompany" ||
@@ -501,6 +523,16 @@ export function isEmpNavItemActive(
       return pathname === "/empMore" || pathname.startsWith("/empMore/");
     }
     return true;
+  }
+
+  // Keep setup hub items active on their nested tab pages (Branches, Designations, …).
+  if (
+    item.href === "/company-setup" ||
+    item.href === "/policy-setup" ||
+    item.href === "/payroll-setup" ||
+    item.href === "/statutory-reports"
+  ) {
+    if (isSetupHubChildPath(item.href, pathname)) return true;
   }
 
   // Remaining admin pages not yet promoted to their own sidebar item — keep More highlighted.

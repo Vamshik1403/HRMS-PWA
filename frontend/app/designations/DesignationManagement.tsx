@@ -35,6 +35,7 @@ import type { DataTableColumn } from "../components/app/data-table";
 import { EntityRowActions } from "../components/app/entity-row-actions";
 import { DetailCard } from "../components/app/detail-card";
 import { EntityDetailHero, EntityDetailLayout } from "../components/app/entity-detail-layout";
+import { AutocompleteBranchField } from "../components/app/autocomplete-branch-field";
 import { useClientTable, sortRows } from "../hooks/use-client-table";
 import { toast } from "sonner";
 import { getSidebarContext } from "../utils/sidebarContext";
@@ -1078,58 +1079,52 @@ const filtered = useMemo(() => {
                 </div>
               )}
 
-              {/* Branch Autocomplete */}
+              {/* Branch Autocomplete — auto-selects when company has exactly one branch */}
               {showOrgFields && (
-                <div ref={brRef} className="space-y-2 relative">
-                  <Label>Branch</Label>
-                  <Input
-                    value={formData.brAutocomplete}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      setFormData((p) => ({ ...p, brAutocomplete: val, branchesID: null }));
-                      if (!editing) {
-                        fetchBranchSuggestions(val);
-                      }
-                    }}
-                    onFocus={() => {
-                      if (!editing && (formData.companyID || resolveScopedCompanyId(user)) && formData.brAutocomplete.length >= MIN_CHARS) {
-                        fetchBranchSuggestions(formData.brAutocomplete);
-                      }
-                    }}
+                <div ref={brRef}>
+                  <AutocompleteBranchField
+                    label="Branch"
                     placeholder={
                       !(formData.companyID || resolveScopedCompanyId(user) || user?.companyID)
                         ? "Company not resolved for this account"
-                        : editing ? formData.brAutocomplete || "Branch" :
-                      "Type to search branch..."
+                        : "Type to search branch..."
                     }
-                    autoComplete="off"
-                    disabled={!(formData.companyID || resolveScopedCompanyId(user) || user?.companyID)}
+                    value={formData.brAutocomplete}
+                    branchId={formData.branchesID}
+                    companyID={
+                      formData.companyID ??
+                      currentUserMapping?.companyID ??
+                      resolveScopedCompanyId(user) ??
+                      user?.companyID
+                    }
+                    required={false}
+                    disabled={
+                      !(formData.companyID || resolveScopedCompanyId(user) || user?.companyID)
+                    }
+                    onInputChange={(display) => {
+                      setFormData((p) => ({
+                        ...p,
+                        brAutocomplete: display,
+                        branchesID: null,
+                      }));
+                    }}
+                    onBranchSelect={({ id, branchName, item }) => {
+                      setFormData((p) => ({
+                        ...p,
+                        branchesID: id,
+                        brAutocomplete: branchName,
+                        companyID: p.companyID ?? item?.companyID ?? null,
+                        serviceProviderID:
+                          p.serviceProviderID ?? item?.serviceProviderID ?? null,
+                      }));
+                      setSuggestedBranches([]);
+                    }}
+                    onFetch={(q) => {
+                      if (!editing) fetchBranchSuggestions(q);
+                    }}
+                    options={suggestedBranches}
+                    optionsLoading={loadingBranches}
                   />
-                  {suggestedBranches.length > 0 && !editing && (
-                    <div className="absolute z-10 bg-popover text-popover-foreground border border-border rounded w-full shadow max-h-48 overflow-y-auto">
-                      {loadingBranches && <div className="px-3 py-2 text-sm text-gray-500">Loading…</div>}
-                      {suggestedBranches.map((br) => (
-                        <div
-                          key={br.id}
-                          className="px-3 py-2 hover:bg-accent cursor-pointer"
-                          onMouseDown={(e) => e.preventDefault()}
-                          onClick={() => {
-                            setFormData((p) => ({
-                              ...p,
-                              branchesID: br.id,
-                              brAutocomplete: br.branchName,
-                              companyID: p.companyID ?? br.companyID ?? null,
-                              serviceProviderID:
-                                p.serviceProviderID ?? br.serviceProviderID ?? null,
-                            }));
-                            setSuggestedBranches([]);
-                          }}
-                        >
-                          {br.branchName}
-                        </div>
-                      ))}
-                    </div>
-                  )}
                 </div>
               )}
 
@@ -1199,7 +1194,18 @@ const filtered = useMemo(() => {
                 </div>
               )}
 
-              {/* Parent Designation */}
+              {/* Designation Name */}
+              <div className="space-y-2">
+                <Label>Designation *</Label>
+                <Input
+                  value={formData.designation}
+                  onChange={(e) => setFormData((p) => ({ ...p, designation: e.target.value }))}
+                  required
+                  placeholder="Enter designation name"
+                />
+              </div>
+
+              {/* Parent Designation — company-wide; not limited to the selected department */}
               {showOrgFields && (
                 <div className="space-y-2">
                   <Label>Parent Designation</Label>
@@ -1226,18 +1232,26 @@ const filtered = useMemo(() => {
                         parentAutocomplete: match?.designation ?? "",
                       }));
                     }}
-                    disabled={!formData.departmentID}
                   >
                     <SelectTrigger>
-                      <SelectValue placeholder={formData.departmentID ? "No Parent" : "Select department first"} />
+                      <SelectValue placeholder="No Parent" />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="none">No Parent</SelectItem>
                       {rows
                         .filter((d) => {
-                          if (!formData.departmentID) return false;
-                          if (Number(d.departmentID) !== Number(formData.departmentID)) return false;
                           if (editing && d.id === editing.id) return false;
+                          const companyId =
+                            formData.companyID ||
+                            resolveScopedCompanyId(user) ||
+                            user?.companyID;
+                          if (
+                            companyId &&
+                            d.companyID != null &&
+                            Number(d.companyID) !== Number(companyId)
+                          ) {
+                            return false;
+                          }
                           return true;
                         })
                         .map((d) => (
@@ -1249,17 +1263,6 @@ const filtered = useMemo(() => {
                   </Select>
                 </div>
               )}
-
-              {/* Designation Name */}
-              <div className="space-y-2">
-                <Label>Designation *</Label>
-                <Input
-                  value={formData.designation}
-                  onChange={(e) => setFormData((p) => ({ ...p, designation: e.target.value }))}
-                  required
-                  placeholder="Enter designation name"
-                />
-              </div>
 
               {/* New Fields Section - hidden for ADMIN and COMPANY_ADMIN */}
               {!(user?.role === "ADMIN" || user?.role === "COMPANY_ADMIN") && <div className="border-t border-gray-200 pt-4 mt-4">

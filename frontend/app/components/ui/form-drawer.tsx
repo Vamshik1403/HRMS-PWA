@@ -1,9 +1,11 @@
 "use client";
 
+import { useCallback } from "react";
 import { ArrowLeft } from "lucide-react";
 import { Button } from "./button";
 import { cn } from "@/app/utils/cn";
 import { listCardClass } from "../app/list-ui-styles";
+import { useSidebarMainPageClick } from "@/app/hooks/useSidebarMainPageClick";
 
 interface FormDrawerProps {
   open: boolean;
@@ -29,6 +31,12 @@ export function FormDrawer({
   showHeaderCancel = false,
   cancelLabel = "Cancel",
 }: FormDrawerProps) {
+  // Re-clicking the active sidebar item should return to the table/list view.
+  const closeFromSidebar = useCallback(() => {
+    onOpenChange(false);
+  }, [onOpenChange]);
+  useSidebarMainPageClick(closeFromSidebar, open);
+
   if (!open) return null;
 
   return (

@@ -64,24 +64,35 @@ export function recordPortalNavigation(
 
 /**
  * Pop the previous location when the user re-clicks the active sidebar item.
- * Falls back to Home when the stack is empty and the user is not already there.
+ * Only steps back within the same sidebar section — never jumps to another section
+ * (e.g. Branches → Employees → re-click Employees must not return to Branches).
+ * Returns null when there is no same-section history (caller should refresh / close panels).
  */
-export function popPortalNavHistory(currentUrl: string): string | null {
+export function popPortalNavHistory(
+  currentUrl: string,
+  currentSectionId?: string,
+): string | null {
+  const skipped: EmpNavHistoryEntry[] = [];
+
   while (stack.length > 0) {
     const entry = stack.pop()!;
+    if (currentSectionId && entry.sectionId !== currentSectionId) {
+      // Preserve other sections' history for their own sidebar re-clicks.
+      skipped.push(entry);
+      continue;
+    }
     if (entry.url && entry.url !== currentUrl) {
+      // Restore skipped (other-section) entries in original order.
+      for (let i = skipped.length - 1; i >= 0; i--) {
+        stack.push(skipped[i]);
+      }
       suppressNextRecord = true;
       return entry.url;
     }
   }
-  const isHomeRoot =
-    currentUrl === "/empdashboard" ||
-    currentUrl === "/empdashboard?" ||
-    currentUrl === "/empdashboard?tab=dashboard" ||
-    currentUrl === "/empdashboard?tab=overview";
-  if (!isHomeRoot) {
-    suppressNextRecord = true;
-    return "/empdashboard";
+
+  for (let i = skipped.length - 1; i >= 0; i--) {
+    stack.push(skipped[i]);
   }
   return null;
 }

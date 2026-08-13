@@ -159,6 +159,13 @@ export const EMP_COMPANY_TABS = [
     match: (p: string) =>
       p === "/empCompanyDashboard" || p.startsWith("/empCompanyDashboard/"),
   },
+  // Temporarily hidden from My Company tabs. Uncomment to show again.
+  // {
+  //   id: "hierarchy",
+  //   label: "Company Hierarchy",
+  //   href: "/company-hierarchy",
+  //   match: (p: string) => p === "/company-hierarchy" || p.startsWith("/company-hierarchy/"),
+  // },
   {
     id: "departments",
     label: "Departments",
@@ -215,6 +222,8 @@ export function resolvePortalZone(pathname: string): EmpPortalZone {
     pathname.startsWith("/empCompanyDashboard/") ||
     pathname === "/empCompany" ||
     pathname.startsWith("/empCompany/") ||
+    pathname === "/company-hierarchy" ||
+    pathname.startsWith("/company-hierarchy/") ||
     pathname.startsWith("/empHolidays") ||
     pathname.startsWith("/empNoticeboard") ||
     pathname.startsWith("/empPublicHoliday")

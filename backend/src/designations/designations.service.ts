@@ -7,23 +7,23 @@ import { UpdateDesignationsDto } from './dto/update-designation.dto';
 export class DesignationsService {
   constructor(private prisma: PrismaService) {}
 
-  private async assertParentSameDepartment(
-    departmentID: number | null | undefined,
+  private async assertParentSameCompany(
+    companyID: number | null | undefined,
     parentDesignationID: number | null | undefined,
   ) {
     if (!parentDesignationID) return;
     const parent = await this.prisma.designations.findUnique({
       where: { id: parentDesignationID },
-      select: { id: true, departmentID: true },
+      select: { id: true, companyID: true },
     });
     if (!parent) throw new BadRequestException('Parent designation not found');
-    if (departmentID && parent.departmentID && parent.departmentID !== departmentID) {
-      throw new BadRequestException('Parent designation must belong to the same department');
+    if (companyID && parent.companyID && parent.companyID !== companyID) {
+      throw new BadRequestException('Parent designation must belong to the same company');
     }
   }
 
   async create(data: CreateDesignationsDto) {
-    await this.assertParentSameDepartment(data.departmentID, data.parentDesignationID);
+    await this.assertParentSameCompany(data.companyID, data.parentDesignationID);
     return this.prisma.designations.create({
       data: {
         ...data,
@@ -92,19 +92,19 @@ export class DesignationsService {
   }
 
   async update(id: number, data: UpdateDesignationsDto) {
-    const departmentID =
-      data.departmentID !== undefined
-        ? data.departmentID
+    const companyID =
+      data.companyID !== undefined
+        ? data.companyID
         : (
             await this.prisma.designations.findUnique({
               where: { id },
-              select: { departmentID: true },
+              select: { companyID: true },
             })
-          )?.departmentID;
+          )?.companyID;
     if (data.parentDesignationID != null && Number(data.parentDesignationID) === Number(id)) {
       throw new BadRequestException('Designation cannot be its own parent');
     }
-    await this.assertParentSameDepartment(departmentID, data.parentDesignationID);
+    await this.assertParentSameCompany(companyID, data.parentDesignationID);
     return this.prisma.designations.update({
       where: { id },
       data,
