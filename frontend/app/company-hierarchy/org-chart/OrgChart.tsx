@@ -32,7 +32,8 @@ const nodeTypes = {
 };
 
 const GOLD = "#C9962A";
-const PAD = 160;
+const MIN_ZOOM = 0.15;
+const MAX_ZOOM = 1.8;
 
 type RFNode = Node<OrgNodeData>;
 type ChartView = "employees" | "departments";
@@ -183,45 +184,33 @@ function buildDepartmentTree(
   };
 }
 
-function treeExtent(nodes: RFNode[]): [[number, number], [number, number]] {
-  if (!nodes.length) return [[-PAD, -PAD], [1200, 800]];
-  let minX = Infinity;
-  let minY = Infinity;
-  let maxX = -Infinity;
-  let maxY = -Infinity;
-  for (const n of nodes) {
-    const w = Number(n.style?.width ?? NODE_SIZE.employee.width);
-    const h = Number(n.style?.height ?? NODE_SIZE.employee.height);
-    minX = Math.min(minX, n.position.x);
-    minY = Math.min(minY, n.position.y);
-    maxX = Math.max(maxX, n.position.x + w);
-    maxY = Math.max(maxY, n.position.y + h);
-  }
-  return [
-    [minX - PAD, minY - PAD],
-    [maxX + PAD, maxY + PAD],
-  ];
-}
-
 function AlignTreeTop({ nodes, view }: { nodes: RFNode[]; view: ChartView }) {
   const rf = useReactFlow();
   useEffect(() => {
     if (!nodes.length) return;
+    let cancelled = false;
     const frame = window.requestAnimationFrame(() => {
+      if (cancelled) return;
       const bounds = getNodesBounds(nodes);
       const pane = document.querySelector(".org-chart-canvas") as HTMLElement | null;
-      const w = pane?.clientWidth ?? 900;
-      const h = pane?.clientHeight ?? 620;
+      const w = pane?.clientWidth ?? 0;
+      const h = pane?.clientHeight ?? 0;
+      if (w < 80 || h < 80) return;
       const zoom = Math.min(
         1,
-        Math.max(0.15, Math.min((w - 48) / Math.max(bounds.width, 1), (h - 32) / Math.max(bounds.height, 1))),
+        Math.max(MIN_ZOOM, Math.min((w - 48) / Math.max(bounds.width, 1), (h - 32) / Math.max(bounds.height, 1))),
       );
       const x = (w - bounds.width * zoom) / 2 - bounds.x * zoom;
       const y = 12 - bounds.y * zoom;
       rf.setViewport({ x, y, zoom }, { duration: 0 });
     });
-    return () => window.cancelAnimationFrame(frame);
-  }, [nodes.length, rf, view]);
+    return () => {
+      cancelled = true;
+      window.cancelAnimationFrame(frame);
+    };
+    // Only re-align when the tree view or node count changes — never while the user is zooming.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nodes.length, view]);
   return null;
 }
 
@@ -238,8 +227,6 @@ function OrgChartCanvas({
   onEmployeeClick: (id: string) => void;
   onHoverNode: (id: string | null) => void;
 }) {
-  const extent = useMemo(() => treeExtent(nodes), [nodes]);
-
   const onNodeClick = useCallback(
     (_event: MouseEvent, node: RFNode) => {
       if (node.type === "employee") onEmployeeClick(node.id);
@@ -253,9 +240,8 @@ function OrgChartCanvas({
       nodes={nodes}
       edges={edges}
       nodeTypes={nodeTypes}
-      minZoom={0.15}
-      maxZoom={1.8}
-      translateExtent={extent}
+      minZoom={MIN_ZOOM}
+      maxZoom={MAX_ZOOM}
       nodesDraggable={false}
       nodesConnectable={false}
       elementsSelectable={false}
