@@ -7,6 +7,12 @@ export type HierarchyEmployee = {
   employeeFirstName: string | null;
   employeeLastName: string | null;
   employeePhotoUrl: string | null;
+  businessEmail: string | null;
+  personalEmail: string | null;
+  businessPhoneNo: string | null;
+  personalPhoneNo: string | null;
+  joiningDate: string | null;
+  employmentStatus: string | null;
   branchesID: number | null;
   departmentNameID: number | null;
   designationID: number | null;
@@ -61,6 +67,12 @@ export class CompanyHierarchyService {
           employeeFirstName: true,
           employeeLastName: true,
           employeePhotoUrl: true,
+          businessEmail: true,
+          personalEmail: true,
+          businessPhoneNo: true,
+          personalPhoneNo: true,
+          joiningDate: true,
+          employmentStatus: true,
           branchesID: true,
           departmentNameID: true,
           designationID: true,
@@ -119,6 +131,12 @@ export class CompanyHierarchyService {
         employeeFirstName: e.employeeFirstName,
         employeeLastName: e.employeeLastName,
         employeePhotoUrl: e.employeePhotoUrl,
+        businessEmail: e.businessEmail,
+        personalEmail: e.personalEmail,
+        businessPhoneNo: e.businessPhoneNo,
+        personalPhoneNo: e.personalPhoneNo,
+        joiningDate: e.joiningDate,
+        employmentStatus: e.employmentStatus,
         branchesID: e.branchesID,
         departmentNameID: e.departmentNameID,
         designationID: e.designationID,

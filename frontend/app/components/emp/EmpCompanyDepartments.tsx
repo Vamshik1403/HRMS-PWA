@@ -107,8 +107,32 @@ export function EmpCompanyDepartments() {
           }
         }
 
-        const scopedById = new Map(scopedList.map((d) => [d.id, d]));
-        const merged = new Map<number, DepartmentGroup>();
+        const byName = new Map<string, DepartmentGroup>();
+
+        const addDept = (d: DepartmentGroup) => {
+          const key = (d.departmentName || "").trim().toLowerCase() || `id-${d.id}`;
+          const existing = byName.get(key);
+          if (!existing) {
+            const employees = [...(d.employees || [])];
+            byName.set(key, {
+              ...d,
+              departmentName: d.departmentName || "Unnamed department",
+              employees,
+              employeeCount: employees.length,
+            });
+            return;
+          }
+          const seen = new Set(existing.employees.map((e) => e.id));
+          for (const e of d.employees || []) {
+            if (seen.has(e.id)) continue;
+            existing.employees.push(e);
+            seen.add(e.id);
+          }
+          existing.employeeCount = existing.employees.length;
+          if (existing.id === 0 && d.id !== 0) existing.id = d.id;
+        };
+
+        for (const d of scopedList) addDept(d);
 
         if (companyID) {
           const [catalogRes, branchesRes] = await Promise.all([
@@ -140,29 +164,20 @@ export function EmpCompanyDepartments() {
                   Number(d.companyID) === Number(companyID) ||
                   (d.branchesID != null && branchIds.has(Number(d.branchesID)));
                 if (!inCompany) continue;
-
-                const scoped = scopedById.get(d.id);
-                merged.set(
-                  d.id,
-                  scoped ?? {
-                    id: d.id,
-                    departmentName: d.departmentName ?? "Unnamed department",
-                    employeeCount: 0,
-                    employees: [],
-                  },
-                );
+                addDept({
+                  id: d.id,
+                  departmentName: d.departmentName ?? "Unnamed department",
+                  employeeCount: 0,
+                  employees: [],
+                });
               }
             }
           }
         }
 
-        for (const d of scopedList) {
-          if (!merged.has(d.id)) merged.set(d.id, d);
-        }
-
         if (!cancelled) {
           setDepartments(
-            [...merged.values()].sort((a, b) => a.departmentName.localeCompare(b.departmentName)),
+            [...byName.values()].sort((a, b) => a.departmentName.localeCompare(b.departmentName)),
           );
         }
       } finally {

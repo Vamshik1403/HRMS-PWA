@@ -1,63 +1,46 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Network } from "lucide-react";
 import { EmpDesktopPage } from "@/app/components/emp/desktop/EmpDesktopPage";
-import { cn } from "@/app/utils/cn";
 import { useCurrentUser } from "@/app/hooks/useCurrentUser";
-import { authHeaders } from "@/lib/auth";
 import { resolveScopedCompanyId } from "@/app/utils/scopeContext";
 import { getSidebarContext } from "@/app/utils/sidebarContext";
-import {
-  CompanyHierarchyTree,
-  type HierarchyPayload,
-} from "./CompanyHierarchyTree";
+import { loadOrgChartData } from "./org-chart/mapApiToOrgData";
+import type { OrgChartData } from "./org-chart/types";
 
-type HierarchyResponse = HierarchyPayload & {
-  totals: {
-    employees: number;
-    l1?: number;
-    roots?: number;
-    departments: number;
-    designations: number;
-  };
-};
+const OrgChart = dynamic(
+  () => import("./org-chart/OrgChart").then((m) => m.OrgChart),
+  {
+    ssr: false,
+    loading: () => (
+      <p className="py-16 text-center text-sm text-slate-400">Loading organization chart…</p>
+    ),
+  },
+);
 
 export default function CompanyHierarchyPage() {
   const user = useCurrentUser();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [data, setData] = useState<HierarchyResponse | null>(null);
-  const [view, setView] = useState<"departments" | "employees">("departments");
+  const [data, setData] = useState<OrgChartData | null>(null);
+  const [source, setSource] = useState<"api" | "mock">("mock");
 
   const companyID = useMemo(() => {
     const ctx = getSidebarContext();
-    return (
-      resolveScopedCompanyId(user) ??
-      user?.companyID ??
-      ctx?.companyID ??
-      null
-    );
+    return resolveScopedCompanyId(user) ?? user?.companyID ?? ctx?.companyID ?? null;
   }, [user]);
 
   const load = useCallback(async () => {
-    if (!companyID) {
-      setError("Company is not selected");
-      setLoading(false);
-      return;
-    }
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/backend/company-hierarchy?companyID=${companyID}`, {
-        headers: authHeaders(),
-        cache: "no-store",
-      });
-      if (!res.ok) throw new Error(await res.text());
-      const json = (await res.json()) as HierarchyResponse;
-      setData(json);
+      const result = await loadOrgChartData(companyID);
+      setData(result.data);
+      setSource(result.source);
     } catch (e: any) {
-      setError(e?.message || "Failed to load company hierarchy");
+      setError(e?.message || "Failed to load organization hierarchy");
       setData(null);
     } finally {
       setLoading(false);
@@ -70,40 +53,25 @@ export default function CompanyHierarchyPage() {
 
   return (
     <EmpDesktopPage
-      title="Company Hierarchy"
-      description="Organisation tree of owners, departments, and reporting lines."
+      title="Organization Hierarchy"
+      description="Interactive reporting tree of owners, departments, and teams."
       icon={Network}
-      actions={
-        <div className="inline-flex rounded-full border border-slate-200 bg-white p-0.5 text-xs font-semibold">
-          <button
-            type="button"
-            onClick={() => setView("departments")}
-            className={cn(
-              "rounded-full px-3 py-1.5",
-              view === "departments" ? "bg-sky-600 text-white" : "text-slate-600 hover:bg-slate-50",
-            )}
-          >
-            Department tree
-          </button>
-          <button
-            type="button"
-            onClick={() => setView("employees")}
-            className={cn(
-              "rounded-full px-3 py-1.5",
-              view === "employees" ? "bg-sky-600 text-white" : "text-slate-600 hover:bg-slate-50",
-            )}
-          >
-            Employee tree
-          </button>
-        </div>
-      }
+      className="flex min-h-0 flex-1 flex-col overflow-hidden space-y-0"
     >
       {loading ? (
-        <p className="py-16 text-center text-sm text-muted-foreground">Loading hierarchy…</p>
+        <p className="py-16 text-center text-sm text-slate-400">Loading hierarchy…</p>
       ) : error ? (
         <p className="py-16 text-center text-sm text-destructive">{error}</p>
       ) : data ? (
-        <CompanyHierarchyTree data={data} view={view} />
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+          {source === "mock" ? (
+            <p className="mb-2 shrink-0 text-xs text-slate-400">
+              Showing sample org data. Live employees load from{" "}
+              <code className="rounded bg-slate-100 px-1">GET /backend/company-hierarchy</code>.
+            </p>
+          ) : null}
+          <OrgChart data={data} />
+        </div>
       ) : null}
     </EmpDesktopPage>
   );

@@ -13,6 +13,7 @@ const nextConfig = {
   images: {
     domains: ['localhost'],
   },
+  transpilePackages: ["@xyflow/react", "@xyflow/system"],
 
   eslint: {
     ignoreDuringBuilds: true,

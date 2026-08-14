@@ -37,6 +37,14 @@ export const COMPANY_SETUP_TABS: EmpSetupTab[] = [
         show: () => canViewModule("DEPARTMENTS"),
       },
       {
+        id: "designations",
+        label: "Designations",
+        href: "/designations",
+        icon: "solar:medal-ribbon-bold-duotone",
+        iconClassName: "text-amber-700",
+        show: () => canViewModule("DESIGNATIONS"),
+      },
+      {
         id: "devices",
         label: "Attendance Devices",
         href: "/devices",

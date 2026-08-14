@@ -992,7 +992,7 @@ export function EmpProfileMessagingPanel({
 
   const load = useCallback(
     async (options?: { silent?: boolean }) => {
-      if (!user?.username) return;
+    if (!user?.username) return;
       if (!options?.silent) {
         setLoading((current) => current || (messages.length === 0 && teamMembers.length === 0));
       }
@@ -1003,7 +1003,7 @@ export function EmpProfileMessagingPanel({
         let creds: any = null;
         try {
           const credsRes = await fetch(
-            `${BACKEND}/manage-emp/credentials/${encodeURIComponent(user.username)}`,
+        `${BACKEND}/manage-emp/credentials/${encodeURIComponent(user.username)}`,
             { headers },
           );
           creds = await readJsonOrNull(credsRes);
@@ -1088,12 +1088,12 @@ export function EmpProfileMessagingPanel({
           });
         }
 
-        list.sort(
-          (a: MemoItem, b: MemoItem) =>
-            new Date(b.createdAt || b.issuedDate || 0).getTime() -
-            new Date(a.createdAt || a.issuedDate || 0).getTime(),
-        );
-        setMessages(list);
+      list.sort(
+        (a: MemoItem, b: MemoItem) =>
+          new Date(b.createdAt || b.issuedDate || 0).getTime() -
+          new Date(a.createdAt || a.issuedDate || 0).getTime(),
+      );
+      setMessages(list);
         if (list.length === 0 && typeof window !== "undefined" && !isCompanyScope) {
           sessionStorage.removeItem(`_pc_${panelCacheKey}`);
           for (const key of Object.keys(localStorage)) {
@@ -1113,7 +1113,7 @@ export function EmpProfileMessagingPanel({
         } else {
           setTeamMembers([]);
         }
-      } catch {
+    } catch {
         if (!options?.silent) setMessages([]);
         // Still try to load company contacts for admin even if earlier steps failed.
         if (isCompanyScope) {
@@ -1123,9 +1123,9 @@ export function EmpProfileMessagingPanel({
             /* ignore */
           }
         }
-      } finally {
-        setLoading(false);
-      }
+    } finally {
+      setLoading(false);
+    }
     },
     [
       isCompanyScope,
@@ -1145,7 +1145,7 @@ export function EmpProfileMessagingPanel({
     hydratedRef.current = true;
     const cached = getPageCache<ImPanelCache>(panelCacheKey);
     if (!cached) {
-      void load();
+    void load();
       return;
     }
     setEmployeeId(cached.employeeId);
@@ -1582,15 +1582,15 @@ export function EmpProfileMessagingPanel({
       if (conversationFilter === "unread" && conv.unreadCount === 0) return false;
       if (conversationFilter === "archived" && !conv.isArchived) return false;
       if (conversationFilter === "all" && conv.isArchived) return false;
-      if (!q) return true;
-      return (
+    if (!q) return true;
+    return (
         conv.profile.name.toLowerCase().includes(q) ||
         conv.profile.designation.toLowerCase().includes(q) ||
         conv.profile.department.toLowerCase().includes(q) ||
         conv.lastMessage.toLowerCase().includes(q) ||
         (conv.groupName?.toLowerCase().includes(q) ?? false)
-      );
-    });
+    );
+  });
   }, [conversations, searchQuery, conversationFilter, selfProfile]);
 
   const totalUnread = useMemo(
@@ -2177,7 +2177,7 @@ export function EmpProfileMessagingPanel({
                         const id = normalizeId(member.id)!;
                         const selected = groupMemberIds.includes(id);
                         const name = reporteeDisplayName(member);
-                        return (
+    return (
                           <button
                             key={id}
                             type="button"
@@ -2271,8 +2271,8 @@ export function EmpProfileMessagingPanel({
               <div className="min-w-0">
                 <h2 className="text-[26px] font-semibold tracking-tight text-[#111827]">Conversations</h2>
                 <p className="mt-0.5 text-[13px] text-[#6B7280]">{departmentLabel}</p>
-              </div>
-              {canCompose ? (
+        </div>
+        {canCompose ? (
                 <button
                   type="button"
                   onClick={() => setShowCreateGroup(true)}
@@ -2281,8 +2281,8 @@ export function EmpProfileMessagingPanel({
                   <Plus className="size-3.5" />
                   New group
                 </button>
-              ) : null}
-            </div>
+        ) : null}
+      </div>
             <div className="mt-4 flex items-center gap-2">
               <div className="relative flex-1">
                 <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[#9CA3AF]" />
@@ -2291,8 +2291,8 @@ export function EmpProfileMessagingPanel({
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="Search conversations..."
                   className="h-10 w-full rounded-xl border border-[#EEF2F7] bg-white pl-9 pr-3 text-[14px] text-[#111827] outline-none transition-colors duration-150 placeholder:text-[#9CA3AF] focus:border-primary/30 focus:ring-2 focus:ring-primary/10"
-                />
-              </div>
+            />
+          </div>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <button
@@ -2310,7 +2310,7 @@ export function EmpProfileMessagingPanel({
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>
-          </div>
+                    </div>
 
           <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
             {showConversationLoader ? (
@@ -2342,7 +2342,7 @@ export function EmpProfileMessagingPanel({
                       )}
                     >
                       <ConversationAvatar profile={conv.profile} size="sm" isGroup={conv.kind === "group"} showPresence={conv.kind === "dm"} />
-                      <div className="min-w-0 flex-1">
+                    <div className="min-w-0 flex-1">
                         <div className="flex items-start justify-between gap-2">
                           <p className="truncate text-[15px] font-medium text-[#111827]">{conv.profile.name}</p>
                           <span className="shrink-0 text-[12px] text-[#9CA3AF]">
@@ -2362,7 +2362,7 @@ export function EmpProfileMessagingPanel({
                             <span className="inline-flex min-w-5 shrink-0 items-center justify-center rounded-full bg-primary px-1.5 py-0.5 text-[11px] font-semibold text-white">
                               {conv.unreadCount > 9 ? "9+" : conv.unreadCount}
                             </span>
-                          ) : null}
+                      ) : null}
                         </div>
                       </div>
                     </button>
@@ -2416,8 +2416,8 @@ export function EmpProfileMessagingPanel({
                   ) : (
                     <p className="text-[12px] font-medium text-[#6B7280]">Group conversation</p>
                   )}
-                </div>
-              </div>
+                    </div>
+                  </div>
               <div className="flex items-center gap-1">
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>

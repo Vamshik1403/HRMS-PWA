@@ -159,13 +159,12 @@ export const EMP_COMPANY_TABS = [
     match: (p: string) =>
       p === "/empCompanyDashboard" || p.startsWith("/empCompanyDashboard/"),
   },
-  // Temporarily hidden from My Company tabs. Uncomment to show again.
-  // {
-  //   id: "hierarchy",
-  //   label: "Company Hierarchy",
-  //   href: "/company-hierarchy",
-  //   match: (p: string) => p === "/company-hierarchy" || p.startsWith("/company-hierarchy/"),
-  // },
+  {
+    id: "hierarchy",
+    label: "Company Hierarchy",
+    href: "/company-hierarchy",
+    match: (p: string) => p === "/company-hierarchy" || p.startsWith("/company-hierarchy/"),
+  },
   {
     id: "departments",
     label: "Departments",
