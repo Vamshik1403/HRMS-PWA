@@ -11,8 +11,10 @@ import {
   Post,
   Req,
   UnauthorizedException,
+  UseGuards,
 } from '@nestjs/common';
 
+import { AuthGuard } from '@nestjs/passport';
 import type { Request } from 'express';
 
 import { PrismaService } from '../prisma/prisma.service';
@@ -20,17 +22,20 @@ import { ApprovalRequestService } from './approval-request.service';
 import { ApproveApprovalRequestDto } from './dto/approve-approval-request.dto';
 import { RejectApprovalRequestDto } from './dto/reject-approval-request.dto';
 
+@UseGuards(AuthGuard('jwt'))
 @Controller('approval-requests')
 export class ApprovalRequestController {
   constructor(
     private readonly approvalRequestService:
       ApprovalRequestService,
 
-    private readonly prisma: PrismaService,
+    private readonly prisma:
+      PrismaService,
   ) {}
 
   /**
-   * This route must remain above @Get(':id').
+   * Actionable approvals only.
+   * A record disappears from this endpoint after this employee acts.
    */
   @Get('my-pending')
   @HttpCode(HttpStatus.OK)
@@ -44,9 +49,6 @@ export class ApprovalRequestController {
       .getMyPendingApprovals(actor);
   }
 
-  /**
-   * This route must remain above @Get(':id').
-   */
   @Get('my-pending/count')
   @HttpCode(HttpStatus.OK)
   async getMyPendingCount(
@@ -60,8 +62,27 @@ export class ApprovalRequestController {
   }
 
   /**
-   * This route must remain above @Get(':id').
+   * Persistent assignment list.
+   *
+   * Once an approval request was assigned to an employee, this endpoint
+   * keeps returning it after APPROVED / REJECTED / SKIPPED / CANCELLED.
+   *
+   * Frontends should use:
+   * - my-assigned => persistent table/history visibility
+   * - my-pending  => Approve/Reject buttons
    */
+  @Get('my-assigned')
+  @HttpCode(HttpStatus.OK)
+  async getMyAssignedApprovals(
+    @Req() request: Request,
+  ) {
+    const actor =
+      await this.resolveActor(request);
+
+    return this.approvalRequestService
+      .getMyAssignedApprovals(actor);
+  }
+
   @Get('my-history')
   @HttpCode(HttpStatus.OK)
   async getMyHistory(
@@ -156,13 +177,6 @@ export class ApprovalRequestController {
     }
   }
 
-  /**
-   * Resolves the authenticated User account to its
-   * linked ManageEmployee record.
-   *
-   * The JWT authentication guard should already populate
-   * request.user.
-   */
   private async resolveActor(
     request: Request,
   ) {
@@ -202,10 +216,6 @@ export class ApprovalRequestController {
       authenticatedUser.username
         ?.trim() || null;
 
-    /*
-     * When the JWT contains only the User ID,
-     * load the username from User.
-     */
     if (
       !username &&
       userID
@@ -232,10 +242,6 @@ export class ApprovalRequestController {
       );
     }
 
-    /*
-     * Avoid relying on the EmployeeCredentials relation name.
-     * First find employeeID from credentials, then load employee.
-     */
     const credentials =
       await this.prisma.employeeCredentials.findFirst({
         where: {
@@ -284,9 +290,6 @@ export class ApprovalRequestController {
       );
     }
 
-    /*
-     * Approvers should normally already be approved employees.
-     */
     if (
       employee.onboardingApprovalStatus !==
       'APPROVED'
@@ -299,13 +302,10 @@ export class ApprovalRequestController {
     return {
       userID,
       employeeID: employee.id,
-
       companyID:
         employee.companyID ?? null,
-
       branchesID:
         employee.branchesID ?? null,
-
       username,
     };
   }

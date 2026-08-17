@@ -6,8 +6,7 @@
   "private": true,
   "license": "UNLICENSED",
   "scripts": {
-    "build": "node --max-old-space-size=2048 ./node_modules/typescript/bin/tsc -p tsconfig.build.json",
-    "build:nest": "nest build",
+"build": "node --max-old-space-size=4096 ./node_modules/typescript/bin/tsc -p tsconfig.build.json",    "build:nest": "nest build",
     "migrate:dev": "prisma migrate dev --schema=prisma/hrms/schema.prisma",
     "generate": "prisma generate --schema=prisma/hrms/schema.prisma",
     "studio": "prisma studio --schema=prisma/hrms/schema.prisma --port 5556",

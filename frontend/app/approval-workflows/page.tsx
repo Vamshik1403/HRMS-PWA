@@ -23,7 +23,6 @@ import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 import { Textarea } from "../components/ui/textarea";
 import { Switch } from "../components/ui/switch";
-import { Checkbox } from "../components/ui/checkbox";
 import { Badge } from "../components/ui/badge";
 
 import { FormDrawer } from "../components/ui/form-drawer";
@@ -580,6 +579,30 @@ const CONDITION_FIELD_LABELS: Record<
   REGULARISATION_DAYS: "Regularisation Days",
   REQUEST_TEXT: "Request Text",
 };
+
+const REGULARISATION_TYPE_OPTIONS = [
+  { value: "PRESENT", label: "Present" },
+  { value: "HALF_DAY", label: "Half Day" },
+  { value: "LATE_MARK", label: "Late Mark" },
+  { value: "SL", label: "Sick Leave (SL)" },
+  { value: "CL", label: "Casual Leave (CL)" },
+  { value: "PL", label: "Privilege Leave (PL)" },
+  { value: "LOP", label: "Loss of Pay (LOP)" },
+  { value: "WEEKOFF", label: "Week Off" },
+] as const;
+
+const APPROVAL_MODE_COPY = {
+  SEQUENTIAL: {
+    title: "Sequential Approval",
+    description:
+      "Approvals are completed in order. Step 2 becomes active only after Step 1 is completed. Use this for controlled multi-level approvals.",
+  },
+  ANY_ELIGIBLE: {
+    title: "Any Eligible Approver",
+    description:
+      "All eligible approvers from the configured workflow may act. The first valid approval completes the request.",
+  },
+} as const;
 
 const CONDITION_OPERATOR_LABELS: Record<
   WorkflowConditionOperator,
@@ -1767,14 +1790,22 @@ if (!conditionContainer) {
       ];
     }
 
-    return (
+    const fields =
       MODULE_CONDITION_FIELDS[
         resolvedModuleKey
       ] ?? [
         ...COMMON_ORG_CONDITION_FIELDS,
         "REQUEST_TEXT",
-      ]
-    );
+      ];
+
+    /*
+     * If the workflow itself is already limited to one branch,
+     * a BRANCH condition is redundant and can confuse admins.
+     * Keep BRANCH available only for company-wide workflows.
+     */
+    return formData.branchesID != null
+      ? fields.filter((field) => field !== "BRANCH")
+      : fields;
   };
 
 
@@ -2402,31 +2433,11 @@ if (!conditionContainer) {
     setBranchList([]);
     setModuleList([]);
     setDesignationSuggestionMap({});
-    setConditionDepartmentSuggestions(
-  {},
-);
-setConditionBranchSuggestions({});
-setConditionDesignationSuggestions(
-  {},
-);
-setConditionEmployeeSuggestions(
-  {},
-);
-setConditionEmployeeLoading({});
-    setConditionDepartmentSuggestions(
-  {},
-);
-setConditionBranchSuggestions({});
-setConditionDesignationSuggestions(
-  {},
-);
-setConditionEmployeeSuggestions(
-  {},
-);
-setConditionEmployeeLoading({});
     setConditionDepartmentSuggestions({});
+    setConditionBranchSuggestions({});
     setConditionDesignationSuggestions({});
     setConditionEmployeeSuggestions({});
+    setConditionEmployeeLoading({});
 
     setIsFormOpen(true);
   };
@@ -3554,7 +3565,7 @@ steps: formData.steps.map(
       <PageHeader
         icon={Workflow}
         title="Approval Workflows"
-        description="Configure module-based, company and branch-specific multi-step approval workflows."
+        description="Create clear approval rules by company, branch, module, conditions and approver sequence."
         actions={
           !isFormOpen &&
             !isViewing &&
@@ -3599,8 +3610,7 @@ steps: formData.steps.map(
               </h3>
 
               <p className="mt-1 text-xs text-gray-500">
-                Select where and when this workflow
-                applies.
+                Define the scope, module, activation date and approval behavior for this workflow.
               </p>
             </div>
 
@@ -3727,7 +3737,7 @@ steps: formData.steps.map(
                 ref={branchRef}
                 className="relative space-y-2"
               >
-                <Label>Branch</Label>
+                <Label>Branch Scope</Label>
 
                 <Input
                   value={
@@ -3759,7 +3769,7 @@ steps: formData.steps.map(
                       formData.branchAutocomplete,
                     )
                   }
-                  placeholder="Search branch or leave blank for all branches..."
+                  placeholder="Select a branch or choose All Branches..."
                   disabled={
                     !formData.companyID ||
                     user?.role ===
@@ -3839,6 +3849,13 @@ steps: formData.steps.map(
                     ))}
                   </div>
                 )}
+              </div>
+
+              <div className="md:col-span-2 -mt-2">
+                <p className="text-xs text-gray-500">
+                  Branch Scope controls where the workflow exists. Use <strong>All Branches</strong>
+                  for a company-wide workflow; exact branch workflows take priority over company-wide fallback.
+                </p>
               </div>
 
               <div
@@ -3962,57 +3979,91 @@ steps: formData.steps.map(
               />
             </div>
 
-            <div className="space-y-3 rounded-lg border border-gray-200 p-4">
-              <div className="flex items-start gap-3">
-                <Checkbox
-                  id="allowAnySameDesignation"
-                  checked={
-                    formData.allowAnySameDesignation
-                  }
-                  onCheckedChange={(checked) =>
-                    setFormData((current) => ({
-                      ...current,
-                      allowAnySameDesignation:
-                        checked === true,
-                    }))
-                  }
-                />
-
-                <div>
-                  <Label
-                    htmlFor="allowAnySameDesignation"
-                    className="cursor-pointer"
-                  >
-                    Allow approval by any eligible
-                    employee with the selected
-                    designation
-                  </Label>
-
-                  <p className="mt-1 text-xs text-gray-500">
-                    When disabled, the system should
-                    resolve the requester&apos;s actual
-                    reporting hierarchy. When enabled,
-                    any active employee with the selected
-                    designation in the applicable company
-                    and branch may approve.
-                  </p>
-                </div>
+            <div className="space-y-4 rounded-xl border border-gray-200 p-4">
+              <div>
+                <Label className="text-sm font-semibold">
+                  Approval Mode
+                </Label>
+                <p className="mt-1 text-xs text-gray-500">
+                  Choose how the configured approval steps should be executed.
+                </p>
               </div>
 
-              {/* <div className="flex items-center justify-between border-t pt-3">
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                <button
+                  type="button"
+                  onClick={() =>
+                    setFormData((current) => ({
+                      ...current,
+                      allowAnySameDesignation: false,
+                    }))
+                  }
+                  className={`rounded-lg border p-4 text-left transition ${
+                    !formData.allowAnySameDesignation
+                      ? "border-primary bg-primary/5 ring-1 ring-primary"
+                      : "border-gray-200 hover:bg-gray-50"
+                  }`}
+                >
+                  <div className="flex items-start gap-3">
+                    <div className={`mt-0.5 h-4 w-4 rounded-full border ${
+                      !formData.allowAnySameDesignation
+                        ? "border-primary bg-primary ring-2 ring-primary/20"
+                        : "border-gray-300"
+                    }`} />
+                    <div>
+                      <div className="text-sm font-semibold">
+                        {APPROVAL_MODE_COPY.SEQUENTIAL.title}
+                      </div>
+                      <p className="mt-1 text-xs leading-5 text-gray-500">
+                        {APPROVAL_MODE_COPY.SEQUENTIAL.description}
+                      </p>
+                    </div>
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    setFormData((current) => ({
+                      ...current,
+                      allowAnySameDesignation: true,
+                    }))
+                  }
+                  className={`rounded-lg border p-4 text-left transition ${
+                    formData.allowAnySameDesignation
+                      ? "border-primary bg-primary/5 ring-1 ring-primary"
+                      : "border-gray-200 hover:bg-gray-50"
+                  }`}
+                >
+                  <div className="flex items-start gap-3">
+                    <div className={`mt-0.5 h-4 w-4 rounded-full border ${
+                      formData.allowAnySameDesignation
+                        ? "border-primary bg-primary ring-2 ring-primary/20"
+                        : "border-gray-300"
+                    }`} />
+                    <div>
+                      <div className="text-sm font-semibold">
+                        {APPROVAL_MODE_COPY.ANY_ELIGIBLE.title}
+                      </div>
+                      <p className="mt-1 text-xs leading-5 text-gray-500">
+                        {APPROVAL_MODE_COPY.ANY_ELIGIBLE.description}
+                      </p>
+                    </div>
+                  </div>
+                </button>
+              </div>
+
+              <div className="flex items-center justify-between border-t pt-4">
                 <div>
                   <Label>Workflow Status</Label>
-
                   <p className="mt-1 text-xs text-gray-500">
-                    Only active workflows can be resolved
-                    for new requests.
+                    Only active workflows are considered for new requests.
+                    Existing approval requests keep their saved workflow snapshot.
                   </p>
                 </div>
 
                 <Switch
-                  checked={
-                    formData.workflowStatus
-                  }
+                  checked={formData.workflowStatus}
                   onCheckedChange={(checked) =>
                     setFormData((current) => ({
                       ...current,
@@ -4020,7 +4071,7 @@ steps: formData.steps.map(
                     }))
                   }
                 />
-              </div> */}
+              </div>
             </div>
           </section>
 
@@ -4034,8 +4085,9 @@ steps: formData.steps.map(
                 </h3>
 
                 <p className="mt-1 text-xs text-gray-500">
-                  Steps are processed sequentially from
-                  top to bottom.
+                  {formData.allowAnySameDesignation
+                    ? "All configured eligible approvers may act; the first valid approval completes the request."
+                    : "Steps are processed from top to bottom. The next step becomes active only after the current step is completed."}
                 </p>
               </div>
 
@@ -4166,6 +4218,11 @@ steps: formData.steps.map(
                               Reporting Manager
                             </option>
                           </select>
+                          <p className="text-xs text-gray-500">
+                            {step.approverType === "REPORTING_MANAGER"
+                              ? "Uses the employee's actual mapped reporting manager."
+                              : "Uses active employees who hold the selected designation in the workflow company scope."}
+                          </p>
                         </div>
 
                         <div className="space-y-2">
@@ -4320,9 +4377,11 @@ steps: formData.steps.map(
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <h3 className="text-sm font-semibold text-gray-900">
-                  Workflow Conditions
+                  Apply To / Workflow Conditions
                 </h3>
-
+                <p className="mt-1 text-xs text-gray-500">
+                  Conditions decide when this workflow starts. Approval steps decide who approves.
+                </p>
               </div>
 
               <Button
@@ -4385,6 +4444,19 @@ steps: formData.steps.map(
                   </Button>
                 </div>
               </div>
+            )}
+
+            {formData.companyModuleID && formData.conditions.length === 0 && (
+              <NoticeBanner variant="info" compact>
+                No conditions added. This workflow will apply to every request inside the selected
+                Company + Branch Scope + Module once it becomes effective.
+              </NoticeBanner>
+            )}
+
+            {formData.branchesID != null && formData.conditions.some((c) => c.fieldKey === "BRANCH") && (
+              <NoticeBanner variant="warning" compact>
+                This workflow already has a specific Branch Scope, so an additional Branch condition is redundant.
+              </NoticeBanner>
             )}
 
             <div className="space-y-4">
@@ -4943,34 +5015,64 @@ steps: formData.steps.map(
                             </>
                           )}
 
+                        {condition.fieldKey === "REGULARISATION_TYPE" && (
+                          <div className="space-y-2 md:col-span-2">
+                            <Label>Regularisation Type *</Label>
+                            <select
+                              value={condition.textValue}
+                              onChange={(event) =>
+                                updateCondition(
+                                  condition.localID,
+                                  { textValue: event.target.value },
+                                )
+                              }
+                              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                            >
+                              <option value="">Select regularisation type</option>
+                              {REGULARISATION_TYPE_OPTIONS.map((option) => (
+                                <option key={option.value} value={option.value}>
+                                  {option.label}
+                                </option>
+                              ))}
+                            </select>
+                            <p className="text-xs text-gray-500">
+                              Stored using the same internal code used by Attendance Regularisation.
+                            </p>
+                          </div>
+                        )}
+
                         {[
                           "LEAVE_TYPE",
                           "EXIT_TYPE",
-                          "REGULARISATION_TYPE",
                           "REQUEST_TEXT",
                         ].includes(
                           condition.fieldKey,
                         ) && (
-                            <div className="space-y-2 md:col-span-2">
-                              <Label>Value *</Label>
+                          <div className="space-y-2 md:col-span-2">
+                            <Label>
+                              {condition.fieldKey === "LEAVE_TYPE"
+                                ? "Leave Type *"
+                                : condition.fieldKey === "EXIT_TYPE"
+                                  ? "Exit Type *"
+                                  : "Text Value *"}
+                            </Label>
 
-                              <Input
-                                value={
-                                  condition.textValue
-                                }
-                                onChange={(event) =>
-                                  updateCondition(
-                                    condition.localID,
-                                    {
-                                      textValue:
-                                        event.target.value,
-                                    },
-                                  )
-                                }
-                                placeholder="Enter condition value..."
-                              />
-                            </div>
-                          )}
+                            <Input
+                              value={condition.textValue}
+                              onChange={(event) =>
+                                updateCondition(
+                                  condition.localID,
+                                  { textValue: event.target.value },
+                                )
+                              }
+                              placeholder={
+                                condition.fieldKey === "REQUEST_TEXT"
+                                  ? "Enter text to match..."
+                                  : "Enter exact value used by the source module..."
+                              }
+                            />
+                          </div>
+                        )}
                       </div>
                     </div>
                   );
@@ -4987,6 +5089,36 @@ steps: formData.steps.map(
           </section>
 
           
+          <div className="rounded-xl border bg-gray-50 p-4 text-sm">
+            <div className="font-semibold text-gray-900">Workflow Summary</div>
+            <div className="mt-2 grid grid-cols-1 gap-2 text-gray-600 md:grid-cols-2">
+              <div>
+                <span className="font-medium text-gray-800">Scope:</span>{" "}
+                {formData.companyAutocomplete || "Company not selected"} /{" "}
+                {formData.branchesID == null
+                  ? "All Branches"
+                  : formData.branchAutocomplete || "Selected Branch"}
+              </div>
+              <div>
+                <span className="font-medium text-gray-800">Module:</span>{" "}
+                {formData.moduleAutocomplete || "Not selected"}
+              </div>
+              <div>
+                <span className="font-medium text-gray-800">Conditions:</span>{" "}
+                {formData.conditions.length === 0
+                  ? "All requests in scope"
+                  : `${formData.conditionMatchType === "ALL" ? "Match All" : "Match Any"} (${formData.conditions.length})`}
+              </div>
+              <div>
+                <span className="font-medium text-gray-800">Approval:</span>{" "}
+                {formData.allowAnySameDesignation
+                  ? APPROVAL_MODE_COPY.ANY_ELIGIBLE.title
+                  : APPROVAL_MODE_COPY.SEQUENTIAL.title}{" "}
+                · {formData.steps.length} step{formData.steps.length === 1 ? "" : "s"}
+              </div>
+            </div>
+          </div>
+
           <div className="flex justify-end gap-2 border-t pt-4">
             <Button
               type="button"
@@ -5081,12 +5213,11 @@ steps: formData.steps.map(
                     "No description",
                 },
                 {
-                  label:
-                    "Any Same Designation Can Approve",
+                  label: "Approval Mode",
                   value:
                     viewRow.allowAnySameDesignation
-                      ? "Yes"
-                      : "No",
+                      ? APPROVAL_MODE_COPY.ANY_ELIGIBLE.title
+                      : APPROVAL_MODE_COPY.SEQUENTIAL.title,
                 },
                 {
                   label: "Status",
@@ -5099,6 +5230,19 @@ steps: formData.steps.map(
               ]}
             />
 
+
+            {(!viewRow.conditions || viewRow.conditions.length === 0) && (
+              <DetailCard
+                title="Workflow Conditions"
+                subtitle="No additional conditions"
+                rows={[
+                  {
+                    label: "Applies To",
+                    value: "All requests inside the selected Company + Branch Scope + Module",
+                  },
+                ]}
+              />
+            )}
 
             {viewRow.conditions &&
               viewRow.conditions.length > 0 && (
@@ -5162,7 +5306,9 @@ steps: formData.steps.map(
                 </h3>
 
                 <p className="mt-1 text-sm text-gray-500">
-                  Approval is processed in this order.
+                  {viewRow.allowAnySameDesignation
+                    ? "Any eligible configured approver may complete the request."
+                    : "Approval is processed in this order."}
                 </p>
               </div>
 

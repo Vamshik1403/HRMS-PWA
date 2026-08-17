@@ -1,9 +1,32 @@
 import { Module } from '@nestjs/common';
-import { EmpAttendanceRegulariseService } from './emp-attendance-regularise.service';
+
+import { PrismaModule } from '../prisma/prisma.module';
+
+import { ApprovalWorkflowModule } from '../approval-workflow/approval-workflow.module';
+
 import { EmpAttendanceRegulariseController } from './emp-attendance-regularise.controller';
+import { EmpAttendanceRegulariseService } from './emp-attendance-regularise.service';
 
 @Module({
-  controllers: [EmpAttendanceRegulariseController],
-  providers: [EmpAttendanceRegulariseService],
+  imports: [
+    PrismaModule,
+
+    /*
+     * Gives this module access to ApprovalEngineService.
+     */
+    ApprovalWorkflowModule,
+  ],
+
+  controllers: [
+    EmpAttendanceRegulariseController,
+  ],
+
+  providers: [
+    EmpAttendanceRegulariseService,
+  ],
+
+  exports: [
+    EmpAttendanceRegulariseService,
+  ],
 })
 export class EmpAttendanceRegulariseModule {}

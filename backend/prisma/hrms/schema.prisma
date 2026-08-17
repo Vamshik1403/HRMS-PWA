@@ -131,86 +131,86 @@ model Branches {
   longitude      String? @db.VarChar
   geofenchradius String? @db.VarChar
 
-  attendancePolicy        AttendancePolicy[]
-  bankDetails             BankDetails[]
-  bonusSetup              BonusSetup[]
-  company                 Company?                  @relation(fields: [companyID], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  serviceProvider         ServiceProvider?          @relation(fields: [serviceProviderID], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  departments             Departments[]
-  designations            Designations[]
-  devices                 Devices[]
-  empAttendanceRegularise EmpAttendanceRegularise[]
-  empCurrentPosition      EmpCurrentPosition[]
-  empFieldSiteAttendance  EmpFieldSiteAttendance[]
-  empPromotion            EmpPromotion[]
-  employeeCredentials     EmployeeCredentials[]
-  genarateBonus           GenarateBonus[]
-  generateSalary          GenerateSalary[]
-  hourlyPayGrade          HourlyPayGrade[]
-  manageEmployee          ManageEmployee[]
-  empBranch               EmpBranch[]
-  manageHoliday           ManageHoliday[]
-  monthlyPayGrade         MonthlyPayGrade[]
-  ptCompliance            PTCompliance[]
-  publicHoliday           PublicHoliday[]
-  reimbursement           Reimbursement[]
-  roaster                 Roster[]
-  salaryAdvance           SalaryAdvance[]
-  salaryAllowance         SalaryAllowance[]
-  salaryCycle             SalaryCycle[]
-  salaryDeduction         SalaryDeduction[]
-  user                    User[]
-  workShift               WorkShift[]
-  leaveApplication        leaveApplication[]
-  leaveApplicationRequest leaveApplicationRequest[]
-  leavePolicy             leavePolicy[]
-  leavePolicyHoliday      leavePolicyHoliday[]
-  contractorBranches      ContractorBranch[]
-  bonusAllocation         BonusAllocation[]
-  taskCustomers           TaskCustomer[]
-  employeeDocuments       EmployeeDocument[]
-  approvalWorkflows       ApprovalWorkflow[]
-  departmentBranches      DepartmentBranch[]
+  attendancePolicy           AttendancePolicy[]
+  bankDetails                BankDetails[]
+  bonusSetup                 BonusSetup[]
+  company                    Company?                    @relation(fields: [companyID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  serviceProvider            ServiceProvider?            @relation(fields: [serviceProviderID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  departments                Departments[]
+  designations               Designations[]
+  devices                    Devices[]
+  empAttendanceRegularise    EmpAttendanceRegularise[]
+  empCurrentPosition         EmpCurrentPosition[]
+  empFieldSiteAttendance     EmpFieldSiteAttendance[]
+  empPromotion               EmpPromotion[]
+  employeeCredentials        EmployeeCredentials[]
+  genarateBonus              GenarateBonus[]
+  generateSalary             GenerateSalary[]
+  hourlyPayGrade             HourlyPayGrade[]
+  manageEmployee             ManageEmployee[]
+  empBranch                  EmpBranch[]
+  manageHoliday              ManageHoliday[]
+  monthlyPayGrade            MonthlyPayGrade[]
+  ptCompliance               PTCompliance[]
+  publicHoliday              PublicHoliday[]
+  reimbursement              Reimbursement[]
+  roaster                    Roster[]
+  salaryAdvance              SalaryAdvance[]
+  salaryAllowance            SalaryAllowance[]
+  salaryCycle                SalaryCycle[]
+  salaryDeduction            SalaryDeduction[]
+  user                       User[]
+  workShift                  WorkShift[]
+  leaveApplication           leaveApplication[]
+  leaveApplicationRequest    leaveApplicationRequest[]
+  leavePolicy                leavePolicy[]
+  leavePolicyHoliday         leavePolicyHoliday[]
+  contractorBranches         ContractorBranch[]
+  bonusAllocation            BonusAllocation[]
+  taskCustomers              TaskCustomer[]
+  employeeDocuments          EmployeeDocument[]
+  approvalWorkflows          ApprovalWorkflow[]
+  departmentBranches         DepartmentBranch[]
   approvalWorkflowConditions ApprovalWorkflowCondition[]
 }
 
 model Company {
-  id                             Int                       @id @default(autoincrement())
+  id                             Int                        @id @default(autoincrement())
   serviceProviderID              Int?
-  companyName                    String?                   @db.VarChar
-  address                        String?                   @db.VarChar
-  country                        String?                   @db.VarChar
-  state                          String?                   @db.VarChar
-  city                           String?                   @db.VarChar
-  pincode                        String?                   @db.VarChar
-  timeZone                       String?                   @db.VarChar
-  currency                       String?                   @db.VarChar
-  pfNo                           String?                   @db.VarChar
-  panNo                          String?                   @db.VarChar
-  tanNo                          String?                   @db.VarChar
-  esiNo                          String?                   @db.VarChar
-  linNo                          String?                   @db.VarChar
-  gstNo                          String?                   @db.VarChar
-  gstCertUrl                     String?                   @db.VarChar
-  shopRegNo                      String?                   @db.VarChar
+  companyName                    String?                    @db.VarChar
+  address                        String?                    @db.VarChar
+  country                        String?                    @db.VarChar
+  state                          String?                    @db.VarChar
+  city                           String?                    @db.VarChar
+  pincode                        String?                    @db.VarChar
+  timeZone                       String?                    @db.VarChar
+  currency                       String?                    @db.VarChar
+  pfNo                           String?                    @db.VarChar
+  panNo                          String?                    @db.VarChar
+  tanNo                          String?                    @db.VarChar
+  esiNo                          String?                    @db.VarChar
+  linNo                          String?                    @db.VarChar
+  gstNo                          String?                    @db.VarChar
+  gstCertUrl                     String?                    @db.VarChar
+  shopRegNo                      String?                    @db.VarChar
   shopRegCertHistory             Json?
-  financialYearStart             String?                   @db.VarChar
-  contactNo                      String?                   @db.VarChar
-  emailAdd                       String?                   @db.VarChar
-  companyLogoUrl                 String?                   @db.VarChar
-  SignatureUrl                   String?                   @db.VarChar
-  companyType                    String?                   @db.VarChar
-  legalEntityType                String?                   @db.VarChar
-  defaultOwnerTitle              String?                   @db.VarChar
-  noticePeriodDaysForResignation String?                   @db.VarChar
-  noticePeriodDaysForTermination String?                   @db.VarChar
-  pwaShowLeaveBalance            Boolean                   @default(true)
+  financialYearStart             String?                    @db.VarChar
+  contactNo                      String?                    @db.VarChar
+  emailAdd                       String?                    @db.VarChar
+  companyLogoUrl                 String?                    @db.VarChar
+  SignatureUrl                   String?                    @db.VarChar
+  companyType                    String?                    @db.VarChar
+  legalEntityType                String?                    @db.VarChar
+  defaultOwnerTitle              String?                    @db.VarChar
+  noticePeriodDaysForResignation String?                    @db.VarChar
+  noticePeriodDaysForTermination String?                    @db.VarChar
+  pwaShowLeaveBalance            Boolean                    @default(true)
   attendancePolicy               AttendancePolicy[]
   bankDetails                    BankDetails[]
   bonusSetup                     BonusSetup[]
   complianceRule                 ComplianceRule[]
   branches                       Branches[]
-  serviceProvider                ServiceProvider?          @relation(fields: [serviceProviderID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  serviceProvider                ServiceProvider?           @relation(fields: [serviceProviderID], references: [id], onDelete: NoAction, onUpdate: NoAction)
   contractors                    Contractors[]
   departments                    Departments[]
   designations                   Designations[]
@@ -438,7 +438,7 @@ model DepartmentBranch {
   branchesID   Int
 
   department Departments @relation(fields: [departmentID], references: [id], onDelete: Cascade)
-  branches   Branches   @relation(fields: [branchesID], references: [id], onDelete: Cascade)
+  branches   Branches    @relation(fields: [branchesID], references: [id], onDelete: Cascade)
 
   @@unique([departmentID, branchesID])
   @@index([departmentID])
@@ -2057,12 +2057,21 @@ enum AttendanceStatus {
 
 enum RegularizeAs {
   PRESENT
+  HALF_DAY
+  LATE_MARK
   SL
   CL
   PL
   LOP
   WEEKOFF
 }
+
+enum ApprovalRequirement {
+  ANY
+  ALL
+}
+
+
 
 model EmployeeMemo {
   id                Int             @id @default(autoincrement())
@@ -2621,6 +2630,11 @@ enum WorkflowConditionValueType {
   DATE
 }
 
+enum WorkflowApproverType {
+  DESIGNATION
+  REPORTING_MANAGER
+}
+
 model ApprovalWorkflow {
   id Int @id @default(autoincrement())
 
@@ -2722,10 +2736,13 @@ model ApprovalRequestStep {
 
   approvalWorkflowStepID Int?
   stepNo                 Int
-  designationID          Int
 
-  stepNameSnapshot        String?
-  designationNameSnapshot String
+  designationID Int
+
+  stepNameSnapshot         String?
+  designationNameSnapshot  String
+
+  approvalRequirementSnapshot ApprovalRequirement @default(ANY)
 
   isMandatorySnapshot     Boolean @default(true)
   canRejectSnapshot       Boolean @default(true)
@@ -2751,6 +2768,7 @@ model ApprovalRequestStep {
   @@index([approvalRequestID])
   @@index([designationID])
   @@index([status])
+
   @@map("approval_request_steps")
 }
 
@@ -2900,9 +2918,12 @@ model ApprovalWorkflowStep {
 
   approvalWorkflowID Int
   stepNo             Int
-  /// DESIGNATION = approve by matching designation; REPORTING_MANAGER = subject's manager via EmployeeLink
-  approverType       String  @default("DESIGNATION") @db.VarChar(32)
-  designationID      Int?
+
+  approverType WorkflowApproverType @default(DESIGNATION)
+
+  designationID Int?
+
+  approvalRequirement ApprovalRequirement @default(ANY)
 
   stepName        String?
   isMandatory     Boolean @default(true)
@@ -2914,11 +2935,15 @@ model ApprovalWorkflowStep {
   updatedAt DateTime @updatedAt
 
   approvalWorkflow ApprovalWorkflow @relation(fields: [approvalWorkflowID], references: [id], onDelete: Cascade)
-  designation      Designations?    @relation(fields: [designationID], references: [id], onDelete: Restrict)
+
+  designation Designations? @relation(fields: [designationID], references: [id], onDelete: Restrict)
 
   @@unique([approvalWorkflowID, stepNo])
   @@index([approvalWorkflowID])
   @@index([designationID])
+  @@index([approverType])
+  @@index([approvalRequirement])
+
   @@map("approval_workflow_steps")
 }
 

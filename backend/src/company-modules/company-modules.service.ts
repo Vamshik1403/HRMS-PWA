@@ -11,12 +11,26 @@ import { UpdateCompanyModuleDto } from './dto/update-company-module.dto';
 export class CompanyModulesService {
   constructor(private readonly prisma: PrismaService) {}
 
-  private generateModuleKey(moduleName: string): string {
-  return `${moduleName
+ private generateModuleKey(
+  moduleName: string,
+): string {
+  const normalized = moduleName
     .trim()
     .toUpperCase()
     .replace(/[^A-Z0-9]+/g, '_')
-    .replace(/^_+|_+$/g, '')}_MODULE`;
+    .replace(/^_+|_+$/g, '');
+
+  /*
+   * Prevent:
+   * ATTENDANCE_MODULE
+   * becoming
+   * ATTENDANCE_MODULE_MODULE
+   */
+  if (normalized.endsWith('_MODULE')) {
+    return normalized;
+  }
+
+  return `${normalized}_MODULE`;
 }
 
   async create(

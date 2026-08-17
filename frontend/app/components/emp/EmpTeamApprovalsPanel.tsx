@@ -18,6 +18,7 @@ import type { ReimbursementRow } from "./EmpReimbursementMobile";
 import { totalAmount } from "./EmpReimbursementMobile";
 import { Button } from "../ui/button";
 import { cn } from "@/app/utils/cn";
+import { useRouter } from "next/navigation";
 
 const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL || "/backend";
 
@@ -76,6 +77,7 @@ export function EmpTeamApprovalsPanel({
   const [selectedLeave, setSelectedLeave] = useState<LeaveAppRow | null>(null);
   const [selectedReimbId, setSelectedReimbId] = useState<string | null>(null);
   const [newRequestOpen, setNewRequestOpen] = useState(false);
+  const router = useRouter();
 
   const loadData = useCallback(async (empId: number) => {
     setLoading(true);
@@ -269,19 +271,28 @@ export function EmpTeamApprovalsPanel({
   ) : (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-wrap items-center gap-2">
-          {(["all", "leave", "reimbursement"] as FilterType[]).map((f) => (
-            <Button
-              key={f}
-              type="button"
-              size="sm"
-              variant={filter === f ? "default" : "outline"}
-              onClick={() => setFilter(f)}
-            >
-              {f === "all" ? "All" : f === "leave" ? "Leave" : "Reimbursement"}
-            </Button>
-          ))}
-        </div>
+       <div className="flex flex-wrap items-center gap-2">
+  {(["all", "leave", "reimbursement"] as FilterType[]).map((f) => (
+    <Button
+      key={f}
+      type="button"
+      size="sm"
+      variant={filter === f ? "default" : "outline"}
+      onClick={() => setFilter(f)}
+    >
+      {f === "all" ? "All" : f === "leave" ? "Leave" : "Reimbursement"}
+    </Button>
+  ))}
+
+  <Button
+  type="button"
+  size="sm"
+  variant="outline"
+  onClick={() => router.push("/empTeam/regularisation")}
+>
+  Regularization
+</Button>
+</div>
         {allowNewRequest ? (
           <Button type="button" onClick={() => setNewRequestOpen(true)}>
             <Plus className="size-4" />

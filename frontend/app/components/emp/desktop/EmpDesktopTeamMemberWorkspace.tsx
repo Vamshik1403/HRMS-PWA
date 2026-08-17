@@ -8,6 +8,7 @@ import { EmpDesktopProfilePanel } from "./EmpDesktopProfilePanel";
 import { EmpProfileWorkspaceTabNav } from "./EmpProfileWorkspaceTabNav";
 import { EmpProfileAttendanceView } from "./EmpProfileAttendanceView";
 import { EmpProfileWorkReportView } from "./EmpProfileWorkReportView";
+import { EmpProfileRegularisationView } from "./EmpProfileRegularisationView";
 import { EmpHolidayListMobile } from "../EmpHolidayListMobile";
 import {
   EmpTeamMemberLeave,
@@ -25,6 +26,7 @@ const MEMBER_TABS = [
   "work-report",
   "leave",
   "reimbursement",
+  "regularisation",
   "payslips",
   "salary-advance",
   "messaging",
@@ -66,6 +68,7 @@ function EmpDesktopTeamMemberWorkspaceInner() {
     { id: "work-report", label: "Work Report", href: memberTabHref(employeeId, "work-report") },
     { id: "leave", label: "Leave", href: memberTabHref(employeeId, "leave") },
     { id: "reimbursement", label: "Reimbursement", href: memberTabHref(employeeId, "reimbursement") },
+    { id: "regularisation", label: "Regularisation", href: memberTabHref(employeeId, "regularisation") },
     { id: "payslips", label: "Payslips", href: memberTabHref(employeeId, "payslips") },
     { id: "salary-advance", label: "Loans & Advances", href: memberTabHref(employeeId, "salary-advance") },
     { id: "messaging", label: "IM", href: memberTabHref(employeeId, "messaging") },
@@ -85,6 +88,9 @@ function EmpDesktopTeamMemberWorkspaceInner() {
         {activeTab === "work-report" && <EmpProfileWorkReportView employeeId={employeeId} />}
         {activeTab === "leave" && <EmpTeamMemberLeave employeeId={employeeId} />}
         {activeTab === "reimbursement" && <EmpTeamMemberReimbursement employeeId={employeeId} />}
+        {activeTab === "regularisation" && (
+          <EmpProfileRegularisationView employeeId={employeeId} />
+        )}
         {activeTab === "payslips" && <EmpTeamMemberPayslips employeeId={employeeId} />}
         {activeTab === "salary-advance" && <EmpTeamMemberSalaryAdvances employeeId={employeeId} />}
         {activeTab === "messaging" && <EmpTeamMemberMessaging employeeId={employeeId} />}

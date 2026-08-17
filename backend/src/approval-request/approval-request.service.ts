@@ -30,6 +30,18 @@ export interface ApprovalRequestActor {
   username: string | null;
 }
 
+type RuntimeApprovalRequest = {
+  id: number;
+  companyID: number;
+  branchesID: number | null;
+  subjectType: string;
+  subjectID: number;
+  subjectEmployeeID: number | null;
+  status: ApprovalRequestStatus;
+  currentStepNo: number | null;
+  allowAnySameDesignationSnapshot: boolean;
+};
+
 @Injectable()
 export class ApprovalRequestService {
   constructor(
@@ -43,18 +55,160 @@ export class ApprovalRequestService {
   async getMyPendingApprovals(
     actor: ApprovalRequestActor,
   ) {
+    const rows =
+      await this.prisma.approvalRequestApprover.findMany({
+        where: {
+          approverEmployeeID: actor.employeeID,
+
+          status: {
+            in: [
+              ApprovalApproverStatus.PENDING,
+              ApprovalApproverStatus.WAITING,
+            ],
+          },
+
+          approvalRequest: {
+            status: ApprovalRequestStatus.PENDING,
+          },
+
+          approvalRequestStep: {
+            status: {
+              in: [
+                ApprovalStepStatus.PENDING,
+                ApprovalStepStatus.WAITING,
+              ],
+            },
+          },
+        },
+
+        select: {
+          id: true,
+          approvalRequestID: true,
+          approvalRequestStepID: true,
+          approverEmployeeID: true,
+
+          status: true,
+          activatedAt: true,
+          actedAt: true,
+          comment: true,
+
+          designationIDSnapshot: true,
+          designationNameSnapshot: true,
+          departmentIDSnapshot: true,
+          branchesIDSnapshot: true,
+          companyIDSnapshot: true,
+
+          approvalRequest: {
+            select: {
+              id: true,
+              serviceProviderID: true,
+              companyID: true,
+              branchesID: true,
+              approvalWorkflowID: true,
+              companyModuleID: true,
+              subjectType: true,
+              subjectID: true,
+              subjectEmployeeID: true,
+              status: true,
+              currentStepNo: true,
+              workflowNameSnapshot: true,
+              moduleKeySnapshot: true,
+              conditionMatchTypeSnapshot: true,
+              allowAnySameDesignationSnapshot: true,
+              submittedByUserID: true,
+              submittedAt: true,
+              createdAt: true,
+              updatedAt: true,
+
+              subjectEmployee: {
+                select: {
+                  id: true,
+                  employeeID: true,
+                  employeeFirstName: true,
+                  employeeLastName: true,
+                  serviceProviderID: true,
+                  companyID: true,
+                  branchesID: true,
+                  departmentNameID: true,
+                  designationID: true,
+                  onboardingApprovalStatus: true,
+                  lifecycleStatus: true,
+                },
+              },
+
+              companyModule: {
+                select: {
+                  id: true,
+                  moduleKey: true,
+                  moduleName: true,
+                },
+              },
+            },
+          },
+
+          approvalRequestStep: {
+            select: {
+              id: true,
+              stepNo: true,
+              designationID: true,
+              stepNameSnapshot: true,
+              designationNameSnapshot: true,
+              isMandatorySnapshot: true,
+              canRejectSnapshot: true,
+              canSendBackSnapshot: true,
+              approvalTimeoutSnapshot: true,
+              status: true,
+              activatedAt: true,
+            },
+          },
+        },
+
+        orderBy: [
+          { activatedAt: 'asc' },
+          { id: 'asc' },
+        ],
+      });
+
+    return rows.filter((row) => {
+      const request = row.approvalRequest;
+      const step = row.approvalRequestStep;
+
+      if (
+        request.allowAnySameDesignationSnapshot === true
+      ) {
+        return (
+          request.status === ApprovalRequestStatus.PENDING &&
+          (row.status === ApprovalApproverStatus.PENDING ||
+            row.status === ApprovalApproverStatus.WAITING) &&
+          (step.status === ApprovalStepStatus.PENDING ||
+            step.status === ApprovalStepStatus.WAITING)
+        );
+      }
+
+      return (
+        request.status === ApprovalRequestStatus.PENDING &&
+        request.currentStepNo === step.stepNo &&
+        step.status === ApprovalStepStatus.PENDING &&
+        row.status === ApprovalApproverStatus.PENDING
+      );
+    });
+  }
+
+  /**
+   * Persistent approval inbox/history.
+   *
+   * Unlike /my-pending, this endpoint NEVER drops an assignment merely
+   * because the employee already acted or the request reached a final state.
+   *
+   * Use this endpoint for table visibility/history.
+   * Use /my-pending only for actionable Approve/Reject buttons.
+   */
+  async getMyAssignedApprovals(
+    actor: ApprovalRequestActor,
+  ) {
     return this.prisma.approvalRequestApprover.findMany({
       where: {
         approverEmployeeID: actor.employeeID,
-        status: ApprovalApproverStatus.PENDING,
-
-        approvalRequest: {
-          status: ApprovalRequestStatus.PENDING,
-        },
-
-        approvalRequestStep: {
-          status: ApprovalStepStatus.PENDING,
-        },
       },
 
       select: {
@@ -99,6 +253,10 @@ export class ApprovalRequestService {
 
             submittedByUserID: true,
             submittedAt: true,
+            completedAt: true,
+            rejectedAt: true,
+            cancelledAt: true,
+            finalRemark: true,
 
             createdAt: true,
             updatedAt: true,
@@ -148,51 +306,34 @@ export class ApprovalRequestService {
 
             status: true,
             activatedAt: true,
+            completedAt: true,
+            rejectedAt: true,
+            sentBackAt: true,
           },
         },
       },
 
       orderBy: [
         {
-          activatedAt: 'asc',
+          createdAt: 'desc',
         },
         {
-          id: 'asc',
+          id: 'desc',
         },
       ],
     });
   }
 
-  /**
-   * Pending approval count for sidebar/dashboard badges.
-   */
   async getMyPendingCount(
     actor: ApprovalRequestActor,
   ) {
-    const count =
-      await this.prisma.approvalRequestApprover.count({
-        where: {
-          approverEmployeeID: actor.employeeID,
-          status: ApprovalApproverStatus.PENDING,
-
-          approvalRequest: {
-            status: ApprovalRequestStatus.PENDING,
-          },
-
-          approvalRequestStep: {
-            status: ApprovalStepStatus.PENDING,
-          },
-        },
-      });
+    const rows = await this.getMyPendingApprovals(actor);
 
     return {
-      count,
+      count: rows.length,
     };
   }
 
-  /**
-   * Approval actions performed by the logged-in employee.
-   */
   async getMyHistory(
     actor: ApprovalRequestActor,
   ) {
@@ -456,18 +597,45 @@ export class ApprovalRequestService {
       );
     }
 
+    const request =
+      assignment.approvalRequest;
+
+    const step =
+      assignment.approvalRequestStep;
+
+    const anyApproverMode =
+      request.allowAnySameDesignationSnapshot === true;
+
     const canAct =
-      assignment.status ===
-        ApprovalApproverStatus.PENDING &&
-      assignment.approvalRequest.status ===
-        ApprovalRequestStatus.PENDING &&
-      assignment.approvalRequestStep.status ===
-        ApprovalStepStatus.PENDING &&
-      assignment.approvalRequest.currentStepNo ===
-        assignment.approvalRequestStep.stepNo;
+      request.status === ApprovalRequestStatus.PENDING &&
+      (
+        anyApproverMode
+          ? (
+              (
+                [
+                  ApprovalApproverStatus.PENDING,
+                  ApprovalApproverStatus.WAITING,
+                ] as ApprovalApproverStatus[]
+              ).includes(assignment.status) &&
+              (
+                [
+                  ApprovalStepStatus.PENDING,
+                  ApprovalStepStatus.WAITING,
+                ] as ApprovalStepStatus[]
+              ).includes(step.status)
+            )
+          : (
+              assignment.status ===
+                ApprovalApproverStatus.PENDING &&
+              step.status ===
+                ApprovalStepStatus.PENDING &&
+              request.currentStepNo ===
+                step.stepNo
+            )
+      );
 
     return {
-      ...assignment.approvalRequest,
+      ...request,
 
       currentAssignment: {
         id: assignment.id,
@@ -478,20 +646,18 @@ export class ApprovalRequestService {
       },
 
       assignedStep:
-        assignment.approvalRequestStep,
+        step,
 
       permissions: {
         canApprove: canAct,
 
         canReject:
           canAct &&
-          assignment.approvalRequestStep
-            .canRejectSnapshot,
+          step.canRejectSnapshot,
 
         canSendBack:
           canAct &&
-          assignment.approvalRequestStep
-            .canSendBackSnapshot,
+          step.canSendBackSnapshot,
       },
     };
   }
@@ -504,39 +670,34 @@ export class ApprovalRequestService {
     try {
       return await this.prisma.$transaction(
         async (tx) => {
-          const context =
-            await this.getActiveAssignment(
-              tx,
-              requestID,
-              actor,
-            );
-
           const {
             request,
             currentStep,
             assignment,
-          } = context;
+          } = await this.getActiveAssignment(
+            tx,
+            requestID,
+            actor,
+          );
 
           const now = new Date();
-          const remark =
-            dto.remark?.trim() || null;
+          const remark = dto.remark?.trim() || null;
 
-          /*
-           * Atomic update prevents the same employee from
-           * approving the same assignment twice.
-           */
           const assignmentUpdate =
             await tx.approvalRequestApprover.updateMany({
               where: {
                 id: assignment.id,
-                status:
-                  ApprovalApproverStatus.PENDING,
+
+                status: {
+                  in: [
+                    ApprovalApproverStatus.PENDING,
+                    ApprovalApproverStatus.WAITING,
+                  ],
+                },
               },
 
               data: {
-                status:
-                  ApprovalApproverStatus.APPROVED,
-
+                status: ApprovalApproverStatus.APPROVED,
                 actedAt: now,
                 comment: remark,
               },
@@ -551,75 +712,179 @@ export class ApprovalRequestService {
           await tx.approvalRequestAction.create({
             data: {
               approvalRequestID: request.id,
-
-              approvalRequestStepID:
-                currentStep.id,
-
-              approvalRequestApproverID:
-                assignment.id,
-
-              action:
-                ApprovalActionType.APPROVED,
-
-              actedByEmployeeID:
-                actor.employeeID,
-
-              actedByUserID:
-                actor.userID,
-
-              fromStatus:
-                ApprovalApproverStatus.PENDING,
-
-              toStatus:
-                ApprovalApproverStatus.APPROVED,
-
+              approvalRequestStepID: currentStep.id,
+              approvalRequestApproverID: assignment.id,
+              action: ApprovalActionType.APPROVED,
+              actedByEmployeeID: actor.employeeID,
+              actedByUserID: actor.userID,
+              fromStatus: assignment.status,
+              toStatus: ApprovalApproverStatus.APPROVED,
               remark,
             },
           });
 
           /*
-           * The engine already controls whether one or all
-           * employees are assigned.
-           *
-           * Once one active assignment approves, the current
-           * workflow step is complete.
+           * ANY MODE:
+           * any one eligible configured approver final-approves
+           * the whole request.
            */
-          await tx.approvalRequestApprover.updateMany({
-            where: {
-              approvalRequestStepID:
-                currentStep.id,
+          if (
+            request.allowAnySameDesignationSnapshot === true
+          ) {
+            await tx.approvalRequestApprover.updateMany({
+              where: {
+                approvalRequestID: request.id,
+                id: { not: assignment.id },
 
-              id: {
-                not: assignment.id,
+                status: {
+                  in: [
+                    ApprovalApproverStatus.PENDING,
+                    ApprovalApproverStatus.WAITING,
+                  ],
+                },
               },
 
-              status:
-                ApprovalApproverStatus.PENDING,
-            },
+              data: {
+                status: ApprovalApproverStatus.SKIPPED,
+                actedAt: now,
+                comment:
+                  'Request completed by another eligible approver',
+              },
+            });
 
-            data: {
-              status:
-                ApprovalApproverStatus.SKIPPED,
+            await tx.approvalRequestStep.update({
+              where: {
+                id: currentStep.id,
+              },
 
-              actedAt: now,
+              data: {
+                status: ApprovalStepStatus.APPROVED,
+                completedAt: now,
+              },
+            });
 
-              comment:
-                'Approval completed by another eligible approver',
-            },
-          });
+            await tx.approvalRequestStep.updateMany({
+              where: {
+                approvalRequestID: request.id,
+                id: { not: currentStep.id },
 
+                status: {
+                  in: [
+                    ApprovalStepStatus.PENDING,
+                    ApprovalStepStatus.WAITING,
+                  ],
+                },
+              },
+
+              data: {
+                status: ApprovalStepStatus.SKIPPED,
+                completedAt: now,
+              },
+            });
+
+            await tx.approvalRequestAction.create({
+              data: {
+                approvalRequestID: request.id,
+                approvalRequestStepID: currentStep.id,
+                approvalRequestApproverID: assignment.id,
+                action: ApprovalActionType.STEP_COMPLETED,
+                actedByEmployeeID: actor.employeeID,
+                actedByUserID: actor.userID,
+                fromStatus: currentStep.status,
+                toStatus: ApprovalStepStatus.APPROVED,
+                remark:
+                  'Any-approver mode: request finalized by one eligible approver',
+              },
+            });
+
+            await this.completeApprovalRequest(
+              tx,
+              request,
+              currentStep.id,
+              assignment.id,
+              actor,
+              remark,
+              now,
+            );
+
+            return {
+              success: true,
+              requestID: request.id,
+              status: ApprovalRequestStatus.APPROVED,
+              completed: true,
+              currentStepNo: null,
+              message:
+                'Approval request completed by an eligible approver',
+            };
+          }
+
+          /*
+           * SEQUENTIAL MODE:
+           * first complete all employees assigned to THIS step,
+           * one by one.
+           */
+          const nextApprover =
+            await tx.approvalRequestApprover.findFirst({
+              where: {
+                approvalRequestStepID: currentStep.id,
+                status: ApprovalApproverStatus.WAITING,
+              },
+
+              orderBy: {
+                id: 'asc',
+              },
+            });
+
+          if (nextApprover) {
+            await tx.approvalRequestApprover.update({
+              where: {
+                id: nextApprover.id,
+              },
+
+              data: {
+                status: ApprovalApproverStatus.PENDING,
+                activatedAt: now,
+              },
+            });
+
+            await tx.approvalRequestAction.create({
+              data: {
+                approvalRequestID: request.id,
+                approvalRequestStepID: currentStep.id,
+                approvalRequestApproverID: nextApprover.id,
+                action: ApprovalActionType.STEP_ACTIVATED,
+                actedByEmployeeID: actor.employeeID,
+                actedByUserID: actor.userID,
+                fromStatus: ApprovalApproverStatus.WAITING,
+                toStatus: ApprovalApproverStatus.PENDING,
+                remark:
+                  `Next approver activated for step ${currentStep.stepNo}`,
+              },
+            });
+
+            return {
+              success: true,
+              requestID: request.id,
+              status: ApprovalRequestStatus.PENDING,
+              completed: false,
+              currentStepNo: currentStep.stepNo,
+              message:
+                'Approval recorded. Waiting for the next approver in the same step.',
+            };
+          }
+
+          /*
+           * Everyone assigned to the current step has approved.
+           */
           const stepUpdate =
             await tx.approvalRequestStep.updateMany({
               where: {
                 id: currentStep.id,
-                status:
-                  ApprovalStepStatus.PENDING,
+                status: ApprovalStepStatus.PENDING,
               },
 
               data: {
-                status:
-                  ApprovalStepStatus.APPROVED,
-
+                status: ApprovalStepStatus.APPROVED,
                 completedAt: now,
               },
             });
@@ -633,30 +898,14 @@ export class ApprovalRequestService {
           await tx.approvalRequestAction.create({
             data: {
               approvalRequestID: request.id,
-
-              approvalRequestStepID:
-                currentStep.id,
-
-              approvalRequestApproverID:
-                assignment.id,
-
-              action:
-                ApprovalActionType.STEP_COMPLETED,
-
-              actedByEmployeeID:
-                actor.employeeID,
-
-              actedByUserID:
-                actor.userID,
-
-              fromStatus:
-                ApprovalStepStatus.PENDING,
-
-              toStatus:
-                ApprovalStepStatus.APPROVED,
-
+              approvalRequestStepID: currentStep.id,
+              approvalRequestApproverID: assignment.id,
+              action: ApprovalActionType.STEP_COMPLETED,
+              actedByEmployeeID: actor.employeeID,
+              actedByUserID: actor.userID,
+              fromStatus: ApprovalStepStatus.PENDING,
+              toStatus: ApprovalStepStatus.APPROVED,
               remark:
-                remark ||
                 `Approval step ${currentStep.stepNo} completed`,
             },
           });
@@ -670,8 +919,7 @@ export class ApprovalRequestService {
                   gt: currentStep.stepNo,
                 },
 
-                status:
-                  ApprovalStepStatus.WAITING,
+                status: ApprovalStepStatus.WAITING,
               },
 
               orderBy: {
@@ -691,26 +939,18 @@ export class ApprovalRequestService {
 
             return {
               success: true,
-
               requestID: request.id,
-
-              status:
-                ApprovalRequestStatus.PENDING,
-
+              status: ApprovalRequestStatus.PENDING,
               completed: false,
-
-              currentStepNo:
-                nextStep.stepNo,
-
+              currentStepNo: nextStep.stepNo,
               message:
-                'Approval completed and the next approval step was activated',
+                `Step ${currentStep.stepNo} completed. Step ${nextStep.stepNo} activated.`,
             };
           }
 
           await this.completeApprovalRequest(
             tx,
-            request.id,
-            request.subjectEmployeeID,
+            request,
             currentStep.id,
             assignment.id,
             actor,
@@ -720,18 +960,12 @@ export class ApprovalRequestService {
 
           return {
             success: true,
-
             requestID: request.id,
-
-            status:
-              ApprovalRequestStatus.APPROVED,
-
+            status: ApprovalRequestStatus.APPROVED,
             completed: true,
-
             currentStepNo: null,
-
             message:
-              'Approval request completed successfully',
+              'All required approvals completed successfully',
           };
         },
         {
@@ -760,22 +994,17 @@ export class ApprovalRequestService {
     try {
       return await this.prisma.$transaction(
         async (tx) => {
-          const context =
-            await this.getActiveAssignment(
-              tx,
-              requestID,
-              actor,
-            );
-
           const {
             request,
             currentStep,
             assignment,
-          } = context;
+          } = await this.getActiveAssignment(
+            tx,
+            requestID,
+            actor,
+          );
 
-          if (
-            !currentStep.canRejectSnapshot
-          ) {
+          if (!currentStep.canRejectSnapshot) {
             throw new BadRequestException(
               'Rejection is not allowed for this approval step',
             );
@@ -788,14 +1017,16 @@ export class ApprovalRequestService {
               where: {
                 id: assignment.id,
 
-                status:
-                  ApprovalApproverStatus.PENDING,
+                status: {
+                  in: [
+                    ApprovalApproverStatus.PENDING,
+                    ApprovalApproverStatus.WAITING,
+                  ],
+                },
               },
 
               data: {
-                status:
-                  ApprovalApproverStatus.REJECTED,
-
+                status: ApprovalApproverStatus.REJECTED,
                 actedAt: now,
                 comment: remark,
               },
@@ -809,142 +1040,68 @@ export class ApprovalRequestService {
 
           await tx.approvalRequestApprover.updateMany({
             where: {
-              approvalRequestStepID:
-                currentStep.id,
+              approvalRequestID: request.id,
+              id: { not: assignment.id },
 
-              id: {
-                not: assignment.id,
+              status: {
+                in: [
+                  ApprovalApproverStatus.PENDING,
+                  ApprovalApproverStatus.WAITING,
+                ],
               },
-
-              status:
-                ApprovalApproverStatus.PENDING,
             },
 
             data: {
-              status:
-                ApprovalApproverStatus.SKIPPED,
-
+              status: ApprovalApproverStatus.CANCELLED,
               actedAt: now,
-
               comment:
-                'Request was rejected by another approver',
+                'Approval request was rejected',
             },
           });
 
-          const stepUpdate =
-            await tx.approvalRequestStep.updateMany({
-              where: {
-                id: currentStep.id,
+          await tx.approvalRequestStep.update({
+            where: {
+              id: currentStep.id,
+            },
 
-                status:
+            data: {
+              status: ApprovalStepStatus.REJECTED,
+              rejectedAt: now,
+              completedAt: now,
+            },
+          });
+
+          await tx.approvalRequestStep.updateMany({
+            where: {
+              approvalRequestID: request.id,
+              id: { not: currentStep.id },
+
+              status: {
+                in: [
                   ApprovalStepStatus.PENDING,
+                  ApprovalStepStatus.WAITING,
+                ],
               },
+            },
 
-              data: {
-                status:
-                  ApprovalStepStatus.REJECTED,
-
-                rejectedAt: now,
-                completedAt: now,
-              },
-            });
-
-          if (stepUpdate.count !== 1) {
-            throw new ConflictException(
-              'The current approval step has already been processed',
-            );
-          }
-
-          /*
-           * Cancel all future workflow steps.
-           */
-          const futureSteps =
-            await tx.approvalRequestStep.findMany({
-              where: {
-                approvalRequestID: request.id,
-
-                stepNo: {
-                  gt: currentStep.stepNo,
-                },
-
-                status: {
-                  in: [
-                    ApprovalStepStatus.WAITING,
-                    ApprovalStepStatus.PENDING,
-                  ],
-                },
-              },
-
-              select: {
-                id: true,
-              },
-            });
-
-          const futureStepIDs =
-            futureSteps.map(
-              (step) => step.id,
-            );
-
-          if (futureStepIDs.length > 0) {
-            await tx.approvalRequestStep.updateMany({
-              where: {
-                id: {
-                  in: futureStepIDs,
-                },
-              },
-
-              data: {
-                status:
-                  ApprovalStepStatus.CANCELLED,
-
-                completedAt: now,
-              },
-            });
-
-            await tx.approvalRequestApprover.updateMany({
-              where: {
-                approvalRequestStepID: {
-                  in: futureStepIDs,
-                },
-
-                status: {
-                  in: [
-                    ApprovalApproverStatus.WAITING,
-                    ApprovalApproverStatus.PENDING,
-                  ],
-                },
-              },
-
-              data: {
-                status:
-                  ApprovalApproverStatus.CANCELLED,
-
-                actedAt: now,
-
-                comment:
-                  'Approval request was rejected',
-              },
-            });
-          }
+            data: {
+              status: ApprovalStepStatus.CANCELLED,
+              completedAt: now,
+            },
+          });
 
           const requestUpdate =
             await tx.approvalRequest.updateMany({
               where: {
                 id: request.id,
-
-                status:
-                  ApprovalRequestStatus.PENDING,
+                status: ApprovalRequestStatus.PENDING,
               },
 
               data: {
-                status:
-                  ApprovalRequestStatus.REJECTED,
-
+                status: ApprovalRequestStatus.REJECTED,
                 currentStepNo: null,
-
                 rejectedAt: now,
                 completedAt: now,
-
                 finalRemark: remark,
               },
             });
@@ -958,69 +1115,29 @@ export class ApprovalRequestService {
           await tx.approvalRequestAction.create({
             data: {
               approvalRequestID: request.id,
-
-              approvalRequestStepID:
-                currentStep.id,
-
-              approvalRequestApproverID:
-                assignment.id,
-
-              action:
-                ApprovalActionType.REJECTED,
-
-              actedByEmployeeID:
-                actor.employeeID,
-
-              actedByUserID:
-                actor.userID,
-
-              fromStatus:
-                ApprovalRequestStatus.PENDING,
-
-              toStatus:
-                ApprovalRequestStatus.REJECTED,
-
+              approvalRequestStepID: currentStep.id,
+              approvalRequestApproverID: assignment.id,
+              action: ApprovalActionType.REJECTED,
+              actedByEmployeeID: actor.employeeID,
+              actedByUserID: actor.userID,
+              fromStatus: ApprovalRequestStatus.PENDING,
+              toStatus: ApprovalRequestStatus.REJECTED,
               remark,
             },
           });
 
-          if (request.subjectEmployeeID) {
-            await tx.manageEmployee.update({
-              where: {
-                id: request.subjectEmployeeID,
-              },
-
-              data: {
-                onboardingApprovalStatus:
-                  'REJECTED',
-              },
-            });
-
-            /*
-             * A rejected employee should not be able to log in.
-             */
-            await tx.employeeCredentials.updateMany({
-              where: {
-                employeeID:
-                  request.subjectEmployeeID,
-              },
-
-              data: {
-                isActive: false,
-              },
-            });
-          }
+          await this.applySubjectOutcome(
+            tx,
+            request,
+            'REJECTED',
+          );
 
           return {
             success: true,
-
             requestID: request.id,
-
-            status:
-              ApprovalRequestStatus.REJECTED,
-
+            status: ApprovalRequestStatus.REJECTED,
             completed: true,
-
+            currentStepNo: null,
             message:
               'Approval request rejected successfully',
           };
@@ -1050,14 +1167,12 @@ export class ApprovalRequestService {
           id: true,
           companyID: true,
           branchesID: true,
-
+          subjectType: true,
+          subjectID: true,
           subjectEmployeeID: true,
-
           status: true,
           currentStepNo: true,
-
-          allowAnySameDesignationSnapshot:
-            true,
+          allowAnySameDesignationSnapshot: true,
         },
       });
 
@@ -1076,68 +1191,121 @@ export class ApprovalRequestService {
       );
     }
 
-    if (request.currentStepNo == null) {
-      throw new BadRequestException(
-        'Approval request has no active step',
-      );
+    const anyApproverMode =
+      request.allowAnySameDesignationSnapshot === true;
+
+    let currentStep:
+      | Awaited<
+          ReturnType<
+            typeof tx.approvalRequestStep.findFirst
+          >
+        >
+      | null = null;
+
+    let assignment:
+      | Awaited<
+          ReturnType<
+            typeof tx.approvalRequestApprover.findFirst
+          >
+        >
+      | null = null;
+
+    if (anyApproverMode) {
+      assignment =
+        await tx.approvalRequestApprover.findFirst({
+          where: {
+            approvalRequestID: request.id,
+            approverEmployeeID: actor.employeeID,
+
+            status: {
+              in: [
+                ApprovalApproverStatus.PENDING,
+                ApprovalApproverStatus.WAITING,
+              ],
+            },
+
+            approvalRequestStep: {
+              status: {
+                in: [
+                  ApprovalStepStatus.PENDING,
+                  ApprovalStepStatus.WAITING,
+                ],
+              },
+            },
+          },
+
+          orderBy: {
+            id: 'asc',
+          },
+        });
+
+      if (!assignment) {
+        throw new ForbiddenException(
+          'The logged-in employee is not an eligible approver for this request',
+        );
+      }
+
+      currentStep =
+        await tx.approvalRequestStep.findUnique({
+          where: {
+            id: assignment.approvalRequestStepID,
+          },
+        });
+    } else {
+      if (request.currentStepNo == null) {
+        throw new BadRequestException(
+          'Approval request has no active step',
+        );
+      }
+
+      currentStep =
+        await tx.approvalRequestStep.findFirst({
+          where: {
+            approvalRequestID: request.id,
+            stepNo: request.currentStepNo,
+            status: ApprovalStepStatus.PENDING,
+          },
+        });
+
+      if (!currentStep) {
+        throw new BadRequestException(
+          'The current approval step is not active',
+        );
+      }
+
+      assignment =
+        await tx.approvalRequestApprover.findFirst({
+          where: {
+            approvalRequestID: request.id,
+            approvalRequestStepID: currentStep.id,
+            approverEmployeeID: actor.employeeID,
+            status: ApprovalApproverStatus.PENDING,
+          },
+        });
+
+      if (!assignment) {
+        throw new ForbiddenException(
+          'The logged-in employee is not the active approver for this request',
+        );
+      }
     }
 
-    const currentStep =
-      await tx.approvalRequestStep.findFirst({
-        where: {
-          approvalRequestID: request.id,
-
-          stepNo: request.currentStepNo,
-
-          status:
-            ApprovalStepStatus.PENDING,
-        },
-      });
-
-    if (!currentStep) {
-      throw new BadRequestException(
-        'The current approval step is not active',
-      );
-    }
-
-    const assignment =
-      await tx.approvalRequestApprover.findFirst({
-        where: {
-          approvalRequestID: request.id,
-
-          approvalRequestStepID:
-            currentStep.id,
-
-          approverEmployeeID:
-            actor.employeeID,
-
-          status:
-            ApprovalApproverStatus.PENDING,
-        },
-      });
-
-    if (!assignment) {
+    if (!assignment || !currentStep) {
       throw new ForbiddenException(
-        'The logged-in employee is not an active approver for this request',
+        'No active approval assignment was found',
       );
     }
 
-    /*
-     * Prevent accidental self-approval even if an invalid
-     * assignment was inserted.
-     */
     if (
-      request.subjectEmployeeID ===
-      actor.employeeID
+      request.subjectEmployeeID != null &&
+      Number(request.subjectEmployeeID) ===
+        Number(actor.employeeID)
     ) {
       throw new ForbiddenException(
         'Employees cannot approve their own request',
       );
     }
 
-    /*
-     * Additional organisation safety check.
-     */
     if (
       actor.companyID != null &&
       Number(request.companyID) !==
@@ -1148,19 +1316,10 @@ export class ApprovalRequestService {
       );
     }
 
-    if (
-      request.branchesID != null &&
-      actor.branchesID != null &&
-      Number(request.branchesID) !==
-        Number(actor.branchesID)
-    ) {
-      throw new ForbiddenException(
-        'Approval request belongs to a different branch',
-      );
-    }
-
     return {
-      request,
+      request:
+        request as RuntimeApprovalRequest,
+
       currentStep,
       assignment,
     };
@@ -1174,18 +1333,19 @@ export class ApprovalRequestService {
     actor: ApprovalRequestActor,
     now: Date,
   ) {
-    const waitingApproverCount =
-      await tx.approvalRequestApprover.count({
+    const firstApprover =
+      await tx.approvalRequestApprover.findFirst({
         where: {
-          approvalRequestStepID:
-            nextStepID,
+          approvalRequestStepID: nextStepID,
+          status: ApprovalApproverStatus.WAITING,
+        },
 
-          status:
-            ApprovalApproverStatus.WAITING,
+        orderBy: {
+          id: 'asc',
         },
       });
 
-    if (waitingApproverCount === 0) {
+    if (!firstApprover) {
       throw new BadRequestException(
         `No approver is assigned to approval step ${nextStepNo}`,
       );
@@ -1195,15 +1355,11 @@ export class ApprovalRequestService {
       await tx.approvalRequestStep.updateMany({
         where: {
           id: nextStepID,
-
-          status:
-            ApprovalStepStatus.WAITING,
+          status: ApprovalStepStatus.WAITING,
         },
 
         data: {
-          status:
-            ApprovalStepStatus.PENDING,
-
+          status: ApprovalStepStatus.PENDING,
           activatedAt: now,
         },
       });
@@ -1214,19 +1370,13 @@ export class ApprovalRequestService {
       );
     }
 
-    await tx.approvalRequestApprover.updateMany({
+    await tx.approvalRequestApprover.update({
       where: {
-        approvalRequestStepID:
-          nextStepID,
-
-        status:
-          ApprovalApproverStatus.WAITING,
+        id: firstApprover.id,
       },
 
       data: {
-        status:
-          ApprovalApproverStatus.PENDING,
-
+        status: ApprovalApproverStatus.PENDING,
         activatedAt: now,
       },
     });
@@ -1244,25 +1394,13 @@ export class ApprovalRequestService {
     await tx.approvalRequestAction.create({
       data: {
         approvalRequestID: requestID,
-
-        approvalRequestStepID:
-          nextStepID,
-
-        action:
-          ApprovalActionType.STEP_ACTIVATED,
-
-        actedByEmployeeID:
-          actor.employeeID,
-
-        actedByUserID:
-          actor.userID,
-
-        fromStatus:
-          ApprovalStepStatus.WAITING,
-
-        toStatus:
-          ApprovalStepStatus.PENDING,
-
+        approvalRequestStepID: nextStepID,
+        approvalRequestApproverID: firstApprover.id,
+        action: ApprovalActionType.STEP_ACTIVATED,
+        actedByEmployeeID: actor.employeeID,
+        actedByUserID: actor.userID,
+        fromStatus: ApprovalStepStatus.WAITING,
+        toStatus: ApprovalStepStatus.PENDING,
         remark:
           `Approval step ${nextStepNo} activated`,
       },
@@ -1271,8 +1409,7 @@ export class ApprovalRequestService {
 
   private async completeApprovalRequest(
     tx: TransactionClient,
-    requestID: number,
-    subjectEmployeeID: number | null,
+    request: RuntimeApprovalRequest,
     currentStepID: number,
     assignmentID: number,
     actor: ApprovalRequestActor,
@@ -1282,20 +1419,14 @@ export class ApprovalRequestService {
     const requestUpdate =
       await tx.approvalRequest.updateMany({
         where: {
-          id: requestID,
-
-          status:
-            ApprovalRequestStatus.PENDING,
+          id: request.id,
+          status: ApprovalRequestStatus.PENDING,
         },
 
         data: {
-          status:
-            ApprovalRequestStatus.APPROVED,
-
+          status: ApprovalRequestStatus.APPROVED,
           currentStepNo: null,
-
           completedAt: now,
-
           finalRemark:
             remark ||
             'Approval request completed successfully',
@@ -1308,59 +1439,105 @@ export class ApprovalRequestService {
       );
     }
 
-    if (subjectEmployeeID) {
+    await this.applySubjectOutcome(
+      tx,
+      request,
+      'APPROVED',
+    );
+
+    await tx.approvalRequestAction.create({
+      data: {
+        approvalRequestID: request.id,
+        approvalRequestStepID: currentStepID,
+        approvalRequestApproverID: assignmentID,
+        action: ApprovalActionType.REQUEST_COMPLETED,
+        actedByEmployeeID: actor.employeeID,
+        actedByUserID: actor.userID,
+        fromStatus: ApprovalRequestStatus.PENDING,
+        toStatus: ApprovalRequestStatus.APPROVED,
+        remark:
+          remark ||
+          'All required approvals completed successfully',
+      },
+    });
+  }
+
+  private async applySubjectOutcome(
+    tx: TransactionClient,
+    request: {
+      subjectType: string;
+      subjectID: number;
+      subjectEmployeeID: number | null;
+    },
+    outcome:
+      | 'APPROVED'
+      | 'REJECTED',
+  ) {
+    const subjectType =
+      String(request.subjectType ?? '')
+        .trim()
+        .toUpperCase();
+
+    if (
+      subjectType ===
+      'EMPLOYEE_ONBOARDING'
+    ) {
+      if (!request.subjectEmployeeID) {
+        throw new BadRequestException(
+          'Employee onboarding request has no subject employee',
+        );
+      }
+
       await tx.manageEmployee.update({
         where: {
-          id: subjectEmployeeID,
+          id: request.subjectEmployeeID,
         },
 
         data: {
-          onboardingApprovalStatus:
-            'APPROVED',
+          onboardingApprovalStatus: outcome,
         },
       });
 
       await tx.employeeCredentials.updateMany({
         where: {
-          employeeID: subjectEmployeeID,
+          employeeID: request.subjectEmployeeID,
         },
 
         data: {
-          isActive: true,
+          isActive:
+            outcome === 'APPROVED',
         },
       });
+
+      return;
     }
 
-    await tx.approvalRequestAction.create({
-      data: {
-        approvalRequestID: requestID,
+    if (
+      [
+        'ATTENDANCE_REGULARISATION',
+        'ATTENDANCE_REGULARIZATION',
+        'ATTENDANCE_REGULARISE',
+      ].includes(subjectType)
+    ) {
+      await tx.empAttendanceRegularise.update({
+        where: {
+          id: request.subjectID,
+        },
 
-        approvalRequestStepID:
-          currentStepID,
+        data: {
+          status:
+            outcome === 'APPROVED'
+              ? 'Approved'
+              : 'Rejected',
+        },
+      });
 
-        approvalRequestApproverID:
-          assignmentID,
+      return;
+    }
 
-        action:
-          ApprovalActionType.REQUEST_COMPLETED,
-
-        actedByEmployeeID:
-          actor.employeeID,
-
-        actedByUserID:
-          actor.userID,
-
-        fromStatus:
-          ApprovalRequestStatus.PENDING,
-
-        toStatus:
-          ApprovalRequestStatus.APPROVED,
-
-        remark:
-          remark ||
-          'All approval steps completed successfully',
-      },
-    });
+    throw new BadRequestException(
+      `Unsupported approval subject type "${request.subjectType}"`,
+    );
   }
 
   private handleTransactionError(

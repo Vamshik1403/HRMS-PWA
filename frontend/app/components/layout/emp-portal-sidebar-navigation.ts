@@ -515,6 +515,14 @@ export function isEmpNavItemActive(
     if (item.href === "/empTeam/my-team") {
       return pathname.startsWith("/empTeam/member");
     }
+    // Team Approvals → Regularization stays under emp portal (not admin shell).
+    if (
+      item.id === "team-approvals" &&
+      (pathname === "/empTeam/regularisation" ||
+        pathname.startsWith("/empTeam/regularisation/"))
+    ) {
+      return true;
+    }
     return false;
   }
 

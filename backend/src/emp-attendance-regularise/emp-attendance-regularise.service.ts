@@ -1,239 +1,708 @@
-import { Injectable, BadRequestException, ConflictException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+} from '@nestjs/common';
+
 import { PrismaService } from '../prisma/prisma.service';
+import { ApprovalEngineService } from '../approval-workflow/approval-engine.service';
 import { CreateEmpAttendanceRegulariseDto } from './dto/create-emp-attendance-regularise.dto';
 import { UpdateEmpAttendanceRegulariseDto } from './dto/update-emp-attendance-regularise.dto';
 
 @Injectable()
 export class EmpAttendanceRegulariseService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly approvalEngine: ApprovalEngineService,
+  ) {}
 
-  private parsePayload(data: Record<string, unknown>) {
-    const payload = { ...data };
-    for (const key of ['attendanceDate', 'checkInTime', 'checkOutTime'] as const) {
-      if (payload[key] != null && payload[key] !== '') {
+  private parsePayload(
+    data: Record<string, unknown>,
+  ) {
+    const payload = {
+      ...data,
+    };
+
+    for (
+      const key
+      of [
+        'attendanceDate',
+        'checkInTime',
+        'checkOutTime',
+      ] as const
+    ) {
+      if (
+        payload[key] != null &&
+        payload[key] !== ''
+      ) {
         payload[key] =
-          key === 'attendanceDate'
-            ? this.normalizeAttendanceDay(String(payload[key]))
-            : new Date(String(payload[key]));
+          key ===
+          'attendanceDate'
+            ? this.normalizeAttendanceDay(
+                String(
+                  payload[key],
+                ),
+              )
+            : new Date(
+                String(
+                  payload[key],
+                ),
+              );
       }
     }
+
     return payload;
   }
 
-  private normalizeAttendanceDay(dateInput: string | Date): Date {
+  private normalizeAttendanceDay(
+    dateInput:
+      string | Date,
+  ): Date {
     const raw =
-      typeof dateInput === 'string'
-        ? dateInput.trim().slice(0, 10)
-        : dateInput.toISOString().slice(0, 10);
-    return new Date(`${raw}T12:00:00.000Z`);
+      typeof dateInput ===
+      'string'
+        ? dateInput
+            .trim()
+            .slice(
+              0,
+              10,
+            )
+        : dateInput
+            .toISOString()
+            .slice(
+              0,
+              10,
+            );
+
+    return new Date(
+      `${raw}T12:00:00.000Z`,
+    );
   }
 
-  async fetchAttendanceStatus(employeeId: number, date: string) {
-    const targetDate = this.normalizeAttendanceDay(date);
-    const nextDay = new Date(targetDate);
-    nextDay.setUTCDate(nextDay.getUTCDate() + 1);
+  async fetchAttendanceStatus(
+    employeeId:
+      number,
+    date:
+      string,
+  ) {
+    const targetDate =
+      this.normalizeAttendanceDay(
+        date,
+      );
 
-    // Check if there's already an approved regularization for this employee+date
-    const existingRegularization = await this.prisma.empAttendanceRegularise.findFirst({
-      where: {
-        manageEmployeeID: employeeId,
-        attendanceDate: targetDate,
-        status: 'Approved',
-      },
-    });
+    const nextDay =
+      new Date(
+        targetDate,
+      );
 
-    if (existingRegularization) {
+    nextDay.setUTCDate(
+      nextDay.getUTCDate() +
+        1,
+    );
+
+    const existingRegularization =
+      await this.prisma
+        .empAttendanceRegularise
+        .findFirst({
+          where: {
+            manageEmployeeID:
+              employeeId,
+
+            attendanceDate:
+              targetDate,
+
+            status:
+              'Approved',
+          },
+        });
+
+    if (
+      existingRegularization
+    ) {
       return {
-        actualStatus: existingRegularization.requestedStatus || existingRegularization.actualStatus || 'ABSENT',
-        checkInTime: existingRegularization.checkInTime,
-        checkOutTime: existingRegularization.checkOutTime,
-        isRegularized: true,
-        punchCount: 0,
+        actualStatus:
+          existingRegularization
+            .requestedStatus ||
+          existingRegularization
+            .actualStatus ||
+          'ABSENT',
+
+        checkInTime:
+          existingRegularization
+            .checkInTime,
+
+        checkOutTime:
+          existingRegularization
+            .checkOutTime,
+
+        isRegularized:
+          true,
+
+        punchCount:
+          0,
       };
     }
 
-    // Fetch punches from process_att_logs for this employee on this date
-    const punches = await this.prisma.process_att_logs.findMany({
-      where: {
-        manage_employee_id: employeeId,
-        punch_time: {
-          gte: targetDate,
-          lt: nextDay,
-        },
-      },
-      orderBy: { punch_time: 'asc' },
-    });
+    const punches =
+      await this.prisma
+        .process_att_logs
+        .findMany({
+          where: {
+            manage_employee_id:
+              employeeId,
 
-    if (punches.length === 0) {
+            punch_time: {
+              gte:
+                targetDate,
+
+              lt:
+                nextDay,
+            },
+          },
+
+          orderBy: {
+            punch_time:
+              'asc',
+          },
+        });
+
+    if (
+      punches.length === 0
+    ) {
       return {
-        actualStatus: 'ABSENT',
-        checkInTime: null,
-        checkOutTime: null,
-        isRegularized: false,
-        punchCount: 0,
+        actualStatus:
+          'ABSENT',
+
+        checkInTime:
+          null,
+
+        checkOutTime:
+          null,
+
+        isRegularized:
+          false,
+
+        punchCount:
+          0,
       };
     }
 
-    const firstPunch = punches[0].punch_time;
-    const lastPunch = punches[punches.length - 1].punch_time;
+    const firstPunch =
+      punches[0]
+        .punch_time;
 
-    // Fetch employee with direct work shift and attendance policy relations
-    const employee = await this.prisma.manageEmployee.findUnique({
-      where: { id: employeeId },
-      include: {
-        workShift: { include: { workShiftDay: true } },
-        attendancePolicy: true,
-      },
-    });
+    const lastPunch =
+      punches[
+        punches.length -
+        1
+      ].punch_time;
 
-    // Also check EmpWorkShift for a custom shift assignment (takes priority)
-    const empWorkShift = await this.prisma.empWorkShift.findFirst({
-      where: { manageEmployeeID: employeeId },
-      include: { workShift: { include: { workShiftDay: true } } },
-      orderBy: { id: 'desc' },
-    });
+    const employee =
+      await this.prisma
+        .manageEmployee
+        .findUnique({
+          where: {
+            id:
+              employeeId,
+          },
 
-    const workShift = empWorkShift?.workShift ?? (employee as any)?.workShift ?? null;
+          include: {
+            workShift: {
+              include: {
+                workShiftDay:
+                  true,
+              },
+            },
 
-    // Determine the weekday name for the target date
-    const weekDayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-    const dayOfWeek = weekDayNames[targetDate.getDay()];
+            attendancePolicy:
+              true,
+          },
+        });
 
-    // Find the WORK shift day for this weekday
-    const shiftDay = workShift?.workShiftDay?.find(
-      (d: any) => d.weekDay === dayOfWeek && d.shiftType === 'WORK',
-    ) ?? null;
+    const empWorkShift =
+      await this.prisma
+        .empWorkShift
+        .findFirst({
+          where: {
+            manageEmployeeID:
+              employeeId,
+          },
 
-    // Resolve attendance policy: employee-level → EmpAttendancePolicy → branch-level
-    let policy: any = (employee as any)?.attendancePolicy ?? null;
+          include: {
+            workShift: {
+              include: {
+                workShiftDay:
+                  true,
+              },
+            },
+          },
+
+          orderBy: {
+            id:
+              'desc',
+          },
+        });
+
+    const workShift =
+      empWorkShift
+        ?.workShift ??
+      (employee as any)
+        ?.workShift ??
+      null;
+
+    const weekDayNames =
+      [
+        'Sunday',
+        'Monday',
+        'Tuesday',
+        'Wednesday',
+        'Thursday',
+        'Friday',
+        'Saturday',
+      ];
+
+    const dayOfWeek =
+      weekDayNames[
+        targetDate.getDay()
+      ];
+
+    const shiftDay =
+      workShift
+        ?.workShiftDay
+        ?.find(
+          (day: any) =>
+            day.weekDay ===
+              dayOfWeek &&
+            day.shiftType ===
+              'WORK',
+        ) ??
+      null;
+
+    let policy:
+      any =
+      (employee as any)
+        ?.attendancePolicy ??
+      null;
+
     if (!policy) {
-      const empPolicy = await this.prisma.empAttendancePolicy.findFirst({
-        where: { manageEmployeeID: employeeId },
-        include: { attendancePolicy: true },
-        orderBy: { id: 'desc' },
-      });
-      policy = empPolicy?.attendancePolicy ?? null;
+      const empPolicy =
+        await this.prisma
+          .empAttendancePolicy
+          .findFirst({
+            where: {
+              manageEmployeeID:
+                employeeId,
+            },
+
+            include: {
+              attendancePolicy:
+                true,
+            },
+
+            orderBy: {
+              id:
+                'desc',
+            },
+          });
+
+      policy =
+        empPolicy
+          ?.attendancePolicy ??
+        null;
     }
-    if (!policy && employee?.companyID && employee?.branchesID) {
-      policy = await this.prisma.attendancePolicy.findFirst({
-        where: { companyID: employee.companyID, branchesID: employee.branchesID },
-      });
+
+    if (
+      !policy &&
+      employee?.companyID &&
+      employee?.branchesID
+    ) {
+      policy =
+        await this.prisma
+          .attendancePolicy
+          .findFirst({
+            where: {
+              companyID:
+                employee.companyID,
+
+              branchesID:
+                employee.branchesID,
+            },
+          });
     }
 
+    if (
+      punches.length === 1
+    ) {
+      const singlePunchStatus =
+        policy?.markAs ===
+        'Absent'
+          ? 'ABSENT'
+          : 'HALFDAY';
 
-
-    // Handle single punch using policy markAs setting
-    if (punches.length === 1) {
-      const singlePunchStatus = policy?.markAs === 'Absent' ? 'ABSENT' : 'HALFDAY';
       return {
-        actualStatus: singlePunchStatus,
-        checkInTime: firstPunch,
-        checkOutTime: null,
-        isRegularized: false,
-        punchCount: 1,
+        actualStatus:
+          singlePunchStatus,
+
+        checkInTime:
+          firstPunch,
+
+        checkOutTime:
+          null,
+
+        isRegularized:
+          false,
+
+        punchCount:
+          1,
       };
     }
 
-    // Helper: convert "HH:MM[:SS]" string or Date to minutes since midnight (local time)
-    const toMin = (val: Date | string | null | undefined): number => {
-      if (!val) return 0;
-      if (val instanceof Date) return val.getHours() * 60 + val.getMinutes();
-      const parts = String(val).split(':');
-      return (parseInt(parts[0], 10) || 0) * 60 + (parseInt(parts[1], 10) || 0);
-    };
-
-    const firstPunchMin = toMin(firstPunch);
-    const lastPunchMin = toMin(lastPunch);
-
-    const isFlexible = workShift?.isFlexible || false;
-    let startMin = firstPunchMin;
-    let endMin = lastPunchMin;
-
-    // Apply same capping logic as the attendance reports calculateWorkedMinutes
-    if (!isFlexible && shiftDay && policy) {
-      const shiftStartMin = toMin(shiftDay.startTime);
-      const shiftEndMin = toMin(shiftDay.endTime);
-
-      // Cap early check-in
-      const earlyBuffer = policy.checkin_begin_before_min || 0;
-      if (startMin < shiftStartMin - earlyBuffer) {
-        startMin = shiftStartMin;
+    const toMin = (
+      value:
+        | Date
+        | string
+        | null
+        | undefined,
+    ): number => {
+      if (!value) {
+        return 0;
       }
 
-      // Cap late check-out if OT not applicable
-      if (!policy.overtimeApplicable) {
-        const checkoutBuffer = policy.checkout_end_after_min || 0;
-        if (endMin > shiftEndMin + checkoutBuffer) {
-          endMin = shiftEndMin;
+      if (
+        value instanceof
+        Date
+      ) {
+        return (
+          value.getHours() *
+            60 +
+          value.getMinutes()
+        );
+      }
+
+      const parts =
+        String(
+          value,
+        ).split(
+          ':',
+        );
+
+      return (
+        (
+          parseInt(
+            parts[0],
+            10,
+          ) ||
+          0
+        ) *
+          60 +
+        (
+          parseInt(
+            parts[1],
+            10,
+          ) ||
+          0
+        )
+      );
+    };
+
+    const firstPunchMin =
+      toMin(
+        firstPunch,
+      );
+
+    const lastPunchMin =
+      toMin(
+        lastPunch,
+      );
+
+    const isFlexible =
+      workShift
+        ?.isFlexible ||
+      false;
+
+    let startMin =
+      firstPunchMin;
+
+    let endMin =
+      lastPunchMin;
+
+    if (
+      !isFlexible &&
+      shiftDay &&
+      policy
+    ) {
+      const shiftStartMin =
+        toMin(
+          shiftDay
+            .startTime,
+        );
+
+      const shiftEndMin =
+        toMin(
+          shiftDay
+            .endTime,
+        );
+
+      const earlyBuffer =
+        policy
+          .checkin_begin_before_min ||
+        0;
+
+      if (
+        startMin <
+        shiftStartMin -
+          earlyBuffer
+      ) {
+        startMin =
+          shiftStartMin;
+      }
+
+      if (
+        !policy
+          .overtimeApplicable
+      ) {
+        const checkoutBuffer =
+          policy
+            .checkout_end_after_min ||
+          0;
+
+        if (
+          endMin >
+          shiftEndMin +
+            checkoutBuffer
+        ) {
+          endMin =
+            shiftEndMin;
         }
       }
     }
 
-    let workedMinutes = endMin - startMin;
-    if (workedMinutes < 0) workedMinutes += 24 * 60; // handle midnight wrap
+    let workedMinutes =
+      endMin -
+      startMin;
 
-    // Deduct break time if employee was present during the full break window
-    if (shiftDay?.breakStart && shiftDay?.breakEnd) {
-      const breakStartMin = toMin(shiftDay.breakStart);
-      const breakEndMin = toMin(shiftDay.breakEnd);
-      if (breakStartMin > 0 && breakEndMin > 0 && startMin <= breakStartMin && endMin >= breakEndMin) {
-        workedMinutes -= (breakEndMin - breakStartMin);
+    if (
+      workedMinutes < 0
+    ) {
+      workedMinutes +=
+        24 * 60;
+    }
+
+    if (
+      shiftDay
+        ?.breakStart &&
+      shiftDay
+        ?.breakEnd
+    ) {
+      const breakStartMin =
+        toMin(
+          shiftDay
+            .breakStart,
+        );
+
+      const breakEndMin =
+        toMin(
+          shiftDay
+            .breakEnd,
+        );
+
+      if (
+        breakStartMin >
+          0 &&
+        breakEndMin >
+          0 &&
+        startMin <=
+          breakStartMin &&
+        endMin >=
+          breakEndMin
+      ) {
+        workedMinutes -=
+          breakEndMin -
+          breakStartMin;
       }
     }
 
-    // Deduct policy trim pre/post shift minutes
-    if (!isFlexible && policy) {
-      workedMinutes -= (policy.trimPreshiftMin || 0);
-      workedMinutes -= (policy.trimPostshiftMin || 0);
+    if (
+      !isFlexible &&
+      policy
+    ) {
+      workedMinutes -=
+        policy
+          .trimPreshiftMin ||
+        0;
+
+      workedMinutes -=
+        policy
+          .trimPostshiftMin ||
+        0;
     }
 
-    workedMinutes = Math.max(0, workedMinutes);
+    workedMinutes =
+      Math.max(
+        0,
+        workedMinutes,
+      );
 
-    // Use actual shift totalMinutes as full-day threshold; fall back to 480 min (8 h)
-    const totalShiftMinutes = shiftDay?.totalMinutes ?? 480;
-    // Use policy half-day minimum; fall back to half of shift minutes
-    const halfDayMin = policy?.min_work_hours_half_day_min ?? Math.round(totalShiftMinutes / 2);
+    const totalShiftMinutes =
+      shiftDay
+        ?.totalMinutes ??
+      480;
 
-    let actualStatus: string;
-    if (workedMinutes < halfDayMin) {
-      actualStatus = 'ABSENT';
-    } else if (workedMinutes < totalShiftMinutes) {
-      actualStatus = 'HALFDAY';
+    const halfDayMin =
+      policy
+        ?.min_work_hours_half_day_min ??
+      Math.round(
+        totalShiftMinutes /
+          2,
+      );
+
+    let actualStatus:
+      string;
+
+    if (
+      workedMinutes <
+      halfDayMin
+    ) {
+      actualStatus =
+        'ABSENT';
+    } else if (
+      workedMinutes <
+      totalShiftMinutes
+    ) {
+      actualStatus =
+        'HALFDAY';
     } else {
-      actualStatus = 'FULLDAY';
+      actualStatus =
+        'FULLDAY';
     }
 
     return {
       actualStatus,
-      checkInTime: firstPunch,
-      checkOutTime: lastPunch,
-      isRegularized: false,
-      punchCount: punches.length,
+
+      checkInTime:
+        firstPunch,
+
+      checkOutTime:
+        lastPunch,
+
+      isRegularized:
+        false,
+
+      punchCount:
+        punches.length,
     };
   }
 
-  async create(createEmpAttendanceRegulariseDto: CreateEmpAttendanceRegulariseDto) {
-    const data = this.parsePayload(createEmpAttendanceRegulariseDto as Record<string, unknown>) as any;
+  async create(
+    createEmpAttendanceRegulariseDto:
+      CreateEmpAttendanceRegulariseDto,
+  ) {
+    const data =
+      this.parsePayload(
+        createEmpAttendanceRegulariseDto as Record<
+          string,
+          unknown
+        >,
+      ) as any;
 
-    // Rule: Only past dates allowed — no future regularisation
-    if (data.attendanceDate) {
-      const reqDate = this.normalizeAttendanceDay(data.attendanceDate);
-      const today = this.normalizeAttendanceDay(new Date());
-      if (reqDate > today) {
-        throw new BadRequestException('Attendance regularisation is only allowed for past dates');
+    if (
+      data.attendanceDate
+    ) {
+      const reqDate =
+        this.normalizeAttendanceDay(
+          data.attendanceDate,
+        );
+
+      const today =
+        this.normalizeAttendanceDay(
+          new Date(),
+        );
+
+      if (
+        reqDate >
+        today
+      ) {
+        throw new BadRequestException(
+          'Attendance regularisation is only allowed for past dates',
+        );
       }
-      data.attendanceDate = reqDate;
+
+      data.attendanceDate =
+        reqDate;
     }
 
-    // Rule: No duplicate request for the same employee + date (with PENDING status)
-    if (data.manageEmployeeID && data.attendanceDate) {
-      const existing = await this.prisma.empAttendanceRegularise.findFirst({
-        where: {
-          manageEmployeeID: data.manageEmployeeID,
-          attendanceDate: data.attendanceDate,
-          status: 'Pending',
-        },
-      });
+    const manageEmployeeID =
+      Number(
+        data.manageEmployeeID,
+      );
+
+    if (
+      !Number.isInteger(
+        manageEmployeeID,
+      ) ||
+      manageEmployeeID <= 0
+    ) {
+      throw new BadRequestException(
+        'A valid employee is required',
+      );
+    }
+
+    const companyID =
+      Number(
+        data.companyID,
+      );
+
+    if (
+      !Number.isInteger(
+        companyID,
+      ) ||
+      companyID <= 0
+    ) {
+      throw new BadRequestException(
+        'A valid company is required',
+      );
+    }
+
+    const branchesID =
+      data.branchesID ==
+      null
+        ? null
+        : Number(
+            data.branchesID,
+          );
+
+    if (
+      branchesID != null &&
+      (
+        !Number.isInteger(
+          branchesID,
+        ) ||
+        branchesID <= 0
+      )
+    ) {
+      throw new BadRequestException(
+        'Branch must be a valid positive integer',
+      );
+    }
+
+    if (
+      data.attendanceDate
+    ) {
+      const existing =
+        await this.prisma
+          .empAttendanceRegularise
+          .findFirst({
+            where: {
+              manageEmployeeID,
+
+              attendanceDate:
+                data.attendanceDate,
+
+              status:
+                'Pending',
+            },
+          });
+
       if (existing) {
         throw new ConflictException(
           'A pending regularisation request already exists for this employee on the selected date',
@@ -241,64 +710,341 @@ export class EmpAttendanceRegulariseService {
       }
     }
 
-    return this.prisma.empAttendanceRegularise.create({
-      data,
-      include: {
-        serviceProvider: true,
-        company: true,
-        branches: true,
-        departments: true,
-        manageEmployee: true,
+    return this.prisma.$transaction(
+      async (tx) => {
+        /*
+         * Backend owns approval status.
+         */
+        delete data.status;
+
+        const employee =
+          await tx.manageEmployee
+            .findUnique({
+              where: {
+                id:
+                  manageEmployeeID,
+              },
+
+              select: {
+                id: true,
+
+                serviceProviderID:
+                  true,
+
+                companyID:
+                  true,
+
+                branchesID:
+                  true,
+
+                departmentNameID:
+                  true,
+
+                designationID:
+                  true,
+              },
+            });
+
+        if (!employee) {
+          throw new BadRequestException(
+            'Selected employee was not found',
+          );
+        }
+
+        if (
+          employee.companyID ==
+          null
+        ) {
+          throw new BadRequestException(
+            'Selected employee is not mapped to a company',
+          );
+        }
+
+        /*
+         * Force organisation context from employee to avoid
+         * frontend spoofing/mismatch.
+         */
+        const resolvedCompanyID =
+          employee.companyID;
+
+        const resolvedBranchID =
+          employee.branchesID;
+
+        const regularisation =
+          await tx
+            .empAttendanceRegularise
+            .create({
+              data: {
+                ...data,
+
+                manageEmployeeID,
+
+                companyID:
+                  resolvedCompanyID,
+
+                branchesID:
+                  resolvedBranchID,
+
+                /*
+                 * Temporary state. Engine will decide whether
+                 * request remains Pending or becomes Approved.
+                 */
+                status:
+                  'Pending',
+              },
+
+              include: {
+                serviceProvider:
+                  true,
+
+                company:
+                  true,
+
+                branches:
+                  true,
+
+                departments:
+                  true,
+
+                manageEmployee:
+                  true,
+              },
+            });
+
+        const approval =
+          await this
+            .approvalEngine
+            .submitAttendanceRegularisation(
+              tx,
+              {
+                id:
+                  regularisation.id,
+
+                serviceProviderID:
+                  regularisation
+                    .serviceProviderID ??
+                  employee
+                    .serviceProviderID,
+
+                companyID:
+                  resolvedCompanyID,
+
+                branchesID:
+                  resolvedBranchID,
+
+                manageEmployeeID,
+
+                departmentID:
+                  employee
+                    .departmentNameID,
+
+                designationID:
+                  employee
+                    .designationID,
+
+                requestedStatus:
+                  regularisation
+                    .requestedStatus !=
+                  null
+                    ? String(
+                        regularisation
+                          .requestedStatus,
+                      )
+                    : null,
+
+                regularisationDays:
+                  1,
+              },
+            );
+
+        if (
+          !approval
+            .approvalRequired
+        ) {
+          await tx
+            .empAttendanceRegularise
+            .update({
+              where: {
+                id:
+                  regularisation.id,
+              },
+
+              data: {
+                status:
+                  'Approved',
+              },
+            });
+        }
+
+        const finalRecord =
+          await tx
+            .empAttendanceRegularise
+            .findUnique({
+              where: {
+                id:
+                  regularisation.id,
+              },
+
+              include: {
+                serviceProvider:
+                  true,
+
+                company:
+                  true,
+
+                branches:
+                  true,
+
+                departments:
+                  true,
+
+                manageEmployee:
+                  true,
+              },
+            });
+
+        return {
+          ...finalRecord,
+
+          approval: {
+            required:
+              approval
+                .approvalRequired,
+
+            requestID:
+              approval
+                .approvalRequestID,
+
+            workflowID:
+              approval
+                .workflowID,
+
+            workflowName:
+              approval
+                .workflowName,
+
+            currentStepNo:
+              approval
+                .currentStepNo,
+
+            status:
+              approval.status,
+          },
+        };
       },
-    });
+    );
   }
 
   async findAll() {
-    return this.prisma.empAttendanceRegularise.findMany({
-      include: {
-        serviceProvider: true,
-        company: true,
-        branches: true,
-        departments: true,
-        manageEmployee: true,
-      },
-      orderBy: {
-        id: 'desc',
-      },
-    });
+    return this.prisma
+      .empAttendanceRegularise
+      .findMany({
+        include: {
+          serviceProvider:
+            true,
+
+          company:
+            true,
+
+          branches:
+            true,
+
+          departments:
+            true,
+
+          manageEmployee:
+            true,
+        },
+
+        orderBy: {
+          id:
+            'desc',
+        },
+      });
   }
 
-  async findOne(id: number) {
-    return this.prisma.empAttendanceRegularise.findUnique({
-      where: { id },
-      include: {
-        serviceProvider: true,
-        company: true,
-        branches: true,
-        departments: true,
-        manageEmployee: true,
-      },
-    });
+  async findOne(
+    id:
+      number,
+  ) {
+    return this.prisma
+      .empAttendanceRegularise
+      .findUnique({
+        where: {
+          id,
+        },
+
+        include: {
+          serviceProvider:
+            true,
+
+          company:
+            true,
+
+          branches:
+            true,
+
+          departments:
+            true,
+
+          manageEmployee:
+            true,
+        },
+      });
   }
 
-  async update(id: number, updateEmpAttendanceRegulariseDto: UpdateEmpAttendanceRegulariseDto) {
-    const data = this.parsePayload(updateEmpAttendanceRegulariseDto as Record<string, unknown>) as any;
-    return this.prisma.empAttendanceRegularise.update({
-      where: { id },
-      data,
-      include: {
-        serviceProvider: true,
-        company: true,
-        branches: true,
-        departments: true,
-        manageEmployee: true,
-      },
-    });
+  async update(
+    id:
+      number,
+    updateEmpAttendanceRegulariseDto:
+      UpdateEmpAttendanceRegulariseDto,
+  ) {
+    const data =
+      this.parsePayload(
+        updateEmpAttendanceRegulariseDto as Record<
+          string,
+          unknown
+        >,
+      ) as any;
+
+    return this.prisma
+      .empAttendanceRegularise
+      .update({
+        where: {
+          id,
+        },
+
+        data,
+
+        include: {
+          serviceProvider:
+            true,
+
+          company:
+            true,
+
+          branches:
+            true,
+
+          departments:
+            true,
+
+          manageEmployee:
+            true,
+        },
+      });
   }
 
-  async remove(id: number) {
-    return this.prisma.empAttendanceRegularise.delete({
-      where: { id },
-    });
+  async remove(
+    id:
+      number,
+  ) {
+    return this.prisma
+      .empAttendanceRegularise
+      .delete({
+        where: {
+          id,
+        },
+      });
   }
 }

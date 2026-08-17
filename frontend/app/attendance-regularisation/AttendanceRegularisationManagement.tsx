@@ -8,7 +8,6 @@ import { FormDrawer } from "../components/ui/form-drawer"
 import { Badge } from "../components/ui/badge"
 import { Plus, Search, Clock, Check, X, CalendarCheck2 } from "lucide-react"
 import { PageHeader } from "../components/app/page-header";
-import { hasModuleWriteAccess } from "@/lib/companyAccess";
 import { FilterBar, FilterSelect } from "../components/app/filter-bar";
 import { EntityListShell } from "../components/app/entity-list-shell";
 import type { DataTableColumn } from "../components/app/data-table";
@@ -27,6 +26,7 @@ interface AttendanceRegularisation {
   companyID?: number
   branchesID?: number
   departmentID?: number
+  designationID?: number
 
   manageEmployeeID?: number
   serviceProvider?: string
@@ -53,8 +53,164 @@ interface SelectedItem {
   item: any
 }
 
-// Backend URL
+type AttendanceConditionField =
+  | "BRANCH"
+  | "DEPARTMENT"
+  | "DESIGNATION"
+  | "EMPLOYEE"
+  | "REGULARISATION_TYPE"
+  | "REGULARISATION_DAYS"
+
+type AttendanceConditionOperator =
+  | "EQUALS"
+  | "NOT_EQUALS"
+  | "IN"
+  | "NOT_IN"
+  | "GREATER_THAN"
+  | "GREATER_THAN_OR_EQUAL"
+  | "LESS_THAN"
+  | "LESS_THAN_OR_EQUAL"
+  | "BETWEEN"
+
+interface AttendanceWorkflowCondition {
+  id: number
+  conditionNo: number
+  fieldKey: AttendanceConditionField
+  operator: AttendanceConditionOperator
+  branchesID?: number | null
+  departmentID?: number | null
+  designationID?: number | null
+  numberValue?: number | string | null
+  numberValueTo?: number | string | null
+  textValue?: string | null
+  isActive?: boolean
+  employees?: Array<{
+    id?: number
+    manageEmployeeID: number
+  }>
+}
+
+type WorkflowApproverType = "REPORTING_MANAGER" | "DESIGNATION"
+
+interface AttendanceWorkflowStep {
+  id: number
+  approvalWorkflowID: number
+  stepNo: number
+  approverType: WorkflowApproverType
+  designationID?: number | null
+  stepName?: string | null
+  isMandatory: boolean
+  canReject: boolean
+  canSendBack: boolean
+  approvalTimeout?: number | null
+  designation?: {
+    id: number
+    designation?: string | null
+    companyID?: number | null
+    branchesID?: number | null
+    departmentID?: number | null
+  } | null
+}
+
+interface AttendanceWorkflow {
+  id: number
+  serviceProviderID?: number | null
+  companyID: number
+  branchesID?: number | null
+  companyModuleID: number
+  workflowName: string
+  workflowDescription?: string | null
+  effectiveFrom: string
+  conditionMatchType: "ALL" | "ANY"
+  allowAnySameDesignation: boolean
+  workflowStatus: boolean
+  companyModule: {
+    id: number
+    moduleKey: string
+    moduleName: string
+    moduleStatus: boolean
+  }
+  steps: AttendanceWorkflowStep[]
+  conditions: AttendanceWorkflowCondition[]
+}
+
+interface CurrentEmployeeContext {
+  id: number
+  companyID?: number | null
+  branchesID?: number | null
+  departmentNameID?: number | null
+  designationID?: number | null
+}
+
+
+interface MyApprovalAssignment {
+  id: number
+  approvalRequestID: number
+  status: string
+  approvalRequest: {
+    id: number
+    subjectType: string
+    subjectID: number
+    subjectEmployeeID?: number | null
+    status: string
+    currentStepNo?: number | null
+    allowAnySameDesignationSnapshot?: boolean
+  }
+  approvalRequestStep: {
+    id: number
+    stepNo: number
+    stepNameSnapshot?: string | null
+    canRejectSnapshot?: boolean
+    status: string
+  }
+}
+
+interface LinkedManager {
+  id: number
+  employeeFirstName?: string
+  employeeLastName?: string
+  employeeID?: string
+}
+
+function getAuthHeaders(json = false): HeadersInit {
+  const token =
+    typeof window !== "undefined"
+      ? localStorage.getItem("token") || localStorage.getItem("accessToken") || ""
+      : ""
+
+  return {
+    ...(json ? { "Content-Type": "application/json" } : {}),
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  }
+}
+
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "/backend"
+const ATTENDANCE_MODULE_KEY = "ATTENDANCE_MODULE"
+
+function normalizeStatusCode(value: unknown): string {
+  const normalized = String(value ?? "")
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+
+  const aliases: Record<string, string> = {
+    PRESENT: "PRESENT",
+    FULLDAY: "FULL_DAY",
+    FULL_DAY: "FULL_DAY",
+    HALFDAY: "HALF_DAY",
+    HALF_DAY: "HALF_DAY",
+    LATE: "LATE_MARK",
+    LATE_MARK: "LATE_MARK",
+    SICK_LEAVE: "SL",
+    CASUAL_LEAVE: "CL",
+    PRIVILEGE_LEAVE: "PL",
+    PRIVILEGED_LEAVE: "PL",
+    LOSS_OF_PAY: "LOP",
+  }
+
+  return aliases[normalized] ?? normalized
+}
 
 export function AttendanceRegularisationManagement() {
   const { isSingleBranch, autoBranchId, autoBranchName } = useCompanyBranches();
@@ -86,6 +242,7 @@ employeeName: "",
     companyID: undefined as number | undefined,
 branchesID: undefined as number | undefined,
 departmentID: undefined as number | undefined,
+designationID: undefined as number | undefined,
 manageEmployeeID: undefined as number | undefined,
     overtimeApplicable: false,
     otMealApply: false,
@@ -98,6 +255,11 @@ manageEmployeeID: undefined as number | undefined,
   const [empCreds, setEmpCreds] = useState<any>(null)
   const [holidays, setHolidays] = useState<any[]>([])
   const [isFetchingStatus, setIsFetchingStatus] = useState(false)
+  const [attendanceWorkflows, setAttendanceWorkflows] = useState<AttendanceWorkflow[]>([])
+  const [currentEmployee, setCurrentEmployee] = useState<CurrentEmployeeContext | null>(null)
+  const [myPendingApprovals, setMyPendingApprovals] = useState<MyApprovalAssignment[]>([])
+  const [myAssignedApprovals, setMyAssignedApprovals] = useState<MyApprovalAssignment[]>([])
+  const [linkedManagersByEmployee, setLinkedManagersByEmployee] = useState<Record<number, LinkedManager[]>>({})
   
   const user = useCurrentUser()
   const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN"
@@ -118,10 +280,53 @@ manageEmployeeID: undefined as number | undefined,
 
         // --- EMPLOYEE ---
         if (user.role === "EMPLOYEE") {
-          const credsRes = await fetch(`${BACKEND_URL}/manage-emp/credentials/all`);
-          const creds = await credsRes.json();
-          const me = creds.find((u: any) => u.username === user.username);
-          setEmpCreds(me || null);
+          const credsRes = await fetch(`${BACKEND_URL}/manage-emp/credentials/all`, {
+            cache: "no-store",
+          })
+          const creds = await credsRes.json()
+
+          const me = Array.isArray(creds)
+            ? creds.find((item: any) => item.username === user.username)
+            : null
+
+          setEmpCreds(me || null)
+
+          const manageEmployeeID = Number(
+            me?.manageEmployeeID ??
+            me?.employee?.id ??
+            0,
+          )
+
+          if (manageEmployeeID > 0) {
+            const employeeRes = await fetch(
+              `${BACKEND_URL}/manage-emp/${manageEmployeeID}`,
+              { cache: "no-store" },
+            )
+
+            if (employeeRes.ok) {
+              const employee = await employeeRes.json()
+
+              setCurrentEmployee({
+                id: Number(employee.id),
+                companyID: employee.companyID ?? null,
+                branchesID: employee.branchesID ?? null,
+                departmentNameID:
+                  employee.departmentNameID ??
+                  employee.departments?.id ??
+                  null,
+                designationID:
+                  employee.designationID ??
+                  employee.designations?.id ??
+                  employee.empDesignation?.[0]?.designationID ??
+                  employee.empDesignation?.[0]?.designation?.id ??
+                  null,
+              })
+            } else {
+              setCurrentEmployee(null)
+            }
+          } else {
+            setCurrentEmployee(null)
+          }
         }
       } catch (error) {
         console.error("Error loading user data:", error);
@@ -145,6 +350,19 @@ manageEmployeeID: undefined as number | undefined,
     };
     loadHolidays();
   }, []);
+
+  useEffect(() => {
+    if (!isSingleBranch || !autoBranchId) return
+
+    setFormData((prev) => ({
+      ...prev,
+      branchesID:
+        prev.branchesID != null
+          ? prev.branchesID
+          : Number(autoBranchId),
+      branchName: prev.branchName || autoBranchName || "",
+    }))
+  }, [isSingleBranch, autoBranchId, autoBranchName])
 
   // API functions for search and suggest
   const fetchServiceProviders = async (query: string) => {
@@ -336,43 +554,241 @@ manageEmployeeID: undefined as number | undefined,
     }
   }
 
-  // Load attendance regularisations on component mount
-  useEffect(() => {
-if (user) {
-  loadAttendanceRegularisations()
-  loadFilterLookups()
-}
-  }, [user, managerData, empCreds])
+  const loadAttendanceWorkflows = async (): Promise<AttendanceWorkflow[]> => {
+    try {
+      const res = await fetch(`${BACKEND_URL}/approval-workflows`, {
+        cache: "no-store",
+      })
 
-  useEffect(() => {
-  const handler = () => {
-    if (user) {
-      loadAttendanceRegularisations();
-      loadFilterLookups();
+      if (!res.ok) {
+        throw new Error(`Failed to load workflows (${res.status})`)
+      }
+
+      const raw = await res.json()
+      const workflows: AttendanceWorkflow[] = Array.isArray(raw)
+        ? raw
+        : Array.isArray(raw?.data)
+          ? raw.data
+          : []
+
+      const attendanceOnly = workflows.filter(
+        (workflow) =>
+          workflow.workflowStatus === true &&
+          workflow.companyModule?.moduleStatus !== false &&
+          workflow.companyModule?.moduleKey?.trim().toUpperCase() ===
+            ATTENDANCE_MODULE_KEY,
+      )
+
+      setAttendanceWorkflows(attendanceOnly)
+      return attendanceOnly
+    } catch (error) {
+      console.error("Failed to load Attendance workflows:", error)
+      setAttendanceWorkflows([])
+      return []
     }
-  };
+  }
 
-  const sidebarPageClickHandler = (e: any) => {
-    if (e.detail?.path === "/attendance-regularisation") {
-      closeRegularisationPagePanels();
+  const loadMyPendingApprovals = async (): Promise<MyApprovalAssignment[]> => {
+    if (user?.role !== "EMPLOYEE") {
+      setMyPendingApprovals([])
+      return []
+    }
 
-      if (user) {
-        loadAttendanceRegularisations();
-        loadFilterLookups();
+    try {
+      const response = await fetch(
+        `${BACKEND_URL}/approval-requests/my-pending`,
+        {
+          headers: getAuthHeaders(),
+          credentials: "include",
+          cache: "no-store",
+        },
+      )
+
+      if (!response.ok) {
+        const errorBody = await response.json().catch(() => ({}))
+        console.error(
+          "Failed to load my pending approvals:",
+          errorBody?.message || response.status,
+        )
+        setMyPendingApprovals([])
+        return []
+      }
+
+      const raw = await response.json()
+      const rows: MyApprovalAssignment[] = Array.isArray(raw)
+        ? raw
+        : Array.isArray(raw?.data)
+          ? raw.data
+          : []
+
+      const attendanceRows = rows.filter((item) => {
+        const subjectType = String(item.approvalRequest?.subjectType ?? "")
+          .trim()
+          .toUpperCase()
+
+        return [
+          "ATTENDANCE_REGULARISATION",
+          "ATTENDANCE_REGULARIZATION",
+          "ATTENDANCE_REGULARISE",
+        ].includes(subjectType)
+      })
+
+      setMyPendingApprovals(attendanceRows)
+      return attendanceRows
+    } catch (error) {
+      console.error("Failed to load my pending approvals:", error)
+      setMyPendingApprovals([])
+      return []
+    }
+  }
+
+  const loadMyAssignedApprovals = async (): Promise<MyApprovalAssignment[]> => {
+    if (user?.role !== "EMPLOYEE") {
+      setMyAssignedApprovals([])
+      return []
+    }
+
+    try {
+      const response = await fetch(
+        `${BACKEND_URL}/approval-requests/my-assigned`,
+        {
+          headers: getAuthHeaders(),
+          credentials: "include",
+          cache: "no-store",
+        },
+      )
+
+      if (!response.ok) {
+        const errorBody = await response.json().catch(() => ({}))
+        console.error(
+          "Failed to load my assigned approvals:",
+          errorBody?.message || response.status,
+        )
+        setMyAssignedApprovals([])
+        return []
+      }
+
+      const raw = await response.json()
+      const rows: MyApprovalAssignment[] = Array.isArray(raw)
+        ? raw
+        : Array.isArray(raw?.data)
+          ? raw.data
+          : []
+
+      const attendanceRows = rows.filter((item) => {
+        const subjectType = String(item.approvalRequest?.subjectType ?? "")
+          .trim()
+          .toUpperCase()
+
+        return [
+          "ATTENDANCE_REGULARISATION",
+          "ATTENDANCE_REGULARIZATION",
+          "ATTENDANCE_REGULARISE",
+        ].includes(subjectType)
+      })
+
+      setMyAssignedApprovals(attendanceRows)
+      return attendanceRows
+    } catch (error) {
+      console.error("Failed to load my assigned approvals:", error)
+      setMyAssignedApprovals([])
+      return []
+    }
+  }
+
+  const loadLinkedManagersForRows = async (
+    rows: AttendanceRegularisation[],
+  ): Promise<Record<number, LinkedManager[]>> => {
+    const employeeIDs = Array.from(
+      new Set(
+        rows
+          .map((row) => Number(row.manageEmployeeID ?? 0))
+          .filter((id) => Number.isInteger(id) && id > 0),
+      ),
+    )
+
+    if (employeeIDs.length === 0) {
+      setLinkedManagersByEmployee({})
+      return {}
+    }
+
+    const entries = await Promise.all(
+      employeeIDs.map(async (employeeID) => {
+        try {
+          const response = await fetch(
+            `${BACKEND_URL}/manage-emp/${employeeID}/linked-employees`,
+            {
+              headers: getAuthHeaders(),
+              credentials: "include",
+              cache: "no-store",
+            },
+          )
+
+          if (!response.ok) return [employeeID, []] as const
+
+          const raw = await response.json()
+          return [employeeID, Array.isArray(raw) ? raw : []] as const
+        } catch (error) {
+          console.error(
+            `Failed to load linked managers for employee ${employeeID}:`,
+            error,
+          )
+          return [employeeID, []] as const
+        }
+      }),
+    )
+
+    const managerMap = Object.fromEntries(entries) as Record<number, LinkedManager[]>
+    setLinkedManagersByEmployee(managerMap)
+    return managerMap
+  }
+
+  const refreshPageData = async () => {
+    if (!user) return
+
+    const [workflowRows, pendingRows, assignedRows] = await Promise.all([
+      loadAttendanceWorkflows(),
+      loadMyPendingApprovals(),
+      loadMyAssignedApprovals(),
+    ])
+
+    await Promise.all([
+      loadFilterLookups(),
+      loadAttendanceRegularisations(
+        workflowRows,
+        pendingRows,
+        assignedRows,
+      ),
+    ])
+  }
+
+  useEffect(() => {
+    if (!user) return
+    void refreshPageData()
+  }, [user, managerData, empCreds, currentEmployee?.id])
+
+  useEffect(() => {
+    const handler = () => {
+      void refreshPageData()
+    }
+
+    const sidebarPageClickHandler = (e: any) => {
+      if (e.detail?.path === "/attendance-regularisation") {
+        closeRegularisationPagePanels()
+        void refreshPageData()
       }
     }
-  };
 
-  window.addEventListener("sidebar-context-changed", handler);
-  window.addEventListener("app-data-refresh", handler);
-  window.addEventListener("sidebar-main-page-click", sidebarPageClickHandler);
+    window.addEventListener("sidebar-context-changed", handler)
+    window.addEventListener("app-data-refresh", handler)
+    window.addEventListener("sidebar-main-page-click", sidebarPageClickHandler)
 
-  return () => {
-    window.removeEventListener("sidebar-context-changed", handler);
-    window.removeEventListener("app-data-refresh", handler);
-    window.removeEventListener("sidebar-main-page-click", sidebarPageClickHandler);
-  };
-}, [user, managerData, empCreds]);
+    return () => {
+      window.removeEventListener("sidebar-context-changed", handler)
+      window.removeEventListener("app-data-refresh", handler)
+      window.removeEventListener("sidebar-main-page-click", sidebarPageClickHandler)
+    }
+  }, [user, managerData, empCreds, currentEmployee?.id])
 
 
   const loadFilterLookups = async () => {
@@ -416,7 +832,11 @@ if (user) {
   }
 }
 
-  const loadAttendanceRegularisations = async () => {
+  const loadAttendanceRegularisations = async (
+    workflowSource: AttendanceWorkflow[] = attendanceWorkflows,
+    pendingAssignments: MyApprovalAssignment[] = myPendingApprovals,
+    assignedAssignments: MyApprovalAssignment[] = myAssignedApprovals,
+  ) => {
     setListLoading(true);
     try {
       const res = await fetch(`${BACKEND_URL}/emp-attendance-regularise`, {
@@ -433,7 +853,16 @@ if (user) {
           serviceProvider: regularisation.serviceProvider?.companyName || "",
           companyName: regularisation.company?.companyName || "",
    branchName: regularisation.branches?.branchName || "",
-departmentID: regularisation.departmentID ?? regularisation.manageEmployee?.departmentNameID,
+departmentID:
+  regularisation.departmentID ??
+  regularisation.manageEmployee?.departmentNameID ??
+  regularisation.manageEmployee?.departments?.id,
+designationID:
+  regularisation.designationID ??
+  regularisation.manageEmployee?.designationID ??
+  regularisation.manageEmployee?.designations?.id ??
+  regularisation.manageEmployee?.empDesignation?.[0]?.designationID ??
+  regularisation.manageEmployee?.empDesignation?.[0]?.designation?.id,
 departmentName:
   regularisation.departments?.departmentName ||
   regularisation.manageEmployee?.departments?.departmentName ||
@@ -462,6 +891,8 @@ employeeId: regularisation.manageEmployee?.employeeID || "",
             : new Date().toISOString().split("T")[0],
         })
       )
+
+      const managerMap = await loadLinkedManagersForRows(regularisationsData)
 
       // Role-based filtering
       if (!user) {
@@ -505,17 +936,23 @@ employeeId: regularisation.manageEmployee?.employeeID || "",
         return
       }
 
-      // For employees or others → get from /manage-emp/credentials/all
-      const creds = await fetch(`${BACKEND_URL}/manage-emp/credentials/all`).then((r) => r.json())
-      const emp = creds.find((c: any) => c.username === user.username)
-      if (emp) {
+      if (user.role === "EMPLOYEE") {
         const filtered = regularisationsData.filter(
-          (a) => a.companyID === emp.companyID && a.branchesID === emp.branchesID
+          (row: AttendanceRegularisation) =>
+            canEmployeeSeeRow(
+              row,
+              workflowSource,
+              managerMap,
+              pendingAssignments,
+              assignedAssignments,
+            ),
         )
+
         setRegularisations(filtered)
-      } else {
-        setRegularisations([])
+        return
       }
+
+      setRegularisations([])
     } catch (error) {
       console.error("Error loading attendance regularisations:", error)
     } finally {
@@ -624,21 +1061,48 @@ const statusBadgeVariant = (status?: AttendanceRegularisation["status"]) => {
     setFormData((prev) => ({
       ...prev,
       branchName: selected.display,
-branchesID: selected.value,
-departmentName: "",
-departmentID: undefined,
-employeeName: "",
-manageEmployeeID: undefined,
+      branchesID: Number(selected.value),
+      departmentName: "",
+      departmentID: undefined,
+      designationID: undefined,
+      employeeName: "",
+      manageEmployeeID: undefined,
     }))
+    setSelectedEmployee(null)
   }
 
   const handleEmployeeSelect = (selected: SelectedItem) => {
     const employee = selected.item
+
     setSelectedEmployee(employee)
+
     setFormData((prev) => ({
       ...prev,
       employeeName: selected.display,
-      manageEmployeeID: selected.value,
+      manageEmployeeID: Number(selected.value),
+      serviceProviderID:
+        employee?.serviceProviderID ??
+        prev.serviceProviderID,
+      companyID:
+        employee?.companyID ??
+        prev.companyID,
+      branchesID:
+        employee?.branchesID ??
+        prev.branchesID,
+      departmentID:
+        employee?.departmentNameID ??
+        employee?.departmentID ??
+        employee?.departments?.id ??
+        prev.departmentID,
+      departmentName:
+        employee?.departments?.departmentName ??
+        prev.departmentName,
+      designationID:
+        employee?.designationID ??
+        employee?.designations?.id ??
+        employee?.empDesignation?.[0]?.designationID ??
+        employee?.empDesignation?.[0]?.designation?.id ??
+        undefined,
     }))
   }
 
@@ -848,38 +1312,551 @@ manageEmployeeID: undefined,
     }
   }
 
+  const compareIDCondition = (
+    actual: number | null | undefined,
+    expected: number | null | undefined,
+    operator: AttendanceConditionOperator,
+  ): boolean => {
+    if (actual == null || expected == null) return false
+
+    const left = Number(actual)
+    const right = Number(expected)
+
+    if (operator === "EQUALS") return left === right
+    if (operator === "NOT_EQUALS") return left !== right
+
+    return false
+  }
+
+  const compareNumberCondition = (
+    actual: number,
+    condition: AttendanceWorkflowCondition,
+  ): boolean => {
+    const first = Number(condition.numberValue)
+
+    if (!Number.isFinite(first)) return false
+
+    switch (condition.operator) {
+      case "EQUALS":
+        return actual === first
+      case "NOT_EQUALS":
+        return actual !== first
+      case "GREATER_THAN":
+        return actual > first
+      case "GREATER_THAN_OR_EQUAL":
+        return actual >= first
+      case "LESS_THAN":
+        return actual < first
+      case "LESS_THAN_OR_EQUAL":
+        return actual <= first
+      case "BETWEEN": {
+        const second = Number(condition.numberValueTo)
+
+        return (
+          Number.isFinite(second) &&
+          actual >= first &&
+          actual <= second
+        )
+      }
+      default:
+        return false
+    }
+  }
+
+  const evaluateAttendanceCondition = (
+    condition: AttendanceWorkflowCondition,
+    subject: {
+      branchesID?: number | null
+      departmentID?: number | null
+      designationID?: number | null
+      manageEmployeeID?: number | null
+      requestedStatus?: string | null
+      regularisationDays: number
+    },
+  ): boolean => {
+    switch (condition.fieldKey) {
+      case "BRANCH":
+        return compareIDCondition(
+          subject.branchesID,
+          condition.branchesID,
+          condition.operator,
+        )
+
+      case "DEPARTMENT":
+        return compareIDCondition(
+          subject.departmentID,
+          condition.departmentID,
+          condition.operator,
+        )
+
+      case "DESIGNATION":
+        return compareIDCondition(
+          subject.designationID,
+          condition.designationID,
+          condition.operator,
+        )
+
+      case "EMPLOYEE": {
+        const configuredIDs = (condition.employees ?? [])
+          .map((employee) => Number(employee.manageEmployeeID))
+          .filter((id) => Number.isInteger(id) && id > 0)
+
+        const employeeID = Number(subject.manageEmployeeID)
+        const included = configuredIDs.includes(employeeID)
+
+        if (condition.operator === "IN") return included
+        if (condition.operator === "NOT_IN") return !included
+
+        return false
+      }
+
+      case "REGULARISATION_TYPE": {
+        const actual = normalizeStatusCode(subject.requestedStatus)
+        const expected = normalizeStatusCode(condition.textValue)
+
+        if (!expected) return false
+
+        if (condition.operator === "EQUALS") {
+          return actual === expected
+        }
+
+        if (condition.operator === "NOT_EQUALS") {
+          return actual !== expected
+        }
+
+        return false
+      }
+
+      case "REGULARISATION_DAYS":
+        return compareNumberCondition(
+          subject.regularisationDays,
+          condition,
+        )
+
+      default:
+        return false
+    }
+  }
+
+  const workflowMatchesConditions = (
+    workflow: AttendanceWorkflow,
+    subject: {
+      branchesID?: number | null
+      departmentID?: number | null
+      designationID?: number | null
+      manageEmployeeID?: number | null
+      requestedStatus?: string | null
+      regularisationDays: number
+    },
+  ): boolean => {
+    const conditions = (workflow.conditions ?? [])
+      .filter((condition) => condition.isActive !== false)
+      .sort((a, b) => a.conditionNo - b.conditionNo)
+
+    if (conditions.length === 0) return false
+
+    const results = conditions.map((condition) =>
+      evaluateAttendanceCondition(condition, subject),
+    )
+
+    return workflow.conditionMatchType === "ANY"
+      ? results.some(Boolean)
+      : results.every(Boolean)
+  }
+
+  const findAttendanceWorkflow = (
+    subject: {
+      companyID: number
+      branchesID: number
+      departmentID?: number | null
+      designationID?: number | null
+      manageEmployeeID?: number | null
+      requestedStatus?: string | null
+      regularisationDays: number
+    },
+    workflowSource: AttendanceWorkflow[] = attendanceWorkflows,
+  ): AttendanceWorkflow | null => {
+    const now = Date.now()
+
+    const candidates = workflowSource
+      .filter(
+        (workflow) =>
+          workflow.workflowStatus === true &&
+          workflow.companyModule?.moduleStatus !== false &&
+          workflow.companyModule?.moduleKey?.trim().toUpperCase() ===
+            ATTENDANCE_MODULE_KEY &&
+          Number(workflow.companyID) === Number(subject.companyID) &&
+          (workflow.branchesID == null ||
+            Number(workflow.branchesID) ===
+              Number(subject.branchesID)) &&
+          new Date(workflow.effectiveFrom).getTime() <= now,
+      )
+      .sort((a, b) => {
+        const aExact =
+          a.branchesID != null &&
+          Number(a.branchesID) === Number(subject.branchesID)
+
+        const bExact =
+          b.branchesID != null &&
+          Number(b.branchesID) === Number(subject.branchesID)
+
+        if (aExact !== bExact) {
+          return aExact ? -1 : 1
+        }
+
+        const dateDiff =
+          new Date(b.effectiveFrom).getTime() -
+          new Date(a.effectiveFrom).getTime()
+
+        if (dateDiff !== 0) return dateDiff
+
+        return b.id - a.id
+      })
+
+    // Exact branch workflows are evaluated first.
+    // Company-wide branchesID=null workflows act as fallback.
+    for (const workflow of candidates) {
+      if (workflowMatchesConditions(workflow, subject)) {
+        return workflow
+      }
+    }
+
+    return null
+  }
+
+  const getWorkflowForRow = (
+    row: AttendanceRegularisation,
+    workflowSource: AttendanceWorkflow[] = attendanceWorkflows,
+  ): AttendanceWorkflow | null => {
+    if (!row.companyID || !row.branchesID) return null
+
+    return findAttendanceWorkflow(
+      {
+        companyID: Number(row.companyID),
+        branchesID: Number(row.branchesID),
+        departmentID: row.departmentID ?? null,
+        designationID: row.designationID ?? null,
+        manageEmployeeID: row.manageEmployeeID ?? null,
+        requestedStatus: row.requestedStatus ?? null,
+        regularisationDays: 1,
+      },
+      workflowSource,
+    )
+  }
+
+  const canEmployeeSeeRow = (
+    row: AttendanceRegularisation,
+    workflowSource: AttendanceWorkflow[],
+    managerMap: Record<number, LinkedManager[]>,
+    pendingAssignments: MyApprovalAssignment[],
+    assignedAssignments: MyApprovalAssignment[],
+  ): boolean => {
+    if (user?.role !== "EMPLOYEE" || !currentEmployee) return false
+
+    const loggedEmployeeID = Number(currentEmployee.id)
+    const requestEmployeeID = Number(row.manageEmployeeID ?? 0)
+
+    /*
+     * Request owner always keeps the record.
+     */
+    if (
+      loggedEmployeeID > 0 &&
+      requestEmployeeID === loggedEmployeeID
+    ) {
+      return true
+    }
+
+    /*
+     * PRODUCTION RULE:
+     * Once this approval request was ever assigned to this employee,
+     * it stays visible permanently, regardless of:
+     * PENDING / WAITING / APPROVED / REJECTED / SKIPPED / CANCELLED.
+     */
+    const wasEverAssigned = assignedAssignments.some(
+      (assignment) =>
+        Number(assignment.approvalRequest?.subjectID) === Number(row.id),
+    )
+
+    if (wasEverAssigned) {
+      return true
+    }
+
+    /*
+     * Current actionable assignment also guarantees visibility.
+     * This is mostly redundant once my-assigned is available, but is kept
+     * defensively while rolling out the new endpoint.
+     */
+    const assignedNow = pendingAssignments.some(
+      (assignment) =>
+        Number(assignment.approvalRequest?.subjectID) === Number(row.id) &&
+        assignment.approvalRequest?.status === "PENDING",
+    )
+
+    if (assignedNow) {
+      return true
+    }
+
+    /*
+     * Legacy fallback for old rows created before ApprovalRequest integration.
+     * It is visibility-only and NEVER grants approve/reject permission.
+     */
+    if (row.status !== "Pending") {
+      return false
+    }
+
+    const workflow = getWorkflowForRow(row, workflowSource)
+    if (!workflow) return false
+
+    /*
+     * For sequential mode, never guess the active approver in the browser.
+     * Backend assignment is required.
+     */
+    if (workflow.allowAnySameDesignation !== true) {
+      return false
+    }
+
+    const steps = [...(workflow.steps ?? [])].sort(
+      (a, b) => a.stepNo - b.stepNo,
+    )
+
+    return steps.some((step) => {
+      if (step.approverType === "REPORTING_MANAGER") {
+        const managers = managerMap[requestEmployeeID] ?? []
+
+        const isActualLinkedManager = managers.some(
+          (manager) => Number(manager.id) === loggedEmployeeID,
+        )
+
+        if (!isActualLinkedManager) return false
+
+        if (
+          Number(currentEmployee.companyID ?? 0) !==
+          Number(workflow.companyID)
+        ) {
+          return false
+        }
+
+        if (step.designationID != null) {
+          return (
+            Number(currentEmployee.designationID ?? 0) ===
+            Number(step.designationID)
+          )
+        }
+
+        return true
+      }
+
+      if (step.approverType === "DESIGNATION") {
+        return (
+          Number(currentEmployee.companyID ?? 0) ===
+            Number(workflow.companyID) &&
+          Number(currentEmployee.designationID ?? 0) ===
+            Number(step.designationID ?? 0)
+        )
+      }
+
+      return false
+    })
+  }
+
+  const getAssignedApproval = (
+    row: AttendanceRegularisation,
+  ): MyApprovalAssignment | null => {
+    return (
+      myAssignedApprovals.find(
+        (assignment) =>
+          Number(assignment.approvalRequest?.subjectID) === Number(row.id),
+      ) ?? null
+    )
+  }
+
+  const getApprovalDisplayState = (
+    row: AttendanceRegularisation,
+  ): {
+    label: string
+    variant: "default" | "secondary" | "destructive" | "outline"
+  } => {
+    const assigned = getAssignedApproval(row)
+
+    if (!assigned) {
+      if (row.status === "Approved") {
+        return {
+          label: "Final Approved",
+          variant: "default",
+        }
+      }
+
+      if (row.status === "Rejected") {
+        return {
+          label: "Rejected",
+          variant: "destructive",
+        }
+      }
+
+      return {
+        label: row.status || "Pending",
+        variant: "secondary",
+      }
+    }
+
+    const requestStatus = String(
+      assigned.approvalRequest?.status ?? "",
+    ).toUpperCase()
+
+    const assignmentStatus = String(
+      assigned.status ?? "",
+    ).toUpperCase()
+
+    if (requestStatus === "APPROVED") {
+      return {
+        label: "Final Approved",
+        variant: "default",
+      }
+    }
+
+    if (requestStatus === "REJECTED") {
+      return {
+        label: "Rejected",
+        variant: "destructive",
+      }
+    }
+
+    if (requestStatus === "CANCELLED") {
+      return {
+        label: "Cancelled",
+        variant: "outline",
+      }
+    }
+
+    /*
+     * Employee already approved his stage but the whole workflow
+     * is still moving to another approver/step.
+     */
+    if (
+      requestStatus === "PENDING" &&
+      assignmentStatus === "APPROVED"
+    ) {
+      return {
+        label: "Soft Approved",
+        variant: "outline",
+      }
+    }
+
+    if (
+      requestStatus === "PENDING" &&
+      assignmentStatus === "PENDING"
+    ) {
+      return {
+        label: assigned.approvalRequestStep?.stepNameSnapshot
+          ? `Pending • ${assigned.approvalRequestStep.stepNameSnapshot}`
+          : `Pending • Step ${assigned.approvalRequestStep?.stepNo ?? ""}`,
+        variant: "secondary",
+      }
+    }
+
+    if (
+      requestStatus === "PENDING" &&
+      assignmentStatus === "WAITING"
+    ) {
+      return {
+        label: assigned.approvalRequestStep?.stepNameSnapshot
+          ? `Waiting • ${assigned.approvalRequestStep.stepNameSnapshot}`
+          : `Waiting • Step ${assigned.approvalRequestStep?.stepNo ?? ""}`,
+        variant: "outline",
+      }
+    }
+
+    if (assignmentStatus === "SKIPPED") {
+      return {
+        label: "Completed Elsewhere",
+        variant: "outline",
+      }
+    }
+
+    return {
+      label: assignmentStatus || requestStatus || "Pending",
+      variant: "outline",
+    }
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
-    // Auto-populate serviceProviderID and companyID for MANAGER/EMPLOYEE
-    const serviceProviderID = user?.role === "SUPERADMIN" 
-      ? formData.serviceProviderID 
-      : managerData?.serviceProviderID || empCreds?.serviceProviderID || formData.serviceProviderID || user?.serviceProviderID;
+    const serviceProviderID =
+      user?.role === "SUPERADMIN"
+        ? formData.serviceProviderID
+        : managerData?.serviceProviderID ||
+          empCreds?.serviceProviderID ||
+          formData.serviceProviderID ||
+          user?.serviceProviderID
 
-    const companyID = user?.role === "SUPERADMIN" 
-      ? formData.companyID 
-      : managerData?.companyID || empCreds?.companyID || formData.companyID || user?.companyID;
+    const companyID =
+      user?.role === "SUPERADMIN"
+        ? formData.companyID
+        : managerData?.companyID ||
+          empCreds?.companyID ||
+          currentEmployee?.companyID ||
+          formData.companyID ||
+          user?.companyID
 
-    // Ensure we have the required IDs
     if (!companyID || !formData.branchesID || !formData.manageEmployeeID) {
-      toast.error("Please make sure all required fields are selected: Branch and Employee");
-      return;
+      toast.error(
+        "Please make sure all required fields are selected: Branch and Employee",
+      )
+      return
     }
+
+    if (!formData.attendanceDate) {
+      toast.error("Attendance date is required")
+      return
+    }
+
+    if (!formData.requestedStatus) {
+      toast.error("Requested status is required")
+      return
+    }
+
+    if (!formData.reason.trim()) {
+      toast.error("Reason is required")
+      return
+    }
+
+    const matchedWorkflow = findAttendanceWorkflow({
+      companyID: Number(companyID),
+      branchesID: Number(formData.branchesID),
+      departmentID: formData.departmentID ?? null,
+      designationID: formData.designationID ?? null,
+      manageEmployeeID: Number(formData.manageEmployeeID),
+      requestedStatus: formData.requestedStatus,
+      regularisationDays: 1,
+    })
+
+    const status: "Pending" | "Approved" =
+      matchedWorkflow != null
+        ? "Pending"
+        : "Approved"
 
     try {
       const attendanceRegularisationData = {
-        serviceProviderID: serviceProviderID,
-        companyID: companyID,
-        branchesID: formData.branchesID,
-        manageEmployeeID: formData.manageEmployeeID,
-        attendanceDate: formData.attendanceDate ? new Date(formData.attendanceDate) : null,
+        serviceProviderID,
+        companyID: Number(companyID),
+        branchesID: Number(formData.branchesID),
+        manageEmployeeID: Number(formData.manageEmployeeID),
+        attendanceDate: new Date(formData.attendanceDate),
         day: formData.day,
-        checkInTime: formData.checkInTime ? new Date(`2000-01-01T${formData.checkInTime}`) : null,
-        checkOutTime: formData.checkOutTime ? new Date(`2000-01-01T${formData.checkOutTime}`) : null,
-        actualStatus: formData.actualStatus ? formData.actualStatus.replace(" (Regularized)", "") : null,
-        requestedStatus: formData.requestedStatus || null,
-        reason: formData.reason || null,
+        checkInTime: formData.checkInTime
+          ? new Date(`2000-01-01T${formData.checkInTime}`)
+          : null,
+        checkOutTime: formData.checkOutTime
+          ? new Date(`2000-01-01T${formData.checkOutTime}`)
+          : null,
+        actualStatus: formData.actualStatus
+          ? formData.actualStatus.replace(" (Regularized)", "")
+          : null,
+        requestedStatus: formData.requestedStatus,
+        reason: formData.reason.trim(),
         remarks: formData.remarks,
+        status,
         overtimeApplicable: false,
         otMealApply: false,
         otMealMinutes: null,
@@ -889,6 +1866,7 @@ manageEmployeeID: undefined,
       const url = editingRegularisation
         ? `${BACKEND_URL}/emp-attendance-regularise/${editingRegularisation.id}`
         : `${BACKEND_URL}/emp-attendance-regularise`
+
       const method = editingRegularisation ? "PATCH" : "POST"
 
       const res = await fetch(url, {
@@ -896,20 +1874,37 @@ manageEmployeeID: undefined,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(attendanceRegularisationData),
       })
+
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({}))
-        const message = errorData?.message || `Failed to save attendance regularisation: ${res.status}`
+        const message =
+          errorData?.message ||
+          `Failed to save attendance regularisation: ${res.status}`
+
         toast.error(message)
         return
       }
 
-      await loadAttendanceRegularisations()
+      await refreshPageData()
       resetForm()
       setIsDialogOpen(false)
-      toast.success("Attendance regularisation saved successfully")
+
+      if (matchedWorkflow) {
+        toast.success(
+          `Regularisation submitted for approval through "${matchedWorkflow.workflowName}"`,
+        )
+      } else {
+        toast.success(
+          "No workflow condition matched. Regularisation approved directly.",
+        )
+      }
     } catch (error) {
       console.error("Error saving attendance regularisation:", error)
-      toast.error((error as any)?.message || "Something went wrong")
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Something went wrong",
+      )
     }
   }
 
@@ -918,9 +1913,9 @@ manageEmployeeID: undefined,
     setFormData({
       serviceProvider: ctx?.serviceProviderName ?? "",
       companyName: ctx?.companyName ?? "",
-      branchName: "",
-departmentName: "",
-employeeName: "",
+      branchName: isSingleBranch ? autoBranchName || "" : "",
+      departmentName: "",
+      employeeName: "",
       attendanceDate: "",
       checkInTime: "",
       checkOutTime: "",
@@ -931,8 +1926,12 @@ employeeName: "",
       day: "",
       serviceProviderID: ctx?.serviceProviderID ?? undefined,
       companyID: ctx?.companyID ?? undefined,
-      branchesID: undefined,
+      branchesID:
+        isSingleBranch && autoBranchId
+          ? Number(autoBranchId)
+          : undefined,
       departmentID: undefined,
+      designationID: undefined,
       manageEmployeeID: undefined,
       overtimeApplicable: false,
       otMealApply: false,
@@ -972,6 +1971,7 @@ employeeName: "",
       companyID: regularisation.companyID,
       branchesID: regularisation.branchesID,
       departmentID: regularisation.departmentID,
+      designationID: regularisation.designationID,
       manageEmployeeID: regularisation.manageEmployeeID,
       overtimeApplicable: (regularisation as any).overtimeApplicable || false,
       otMealApply: (regularisation as any).otMealApply || false,
@@ -995,7 +1995,7 @@ employeeName: "",
       if (!res.ok) {
         throw new Error(`Failed to delete attendance regularisation: ${res.status}`)
       }
-      await loadAttendanceRegularisations()
+      await refreshPageData()
       toast.success("Record deleted successfully")
     } catch (error) {
       console.error("Error deleting attendance regularisation:", error)
@@ -1003,39 +2003,182 @@ employeeName: "",
     }
   }
 
-  const handleApprove = async (id: string) => {
-    try {
-      const res = await fetch(`${BACKEND_URL}/emp-attendance-regularise/${id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: "Approved" }),
-      })
-      if (!res.ok) {
-        throw new Error(`Failed to approve attendance regularisation: ${res.status}`)
+  const getApprovalAssignment = (
+    row: AttendanceRegularisation,
+  ): MyApprovalAssignment | null => {
+    if (row.status !== "Pending") return null
+
+    return (
+      myPendingApprovals.find(
+        (assignment) =>
+          Number(assignment.approvalRequest?.subjectID) === Number(row.id) &&
+          assignment.approvalRequest?.status === "PENDING",
+      ) ?? null
+    )
+  }
+
+  const getApprovalPermission = (
+    row: AttendanceRegularisation,
+  ): {
+    canApprove: boolean
+    canReject: boolean
+    assignment: MyApprovalAssignment | null
+    linkedManagers: LinkedManager[]
+  } => {
+    const assignment = getApprovalAssignment(row)
+    const linkedManagers =
+      linkedManagersByEmployee[Number(row.manageEmployeeID ?? 0)] ?? []
+
+    if (!assignment) {
+      return {
+        canApprove: false,
+        canReject: false,
+        assignment: null,
+        linkedManagers,
       }
-      await loadAttendanceRegularisations()
-      toast.success("Approved successfully")
+    }
+
+    /*
+     * IMPORTANT:
+     * Frontend does NOT recalculate workflow/designation/current-step access.
+     * /approval-requests/my-pending is the backend authority.
+     *
+     * Therefore:
+     * - sequential mode: only currently activated employee receives the row
+     * - any-approver mode: all currently eligible assigned employees receive it
+     * - REPORTING_MANAGER: backend assignment engine must use linked manager
+     * - DESIGNATION: backend assignment engine must assign matching company employees
+     */
+    return {
+      canApprove: true,
+      canReject:
+        assignment.approvalRequestStep?.canRejectSnapshot !== false,
+      assignment,
+      linkedManagers,
+    }
+  }
+
+  const refreshApprovalData = async () => {
+    await refreshPageData()
+  }
+
+  const handleApprove = async (id: string) => {
+    const row = regularisations.find(
+      (item) => String(item.id) === String(id),
+    )
+
+    if (!row) {
+      toast.error("Regularisation record not found")
+      return
+    }
+
+    const permission = getApprovalPermission(row)
+
+    if (!permission.canApprove || !permission.assignment) {
+      toast.error(
+        "This regularisation is not currently assigned to you for approval",
+      )
+      return
+    }
+
+    try {
+      const response = await fetch(
+        `${BACKEND_URL}/approval-requests/${permission.assignment.approvalRequest.id}/approve`,
+        {
+          method: "POST",
+          headers: getAuthHeaders(true),
+          credentials: "include",
+          body: JSON.stringify({
+            remark: "Attendance regularisation approved",
+          }),
+        },
+      )
+
+      const result = await response.json().catch(() => ({}))
+
+      if (!response.ok) {
+        throw new Error(
+          result?.message ||
+          `Failed to approve attendance regularisation (${response.status})`,
+        )
+      }
+
+      await refreshApprovalData()
+
+      toast.success(
+        result?.completed
+          ? "Regularisation fully approved"
+          : result?.message || "Approval recorded successfully",
+      )
     } catch (error) {
       console.error("Error approving attendance regularisation:", error)
-      toast.error((error as any)?.message || "Something went wrong")
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Something went wrong",
+      )
     }
   }
 
   const handleReject = async (id: string) => {
+    const row = regularisations.find(
+      (item) => String(item.id) === String(id),
+    )
+
+    if (!row) {
+      toast.error("Regularisation record not found")
+      return
+    }
+
+    const permission = getApprovalPermission(row)
+
+    if (!permission.canReject || !permission.assignment) {
+      toast.error(
+        "You are not allowed to reject this regularisation",
+      )
+      return
+    }
+
+    const reason = window.prompt("Enter rejection reason:")
+
+    if (reason == null) return
+
+    const remark = reason.trim()
+
+    if (!remark) {
+      toast.error("Rejection reason is required")
+      return
+    }
+
     try {
-      const res = await fetch(`${BACKEND_URL}/emp-attendance-regularise/${id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: "Rejected" }),
-      })
-      if (!res.ok) {
-        throw new Error(`Failed to reject attendance regularisation: ${res.status}`)
+      const response = await fetch(
+        `${BACKEND_URL}/approval-requests/${permission.assignment.approvalRequest.id}/reject`,
+        {
+          method: "POST",
+          headers: getAuthHeaders(true),
+          credentials: "include",
+          body: JSON.stringify({ remark }),
+        },
+      )
+
+      const result = await response.json().catch(() => ({}))
+
+      if (!response.ok) {
+        throw new Error(
+          result?.message ||
+          `Failed to reject attendance regularisation (${response.status})`,
+        )
       }
-      await loadAttendanceRegularisations()
-      toast.success("Rejected successfully")
+
+      await refreshApprovalData()
+      toast.success("Regularisation rejected")
     } catch (error) {
       console.error("Error rejecting attendance regularisation:", error)
-      toast.error((error as any)?.message || "Something went wrong")
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Something went wrong",
+      )
     }
   }
 
@@ -1115,38 +2258,77 @@ employeeName: "",
       cell: (r) => r.createdAt || "—",
     },
     {
+      key: "approval",
+      header: "Approval Status",
+      colSpan: 1,
+      cell: (r) => {
+        const state = getApprovalDisplayState(r)
+
+        return (
+          <Badge variant={state.variant}>
+            {state.label}
+          </Badge>
+        )
+      },
+    },
+    {
       key: "actions",
       header: "Actions",
       colSpan: 1,
       align: "right",
       cell: (r) => {
-        const extra = canManage && r.status === "Pending"
+        const permission = getApprovalPermission(r)
+
+        const extra = permission.canApprove
           ? [
               {
                 icon: Check,
-                title: "Approve",
-                onClick: () => handleApprove(r.id),
+                title: permission.assignment?.approvalRequestStep?.stepNameSnapshot
+                  ? `Approve — ${permission.assignment.approvalRequestStep.stepNameSnapshot}`
+                  : "Approve",
+                onClick: () => void handleApprove(r.id),
                 className: "text-green-600",
               },
-              {
-                icon: X,
-                title: "Reject",
-                onClick: () => handleReject(r.id),
-                className: "text-destructive",
-              },
+              ...(permission.canReject
+                ? [
+                    {
+                      icon: X,
+                      title: "Reject",
+                      onClick: () => void handleReject(r.id),
+                      className: "text-destructive",
+                    },
+                  ]
+                : []),
             ]
           : undefined
 
         return (
           <EntityRowActions
-            onEdit={() => handleEdit(r)}
-            onDelete={() => handleDelete(r.id)}
+            onEdit={
+              canManage
+                ? () => handleEdit(r)
+                : undefined
+            }
+            onDelete={
+              canManage
+                ? () => void handleDelete(r.id)
+                : undefined
+            }
             extra={extra}
           />
         )
       },
     },
-  ], [canManage])
+  ], [
+    canManage,
+    attendanceWorkflows,
+    currentEmployee,
+    empCreds,
+    myPendingApprovals,
+    myAssignedApprovals,
+    linkedManagersByEmployee,
+    regularisations,
+  ])
 
   return (
     <div className="space-y-6 w-full max-w-none animate-fade-in page-content-enter">
@@ -1244,7 +2426,12 @@ employeeName: "",
                       placeholder="Search by employee name or employee ID…"
                       value={formData.employeeName}
                       onChange={(value) =>
-                        setFormData((prev) => ({ ...prev, employeeName: value }))
+                        setFormData((prev) => ({
+                          ...prev,
+                          employeeName: value,
+                          manageEmployeeID: undefined,
+                          designationID: undefined,
+                        }))
                       }
                       onSelect={handleEmployeeSelect}
                       fetchData={fetchEmployees}
@@ -1310,12 +2497,13 @@ employeeName: "",
                       >
                         <option value="">Select Requested Status</option>
                         <option value="PRESENT">Present</option>
-                        <option value="SL">Late Mark</option>
-                        <option value="SL">Half Day</option>
-                        <option value="SL">Sick Leave (SL)</option>
-                        <option value="CL">Casual Leave (CL)</option>
-                        <option value="PL">Privilege Leave (PL)</option>
-                        <option value="LOP">Loss of Pay (LOP)</option>
+<option value="HALF_DAY">Half Day</option>
+<option value="LATE_MARK">Late Mark</option>
+<option value="SL">Sick Leave (SL)</option>
+<option value="CL">Casual Leave (CL)</option>
+<option value="PL">Privilege Leave (PL)</option>
+<option value="LOP">Loss of Pay (LOP)</option>
+<option value="WEEKOFF">Week Off</option>
                       </select>
                     </div>
                   </div>

@@ -4,6 +4,11 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import {
+  ApprovalRequirement,
+  Prisma,
+  WorkflowApproverType,
+} from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateApprovalWorkflowDto } from './dto/create-approval-workflow.dto';
 import { UpdateApprovalWorkflowDto } from './dto/update-approval-workflow.dto';
@@ -15,10 +20,11 @@ export class ApprovalWorkflowService {
 
   private validateSteps(
     steps: Array<{
-      stepNo: number;
-      designationID?: number | null;
-      approverType?: string | null;
-    }>,
+  stepNo: number;
+  designationID?: number | null;
+  approverType?: string | null;
+  approvalRequirement?: string | null;
+}>,
   ) {
     if (!steps?.length) {
       throw new BadRequestException(
@@ -49,14 +55,58 @@ export class ApprovalWorkflowService {
     });
 
     for (const step of steps) {
-      const approverType = (step.approverType || 'DESIGNATION').toUpperCase();
-      if (approverType === 'REPORTING_MANAGER') continue;
-      if (!Number.isInteger(step.designationID) || !step.designationID || step.designationID <= 0) {
-        throw new BadRequestException(
-          `Invalid designation for step ${step.stepNo}`,
-        );
-      }
+  const approverType =
+    String(
+      step.approverType ??
+      'DESIGNATION',
+    ).toUpperCase();
+
+  if (
+    ![
+      'DESIGNATION',
+      'REPORTING_MANAGER',
+    ].includes(approverType)
+  ) {
+    throw new BadRequestException(
+      `Invalid approver type for step ${step.stepNo}`,
+    );
+  }
+
+  const approvalRequirement =
+    String(
+      step.approvalRequirement ??
+      'ANY',
+    ).toUpperCase();
+
+  if (
+    ![
+      'ANY',
+      'ALL',
+    ].includes(approvalRequirement)
+  ) {
+    throw new BadRequestException(
+      `Invalid approval requirement for step ${step.stepNo}`,
+    );
+  }
+
+  if (
+    approverType ===
+    'DESIGNATION'
+  ) {
+    if (
+      !Number.isInteger(
+        step.designationID,
+      ) ||
+      !step.designationID ||
+      step.designationID <= 0
+    ) {
+      throw new BadRequestException(
+        `Invalid designation for step ${step.stepNo}`,
+      );
     }
+  }
+}
+
   }
 
   private async validateReferences(params: {
@@ -67,6 +117,7 @@ export class ApprovalWorkflowService {
       stepNo: number;
       designationID?: number | null;
       approverType?: string | null;
+      approvalRequirement?: string | null;
     }>;
   }) {
     const {
@@ -312,8 +363,20 @@ export class ApprovalWorkflowService {
               .sort((a, b) => a.stepNo - b.stepNo)
               .map((step) => ({
                 stepNo: step.stepNo,
-                designationID: step.designationID ?? null,
-                approverType: (step.approverType || 'DESIGNATION').toUpperCase(),
+                approverType:
+                  String(step.approverType ?? WorkflowApproverType.DESIGNATION)
+                    .trim()
+                    .toUpperCase() as WorkflowApproverType,
+                approvalRequirement:
+                  String(step.approvalRequirement ?? ApprovalRequirement.ANY)
+                    .trim()
+                    .toUpperCase() as ApprovalRequirement,
+                designationID:
+                  String(step.approverType ?? WorkflowApproverType.DESIGNATION)
+                    .trim()
+                    .toUpperCase() === WorkflowApproverType.REPORTING_MANAGER
+                    ? null
+                    : step.designationID ?? null,
                 stepName:
                   step.stepName?.trim() || null,
                 isMandatory:
@@ -409,6 +472,7 @@ export class ApprovalWorkflowService {
   ) {
     const expectedValueTypes:
       Record<string, string> = {
+      BRANCH: 'BRANCH',
       DEPARTMENT: 'DEPARTMENT',
       DESIGNATION: 'DESIGNATION',
       EMPLOYEE: 'EMPLOYEE_LIST',
@@ -450,6 +514,9 @@ export class ApprovalWorkflowService {
   private validateConditionPayloadShape(
     condition: any,
   ) {
+    const hasBranch =
+      condition.branchesID != null;
+
     const hasDepartment =
       condition.departmentID != null;
 
@@ -472,6 +539,22 @@ export class ApprovalWorkflowService {
       condition.textValue.trim() !== '';
 
     switch (condition.fieldKey) {
+      case 'BRANCH':
+        if (
+          !hasBranch ||
+          hasDepartment ||
+          hasDesignation ||
+          hasEmployees ||
+          hasNumber ||
+          hasNumberTo ||
+          hasText
+        ) {
+          throw new BadRequestException(
+            `Condition ${condition.conditionNo} contains invalid values for BRANCH`,
+          );
+        }
+        break;
+
       case 'DEPARTMENT':
         if (
           !hasDepartment ||
@@ -1037,15 +1120,31 @@ export class ApprovalWorkflowService {
     const existing = await this.findOne(id);
 
     const normalizedExistingSteps =
-      existing.steps
-        .map((step) => ({
+      (existing.steps as any[])
+        .map((step: any) => ({
           stepNo:
             Number(step.stepNo),
 
+          approverType:
+            String(
+              step.approverType ??
+              WorkflowApproverType.DESIGNATION,
+            )
+              .trim()
+              .toUpperCase(),
+
+          approvalRequirement:
+            String(
+              step.approvalRequirement ??
+              ApprovalRequirement.ANY,
+            )
+              .trim()
+              .toUpperCase(),
+
           designationID:
-            Number(
-              step.designationID,
-            ),
+            step.designationID != null
+              ? Number(step.designationID)
+              : null,
 
           stepName:
             step.stepName?.trim() ||
@@ -1062,9 +1161,7 @@ export class ApprovalWorkflowService {
 
           approvalTimeout:
             step.approvalTimeout != null
-              ? Number(
-                step.approvalTimeout,
-              )
+              ? Number(step.approvalTimeout)
               : null,
         }))
         .sort(
@@ -1076,35 +1173,56 @@ export class ApprovalWorkflowService {
       dto.steps === undefined
         ? normalizedExistingSteps
         : dto.steps
-          .map((step) => ({
-            stepNo:
-              Number(step.stepNo),
+          .map((step) => {
+            const approverType =
+              String(
+                step.approverType ??
+                WorkflowApproverType.DESIGNATION,
+              )
+                .trim()
+                .toUpperCase();
 
-            designationID:
-              Number(
-                step.designationID,
-              ),
+            return {
+              stepNo:
+                Number(step.stepNo),
 
-            stepName:
-              step.stepName?.trim() ||
-              null,
+              approverType,
 
-            isMandatory:
-              step.isMandatory !== false,
-
-            canReject:
-              step.canReject !== false,
-
-            canSendBack:
-              step.canSendBack === true,
-
-            approvalTimeout:
-              step.approvalTimeout != null
-                ? Number(
-                  step.approvalTimeout,
+              approvalRequirement:
+                String(
+                  step.approvalRequirement ??
+                  ApprovalRequirement.ANY,
                 )
-                : null,
-          }))
+                  .trim()
+                  .toUpperCase(),
+
+              designationID:
+                approverType ===
+                WorkflowApproverType.REPORTING_MANAGER
+                  ? null
+                  : step.designationID != null
+                    ? Number(step.designationID)
+                    : null,
+
+              stepName:
+                step.stepName?.trim() ||
+                null,
+
+              isMandatory:
+                step.isMandatory !== false,
+
+              canReject:
+                step.canReject !== false,
+
+              canSendBack:
+                step.canSendBack === true,
+
+              approvalTimeout:
+                step.approvalTimeout != null
+                  ? Number(step.approvalTimeout)
+                  : null,
+            };
+          })
           .sort(
             (a, b) =>
               a.stepNo - b.stepNo,
@@ -1126,6 +1244,11 @@ export class ApprovalWorkflowService {
 
       valueType:
         condition.valueType,
+
+      branchesID:
+        condition.branchesID != null
+          ? Number(condition.branchesID)
+          : null,
 
       departmentID:
         condition.departmentID != null
@@ -1287,21 +1410,6 @@ export class ApprovalWorkflowService {
       }
     }
 
-    if (structuralChangeRequested) {
-      const pendingRequestCount =
-        await this.prisma.approvalRequest.count({
-          where: {
-            approvalWorkflowID: id,
-            status: 'PENDING',
-          },
-        });
-
-      if (pendingRequestCount > 0) {
-        throw new ConflictException(
-          `Workflow cannot be structurally changed because ${pendingRequestCount} approval request(s) are pending`,
-        );
-      }
-    }
 
     const finalCompanyID =
       dto.companyID ?? existing.companyID;
@@ -1319,20 +1427,32 @@ export class ApprovalWorkflowService {
     const finalSteps =
       dto.steps ??
       existing.steps.map((step) => ({
-        stepNo: step.stepNo,
+        stepNo:
+          step.stepNo,
+
+        approverType:
+          step.approverType,
+
+        approvalRequirement:
+          step.approvalRequirement,
+
         designationID:
           step.designationID,
+
         stepName:
           step.stepName ?? undefined,
+
         isMandatory:
           step.isMandatory,
+
         canReject:
           step.canReject,
+
         canSendBack:
           step.canSendBack,
+
         approvalTimeout:
-          step.approvalTimeout ??
-          undefined,
+          step.approvalTimeout ?? undefined,
       }));
 
     const finalConditions =
@@ -1352,6 +1472,10 @@ export class ApprovalWorkflowService {
             valueType:
               condition.valueType,
 
+            branchesID:
+              condition.branchesID ??
+              undefined,
+
             departmentID:
               condition.departmentID ??
               undefined,
@@ -1361,10 +1485,8 @@ export class ApprovalWorkflowService {
               undefined,
 
             employeeIDs:
-              condition.employees.map(
-                (item) =>
-                  item.manageEmployeeID,
-              ),
+              condition.employeeIDs ??
+              undefined,
 
             numberValue:
               condition.numberValue != null
@@ -1435,13 +1557,6 @@ export class ApprovalWorkflowService {
         finalConditions,
     });
 
-    await this.validateConditionalWorkflowRequirement({
-      companyModuleID: finalCompanyModuleID,
-
-      workflowStatus: dto.workflowStatus ?? true,
-
-      conditions: dto.conditions ?? [],
-    });
 
     const finalWorkflowName =
       dto.workflowName?.trim() ??
@@ -1645,10 +1760,34 @@ export class ApprovalWorkflowService {
                 .map((step) => ({
                   stepNo:
                     step.stepNo,
-                  designationID:
-                    step.designationID ?? null,
+
                   approverType:
-                    (step.approverType || 'DESIGNATION').toUpperCase(),
+                    String(
+                      step.approverType ??
+                      WorkflowApproverType.DESIGNATION,
+                    )
+                      .trim()
+                      .toUpperCase() as WorkflowApproverType,
+
+                  approvalRequirement:
+                    String(
+                      step.approvalRequirement ??
+                      ApprovalRequirement.ANY,
+                    )
+                      .trim()
+                      .toUpperCase() as ApprovalRequirement,
+
+                  designationID:
+                    String(
+                      step.approverType ??
+                      WorkflowApproverType.DESIGNATION,
+                    )
+                      .trim()
+                      .toUpperCase() ===
+                    WorkflowApproverType.REPORTING_MANAGER
+                      ? null
+                      : step.designationID ?? null,
+
                   stepName:
                     step.stepName?.trim() ||
                     null,
@@ -1835,7 +1974,7 @@ export class ApprovalWorkflowService {
   }
 
 
-  private workflowInclude() {
+  private workflowInclude(): Prisma.ApprovalWorkflowInclude {
     return {
       company: {
         select: {
@@ -1862,39 +2001,39 @@ export class ApprovalWorkflowService {
         },
       },
 
-      steps: {
-        include: {
-          designation: {
-            select: {
-              id: true,
-              designation: true,
-              companyID: true,
-              branchesID: true,
-              departmentID: true,
-              isManager: true,
+    steps: {
+  include: {
+    designation: {
+      select: {
+        id: true,
+        designation: true,
+        companyID: true,
+        branchesID: true,
+        departmentID: true,
+        isManager: true,
 
-              branches: {
-                select: {
-                  id: true,
-                  branchName: true,
-                  companyID: true,
-                },
-              },
-
-              departments: {
-                select: {
-                  id: true,
-                  departmentName: true,
-                },
-              },
-            },
+        branches: {
+          select: {
+            id: true,
+            branchName: true,
+            companyID: true,
           },
         },
 
-        orderBy: {
-          stepNo: 'asc' as const,
+        department: {
+          select: {
+            id: true,
+            departmentName: true,
+          },
         },
       },
+    },
+  },
+
+  orderBy: {
+    stepNo: 'asc' as const,
+  },
+},
 
       conditions: {
         include: {

@@ -54,6 +54,7 @@ export function resolveProfileWorkspaceTab(searchParams: URLSearchParams): strin
     "work-report",
     "leave",
     "reimbursement",
+    "regularisation",
     "delegation",
     "payslips",
     "salary-advance",

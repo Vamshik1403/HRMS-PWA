@@ -13,6 +13,7 @@ import { EmpLeaveMobile } from "../EmpLeaveMobile";
 import { EmpReimbursementMobile } from "../EmpReimbursementMobile";
 import { EmpProfileAttendanceView } from "./EmpProfileAttendanceView";
 import { EmpProfileWorkReportView } from "./EmpProfileWorkReportView";
+import { EmpProfileRegularisationView } from "./EmpProfileRegularisationView";
 import { EmpPayoutContent } from "../EmpPayoutContent";
 import { EmpProfileSalaryAdvancePanel } from "../EmpProfileSalaryAdvancePanel";
 import { EmpProfileMessagingPanel } from "../EmpProfileMessagingPanel";
@@ -84,6 +85,7 @@ function EmpDesktopMyProfileWorkspaceInner() {
     { id: "work-report", label: "Work Report", href: profileTabHref("work-report") },
     { id: "leave", label: "Leave", href: profileTabHref("leave") },
     { id: "reimbursement", label: "Reimbursement", href: profileTabHref("reimbursement") },
+    { id: "regularisation", label: "Regularisation", href: profileTabHref("regularisation") },
     { id: "payslips", label: "Payslip", href: profileTabHref("payslips") },
     ...(showLoanAdvances
       ? [{ id: "salary-advance", label: "Loan & Advances", href: profileTabHref("salary-advance") }]
@@ -124,6 +126,7 @@ function EmpDesktopMyProfileWorkspaceInner() {
         {activeTab === "work-report" && <EmpProfileWorkReportView />}
         {activeTab === "leave" && <EmpLeaveMobile desktopTab="overview" embedded compactBalance />}
         {activeTab === "reimbursement" && <EmpReimbursementMobile desktopTab="overview" embedded />}
+        {activeTab === "regularisation" && <EmpProfileRegularisationView />}
         {activeTab === "delegation" && <EmpWorkspaceDelegation embedded />}
         {activeTab === "payslips" && (
           <Suspense fallback={<div className="text-sm text-muted-foreground">Loading payslips…</div>}>

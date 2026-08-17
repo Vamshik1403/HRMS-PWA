@@ -1,28 +1,33 @@
 import {
   IsBoolean,
+  IsEnum,
   IsInt,
   IsOptional,
+  IsPositive,
   IsString,
   MaxLength,
-  Min,
-  ValidateIf,
 } from 'class-validator';
+
+import {
+  ApprovalRequirement,
+  WorkflowApproverType,
+} from '@prisma/client';
 
 export class ApprovalWorkflowStepDto {
   @IsInt()
-  @Min(1)
+  @IsPositive()
   stepNo: number;
 
-  /** DESIGNATION (default) or REPORTING_MANAGER */
-  @IsOptional()
-  @IsString()
-  @MaxLength(32)
-  approverType?: string;
+  @IsEnum(WorkflowApproverType)
+  approverType: WorkflowApproverType;
 
-  @ValidateIf((o) => (o.approverType || 'DESIGNATION').toUpperCase() !== 'REPORTING_MANAGER')
+  @IsOptional()
   @IsInt()
-  @Min(1)
+  @IsPositive()
   designationID?: number;
+
+  @IsEnum(ApprovalRequirement)
+  approvalRequirement: ApprovalRequirement;
 
   @IsOptional()
   @IsString()
@@ -41,11 +46,8 @@ export class ApprovalWorkflowStepDto {
   @IsBoolean()
   canSendBack?: boolean;
 
-  /**
-   * Approval timeout in hours.
-   */
   @IsOptional()
   @IsInt()
-  @Min(1)
+  @IsPositive()
   approvalTimeout?: number;
 }
