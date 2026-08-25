@@ -1120,8 +1120,8 @@ export class ApprovalWorkflowService {
     const existing = await this.findOne(id);
 
     const normalizedExistingSteps =
-      (existing.steps as any[])
-        .map((step: any) => ({
+      existing.steps
+        .map((step) => ({
           stepNo:
             Number(step.stepNo),
 
@@ -1485,8 +1485,10 @@ export class ApprovalWorkflowService {
               undefined,
 
             employeeIDs:
-              condition.employeeIDs ??
-              undefined,
+              condition.employees.map(
+                (item) =>
+                  item.manageEmployeeID,
+              ),
 
             numberValue:
               condition.numberValue != null
@@ -1974,8 +1976,8 @@ export class ApprovalWorkflowService {
   }
 
 
-  private workflowInclude(): Prisma.ApprovalWorkflowInclude {
-    return {
+private workflowInclude() {
+  return Prisma.validator<Prisma.ApprovalWorkflowInclude>()({
       company: {
         select: {
           id: true,
@@ -2089,6 +2091,6 @@ export class ApprovalWorkflowService {
           conditionNo: 'asc' as const,
         },
       },
-    };
+    });
   }
 }

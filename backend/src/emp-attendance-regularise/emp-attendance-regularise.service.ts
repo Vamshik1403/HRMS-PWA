@@ -935,8 +935,60 @@ export class EmpAttendanceRegulariseService {
     );
   }
 
-  async findAll() {
-    return this.prisma
+  private async hasApprovalActionTaken(
+  regularisationID: number,
+): Promise<boolean> {
+  const approvalRequest =
+    await this.prisma.approvalRequest.findFirst({
+      where: {
+        subjectID:
+          regularisationID,
+
+        subjectType: {
+          in: [
+            'ATTENDANCE_REGULARISATION',
+            'ATTENDANCE_REGULARIZATION',
+            'ATTENDANCE_REGULARISE',
+          ],
+        },
+      },
+
+      select: {
+        id: true,
+
+        approvers: {
+          where: {
+            status: {
+              in: [
+                'APPROVED',
+                'REJECTED',
+                'SENT_BACK',
+              ],
+            },
+          },
+
+          select: {
+            id: true,
+          },
+
+          take: 1,
+        },
+      },
+
+      orderBy: {
+        id: 'desc',
+      },
+    });
+
+  return (
+    approvalRequest?.approvers
+      ?.length ?? 0
+  ) > 0;
+}
+
+async findAll() {
+  const rows =
+    await this.prisma
       .empAttendanceRegularise
       .findMany({
         include: {
@@ -961,13 +1013,147 @@ export class EmpAttendanceRegulariseService {
             'desc',
         },
       });
+
+  if (
+    rows.length === 0
+  ) {
+    return [];
   }
 
-  async findOne(
-    id:
+  const rowIDs =
+    rows.map(
+      (row) =>
+        row.id,
+    );
+
+  /*
+   * Load approval requests for these
+   * attendance regularisations in one query.
+   */
+  const approvalRequests =
+    await this.prisma.approvalRequest.findMany({
+      where: {
+        subjectID: {
+          in:
+            rowIDs,
+        },
+
+        subjectType: {
+          in: [
+            'ATTENDANCE_REGULARISATION',
+            'ATTENDANCE_REGULARIZATION',
+            'ATTENDANCE_REGULARISE',
+          ],
+        },
+      },
+
+      select: {
+        id: true,
+        subjectID: true,
+        status: true,
+        currentStepNo: true,
+
+        approvers: {
+          where: {
+            status: {
+              in: [
+                'APPROVED',
+                'REJECTED',
+                'SENT_BACK',
+              ],
+            },
+          },
+
+          select: {
+            id: true,
+            status: true,
+            actedAt: true,
+          },
+
+          take: 1,
+        },
+      },
+
+      orderBy: {
+        id:
+          'desc',
+      },
+    });
+
+  /*
+   * One regularisation should normally have
+   * one ApprovalRequest.
+   *
+   * Map latest request by subjectID defensively.
+   */
+  const approvalByRegularisationID =
+    new Map<
       number,
+      (typeof approvalRequests)[number]
+    >();
+
+  for (
+    const request
+    of approvalRequests
   ) {
-    return this.prisma
+    if (
+      !approvalByRegularisationID.has(
+        request.subjectID,
+      )
+    ) {
+      approvalByRegularisationID.set(
+        request.subjectID,
+        request,
+      );
+    }
+  }
+
+  return rows.map(
+    (row) => {
+      const approvalRequest =
+        approvalByRegularisationID.get(
+          row.id,
+        );
+
+      return {
+        ...row,
+
+        /*
+         * FALSE:
+         * request is still untouched and can
+         * be edited/deleted.
+         *
+         * TRUE:
+         * somebody already approved/rejected/
+         * sent it back.
+         */
+        approvalActionTaken:
+          (
+            approvalRequest
+              ?.approvers
+              ?.length ??
+            0
+          ) > 0,
+
+        approvalRequestStatus:
+          approvalRequest
+            ?.status ??
+          null,
+
+        approvalCurrentStepNo:
+          approvalRequest
+            ?.currentStepNo ??
+          null,
+      };
+    },
+  );
+}
+
+async findOne(
+  id: number,
+) {
+  const row =
+    await this.prisma
       .empAttendanceRegularise
       .findUnique({
         where: {
@@ -991,23 +1177,131 @@ export class EmpAttendanceRegulariseService {
             true,
         },
       });
+
+  if (!row) {
+    return null;
   }
 
-  async update(
-    id:
-      number,
-    updateEmpAttendanceRegulariseDto:
-      UpdateEmpAttendanceRegulariseDto,
-  ) {
-    const data =
-      this.parsePayload(
-        updateEmpAttendanceRegulariseDto as Record<
-          string,
-          unknown
-        >,
-      ) as any;
+  const approvalActionTaken =
+    await this.hasApprovalActionTaken(
+      id,
+    );
 
-    return this.prisma
+  return {
+    ...row,
+    approvalActionTaken,
+  };
+}
+
+async update(
+  id: number,
+
+  updateEmpAttendanceRegulariseDto:
+    UpdateEmpAttendanceRegulariseDto,
+) {
+  const existing =
+    await this.prisma
+      .empAttendanceRegularise
+      .findUnique({
+        where: {
+          id,
+        },
+      });
+
+  if (!existing) {
+    throw new BadRequestException(
+      'Attendance regularisation request was not found',
+    );
+  }
+
+  /*
+   * Final approved / rejected requests
+   * can never be edited.
+   */
+  if (
+    String(
+      existing.status ??
+      '',
+    )
+      .trim()
+      .toUpperCase() !==
+    'PENDING'
+  ) {
+    throw new ConflictException(
+      'Only pending attendance regularisation requests can be edited',
+    );
+  }
+
+  /*
+   * Even if regularisation.status is still Pending,
+   * a Step 1 approval means workflow has started.
+   */
+  const approvalActionTaken =
+    await this.hasApprovalActionTaken(
+      id,
+    );
+
+  if (
+    approvalActionTaken
+  ) {
+    throw new ConflictException(
+      'This attendance regularisation can no longer be edited because approval has already started',
+    );
+  }
+
+  const data =
+    this.parsePayload(
+      updateEmpAttendanceRegulariseDto as Record<
+        string,
+        unknown
+      >,
+    ) as any;
+
+  /*
+   * Frontend must never change approval status.
+   */
+  delete data.status;
+
+  /*
+   * Prevent reassignment of request after creation.
+   *
+   * If you want employee/branch switching during
+   * edit later, that requires rebuilding the
+   * ApprovalRequest and approver snapshots.
+   */
+  delete data.manageEmployeeID;
+  delete data.companyID;
+  delete data.branchesID;
+  delete data.serviceProviderID;
+
+  if (
+    data.attendanceDate
+  ) {
+    const reqDate =
+      this.normalizeAttendanceDay(
+        data.attendanceDate,
+      );
+
+    const today =
+      this.normalizeAttendanceDay(
+        new Date(),
+      );
+
+    if (
+      reqDate >
+      today
+    ) {
+      throw new BadRequestException(
+        'Attendance regularisation is only allowed for past dates',
+      );
+    }
+
+    data.attendanceDate =
+      reqDate;
+  }
+
+  const updated =
+    await this.prisma
       .empAttendanceRegularise
       .update({
         where: {
@@ -1033,18 +1327,122 @@ export class EmpAttendanceRegulariseService {
             true,
         },
       });
-  }
+
+  return {
+    ...updated,
+    approvalActionTaken:
+      false,
+  };
+}
 
   async remove(
-    id:
-      number,
-  ) {
-    return this.prisma
+  id: number,
+) {
+  const existing =
+    await this.prisma
       .empAttendanceRegularise
-      .delete({
+      .findUnique({
         where: {
           id,
         },
       });
+
+  if (!existing) {
+    throw new BadRequestException(
+      'Attendance regularisation request was not found',
+    );
   }
+
+  if (
+    String(
+      existing.status ??
+      '',
+    )
+      .trim()
+      .toUpperCase() !==
+    'PENDING'
+  ) {
+    throw new ConflictException(
+      'Only pending attendance regularisation requests can be deleted',
+    );
+  }
+
+  const approvalActionTaken =
+    await this.hasApprovalActionTaken(
+      id,
+    );
+
+  if (
+    approvalActionTaken
+  ) {
+    throw new ConflictException(
+      'This attendance regularisation can no longer be deleted because approval has already started',
+    );
+  }
+
+  /*
+   * Delete ApprovalRequest first because
+   * ApprovalRequest.subjectID is not a DB FK
+   * to EmpAttendanceRegularise.
+   *
+   * Child request steps/approvers/actions
+   * should cascade through your existing
+   * ApprovalRequest relations.
+   */
+  return this.prisma.$transaction(
+    async (tx) => {
+      const approvalRequests =
+        await tx.approvalRequest.findMany({
+          where: {
+            subjectID:
+              id,
+
+            subjectType: {
+              in: [
+                'ATTENDANCE_REGULARISATION',
+                'ATTENDANCE_REGULARIZATION',
+                'ATTENDANCE_REGULARISE',
+              ],
+            },
+          },
+
+          select: {
+            id: true,
+          },
+        });
+
+      if (
+        approvalRequests.length >
+        0
+      ) {
+        await tx.approvalRequest.deleteMany({
+          where: {
+            id: {
+              in:
+                approvalRequests.map(
+                  (request) =>
+                    request.id,
+                ),
+            },
+          },
+        });
+      }
+
+      const deleted =
+        await tx.empAttendanceRegularise.delete({
+          where: {
+            id,
+          },
+        });
+
+      return {
+        message:
+          'Attendance regularisation deleted successfully',
+
+        data:
+          deleted,
+      };
+    },
+  );
+}
 }

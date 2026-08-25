@@ -844,6 +844,7 @@ model ManageEmployee {
   shiftEligibility                   String?                             @db.VarChar
   typeOfEmployee                     String?                             @db.VarChar
   weeklyOffPattern                   String?                             @db.VarChar
+  salaryCycleID                      Int?
   allowRotatingShift                 Boolean                             @default(false)
   allowCreateTaskOnMobile            Boolean                             @default(false)
   pwaShowLeaveBalance                Boolean                             @default(true)
@@ -871,6 +872,7 @@ model ManageEmployee {
   hourlyPayGrade                     HourlyPayGrade?                     @relation("EmployeeHourlyPayGrade", fields: [hourlyPayGradeID], references: [id], onDelete: NoAction, onUpdate: NoAction)
   leavePolicy                        leavePolicy?                        @relation("EmployeeLeavePolicy", fields: [leavePolicyID], references: [id], onDelete: NoAction, onUpdate: NoAction)
   monthlyPayGrade                    MonthlyPayGrade?                    @relation("EmployeeMonthlyPayGrade", fields: [monthlyPayGradeID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  salaryCycle                        SalaryCycle?                        @relation("EmployeeSalaryCycle", fields: [salaryCycleID], references: [id], onDelete: NoAction, onUpdate: NoAction)
   serviceProvider                    ServiceProvider?                    @relation(fields: [serviceProviderID], references: [id], onDelete: NoAction, onUpdate: NoAction)
   workShift                          WorkShift?                          @relation("EmployeeWorkShift", fields: [workShiftID], references: [id], onDelete: NoAction, onUpdate: NoAction)
   overtime                           Overtime[]
@@ -1370,6 +1372,7 @@ model SalaryCycle {
   branches          Branches?        @relation(fields: [branchesID], references: [id], onDelete: NoAction, onUpdate: NoAction)
   company           Company?         @relation(fields: [companyID], references: [id], onDelete: NoAction, onUpdate: NoAction)
   serviceProvider   ServiceProvider? @relation(fields: [serviceProviderID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  manageEmployees   ManageEmployee[] @relation("EmployeeSalaryCycle")
 }
 
 model GenerateSalary {

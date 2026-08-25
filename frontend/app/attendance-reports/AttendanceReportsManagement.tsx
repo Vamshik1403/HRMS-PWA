@@ -80,7 +80,7 @@ interface Designation {
 interface PublicHoliday {
   id: number;
   companyID: number;
-  branchesID: number;
+  branchesID: number | null;
   startDate: string;
   endDate: string;
 }
@@ -405,15 +405,25 @@ const incrementTrackerAndShouldApply = (
 
   const nextCount = (tracker.get(key) || 0) + 1;
 
-  // Apply rule only on the violation AFTER the configured count.
-  // Example: count=3 => apply on 4th, then start a fresh cycle.
-  if (nextCount > allowedCount) {
+  // Policy "after N late marks" / "N lates = 1 absent" converts on the Nth, then resets.
+  if (nextCount >= allowedCount) {
     tracker.set(key, 0);
     return true;
   }
 
   tracker.set(key, nextCount);
   return false;
+};
+
+const isoDatePrefix = (value: any): string => {
+  if (!value) return "";
+  if (typeof value === "string") {
+    const m = value.match(/^(\d{4}-\d{2}-\d{2})/);
+    if (m) return m[1];
+  }
+  const d = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toISOString().split("T")[0];
 };
 
 const buildStatusCacheKey = (date: string, employeeID: number, punches: string[]) =>
@@ -722,6 +732,13 @@ const DateCell = ({ punches, date, employeeID, formData, reportData, selectedCom
         </td>
       );
     }
+    if (status.type === "HOLIDAY") {
+      return (
+        <td className="px-2 py-1 border-b min-w-[100px] text-center align-top">
+          <span className="inline-block px-2 py-0.5 bg-purple-100 text-purple-800 text-[9px] font-medium rounded-full">{status.label === "PH-P" ? "PH-P" : "PH"}</span>
+        </td>
+      );
+    }
     return (
       <td className="px-2 py-1 border-b min-w-[100px] text-center align-top">
         {punches.length > 0 ? (
@@ -747,6 +764,13 @@ const DateCell = ({ punches, date, employeeID, formData, reportData, selectedCom
       return (
         <td className="px-2 py-1 border-b min-w-[100px] text-center align-top">
           <span className="inline-block px-2 py-0.5 bg-orange-100 text-orange-800 text-[9px] font-medium rounded-full">WO</span>
+        </td>
+      );
+    }
+    if (status.type === "HOLIDAY") {
+      return (
+        <td className="px-2 py-1 border-b min-w-[100px] text-center align-top">
+          <span className="inline-block px-2 py-0.5 bg-purple-100 text-purple-800 text-[9px] font-medium rounded-full">{status.label === "PH-P" ? "PH-P" : "PH"}</span>
         </td>
       );
     }
@@ -1397,9 +1421,9 @@ const employeeOptions = filteredEmployees.map((e: Employee) => ({
 
     const isPHDay = (date: string): boolean => {
       return localHolidays.some((h: PublicHoliday) => {
-        const start = new Date(h.startDate).toISOString().split('T')[0];
-        const end = new Date(h.endDate).toISOString().split('T')[0];
-        return date >= start && date <= end;
+        const start = isoDatePrefix(h.startDate);
+        const end = isoDatePrefix(h.endDate) || start;
+        return !!start && date >= start && date <= end;
       });
     };
 
@@ -1563,7 +1587,7 @@ const employeeOptions = filteredEmployees.map((e: Employee) => ({
     }
 
     const isRotating = workShift?.isRotating || false;
-    const isFlexible = workShift?.isFlexible || false;
+    const isFlexible = !!(workShift?.isFlexible || String(sourceAttendancePolicy?.workingHoursType || "").toLowerCase().includes("flex"));
     const dayOfWeek = WEEKDAYS[new Date(date).getDay()];
     const dayConfig = workShift?.workShiftDay?.find((d) => d.weekDay === dayOfWeek);
     const shiftDay =
@@ -1633,10 +1657,13 @@ const employeeOptions = filteredEmployees.map((e: Employee) => ({
     // Public holiday check
     const isPublicHolidayDay = (): boolean => {
       return sourcePublicHolidays.some(holiday => {
-        if (holiday.companyID !== selectedCompanyID || holiday.branchesID !== selectedBranchID) return false;
-        const holidayStart = new Date(holiday.startDate).toISOString().split('T')[0];
-        const holidayEnd = new Date(holiday.endDate).toISOString().split('T')[0];
-        return date >= holidayStart && date <= holidayEnd;
+        if (Number(holiday.companyID) !== Number(selectedCompanyID)) return false;
+        if (holiday.branchesID != null && String(holiday.branchesID) !== "") {
+          if (Number(holiday.branchesID) !== Number(selectedBranchID)) return false;
+        }
+        const holidayStart = isoDatePrefix(holiday.startDate);
+        const holidayEnd = isoDatePrefix(holiday.endDate) || holidayStart;
+        return !!holidayStart && date >= holidayStart && date <= holidayEnd;
       });
     };
 
@@ -1670,19 +1697,19 @@ const getLeaveDay = (): { leave: LeaveApplication; leaveLabel: string } | null =
   };
 };
 
-    // PRIORITY 2: Week Off
-    if (isWeekOff()) {
-      return { type: "WEEK_OFF", label: "WO", hasPunches: false, workedMinutes: defaultWorkedMinutes };
-    }
-
-    // PRIORITY 3: Public Holiday (factual mode only)
-    if (sourceIsFactualMode && isPublicHolidayDay()) {
+    // PRIORITY 2: Public Holiday (before week-off so a working Saturday PH is paid)
+    if (isPublicHolidayDay()) {
       let workedMinutes = 0;
       if (hasPunches && shiftDay) {
         workedMinutes = calculateWorkedMinutes(punches, shiftDay.startTime, shiftDay.endTime, 
           { breakStart: shiftDay.breakStart || "", breakEnd: shiftDay.breakEnd || "" }, sourceAttendancePolicy, isFlexible);
       }
       return { type: "HOLIDAY", label: hasPunches ? "PH-P" : "PH", hasPunches, workedMinutes: workedMinutes || defaultWorkedMinutes };
+    }
+
+    // PRIORITY 3: Week Off
+    if (isWeekOff()) {
+      return { type: "WEEK_OFF", label: "WO", hasPunches: false, workedMinutes: defaultWorkedMinutes };
     }
 
  // PRIORITY 4: Approved Leave
@@ -1804,7 +1831,33 @@ if (!hasPunchesEffective) return { type: "ABSENT", label: "Absent", hasPunches: 
         ? totalShiftMinutes
         : Math.max(totalShiftMinutes - graceTime, halfDayMin);
 
-      if (isBeyondMaxLate && workedMinutes < requiredFullDayMinutes) {
+      const isLate = !isFlexible && 
+                     firstPunch > graceEnd && 
+                     firstPunch <= maxLateCutoffInclusive;
+
+      let otMinutes = 0;
+      if (otDay && policy.overtimeApplicable) {
+        otMinutes = calculateOTMinutes(effectivePunches, shiftDay.endTime, {
+          startTime: otDay.startTime, endTime: otDay.endTime,
+          breakStart: otDay.breakStart || "", breakEnd: otDay.breakEnd || ""
+        }, policy);
+      }
+
+      if (workedMinutes < halfDayMin) {
+        return { type: "ABSENT", label: "Absent", hasPunches: true, workedMinutes };
+      }
+
+      if (isFlexible) {
+        if (workedMinutes < requiredFullDayMinutes) {
+          return { type: "HALF_DAY", label: "Half Day", hasPunches: true, workedMinutes, rosterShiftName };
+        }
+        if (otMinutes > 0) {
+          return { type: "OT", label: "OT", hasPunches: true, workedMinutes, otMinutes, totalShiftMinutes, rosterShiftName };
+        }
+        return { type: "PRESENT", label: "P", hasPunches: true, workedMinutes, rosterShiftName };
+      }
+
+      if (isBeyondMaxLate) {
         const markAs = policy.maxLateCheckinMarkAs || "Absent";
         return {
           type: markAs === "Absent" ? "ABSENT" : "HALF_DAY",
@@ -1813,16 +1866,16 @@ if (!hasPunchesEffective) return { type: "ABSENT", label: "Absent", hasPunches: 
           workedMinutes,
         };
       }
-      
-      // Late mark tracking
-      const isLate = !isFlexible && 
-                     firstPunch > graceEnd && 
-                     firstPunch <= maxLateCutoffInclusive;
-      
+
+      const earlyCheckoutWindow = policy.earlyCheckoutBeforeEndMin || 0;
+      if (effectivePunches.length >= 2 && lastPunch < shiftEndMin - earlyCheckoutWindow) {
+        return { type: "HALF_DAY", label: "Half Day", hasPunches: true, workedMinutes, rosterShiftName };
+      }
+
       if (isLate) {
         const monthKey = `${employeeID}-${date.substring(0, 7)}`;
         const currentTracker = lateMarkTracker.current;
-        const maxLateCount = parseRuleCount(policy.lateMarkMarkCount || policy.lateMarkCount, 3);
+        const maxLateCount = parseRuleCount(policy.lateMarkMarkCount, 3);
         const shouldApplyLateMarkRule = incrementTrackerAndShouldApply(currentTracker, monthKey, maxLateCount);
 
         if (shouldApplyLateMarkRule) {
@@ -1834,38 +1887,13 @@ if (!hasPunchesEffective) return { type: "ABSENT", label: "Absent", hasPunches: 
             workedMinutes 
           };
         }
-      }
-      
-      // Calculate OT — only using filtered punches within the valid attendance window
-      let otMinutes = 0;
-      if (otDay && policy.overtimeApplicable) {
-        otMinutes = calculateOTMinutes(effectivePunches, shiftDay.endTime, {
-          startTime: otDay.startTime, endTime: otDay.endTime,
-          breakStart: otDay.breakStart || "", breakEnd: otDay.breakEnd || ""
-        }, policy);
-      }
-      
-      if (workedMinutes < halfDayMin) {
-        return { type: "ABSENT", label: "Absent", hasPunches: true, workedMinutes };
+        return { type: "LATE_MARK", label: "Late Mark", hasPunches: true, workedMinutes, rosterShiftName };
       }
 
-      // Early checkout allow time: checkout before cutoff is Half Day.
-      const earlyCheckoutWindow = policy.earlyCheckoutBeforeEndMin || 0;
-      if (effectivePunches.length >= 2 && lastPunch < shiftEndMin - earlyCheckoutWindow) {
-        return { type: "HALF_DAY", label: "Half Day", hasPunches: true, workedMinutes, rosterShiftName };
-      } else if (workedMinutes < requiredFullDayMinutes && !isLate) {
-        // Allow grace-time minutes as still full-day, and keep late arrivals under late-mark flow.
-        // Late arrivals use the late-mark rule — they accumulate to the threshold.
-        return { type: "HALF_DAY", label: "Half Day", hasPunches: true, workedMinutes, rosterShiftName };
-      } else if (otMinutes > 0) {
+      if (otMinutes > 0) {
         return { type: "OT", label: "OT", hasPunches: true, workedMinutes, otMinutes, totalShiftMinutes, rosterShiftName };
-      } else if (isLate) {
-        return { type: "LATE_MARK", label: "Late Mark", hasPunches: true, workedMinutes, rosterShiftName };
-      } else if (workedMinutes >= requiredFullDayMinutes) {
-        return { type: "PRESENT", label: "P", hasPunches: true, workedMinutes, rosterShiftName };
-      } else {
-        return { type: "PRESENT", label: "P", hasPunches: true, workedMinutes, rosterShiftName };
       }
+      return { type: "PRESENT", label: "P", hasPunches: true, workedMinutes, rosterShiftName };
     }
 
     return { type: "PRESENT", label: "P", hasPunches: true };
@@ -2027,7 +2055,7 @@ if (!hasPunchesEffective) return { type: "ABSENT", label: "Absent", hasPunches: 
 
       const shifts = extractEmpWorkShiftMappings(safeEmpData, isFactualMode, shiftById);
 
-      const filteredHolidays = safeHolidays.filter((h: PublicHoliday) => Number(h.companyID) === Number(selectedCompanyID) && Number(h.branchesID) === Number(selectedBranchID));
+      const filteredHolidays = safeHolidays.filter((h: PublicHoliday) => Number(h.companyID) === Number(selectedCompanyID) && (h.branchesID == null || Number(h.branchesID) === Number(selectedBranchID)));
       const filteredRegularizations = safeRegData.filter((r: AttendanceRegularize) => Number(r.companyID) === Number(selectedCompanyID) && Number(r.branchesID) === Number(selectedBranchID) && r.status === "Approved");
       const filteredLeaves = safeLeavesData.filter((l: LeaveApplication) => Number(l.companyID) === Number(selectedCompanyID) && Number(l.branchesID) === Number(selectedBranchID) && l.status === "Approved");
 
@@ -2174,19 +2202,14 @@ if (!hasPunchesEffective) return { type: "ABSENT", label: "Absent", hasPunches: 
       };
 
       // Precompute statuses before painting so empty cells don't flash "..."
-      // (punch cells render immediately from props regardless).
-      if (
-        formData.reportType !== "All Punches Logs" &&
-        formData.reportType !== "FILO Punches Logs"
-      ) {
-        await precomputeReportStatuses(
-          rows,
-          dateColumnsFull,
-          selectedCompanyID,
-          selectedBranchID,
-          newFactualWeekoffOverrides,
-        );
-      }
+      // and punch-log Excel/UI can show PH / WO / Late / HD.
+      await precomputeReportStatuses(
+        rows,
+        dateColumnsFull,
+        selectedCompanyID,
+        selectedBranchID,
+        newFactualWeekoffOverrides,
+      );
 
       setReportData(rows);
       setFactualWeekoffOverrides(newFactualWeekoffOverrides);
@@ -2239,6 +2262,8 @@ if (!hasPunchesEffective) return { type: "ABSENT", label: "Absent", hasPunches: 
             ? status.label
             : status?.type === "WEEK_OFF"
               ? "WO"
+              : status?.type === "HOLIDAY"
+                ? (status.label === "PH-P" ? "PH-P" : "PH")
               : status?.type === "ABSENT"
                 ? "Absent"
                 : "";
@@ -2255,6 +2280,7 @@ if (!hasPunchesEffective) return { type: "ABSENT", label: "Absent", hasPunches: 
       if (punches.length > 0) return punches.join("\n");
       if (status?.type === "LEAVE") return status.label;
       if (status?.type === "WEEK_OFF") return "WO";
+      if (status?.type === "HOLIDAY") return status.label === "PH-P" ? "PH-P" : "PH";
       if (status?.type === "ABSENT") return "Absent";
       return "";
     };

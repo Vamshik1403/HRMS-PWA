@@ -168,6 +168,11 @@ export class UpdateManageEmployeeDto {
   weeklyOffPattern?: string;
 
   @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  salaryCycleID?: number | null;
+
+  @IsOptional()
   @IsString()
   noticePeriodDaysForResignation?: string;
 

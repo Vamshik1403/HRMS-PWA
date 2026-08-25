@@ -312,6 +312,11 @@ export class CreateManageEmployeeDto {
   weeklyOffPattern?: string;
 
   @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  salaryCycleID?: number;
+
+  @IsOptional()
   @IsString()
   noticePeriodDaysForResignation?: string;
 

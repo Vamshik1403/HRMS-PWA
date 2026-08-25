@@ -48,6 +48,7 @@ async findAll(query: QueryProcessAttLogDto = {}) {
     deviceId,
     deviceIds,
     username,
+    manageEmployeeIds,
     company_name,
     branch_name,
     limit: rawLimit = 1000,
@@ -94,6 +95,18 @@ async findAll(query: QueryProcessAttLogDto = {}) {
       contains: username,
       mode: 'insensitive',
     };
+  }
+
+  if (manageEmployeeIds) {
+    const empIdArray = manageEmployeeIds
+      .split(',')
+      .map((id) => parseInt(id.trim(), 10))
+      .filter((id) => Number.isFinite(id));
+    if (empIdArray.length === 1) {
+      whereConditions.manage_employee_id = empIdArray[0];
+    } else if (empIdArray.length > 1) {
+      whereConditions.manage_employee_id = { in: empIdArray };
+    }
   }
 
   if (company_name) {

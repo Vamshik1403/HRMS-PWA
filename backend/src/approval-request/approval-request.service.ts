@@ -10,6 +10,7 @@ import {
   ApprovalActionType,
   ApprovalApproverStatus,
   ApprovalRequestStatus,
+  ApprovalRequirement,
   ApprovalStepStatus,
   Prisma,
 } from '@prisma/client';
@@ -149,6 +150,7 @@ export class ApprovalRequestService {
           approvalRequestStep: {
             select: {
               id: true,
+              approvalRequirementSnapshot:true,
               stepNo: true,
               designationID: true,
               stepNameSnapshot: true,
@@ -295,7 +297,7 @@ export class ApprovalRequestService {
             id: true,
             stepNo: true,
             designationID: true,
-
+ approvalRequirementSnapshot:true,
             stepNameSnapshot: true,
             designationNameSnapshot: true,
 
@@ -396,6 +398,7 @@ export class ApprovalRequestService {
         approvalRequestStep: {
           select: {
             id: true,
+             approvalRequirementSnapshot:true,
             stepNo: true,
             stepNameSnapshot: true,
             designationNameSnapshot: true,
@@ -437,7 +440,7 @@ export class ApprovalRequestService {
               id: true,
               stepNo: true,
               designationID: true,
-
+ approvalRequirementSnapshot:true,
               stepNameSnapshot: true,
               designationNameSnapshot: true,
 
@@ -723,192 +726,169 @@ export class ApprovalRequestService {
             },
           });
 
-          /*
-           * ANY MODE:
-           * any one eligible configured approver final-approves
-           * the whole request.
-           */
-          if (
-            request.allowAnySameDesignationSnapshot === true
-          ) {
-            await tx.approvalRequestApprover.updateMany({
-              where: {
-                approvalRequestID: request.id,
-                id: { not: assignment.id },
+        /*
+ * ==========================================================
+ * PER-STEP APPROVAL REQUIREMENT
+ * ==========================================================
+ */
 
-                status: {
-                  in: [
-                    ApprovalApproverStatus.PENDING,
-                    ApprovalApproverStatus.WAITING,
-                  ],
-                },
-              },
+const requirement =
+  currentStep.approvalRequirementSnapshot ??
+  ApprovalRequirement.ANY;
 
-              data: {
-                status: ApprovalApproverStatus.SKIPPED,
-                actedAt: now,
-                comment:
-                  'Request completed by another eligible approver',
-              },
-            });
+/*
+ * ANY
+ *
+ * First approval completes THIS STEP.
+ */
+if (
+  requirement ===
+  ApprovalRequirement.ANY
+) {
+  /*
+   * Remaining peers in this step no longer need to act.
+   */
+  await tx.approvalRequestApprover.updateMany({
+    where: {
+      approvalRequestStepID:
+        currentStep.id,
 
-            await tx.approvalRequestStep.update({
-              where: {
-                id: currentStep.id,
-              },
+      id: {
+        not:
+          assignment.id,
+      },
 
-              data: {
-                status: ApprovalStepStatus.APPROVED,
-                completedAt: now,
-              },
-            });
+      status:
+        ApprovalApproverStatus.PENDING,
+    },
 
-            await tx.approvalRequestStep.updateMany({
-              where: {
-                approvalRequestID: request.id,
-                id: { not: currentStep.id },
+    data: {
+      status:
+        ApprovalApproverStatus.SKIPPED,
 
-                status: {
-                  in: [
-                    ApprovalStepStatus.PENDING,
-                    ApprovalStepStatus.WAITING,
-                  ],
-                },
-              },
+      actedAt:
+        now,
 
-              data: {
-                status: ApprovalStepStatus.SKIPPED,
-                completedAt: now,
-              },
-            });
+      comment:
+        'Step completed by another eligible approver',
+    },
+  });
+}
 
-            await tx.approvalRequestAction.create({
-              data: {
-                approvalRequestID: request.id,
-                approvalRequestStepID: currentStep.id,
-                approvalRequestApproverID: assignment.id,
-                action: ApprovalActionType.STEP_COMPLETED,
-                actedByEmployeeID: actor.employeeID,
-                actedByUserID: actor.userID,
-                fromStatus: currentStep.status,
-                toStatus: ApprovalStepStatus.APPROVED,
-                remark:
-                  'Any-approver mode: request finalized by one eligible approver',
-              },
-            });
+/*
+ * ALL
+ *
+ * Every assigned employee in this step must approve.
+ */
+if (
+  requirement ===
+  ApprovalRequirement.ALL
+) {
+  const remainingApprovers =
+    await tx.approvalRequestApprover.count({
+      where: {
+        approvalRequestStepID:
+          currentStep.id,
 
-            await this.completeApprovalRequest(
-              tx,
-              request,
-              currentStep.id,
-              assignment.id,
-              actor,
-              remark,
-              now,
-            );
+        status:
+          ApprovalApproverStatus.PENDING,
+      },
+    });
 
-            return {
-              success: true,
-              requestID: request.id,
-              status: ApprovalRequestStatus.APPROVED,
-              completed: true,
-              currentStepNo: null,
-              message:
-                'Approval request completed by an eligible approver',
-            };
-          }
+  if (
+    remainingApprovers > 0
+  ) {
+    return {
+      success:
+        true,
 
-          /*
-           * SEQUENTIAL MODE:
-           * first complete all employees assigned to THIS step,
-           * one by one.
-           */
-          const nextApprover =
-            await tx.approvalRequestApprover.findFirst({
-              where: {
-                approvalRequestStepID: currentStep.id,
-                status: ApprovalApproverStatus.WAITING,
-              },
+      requestID:
+        request.id,
 
-              orderBy: {
-                id: 'asc',
-              },
-            });
+      status:
+        ApprovalRequestStatus.PENDING,
 
-          if (nextApprover) {
-            await tx.approvalRequestApprover.update({
-              where: {
-                id: nextApprover.id,
-              },
+      completed:
+        false,
 
-              data: {
-                status: ApprovalApproverStatus.PENDING,
-                activatedAt: now,
-              },
-            });
+      currentStepNo:
+        currentStep.stepNo,
 
-            await tx.approvalRequestAction.create({
-              data: {
-                approvalRequestID: request.id,
-                approvalRequestStepID: currentStep.id,
-                approvalRequestApproverID: nextApprover.id,
-                action: ApprovalActionType.STEP_ACTIVATED,
-                actedByEmployeeID: actor.employeeID,
-                actedByUserID: actor.userID,
-                fromStatus: ApprovalApproverStatus.WAITING,
-                toStatus: ApprovalApproverStatus.PENDING,
-                remark:
-                  `Next approver activated for step ${currentStep.stepNo}`,
-              },
-            });
+      message:
+        `Approval recorded. Waiting for ${remainingApprovers} remaining approver(s) in this step.`,
+    };
+  }
+}
 
-            return {
-              success: true,
-              requestID: request.id,
-              status: ApprovalRequestStatus.PENDING,
-              completed: false,
-              currentStepNo: currentStep.stepNo,
-              message:
-                'Approval recorded. Waiting for the next approver in the same step.',
-            };
-          }
+/*
+ * ANY reached here:
+ * one approver approved.
+ *
+ * ALL reached here:
+ * everybody approved.
+ *
+ * Therefore the step is now complete.
+ */
+const stepUpdate =
+  await tx.approvalRequestStep.updateMany({
+    where: {
+      id:
+        currentStep.id,
 
-          /*
-           * Everyone assigned to the current step has approved.
-           */
-          const stepUpdate =
-            await tx.approvalRequestStep.updateMany({
-              where: {
-                id: currentStep.id,
-                status: ApprovalStepStatus.PENDING,
-              },
+      status:
+        ApprovalStepStatus.PENDING,
+    },
 
-              data: {
-                status: ApprovalStepStatus.APPROVED,
-                completedAt: now,
-              },
-            });
+    data: {
+      status:
+        ApprovalStepStatus.APPROVED,
 
-          if (stepUpdate.count !== 1) {
-            throw new ConflictException(
-              'The current approval step has already been processed',
-            );
-          }
+      completedAt:
+        now,
+    },
+  });
 
-          await tx.approvalRequestAction.create({
-            data: {
-              approvalRequestID: request.id,
-              approvalRequestStepID: currentStep.id,
-              approvalRequestApproverID: assignment.id,
-              action: ApprovalActionType.STEP_COMPLETED,
-              actedByEmployeeID: actor.employeeID,
-              actedByUserID: actor.userID,
-              fromStatus: ApprovalStepStatus.PENDING,
-              toStatus: ApprovalStepStatus.APPROVED,
-              remark:
-                `Approval step ${currentStep.stepNo} completed`,
-            },
-          });
+if (
+  stepUpdate.count !== 1
+) {
+  throw new ConflictException(
+    'The current approval step has already been processed',
+  );
+}
+
+await tx.approvalRequestAction.create({
+  data: {
+    approvalRequestID:
+      request.id,
+
+    approvalRequestStepID:
+      currentStep.id,
+
+    approvalRequestApproverID:
+      assignment.id,
+
+    action:
+      ApprovalActionType.STEP_COMPLETED,
+
+    actedByEmployeeID:
+      actor.employeeID,
+
+    actedByUserID:
+      actor.userID,
+
+    fromStatus:
+      ApprovalStepStatus.PENDING,
+
+    toStatus:
+      ApprovalStepStatus.APPROVED,
+
+    remark:
+      requirement ===
+      ApprovalRequirement.ANY
+        ? `Step ${currentStep.stepNo} completed by one eligible approver`
+        : `All approvers completed step ${currentStep.stepNo}`,
+  },
+});
 
           const nextStep =
             await tx.approvalRequestStep.findFirst({
@@ -1325,87 +1305,122 @@ export class ApprovalRequestService {
     };
   }
 
-  private async activateNextStep(
-    tx: TransactionClient,
-    requestID: number,
-    nextStepID: number,
-    nextStepNo: number,
-    actor: ApprovalRequestActor,
-    now: Date,
+ private async activateNextStep(
+  tx: TransactionClient,
+  requestID: number,
+  nextStepID: number,
+  nextStepNo: number,
+  actor: ApprovalRequestActor,
+  now: Date,
+) {
+  const waitingApproverCount =
+    await tx.approvalRequestApprover.count({
+      where: {
+        approvalRequestStepID:
+          nextStepID,
+
+        status:
+          ApprovalApproverStatus.WAITING,
+      },
+    });
+
+  if (
+    waitingApproverCount === 0
   ) {
-    const firstApprover =
-      await tx.approvalRequestApprover.findFirst({
-        where: {
-          approvalRequestStepID: nextStepID,
-          status: ApprovalApproverStatus.WAITING,
-        },
-
-        orderBy: {
-          id: 'asc',
-        },
-      });
-
-    if (!firstApprover) {
-      throw new BadRequestException(
-        `No approver is assigned to approval step ${nextStepNo}`,
-      );
-    }
-
-    const stepUpdate =
-      await tx.approvalRequestStep.updateMany({
-        where: {
-          id: nextStepID,
-          status: ApprovalStepStatus.WAITING,
-        },
-
-        data: {
-          status: ApprovalStepStatus.PENDING,
-          activatedAt: now,
-        },
-      });
-
-    if (stepUpdate.count !== 1) {
-      throw new ConflictException(
-        'The next approval step could not be activated',
-      );
-    }
-
-    await tx.approvalRequestApprover.update({
-      where: {
-        id: firstApprover.id,
-      },
-
-      data: {
-        status: ApprovalApproverStatus.PENDING,
-        activatedAt: now,
-      },
-    });
-
-    await tx.approvalRequest.update({
-      where: {
-        id: requestID,
-      },
-
-      data: {
-        currentStepNo: nextStepNo,
-      },
-    });
-
-    await tx.approvalRequestAction.create({
-      data: {
-        approvalRequestID: requestID,
-        approvalRequestStepID: nextStepID,
-        approvalRequestApproverID: firstApprover.id,
-        action: ApprovalActionType.STEP_ACTIVATED,
-        actedByEmployeeID: actor.employeeID,
-        actedByUserID: actor.userID,
-        fromStatus: ApprovalStepStatus.WAITING,
-        toStatus: ApprovalStepStatus.PENDING,
-        remark:
-          `Approval step ${nextStepNo} activated`,
-      },
-    });
+    throw new BadRequestException(
+      `No approver is assigned to approval step ${nextStepNo}`,
+    );
   }
+
+  const stepUpdate =
+    await tx.approvalRequestStep.updateMany({
+      where: {
+        id:
+          nextStepID,
+
+        status:
+          ApprovalStepStatus.WAITING,
+      },
+
+      data: {
+        status:
+          ApprovalStepStatus.PENDING,
+
+        activatedAt:
+          now,
+      },
+    });
+
+  if (
+    stepUpdate.count !== 1
+  ) {
+    throw new ConflictException(
+      'The next approval step could not be activated',
+    );
+  }
+
+  /*
+   * Activate EVERY eligible approver
+   * belonging to the step.
+   */
+  await tx.approvalRequestApprover.updateMany({
+    where: {
+      approvalRequestStepID:
+        nextStepID,
+
+      status:
+        ApprovalApproverStatus.WAITING,
+    },
+
+    data: {
+      status:
+        ApprovalApproverStatus.PENDING,
+
+      activatedAt:
+        now,
+    },
+  });
+
+  await tx.approvalRequest.update({
+    where: {
+      id:
+        requestID,
+    },
+
+    data: {
+      currentStepNo:
+        nextStepNo,
+    },
+  });
+
+  await tx.approvalRequestAction.create({
+    data: {
+      approvalRequestID:
+        requestID,
+
+      approvalRequestStepID:
+        nextStepID,
+
+      action:
+        ApprovalActionType.STEP_ACTIVATED,
+
+      actedByEmployeeID:
+        actor.employeeID,
+
+      actedByUserID:
+        actor.userID,
+
+      fromStatus:
+        ApprovalStepStatus.WAITING,
+
+      toStatus:
+        ApprovalStepStatus.PENDING,
+
+      remark:
+        `Approval step ${nextStepNo} activated for ${waitingApproverCount} eligible approver(s)`,
+    },
+  });
+}
 
   private async completeApprovalRequest(
     tx: TransactionClient,

@@ -538,6 +538,7 @@ export class ManageEmployeeService {
           empFactualAttendancePolicy: { include: { factualAttendancePolicy: true } },
           empLeavePolicy: { include: { leavePolicy: true } },
           empContractor: { include: { contractor: true } },
+          salaryCycle: true,
           empPromotion: {
             orderBy: { id: 'desc' },
             include: {
@@ -1346,6 +1347,7 @@ export class ManageEmployeeService {
         leavePolicy: true,
         monthlyPayGrade: true,
         hourlyPayGrade: true,
+        salaryCycle: true,
         empEduQualification: true,
         empProfExprience: true,
         empDesignation: { include: { designation: true } },
@@ -1427,6 +1429,7 @@ export class ManageEmployeeService {
         leavePolicy: true,
         monthlyPayGrade: true,
         hourlyPayGrade: true,
+        salaryCycle: true,
         empEduQualification: true,
         empProfExprience: true,
         empDesignation: { include: { designation: true } },
@@ -2270,6 +2273,7 @@ export class ManageEmployeeService {
             leavePolicy: true,
             monthlyPayGrade: true,
             hourlyPayGrade: true,
+            salaryCycle: true,
             employeeBankDetails: true,
             employeeDocuments: {
               orderBy: { createdAt: 'desc' },

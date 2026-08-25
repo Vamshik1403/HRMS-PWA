@@ -217,7 +217,7 @@ export function MonthlyPayGradeManagement() {
     otPayoutUnit: "Per Hour" as "Per Minute" | "Per Hour",
     salType: "Percentage" as "Percentage" | "Fixed",
     grossSalary: 0,
-    percentageOfBasic: 0,
+    percentageOfBasic: "",
     basicSalary: 0,
     selectedAllowances: [] as Allowance[],
     selectedDeductions: [] as Deduction[],
@@ -354,7 +354,12 @@ const resolvedBranchID =
   /* ---------- Derived calc ---------- */
   useEffect(() => {
     if (formData.salType === "Percentage") {
-      const basic = (formData.grossSalary * formData.percentageOfBasic) / 100;
+      const pct = parseFloat(formData.percentageOfBasic);
+      if (!Number.isFinite(pct)) {
+        setFormData((p) => ({ ...p, basicSalary: 0 }));
+        return;
+      }
+      const basic = (formData.grossSalary * pct) / 100;
       setFormData((p) => ({ ...p, basicSalary: Math.round(basic * 100) / 100 || 0 }));
     }
   }, [formData.grossSalary, formData.percentageOfBasic, formData.salType]);
@@ -564,8 +569,8 @@ miniOTTime: x.miniOTTime ?? 0,
         miniOTTime: fd.miniOTTime,
       salType: fd.salType,
       grossSalary: String(fd.grossSalary),
-      percentageOfBasic: fd.salType === "Percentage" ? String(fd.percentageOfBasic) : "0",
-      basicSalary: fd.basicSalary,
+      percentageOfBasic: fd.salType === "Percentage" ? (fd.percentageOfBasic || "0") : "0",
+      basicSalary: Math.round(Number(fd.basicSalary) || 0),
       allowanceIDs: regularAllowanceIDs,
       bonusAllocationIDs: bonusAllowanceIDs, // New field for bonus allocations
       deductionIDs: fd.selectedDeductions.map((d) => Number(d.id.replace('deduction_', ''))),
@@ -733,7 +738,7 @@ miniOTTime: x.miniOTTime ?? 0,
       otPayoutUnit: formData.otPayoutUnit,
       salType: pg.salType === "Fixed" || pg.salType === "Percentage" ? pg.salType : "Percentage",
       grossSalary: pg.grossSalary,
-      percentageOfBasic: pg.percentageOfBasic,
+      percentageOfBasic: pg.percentageOfBasic != null ? String(pg.percentageOfBasic) : "",
       basicSalary: pg.basicSalary,
       selectedAllowances: pg.selectedAllowances,
       selectedDeductions: pg.selectedDeductions,
@@ -769,7 +774,7 @@ miniOTTime: x.miniOTTime ?? 0,
       otPayoutUnit: "Per Hour" as "Per Minute" | "Per Hour",
       salType: "Percentage",
       grossSalary: 0,
-      percentageOfBasic: 0,
+      percentageOfBasic: "",
       basicSalary: 0,
       selectedAllowances: [],
       selectedDeductions: [],
@@ -1105,13 +1110,14 @@ miniOTTime: x.miniOTTime ?? 0,
                       <Input
                         id="percentageOfBasic"
                         type="text"
-                        min="0"
-                        max="100"
-                        step="0.01"
+                        inputMode="decimal"
                         value={formData.percentageOfBasic}
-                        onChange={(e) =>
-                          setFormData((p) => ({ ...p, percentageOfBasic: parseFloat(e.target.value) || 0 }))
-                        }
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          if (v === "" || /^\d{0,3}(\.\d{0,4})?$/.test(v)) {
+                            setFormData((p) => ({ ...p, percentageOfBasic: v }));
+                          }
+                        }}
                         placeholder="0"
                         disabled={formData.salType === "Fixed"}
                         required={formData.salType === "Percentage"}

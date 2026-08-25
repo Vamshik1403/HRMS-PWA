@@ -33,7 +33,7 @@ export async function detectAttendanceActualStatus(params: {
   const dayOfWeek = WEEKDAYS[new Date(date).getDay()];
 
   const [logsRes, empRes, policyRes, holidayRes, leaveRes, regRes, rosterRes] = await Promise.all([
-    fetch(`${BACKEND_URL}/process-att-logs?dateFrom=${date}&dateTo=${date}&limit=1000`, { cache: "no-store" }),
+    fetch(`${BACKEND_URL}/process-att-logs?dateFrom=${date}&dateTo=${date}&manageEmployeeIds=${employeeId}&limit=1000`, { cache: "no-store" }),
     fetch(`${BACKEND_URL}/manage-emp/${employeeId}`, { cache: "no-store" }),
     fetch(`${BACKEND_URL}/attendance-policy`, { cache: "no-store" }),
     fetch(`${BACKEND_URL}/public-holiday`, { cache: "no-store" }),
@@ -112,7 +112,8 @@ export async function detectAttendanceActualStatus(params: {
     if (wsRes.ok) workShift = await wsRes.json();
   }
 
-  const isFlexible = workShift?.isFlexible || false;
+  const isFlexible =
+    !!(workShift?.isFlexible || String((policy as { workingHoursType?: string } | null)?.workingHoursType || "").toLowerCase().includes("flex"));
   const isRotating = workShift?.isRotating || false;
   const shiftDay =
     workShift?.workShiftDay?.find((d) => d.weekDay === dayOfWeek && d.shiftType === "WORK") ?? null;
@@ -163,15 +164,15 @@ export async function detectAttendanceActualStatus(params: {
 
   const isPublicHoliday = (): boolean =>
     allHolidays.some((h) => {
-      if (
-        Number(h.companyID) !== Number(resolvedCompanyID) ||
-        Number(h.branchesID) !== Number(resolvedBranchID)
-      ) {
-        return false;
+      if (Number(h.companyID) !== Number(resolvedCompanyID)) return false;
+      if (h.branchesID != null && String(h.branchesID) !== "") {
+        if (Number(h.branchesID) !== Number(resolvedBranchID)) return false;
       }
-      const hs = new Date(h.startDate ?? "").toISOString().split("T")[0];
-      const he = new Date(h.endDate ?? "").toISOString().split("T")[0];
-      return date >= hs && date <= he;
+      const rawStart = String(h.startDate ?? "");
+      const rawEnd = String(h.endDate ?? "");
+      const hs = rawStart.match(/^(\d{4}-\d{2}-\d{2})/)?.[1] || new Date(rawStart).toISOString().split("T")[0];
+      const he = rawEnd.match(/^(\d{4}-\d{2}-\d{2})/)?.[1] || new Date(rawEnd).toISOString().split("T")[0] || hs;
+      return !!hs && date >= hs && date <= he;
     });
 
   const approvedLeave = () =>
@@ -219,15 +220,15 @@ export async function detectAttendanceActualStatus(params: {
   };
 
   if (punches.length === 0) {
-    if (isWeekOff()) return build("WEEK_OFF");
     if (isPublicHoliday()) return build("PUBLIC_HOLIDAY");
+    if (isWeekOff()) return build("WEEK_OFF");
     const leave = approvedLeave();
     if (leave) return build(leave.appliedLeaveType ?? "LEAVE");
     return build("ABSENT");
   }
 
-  if (isWeekOff()) return build("WEEK_OFF");
   if (isPublicHoliday()) return build("PUBLIC_HOLIDAY");
+  if (isWeekOff()) return build("WEEK_OFF");
   const leave = approvedLeave();
   if (leave) return build(leave.appliedLeaveType ?? "LEAVE");
 
@@ -238,32 +239,38 @@ export async function detectAttendanceActualStatus(params: {
 
   if (shiftDay && policy) {
     const firstMin = timeToMin(punches[0]);
+    const lastMin = timeToMin(punches[punches.length - 1]);
     const shiftStartMin = timeToMin(shiftDay.startTime ?? "");
+    const shiftEndMin = timeToMin(shiftDay.endTime ?? "");
     const pol = policy as {
       max_late_check_in_time?: number;
       maxLateCheckinMarkAs?: string;
       min_work_hours_half_day_min?: number;
       checkin_grace_time_min?: number;
+      earlyCheckoutBeforeEndMin?: number;
     };
+    const graceTime = pol.checkin_grace_time_min || 0;
     const maxLateWindow = pol.max_late_check_in_time || 0;
-
-    if (!isFlexible && firstMin > shiftStartMin + maxLateWindow) {
-      const markAs = pol.maxLateCheckinMarkAs || "Absent";
-      return build(markAs === "Absent" ? "ABSENT" : "HALFDAY");
-    }
-
+    const graceEnd = shiftStartMin + graceTime;
+    const maxLateCutoff = graceEnd + maxLateWindow;
     const workedMinutes = calculateWorkedMinutes(punches);
     const totalShiftMinutes = shiftDay.totalMinutes || 480;
     const halfDayMin = pol.min_work_hours_half_day_min || 0;
-    const graceTime = pol.checkin_grace_time_min || 0;
-    const isLate =
-      !isFlexible &&
-      firstMin > shiftStartMin + graceTime &&
-      firstMin <= shiftStartMin + maxLateWindow;
+    const earlyAllow = pol.earlyCheckoutBeforeEndMin || 0;
+
+    if (isFlexible) {
+      if (workedMinutes < halfDayMin) return build("ABSENT");
+      if (workedMinutes < totalShiftMinutes) return build("HALFDAY");
+      return build("FULLDAY");
+    }
 
     if (workedMinutes < halfDayMin) return build("ABSENT");
-    if (workedMinutes < totalShiftMinutes) return build("HALFDAY");
-    if (isLate) return build("LATE_MARK");
+    if (firstMin > maxLateCutoff) {
+      const markAs = pol.maxLateCheckinMarkAs || "Absent";
+      return build(markAs === "Absent" ? "ABSENT" : "HALFDAY");
+    }
+    if (lastMin < shiftEndMin - earlyAllow) return build("HALFDAY");
+    if (firstMin > graceEnd && firstMin <= maxLateCutoff) return build("LATE_MARK");
     return build("FULLDAY");
   }
 

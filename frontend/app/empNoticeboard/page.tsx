@@ -22,7 +22,7 @@ export default function EmpNoticeboardPage() {
     <EmpMobileLayout>
       <div className="flex min-h-[50vh] items-center justify-center">
         <Icon icon="solar:refresh-bold-duotone" className="size-8 animate-spin text-blue-400" />
-      </div>
+        </div>
     </EmpMobileLayout>
   );
 }

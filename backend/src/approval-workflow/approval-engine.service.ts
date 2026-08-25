@@ -5,6 +5,7 @@ import {
 
 import {
   ApprovalApproverStatus,
+  ApprovalRequirement,
   ApprovalRequestStatus,
   ApprovalStepStatus,
   Prisma,
@@ -965,25 +966,22 @@ export class ApprovalEngineService {
         );
       }
 
-      const anyMode =
-        workflow
-          .allowAnySameDesignation ===
-        true;
-
       const isFirstStep =
-        workflowStep.stepNo ===
-        1;
+  workflowStep.stepNo ===
+  1;
 
-      /*
-       * Any mode:
-       * every workflow step is actionable immediately.
-       *
-       * Sequential mode:
-       * only Step 1 is active.
-       */
-      const stepIsActive =
-        anyMode ||
-        isFirstStep;
+/*
+ * Workflow steps are ALWAYS sequential.
+ *
+ * ANY / ALL only controls approvers
+ * inside the current step.
+ */
+const stepIsActive =
+  isFirstStep;
+
+const approvalRequirement =
+  workflowStep.approvalRequirement ??
+  ApprovalRequirement.ANY;
 
       /*
        * ApprovalRequestStep.designationID is required in your
@@ -1033,11 +1031,14 @@ export class ApprovalEngineService {
             stepNameSnapshot:
               workflowStep.stepName,
 
-            designationNameSnapshot:
-              designationName,
+      designationNameSnapshot:
+  designationName,
 
-            isMandatorySnapshot:
-              workflowStep.isMandatory,
+approvalRequirementSnapshot:
+  approvalRequirement,
+
+isMandatorySnapshot:
+  workflowStep.isMandatory,
 
             canRejectSnapshot:
               workflowStep.canReject,
@@ -1077,16 +1078,9 @@ export class ApprovalEngineService {
      const approverRows:
   Prisma.ApprovalRequestApproverCreateManyInput[] =
   approvers.map(
-    (
-      approver,
-      index,
-    ) => {
+    (approver) => {
       const approverActive =
-        anyMode ||
-        (
-          isFirstStep &&
-          index === 0
-        );
+  isFirstStep;
 
       const approverDesignationID =
         approver.designationID ??
@@ -1176,10 +1170,8 @@ await tx.approvalRequestApprover.createMany({
               toStatus:
                 'PENDING',
 
-              remark:
-                anyMode
-                  ? `Approval step ${workflowStep.stepNo} activated in any-approver mode`
-                  : `Approval step ${workflowStep.stepNo} activated`,
+           remark:
+  `Approval step ${workflowStep.stepNo} activated`,
             },
           });
       }
@@ -1453,130 +1445,184 @@ await tx.approvalRequestApprover.createMany({
    * with step.designationID are candidates.
    */
   private async findDesignationApprovers(
-    tx: TransactionClient,
-    subject:
-      WorkflowSubject,
-    workflowStep:
-      any,
-  ): Promise<ResolvedApprover[]> {
-    const designationID =
-      workflowStep.designationID;
+  tx: TransactionClient,
+  subject: WorkflowSubject,
+  workflowStep: any,
+): Promise<ResolvedApprover[]> {
+  const designationID =
+    Number(
+      workflowStep.designationID,
+    );
+  if (
+    !Number.isInteger(
+      designationID,
+    ) ||
+    designationID <= 0
+  ) {
+    throw new BadRequestException(
+      `Designation is required for DESIGNATION approver at step ${workflowStep.stepNo}`,
+    );
+  }
 
-    if (
-      designationID ==
-      null
-    ) {
-      throw new BadRequestException(
-        `Designation is required for DESIGNATION approver at step ${workflowStep.stepNo}`,
-      );
-    }
+  const employees =
+    await tx.manageEmployee.findMany({
+      where: {
+        companyID:
+          subject.companyID,
 
-    const employees =
-      await tx.manageEmployee.findMany({
-        where: {
-          companyID:
-            subject.companyID,
+        /*
+         * For branch-specific workflow,
+         * keep approvers inside that branch.
+         */
+        ...(subject.branchesID != null
+          ? {
+              branchesID:
+                subject.branchesID,
+            }
+          : {}),
 
-          id: {
-            not:
-              subject.employeeID,
+        id: {
+          not:
+            subject.employeeID,
+        },
+
+        /*
+         * Support both employee designation methods.
+         */
+        OR: [
+          {
+            designationID,
           },
 
-          OR: [
-            {
-              designationID,
-            },
-
-            {
-              empDesignation: {
-                some: {
-                  designationID,
-                },
+          {
+            empDesignation: {
+              some: {
+                designationID,
               },
             },
-          ],
+          },
+        ],
 
-          lifecycleStatus:
-            'ACTIVE',
+        lifecycleStatus:
+          'ACTIVE',
 
-          onboardingApprovalStatus:
-            'APPROVED',
+        onboardingApprovalStatus:
+          'APPROVED',
 
-          isDeleted:
-            false,
+        isDeleted:
+          false,
 
-          employeeCredentials: {
-            is: {
-              isActive:
-                true,
-            },
+        /*
+         * Only employees who can actually log in
+         * should receive workflow assignments.
+         */
+        employeeCredentials: {
+          is: {
+            isActive:
+              true,
+          },
+        },
+      },
+
+      select: {
+        id: true,
+        companyID: true,
+        branchesID: true,
+        departmentNameID: true,
+        designationID: true,
+
+        designations: {
+          select: {
+            id: true,
+            designation: true,
           },
         },
 
-        select: {
-          id: true,
-          companyID: true,
-          branchesID: true,
-          departmentNameID: true,
-          designationID: true,
-
-          designations: {
-            select: {
-              designation:
-                true,
-            },
+        empDesignation: {
+          where: {
+            designationID,
           },
-        },
 
-        orderBy: {
-          id:
-            'asc',
-        },
-      });
-
-    return employees
-      .map(
-        (employee) => {
-          /*
-           * Usually designationID is directly populated.
-           * If your application uses EmpDesignation only,
-           * the engine still matched the employee through OR above.
-           * Snapshot uses the workflow designation ID.
-           */
-          const resolvedDesignationID =
-            employee.designationID ??
-            designationID;
-
-          return {
-            id:
-              employee.id,
-
-            companyID:
-              employee.companyID,
-
-            branchesID:
-              employee.branchesID,
-
-            departmentNameID:
-              employee.departmentNameID,
-
+          select: {
             designationID:
-              resolvedDesignationID,
+              true,
 
-            designationName:
-              employee
+            designation: {
+              select: {
+                id:
+                  true,
+
+                designation:
+                  true,
+              },
+            },
+          },
+        },
+      },
+
+      orderBy: {
+        id:
+          'asc',
+      },
+    });
+
+  return employees.map(
+    (employee) => {
+      const mappedDesignation =
+        employee.empDesignation?.find(
+          (item) =>
+            Number(
+              item.designationID,
+            ) ===
+            designationID,
+        );
+
+      const designationName =
+        mappedDesignation
+          ?.designation
+          ?.designation
+          ?.trim() ||
+        (
+          Number(
+            employee.designationID,
+          ) ===
+          designationID
+            ? employee
                 .designations
                 ?.designation
-                ?.trim() ||
-              workflowStep
-                .designation
-                ?.designation
-                ?.trim() ||
-              `Designation ${designationID}`,
-          };
-        },
-      );
-  }
+                ?.trim()
+            : null
+        ) ||
+        workflowStep
+          .designation
+          ?.designation
+          ?.trim() ||
+        `Designation ${designationID}`;
+
+      return {
+        id:
+          employee.id,
+
+        companyID:
+          employee.companyID,
+
+        branchesID:
+          employee.branchesID,
+
+        departmentNameID:
+          employee.departmentNameID,
+
+        /*
+         * Snapshot workflow designation,
+         * not another employee primary designation.
+         */
+        designationID,
+
+        designationName,
+      };
+    },
+  );
+}
 
   /*
    * ============================================================

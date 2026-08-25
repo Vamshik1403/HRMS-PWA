@@ -250,7 +250,7 @@ export const HRMS_NAVIGATION: NavGroup[] = [
         label: "Approval Workflows",
         href: "/approval-workflows",
         icon: ClipboardList,
-        show: (c) => c.isServiceProvider,
+        show: (c) => c.isSuperAdmin || c.isServiceProvider,
       },
 
 

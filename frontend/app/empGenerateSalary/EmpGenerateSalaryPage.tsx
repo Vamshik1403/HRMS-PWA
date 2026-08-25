@@ -519,7 +519,13 @@ async function getReimbursementAmount(employeeId: number, selectedMonthLabel: st
 
 /** Compute earnings from Pay Grade + Reimbursements */
 async function computeEarnings(gross: number, grade: any, employeeId: number, selectedMonthLabel: string) {
-  const basic = Math.round(gross * 0.50);
+  const configured = Number(grade?.basicSalary ?? 0);
+  const pct = Number(grade?.percentageOfBasic ?? 0);
+  const basic = configured > 0
+    ? Math.round(configured)
+    : pct > 0
+      ? Math.round((gross * pct) / 100)
+      : (() => { throw new Error("Basic not set"); })();
   const allowances: { name: string, amount: number }[] = [];
   const list = grade?.monthlyPayGradeAllowanceList || [];
 

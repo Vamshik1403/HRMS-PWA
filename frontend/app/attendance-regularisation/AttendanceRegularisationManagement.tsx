@@ -22,6 +22,7 @@ import { formatDevicePunchForDisplay } from "../utils/devicePunchTime";
 
 interface AttendanceRegularisation {
   id: string
+  approvalActionTaken?: boolean
   serviceProviderID?: number
   companyID?: number
   branchesID?: number
@@ -140,6 +141,8 @@ interface CurrentEmployeeContext {
   branchesID?: number | null
   departmentNameID?: number | null
   designationID?: number | null
+
+  isCompanyOwner?: boolean
 }
 
 
@@ -263,6 +266,9 @@ manageEmployeeID: undefined as number | undefined,
   
   const user = useCurrentUser()
   const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN"
+  const isCompanyOwner =
+  user?.role === "EMPLOYEE" &&
+  currentEmployee?.isCompanyOwner === true
 
   // Load user data based on role
   useEffect(() => {
@@ -307,20 +313,31 @@ manageEmployeeID: undefined as number | undefined,
               const employee = await employeeRes.json()
 
               setCurrentEmployee({
-                id: Number(employee.id),
-                companyID: employee.companyID ?? null,
-                branchesID: employee.branchesID ?? null,
-                departmentNameID:
-                  employee.departmentNameID ??
-                  employee.departments?.id ??
-                  null,
-                designationID:
-                  employee.designationID ??
-                  employee.designations?.id ??
-                  employee.empDesignation?.[0]?.designationID ??
-                  employee.empDesignation?.[0]?.designation?.id ??
-                  null,
-              })
+  id: Number(employee.id),
+
+  companyID:
+    employee.companyID ??
+    null,
+
+  branchesID:
+    employee.branchesID ??
+    null,
+
+  departmentNameID:
+    employee.departmentNameID ??
+    employee.departments?.id ??
+    null,
+
+  designationID:
+    employee.designationID ??
+    employee.designations?.id ??
+    employee.empDesignation?.[0]?.designationID ??
+    employee.empDesignation?.[0]?.designation?.id ??
+    null,
+
+  isCompanyOwner:
+    employee.isCompanyOwner === true,
+})
             } else {
               setCurrentEmployee(null)
             }
@@ -589,10 +606,13 @@ manageEmployeeID: undefined as number | undefined,
   }
 
   const loadMyPendingApprovals = async (): Promise<MyApprovalAssignment[]> => {
-    if (user?.role !== "EMPLOYEE") {
-      setMyPendingApprovals([])
-      return []
-    }
+    if (
+  user?.role !== "EMPLOYEE" ||
+  currentEmployee?.isCompanyOwner === true
+) {
+  setMyPendingApprovals([])
+  return []
+}
 
     try {
       const response = await fetch(
@@ -643,10 +663,13 @@ manageEmployeeID: undefined as number | undefined,
   }
 
   const loadMyAssignedApprovals = async (): Promise<MyApprovalAssignment[]> => {
-    if (user?.role !== "EMPLOYEE") {
-      setMyAssignedApprovals([])
-      return []
-    }
+    if (
+  user?.role !== "EMPLOYEE" ||
+  currentEmployee?.isCompanyOwner === true
+) {
+  setMyAssignedApprovals([])
+  return []
+}
 
     try {
       const response = await fetch(
@@ -846,7 +869,12 @@ manageEmployeeID: undefined as number | undefined,
       const regularisationsData = (Array.isArray(data) ? data : []).map(
         (regularisation: any) => ({
           id: regularisation.id.toString(),
-          serviceProviderID: regularisation.serviceProviderID,
+
+approvalActionTaken:
+  regularisation.approvalActionTaken === true,
+
+serviceProviderID:
+  regularisation.serviceProviderID,
           companyID: regularisation.companyID,
           branchesID: regularisation.branchesID,
           manageEmployeeID: regularisation.manageEmployeeID,
@@ -1136,7 +1164,7 @@ const statusBadgeVariant = (status?: AttendanceRegularisation["status"]) => {
 
       // ── Fetch all data in parallel ────────────────────────────────────
       const [logsRes, empRes, policyRes, holidayRes, leaveRes, regRes, rosterRes] = await Promise.all([
-        fetch(`${BACKEND_URL}/process-att-logs?dateFrom=${date}&dateTo=${date}&limit=1000`, { cache: "no-store" }),
+        fetch(`${BACKEND_URL}/process-att-logs?dateFrom=${date}&dateTo=${date}&manageEmployeeIds=${employeeId}&limit=1000`, { cache: "no-store" }),
         fetch(`${BACKEND_URL}/manage-emp/${employeeId}`, { cache: "no-store" }),
         fetch(`${BACKEND_URL}/attendance-policy`, { cache: "no-store" }),
         fetch(`${BACKEND_URL}/public-holiday`, { cache: "no-store" }),
@@ -1170,7 +1198,7 @@ const statusBadgeVariant = (status?: AttendanceRegularisation["status"]) => {
         if (wsRes.ok) workShift = await wsRes.json()
       }
 
-      const isFlexible: boolean = workShift?.isFlexible || false
+      const isFlexible: boolean = !!(workShift?.isFlexible || String(policy?.workingHoursType || "").toLowerCase().includes("flex"))
       const isRotating: boolean = workShift?.isRotating || false
       const shiftDay: any = workShift?.workShiftDay?.find((d: any) => d.weekDay === dayOfWeek && d.shiftType === "WORK") ?? null
 
@@ -1216,10 +1244,15 @@ const statusBadgeVariant = (status?: AttendanceRegularisation["status"]) => {
       // ── Public-holiday helper ─────────────────────────────────────────
       const isPublicHoliday = (): boolean =>
         allHolidays.some((h: any) => {
-          if (Number(h.companyID) !== Number(resolvedCompanyID) || Number(h.branchesID) !== Number(resolvedBranchID)) return false
-          const hs = new Date(h.startDate).toISOString().split("T")[0]
-          const he = new Date(h.endDate).toISOString().split("T")[0]
-          return date >= hs && date <= he
+          if (Number(h.companyID) !== Number(resolvedCompanyID)) return false
+          if (h.branchesID != null && String(h.branchesID) !== "") {
+            if (Number(h.branchesID) !== Number(resolvedBranchID)) return false
+          }
+          const rawStart = String(h.startDate ?? "")
+          const rawEnd = String(h.endDate ?? "")
+          const hs = rawStart.match(/^(\d{4}-\d{2}-\d{2})/)?.[1] || new Date(rawStart).toISOString().split("T")[0]
+          const he = rawEnd.match(/^(\d{4}-\d{2}-\d{2})/)?.[1] || new Date(rawEnd).toISOString().split("T")[0] || hs
+          return !!hs && date >= hs && date <= he
         })
 
       // ── Approved-leave helper ─────────────────────────────────────────
@@ -1261,44 +1294,49 @@ const statusBadgeVariant = (status?: AttendanceRegularisation["status"]) => {
 
       // ── 0 punches ────────────────────────────────────────────────────
       if (punches.length === 0) {
-        if (isWeekOff()) return applyStatus("WEEK_OFF")
         if (isPublicHoliday()) return applyStatus("PUBLIC_HOLIDAY")
+        if (isWeekOff()) return applyStatus("WEEK_OFF")
         const leave = approvedLeave()
         if (leave) return applyStatus(leave.appliedLeaveType)
         return applyStatus("ABSENT")
       }
 
-      // ── 1+ punch: check special days first ───────────────────────────
-      if (isWeekOff()) return applyStatus("WEEK_OFF")
       if (isPublicHoliday()) return applyStatus("PUBLIC_HOLIDAY")
+      if (isWeekOff()) return applyStatus("WEEK_OFF")
       const leave = approvedLeave()
       if (leave) return applyStatus(leave.appliedLeaveType)
 
-      // ── 1 punch: single-punch policy ─────────────────────────────────
       if (punches.length === 1) {
         return applyStatus(policy?.markAs === "Absent" ? "ABSENT" : "HALFDAY")
       }
 
-      // ── 2+ punches: full policy calculation ──────────────────────────
       if (shiftDay && policy) {
         const firstMin = timeToMin(punches[0])
+        const lastMin = timeToMin(punches[punches.length - 1])
         const shiftStartMin = timeToMin(shiftDay.startTime)
+        const shiftEndMin = timeToMin(shiftDay.endTime)
+        const graceTime = policy.checkin_grace_time_min || 0
         const maxLateWindow = policy.max_late_check_in_time || 0
-
-        if (!isFlexible && firstMin > shiftStartMin + maxLateWindow) {
-          const markAs = policy.maxLateCheckinMarkAs || "Absent"
-          return applyStatus(markAs === "Absent" ? "ABSENT" : "HALFDAY")
-        }
-
+        const graceEnd = shiftStartMin + graceTime
+        const maxLateCutoff = graceEnd + maxLateWindow
         const workedMinutes = calculateWorkedMinutes(punches)
         const totalShiftMinutes = shiftDay.totalMinutes || 480
         const halfDayMin = policy.min_work_hours_half_day_min || 0
-        const graceTime = policy.checkin_grace_time_min || 0
-        const isLate = !isFlexible && firstMin > shiftStartMin + graceTime && firstMin <= shiftStartMin + maxLateWindow
+        const earlyAllow = policy.earlyCheckoutBeforeEndMin || 0
+
+        if (isFlexible) {
+          if (workedMinutes < halfDayMin) return applyStatus("ABSENT")
+          if (workedMinutes < totalShiftMinutes) return applyStatus("HALFDAY")
+          return applyStatus("FULLDAY")
+        }
 
         if (workedMinutes < halfDayMin) return applyStatus("ABSENT")
-        if (workedMinutes < totalShiftMinutes) return applyStatus("HALFDAY")
-        if (isLate) return applyStatus("LATE_MARK")
+        if (firstMin > maxLateCutoff) {
+          const markAs = policy.maxLateCheckinMarkAs || "Absent"
+          return applyStatus(markAs === "Absent" ? "ABSENT" : "HALFDAY")
+        }
+        if (lastMin < shiftEndMin - earlyAllow) return applyStatus("HALFDAY")
+        if (firstMin > graceEnd && firstMin <= maxLateCutoff) return applyStatus("LATE_MARK")
         return applyStatus("FULLDAY")
       }
 
@@ -1551,10 +1589,36 @@ const statusBadgeVariant = (status?: AttendanceRegularisation["status"]) => {
     pendingAssignments: MyApprovalAssignment[],
     assignedAssignments: MyApprovalAssignment[],
   ): boolean => {
-    if (user?.role !== "EMPLOYEE" || !currentEmployee) return false
+    if (
+  user?.role !== "EMPLOYEE" ||
+  !currentEmployee
+) {
+  return false
+}
 
-    const loggedEmployeeID = Number(currentEmployee.id)
-    const requestEmployeeID = Number(row.manageEmployeeID ?? 0)
+const loggedEmployeeID =
+  Number(currentEmployee.id)
+
+const requestEmployeeID =
+  Number(row.manageEmployeeID ?? 0)
+
+/*
+ * COMPANY OWNER
+ *
+ * Company owner can VIEW every regularisation
+ * belonging to their company.
+ *
+ * This is visibility only.
+ * Approval permission is handled separately.
+ */
+if (
+  currentEmployee.isCompanyOwner === true
+) {
+  return (
+    Number(row.companyID ?? 0) ===
+    Number(currentEmployee.companyID ?? 0)
+  )
+}
 
     /*
      * Request owner always keeps the record.
@@ -1779,8 +1843,9 @@ const statusBadgeVariant = (status?: AttendanceRegularisation["status"]) => {
     }
   }
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
+const handleSubmit = async (e: React.FormEvent) => {
+  e.preventDefault()
+
 
     const serviceProviderID =
       user?.role === "SUPERADMIN"
@@ -1952,56 +2017,262 @@ const statusBadgeVariant = (status?: AttendanceRegularisation["status"]) => {
   setIsFetchingStatus(false);
 };
 
-  const handleEdit = (regularisation: AttendanceRegularisation) => {
-    setFormData({
-      serviceProvider: regularisation.serviceProvider || "",
-      companyName: regularisation.companyName || "",
-      branchName: regularisation.branchName || "",
-      departmentName: regularisation.departmentName || "",
-      employeeName: regularisation.employeeName || "",
-      attendanceDate: regularisation.attendanceDate,
-      checkInTime: regularisation.checkInTime,
-      checkOutTime: regularisation.checkOutTime,
-      actualStatus: regularisation.actualStatus || "",
-      requestedStatus: regularisation.requestedStatus || "",
-      reason: regularisation.reason || "",
-      remarks: regularisation.remarks || "",
-      day: regularisation.day || "",
-      serviceProviderID: regularisation.serviceProviderID,
-      companyID: regularisation.companyID,
-      branchesID: regularisation.branchesID,
-      departmentID: regularisation.departmentID,
-      designationID: regularisation.designationID,
-      manageEmployeeID: regularisation.manageEmployeeID,
-      overtimeApplicable: (regularisation as any).overtimeApplicable || false,
-      otMealApply: (regularisation as any).otMealApply || false,
-      otMealMinutes: (regularisation as any).otMealMinutes || "",
-      otBreakMinutes: (regularisation as any).otBreakMinutes || "",
-    })
-    setSelectedEmployee({
-      employeeID: regularisation.employeeId,
-      employeeFirstName: regularisation.employeeName?.split(' ')[0] || "",
-      employeeLastName: regularisation.employeeName?.split(' ').slice(1).join(' ') || "",
-    })
-    setEditingRegularisation(regularisation)
-    setIsDialogOpen(true)
+const canModifyRegularisation = (
+  row: AttendanceRegularisation,
+): boolean => {
+  /*
+   * Only Pending requests can be changed.
+   */
+  if (
+    String(row.status ?? "")
+      .trim()
+      .toUpperCase() !== "PENDING"
+  ) {
+    return false
   }
 
-  const handleDelete = async (id: string) => {
-    try {
-      const res = await fetch(`${BACKEND_URL}/emp-attendance-regularise/${id}`, {
-        method: "DELETE",
-      })
-      if (!res.ok) {
-        throw new Error(`Failed to delete attendance regularisation: ${res.status}`)
-      }
-      await refreshPageData()
-      toast.success("Record deleted successfully")
-    } catch (error) {
-      console.error("Error deleting attendance regularisation:", error)
-      toast.error((error as any)?.message || "Something went wrong")
-    }
+  /*
+   * Once ANY workflow approver has acted,
+   * editing/deleting is permanently blocked.
+   *
+   * Example:
+   * Step 1 approved → row still Pending →
+   * approvalActionTaken = true →
+   * Edit/Delete hidden.
+   */
+  if (
+    row.approvalActionTaken === true
+  ) {
+    return false
   }
+
+  return true
+}
+
+ const handleEdit = (
+  regularisation: AttendanceRegularisation,
+) => {
+  if (
+    !canModifyRegularisation(
+      regularisation,
+    )
+  ) {
+    toast.error(
+      "This regularisation can no longer be edited because approval has already started.",
+    )
+    return
+  }
+
+  setFormData({
+    serviceProvider:
+      regularisation.serviceProvider ||
+      "",
+
+    companyName:
+      regularisation.companyName ||
+      "",
+
+    branchName:
+      regularisation.branchName ||
+      "",
+
+    departmentName:
+      regularisation.departmentName ||
+      "",
+
+    employeeName:
+      regularisation.employeeName ||
+      "",
+
+    attendanceDate:
+      regularisation.attendanceDate ||
+      "",
+
+    checkInTime:
+      regularisation.checkInTime ||
+      "",
+
+    checkOutTime:
+      regularisation.checkOutTime ||
+      "",
+
+    actualStatus:
+      regularisation.actualStatus ||
+      "",
+
+    requestedStatus:
+      regularisation.requestedStatus ||
+      "",
+
+    reason:
+      regularisation.reason ||
+      "",
+
+    remarks:
+      regularisation.remarks ||
+      "",
+
+    day:
+      regularisation.day ||
+      "",
+
+    serviceProviderID:
+      regularisation.serviceProviderID,
+
+    companyID:
+      regularisation.companyID,
+
+    branchesID:
+      regularisation.branchesID,
+
+    departmentID:
+      regularisation.departmentID,
+
+    designationID:
+      regularisation.designationID,
+
+    manageEmployeeID:
+      regularisation.manageEmployeeID,
+
+    overtimeApplicable:
+      (regularisation as any)
+        .overtimeApplicable ??
+      false,
+
+    otMealApply:
+      (regularisation as any)
+        .otMealApply ??
+      false,
+
+    otMealMinutes:
+      (regularisation as any)
+        .otMealMinutes ??
+      "",
+
+    otBreakMinutes:
+      (regularisation as any)
+        .otBreakMinutes ??
+      "",
+  })
+
+  setSelectedEmployee({
+    id:
+      regularisation.manageEmployeeID,
+
+    employeeID:
+      regularisation.employeeId,
+
+    employeeFirstName:
+      regularisation.employeeName
+        ?.split(" ")[0] ||
+      "",
+
+    employeeLastName:
+      regularisation.employeeName
+        ?.split(" ")
+        .slice(1)
+        .join(" ") ||
+      "",
+  })
+
+  setEditingRegularisation(
+    regularisation,
+  )
+
+  setIsDialogOpen(
+    true,
+  )
+}
+
+  const handleDelete = async (
+  id: string,
+) => {
+  const row =
+    regularisations.find(
+      (item) =>
+        String(item.id) ===
+        String(id),
+    )
+
+  if (!row) {
+    toast.error(
+      "Regularisation record not found",
+    )
+    return
+  }
+
+  if (
+    !canModifyRegularisation(
+      row,
+    )
+  ) {
+    toast.error(
+      "This regularisation can no longer be deleted because approval has already started.",
+    )
+    return
+  }
+
+  const confirmed =
+    window.confirm(
+      "Delete this attendance regularisation request?",
+    )
+
+  if (!confirmed) {
+    return
+  }
+
+  try {
+    const response =
+      await fetch(
+        `${BACKEND_URL}/emp-attendance-regularise/${id}`,
+        {
+          method:
+            "DELETE",
+
+          headers:
+            getAuthHeaders(),
+
+          credentials:
+            "include",
+        },
+      )
+
+    const result =
+      await response
+        .json()
+        .catch(
+          () => ({}),
+        )
+
+    if (
+      !response.ok
+    ) {
+      throw new Error(
+        result?.message ||
+        `Failed to delete attendance regularisation (${response.status})`,
+      )
+    }
+
+    await refreshPageData()
+
+    toast.success(
+      "Regularisation deleted successfully",
+    )
+  } catch (
+    error
+  ) {
+    console.error(
+      "Error deleting attendance regularisation:",
+      error,
+    )
+
+    toast.error(
+      error instanceof Error
+        ? error.message
+        : "Something went wrong",
+    )
+  }
+}
 
   const getApprovalAssignment = (
     row: AttendanceRegularisation,
@@ -2020,11 +2291,31 @@ const statusBadgeVariant = (status?: AttendanceRegularisation["status"]) => {
   const getApprovalPermission = (
     row: AttendanceRegularisation,
   ): {
+    
     canApprove: boolean
     canReject: boolean
     assignment: MyApprovalAssignment | null
     linkedManagers: LinkedManager[]
   } => {
+
+    /*
+ * Company Owner has company-wide read-only visibility.
+ * Owner must never receive Approve / Reject actions
+ * from this page.
+ */
+if (
+  currentEmployee?.isCompanyOwner === true
+) {
+  return {
+    canApprove: false,
+    canReject: false,
+    assignment: null,
+    linkedManagers:
+      linkedManagersByEmployee[
+        Number(row.manageEmployeeID ?? 0)
+      ] ?? [],
+  }
+}
     const assignment = getApprovalAssignment(row)
     const linkedManagers =
       linkedManagersByEmployee[Number(row.manageEmployeeID ?? 0)] ?? []
@@ -2272,53 +2563,100 @@ const statusBadgeVariant = (status?: AttendanceRegularisation["status"]) => {
       },
     },
     {
-      key: "actions",
-      header: "Actions",
-      colSpan: 1,
-      align: "right",
-      cell: (r) => {
-        const permission = getApprovalPermission(r)
+  key: "actions",
+  header: "Actions",
+  colSpan: 1,
+  align: "right",
 
-        const extra = permission.canApprove
-          ? [
-              {
-                icon: Check,
-                title: permission.assignment?.approvalRequestStep?.stepNameSnapshot
+  cell: (r) => {
+    const permission =
+      getApprovalPermission(r)
+
+    /*
+     * EDIT / DELETE RULE
+     *
+     * Visible to ANY user who can already see this row,
+     * but only while:
+     *
+     * status = Pending
+     * AND
+     * no approval action has happened.
+     */
+    const canModify =
+      canModifyRegularisation(r)
+
+    const extra =
+      permission.canApprove
+        ? [
+            {
+              icon:
+                Check,
+
+              title:
+                permission.assignment
+                  ?.approvalRequestStep
+                  ?.stepNameSnapshot
                   ? `Approve — ${permission.assignment.approvalRequestStep.stepNameSnapshot}`
                   : "Approve",
-                onClick: () => void handleApprove(r.id),
-                className: "text-green-600",
-              },
-              ...(permission.canReject
-                ? [
-                    {
-                      icon: X,
-                      title: "Reject",
-                      onClick: () => void handleReject(r.id),
-                      className: "text-destructive",
-                    },
-                  ]
-                : []),
-            ]
-          : undefined
 
-        return (
-          <EntityRowActions
-            onEdit={
-              canManage
-                ? () => handleEdit(r)
-                : undefined
-            }
-            onDelete={
-              canManage
-                ? () => void handleDelete(r.id)
-                : undefined
-            }
-            extra={extra}
-          />
-        )
-      },
-    },
+              onClick:
+                () =>
+                  void handleApprove(
+                    r.id,
+                  ),
+
+              className:
+                "text-green-600",
+            },
+
+            ...(permission.canReject
+              ? [
+                  {
+                    icon:
+                      X,
+
+                    title:
+                      "Reject",
+
+                    onClick:
+                      () =>
+                        void handleReject(
+                          r.id,
+                        ),
+
+                    className:
+                      "text-destructive",
+                  },
+                ]
+              : []),
+          ]
+        : undefined
+
+    return (
+      <EntityRowActions
+        onEdit={
+          canModify
+            ? () =>
+                handleEdit(
+                  r,
+                )
+            : undefined
+        }
+        onDelete={
+          canModify
+            ? () =>
+                void handleDelete(
+                  r.id,
+                )
+            : undefined
+        }
+        extra={
+          extra
+        }
+      />
+    )
+  },
+},
   ], [
     canManage,
     attendanceWorkflows,
@@ -2336,17 +2674,27 @@ const statusBadgeVariant = (status?: AttendanceRegularisation["status"]) => {
         icon={CalendarCheck2}
         title="Regularisation"
         description="Manage attendance corrections and time adjustments"
-        actions={
-          !isDialogOpen ? (
-            <Button onClick={() => { closeRegularisationPagePanels(); setIsDialogOpen(true); }}>
-              <Plus className="w-4 h-4 mr-1" />
-              Submit Regularisation
-            </Button>
-          ) : null
-        }
+ actions={
+  !isDialogOpen ? (
+    <Button
+      onClick={() => {
+        closeRegularisationPagePanels()
+        setIsDialogOpen(true)
+      }}
+    >
+      <Plus className="w-4 h-4 mr-1" />
+      Submit Regularisation
+    </Button>
+  ) : null
+}
       />
 
-      <FormDrawer open={isDialogOpen} onOpenChange={setIsDialogOpen} title={editingRegularisation ? "Edit Attendance Regularisation" : "Submit Attendance Regularisation"} description={editingRegularisation ? "Update the attendance regularisation information below." : "Fill in the details to submit a new attendance regularisation."}>
+      <FormDrawer open={isDialogOpen} onOpenChange={setIsDialogOpen}  title={
+    editingRegularisation
+      ? "Edit Attendance Regularisation"
+      : "Submit Attendance Regularisation"
+  }
+   description={editingRegularisation ? "Update the attendance regularisation information below." : "Fill in the details to submit a new attendance regularisation."}>
               <form onSubmit={handleSubmit} className="space-y-6">
                 {/* Organization Selection */}
                 <div className="space-y-4">
@@ -2585,11 +2933,17 @@ const statusBadgeVariant = (status?: AttendanceRegularisation["status"]) => {
             emptyIcon={CalendarCheck2}
             emptyTitle="No attendance regularisations found"
             emptyDescription="Try adjusting your search or filters."
-            emptyAction={
-              <Button onClick={() => { closeRegularisationPagePanels(); setIsDialogOpen(true); }}>
-                <Plus className="w-4 h-4 mr-1" /> Submit Regularisation
-              </Button>
-            }
+          emptyAction={
+  <Button
+    onClick={() => {
+      closeRegularisationPagePanels()
+      setIsDialogOpen(true)
+    }}
+  >
+    <Plus className="w-4 h-4 mr-1" />
+    Submit Regularisation
+  </Button>
+}
           />
         </>
       )}

@@ -26,6 +26,10 @@ export class QueryProcessAttLogDto {
 
   @IsOptional()
   @IsString()
+  manageEmployeeIds?: string; // Comma-separated manage employee IDs
+
+  @IsOptional()
+  @IsString()
   company_name?: string;
 
   @IsOptional()

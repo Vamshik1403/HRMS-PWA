@@ -20,6 +20,7 @@ export type DayStatusResult = {
 };
 
 export type AttendancePolicyLike = {
+  workingHoursType?: string | null;
   checkin_begin_before_min?: number | null;
   checkout_end_after_min?: number | null;
   checkin_grace_time_min?: number | null;
@@ -100,12 +101,24 @@ function incrementTrackerAndShouldApply(
 ): boolean {
   if (allowedCount <= 0) return false;
   const nextCount = (tracker.get(key) || 0) + 1;
-  if (nextCount > allowedCount) {
+  // Policy "after N late marks" / "N lates = 1 absent" converts on the Nth, then resets.
+  if (nextCount >= allowedCount) {
     tracker.set(key, 0);
     return true;
   }
   tracker.set(key, nextCount);
   return false;
+}
+
+function isoDatePrefix(value: Date | string | null | undefined): string {
+  if (!value) return '';
+  if (typeof value === 'string') {
+    const m = value.match(/^(\d{4}-\d{2}-\d{2})/);
+    if (m) return m[1];
+  }
+  const d = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toISOString().split('T')[0];
 }
 
 function calculateWorkedMinutes(
@@ -229,7 +242,9 @@ export function computeDayStatus(input: ComputeDayStatusInput): DayStatusResult 
   const effectiveShift =
     rosterDay?.dayType === 'WORK' && rosterDay.workShift ? rosterDay.workShift : workShift;
 
-  const isFlexible = effectiveShift?.isFlexible || false;
+  const isFlexible =
+    !!(effectiveShift?.isFlexible ||
+      String(policy?.workingHoursType || '').toLowerCase().includes('flex'));
   const isRotating = effectiveShift?.isRotating || false;
   const dayOfWeek = WEEKDAYS[new Date(date).getDay()];
   const shiftDay = effectiveShift?.workShiftDay?.find(
@@ -261,26 +276,14 @@ export function computeDayStatus(input: ComputeDayStatusInput): DayStatusResult 
 
   const isPublicHolidayDay = (): boolean =>
     publicHolidays.some((holiday) => {
-      if (holiday.companyID !== companyId) return false;
-      if (holiday.branchesID != null && holiday.branchesID !== branchId) return false;
-      const holidayStart = new Date(holiday.startDate).toISOString().split('T')[0];
-      const holidayEnd = new Date(holiday.endDate).toISOString().split('T')[0];
-      return date >= holidayStart && date <= holidayEnd;
+      if (Number(holiday.companyID) !== Number(companyId)) return false;
+      if (holiday.branchesID != null && String(holiday.branchesID) !== '') {
+        if (Number(holiday.branchesID) !== Number(branchId)) return false;
+      }
+      const holidayStart = isoDatePrefix(holiday.startDate);
+      const holidayEnd = isoDatePrefix(holiday.endDate) || holidayStart;
+      return !!holidayStart && date >= holidayStart && date <= holidayEnd;
     });
-
-  if (!actualMode && isWeekOff()) {
-    return { type: 'WEEK_OFF', label: 'WO', hasPunches: punches.length > 0, workedMinutes: defaultWorkedMinutes };
-  }
-
-  if (!actualMode && leave) {
-    const lt = leave.appliedLeaveType || 'Leave';
-    return {
-      type: 'LEAVE',
-      label: punches.length > 0 ? `${lt}-P` : lt,
-      hasPunches: punches.length > 0,
-      workedMinutes: punches.length > 0 ? undefined : defaultWorkedMinutes,
-    };
-  }
 
   const shiftSpansMidnight = shiftDay
     ? timeToMinutes(shiftDay.endTime) < timeToMinutes(shiftDay.startTime)
@@ -290,7 +293,8 @@ export function computeDayStatus(input: ComputeDayStatusInput): DayStatusResult 
   );
   const hasPunchesEffective = effectivePunches.length > 0;
 
-  if (!actualMode && isPublicHolidayDay()) {
+  // Holiday before week-off/punches so a working Saturday PH is paid, never Absent.
+  if (isPublicHolidayDay()) {
     let workedMinutes = 0;
     if (hasPunchesEffective && shiftDay) {
       workedMinutes = calculateWorkedMinutes(
@@ -310,15 +314,21 @@ export function computeDayStatus(input: ComputeDayStatusInput): DayStatusResult 
     };
   }
 
+  if (!actualMode && isWeekOff()) {
+    return { type: 'WEEK_OFF', label: 'WO', hasPunches: punches.length > 0, workedMinutes: defaultWorkedMinutes };
+  }
+
+  if (!actualMode && leave) {
+    const lt = leave.appliedLeaveType || 'Leave';
+    return {
+      type: 'LEAVE',
+      label: punches.length > 0 ? `${lt}-P` : lt,
+      hasPunches: punches.length > 0,
+      workedMinutes: punches.length > 0 ? undefined : defaultWorkedMinutes,
+    };
+  }
+
   if (!hasPunchesEffective) {
-    if (isPublicHolidayDay()) {
-      return {
-        type: 'HOLIDAY',
-        label: 'PH',
-        hasPunches: false,
-        workedMinutes: defaultWorkedMinutes,
-      };
-    }
     return { type: 'ABSENT', label: 'Absent', hasPunches: false };
   }
 
@@ -434,30 +444,6 @@ export function computeDayStatus(input: ComputeDayStatusInput): DayStatusResult 
 
   const isBeyondMaxLate = !isFlexible && firstPunch > maxLateCutoffInclusive;
 
-  if (isBeyondMaxLate && workedMinutes < requiredFullDayMinutes) {
-    const markAs = policy.maxLateCheckinMarkAs || 'Absent';
-    return {
-      type: markAs === 'Absent' ? 'ABSENT' : 'HALF_DAY',
-      label: markAs,
-      hasPunches: true,
-      workedMinutes,
-    };
-  }
-
-  if (isLate) {
-    const monthKey = `${employeeId}-${date.substring(0, 7)}`;
-    const maxLateCount = parseRuleCount(policy.lateMarkMarkCount || policy.lateMarkCount, 3);
-    if (incrementTrackerAndShouldApply(lateMarkTracker, monthKey, maxLateCount)) {
-      const markAs = policy.lateMarkMarkAs || policy.markAs || 'Half Day';
-      return {
-        type: markAs === 'Absent' ? 'ABSENT' : 'HALF_DAY',
-        label: markAs,
-        hasPunches: true,
-        workedMinutes,
-      };
-    }
-  }
-
   let otMinutes = 0;
   if (otDay && policy.overtimeApplicable) {
     otMinutes = calculateOTMinutes(
@@ -472,32 +458,49 @@ export function computeDayStatus(input: ComputeDayStatusInput): DayStatusResult 
     return { type: 'ABSENT', label: 'Absent', hasPunches: true, workedMinutes };
   }
 
-  // Early-checkout half-day penalty only applies when an early-checkout window
-  // is actually configured (> 0). Previously, with the window left at 0, ANY
-  // checkout even a minute before shift end was forced to Half Day — e.g. an
-  // employee who worked enough net hours but left slightly early was wrongly
-  // marked Half Day. Sufficient worked time is still validated below against
-  // requiredFullDayMinutes.
-  const earlyCheckoutWindow = policy.earlyCheckoutBeforeEndMin || 0;
-  if (
-    earlyCheckoutWindow > 0 &&
-    effectiveForCalc.length >= 2 &&
-    lastPunch < shiftEndMin - earlyCheckoutWindow
-  ) {
-    return { type: 'HALF_DAY', label: 'Half Day', hasPunches: true, workedMinutes };
-  }
-  if (workedMinutes < requiredFullDayMinutes && !isLate) {
-    return { type: 'HALF_DAY', label: 'Half Day', hasPunches: true, workedMinutes };
-  }
-  if (otMinutes > 0) {
-    return { type: 'OT', label: 'OT', hasPunches: true, workedMinutes };
-  }
-  // Full required hours (including late checkout past shift end) → Present, not Late Mark.
-  if (workedMinutes >= requiredFullDayMinutes) {
+  if (isFlexible) {
+    if (workedMinutes < requiredFullDayMinutes) {
+      return { type: 'HALF_DAY', label: 'Half Day', hasPunches: true, workedMinutes };
+    }
+    if (otMinutes > 0) {
+      return { type: 'OT', label: 'OT', hasPunches: true, workedMinutes };
+    }
     return { type: 'PRESENT', label: 'P', hasPunches: true, workedMinutes };
   }
+
+  // Fixed: clock rules, not "completed ~8 hours".
+  if (isBeyondMaxLate) {
+    const markAs = policy.maxLateCheckinMarkAs || 'Absent';
+    return {
+      type: markAs === 'Absent' ? 'ABSENT' : 'HALF_DAY',
+      label: markAs,
+      hasPunches: true,
+      workedMinutes,
+    };
+  }
+
+  const earlyCheckoutWindow = policy.earlyCheckoutBeforeEndMin || 0;
+  if (effectiveForCalc.length >= 2 && lastPunch < shiftEndMin - earlyCheckoutWindow) {
+    return { type: 'HALF_DAY', label: 'Half Day', hasPunches: true, workedMinutes };
+  }
+
   if (isLate) {
+    const monthKey = `${employeeId}-${date.substring(0, 7)}`;
+    const maxLateCount = parseRuleCount(policy.lateMarkMarkCount, 3);
+    if (incrementTrackerAndShouldApply(lateMarkTracker, monthKey, maxLateCount)) {
+      const markAs = policy.lateMarkMarkAs || policy.markAs || 'Half Day';
+      return {
+        type: markAs === 'Absent' ? 'ABSENT' : 'HALF_DAY',
+        label: markAs,
+        hasPunches: true,
+        workedMinutes,
+      };
+    }
     return { type: 'LATE_MARK', label: 'Late Mark', hasPunches: true, workedMinutes };
+  }
+
+  if (otMinutes > 0) {
+    return { type: 'OT', label: 'OT', hasPunches: true, workedMinutes };
   }
   return { type: 'PRESENT', label: 'P', hasPunches: true, workedMinutes };
 }

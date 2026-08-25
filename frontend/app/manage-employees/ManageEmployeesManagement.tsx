@@ -115,6 +115,7 @@ interface CO { id: ID; companyName?: string | null; serviceProviderID?: ID | nul
 interface BR { id: ID; branchName?: string | null; companyID?: ID | null; branchesID?: ID | null; serviceProviderID?: ID | null; }
 interface Device { id: ID; deviceName?: string | null; companyID?: ID | null; branchesID?: ID | null; deviceType?: string | null; }
 interface MonthlyPG { id: ID; monthlyPayGradeName?: string | null; companyID?: ID | null; branchesID?: ID | null; }
+interface SalaryCycle { id: ID; salaryCycleName?: string | null; monthStartDay?: string | null; companyID?: ID | null; }
 interface HourlyPG { id: ID; hourlyPayGradeName?: string | null; }
 
 
@@ -262,6 +263,8 @@ interface ManageEmpRead {
   nightShiftEligibility?: string | null;
   maxHoursPerDay?: string | null;
   weeklyOffPattern?: string | null;
+  salaryCycleID?: ID | null;
+  salaryCycle?: { id: number; salaryCycleName?: string | null; monthStartDay?: string | null } | null;
   noticePeriodDaysForResignation?: string | null;
   noticePeriodDaysForTermination?: string | null;
 
@@ -365,6 +368,7 @@ const API = {
   devices: "/backend/devices",
   monthlyGrades: "/backend/monthly-pay-grade",
   hourlyGrades: "/backend/hourly-grade",
+  salaryCycles: "/backend/salary-cycle",
 };
 
 const MIN_CHARS = 0;
@@ -806,24 +810,28 @@ const [isAddingNew, setIsAddingNew] = useState(false);
 
   const monthlyPGRef = useRef<HTMLDivElement>(null);
   const hourlyPGRef = useRef<HTMLDivElement>(null);
+  const salaryCycleRef = useRef<HTMLDivElement>(null);
 
   const [spList, setSpList] = useState<SP[]>([]);
   const [coList, setCoList] = useState<CO[]>([]);
   const [brList, setBrList] = useState<BR[]>([]);
   const [monthlyPGList, setMonthlyPGList] = useState<MonthlyPG[]>([]);
   const [hourlyPGList, setHourlyPGList] = useState<HourlyPG[]>([]);
+  const [salaryCycleList, setSalaryCycleList] = useState<SalaryCycle[]>([]);
 
   const [spLoading, setSpLoading] = useState(false);
   const [coLoading, setCoLoading] = useState(false);
   const [brLoading, setBrLoading] = useState(false);
   const [monthlyPGLoading, setMonthlyPGLoading] = useState(false);
   const [hourlyPGLoading, setHourlyPGLoading] = useState(false);
+  const [salaryCycleLoading, setSalaryCycleLoading] = useState(false);
 
   const spAbortRef = useRef<AbortController | null>(null);
   const coAbortRef = useRef<AbortController | null>(null);
   const brAbortRef = useRef<AbortController | null>(null);
   const monthlyPGAbortRef = useRef<AbortController | null>(null);
   const hourlyPGAbortRef = useRef<AbortController | null>(null);
+  const salaryCycleAbortRef = useRef<AbortController | null>(null);
 
   const spTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const coTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -831,6 +839,7 @@ const [isAddingNew, setIsAddingNew] = useState(false);
   const monthlyPGTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const hourlyPGTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const salaryCycleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
 
 
@@ -1221,6 +1230,7 @@ const [isAddingNew, setIsAddingNew] = useState(false);
     businessPhones: [""] as string[],
     businessEmails: [""] as string[],
     salaryPayoutCycle: "",
+    salaryCycleID: null as ID | null,
     monthlyPayGradeNames: [] as string[],
     presentAddress: "",
     permenantAddress: "",
@@ -1647,6 +1657,36 @@ const runFetchCombinedDev = (q: string) => {
     }, DEBOUNCE_MS);
   };
 
+  const salaryCycleLabel = (c: { salaryCycleName?: string | null; monthStartDay?: string | null }) => {
+    const name = c.salaryCycleName ?? "Salary cycle";
+    const day = c.monthStartDay ?? "-";
+    return `${name} (starts day ${day})`;
+  };
+
+  const runFetchSalaryCycle = (q: string) => {
+    if (salaryCycleTimerRef.current) clearTimeout(salaryCycleTimerRef.current);
+    salaryCycleTimerRef.current = setTimeout(async () => {
+      if (q.length < MIN_CHARS) { setSalaryCycleList([]); return; }
+      salaryCycleAbortRef.current?.abort();
+      const ctrl = new AbortController(); salaryCycleAbortRef.current = ctrl;
+      setSalaryCycleLoading(true);
+      try {
+        const companyID = formData.companyID;
+        const url = companyID
+          ? `${API.salaryCycles}/company/${companyID}`
+          : API.salaryCycles;
+        let all = await fetchRefCached<SalaryCycle[]>(url, ctrl.signal);
+        if (companyID) {
+          all = (all || []).filter((x) => Number(x.companyID) === Number(companyID));
+        }
+        const filtered = (all || []).filter((x) =>
+          salaryCycleLabel(x).toLowerCase().includes(q.toLowerCase())
+        );
+        setSalaryCycleList(filtered.slice(0, 20));
+      } finally { setSalaryCycleLoading(false); }
+    }, DEBOUNCE_MS);
+  };
+
   const runFetchDept = (q: string) => {
     if (deptTimerRef.current) clearTimeout(deptTimerRef.current);
 
@@ -2022,6 +2062,7 @@ const runFetchCombinedDev = (q: string) => {
       if (linkedEmpRef.current && !linkedEmpRef.current.contains(e.target as any)) setLinkedEmpSuggestions([]);
       if (monthlyPGRef.current && !monthlyPGRef.current.contains(e.target as any)) setMonthlyPGList([]);
       if (hourlyPGRef.current && !hourlyPGRef.current.contains(e.target as any)) setHourlyPGList([]);
+      if (salaryCycleRef.current && !salaryCycleRef.current.contains(e.target as any)) setSalaryCycleList([]);
     };
     document.addEventListener("mousedown", onDocClick);
     return () => document.removeEventListener("mousedown", onDocClick);
@@ -2382,6 +2423,7 @@ const addCombinedDevMap = () => {
       businessPhones: [""],
       businessEmails: [""],
       salaryPayoutCycle: "",
+      salaryCycleID: null,
       monthlyPayGradeNames: [],
       presentAddress: "",
       permenantAddress: "",
@@ -3093,7 +3135,8 @@ const addCombinedDevMap = () => {
             : formData.shiftEligibility || undefined,
         nightShiftEligibility: formData.nightShiftEligibility || undefined,
         maxHoursPerDay: formData.maxHoursPerDay || undefined,
-        weeklyOffPattern: formData.salaryPayoutCycle || formData.weeklyOffPattern || undefined,
+        weeklyOffPattern: formData.weeklyOffPattern || undefined,
+        salaryCycleID: formData.salaryCycleID ?? undefined,
         noticePeriodDaysForResignation: formData.noticePeriodDaysForResignation || undefined,
         noticePeriodDaysForTermination: formData.noticePeriodDaysForTermination || undefined,
         allowRotatingShift: formData.allowRotatingShift,
@@ -3507,7 +3550,10 @@ const addCombinedDevMap = () => {
       nightShiftEligibility: freshData.nightShiftEligibility ?? "",
       maxHoursPerDay: freshData.maxHoursPerDay ?? "",
       weeklyOffPattern: freshData.weeklyOffPattern ?? "",
-      salaryPayoutCycle: freshData.weeklyOffPattern ?? "",
+      salaryCycleID: freshData.salaryCycleID ?? freshData.salaryCycle?.id ?? null,
+      salaryPayoutCycle: freshData.salaryCycle
+        ? `${freshData.salaryCycle.salaryCycleName ?? "Salary cycle"} (starts day ${freshData.salaryCycle.monthStartDay ?? "-"})`
+        : "",
       monthlyPayGradeNames: parsePayGradeNames(freshData.shiftEligibility),
       noticePeriodDaysForResignation: freshData.noticePeriodDaysForResignation ?? "",
       noticePeriodDaysForTermination: freshData.noticePeriodDaysForTermination ?? "",
@@ -3638,6 +3684,20 @@ const addCombinedDevMap = () => {
       if (hpId) {
         const h = await fetchFirstById<HourlyPG>(API.hourlyGrades, hpId);
         setFormData((p) => ({ ...p, hourlyPGAutocomplete: h?.hourlyPayGradeName ?? String(hpId) }));
+      }
+      const scId = freshData.salaryCycleID ?? freshData.salaryCycle?.id ?? null;
+      if (scId && !freshData.salaryCycle) {
+        const cycles = await fetchRefCached<SalaryCycle[]>(
+          freshData.companyID ? `${API.salaryCycles}/company/${freshData.companyID}` : API.salaryCycles
+        );
+        const sc = (cycles || []).find((c) => Number(c.id) === Number(scId));
+        if (sc) {
+          setFormData((p) => ({
+            ...p,
+            salaryCycleID: sc.id,
+            salaryPayoutCycle: salaryCycleLabel(sc),
+          }));
+        }
       }
     })();
 
@@ -5189,13 +5249,46 @@ const handleCancel = () => {
                 onToggle={() => toggleFormGroup("employment-salary")}
               >
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-2 sm:col-span-2">
+                <div className="space-y-2 sm:col-span-2 relative" ref={salaryCycleRef}>
                   <Label>Salary payout cycle</Label>
                   <Input
                     value={formData.salaryPayoutCycle}
-                    onChange={(e) => setFormData((p) => ({ ...p, salaryPayoutCycle: e.target.value }))}
-                    placeholder="e.g. Monthly, Weekly"
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setFormData((p) => ({ ...p, salaryPayoutCycle: val, salaryCycleID: null }));
+                      runFetchSalaryCycle(val);
+                    }}
+                    onFocus={(e) => {
+                      const val = e.target.value;
+                      if (val.length >= MIN_CHARS) runFetchSalaryCycle(val);
+                    }}
+                    placeholder="Select salary cycle…"
+                    autoComplete="off"
                   />
+                  {salaryCycleList.length > 0 && (
+                    <div className="absolute z-10 bg-white border rounded w-full shadow max-h-48 overflow-y-auto">
+                      {salaryCycleLoading && (
+                        <div className="px-3 py-2 text-sm text-gray-500">Loading…</div>
+                      )}
+                      {salaryCycleList.map((c) => (
+                        <div
+                          key={c.id}
+                          className="px-3 py-2 hover:bg-gray-100 cursor-pointer"
+                          onMouseDown={(e) => e.preventDefault()}
+                          onClick={() => {
+                            setFormData((p) => ({
+                              ...p,
+                              salaryCycleID: c.id,
+                              salaryPayoutCycle: salaryCycleLabel(c),
+                            }));
+                            setSalaryCycleList([]);
+                          }}
+                        >
+                          {salaryCycleLabel(c)}
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
                 {/* Salary Pay Grade Type + conditional autocompletes */}
                 <div className="space-y-3 sm:col-span-2">

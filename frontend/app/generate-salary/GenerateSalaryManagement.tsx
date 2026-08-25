@@ -466,14 +466,19 @@ function countWeeklyOffOccurrences(
   return count;
 }
 
-async function getHolidayCount(branchId: number, start: Date, end: Date) {
+async function getHolidayCount(branchId: number, start: Date, end: Date, companyId?: number) {
   const holidays: any[] = await robustGet(API.publicHoliday);
-  const branchHolidays = holidays.filter((h: any) => h.branchesID === branchId);
   let set = new Set<string>();
-  branchHolidays.forEach((h: any) => {
-    const hs = new Date(h.startDate), he = new Date(h.endDate);
-    for (let d = new Date(hs); d <= he; d.setDate(d.getDate() + 1)) {
-      if (d >= start && d <= end) set.add(ymd2(d));
+  holidays.forEach((h: any) => {
+    if (companyId != null && !holidayMatchesCompanyBranch(h, companyId, branchId)) return;
+    if (companyId == null) {
+      if (h.branchesID != null && Number(h.branchesID) !== Number(branchId)) return;
+    }
+    const hs = isoDatePrefix(h.startDate);
+    const he = isoDatePrefix(h.endDate) || hs;
+    if (!hs) return;
+    for (let d = new Date(`${hs}T00:00:00`); d <= new Date(`${he}T00:00:00`); d.setDate(d.getDate() + 1)) {
+      if (d >= start && d <= end) set.add(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`);
     }
   });
   return set.size;
@@ -560,6 +565,55 @@ function getGrossFromEmp(emp: any, grade?: any): number {
   throw new Error("Gross salary not found (expected on employee or monthly pay grade).");
 }
 
+function resolvePayGradeBasic(gross: number, grade: any, emp?: any): number {
+  const configured = Number(emp?.basicSalary ?? emp?.monthlyPayGrade?.basicSalary ?? grade?.basicSalary ?? 0);
+  if (Number.isFinite(configured) && configured > 0) return Math.round(configured);
+  const pct = Number(emp?.percentageOfBasic ?? emp?.monthlyPayGrade?.percentageOfBasic ?? grade?.percentageOfBasic ?? 0);
+  if (Number.isFinite(pct) && pct > 0) return Math.round((gross * pct) / 100);
+  throw new Error("Basic not set");
+}
+
+function isoDatePrefix(value: any): string {
+  if (!value) return "";
+  if (typeof value === "string") {
+    const m = value.match(/^(\d{4}-\d{2}-\d{2})/);
+    if (m) return m[1];
+  }
+  const d = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toISOString().split("T")[0];
+}
+
+function holidayMatchesCompanyBranch(h: any, companyId: number, branchId: number): boolean {
+  if (Number(h.companyID) !== Number(companyId)) return false;
+  if (h.branchesID == null || String(h.branchesID) === "") return true;
+  return Number(h.branchesID) === Number(branchId);
+}
+
+async function fetchProcessAttLogsForEmployee(empId: number, dateFrom: string, dateTo: string): Promise<any[]> {
+  const all: any[] = [];
+  let offset = 0;
+  const limit = 1000;
+  for (;;) {
+    const params = new URLSearchParams({
+      dateFrom,
+      dateTo,
+      manageEmployeeIds: String(empId),
+      limit: String(limit),
+      offset: String(offset),
+      orderBy: "asc",
+    });
+    const raw: any = await robustGet(`/backend/process-att-logs?${params.toString()}`, { fresh: true });
+    const items: any[] = Array.isArray(raw) ? raw : (raw?.data ?? []);
+    all.push(...items);
+    const hasMore = Boolean(raw?.hasMore) || (!Array.isArray(raw) && items.length === limit);
+    if (!hasMore || items.length === 0) break;
+    offset += items.length;
+    if (offset > 200000) break;
+  }
+  return all;
+}
+
 async function getReimbursementAmount(employeeId: number, selectedMonthLabel: string): Promise<number> {
   try {
     const reimbursements: any[] = await robustGet(`${BACKEND_URL}/reimbursement`);
@@ -615,22 +669,18 @@ async function getReimbursementAmount(employeeId: number, selectedMonthLabel: st
    Attendance counter
    ======================= */
 
-async function fetchAllLogs(): Promise<any[]> {
+async function fetchAllLogs(empId: number, dateFrom: string, dateTo: string): Promise<any[]> {
   const all: any[] = [];
 
-  // Fetch from emp-attendance-logs (legacy table)
   try {
     const res: any[] = await robustGet(API.empAttendanceLogs);
-    all.push(...res);
+    all.push(...(Array.isArray(res) ? res : []));
   } catch (err) {
     console.error("Failed to fetch /emp-attendance-logs", err);
   }
 
-  // Also fetch from process_att_logs (device punch data) and normalize to same shape
   try {
-    const raw: any = await robustGet("/backend/process-att-logs");
-    const items: any[] = Array.isArray(raw) ? raw : (raw?.data ?? []);
-    // Normalize fields so calculateSalaryCounts can filter/use them identically
+    const items = await fetchProcessAttLogsForEmployee(empId, dateFrom, dateTo);
     const normalized = items.map((r: any) => ({
       ...r,
       employeeID: r.manage_employee_id ?? r.employeeID,
@@ -744,19 +794,20 @@ async function calculateSalaryCounts(
     const policies: any[] = await robustGet(API.attendancePolicy);
     const policy = policies.find((p: any) => p.id === effectiveAttPolicyID) ?? {};
     const workingType = (policy?.workingHoursType ?? "").toLowerCase();
-    const isFlexible = workingType.includes("flex");
     const checkinBeginBeforeMin = readNum(policy, "checkin_begin_before_min", "checkinBeginBeforeMin") ?? 0;
     const checkoutEndAfterMin = readNum(policy, "checkout_end_after_min", "checkoutEndAfterMin") ?? 0;
     const checkinGraceMin = readNum(policy, "checkin_grace_time_min", "checkinGraceTimeMin") ?? 0;
     const earlyCheckoutBeforeEndMin = readNum(policy, "early_checkout_before_end_min", "earlyCheckoutBeforeEndMin") ?? 0;
     const maxLateCheckInMin = readNum(policy, "max_late_check_in_time", "maxLateCheckInTime") ?? 0;
     const halfDayMin = toMinutesMaybeHours(readNum(policy, "min_work_hours_half_day_min", "minWorkHoursHalfDayMin") ?? 0);
-    const lateMarkCount = Number(policy?.lateMarkMarkCount ?? policy?.lateMarkCount ?? 0);
+    const lateMarkCount = Number(policy?.lateMarkMarkCount ?? 0);
     const lateMarkMarkAsAction = (policy?.lateMarkMarkAs ?? policy?.markAs ?? "Half Day").toString().toLowerCase();
+    const maxLateCheckinMarkAs = (policy?.maxLateCheckinMarkAs ?? "Absent").toString().toLowerCase();
 
     const workShifts: any[] = await robustGet(API.workShift);
     const empShift = workShifts.find((ws: any) => ws.id === effectiveWorkShiftID);
     if (!empShift) return null;
+    const isFlexible = workingType.includes("flex") || empShift?.isFlexible === true;
     const shiftDays: any[] = empShift.workShiftDay ?? [];
     const weeklyOffDays = new Set(shiftDays.filter((d: any) => d.weeklyOff).map((d: any) => d.weekDay));
 
@@ -810,11 +861,15 @@ async function calculateSalaryCounts(
     };
 
     const holidays: any[] = await robustGet(API.publicHoliday);
-    const branchHolidays = holidays.filter((h: any) => h.branchesID === branchId);
     const holidaySet = new Set<string>();
-    for (const h of branchHolidays) {
-      const hs = new Date(h.startDate), he = new Date(h.endDate);
-      for (let d = new Date(hs); d <= he; d.setDate(d.getDate() + 1)) if (d >= startDate && d <= endDate) holidaySet.add(ymd(d));
+    for (const h of holidays) {
+      if (!holidayMatchesCompanyBranch(h, companyId, branchId)) continue;
+      const hs = isoDatePrefix(h.startDate);
+      const he = isoDatePrefix(h.endDate) || hs;
+      if (!hs) continue;
+      for (let d = new Date(`${hs}T00:00:00`); d <= new Date(`${he}T00:00:00`); d.setDate(d.getDate() + 1)) {
+        if (d >= startDate && d <= endDate) holidaySet.add(ymd(d));
+      }
     }
 
     const leaves: any[] = await robustGet(API.leaveApplication);
@@ -838,7 +893,10 @@ async function calculateSalaryCounts(
     const regulariseMap = new Map<string, any>();
     for (const r of empRegs) regulariseMap.set(ymd(new Date(r.attendanceDate)), r);
 
-    const allLogs = await fetchAllLogs();
+    const logFrom = ymd(startDate);
+    const logToDate = new Date(endDate);
+    logToDate.setDate(logToDate.getDate() + 1);
+    const allLogs = await fetchAllLogs(Number(emp.id), logFrom, ymd(logToDate));
     const logs = allLogs.filter((l: any) => String(l.employeeID) === String(emp.id) || String(l.employeeID) === String(emp.employeeID))
       .map((l: any) => ({ ...l, t: parseCDataTs(l.punchTimeStamp) }))
       .filter((l: any) => l.t >= startDate && l.t <= endDate)
@@ -850,7 +908,8 @@ async function calculateSalaryCounts(
       logsByDate.get(key)!.push(l.t);
     }
 
-    let flex_fullDayPresent = 0, flex_halfDayPresent = 0, flex_absent = 0, lateMarksUsed = 0;
+    let flex_fullDayPresent = 0, flex_halfDayPresent = 0, flex_absent = 0;
+    const lateMarksByMonth = new Map<string, number>();
 
     // Loop through each day in the effective period
     for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
@@ -874,23 +933,7 @@ async function calculateSalaryCounts(
       );
       const hasRosterWorkOverride = rosterDayEntry?.dayType === "WORK" && rosterDayEntry?.workShiftID != null;
 
-      // Check if it's a weekly off day.
-      // Roster WEEKLY_OFF overrides default; roster WORK override skips the default weekly-off check.
-      if (rosterDayEntry?.dayType === "WEEKLY_OFF" || (!hasRosterWorkOverride && weeklyOffDays.has(todayWeekDay))) {
-        // ✅ Weekly off days are ALWAYS PAID (regardless of joining date)
-        // The startDate is already adjusted to joining date, so any weekly off
-        // within the loop range is after/before joining date
-        debug.weeklyOff = true;
-        flex_fullDayPresent++; // Weekly off counts as a paid day!
-        debug.final = "WEEKLY_OFF → PAID (FULL DAY)";
-        if (DEBUG_LOP) console.table([debug]);
-        continue;
-      }
-
-      const frame = getShiftFrame(d);
-      if (!frame) continue;
-
-      // Check if it's a holiday
+      // Holiday before week-off / shift-frame skip (working Saturday PH must be paid).
       if (holidaySet.has(key)) {
         debug.holiday = true;
         debug.final = "HOLIDAY → PAID";
@@ -898,6 +941,19 @@ async function calculateSalaryCounts(
         if (DEBUG_LOP) console.table([debug]);
         continue;
       }
+
+      // Check if it's a weekly off day.
+      // Roster WEEKLY_OFF overrides default; roster WORK override skips the default weekly-off check.
+      if (rosterDayEntry?.dayType === "WEEKLY_OFF" || (!hasRosterWorkOverride && weeklyOffDays.has(todayWeekDay))) {
+        debug.weeklyOff = true;
+        flex_fullDayPresent++;
+        debug.final = "WEEKLY_OFF → PAID (FULL DAY)";
+        if (DEBUG_LOP) console.table([debug]);
+        continue;
+      }
+
+      const frame = getShiftFrame(d);
+      if (!frame) continue;
 
       // Check for regularised days — any approved regularization = full paid day (no LOP)
       if (regulariseMap.has(key)) {
@@ -954,11 +1010,9 @@ async function calculateSalaryCounts(
       let dayStatus: "full" | "half" | "absent" = "absent";
 
       if (isFlexible) {
-        // Flexible working hours
         if (dayLogs.length < 2) {
           dayStatus = "absent";
         } else {
-          dayLogs.sort((a, b) => a.getTime() - b.getTime());
           const totalWorkedMinutes = Math.round((dayLogs[dayLogs.length - 1].getTime() - dayLogs[0].getTime()) / 60000);
           if (totalWorkedMinutes < halfDayMin) {
             dayStatus = "absent";
@@ -968,37 +1022,36 @@ async function calculateSalaryCounts(
             dayStatus = "half";
           }
         }
-      } else {
-        // Fixed working hours
-        if (dayLogs.length >= 2) {
-          dayLogs.sort((a, b) => a.getTime() - b.getTime());
-          const totalWorkedMinutes = Math.round((dayLogs[dayLogs.length - 1].getTime() - dayLogs[0].getTime()) / 60000);
-          const firstPunch = dayLogs[0];
-          const lastPunch = dayLogs[dayLogs.length - 1];
-          const isLateMark = firstPunch > frame.graceEnd && firstPunch <= frame.lateEnd;
-          const isVeryLate = firstPunch > frame.lateEnd;
-          const isEarlyCheckout = lastPunch < frame.earlyOutStart && lastPunch >= frame.shiftStart;
+      } else if (dayLogs.length >= 2) {
+        const totalWorkedMinutes = Math.round((dayLogs[dayLogs.length - 1].getTime() - dayLogs[0].getTime()) / 60000);
+        const firstPunch = dayLogs[0];
+        const lastPunch = dayLogs[dayLogs.length - 1];
+        const isLateMark = firstPunch > frame.graceEnd && firstPunch <= frame.lateEnd;
+        const isVeryLate = firstPunch > frame.lateEnd;
+        const isEarlyCheckout = lastPunch < frame.earlyOutStart;
 
-          if (totalWorkedMinutes < halfDayMin) dayStatus = "absent";
-          else if (isEarlyCheckout) dayStatus = "half";
-          else if (isVeryLate) dayStatus = totalWorkedMinutes >= halfDayMin ? "half" : "absent";
-          else {
-            let todayViolations = 0;
-            if (isLateMark) todayViolations++;
-            if (isEarlyCheckout) todayViolations++;
-            if (todayViolations > 0 && lateMarkCount > 0) {
-              if (lateMarksUsed + todayViolations >= lateMarkCount) {
-                dayStatus = lateMarkMarkAsAction.includes("absent") ? "absent" : "half";
-                lateMarksUsed = 0;
-              } else {
-                lateMarksUsed += todayViolations;
-                dayStatus = "full";
-              }
-            } else dayStatus = "full";
+        if (totalWorkedMinutes < halfDayMin) {
+          dayStatus = "absent";
+        } else if (isVeryLate) {
+          dayStatus = maxLateCheckinMarkAs.includes("absent") ? "absent" : "half";
+        } else if (isEarlyCheckout) {
+          dayStatus = "half";
+        } else if (isLateMark && lateMarkCount > 0) {
+          const monthKey = key.slice(0, 7);
+          const used = lateMarksByMonth.get(monthKey) || 0;
+          const nextCount = used + 1;
+          if (nextCount >= lateMarkCount) {
+            dayStatus = lateMarkMarkAsAction.includes("absent") ? "absent" : "half";
+            lateMarksByMonth.set(monthKey, 0);
+          } else {
+            lateMarksByMonth.set(monthKey, nextCount);
+            dayStatus = "full";
           }
         } else {
-          dayStatus = "absent";
+          dayStatus = "full";
         }
+      } else {
+        dayStatus = "absent";
       }
 
       debug.logs = (logsByDate.get(key) || []).length;
@@ -1024,7 +1077,7 @@ async function calculateSalaryCounts(
       flex_fullDayPresent,
       flex_halfDayPresent,
       flex_absent,
-      lateMarksUsed,
+      lateMarksByMonth,
       lateMarkCount
     };
   } catch (err) {
@@ -1043,6 +1096,9 @@ export type SalarySlipComputed = {
   end: Date
   cycleDays: number
   paidUnits: number
+  joiningCalendarDays: number
+  absentCount: number
+  halfDayCount: number
   lopDays: number
   nonLoPLeaveDays: number
   weeklyOffDays: number
@@ -1075,6 +1131,9 @@ export function downloadSalarySlipPDF(payload: {
   end: Date;
   cycleDays: number;
   paidUnits: number;
+  joiningCalendarDays: number;
+  absentCount: number;
+  halfDayCount: number;
   lopDays: number;
   nonLoPLeaveDays: number;
   weeklyOffDays: number;
@@ -1158,7 +1217,9 @@ export function downloadSalarySlipPDF(payload: {
     const dept = payload.employee.departments?.departmentName || "N/A";
     const desg = payload.employee.designations?.designation || "N/A";
 
+    const joiningDays = payload.joiningCalendarDays ?? payload.cycleDays;
     const actualPaidDays = payload.paidUnits;
+    const lopBreakdown = `${payload.absentCount} Absent + ${payload.halfDayCount} Half Day × 0.5 = ${payload.lopDays.toFixed(2)}`;
 
     autoTable(doc, {
       startY: 47,
@@ -1170,6 +1231,7 @@ export function downloadSalarySlipPDF(payload: {
         ["Department", dept, "Designation", desg],
         ["Joining Date", payload.employee.joiningDate || "-", "Working Days", payload.totalWorkingDaysInCycle],
         ["Paid Days", actualPaidDays.toFixed(2), "LOP Days", payload.lopDays.toFixed(2)],
+        ["LOP Breakdown", lopBreakdown, "Joining Days", String(joiningDays)],
         ["Monthly Gross", `₹ ${payload.gross.toLocaleString()}`, "Per-Day Rate", `₹ ${payload.perDayGross.toFixed(2)}`],
       ],
       columnStyles: {
@@ -1193,8 +1255,9 @@ export function downloadSalarySlipPDF(payload: {
         ["Calculation Summary:", ""],
         ["Monthly Gross:", `₹ ${payload.gross.toLocaleString()}`],
         ["Working Days in Month:", `${payload.totalWorkingDaysInCycle}`],
-        ["Paid Days:", `${payload.paidUnits.toFixed(2)}`],
-        ["Pro-rate Ratio:", `${payload.paidUnits.toFixed(2)}/${payload.totalWorkingDaysInCycle} = ${((payload.paidUnits / payload.totalWorkingDaysInCycle) * 100).toFixed(1)}%`],
+        ["Paid Days:", `${payload.paidUnits.toFixed(2)} (calendar ${joiningDays} − LOP ${payload.lopDays.toFixed(2)})`],
+        ["LOP Breakdown:", lopBreakdown],
+        ["Pro-rate Ratio (joining):", `${joiningDays}/${payload.totalWorkingDaysInCycle} = ${((joiningDays / payload.totalWorkingDaysInCycle) * 100).toFixed(1)}%`],
         ["Per-Day Rate:", `₹ ${payload.gross.toLocaleString()} ÷ ${payload.totalWorkingDaysInCycle} = ₹ ${payload.perDayGross.toFixed(2)}`],
         ["LOP Amount:", `₹ ${payload.perDayGross.toFixed(2)} × ${payload.lopDays.toFixed(2)} = ₹ ${payload.lopAmount}`],
       ],
@@ -1205,7 +1268,7 @@ export function downloadSalarySlipPDF(payload: {
     y = (doc as any).lastAutoTable.finalY + 5;
 
     const earningsRows = [
-      ["Basic Pay (50%)", `₹ ${payload.basic.toFixed(2)}`],
+      ["Basic Pay", `₹ ${payload.basic.toFixed(2)}`],
       ...payload.earnings.map((e: any) => [e.name, `₹ ${e.amount.toFixed(2)}`]),
       ["Total Earnings", `₹ ${payload.earningsTotal.toFixed(2)}`],
     ];
@@ -1284,11 +1347,9 @@ export function downloadSalarySlipPDF(payload: {
     doc.setTextColor(100, 100, 100);
 
     // Calculation breakdown
-    doc.text(`Calculation: Monthly Gross ₹${payload.gross.toLocaleString()} × ${payload.paidUnits.toFixed(2)}/${payload.totalWorkingDaysInCycle} = Pro-rated Amount`, 15, y);
+    doc.text(`Paid days: ${joiningDays} − LOP ${payload.lopDays.toFixed(2)} = ${payload.paidUnits.toFixed(2)}`, 15, y);
     y += 4;
-    doc.text(`Per-Day Rate: ₹${payload.gross.toLocaleString()} ÷ ${payload.totalWorkingDaysInCycle} = ₹${payload.perDayGross.toFixed(2)}`, 15, y);
-    y += 4;
-    doc.text(`LOP: ₹${payload.perDayGross.toFixed(2)} × ${payload.lopDays.toFixed(2)} = ₹${payload.lopAmount}`, 15, y);
+    doc.text(`LOP: ${lopBreakdown}; ₹${payload.perDayGross.toFixed(2)} × ${payload.lopDays.toFixed(2)} = ₹${payload.lopAmount}`, 15, y);
 
     y += 15;
     doc.setDrawColor(0);
@@ -1379,7 +1440,7 @@ export async function computeSalarySlipForRow(
     countWeeklyOffOccurrences(shiftDays, effectiveStart, effectiveEnd)
 
   const holidaysEffective =
-    await getHolidayCount(branchId, effectiveStart, effectiveEnd)
+    await getHolidayCount(branchId, effectiveStart, effectiveEnd, companyId)
 
   const counts = await calculateSalaryCounts(
     employeeId,
@@ -1397,8 +1458,9 @@ export async function computeSalarySlipForRow(
      ✅ PAID DAYS (CALENDAR BASED)
   =============================== */
 
-  const totalPaidDays = totalPaidCalendarDays
+  const joiningCalendarDays = totalPaidCalendarDays
   const totalLopEquivalentDays = absentDays + halfDays * 0.5
+  const totalPaidDays = Math.max(0, joiningCalendarDays - totalLopEquivalentDays)
 
   /* ===============================
      SALARY BASE
@@ -1418,13 +1480,13 @@ export async function computeSalarySlipForRow(
     monthlyGross / totalCalendarDaysInMonth
 
   const proRateRatio =
-    totalPaidDays / totalCalendarDaysInMonth
+    joiningCalendarDays / totalCalendarDaysInMonth
 
   /* ===============================
      FULL MONTH COMPONENTS
   =============================== */
 
-  const fullMonthBasic = Math.round(monthlyGross * 0.50)
+  const fullMonthBasic = resolvePayGradeBasic(monthlyGross, grade, emp)
 
   const fullMonthAllowances: { name: string, amount: number }[] = []
   const allowanceList = grade?.monthlyPayGradeAllowanceList || []
@@ -1542,8 +1604,11 @@ export async function computeSalarySlipForRow(
     monthLabel,
     start: effectiveStart,
     end: effectiveEnd,
-    cycleDays: totalPaidCalendarDays,
+    cycleDays: joiningCalendarDays,
     paidUnits: Number(totalPaidDays.toFixed(2)),
+    joiningCalendarDays,
+    absentCount: absentDays,
+    halfDayCount: halfDays,
     lopDays: Number(totalLopEquivalentDays.toFixed(2)),
     nonLoPLeaveDays: 0,
     weeklyOffDays: weeklyOffDaysEffective,
@@ -1558,7 +1623,7 @@ export async function computeSalarySlipForRow(
     deductionsTotal: Math.round(totalDeductions),
     netPay,
     perDayGross: perDayGrossForLop,
-    perDayBasic: perDayGrossForLop * 0.50,
+    perDayBasic: perDayGrossForLop * (fullMonthBasic / (monthlyGross || 1)),
     proRatedGross,
     totalWorkingDaysInCycle: totalCalendarDaysInMonth
   }
@@ -2368,10 +2433,12 @@ export function GenerateSalaryManagement() {
   }, [items]);
 
   function SalarySlipPreview({ data }: { data: SalarySlipComputed }) {
+    const joiningDays = data.joiningCalendarDays ?? data.cycleDays
     const actualPaidDays = data.paidUnits
     const fullMonthDays = data.totalWorkingDaysInCycle
     const perDayRateForLop = data.gross / fullMonthDays
-    const proRateRatio = actualPaidDays / fullMonthDays
+    const proRateRatio = joiningDays / fullMonthDays
+    const lopBreakdown = `${data.absentCount} Absent + ${data.halfDayCount} Half Day × 0.5 = ${data.lopDays.toFixed(2)}`
 
     return (
       <div className="space-y-4 text-sm">
@@ -2412,7 +2479,7 @@ export function GenerateSalaryManagement() {
             <tr>
               <td className="border p-2 font-medium">Pro-rate Ratio</td>
               <td className="border p-2">
-                {actualPaidDays.toFixed(2)} / {fullMonthDays} = {(proRateRatio * 100).toFixed(1)}%
+                {joiningDays} / {fullMonthDays} = {(proRateRatio * 100).toFixed(1)}%
               </td>
               <td className="border p-2 font-medium">Monthly Gross</td>
               <td className="border p-2">₹ {data.gross.toLocaleString()}</td>
@@ -2443,10 +2510,13 @@ export function GenerateSalaryManagement() {
               </p>
               <p className="font-medium mt-1">LOP Deduction:</p>
               <p className="text-red-600">
-                Full Day LOP: ₹ {perDayRateForLop.toFixed(2)} × {data.lopDays.toFixed(2)} days = ₹ {data.lopAmount}
+                {lopBreakdown}
               </p>
-              <p className="text-red-600 text-sm">
-                (Half days count as 0.5 day × per-day rate)
+              <p className="text-red-600">
+                Paid days = {joiningDays} − {data.lopDays.toFixed(2)} = {actualPaidDays.toFixed(2)}
+              </p>
+              <p className="text-red-600">
+                LOP amount: ₹ {perDayRateForLop.toFixed(2)} × {data.lopDays.toFixed(2)} = ₹ {data.lopAmount}
               </p>
             </div>
           </div>
@@ -2463,7 +2533,7 @@ export function GenerateSalaryManagement() {
             </thead>
             <tbody>
               <tr>
-                <td className="border p-2">Basic (50% of pro-rated gross)</td>
+                <td className="border p-2">Basic</td>
                 <td className="border p-2 text-right">₹ {data.basic}</td>
               </tr>
               {data.earnings.map((e, i) => (
@@ -2537,7 +2607,9 @@ export function GenerateSalaryManagement() {
         <NoticeBanner variant="info" title="Calculation verification">
           <div className="text-xs space-y-1 text-muted-foreground">
             <p>Full Month Gross: <span className="font-medium text-foreground">₹ {data.gross.toLocaleString()}</span></p>
-            <p>Paid days ratio: <span className="font-medium text-foreground">{actualPaidDays.toFixed(2)} / {fullMonthDays} = {(proRateRatio * 100).toFixed(1)}%</span></p>
+            <p>Paid days: <span className="font-medium text-foreground">{joiningDays} − LOP {data.lopDays.toFixed(2)} = {actualPaidDays.toFixed(2)}</span></p>
+            <p>LOP breakdown: <span className="font-medium text-foreground">{lopBreakdown}</span></p>
+            <p>Joining/exit ratio: <span className="font-medium text-foreground">{joiningDays} / {fullMonthDays} = {(proRateRatio * 100).toFixed(1)}%</span></p>
             <p>All salary components pro-rated by: <span className="font-medium text-foreground">{(proRateRatio * 100).toFixed(1)}%</span></p>
             <p>Per-day rate for LOP: <span className="font-medium text-foreground">₹ {data.gross.toLocaleString()} ÷ {fullMonthDays} = ₹ {perDayRateForLop.toFixed(2)}</span></p>
             <p>LOP deduction: <span className="font-medium text-foreground">₹ {perDayRateForLop.toFixed(2)} × {data.lopDays.toFixed(2)} = ₹ {data.lopAmount}</span></p>

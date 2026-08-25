@@ -1570,7 +1570,7 @@ export class DashboardOverviewService {
             0,
             0,
           );
-          const diff = this.daysFromToday(today, eventAt);
+        const diff = this.daysFromToday(today, eventAt);
           if (diff < -60 || diff > 400) continue;
           events.push({
             id: `bday-${emp.id}-y${yearOffset}`,
@@ -1594,7 +1594,7 @@ export class DashboardOverviewService {
             0,
             0,
           );
-          const diff = this.daysFromToday(today, eventAt);
+        const diff = this.daysFromToday(today, eventAt);
           if (diff < -60 || diff > 400) continue;
           const joinYear = Number(String(emp.joiningDate).slice(0, 4)) || today.getFullYear();
           const years = today.getFullYear() + yearOffset - joinYear;
@@ -1660,20 +1660,20 @@ export class DashboardOverviewService {
       const diff = this.daysFromToday(today, eventAt);
       // Broad window so dashboard calendar can show public holidays for the month
       if (diff < -60 || diff > 400) continue;
-      const holidayName = h.manageHoliday?.holidayName?.trim() || 'Public holiday';
+        const holidayName = h.manageHoliday?.holidayName?.trim() || 'Public holiday';
       const title =
         diff === 0
           ? `${holidayName} today`
           : diff === 1
             ? `${holidayName} tomorrow`
             : holidayName;
-      items.push({
-        id: `holiday-${h.id}`,
-        kind: 'holiday',
+        items.push({
+          id: `holiday-${h.id}`,
+          kind: 'holiday',
         title,
-        subtitle: companyName,
-        date: dateKeyLocal(eventAt),
-      });
+          subtitle: companyName,
+          date: dateKeyLocal(eventAt),
+        });
     }
 
     items.sort((a, b) => a.date.localeCompare(b.date));
