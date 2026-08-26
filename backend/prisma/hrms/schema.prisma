@@ -192,6 +192,9 @@ model Company {
   linNo                          String?                    @db.VarChar
   gstNo                          String?                    @db.VarChar
   gstCertUrl                     String?                    @db.VarChar
+  website                        String?                    @db.VarChar
+  gstRegistrationType            String?                    @db.VarChar
+  businessTradeName              String?                    @db.VarChar
   shopRegNo                      String?                    @db.VarChar
   shopRegCertHistory             Json?
   financialYearStart             String?                    @db.VarChar
@@ -829,6 +832,7 @@ model ManageEmployee {
   isDeleted                          Boolean                             @default(false)
   isCompanyOwner                     Boolean                             @default(false)
   ownerTitle                         String?                             @db.VarChar
+  salutation                         String?                             @db.VarChar
   lifecycleStatus                    EmployeeLifecycleStatus             @default(ACTIVE)
   onboardingApprovalStatus           ApprovalRequestStatus               @default(APPROVED)
   maxHoursPerDay                     String?                             @db.VarChar
@@ -1037,6 +1041,7 @@ model EmployeeCredentials {
   username           String    @unique @db.VarChar
   password           String    @db.VarChar
   mustChangePassword Boolean   @default(true)
+  requireLoginOtp    Boolean   @default(false)
   passwordChangedAt  DateTime?
 
   serviceProviderID Int?
@@ -1622,6 +1627,7 @@ model User {
   lastName  String?
   contactNo String?
   email     String?
+  requireLoginOtp Boolean @default(false)
 
   serviceProviderID Int?
   companyID         Int?
@@ -2987,4 +2993,43 @@ enum ApprovalActionType {
   STEP_COMPLETED
   REQUEST_COMPLETED
   CANCELLED
+}
+
+enum AuthOtpPurpose {
+  FORGOT_PASSWORD
+  SUPERADMIN_LOGIN
+}
+
+model AuthOtp {
+  id           Int           @id @default(autoincrement())
+  purpose      AuthOtpPurpose
+  identifier   String        @db.VarChar
+  codeHash     String        @db.VarChar
+  pendingToken String        @unique @db.VarChar
+  payload      String?       @db.Text
+  expiresAt    DateTime
+  consumedAt   DateTime?
+  createdAt    DateTime      @default(now())
+
+  @@index([purpose, identifier])
+  @@index([expiresAt])
+}
+
+enum CompanyPolicyType {
+  TERMS_OF_USE
+  PRIVACY_POLICY
+  SLA
+}
+
+model CompanyPolicy {
+  id            Int               @id @default(autoincrement())
+  type          CompanyPolicyType
+  policyName    String            @db.VarChar
+  versionName   String            @db.VarChar
+  effectiveFrom DateTime
+  bodyHtml      String            @db.Text
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+
+  @@index([type, effectiveFrom])
 }

@@ -20,7 +20,6 @@ import type { TodayStatus } from "../hooks/useEmpPunch";
 import { taskFetch } from "../utils/taskApi";
 import { syncAppBadge } from "@/lib/appBadge";
 import { TASK_MANAGEMENT_ENABLED } from "../config/featureFlags";
-import { Eye, EyeOff } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle, DialogHeader } from "../components/ui/dialog";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
@@ -254,9 +253,6 @@ function EmpDashboardPageInner() {
     newPassword: "",
     confirmPassword: "",
   });
-  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
-  const [showNewPassword, setShowNewPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   useEffect(() => {
     clearLegacyEmpPhoto();
@@ -591,14 +587,19 @@ function EmpDashboardPageInner() {
       <Dialog 
         open={forcePasswordModalOpen} 
         onOpenChange={(open) => {
-          // Prevent closing the modal if mustChangePassword is true
           if (!open && mustChangePassword) {
             return;
           }
           setForcePasswordModalOpen(open);
         }}
       >
-        <DialogContent className="max-w-sm">
+        <DialogContent
+          hideClose
+          className="max-w-sm"
+          onPointerDownOutside={(e) => e.preventDefault()}
+          onInteractOutside={(e) => e.preventDefault()}
+          onEscapeKeyDown={(e) => e.preventDefault()}
+        >
           <DialogHeader>
             <DialogTitle className="text-xl font-bold">Change Password Required</DialogTitle>
           </DialogHeader>
@@ -609,72 +610,36 @@ function EmpDashboardPageInner() {
             </p>
 
             <div className="space-y-2">
-              <Label className="text-sm font-medium">Current Password</Label>
-              <div className="relative">
-                <Input
-                  type={showCurrentPassword ? "text" : "password"}
-                  placeholder="Enter current password"
-                  value={passwordForm.currentPassword}
-                  onChange={(e) => setPasswordForm((p) => ({ ...p, currentPassword: e.target.value }))}
-                  autoComplete="current-password"
-                  className="pr-10"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowCurrentPassword((v) => !v)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                  tabIndex={-1}
-                  aria-label={showCurrentPassword ? "Hide current password" : "Show current password"}
-                >
-                  {showCurrentPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
-              </div>
+              <Label className="text-sm font-medium">Old Password</Label>
+              <Input
+                type="password"
+                placeholder="Enter old password"
+                value={passwordForm.currentPassword}
+                onChange={(e) => setPasswordForm((p) => ({ ...p, currentPassword: e.target.value }))}
+                autoComplete="current-password"
+              />
             </div>
 
             <div className="space-y-2">
               <Label className="text-sm font-medium">New Password</Label>
-              <div className="relative">
-                <Input
-                  type={showNewPassword ? "text" : "password"}
-                  placeholder="Enter new password"
-                  value={passwordForm.newPassword}
-                  onChange={(e) => setPasswordForm((p) => ({ ...p, newPassword: e.target.value }))}
-                  autoComplete="new-password"
-                  className="pr-10"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowNewPassword((v) => !v)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                  tabIndex={-1}
-                  aria-label={showNewPassword ? "Hide new password" : "Show new password"}
-                >
-                  {showNewPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
-              </div>
+              <Input
+                type="password"
+                placeholder="Enter new password"
+                value={passwordForm.newPassword}
+                onChange={(e) => setPasswordForm((p) => ({ ...p, newPassword: e.target.value }))}
+                autoComplete="new-password"
+              />
             </div>
 
             <div className="space-y-2">
-              <Label className="text-sm font-medium">Confirm New Password</Label>
-              <div className="relative">
-                <Input
-                  type={showConfirmPassword ? "text" : "password"}
-                  placeholder="Confirm new password"
-                  value={passwordForm.confirmPassword}
-                  onChange={(e) => setPasswordForm((p) => ({ ...p, confirmPassword: e.target.value }))}
-                  autoComplete="new-password"
-                  className="pr-10"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowConfirmPassword((v) => !v)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                  tabIndex={-1}
-                  aria-label={showConfirmPassword ? "Hide confirm password" : "Show confirm password"}
-                >
-                  {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
-              </div>
+              <Label className="text-sm font-medium">Confirm Password</Label>
+              <Input
+                type="password"
+                placeholder="Confirm new password"
+                value={passwordForm.confirmPassword}
+                onChange={(e) => setPasswordForm((p) => ({ ...p, confirmPassword: e.target.value }))}
+                autoComplete="new-password"
+              />
             </div>
 
             <Button

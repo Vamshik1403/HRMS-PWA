@@ -17,6 +17,7 @@ import {
   UserCog,
   Database,
   CreditCard,
+  FileText,
   type LucideIcon,
   Building,
 } from "lucide-react";
@@ -252,9 +253,18 @@ export const HRMS_NAVIGATION: NavGroup[] = [
         icon: ClipboardList,
         show: (c) => c.isSuperAdmin || c.isServiceProvider,
       },
-
-
-
+    ],
+  },
+  {
+    label: "Company Policy Management",
+    show: (c) => c.isSuperAdmin,
+    items: [
+      {
+        label: "Policy Management",
+        href: "/policy-management",
+        icon: FileText,
+        show: always,
+      },
     ],
   },
   {

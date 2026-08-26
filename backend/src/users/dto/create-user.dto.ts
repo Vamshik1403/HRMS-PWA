@@ -7,6 +7,7 @@ import {
   IsBoolean,
   IsArray,
   ArrayUnique,
+  IsEmail,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
@@ -47,7 +48,7 @@ export class CreateUserDto {
   contactNo: string;
 
   @IsOptional()
-  @IsString()
+  @IsEmail()
   email: string;
 
   @IsOptional()

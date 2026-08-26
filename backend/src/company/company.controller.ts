@@ -14,7 +14,7 @@ import { CompanyService } from './company.service';
 import { CreateCompanyDto } from './dto/create-company.dto';
 import { UpdateCompanyDto } from './dto/update-company.dto';
 import { UpdateCompanyModulesDto } from './dto/update-company-modules.dto';
-import { CreateCompanyOwnerDto } from './dto/create-company-owner.dto';
+import { CreateCompanyOwnerDto, SaveOwnerPermissionsDto } from './dto/create-company-owner.dto';
 
 @Controller('company')
 export class CompanyController {
@@ -81,6 +81,23 @@ export class CompanyController {
     @Body() dto: CreateCompanyOwnerDto,
   ) {
     return this.companyService.updateOwner(id, ownerId, dto);
+  }
+
+  @Get(':id/owner/:ownerId/permissions')
+  getOwnerPermissions(
+    @Param('id', ParseIntPipe) id: number,
+    @Param('ownerId', ParseIntPipe) ownerId: number,
+  ) {
+    return this.companyService.getOwnerPermissions(id, ownerId);
+  }
+
+  @Put(':id/owner/:ownerId/permissions')
+  saveOwnerPermissions(
+    @Param('id', ParseIntPipe) id: number,
+    @Param('ownerId', ParseIntPipe) ownerId: number,
+    @Body() dto: SaveOwnerPermissionsDto,
+  ) {
+    return this.companyService.saveOwnerPermissions(id, ownerId, dto.permissions);
   }
 
   @Delete(':id/owner/:ownerId')

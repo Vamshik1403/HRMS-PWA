@@ -82,6 +82,7 @@ import { CompanyModulesModule } from './company-modules/company-modules.module';
 import { ApprovalWorkflowModule } from './approval-workflow/approval-workflow.module';
 import { ApprovalRequestModule } from './approval-request/approval-request.module';
 import { EmployeePermissionsModule } from './employee-permissions/employee-permissions.module';
+import { CompanyPolicyModule } from './company-policy/company-policy.module';
 
 
 @Module({
@@ -169,6 +170,7 @@ import { EmployeePermissionsModule } from './employee-permissions/employee-permi
     ApprovalWorkflowModule,
     ApprovalRequestModule,
     EmployeePermissionsModule,
+    CompanyPolicyModule,
   ],
   providers: [AuthService],
   controllers: [AuthController],

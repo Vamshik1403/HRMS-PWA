@@ -29,6 +29,12 @@ function isCompanyOperatorInEmpPortal(): boolean {
 function shouldUseAdminShell(pathname: string | null): boolean {
   if (!pathname || pathname === "/") return false;
   if (pathname === "/login" || pathname.startsWith("/login/")) return false;
+  if (pathname === "/forgot-password" || pathname.startsWith("/forgot-password/")) return false;
+  if (
+    pathname === "/terms-of-use" ||
+    pathname === "/privacy-policy" ||
+    pathname === "/sla"
+  ) return false;
   if (PWA_ROUTE.test(pathname)) return false;
   if (isCompanyOperatorInEmpPortal()) return false;
   return true;

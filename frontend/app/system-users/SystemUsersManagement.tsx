@@ -240,6 +240,14 @@ const filteredCompanies = useMemo(() => {
     e.preventDefault();
     if (!form.username) { toast.error("Username is required"); return; }
     if (!editingRow && !form.password) { toast.error("Password is required"); return; }
+    if (!form.email.trim()) {
+      toast.error("Email is required");
+      return;
+    }
+    if (!form.contactNo.trim()) {
+      toast.error("Contact number is required");
+      return;
+    }
 if ((form.role === "COMPANY_OWNER") && form.companyIDs.length === 0 && !form.companyID) {
         toast.error("Select a company for the Company Owner");
       return;
@@ -629,21 +637,23 @@ if (isAdmin && user?.companyID) {
   </div>
 
   <div className="space-y-2">
-    <Label>Contact No</Label>
+    <Label>Contact No *</Label>
     <Input
       value={form.contactNo}
       onChange={(e) => setForm((p) => ({ ...p, contactNo: e.target.value }))}
       placeholder="Contact number"
+      required
     />
   </div>
 
   <div className="space-y-2">
-    <Label>Email</Label>
+    <Label>Email *</Label>
     <Input
       type="email"
       value={form.email}
       onChange={(e) => setForm((p) => ({ ...p, email: e.target.value }))}
       placeholder="Email address"
+      required
     />
   </div>
 </div>

@@ -88,9 +88,23 @@ export class ManageEmployeeService {
     return bcrypt.compare(plainPassword, hashedPassword);
   }
 
-  private generateRandomPassword(length = 10): string {
-    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789@#$%';
-    return Array.from({ length }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+  private normalizeEmail(value?: string | null): string {
+    return String(value || '').trim().toLowerCase();
+  }
+
+  private digitsOnly(value?: string | null): string {
+    return String(value || '').replace(/\D/g, '');
+  }
+
+  private employeeLoginUsername(
+    personalEmail?: string | null,
+    businessEmail?: string | null,
+  ): string {
+    return this.normalizeEmail(personalEmail) || this.normalizeEmail(businessEmail);
+  }
+
+  private employeeInitialPassword(personalPhoneNo?: string | null): string {
+    return this.digitsOnly(personalPhoneNo) || String(personalPhoneNo || '').trim();
   }
 
   /**
@@ -471,19 +485,41 @@ export class ManageEmployeeService {
 
       let plainInitialPassword: string | null = null;
 
-      if (scalars.personalPhoneNo) {
+      const loginUsername = this.employeeLoginUsername(
+        scalars.personalEmail,
+        scalars.businessEmail,
+      );
+      const initialPassword = this.employeeInitialPassword(scalars.personalPhoneNo);
+
+      if ((scalars.personalPhoneNo || scalars.personalEmail || scalars.businessEmail) &&
+          (!loginUsername || !initialPassword)) {
+        throw new BadRequestException(
+          'Employee email and mobile number are required to create login credentials',
+        );
+      }
+
+      if (loginUsername && initialPassword) {
         const existingCred = await tx.employeeCredentials.findUnique({
           where: { employeeID: employee.id },
         });
 
         if (!existingCred) {
-          plainInitialPassword = this.generateRandomPassword();
+          const taken = await tx.employeeCredentials.findFirst({
+            where: { username: loginUsername },
+          });
+          if (taken) {
+            throw new BadRequestException(
+              'An employee login already exists for this email address',
+            );
+          }
+
+          plainInitialPassword = initialPassword;
           const hashedPassword = await this.hashPassword(plainInitialPassword);
 
           await tx.employeeCredentials.create({
             data: {
               employeeID: employee.id,
-              username: scalars.personalPhoneNo,
+              username: loginUsername,
               password: hashedPassword,
               mustChangePassword: true,
 
@@ -904,6 +940,9 @@ export class ManageEmployeeService {
           onboardingApprovalStatus: true,
           lifecycleStatus: true,
           isDeleted: true,
+          personalPhoneNo: true,
+          personalEmail: true,
+          businessEmail: true,
         },
       });
 
@@ -933,12 +972,22 @@ export class ManageEmployeeService {
       throw new Error('Employee credentials not found');
     }
 
-    const plainPassword = this.generateRandomPassword();
+    const plainPassword = this.employeeInitialPassword(employee.personalPhoneNo);
+    if (!plainPassword) {
+      throw new BadRequestException(
+        'Employee mobile number is required to reset password',
+      );
+    }
     const hashedPassword = await this.hashPassword(plainPassword);
+    const loginUsername = this.employeeLoginUsername(
+      employee.personalEmail,
+      employee.businessEmail,
+    );
 
     const updated = await this.prisma.employeeCredentials.update({
       where: { employeeID },
       data: {
+        ...(loginUsername ? { username: loginUsername } : {}),
         password: hashedPassword,
         mustChangePassword: true,
         passwordChangedAt: null,
@@ -1707,10 +1756,28 @@ export class ManageEmployeeService {
           });
         }
 
-        // Update employee credentials username if personalPhoneNo changed
-        if (scalars.personalPhoneNo || serviceProviderID !== undefined || companyID !== undefined || branchesID !== undefined) {
+        // Keep employee login username in sync with email (not mobile)
+        const nextLoginUsername = this.employeeLoginUsername(
+          scalars.personalEmail !== undefined
+            ? scalars.personalEmail
+            : oldData?.personalEmail,
+          scalars.businessEmail !== undefined
+            ? scalars.businessEmail
+            : oldData?.businessEmail,
+        );
+        const nextPhone =
+          scalars.personalPhoneNo !== undefined
+            ? scalars.personalPhoneNo
+            : oldData?.personalPhoneNo;
+        const nextInitialPassword = this.employeeInitialPassword(nextPhone);
 
-
+        if (
+          nextLoginUsername ||
+          scalars.personalPhoneNo ||
+          serviceProviderID !== undefined ||
+          companyID !== undefined ||
+          branchesID !== undefined
+        ) {
           const currentCredentials = await tx.employeeCredentials.findUnique({
             where: { employeeID: id }
           });
@@ -1722,9 +1789,19 @@ export class ManageEmployeeService {
               branchesID: branchesID ?? undefined,
             };
 
-            // Mobile number is employee username
-            if (scalars.personalPhoneNo) {
-              updateData.username = scalars.personalPhoneNo;
+            if (nextLoginUsername && nextLoginUsername !== currentCredentials.username) {
+              const taken = await tx.employeeCredentials.findFirst({
+                where: {
+                  username: nextLoginUsername,
+                  employeeID: { not: id },
+                },
+              });
+              if (taken) {
+                throw new BadRequestException(
+                  'An employee login already exists for this email address',
+                );
+              }
+              updateData.username = nextLoginUsername;
             }
 
             await tx.employeeCredentials.update({
@@ -1732,9 +1809,17 @@ export class ManageEmployeeService {
               data: updateData,
             });
 
-          } else if (scalars.personalPhoneNo) {
-            // Create credentials if they don't exist
-            plainInitialPassword = this.generateRandomPassword();
+          } else if (nextLoginUsername && nextInitialPassword) {
+            const taken = await tx.employeeCredentials.findFirst({
+              where: { username: nextLoginUsername },
+            });
+            if (taken) {
+              throw new BadRequestException(
+                'An employee login already exists for this email address',
+              );
+            }
+
+            plainInitialPassword = nextInitialPassword;
             const hashedPassword = await this.hashPassword(plainInitialPassword);
 
             const employeeApprovalState =
@@ -1753,7 +1838,7 @@ export class ManageEmployeeService {
             await tx.employeeCredentials.create({
               data: {
                 employeeID: id,
-                username: scalars.personalPhoneNo,
+                username: nextLoginUsername,
                 password: hashedPassword,
                 mustChangePassword: true,
 

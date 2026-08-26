@@ -17,8 +17,11 @@ export const COMPANY_SCALAR_FIELDS = [
   "panNo",
   "esiNo",
   "linNo",
-  "gstNo",
-  "gstCertUrl",
+    "gstNo",
+    "gstCertUrl",
+    "website",
+    "gstRegistrationType",
+    "businessTradeName",
   "shopRegNo",
   "shopRegCertHistory",
   "financialYearStart",
@@ -59,6 +62,9 @@ export function mapCompanyToFormData(company: Record<string, unknown> | object) 
     linNo: (row.linNo as string) ?? "",
     gstNo: (row.gstNo as string) ?? "",
     gstCertUrl: (row.gstCertUrl as string) ?? "",
+    website: (row.website as string) ?? "",
+    gstRegistrationType: (row.gstRegistrationType as string) ?? "",
+    businessTradeName: (row.businessTradeName as string) ?? "",
     shopRegNo: (row.shopRegNo as string) ?? "",
     shopRegCertHistory: Array.isArray(history)
       ? history.map((entry: Record<string, unknown>, index: number) => ({

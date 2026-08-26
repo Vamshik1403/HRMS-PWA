@@ -9,7 +9,6 @@ import type { Request } from 'express';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   COMPANY_MODULE_KEYS,
-  fullOwnerPermissions,
   hasModuleAction,
   type ModulePermissionDto,
 } from '../common/company-module-permissions';
@@ -156,7 +155,7 @@ export class EmployeePermissionsService {
     if (!target) throw new BadRequestException('Employee not found in this company');
 
     const permissions = target.isCompanyOwner
-      ? fullOwnerPermissions()
+      ? await loadEmployeePermissions(this.prisma, target.id, actor.companyId, true)
       : await loadEmployeePermissions(this.prisma, target.id, actor.companyId, false);
 
     return {
@@ -168,7 +167,7 @@ export class EmployeePermissionsService {
         ownerTitle: target.ownerTitle,
       },
       permissions,
-      readOnly: !!target.isCompanyOwner,
+      readOnly: false,
     };
   }
 
@@ -192,9 +191,6 @@ export class EmployeePermissionsService {
       select: { id: true, isCompanyOwner: true },
     });
     if (!target) throw new BadRequestException('Employee not found in this company');
-    if (target.isCompanyOwner) {
-      throw new BadRequestException('Cannot change permissions for the company owner');
-    }
 
     const allowed = new Set(COMPANY_MODULE_KEYS as readonly string[]);
     await this.prisma.$transaction(async (tx) => {

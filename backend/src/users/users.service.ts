@@ -3,6 +3,7 @@ import {
   NotFoundException,
   ConflictException,
   InternalServerErrorException,
+  BadRequestException,
 } from '@nestjs/common'
 import { PrismaService } from '../prisma/prisma.service'
 import { CreateUserDto } from './dto/create-user.dto'
@@ -37,6 +38,17 @@ export class UsersService {
         )
       }
 
+      if (!createUserDto.email?.trim()) {
+        throw new BadRequestException('Email is required')
+      }
+      if (!createUserDto.contactNo?.trim()) {
+        throw new BadRequestException('Contact number is required')
+      }
+
+      if (role === UserRole.SUPERADMIN && !createUserDto.email?.trim()) {
+        throw new BadRequestException('Email is required for SuperAdmin accounts')
+      }
+
       const existingUser = await this.prisma.user.findUnique({
         where: { username: createUserDto.username },
       })
@@ -66,6 +78,7 @@ export class UsersService {
             lastName: createUserDto.lastName ?? null,
             contactNo: createUserDto.contactNo ?? null,
             email: createUserDto.email ?? null,
+            requireLoginOtp: role === UserRole.SUPERADMIN,
             serviceProviderID: createUserDto.serviceProviderID ?? null,
             companyID: primaryCompanyID,
             branchesID: createUserDto.branchesID ?? null,
@@ -107,7 +120,7 @@ export class UsersService {
 
       return this.excludePassword(user)
     } catch (error) {
-      if (error instanceof ConflictException) throw error
+      if (error instanceof ConflictException || error instanceof BadRequestException) throw error
       console.error(error)
       throw new InternalServerErrorException('Failed to create user')
     }
@@ -124,6 +137,7 @@ export class UsersService {
           lastName: true,
           contactNo: true,
           email: true,
+          requireLoginOtp: true,
           isActive: true,
           createdAt: true,
           updatedAt: true,
@@ -196,6 +210,17 @@ export class UsersService {
     try {
       const user = await this.prisma.user.findUnique({ where: { id } })
       if (!user) throw new NotFoundException(`User with ID ${id} not found`)
+
+      const nextEmail =
+        updateUserDto.email !== undefined ? updateUserDto.email : user.email
+      const nextContact =
+        updateUserDto.contactNo !== undefined ? updateUserDto.contactNo : user.contactNo
+      if (!String(nextEmail || '').trim()) {
+        throw new BadRequestException('Email is required')
+      }
+      if (!String(nextContact || '').trim()) {
+        throw new BadRequestException('Contact number is required')
+      }
 
       if (updateUserDto.username) {
         const existing = await this.prisma.user.findFirst({

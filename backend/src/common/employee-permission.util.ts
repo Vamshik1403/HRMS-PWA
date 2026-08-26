@@ -13,8 +13,7 @@ export async function loadEmployeePermissions(
   companyId: number | null | undefined,
   isCompanyOwner: boolean,
 ): Promise<ModulePermissionDto[]> {
-  if (isCompanyOwner) return fullOwnerPermissions();
-  if (!companyId) return [];
+  if (!companyId) return isCompanyOwner ? fullOwnerPermissions() : [];
   const rows = await prisma.employeeModulePermission.findMany({
     where: { manageEmployeeID: manageEmployeeId, companyID: companyId },
     select: {
@@ -25,6 +24,7 @@ export async function loadEmployeePermissions(
       canDelete: true,
     },
   });
+  if (isCompanyOwner && rows.length === 0) return fullOwnerPermissions();
   const byKey = new Map(rows.map((r) => [r.moduleKey, r]));
   return COMPANY_MODULE_KEYS.map((moduleKey) => {
     const row = byKey.get(moduleKey);
@@ -49,12 +49,11 @@ export async function assertEmployeeModuleAccess(
   },
 ): Promise<void> {
   const isOwner = !!opts.isCompanyOwner;
-  if (isOwner) return;
   const permissions = await loadEmployeePermissions(
     prisma,
     opts.manageEmployeeId,
     opts.companyId,
-    false,
+    isOwner,
   );
   if (!hasModuleAction(permissions, false, opts.moduleKey, opts.action)) {
     throw new ForbiddenException(

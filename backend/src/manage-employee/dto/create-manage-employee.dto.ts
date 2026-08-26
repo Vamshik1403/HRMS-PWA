@@ -6,7 +6,6 @@ import {
   IsEmail,
   IsArray,
   ValidateNested,
-  Matches,
   Length,
   IsBoolean
 } from "class-validator";
@@ -154,11 +153,9 @@ export class TokenDeviceMapCreateDto  {
 
 // ---------- Employee Credentials DTO ----------
 export class EmployeeCredentialsCreateDto {
-  @IsOptional() @IsString()
-@Matches(/^[0-9+\-\s()]+$/, {
-  message: 'Username must be a valid mobile number'
-})
-username?: string;
+  @IsOptional()
+  @IsEmail({}, { message: 'Username must be a valid email address' })
+  username?: string;
 
   @IsOptional() @IsString()
 @Length(6, 100, { message: 'Password must be at least 6 characters long' })
@@ -172,10 +169,8 @@ password?: string;
 }
 
 export class EmployeeCredentialsUpdateDto {
-  @IsOptional() @IsString()
-@Matches(/^[0-9+\-\s()]+$/, {
-  message: 'Username must be a valid mobile number'
-})
+  @IsOptional()
+  @IsEmail({}, { message: 'Username must be a valid email address' })
   username?: string;
 
   @IsOptional() @IsString()
@@ -193,10 +188,7 @@ export class EmployeeCredentialsUpdateDto {
 // ---------- Login DTO ----------
 export class EmployeeLoginDto {
   @IsString()
-@Matches(/^[0-9+\-\s()]+$/, {
-  message: 'Username must be a valid mobile number'
-})
-
+  @IsEmail({}, { message: 'Username must be a valid email address' })
   username!: string;
 
   @IsString()

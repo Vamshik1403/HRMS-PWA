@@ -94,14 +94,15 @@ export function hasModuleAction(
   moduleKey: string,
   action: 'view' | 'create' | 'edit' | 'delete',
 ): boolean {
-  if (isCompanyOwner) return true;
   const row = (permissions || []).find((p) => p.moduleKey === moduleKey);
-  if (!row) return false;
-  if (action === 'view') return !!row.canView;
-  if (action === 'create') return !!row.canCreate;
-  if (action === 'edit') return !!row.canEdit;
-  if (action === 'delete') return !!row.canDelete;
-  return false;
+  if (row) {
+    if (action === 'view') return !!row.canView;
+    if (action === 'create') return !!row.canCreate;
+    if (action === 'edit') return !!row.canEdit;
+    if (action === 'delete') return !!row.canDelete;
+    return false;
+  }
+  return isCompanyOwner;
 }
 
 export const ROUTE_MODULE_MAP: { prefix: string; moduleKey: CompanyModuleKey }[] = [

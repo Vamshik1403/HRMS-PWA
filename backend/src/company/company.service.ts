@@ -6,17 +6,41 @@ import {
 } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../prisma/prisma.service';
-import { CreateCompanyDto } from './dto/create-company.dto';
+import { CreateCompanyDto, PrimaryContactDto } from './dto/create-company.dto';
 import { UpdateCompanyDto } from './dto/update-company.dto';
-import { CreateCompanyOwnerDto } from './dto/create-company-owner.dto';
-import { ownerTitleForLegalEntity } from '../common/company-module-permissions';
+import {
+  CreateCompanyOwnerDto,
+  OwnerModulePermissionDto,
+} from './dto/create-company-owner.dto';
+import {
+  COMPANY_MODULE_KEYS,
+  fullOwnerPermissions,
+  ownerTitleForLegalEntity,
+  type ModulePermissionDto,
+} from '../common/company-module-permissions';
+import { loadEmployeePermissions } from '../common/employee-permission.util';
 
 @Injectable()
 export class CompanyService {
   constructor(private prisma: PrismaService) {}
 
-  create(data: CreateCompanyDto) {
-    return this.prisma.company.create({ data });
+  private digitsOnly(value?: string | null): string {
+    return String(value || '').replace(/\D/g, '');
+  }
+
+  private normalizeEmail(value?: string | null): string {
+    return String(value || '').trim().toLowerCase();
+  }
+
+  private employeeInitialPassword(personalPhoneNo?: string | null): string {
+    return this.digitsOnly(personalPhoneNo) || String(personalPhoneNo || '').trim();
+  }
+
+  async create(data: CreateCompanyDto) {
+    const { primaryContacts, ...companyData } = data;
+    const company = await this.prisma.company.create({ data: companyData as any });
+    await this.processPrimaryContacts(company.id, primaryContacts);
+    return company;
   }
 
   async listOwners(companyId?: number) {
@@ -33,7 +57,10 @@ export class CompanyService {
         employeeFirstName: true,
         employeeLastName: true,
         businessEmail: true,
+        personalEmail: true,
         personalPhoneNo: true,
+        businessPhoneNo: true,
+        salutation: true,
         isCompanyOwner: true,
         ownerTitle: true,
         companyID: true,
@@ -89,6 +116,97 @@ export class CompanyService {
     return `${prefix}${String(maxSeq + 1).padStart(3, '0')}`;
   }
 
+  private async persistModulePermissions(
+    tx: any,
+    companyId: number,
+    manageEmployeeId: number,
+    permissions: ModulePermissionDto[],
+  ) {
+    const allowed = new Set(COMPANY_MODULE_KEYS as readonly string[]);
+    for (const row of permissions) {
+      if (!allowed.has(row.moduleKey)) continue;
+      await tx.employeeModulePermission.upsert({
+        where: {
+          companyID_manageEmployeeID_moduleKey: {
+            companyID: companyId,
+            manageEmployeeID: manageEmployeeId,
+            moduleKey: row.moduleKey,
+          },
+        },
+        create: {
+          companyID: companyId,
+          manageEmployeeID: manageEmployeeId,
+          moduleKey: row.moduleKey,
+          canView: !!row.canView,
+          canCreate: !!row.canCreate,
+          canEdit: !!row.canEdit,
+          canDelete: !!row.canDelete,
+        },
+        update: {
+          canView: !!row.canView,
+          canCreate: !!row.canCreate,
+          canEdit: !!row.canEdit,
+          canDelete: !!row.canDelete,
+        },
+      });
+    }
+  }
+
+  private mapPermissionRows(
+    rows?: OwnerModulePermissionDto[],
+  ): ModulePermissionDto[] {
+    if (!Array.isArray(rows) || rows.length === 0) return fullOwnerPermissions();
+    const byKey = new Map(rows.map((r) => [r.moduleKey, r]));
+    return COMPANY_MODULE_KEYS.map((moduleKey) => {
+      const row = byKey.get(moduleKey);
+      return {
+        moduleKey,
+        canView: !!row?.canView,
+        canCreate: !!row?.canCreate,
+        canEdit: !!row?.canEdit,
+        canDelete: !!row?.canDelete,
+      };
+    });
+  }
+
+  async processPrimaryContacts(
+    companyId: number,
+    contacts?: PrimaryContactDto[],
+  ) {
+    if (!Array.isArray(contacts) || contacts.length === 0) return;
+
+    for (const contact of contacts) {
+      const email = this.normalizeEmail(contact.email);
+      const mobile = String(contact.mobile || '').trim();
+      const firstName = String(contact.firstName || '').trim();
+      const lastName = String(contact.lastName || '').trim();
+      const username = String(contact.username || '').trim();
+      const phone = String(contact.phone || '').trim();
+      const designation = String(contact.designation || '').trim();
+      const title = String(contact.title || '').trim();
+
+      const isFilled = !!(email || mobile || firstName || lastName || username);
+      if (!isFilled) continue;
+      if (!email || !mobile) {
+        throw new BadRequestException(
+          'Each filled primary contact requires email and mobile',
+        );
+      }
+
+      await this.createOwner(companyId, {
+        firstName: firstName || email,
+        lastName: lastName || undefined,
+        username: username || email,
+        businessEmail: email,
+        personalPhoneNo: mobile,
+        businessPhoneNo: phone || undefined,
+        salutation: title || undefined,
+        ownerTitle: designation || undefined,
+        isCompanyOwner: !!contact.setAsCompanyAdmin,
+      });
+    }
+  }
+
   async createOwner(companyId: number, dto: CreateCompanyOwnerDto) {
     const company = await this.prisma.company.findUnique({
       where: { id: companyId },
@@ -102,17 +220,23 @@ export class CompanyService {
     });
     if (!company) throw new NotFoundException('Company not found');
 
-    const username = dto.username.trim();
-    const existingCred = await this.prisma.employeeCredentials.findUnique({
-      where: { username },
+    const email = this.normalizeEmail(dto.businessEmail);
+    const mobile = String(dto.personalPhoneNo || '').trim();
+    if (!email) throw new BadRequestException('Email is required');
+    if (!mobile) throw new BadRequestException('Mobile is required');
+
+    const username = this.normalizeEmail(dto.username) || email;
+    const existingCred = await this.prisma.employeeCredentials.findFirst({
+      where: { username: { equals: username, mode: 'insensitive' } },
     });
     if (existingCred) throw new ConflictException('Username already exists');
 
-    const existingUser = await this.prisma.user.findUnique({
-      where: { username },
+    const existingUser = await this.prisma.user.findFirst({
+      where: { username: { equals: username, mode: 'insensitive' } },
     });
     if (existingUser) throw new ConflictException('Username already exists');
 
+    const isCompanyOwner = dto.isCompanyOwner !== false;
     const ownerTitle =
       (dto.ownerTitle || '').trim() ||
       (company.defaultOwnerTitle || '').trim() ||
@@ -138,15 +262,24 @@ export class CompanyService {
       select: { id: true },
     });
 
+    const plainPassword =
+      (dto.password || '').trim() || this.employeeInitialPassword(mobile);
+    if (!plainPassword || plainPassword.length < 6) {
+      throw new BadRequestException(
+        'Mobile number must have at least 6 digits to use as the initial password',
+      );
+    }
+
     const saltRounds = Number(process.env.BCRYPT_SALT_ROUNDS) || 12;
-    const passwordHash = await bcrypt.hash(dto.password, saltRounds);
+    const passwordHash = await bcrypt.hash(plainPassword, saltRounds);
     const joiningDate =
       dto.joiningDate?.trim() ||
       new Date().toISOString().slice(0, 10);
+    const permissions = isCompanyOwner
+      ? this.mapPermissionRows(dto.permissions)
+      : [];
 
     const created = await this.prisma.$transaction(async (tx) => {
-      // Ensure the owner title also exists as a Designation master record
-      // (user types like Proprietor / Partner are treated as designations).
       let designationId: number | null = null;
       if (ownerTitle) {
         const existingDesg = await tx.designations.findFirst({
@@ -165,7 +298,7 @@ export class CompanyService {
               companyID: company.id,
               serviceProviderID: company.serviceProviderID ?? null,
               branchesID: defaultBranch?.id ?? null,
-              isManager: true,
+              isManager: isCompanyOwner,
             },
             select: { id: true },
           });
@@ -178,14 +311,17 @@ export class CompanyService {
           employeeID: employeeCode,
           employeeFirstName: dto.firstName.trim(),
           employeeLastName: (dto.lastName || '').trim() || null,
-          personalPhoneNo: dto.personalPhoneNo?.trim() || null,
-          businessEmail: dto.businessEmail?.trim() || null,
+          salutation: dto.salutation?.trim() || null,
+          personalPhoneNo: mobile,
+          businessPhoneNo: dto.businessPhoneNo?.trim() || null,
+          businessEmail: email,
+          personalEmail: email,
           joiningDate,
           companyID: company.id,
           serviceProviderID: company.serviceProviderID,
           branchesID: defaultBranch?.id ?? null,
           designationID: designationId,
-          isCompanyOwner: true,
+          isCompanyOwner,
           ownerTitle,
           employmentStatus: 'Active',
           onboardingApprovalStatus: 'APPROVED',
@@ -208,13 +344,18 @@ export class CompanyService {
           employeeID: employee.id,
           username,
           password: passwordHash,
-          mustChangePassword: false,
+          mustChangePassword: true,
+          requireLoginOtp: isCompanyOwner,
           isActive: true,
           serviceProviderID: company.serviceProviderID ?? undefined,
           companyID: company.id,
           branchesID: defaultBranch?.id ?? undefined,
         },
       });
+
+      if (isCompanyOwner && permissions.length) {
+        await this.persistModulePermissions(tx, company.id, employee.id, permissions);
+      }
 
       return tx.manageEmployee.findUnique({
         where: { id: employee.id },
@@ -231,6 +372,7 @@ export class CompanyService {
               username: true,
               isActive: true,
               mustChangePassword: true,
+              requireLoginOtp: true,
               createdAt: true,
             },
           },
@@ -242,7 +384,9 @@ export class CompanyService {
       ...created,
       ownerTitle,
       roleLabel: ownerTitle,
-      message: `Company owner (${ownerTitle}) created. Login with employee credentials.`,
+      message: isCompanyOwner
+        ? `Company admin (${ownerTitle}) created. Login with email and mobile.`
+        : 'Employee login created. Login with email and mobile.',
     };
   }
 
@@ -262,10 +406,26 @@ export class CompanyService {
     });
     if (!owner) throw new NotFoundException('Company owner not found');
 
-    if (dto.username) {
-      const username = dto.username.trim();
+    if (dto.businessEmail !== undefined && !this.normalizeEmail(dto.businessEmail)) {
+      throw new BadRequestException('Email is required');
+    }
+    if (dto.personalPhoneNo !== undefined && !String(dto.personalPhoneNo || '').trim()) {
+      throw new BadRequestException('Mobile is required');
+    }
+
+    const nextUsername =
+      dto.username !== undefined
+        ? this.normalizeEmail(dto.username) || this.normalizeEmail(dto.businessEmail)
+        : dto.businessEmail !== undefined
+          ? this.normalizeEmail(dto.businessEmail)
+          : undefined;
+
+    if (nextUsername) {
       const taken = await this.prisma.employeeCredentials.findFirst({
-        where: { username, employeeID: { not: owner.id } },
+        where: {
+          username: { equals: nextUsername, mode: 'insensitive' },
+          employeeID: { not: owner.id },
+        },
       });
       if (taken) throw new ConflictException('Username already exists');
     }
@@ -277,13 +437,23 @@ export class CompanyService {
           employeeFirstName: dto.firstName?.trim() ?? undefined,
           employeeLastName:
             dto.lastName !== undefined ? dto.lastName.trim() || null : undefined,
+          salutation:
+            dto.salutation !== undefined ? dto.salutation.trim() || null : undefined,
           personalPhoneNo:
             dto.personalPhoneNo !== undefined
               ? dto.personalPhoneNo.trim() || null
               : undefined,
+          businessPhoneNo:
+            dto.businessPhoneNo !== undefined
+              ? dto.businessPhoneNo.trim() || null
+              : undefined,
           businessEmail:
             dto.businessEmail !== undefined
-              ? dto.businessEmail.trim() || null
+              ? this.normalizeEmail(dto.businessEmail) || null
+              : undefined,
+          personalEmail:
+            dto.businessEmail !== undefined
+              ? this.normalizeEmail(dto.businessEmail) || null
               : undefined,
           ownerTitle:
             dto.ownerTitle !== undefined
@@ -294,19 +464,29 @@ export class CompanyService {
 
       if (owner.employeeCredentials) {
         const credUpdate: any = {};
-        if (dto.username) credUpdate.username = dto.username.trim();
+        if (nextUsername) credUpdate.username = nextUsername;
         if (dto.password) {
           const saltRounds = Number(process.env.BCRYPT_SALT_ROUNDS) || 12;
           credUpdate.password = await bcrypt.hash(dto.password, saltRounds);
           credUpdate.mustChangePassword = false;
         }
         if (dto.isActive !== undefined) credUpdate.isActive = dto.isActive;
+        credUpdate.requireLoginOtp = true;
         if (Object.keys(credUpdate).length > 0) {
           await tx.employeeCredentials.update({
             where: { employeeID: owner.id },
             data: credUpdate,
           });
         }
+      }
+
+      if (dto.permissions) {
+        await this.persistModulePermissions(
+          tx,
+          companyId,
+          owner.id,
+          this.mapPermissionRows(dto.permissions),
+        );
       }
     });
 
@@ -320,11 +500,77 @@ export class CompanyService {
             username: true,
             isActive: true,
             mustChangePassword: true,
+            requireLoginOtp: true,
             createdAt: true,
           },
         },
       },
     });
+  }
+
+  async getOwnerPermissions(companyId: number, ownerId: number) {
+    const owner = await this.prisma.manageEmployee.findFirst({
+      where: {
+        id: ownerId,
+        companyID: companyId,
+        isCompanyOwner: true,
+        isDeleted: false,
+      },
+      select: {
+        id: true,
+        employeeFirstName: true,
+        employeeLastName: true,
+        isCompanyOwner: true,
+        ownerTitle: true,
+      },
+    });
+    if (!owner) throw new NotFoundException('Company owner not found');
+
+    const permissions = await loadEmployeePermissions(
+      this.prisma,
+      owner.id,
+      companyId,
+      true,
+    );
+
+    return {
+      employee: {
+        id: owner.id,
+        name: `${owner.employeeFirstName ?? ''} ${owner.employeeLastName ?? ''}`.trim(),
+        isCompanyOwner: true,
+        ownerTitle: owner.ownerTitle,
+      },
+      permissions,
+      readOnly: false,
+    };
+  }
+
+  async saveOwnerPermissions(
+    companyId: number,
+    ownerId: number,
+    permissions: OwnerModulePermissionDto[],
+  ) {
+    const owner = await this.prisma.manageEmployee.findFirst({
+      where: {
+        id: ownerId,
+        companyID: companyId,
+        isCompanyOwner: true,
+        isDeleted: false,
+      },
+      select: { id: true },
+    });
+    if (!owner) throw new NotFoundException('Company owner not found');
+
+    await this.prisma.$transaction(async (tx) => {
+      await this.persistModulePermissions(
+        tx,
+        companyId,
+        owner.id,
+        this.mapPermissionRows(permissions),
+      );
+    });
+
+    return this.getOwnerPermissions(companyId, ownerId);
   }
 
   async deactivateOwner(companyId: number, manageEmployeeId: number) {
@@ -373,6 +619,12 @@ export class CompanyService {
       throw new ConflictException('Company already has an owner employee');
     }
 
+    if (!user.email?.trim() || !user.contactNo?.trim()) {
+      throw new BadRequestException(
+        'COMPANY_ADMIN must have email and contact number to migrate',
+      );
+    }
+
     const usernameBase = user.username;
     let username = usernameBase;
     let suffix = 1;
@@ -386,8 +638,8 @@ export class CompanyService {
       lastName: user.lastName || undefined,
       username,
       password,
-      personalPhoneNo: user.contactNo || undefined,
-      businessEmail: user.email || undefined,
+      personalPhoneNo: user.contactNo,
+      businessEmail: user.email,
     });
 
     await this.prisma.user.update({
@@ -410,6 +662,14 @@ export class CompanyService {
         companyModules: {
           include: {
             module: true,
+          },
+        },
+        subscriptions: {
+          where: { isActive: true },
+          orderBy: { startDate: 'desc' },
+          take: 1,
+          include: {
+            plan: { select: { planName: true } },
           },
         },
       },
@@ -573,11 +833,14 @@ export class CompanyService {
     });
   }
 
-  update(id: number, data: UpdateCompanyDto) {
-    return this.prisma.company.update({
+  async update(id: number, data: UpdateCompanyDto) {
+    const { primaryContacts, ...companyData } = data as UpdateCompanyDto;
+    const company = await this.prisma.company.update({
       where: { id },
-      data,
+      data: companyData as any,
     });
+    await this.processPrimaryContacts(id, primaryContacts);
+    return company;
   }
 
   async remove(id: number) {

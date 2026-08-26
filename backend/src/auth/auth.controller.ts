@@ -1,11 +1,17 @@
-import { Body, Controller, Post, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Post, Req, UseGuards, UsePipes, ValidationPipe } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import type { Request } from 'express';
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
+import {
+  ForgotPasswordDto,
+  VerifyForgotPasswordDto,
+  VerifyLoginOtpDto,
+} from './dto/forgot-password.dto';
 
 @Controller('auth')
+@UsePipes(new ValidationPipe({ whitelist: true, transform: true }))
 export class AuthController {
   constructor(private authService: AuthService) {}
 
@@ -17,6 +23,21 @@ export class AuthController {
   @Post('login')
   login(@Body() dto: LoginDto, @Req() req: Request) {
     return this.authService.login(dto, req);
+  }
+
+  @Post('login/verify-otp')
+  verifyLoginOtp(@Body() dto: VerifyLoginOtpDto, @Req() req: Request) {
+    return this.authService.verifyLoginOtp(dto, req);
+  }
+
+  @Post('forgot-password')
+  forgotPassword(@Body() dto: ForgotPasswordDto) {
+    return this.authService.forgotPassword(dto);
+  }
+
+  @Post('forgot-password/verify')
+  verifyForgotPassword(@Body() dto: VerifyForgotPasswordDto) {
+    return this.authService.verifyForgotPassword(dto);
   }
 
   @Post('logout')

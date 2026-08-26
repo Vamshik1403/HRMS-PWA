@@ -80,14 +80,15 @@ export function isCompanyOwnerFlag(): boolean {
 export function canModuleAction(moduleKey: string, action: ModuleAction): boolean {
   const snap = readCompanyAccess();
   if (!snap?.hasAnyCompanyAccess) return false;
-  if (snap.isCompanyOwner) return true;
   const row = snap.permissions.find((p) => p.moduleKey === moduleKey);
-  if (!row) return false;
-  if (action === "view") return !!row.canView;
-  if (action === "create") return !!row.canCreate;
-  if (action === "edit") return !!row.canEdit;
-  if (action === "delete") return !!row.canDelete;
-  return false;
+  if (row) {
+    if (action === "view") return !!row.canView;
+    if (action === "create") return !!row.canCreate;
+    if (action === "edit") return !!row.canEdit;
+    if (action === "delete") return !!row.canDelete;
+    return false;
+  }
+  return !!snap.isCompanyOwner;
 }
 
 export function canViewModule(moduleKey: string): boolean {
@@ -96,7 +97,6 @@ export function canViewModule(moduleKey: string): boolean {
 
 /** Owner or granted create/edit/delete on a company module (for Add/Edit UI). */
 export function hasModuleWriteAccess(moduleKey: string): boolean {
-  if (isCompanyOwnerFlag()) return true;
   return (
     canModuleAction(moduleKey, "create") ||
     canModuleAction(moduleKey, "edit") ||
@@ -159,11 +159,11 @@ export const LEGAL_ENTITY_OPTIONS = [
   { value: "OPC", label: "OPC" },
   { value: "PRIVATE_LIMITED", label: "Private Limited" },
   { value: "PUBLIC_LIMITED", label: "Public Limited" },
-  { value: "SECTION_8", label: "Section 8 Company" },
+  { value: "SECTION_8", label: "Section 8 Company (Non Profit)" },
   { value: "TRUST", label: "Trust" },
   { value: "SOCIETY", label: "Society" },
-  { value: "GOVERNMENT_PSU", label: "Government / PSU" },
-  { value: "COOPERATIVE_SOCIETY", label: "Cooperative Society" },
+  { value: "GOVERNMENT_PSU", label: "Government - PSU" },
+  { value: "COOPERATIVE_SOCIETY", label: "Co Operative Society" },
 ] as const;
 
 /**
@@ -185,7 +185,8 @@ export const USER_TYPE_OPTIONS_BY_ENTITY: Record<string, string[]> = {
 };
 
 export function userTypeOptionsForEntity(legalEntityType?: string | null): string[] {
-  return USER_TYPE_OPTIONS_BY_ENTITY[(legalEntityType || "").toUpperCase()] || [];
+  const options = USER_TYPE_OPTIONS_BY_ENTITY[(legalEntityType || "").toUpperCase()] || [];
+  return options.includes("Other") ? options : [...options, "Other"];
 }
 
 export function defaultUserTypeForEntity(legalEntityType?: string | null): string {

@@ -659,7 +659,7 @@ export function ManageEmployeesManagement() {
 
       setCredentialEmployee(r);
       setCredentialForm({
-        username: data?.username ?? r.personalPhoneNo ?? "",
+        username: data?.username ?? r.personalEmail ?? r.businessEmail ?? "",
         password: data?.initialPassword ?? "",
       });
       setCredentialModalOpen(true);
@@ -3379,7 +3379,7 @@ const addCombinedDevMap = () => {
           {
             description:
               saveResult?.initialPassword
-                ? "Employee credentials are active. The initial password was generated successfully."
+                ? "Employee credentials are active. The initial password is the employee mobile number."
                 : "No matching conditional approval workflow was required.",
             duration: 6000,
           },

@@ -1,11 +1,36 @@
 import {
+  IsArray,
+  IsBoolean,
+  IsEmail,
   IsInt,
+  IsNotEmpty,
   IsOptional,
   IsString,
   MinLength,
-  IsNotEmpty,
+  ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
+
+export class OwnerModulePermissionDto {
+  @IsString()
+  moduleKey!: string;
+
+  @IsOptional()
+  @IsBoolean()
+  canView?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  canCreate?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  canEdit?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  canDelete?: boolean;
+}
 
 export class CreateCompanyOwnerDto {
   @IsNotEmpty()
@@ -16,23 +41,30 @@ export class CreateCompanyOwnerDto {
   @IsString()
   lastName?: string;
 
-  @IsNotEmpty()
+  @IsOptional()
   @IsString()
-  @MinLength(3)
-  username!: string;
+  username?: string;
 
-  @IsNotEmpty()
+  @IsOptional()
   @IsString()
   @MinLength(6)
-  password!: string;
+  password?: string;
+
+  @IsNotEmpty()
+  @IsString()
+  personalPhoneNo!: string;
 
   @IsOptional()
   @IsString()
-  personalPhoneNo?: string;
+  businessPhoneNo?: string;
+
+  @IsNotEmpty()
+  @IsEmail()
+  businessEmail!: string;
 
   @IsOptional()
   @IsString()
-  businessEmail?: string;
+  salutation?: string;
 
   @IsOptional()
   @IsString()
@@ -46,6 +78,27 @@ export class CreateCompanyOwnerDto {
   @IsOptional()
   @IsString()
   ownerTitle?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  isCompanyOwner?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  isActive?: boolean;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => OwnerModulePermissionDto)
+  permissions?: OwnerModulePermissionDto[];
+}
+
+export class SaveOwnerPermissionsDto {
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => OwnerModulePermissionDto)
+  permissions!: OwnerModulePermissionDto[];
 }
 
 export class CreateCompanyWithOwnerDto {

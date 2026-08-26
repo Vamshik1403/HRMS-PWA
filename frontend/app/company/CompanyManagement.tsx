@@ -12,10 +12,7 @@ import { PageHeader } from "../components/app/page-header"
 import { Building2, Plus, Edit, Trash2, Eye, ArrowLeft, X, Save, UserPlus } from "lucide-react"
 import { useCurrentUser } from "../hooks/useCurrentUser"
 import { useRouter } from "next/navigation"
-import { TimezoneSelect } from "../components/ui/timezone-select"
 import { LocationFields } from "../components/ui/location-fields"
-import { SearchSuggestInput } from "../components/SearchSuggestInput"
-import { fetchCurrencies } from "../utils/geoApi"
 import { PdfUploadField } from "../components/PdfUploadField"
 import { ListAreaSkeleton } from "../components/ui/TableBodySkeleton"
 import { toast } from "sonner"
@@ -36,13 +33,12 @@ import { FormSectionNav } from "../components/app/form-section-nav"
 import { useClientTable, sortRows } from "../hooks/use-client-table"
 import {
   buildCompanyPayload,
-  FINANCIAL_YEAR_EMPTY,
   mapCompanyToFormData,
 } from "../utils/companyFormPayload"
 import { LEGAL_ENTITY_OPTIONS, ownerTitleForLegalEntity, defaultUserTypeForEntity, userTypeOptionsForEntity } from "@/lib/companyAccess"
+import { cn } from "@/app/utils/cn"
 import { FormSection } from "../components/ui/form-section"
 import { FormField } from "../components/ui/form-field"
-import { FileDropzone } from "../components/ui/file-dropzone"
 import {
   Select,
   SelectContent,
@@ -74,6 +70,9 @@ interface Company {
   linNo?: string
   gstNo?: string
   gstCertUrl?: string
+  website?: string
+  gstRegistrationType?: string
+  businessTradeName?: string
   shopRegNo?: string
   shopRegCertHistory?: { certNo: string; effectFrom: string; _localId: string }[]
   financialYearStart?: string
@@ -82,6 +81,11 @@ interface Company {
   companyLogoUrl?: string
   SignatureUrl?: string
   createdAt?: string
+  subscriptions?: {
+    startDate?: string
+    endDate?: string
+    plan?: { planName?: string } | null
+  }[]
 }
 
 interface ServiceProvider {
@@ -114,13 +118,80 @@ interface CompanyAdminUser {
   firstName?: string
   lastName?: string
   ownerTitle?: string | null
-
+  salutation?: string | null
+  phone?: string | null
   serviceProviderID?: number | null
   contactNo?: string | null
   email?: string | null
   isActive: boolean
   companyID?: number | null
   company?: { id?: number; companyName?: string } | null
+}
+
+type OwnerPermissionRow = {
+  moduleKey: string
+  canView: boolean
+  canCreate: boolean
+  canEdit: boolean
+  canDelete: boolean
+}
+
+type ModuleMeta = { moduleKey: string; label: string }
+
+type PrimaryContactRow = {
+  _localId: string
+  title: string
+  firstName: string
+  lastName: string
+  username: string
+  email: string
+  phone: string
+  mobile: string
+  designation: string
+  designationOther: string
+  setAsCompanyAdmin: boolean
+}
+
+const CONTACT_TITLE_OPTIONS = ["Mr", "Mrs", "Ms", "Dr", "Mx"]
+
+const emptyPrimaryContact = (): PrimaryContactRow => ({
+  _localId: `pc-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+  title: "",
+  firstName: "",
+  lastName: "",
+  username: "",
+  email: "",
+  phone: "",
+  mobile: "",
+  designation: "",
+  designationOther: "",
+  setAsCompanyAdmin: false,
+})
+
+function formatCompanyDate(value?: string | Date | null) {
+  if (!value) return "—"
+  const d = new Date(value)
+  if (Number.isNaN(d.getTime())) return "—"
+  return d.toLocaleDateString()
+}
+
+function latestSubscription(company: Company) {
+  return company.subscriptions?.[0] || null
+}
+
+function fullPermissionRows(modules: ModuleMeta[]): OwnerPermissionRow[] {
+  return modules.map((m) => ({
+    moduleKey: m.moduleKey,
+    canView: true,
+    canCreate: true,
+    canEdit: true,
+    canDelete: true,
+  }))
+}
+
+function resolvedDesignation(row: { designation: string; designationOther: string }) {
+  if (row.designation === "Other") return row.designationOther.trim()
+  return row.designation.trim()
 }
 
 
@@ -140,11 +211,14 @@ const emptyCompanyAdminForm = {
   username: "",
   password: "",
   role: "COMPANY_OWNER",
+  title: "",
   firstName: "",
   lastName: "",
+  phone: "",
   contactNo: "",
   email: "",
   designation: "",
+  designationOther: "",
   serviceProviderID: "" as string | number,
   companyID: "" as string | number,
   isActive: true,
@@ -162,7 +236,8 @@ export function CompanyManagement() {
   const [spDropdownOpen, setSpDropdownOpen] = useState(false)
   const [logoFile, setLogoFile] = useState<File | null>(null)
   const [isAddingNew, setIsAddingNew] = useState(false)
-  const [companyFormTab, setCompanyFormTab] = useState("basic")
+  const [companyFormTab, setCompanyFormTab] = useState("general")
+  const [primaryContacts, setPrimaryContacts] = useState<PrimaryContactRow[]>([emptyPrimaryContact()])
   const [isViewing, setIsViewing] = useState(false)
 
   const [isModuleDrawerOpen, setIsModuleDrawerOpen] = useState(false)
@@ -182,6 +257,10 @@ export function CompanyManagement() {
     useState<CompanyAdminUser | null>(null)
 
   const [companyAdminFormOpen, setCompanyAdminFormOpen] = useState(false)
+  const [viewingCompanyAdmin, setViewingCompanyAdmin] = useState(false)
+  const [companyAdminFormTab, setCompanyAdminFormTab] = useState("general")
+  const [ownerModules, setOwnerModules] = useState<ModuleMeta[]>([])
+  const [ownerPermissions, setOwnerPermissions] = useState<OwnerPermissionRow[]>([])
 
   const user = useCurrentUser()
 
@@ -221,6 +300,9 @@ const shouldAutoOpenCompanyProfile = isCompanyProfileOnly
     linNo: "",
     gstNo: "",
     gstCertUrl: "",
+    website: "",
+    gstRegistrationType: "",
+    businessTradeName: "",
     shopRegNo: "",
     shopRegCertHistory: [] as { certNo: string; effectFrom: string; _localId: string }[],
     financialYearStart: "",
@@ -253,6 +335,8 @@ const shouldAutoOpenCompanyProfile = isCompanyProfileOnly
     setCompanyAdminSaving(false)
     setCompanyAdminLoading(false)
     setEditingCompanyAdmin(null)
+    setViewingCompanyAdmin(false)
+    setCompanyAdminFormTab("general")
   }, [])
 
   const handleBack = () => {
@@ -435,11 +519,41 @@ let filtered =
         return
       }
 
+      if ((formData as any).gstRegistrationType === "Registered" && !String(formData.gstNo || "").trim()) {
+        toast.error("GSTIN is required for Registered companies")
+        return
+      }
+
+      const filledContacts = primaryContacts.filter((row) =>
+        [row.email, row.mobile, row.firstName, row.lastName, row.username].some((v) => String(v || "").trim()),
+      )
+      for (const row of filledContacts) {
+        if (!row.email.trim() || !row.mobile.trim()) {
+          toast.error("Each filled primary contact requires Email and Mobile")
+          return
+        }
+        if (row.designation === "Other" && !row.designationOther.trim()) {
+          toast.error("Specify designation for contacts marked Other")
+          return
+        }
+      }
+
       const finalData = buildCompanyPayload(formData as Record<string, unknown>, {
         companyName: formData.companyName || formData.autocompleteName || "",
         serviceProviderID: resolvedServiceProviderID,
         companyLogoUrl: companyLogoUrl || undefined,
         SignatureUrl: SignatureUrl || undefined,
+        primaryContacts: filledContacts.map((row) => ({
+          title: row.title.trim() || undefined,
+          firstName: row.firstName.trim() || undefined,
+          lastName: row.lastName.trim() || undefined,
+          username: row.username.trim() || row.email.trim(),
+          email: row.email.trim(),
+          phone: row.phone.trim() || undefined,
+          mobile: row.mobile.trim(),
+          designation: resolvedDesignation(row) || undefined,
+          setAsCompanyAdmin: !!row.setAsCompanyAdmin,
+        })),
       });
 
       const res = editingCompany
@@ -474,33 +588,123 @@ setEditingCompany(null);
     }
   };
 
-  const handleEditCompanyAdmin = (user: CompanyAdminUser) => {
+  const loadOwnerPermissionGrid = async (ownerId?: number) => {
+    try {
+      const modRes = await fetch("/backend/employee-permissions/modules")
+      const modules = modRes.ok ? await modRes.json() : []
+      const list: ModuleMeta[] = Array.isArray(modules) ? modules : []
+      setOwnerModules(list)
+
+      if (ownerId && selectedCompanyForAdmin?.id) {
+        const permRes = await fetch(
+          `/backend/company/${selectedCompanyForAdmin.id}/owner/${ownerId}/permissions`,
+        )
+        if (permRes.ok) {
+          const data = await permRes.json()
+          if (Array.isArray(data?.permissions) && data.permissions.length) {
+            setOwnerPermissions(data.permissions)
+            return
+          }
+        }
+      }
+      setOwnerPermissions(fullPermissionRows(list))
+    } catch {
+      setOwnerModules([])
+      setOwnerPermissions([])
+    }
+  }
+
+  const toggleOwnerPerm = (
+    moduleKey: string,
+    action: "read" | "write" | "delete" | "admin",
+  ) => {
+    if (viewingCompanyAdmin) return
+    setOwnerPermissions((rows) =>
+      rows.map((row) => {
+        if (row.moduleKey !== moduleKey) return row
+        if (action === "read") return { ...row, canView: !row.canView }
+        if (action === "write") {
+          const on = row.canCreate && row.canEdit
+          return { ...row, canCreate: !on, canEdit: !on }
+        }
+        if (action === "delete") return { ...row, canDelete: !row.canDelete }
+        const allOn = row.canView && row.canCreate && row.canEdit && row.canDelete
+        const next = !allOn
+        return { ...row, canView: next, canCreate: next, canEdit: next, canDelete: next }
+      }),
+    )
+  }
+
+  const designationFromTitle = (title?: string | null, legalEntityType?: string | null) => {
+    const options = userTypeOptionsForEntity(legalEntityType)
+    const value = (title || "").trim()
+    if (!value) return { designation: defaultUserTypeForEntity(legalEntityType) || "", designationOther: "" }
+    if (options.includes(value) && value !== "Other") {
+      return { designation: value, designationOther: "" }
+    }
+    return { designation: "Other", designationOther: value }
+  }
+
+  const handleViewCompanyAdmin = async (user: CompanyAdminUser) => {
     setEditingCompanyAdmin(user)
+    setViewingCompanyAdmin(true)
+    const desg = designationFromTitle(user.ownerTitle, selectedCompanyForAdmin?.legalEntityType)
+    setCompanyAdminForm({
+      ...emptyCompanyAdminForm,
+      username: user.username || "",
+      password: "",
+      role: "COMPANY_OWNER",
+      title: user.salutation || "",
+      firstName: user.firstName || "",
+      lastName: user.lastName || "",
+      phone: user.phone || "",
+      contactNo: user.contactNo || "",
+      email: user.email || "",
+      designation: desg.designation,
+      designationOther: desg.designationOther,
+      serviceProviderID: selectedCompanyForAdmin?.serviceProviderID || "",
+      companyID: selectedCompanyForAdmin?.id || "",
+      isActive: user.isActive,
+    })
+    setCompanyAdminFormTab("general")
+    setCompanyAdminFormOpen(true)
+    await loadOwnerPermissionGrid(user.id)
+  }
+
+  const handleEditCompanyAdmin = async (user: CompanyAdminUser) => {
+    setEditingCompanyAdmin(user)
+    setViewingCompanyAdmin(false)
+
+    const desg = designationFromTitle(
+      (user as any).ownerTitle || selectedCompanyForAdmin?.defaultOwnerTitle,
+      selectedCompanyForAdmin?.legalEntityType,
+    )
 
     setCompanyAdminForm({
       ...emptyCompanyAdminForm,
       username: user.username || "",
       password: "",
       role: "COMPANY_OWNER",
+      title: user.salutation || "",
       firstName: user.firstName || "",
       lastName: user.lastName || "",
+      phone: user.phone || "",
       contactNo: user.contactNo || "",
       email: user.email || "",
-      designation:
-        (user as any).ownerTitle ||
-        (selectedCompanyForAdmin as any)?.defaultOwnerTitle ||
-        defaultUserTypeForEntity(selectedCompanyForAdmin?.legalEntityType) ||
-        "",
+      designation: desg.designation,
+      designationOther: desg.designationOther,
       serviceProviderID: selectedCompanyForAdmin?.serviceProviderID || "",
       companyID: selectedCompanyForAdmin?.id || "",
       isActive: user.isActive,
     })
+    setCompanyAdminFormTab("general")
     setCompanyAdminFormOpen(true)
+    await loadOwnerPermissionGrid(user.id)
   }
 
   const handleDeleteCompanyAdmin = async (id: number) => {
     if (!selectedCompanyForAdmin?.id) return
-    if (!confirm("Deactivate this Company Owner?")) return
+    if (!confirm("Deactivate this Company Admin?")) return
 
     try {
       const res = await fetch(`/backend/company/${selectedCompanyForAdmin.id}/owner/${id}`, {
@@ -541,6 +745,8 @@ setEditingCompany(null);
     setEditingCompany(company)
     setIsAddingNew(true)
     setIsViewing(false)
+    setCompanyFormTab("general")
+    setPrimaryContacts([emptyPrimaryContact()])
     await applySoleServiceProviderToForm()
   }
 
@@ -595,6 +801,9 @@ setEditingCompany(null);
       linNo: "",
       gstNo: "",
       gstCertUrl: "",
+      website: "",
+      gstRegistrationType: "",
+      businessTradeName: "",
       shopRegNo: "",
       shopRegCertHistory: [],
       financialYearStart: "",
@@ -607,7 +816,8 @@ setEditingCompany(null);
     setEditingCompany(null)
     setServiceProviders([])
     setSpDropdownOpen(false)
-    setCompanyFormTab("basic")
+    setCompanyFormTab("general")
+    setPrimaryContacts([emptyPrimaryContact()])
   }
 
   const handleCancel = () => {
@@ -716,16 +926,20 @@ setEditingCompany(null);
         !t ||
         (c.companyName?.toLowerCase().includes(t) ||
           c.country?.toLowerCase().includes(t) ||
-          c.emailAdd?.toLowerCase().includes(t))
+          c.state?.toLowerCase().includes(t) ||
+          c.city?.toLowerCase().includes(t) ||
+          c.legalEntityType?.toLowerCase().includes(t))
     )
     return sortRows(list, table.sortBy, table.sortDir, (row, key) => {
       const c = row as Company
       if (key === "companyName") return c.companyName ?? ""
+      if (key === "companyType") return LEGAL_ENTITY_OPTIONS.find((o) => o.value === c.legalEntityType)?.label ?? c.legalEntityType ?? ""
+      if (key === "city") return c.city ?? ""
       if (key === "country") return c.country ?? ""
       if (key === "state") return c.state ?? ""
-      if (key === "emailAdd") return c.emailAdd ?? ""
-      if (key === "contactNo") return c.contactNo ?? ""
-      if (key === "gstNo") return c.gstNo ?? ""
+      if (key === "activePlan") return latestSubscription(c)?.plan?.planName ?? ""
+      if (key === "activationDate") return latestSubscription(c)?.startDate ?? ""
+      if (key === "expiryDate") return latestSubscription(c)?.endDate ?? ""
       return ""
     })
   }, [companies, table.search, table.sortBy, table.sortDir])
@@ -733,17 +947,27 @@ setEditingCompany(null);
   const companyColumns = useMemo((): DataTableColumn<Company>[] => [
     {
       key: "companyName",
-      header: "Name",
+      header: "Company Name",
       sortable: true,
       colSpan: 3,
       cell: (c) => <span className="font-medium">{c.companyName || "—"}</span>,
     },
     {
-      key: "country",
-      header: "Country",
+      key: "companyType",
+      header: "Company Type",
       sortable: true,
       colSpan: 2,
-      cell: (c) => c.country || "—",
+      cell: (c) =>
+        LEGAL_ENTITY_OPTIONS.find((o) => o.value === c.legalEntityType)?.label ||
+        c.legalEntityType ||
+        "—",
+    },
+    {
+      key: "city",
+      header: "City",
+      sortable: true,
+      colSpan: 2,
+      cell: (c) => c.city || "—",
     },
     {
       key: "state",
@@ -753,25 +977,32 @@ setEditingCompany(null);
       cell: (c) => c.state || "—",
     },
     {
-      key: "emailAdd",
-      header: "Email",
+      key: "country",
+      header: "Country",
       sortable: true,
       colSpan: 2,
-      cell: (c) => c.emailAdd || "—",
+      cell: (c) => c.country || "—",
     },
     {
-      key: "contactNo",
-      header: "Contact",
+      key: "activePlan",
+      header: "Active Plan",
       sortable: true,
       colSpan: 2,
-      cell: (c) => c.contactNo || "—",
+      cell: (c) => latestSubscription(c)?.plan?.planName || "—",
     },
     {
-      key: "gstNo",
-      header: "GST",
+      key: "activationDate",
+      header: "Activation Date",
       sortable: true,
       colSpan: 2,
-      cell: (c) => c.gstNo || "—",
+      cell: (c) => formatCompanyDate(latestSubscription(c)?.startDate),
+    },
+    {
+      key: "expiryDate",
+      header: "Expiry Date",
+      sortable: true,
+      colSpan: 2,
+      cell: (c) => formatCompanyDate(latestSubscription(c)?.endDate),
     },
     {
       key: "actions",
@@ -796,7 +1027,7 @@ setEditingCompany(null);
               ? [
                   {
                     icon: UserPlus,
-                    title: "Company Owners",
+                    title: "Company Admin",
                     onClick: () => openCompanyAdminDrawer(c),
                   },
                 ]
@@ -830,16 +1061,18 @@ setEditingCompany(null);
         owners.map((o: any) => ({
           id: o.id,
           username: o.employeeCredentials?.username || o.employeeID || "",
-          role: "COMPANY_OWNER",
+          role: "Company Admin",
           firstName: o.employeeFirstName,
           lastName: o.employeeLastName,
           contactNo: o.personalPhoneNo,
+          phone: o.businessPhoneNo,
           email: o.businessEmail,
           isActive: o.employeeCredentials?.isActive !== false,
           serviceProviderID: o.serviceProviderID,
           companyID: o.companyID,
           company: o.company,
           ownerTitle: o.ownerTitle,
+          salutation: o.salutation,
         })),
       )
     } catch (error) {
@@ -879,7 +1112,9 @@ setEditingCompany(null);
     setCompanyAdminSaving(false)
     setCompanyAdminLoading(false)
     setEditingCompanyAdmin(null)
+    setViewingCompanyAdmin(false)
     setCompanyAdminFormOpen(false)
+    setCompanyAdminFormTab("general")
   }
 
   const createCompanyAdminUser = async (e: React.FormEvent) => {
@@ -892,13 +1127,25 @@ setEditingCompany(null);
       return
     }
 
-    if (!companyAdminForm.username.trim()) {
-      toast.error("Username is required")
+    if (viewingCompanyAdmin) return
+
+    if (!companyAdminForm.email.trim()) {
+      toast.error("Email is required")
       return
     }
 
-    if (!editingCompanyAdmin && !companyAdminForm.password.trim()) {
-      toast.error("Password is required")
+    if (!companyAdminForm.contactNo.trim()) {
+      toast.error("Mobile is required")
+      return
+    }
+
+    if (!companyAdminForm.firstName.trim()) {
+      toast.error("First name is required")
+      return
+    }
+
+    if (companyAdminForm.designation === "Other" && !companyAdminForm.designationOther.trim()) {
+      toast.error("Specify designation")
       return
     }
 
@@ -912,27 +1159,28 @@ setEditingCompany(null);
     try {
       const companyId = selectedCompanyForAdmin.id
       const isEdit = Boolean(editingCompanyAdmin?.id)
+      const ownerTitle =
+        resolvedDesignation(companyAdminForm) ||
+        (selectedCompanyForAdmin as any)?.defaultOwnerTitle ||
+        ownerTitleForLegalEntity(selectedCompanyForAdmin.legalEntityType) ||
+        undefined
 
       const payload: any = {
-        firstName: companyAdminForm.firstName || companyAdminForm.username.trim(),
+        firstName: companyAdminForm.firstName.trim(),
         lastName: companyAdminForm.lastName || undefined,
-        username: companyAdminForm.username.trim(),
-        personalPhoneNo: companyAdminForm.contactNo || undefined,
-        businessEmail: companyAdminForm.email || undefined,
+        username: companyAdminForm.username.trim() || companyAdminForm.email.trim(),
+        salutation: companyAdminForm.title || undefined,
+        personalPhoneNo: companyAdminForm.contactNo.trim(),
+        businessPhoneNo: companyAdminForm.phone.trim() || undefined,
+        businessEmail: companyAdminForm.email.trim(),
         isActive: companyAdminForm.isActive,
-        ownerTitle:
-          companyAdminForm.designation?.trim() ||
-          (selectedCompanyForAdmin as any)?.defaultOwnerTitle ||
-          ownerTitleForLegalEntity(selectedCompanyForAdmin.legalEntityType) ||
-          undefined,
+        isCompanyOwner: true,
+        ownerTitle,
+        permissions: ownerPermissions,
       }
 
       if (companyAdminForm.password.trim()) {
         payload.password = companyAdminForm.password
-      } else if (!isEdit) {
-        toast.error("Password is required")
-        setCompanyAdminSaving(false)
-        return
       }
 
       const res = await fetch(
@@ -958,18 +1206,13 @@ setEditingCompany(null);
 
       toast.success(
         isEdit
-          ? "Company owner updated successfully"
-          : "Company owner created — they log in as an employee"
+          ? "Company admin updated successfully"
+          : "Company admin created — they log in with email and mobile"
       )
 
       setEditingCompanyAdmin(null)
-      setCompanyAdminForm({
-        ...emptyCompanyAdminForm,
-        role: "COMPANY_OWNER",
-        serviceProviderID: selectedCompanyForAdmin.serviceProviderID || "",
-        companyID: selectedCompanyForAdmin.id,
-        isActive: true,
-      })
+      setViewingCompanyAdmin(false)
+      setCompanyAdminFormOpen(false)
 
       await fetchCompanyAdminUsers(selectedCompanyForAdmin)
     } catch (error: any) {
@@ -1022,17 +1265,17 @@ setEditingCompany(null);
                   active={companyFormTab}
                   onChange={setCompanyFormTab}
                   sections={[
-                    { id: "basic", label: "Company Information" },
-                    { id: "location", label: "Additional Information" },
-                    { id: "compliance", label: "Compliance & Tax" },
+                    { id: "general", label: "General" },
+                    { id: "billing", label: "Billing Details" },
+                    { id: "contacts", label: "Contact Information" },
                   ]}
                 />
 
-                {companyFormTab === "basic" && (
+                {companyFormTab === "general" && (
                   <>
                 <FormSection
-                  title="Company information"
-                  description="Manage your organization's core details and classification."
+                  title="General"
+                  description="Core company details and registered address."
                 >
                   <FormField label="Company Name" required>
                     <Input
@@ -1066,7 +1309,7 @@ setEditingCompany(null);
                     </Select>
                   </FormField>
 
-                  <FormField label="Company Address">
+                  <FormField label="Registered / HO Address">
                     <Textarea
                       value={formData.address || ""}
                       onChange={(e) => setFormData((p) => ({ ...p, address: e.target.value }))}
@@ -1076,14 +1319,7 @@ setEditingCompany(null);
                       maxLength={500}
                     />
                   </FormField>
-                </FormSection>
 
-                  </>
-                )}
-
-                {companyFormTab === "location" && (
-                  <>
-                <FormSection title="Location" description="Regional address and geo details.">
                   <LocationFields
                     values={{
                       city: formData.city,
@@ -1095,64 +1331,46 @@ setEditingCompany(null);
                     onChange={(patch) => setFormData((p) => ({ ...p, ...patch }))}
                     showCurrency={false}
                   />
-                </FormSection>
 
-                <FormSection title="Regional settings" description="Timezone and currency for payroll and reporting.">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <FormField label="Time Zone">
-                      <TimezoneSelect
-                        value={formData.timeZone || ""}
-                        onChange={(value) => setFormData((p) => ({ ...p, timeZone: value }))}
-                      />
-                    </FormField>
-                    <SearchSuggestInput
-                      label="Currency"
-                      placeholder="Type currency code…"
-                      value={formData.currency || ""}
-                      onChange={(v) => setFormData((p) => ({ ...p, currency: v }))}
-                      onSelect={({ display }) => setFormData((p) => ({ ...p, currency: display }))}
-                      fetchData={fetchCurrencies}
-                      displayField="code"
-                      valueField="code"
+                  <FormField label="Website">
+                    <Input
+                      value={(formData as any).website || ""}
+                      onChange={(e) => setFormData((p) => ({ ...p, website: e.target.value }))}
+                      placeholder="https://"
                     />
-                  </div>
+                  </FormField>
                 </FormSection>
-
-                <FormSection title="Contact" description="Primary contact details for this company.">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <FormField label="Contact Number">
-                      <Input value={formData.contactNo || ""} onChange={(e) => setFormData((p) => ({ ...p, contactNo: e.target.value }))} />
-                    </FormField>
-                    <FormField label="Email Address">
-                      <Input type="email" value={formData.emailAdd || ""} onChange={(e) => setFormData((p) => ({ ...p, emailAdd: e.target.value }))} />
-                    </FormField>
-                  </div>
-                </FormSection>
-
-                <FormSection title="Branding" description="Logo used on documents and payslips.">
-                  <FileDropzone
-                    label="Company Logo"
-                    accept="image/*"
-                    hint="PNG or JPG"
-                    value={logoFile}
-                    onChange={setLogoFile}
-                    variant="image"
-                  />
-                </FormSection>
-
                   </>
                 )}
 
-                {companyFormTab === "compliance" && (
-                <FormSection title="Compliance & tax" description="Statutory registration numbers for payroll compliance.">
+                {companyFormTab === "billing" && (
+                <FormSection title="Billing details" description="GST registration and tax identifiers.">
+                  <FormField label="Registration Type">
+                    <Select
+                      value={(formData as any).gstRegistrationType || "Unregistered"}
+                      onValueChange={(v) => setFormData((p) => ({ ...p, gstRegistrationType: v }))}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select registration type" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Unregistered">Unregistered</SelectItem>
+                        <SelectItem value="Registered">Registered</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </FormField>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <FormField label="PF No"><Input value={formData.pfNo || ""} onChange={(e) => setFormData((p) => ({ ...p, pfNo: e.target.value }))} /></FormField>
-                    <FormField label="TAN No"><Input value={formData.tanNo || ""} onChange={(e) => setFormData((p) => ({ ...p, tanNo: e.target.value }))} /></FormField>
-                    <FormField label="PAN No"><Input value={formData.panNo || ""} onChange={(e) => setFormData((p) => ({ ...p, panNo: e.target.value }))} /></FormField>
-                    <FormField label="ESI No"><Input value={formData.esiNo || ""} onChange={(e) => setFormData((p) => ({ ...p, esiNo: e.target.value }))} /></FormField>
-                    <FormField label="LIN No"><Input value={formData.linNo || ""} onChange={(e) => setFormData((p) => ({ ...p, linNo: e.target.value }))} /></FormField>
-                    <FormField label="GST No" className="sm:col-span-2">
+                    <FormField label="GSTIN" required={(formData as any).gstRegistrationType === "Registered"}>
                       <Input value={formData.gstNo || ""} onChange={(e) => setFormData((p) => ({ ...p, gstNo: e.target.value }))} />
+                    </FormField>
+                    <FormField label="PAN">
+                      <Input value={formData.panNo || ""} onChange={(e) => setFormData((p) => ({ ...p, panNo: e.target.value }))} />
+                    </FormField>
+                    <FormField label="Business Trade Name" className="sm:col-span-2">
+                      <Input
+                        value={(formData as any).businessTradeName || ""}
+                        onChange={(e) => setFormData((p) => ({ ...p, businessTradeName: e.target.value }))}
+                      />
                     </FormField>
                   </div>
                   <PdfUploadField
@@ -1160,26 +1378,180 @@ setEditingCompany(null);
                     value={formData.gstCertUrl}
                     onChange={(url) => setFormData((p) => ({ ...p, gstCertUrl: url ?? "" }))}
                   />
-                  <FormField label="Financial Year Start">
-                    <Select
-                      value={formData.financialYearStart || FINANCIAL_YEAR_EMPTY}
-                      onValueChange={(value) =>
-                        setFormData((p) => ({
-                          ...p,
-                          financialYearStart: value === FINANCIAL_YEAR_EMPTY ? "" : value,
-                        }))
-                      }
+                </FormSection>
+                )}
+
+                {companyFormTab === "contacts" && (
+                <FormSection title="Primary contacts" description="Optional. Ticked contacts become Company Admins; others get an employee login.">
+                  <div className="space-y-4">
+                    {primaryContacts.map((row, index) => {
+                      const designationOptions = userTypeOptionsForEntity(formData.legalEntityType)
+                      return (
+                        <div key={row._localId} className="rounded-lg border border-border p-4 space-y-4">
+                          <div className="flex items-center justify-between">
+                            <p className="text-sm font-medium">Primary Contact {index + 1}</p>
+                            {primaryContacts.length > 1 ? (
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                onClick={() =>
+                                  setPrimaryContacts((rows) => rows.filter((r) => r._localId !== row._localId))
+                                }
+                              >
+                                <Trash2 className="h-4 w-4 text-red-600" />
+                              </Button>
+                            ) : null}
+                          </div>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <FormField label="Title">
+                              <Select
+                                value={row.title || "__none__"}
+                                onValueChange={(v) =>
+                                  setPrimaryContacts((rows) =>
+                                    rows.map((r) =>
+                                      r._localId === row._localId ? { ...r, title: v === "__none__" ? "" : v } : r,
+                                    ),
+                                  )
+                                }
+                              >
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Select title" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="__none__">Select title</SelectItem>
+                                  {CONTACT_TITLE_OPTIONS.map((opt) => (
+                                    <SelectItem key={opt} value={opt}>{opt}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </FormField>
+                            <FormField label="Username">
+                              <Input
+                                value={row.username}
+                                onChange={(e) =>
+                                  setPrimaryContacts((rows) =>
+                                    rows.map((r) => r._localId === row._localId ? { ...r, username: e.target.value } : r),
+                                  )
+                                }
+                              />
+                            </FormField>
+                            <FormField label="First Name">
+                              <Input
+                                value={row.firstName}
+                                onChange={(e) =>
+                                  setPrimaryContacts((rows) =>
+                                    rows.map((r) => r._localId === row._localId ? { ...r, firstName: e.target.value } : r),
+                                  )
+                                }
+                              />
+                            </FormField>
+                            <FormField label="Last Name">
+                              <Input
+                                value={row.lastName}
+                                onChange={(e) =>
+                                  setPrimaryContacts((rows) =>
+                                    rows.map((r) => r._localId === row._localId ? { ...r, lastName: e.target.value } : r),
+                                  )
+                                }
+                              />
+                            </FormField>
+                            <FormField label="Email" required>
+                              <Input
+                                type="email"
+                                value={row.email}
+                                onChange={(e) =>
+                                  setPrimaryContacts((rows) =>
+                                    rows.map((r) => r._localId === row._localId ? { ...r, email: e.target.value } : r),
+                                  )
+                                }
+                              />
+                            </FormField>
+                            <FormField label="Phone">
+                              <Input
+                                value={row.phone}
+                                onChange={(e) =>
+                                  setPrimaryContacts((rows) =>
+                                    rows.map((r) => r._localId === row._localId ? { ...r, phone: e.target.value } : r),
+                                  )
+                                }
+                              />
+                            </FormField>
+                            <FormField label="Mobile" required>
+                              <Input
+                                value={row.mobile}
+                                onChange={(e) =>
+                                  setPrimaryContacts((rows) =>
+                                    rows.map((r) => r._localId === row._localId ? { ...r, mobile: e.target.value } : r),
+                                  )
+                                }
+                              />
+                            </FormField>
+                            <FormField label="Designation">
+                              <Select
+                                value={row.designation || "__none__"}
+                                onValueChange={(v) =>
+                                  setPrimaryContacts((rows) =>
+                                    rows.map((r) =>
+                                      r._localId === row._localId
+                                        ? { ...r, designation: v === "__none__" ? "" : v }
+                                        : r,
+                                    ),
+                                  )
+                                }
+                              >
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Select designation" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="__none__">Select designation</SelectItem>
+                                  {designationOptions.map((opt) => (
+                                    <SelectItem key={opt} value={opt}>{opt}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </FormField>
+                            {row.designation === "Other" ? (
+                              <FormField label="Specify Designation" required>
+                                <Input
+                                  value={row.designationOther}
+                                  onChange={(e) =>
+                                    setPrimaryContacts((rows) =>
+                                      rows.map((r) =>
+                                        r._localId === row._localId ? { ...r, designationOther: e.target.value } : r,
+                                      ),
+                                    )
+                                  }
+                                />
+                              </FormField>
+                            ) : null}
+                          </div>
+                          <label className="flex items-center gap-2 text-sm">
+                            <input
+                              type="checkbox"
+                              checked={row.setAsCompanyAdmin}
+                              onChange={(e) =>
+                                setPrimaryContacts((rows) =>
+                                  rows.map((r) =>
+                                    r._localId === row._localId ? { ...r, setAsCompanyAdmin: e.target.checked } : r,
+                                  ),
+                                )
+                              }
+                            />
+                            Set as Company Admin
+                          </label>
+                        </div>
+                      )
+                    })}
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setPrimaryContacts((rows) => [...rows, emptyPrimaryContact()])}
                     >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select start date" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value={FINANCIAL_YEAR_EMPTY}>Select start date</SelectItem>
-                        <SelectItem value="1st Jan">1st January</SelectItem>
-                        <SelectItem value="1st April">1st April</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </FormField>
+                      <Plus className="w-4 h-4 mr-2" />
+                      Add Primary Contact
+                    </Button>
+                  </div>
                 </FormSection>
                 )}
 
@@ -1232,6 +1604,7 @@ setEditingCompany(null);
                         "—",
                     },
                     { label: "Establishment type", value: viewCompany.companyType },
+                    { label: "Website", value: viewCompany.website },
                     { label: "Address", value: viewCompany.address },
                   ]}
                 />
@@ -1246,13 +1619,13 @@ setEditingCompany(null);
                   ]}
                 />
                 <DetailCard
-                  title="Contact"
-                  subtitle="Primary contact details"
+                  title="Billing"
+                  subtitle="GST and tax identifiers"
                   rows={[
-                    { label: "Contact number", value: viewCompany.contactNo },
-                    { label: "Email", value: viewCompany.emailAdd },
-                    { label: "Time zone", value: viewCompany.timeZone },
-                    { label: "Currency", value: viewCompany.currency },
+                    { label: "Registration type", value: viewCompany.gstRegistrationType },
+                    { label: "Business trade name", value: viewCompany.businessTradeName },
+                    { label: "GSTIN", value: viewCompany.gstNo },
+                    { label: "PAN", value: viewCompany.panNo },
                   ]}
                 />
                 <DetailCard
@@ -1361,10 +1734,10 @@ setEditingCompany(null);
                   <div>
                     <CardTitle className="flex items-center gap-2 text-xl">
                       <UserPlus className="w-5 h-5 text-indigo-600" />
-                      Company Owners
+                      Company Admin
                     </CardTitle>
                     <p className="text-sm text-gray-500 mt-1">
-                      Create and view company owner employee logins for this tenant.
+                      Create and manage company admin employee logins for this tenant.
                     </p>
                   </div>
 
@@ -1372,8 +1745,10 @@ setEditingCompany(null);
                     {!companyAdminFormOpen ? (
                       <Button
                         type="button"
-                        onClick={() => {
+                        onClick={async () => {
                           setEditingCompanyAdmin(null)
+                          setViewingCompanyAdmin(false)
+                          setCompanyAdminFormTab("general")
                           setCompanyAdminForm({
                             ...emptyCompanyAdminForm,
                             role: "COMPANY_OWNER",
@@ -1387,6 +1762,7 @@ setEditingCompany(null);
                               "",
                           })
                           setCompanyAdminFormOpen(true)
+                          await loadOwnerPermissionGrid()
                         }}
                       >
                         <Plus className="w-4 h-4 mr-2" />
@@ -1398,6 +1774,7 @@ setEditingCompany(null);
                         variant="outline"
                         onClick={() => {
                           setEditingCompanyAdmin(null)
+                          setViewingCompanyAdmin(false)
                           setCompanyAdminFormOpen(false)
                         }}
                       >
@@ -1433,153 +1810,161 @@ setEditingCompany(null);
                   >
                     <div>
                       <h3 className="text-base font-semibold text-gray-900">
-                        {editingCompanyAdmin
-                          ? "Update Company Owner"
-                          : "Create Company Owner"}
+                        {viewingCompanyAdmin
+                          ? "View Company Admin"
+                          : editingCompanyAdmin
+                            ? "Update Company Admin"
+                            : "Create Company Admin"}
                       </h3>
                       <p className="text-sm text-gray-500">
-                        {editingCompanyAdmin
-                          ? "Update owner employee login. Leave password blank to keep existing password."
-                          : "Creates an employee login with full company owner rights."}
+                        Login identity is email and mobile. Password override is optional.
                       </p>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div className="space-y-2 md:col-span-2">
-                        <Label>Designation *</Label>
-                        {selectedCompanyForAdmin?.legalEntityType &&
-                        userTypeOptionsForEntity(selectedCompanyForAdmin.legalEntityType).length > 0 ? (
-                          <Select
-                            value={
-                              companyAdminForm.designation ||
-                              (selectedCompanyForAdmin as any).defaultOwnerTitle ||
-                              defaultUserTypeForEntity(selectedCompanyForAdmin.legalEntityType)
-                            }
-                            onValueChange={(v) =>
-                              setCompanyAdminForm((p) => ({ ...p, designation: v }))
-                            }
-                          >
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select designation" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {userTypeOptionsForEntity(selectedCompanyForAdmin.legalEntityType).map(
-                                (opt) => (
-                                  <SelectItem key={opt} value={opt}>
-                                    {opt}
-                                  </SelectItem>
-                                ),
-                              )}
-                            </SelectContent>
-                          </Select>
-                        ) : (
-                          <Input
-                            value={companyAdminForm.designation}
-                            onChange={(e) =>
-                              setCompanyAdminForm((p) => ({
-                                ...p,
-                                designation: e.target.value,
-                              }))
-                            }
-                            placeholder="e.g. Proprietor / Director"
-                          />
-                        )}
-                      </div>
+                    <FormSectionNav
+                      active={companyAdminFormTab}
+                      onChange={setCompanyAdminFormTab}
+                      sections={[
+                        { id: "general", label: "General" },
+                        { id: "permissions", label: "User Permission" },
+                      ]}
+                    />
 
+                    {companyAdminFormTab === "general" && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div className="space-y-2">
-                        <Label>Username *</Label>
+                        <Label>Title</Label>
+                        <Select
+                          value={companyAdminForm.title || "__none__"}
+                          onValueChange={(v) =>
+                            setCompanyAdminForm((p) => ({ ...p, title: v === "__none__" ? "" : v }))
+                          }
+                          disabled={viewingCompanyAdmin}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select title" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="__none__">Select title</SelectItem>
+                            {CONTACT_TITLE_OPTIONS.map((opt) => (
+                              <SelectItem key={opt} value={opt}>{opt}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Username</Label>
                         <Input
                           autoComplete="new-username"
-                          name="new-company-admin-username"
                           value={companyAdminForm.username}
                           onChange={(e) =>
-                            setCompanyAdminForm((p) => ({
-                              ...p,
-                              username: e.target.value,
-                            }))
+                            setCompanyAdminForm((p) => ({ ...p, username: e.target.value }))
                           }
-                          placeholder="Enter username"
+                          placeholder="Defaults to email"
+                          disabled={viewingCompanyAdmin}
                         />
                       </div>
-
                       <div className="space-y-2">
-                        <Label>Password *</Label>
+                        <Label>First Name *</Label>
                         <Input
-                          autoComplete="new-password"
-                          name="new-company-admin-password"
-                          type="text"
-                          value={companyAdminForm.password}
-                          onChange={(e) =>
-                            setCompanyAdminForm((p) => ({
-                              ...p,
-                              password: e.target.value,
-                            }))
-                          }
-                          placeholder="Minimum 6 characters"
-                        />
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label>First Name</Label>
-                        <Input
-                          name="new-company-admin-firstName"
                           value={companyAdminForm.firstName}
                           onChange={(e) =>
-                            setCompanyAdminForm((p) => ({
-                              ...p,
-                              firstName: e.target.value,
-                            }))
+                            setCompanyAdminForm((p) => ({ ...p, firstName: e.target.value }))
                           }
-                          placeholder="Enter first name"
+                          disabled={viewingCompanyAdmin}
                         />
                       </div>
-
                       <div className="space-y-2">
                         <Label>Last Name</Label>
                         <Input
-                          name="new-company-admin-lastName"
                           value={companyAdminForm.lastName}
                           onChange={(e) =>
-                            setCompanyAdminForm((p) => ({
-                              ...p,
-                              lastName: e.target.value,
-                            }))
+                            setCompanyAdminForm((p) => ({ ...p, lastName: e.target.value }))
                           }
-                          placeholder="Enter last name"
+                          disabled={viewingCompanyAdmin}
                         />
                       </div>
-
                       <div className="space-y-2">
-                        <Label>Contact Number</Label>
+                        <Label>Email *</Label>
                         <Input
-                          name="new-company-admin-contactNo"
-                          value={companyAdminForm.contactNo}
-                          onChange={(e) =>
-                            setCompanyAdminForm((p) => ({
-                              ...p,
-                              contactNo: e.target.value,
-                            }))
-                          }
-                          placeholder="Enter contact number"
-                        />
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label>Email</Label>
-                        <Input
-                          name="new-company-admin-email"
-                          type="text"
+                          type="email"
                           value={companyAdminForm.email}
                           onChange={(e) =>
-                            setCompanyAdminForm((p) => ({
-                              ...p,
-                              email: e.target.value,
-                            }))
+                            setCompanyAdminForm((p) => ({ ...p, email: e.target.value }))
                           }
-                          placeholder="Enter email"
+                          disabled={viewingCompanyAdmin}
                         />
                       </div>
-
+                      <div className="space-y-2">
+                        <Label>Phone</Label>
+                        <Input
+                          value={companyAdminForm.phone}
+                          onChange={(e) =>
+                            setCompanyAdminForm((p) => ({ ...p, phone: e.target.value }))
+                          }
+                          disabled={viewingCompanyAdmin}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Mobile *</Label>
+                        <Input
+                          value={companyAdminForm.contactNo}
+                          onChange={(e) =>
+                            setCompanyAdminForm((p) => ({ ...p, contactNo: e.target.value }))
+                          }
+                          disabled={viewingCompanyAdmin}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Designation</Label>
+                        <Select
+                          value={companyAdminForm.designation || "__none__"}
+                          onValueChange={(v) =>
+                            setCompanyAdminForm((p) => ({
+                              ...p,
+                              designation: v === "__none__" ? "" : v,
+                            }))
+                          }
+                          disabled={viewingCompanyAdmin}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select designation" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="__none__">Select designation</SelectItem>
+                            {userTypeOptionsForEntity(selectedCompanyForAdmin.legalEntityType).map(
+                              (opt) => (
+                                <SelectItem key={opt} value={opt}>{opt}</SelectItem>
+                              ),
+                            )}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      {companyAdminForm.designation === "Other" ? (
+                        <div className="space-y-2">
+                          <Label>Specify Designation *</Label>
+                          <Input
+                            value={companyAdminForm.designationOther}
+                            onChange={(e) =>
+                              setCompanyAdminForm((p) => ({ ...p, designationOther: e.target.value }))
+                            }
+                            disabled={viewingCompanyAdmin}
+                          />
+                        </div>
+                      ) : null}
+                      <div className="space-y-2">
+                        <Label>Password {editingCompanyAdmin ? "(optional)" : "(optional override)"}</Label>
+                        <Input
+                          autoComplete="new-password"
+                          type="text"
+                          value={companyAdminForm.password}
+                          onChange={(e) =>
+                            setCompanyAdminForm((p) => ({ ...p, password: e.target.value }))
+                          }
+                          placeholder="Defaults to mobile"
+                          disabled={viewingCompanyAdmin}
+                        />
+                      </div>
                       <div className="space-y-2">
                         <Label>Status</Label>
                         <label className="flex h-10 items-center gap-2 rounded-md border px-3 text-sm bg-white">
@@ -1587,17 +1972,65 @@ setEditingCompany(null);
                             type="checkbox"
                             checked={companyAdminForm.isActive}
                             onChange={(e) =>
-                              setCompanyAdminForm((p) => ({
-                                ...p,
-                                isActive: e.target.checked,
-                              }))
+                              setCompanyAdminForm((p) => ({ ...p, isActive: e.target.checked }))
                             }
+                            disabled={viewingCompanyAdmin}
                           />
                           Active
                         </label>
                       </div>
                     </div>
+                    )}
 
+                    {companyAdminFormTab === "permissions" && (
+                      <div className="overflow-x-auto rounded-md border">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>Module</TableHead>
+                              <TableHead>Read</TableHead>
+                              <TableHead>Write</TableHead>
+                              <TableHead>Delete</TableHead>
+                              <TableHead>Add Admin</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {(ownerPermissions.length ? ownerPermissions : fullPermissionRows(ownerModules)).map((row) => {
+                              const meta = ownerModules.find((m) => m.moduleKey === row.moduleKey)
+                              const writeOn = row.canCreate && row.canEdit
+                              const adminOn = row.canView && row.canCreate && row.canEdit && row.canDelete
+                              const cell = (on: boolean) =>
+                                cn(
+                                  "px-2 py-2 text-xs rounded-md border w-full",
+                                  on
+                                    ? "bg-primary/15 border-primary text-primary font-medium"
+                                    : "bg-background border-border text-muted-foreground",
+                                  viewingCompanyAdmin ? "cursor-default" : "cursor-pointer",
+                                )
+                              return (
+                                <TableRow key={row.moduleKey}>
+                                  <TableCell className="font-medium">{meta?.label || row.moduleKey}</TableCell>
+                                  <TableCell>
+                                    <button type="button" className={cell(row.canView)} onClick={() => toggleOwnerPerm(row.moduleKey, "read")}>Read</button>
+                                  </TableCell>
+                                  <TableCell>
+                                    <button type="button" className={cell(writeOn)} onClick={() => toggleOwnerPerm(row.moduleKey, "write")}>Write</button>
+                                  </TableCell>
+                                  <TableCell>
+                                    <button type="button" className={cell(row.canDelete)} onClick={() => toggleOwnerPerm(row.moduleKey, "delete")}>Delete</button>
+                                  </TableCell>
+                                  <TableCell>
+                                    <button type="button" className={cell(adminOn)} onClick={() => toggleOwnerPerm(row.moduleKey, "admin")}>Add Admin</button>
+                                  </TableCell>
+                                </TableRow>
+                              )
+                            })}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    )}
+
+                    {!viewingCompanyAdmin ? (
                     <div className="flex justify-end gap-2">
                       {editingCompanyAdmin && (
                         <Button
@@ -1605,13 +2038,8 @@ setEditingCompany(null);
                           variant="outline"
                           onClick={() => {
                             setEditingCompanyAdmin(null)
-                            setCompanyAdminForm({
-                              ...emptyCompanyAdminForm,
-                              role: "COMPANY_OWNER",
-                              serviceProviderID: selectedCompanyForAdmin?.serviceProviderID || "",
-                              companyID: selectedCompanyForAdmin?.id || "",
-                              isActive: true,
-                            })
+                            setViewingCompanyAdmin(false)
+                            setCompanyAdminFormOpen(false)
                           }}
                         >
                           Cancel Edit
@@ -1624,28 +2052,31 @@ setEditingCompany(null);
                             ? "Updating..."
                             : "Creating..."
                           : editingCompanyAdmin
-                            ? "Update Company Owner"
-                            : "Create Company Owner"}
-
+                            ? "Update Company Admin"
+                            : "Create Company Admin"}
                       </Button>
                     </div>
+                    ) : null}
                   </form>
                 ) : (
                   <div className="rounded-xl border bg-white overflow-hidden">
                     <div className="px-5 py-4 border-b">
                       <h3 className="text-base font-semibold text-gray-900">
-                        Existing Company Owners
+                        Existing Company Admins
                       </h3>
                       <p className="text-sm text-gray-500">
-                        Company owner employee accounts for this tenant.
+                        Company admin employee accounts for this tenant.
                       </p>
                     </div>
 
                     <Table>
                       <TableHeader>
                         <TableRow>
-                          <TableHead>Username</TableHead>
+                          <TableHead>User Name</TableHead>
+                          <TableHead>First Name</TableHead>
+                          <TableHead>Last Name</TableHead>
                           <TableHead>Role</TableHead>
+                          <TableHead>Designation</TableHead>
                           <TableHead>Status</TableHead>
                           <TableHead className="text-right">Actions</TableHead>
                         </TableRow>
@@ -1654,33 +2085,40 @@ setEditingCompany(null);
                       <TableBody>
                         {companyAdminLoading ? (
                           <TableRow>
-                            <TableCell colSpan={4} className="text-center py-8 text-gray-500">
+                            <TableCell colSpan={7} className="text-center py-8 text-gray-500">
                               Loading users...
-
                             </TableCell>
                           </TableRow>
                         ) : companyAdminUsers.length === 0 ? (
                           <TableRow>
-                            <TableCell colSpan={4} className="text-center py-8 text-gray-500">
-                              No company owners found
+                            <TableCell colSpan={7} className="text-center py-8 text-gray-500">
+                              No company admins found
                             </TableCell>
                           </TableRow>
                         ) : (
                           companyAdminUsers.map((u) => (
                             <TableRow key={u.id}>
                               <TableCell className="font-medium">{u.username}</TableCell>
+                              <TableCell>{u.firstName || "—"}</TableCell>
+                              <TableCell>{u.lastName || "—"}</TableCell>
                               <TableCell>
                                 <Badge variant="secondary">{u.role}</Badge>
                               </TableCell>
+                              <TableCell>{u.ownerTitle || "—"}</TableCell>
                               <TableCell>
                                 <Badge>
                                   {u.isActive ? "Active" : "Inactive"}
                                 </Badge>
                               </TableCell>
-
                               <TableCell className="text-right">
                                 <div className="flex justify-end gap-2">
-
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => handleViewCompanyAdmin(u)}
+                                  >
+                                    <Eye className="h-4 w-4" />
+                                  </Button>
                                   <Button
                                     variant="ghost"
                                     size="icon"
@@ -1688,7 +2126,6 @@ setEditingCompany(null);
                                   >
                                     <Edit className="h-4 w-4 text-blue-600" />
                                   </Button>
-
                                   <Button
                                     variant="ghost"
                                     size="icon"
@@ -1696,7 +2133,6 @@ setEditingCompany(null);
                                   >
                                     <Trash2 className="h-4 w-4 text-red-600" />
                                   </Button>
-
                                 </div>
                               </TableCell>
                             </TableRow>

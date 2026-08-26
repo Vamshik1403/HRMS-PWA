@@ -368,4 +368,37 @@ export class MailService {
       return false;
     }
   }
+
+  /** Direct OTP / transactional email to an arbitrary address. */
+  async sendRawEmail(params: {
+    to: string;
+    subject: string;
+    html: string;
+    text?: string;
+    fromName?: string;
+  }): Promise<boolean> {
+    const transporter = this.getTransporter();
+    if (!transporter) {
+      this.logger.warn('SMTP not configured; skipping email');
+      return false;
+    }
+
+    const { from: smtpFrom } = this.smtpConfig();
+    const fromAddress = this.extractSmtpEmail(smtpFrom);
+
+    try {
+      await transporter.sendMail({
+        from: { name: params.fromName || 'OpenHRM', address: fromAddress },
+        to: params.to,
+        subject: params.subject,
+        html: params.html,
+        text: params.text,
+      });
+      this.logger.log(`Email sent to ${params.to}: ${params.subject}`);
+      return true;
+    } catch (err) {
+      this.logger.error(`Failed to send email to ${params.to}: ${String(err)}`);
+      return false;
+    }
+  }
 }
