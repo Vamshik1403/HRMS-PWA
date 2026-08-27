@@ -422,9 +422,9 @@ export function OrgChart({ data }: { data: OrgChartData }) {
   }, [childMap, collapsed, linkedEdges, positions]);
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden">
+    <div className="flex min-h-[520px] flex-1 flex-col gap-3">
       <OrgChartToolbar view={view} onView={changeView} />
-      <div className="relative min-h-0 flex-1 overflow-hidden rounded-2xl border border-slate-200 bg-[#F7F9FC]">
+      <div className="relative h-[min(68vh,640px)] min-h-[420px] w-full overflow-hidden rounded-2xl border border-slate-200 bg-[#F7F9FC]">
         <ReactFlowProvider>
           <OrgChartCanvas
             nodes={nodes}

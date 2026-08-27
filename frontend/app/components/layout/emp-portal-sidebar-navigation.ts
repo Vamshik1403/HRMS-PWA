@@ -14,7 +14,6 @@ import {
   RotateCcw,
   CalendarClock,
   UserMinus,
-  FileText,
   Wallet,
   Coins,
   Gift,
@@ -25,7 +24,6 @@ import {
   CalendarRange,
   Receipt,
   ScrollText,
-  Sliders,
   ClipboardList,
   History,
   DollarSign,
@@ -138,7 +136,7 @@ export const EMP_SIDEBAR_NAVIGATION: EmpSidebarNavGroup[] = [
         href: "/task-projects",
         icon: ListTodo,
         moduleId: "tasks",
-        show: () => canAccessTasksModule(),
+        show: () => canAccessTasksModule() && !hasAnyCompanyAccess(),
       },
       {
         id: "im",
@@ -176,18 +174,11 @@ export const EMP_SIDEBAR_NAVIGATION: EmpSidebarNavGroup[] = [
         moduleId: "promotions",
         managerOnly: true,
       },
-      {
-        id: "team-leave-applications",
-        label: "Leave Applications",
-        href: "/leave-applications",
-        icon: FileText,
-        moduleId: "team",
-        show: () => canViewModule("LEAVE_APPLICATIONS") || isCompanyOwnerFlag(),
-      },
     ],
   },
   {
     label: "Customer Management",
+    show: () => !hasAnyCompanyAccess(),
     items: [
       {
         id: "customers",
@@ -209,7 +200,7 @@ export const EMP_SIDEBAR_NAVIGATION: EmpSidebarNavGroup[] = [
   },
   {
     label: "Employee Management",
-    show: hasAnyCompanyAccess,
+    show: () => false,
     items: [
       {
         id: "admin-employees",
@@ -243,7 +234,7 @@ export const EMP_SIDEBAR_NAVIGATION: EmpSidebarNavGroup[] = [
   },
   {
     label: "Payroll Management",
-    show: hasAnyCompanyAccess,
+    show: () => false,
     items: [
       {
         id: "admin-run-payroll",
@@ -277,7 +268,7 @@ export const EMP_SIDEBAR_NAVIGATION: EmpSidebarNavGroup[] = [
   },
   {
     label: "Contract Management",
-    show: hasAnyCompanyAccess,
+    show: () => false,
     items: [
       {
         id: "admin-contract-employee",
@@ -311,7 +302,7 @@ export const EMP_SIDEBAR_NAVIGATION: EmpSidebarNavGroup[] = [
   },
   {
     label: "Reports",
-    show: hasAnyCompanyAccess,
+    show: () => false,
     items: [
       {
         id: "admin-attendance-reports",
@@ -352,12 +343,12 @@ export const EMP_SIDEBAR_NAVIGATION: EmpSidebarNavGroup[] = [
   },
   {
     label: "My Company",
-    managerOnly: true,
+    show: hasAnyCompanyAccess,
     items: [
       {
         id: "company",
         label: "My Company",
-        href: "/empCompanyDashboard",
+        href: "/my-company",
         icon: Building2,
         moduleId: "company",
         companyAccessOnly: true,
@@ -368,33 +359,6 @@ export const EMP_SIDEBAR_NAVIGATION: EmpSidebarNavGroup[] = [
     label: "Administration",
     show: hasAnyCompanyAccess,
     items: [
-      {
-        id: "admin-company-setup",
-        label: "Company Setup",
-        href: "/company-setup",
-        icon: Sliders,
-        show: () =>
-          isCompanyOwnerFlag() ||
-          ["EMPLOYEES", "BRANCHES", "DEPARTMENTS", "DESIGNATIONS", "DEVICES", "SETTINGS", "IMPORT_ATTENDANCE"].some((k) =>
-            canViewModule(k),
-          ),
-      },
-      {
-        id: "admin-policy-setup",
-        label: "Policy Setup",
-        href: "/policy-setup",
-        icon: ClipboardList,
-        show: () =>
-          isCompanyOwnerFlag() ||
-          ["WORK_SHIFTS", "ATTENDANCE_POLICY", "HOLIDAYS", "LEAVE_POLICY"].some((k) => canViewModule(k)),
-      },
-      {
-        id: "admin-payroll-setup",
-        label: "Payroll Setup",
-        href: "/payroll-setup",
-        icon: Wallet,
-        show: () => isCompanyOwnerFlag() || canViewModule("PAYROLL"),
-      },
       {
         id: "admin-system-logs",
         label: "System Logs",
@@ -407,6 +371,7 @@ export const EMP_SIDEBAR_NAVIGATION: EmpSidebarNavGroup[] = [
 ];
 
 const COMPANY_PATH_PREFIXES = [
+  "/my-company",
   "/empCompanyDashboard",
   "/empCompany",
   "/empHolidays",
@@ -453,9 +418,10 @@ export function isEmpNavItemActive(
 ): boolean {
   const tab = searchParams.get("tab");
 
-  // Keep My Company highlighted across Dashboard / Departments / Holidays only.
+  // Keep My Company highlighted across the tile hub and legacy company paths.
   if (
     item.moduleId === "company" ||
+    item.href === "/my-company" ||
     item.href === "/empCompany" ||
     item.href === "/empCompanyDashboard"
   ) {

@@ -18,13 +18,15 @@ import {
   ForgotPasswordDto,
   VerifyForgotPasswordDto,
   VerifyLoginOtpDto,
+  ResendLoginOtpDto,
 } from './dto/forgot-password.dto';
 import { AuthOtpPurpose, SubscriptionStatus } from '@prisma/client';
 
 const SUBSCRIPTION_EXEMPT_ROLES = ['SUPERADMIN', 'SERVICE_PROVIDER'];
 const EMAIL_NOT_FOUND_MSG =
   'Wrong email address or email not found. Contact your administrator.';
-const OTP_TTL_MS = 10 * 60 * 1000;
+const LOGIN_OTP_TTL_MS = 5 * 60 * 1000;
+const FORGOT_PASSWORD_OTP_TTL_MS = 10 * 60 * 1000;
 const OTP_SALT_ROUNDS = 10;
 
 @Injectable()
@@ -163,6 +165,7 @@ export class AuthService {
         payload: JSON.stringify({ userId: user.id }),
         subject: 'OpenHRM SuperAdmin login OTP',
         bodyLine: 'Use this 6-digit code to complete your SuperAdmin login.',
+        ttlMs: LOGIN_OTP_TTL_MS,
       });
 
       return {
@@ -193,6 +196,7 @@ export class AuthService {
         payload: JSON.stringify({ employeeId: user.employeeID }),
         subject: 'OpenHRM Company Admin login OTP',
         bodyLine: 'Use this 6-digit code to complete your Company Admin login.',
+        ttlMs: LOGIN_OTP_TTL_MS,
       });
 
       return {
@@ -277,6 +281,62 @@ export class AuthService {
     return this.issueLoginResponse(user, 'user', req);
   }
 
+  async resendLoginOtp(dto: ResendLoginOtpDto) {
+    const row = await this.prisma.authOtp.findUnique({
+      where: { pendingToken: String(dto.pendingToken || '').trim() },
+    });
+
+    if (!row || row.purpose !== AuthOtpPurpose.SUPERADMIN_LOGIN || row.consumedAt) {
+      throw new UnauthorizedException('Invalid or expired OTP');
+    }
+
+    let userId: number | null = null;
+    let employeeId: number | null = null;
+    try {
+      const payload = row.payload ? JSON.parse(row.payload) : null;
+      userId = payload?.userId != null ? Number(payload.userId) : null;
+      employeeId = payload?.employeeId != null ? Number(payload.employeeId) : null;
+    } catch {
+      userId = null;
+      employeeId = null;
+    }
+
+    let to = '';
+    let subject = 'OpenHRM login OTP';
+    let bodyLine = 'Use this 6-digit code to complete your login.';
+
+    if (userId) {
+      const user = await this.prisma.user.findUnique({ where: { id: userId } });
+      to = String(user?.email || '').trim();
+      subject = 'OpenHRM SuperAdmin login OTP';
+      bodyLine = 'Use this 6-digit code to complete your SuperAdmin login.';
+    } else if (employeeId) {
+      const employee = await this.prisma.manageEmployee.findUnique({
+        where: { id: employeeId },
+        include: { employeeCredentials: true },
+      });
+      to = employee ? this.employeeEmail(employee) : '';
+      subject = 'OpenHRM Company Admin login OTP';
+      bodyLine = 'Use this 6-digit code to complete your Company Admin login.';
+    }
+
+    if (!to) {
+      throw new BadRequestException(
+        'Email is not configured for this account. Contact your administrator.',
+      );
+    }
+
+    return this.createAndSendOtp({
+      purpose: AuthOtpPurpose.SUPERADMIN_LOGIN,
+      identifier: row.identifier,
+      to,
+      payload: row.payload || '{}',
+      subject,
+      bodyLine,
+      ttlMs: LOGIN_OTP_TTL_MS,
+    });
+  }
+
   async forgotPassword(dto: ForgotPasswordDto) {
     const identifier = String(dto.emailOrMobile || '').trim();
     if (!identifier) {
@@ -307,6 +367,7 @@ export class AuthService {
       payload: JSON.stringify({ employeeID: employee.id }),
       subject: 'OpenHRM password reset OTP',
       bodyLine: 'Use this 6-digit code to reset your OpenHRM password.',
+      ttlMs: FORGOT_PASSWORD_OTP_TTL_MS,
     });
 
     return {
@@ -607,6 +668,7 @@ export class AuthService {
     payload: string;
     subject: string;
     bodyLine: string;
+    ttlMs: number;
   }) {
     if (!this.mail.isConfigured()) {
       throw new BadRequestException(
@@ -626,6 +688,7 @@ export class AuthService {
     const otp = String(randomInt(100000, 1000000));
     const pendingToken = randomBytes(32).toString('hex');
     const codeHash = await bcrypt.hash(otp, OTP_SALT_ROUNDS);
+    const ttlMinutes = Math.max(1, Math.round(params.ttlMs / 60000));
 
     await this.prisma.authOtp.create({
       data: {
@@ -634,7 +697,7 @@ export class AuthService {
         codeHash,
         pendingToken,
         payload: params.payload,
-        expiresAt: new Date(Date.now() + OTP_TTL_MS),
+        expiresAt: new Date(Date.now() + params.ttlMs),
       },
     });
 
@@ -644,8 +707,8 @@ export class AuthService {
       html:
         `<p>${params.bodyLine}</p>` +
         `<p style="font-size:22px;letter-spacing:4px;font-weight:700">${otp}</p>` +
-        `<p>This code expires in 10 minutes.</p>`,
-      text: `${params.bodyLine}\n\n${otp}\n\nThis code expires in 10 minutes.`,
+        `<p>This code expires in ${ttlMinutes} minutes.</p>`,
+      text: `${params.bodyLine}\n\n${otp}\n\nThis code expires in ${ttlMinutes} minutes.`,
     });
 
     if (!sent) {

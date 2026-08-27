@@ -1,6 +1,5 @@
 "use client";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, Suspense } from "react";
-import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Eye, EyeOff } from "lucide-react";
 import {
@@ -48,10 +47,6 @@ import { EmpPortalTopbar } from "./EmpPortalTopbar";
 import { EmpPortalPageProvider } from "./emp-portal-page-context";
 import { ListToolbarActionsProvider } from "./list-toolbar-actions-context";
 import { applyEmpTheme, readStoredEmpTheme } from "@/app/utils/empTheme";
-import {
-  EMP_COMPANY_TABS,
-  resolvePortalZone,
-} from "./emp-portal-navigation";
 import {
   findActiveSidebarItem,
   fullPortalUrl,
@@ -114,29 +109,6 @@ export function useEmpPortalDesktop(): boolean {
   return useEmpPortalLayout().desktop;
 }
 
-function NavTabLink({
-  href,
-  active,
-  children,
-}: {
-  href: string;
-  active: boolean;
-  children: React.ReactNode;
-}) {
-  return (
-    <Link
-      href={href}
-      className={`px-4 py-2.5 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
-        active
-          ? "border-primary text-primary"
-          : "border-transparent text-muted-foreground hover:text-foreground hover:border-border"
-      }`}
-    >
-      {children}
-    </Link>
-  );
-}
-
 export default function EmpPortalShell({ children, hideBottomNav = false }: EmpPortalShellProps) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -154,15 +126,11 @@ export default function EmpPortalShell({ children, hideBottomNav = false }: EmpP
   const syncInFlight = useRef(false);
   const prevNavRef = useRef<{ url: string; sectionId: string } | null>(null);
 
-  const activeZone = resolvePortalZone(pathname);
   const activeModule = resolveModuleWorkspace(pathname);
 
   const moduleTabs = activeModule
     ? visibleModuleTabs(activeModule, isManagerView)
     : [];
-
-  const companyTabs = EMP_COMPANY_TABS;
-  const showCompanyTabs = isManagerView && activeZone === "company";
 
   // Warm the Home hero scene as soon as the portal mounts (often before Home paints).
   useEffect(() => {
@@ -445,16 +413,6 @@ export default function EmpPortalShell({ children, hideBottomNav = false }: EmpP
             window.location.href = "/login";
           }}
         />
-
-        {showCompanyTabs && (
-          <div className="shrink-0 bg-background border-b border-border px-4 flex gap-0.5 overflow-x-auto">
-            {companyTabs.map((tab) => (
-              <NavTabLink key={tab.id} href={tab.href} active={tab.match(pathname)}>
-                {tab.label}
-              </NavTabLink>
-            ))}
-          </div>
-        )}
 
         {/* More module categories — directly under top navbar */}
         <Suspense fallback={null}>

@@ -1,7 +1,7 @@
 "use client";
 
-import { PublicPolicyPage } from "../components/app/public-policy-page";
+import { LegalPolicyLayout } from "../components/app/legal-policy-layout";
 
 export default function SlaPage() {
-  return <PublicPolicyPage type="SLA" />;
+  return <LegalPolicyLayout type="SLA" />;
 }

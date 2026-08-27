@@ -42,7 +42,7 @@ export function PublicPolicyPage({ type }: { type: string }) {
   const title = policy?.policyName || TITLES[type] || "Policy";
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="bg-background">
       <div className="mx-auto max-w-3xl px-6 py-12">
         <a href="/login" className="text-sm text-primary underline underline-offset-2">
           Back to login

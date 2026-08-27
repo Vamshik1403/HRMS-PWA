@@ -151,34 +151,6 @@ export const EMP_TEAM_TABS = [
   { id: "promotions", label: "Promotions & Transfers", href: "/empTeam/promotions", match: (p: string) => p.startsWith("/empTeam/promotions") },
 ];
 
-export const EMP_COMPANY_TABS = [
-  {
-    id: "dashboard",
-    label: "Dashboard",
-    href: "/empCompanyDashboard",
-    match: (p: string) =>
-      p === "/empCompanyDashboard" || p.startsWith("/empCompanyDashboard/"),
-  },
-  {
-    id: "hierarchy",
-    label: "Company Hierarchy",
-    href: "/company-hierarchy",
-    match: (p: string) => p === "/company-hierarchy" || p.startsWith("/company-hierarchy/"),
-  },
-  {
-    id: "departments",
-    label: "Departments",
-    href: "/empCompany/departments",
-    match: (p: string) => p.startsWith("/empCompany/departments"),
-  },
-  {
-    id: "holidays",
-    label: "Holidays",
-    href: "/empHolidays",
-    match: (p: string) => p === "/empHolidays" || p.startsWith("/empPublicHoliday"),
-  },
-];
-
 const HOME_PATH_PREFIXES = [
   "/empdashboard",
   "/empProfile",

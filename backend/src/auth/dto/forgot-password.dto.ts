@@ -30,3 +30,8 @@ export class VerifyLoginOtpDto {
   @MinLength(6)
   otp: string;
 }
+
+export class ResendLoginOtpDto {
+  @IsString()
+  pendingToken: string;
+}

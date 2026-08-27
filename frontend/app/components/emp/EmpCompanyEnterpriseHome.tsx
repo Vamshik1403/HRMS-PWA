@@ -6,6 +6,7 @@ import { CompanyAdminEnterpriseDashboard } from "@/app/dashboard/components/Comp
 import { EmpDesktopPage } from "@/app/components/emp/desktop/EmpDesktopPage";
 import { authHeaders } from "@/lib/auth";
 import { hasCompanyAccessFlag, readCompanyAccess } from "@/lib/companyAccess";
+import { useCurrentUser } from "@/app/hooks/useCurrentUser";
 import { useOptionalEmpPortalPageContext } from "@/app/components/layout/emp-portal-page-context";
 
 const BACKEND = "/backend";
@@ -18,14 +19,18 @@ function todayIso() {
 /** Company admin enterprise dashboard embedded in the employee portal for owners/grantees. */
 export function EmpCompanyEnterpriseHome({ firstName }: { firstName?: string }) {
   const access = readCompanyAccess();
+  const user = useCurrentUser();
   const inPortal = Boolean(useOptionalEmpPortalPageContext());
+  const canShowCompanyDashboard =
+    hasCompanyAccessFlag() ||
+    String(user?.role || "").toUpperCase() === "COMPANY_ADMIN";
   const [ready, setReady] = useState(false);
   const [overview, setOverview] = useState<any>(null);
   const [widgets, setWidgets] = useState<any>(null);
   const [deptRows, setDeptRows] = useState<{ name: string; count: number }[]>([]);
 
   useEffect(() => {
-    if (!hasCompanyAccessFlag()) return;
+    if (!canShowCompanyDashboard) return;
     let cancelled = false;
     const headers = authHeaders();
     let companyID = 0;
@@ -65,7 +70,7 @@ export function EmpCompanyEnterpriseHome({ firstName }: { firstName?: string }) 
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [canShowCompanyDashboard]);
 
   const activityItems = useMemo(() => {
     const fromApi = (widgets?.recentActivities ?? []).map((a: any) => {
@@ -89,10 +94,13 @@ export function EmpCompanyEnterpriseHome({ firstName }: { firstName?: string }) 
 
   const titleName =
     firstName ||
+    (user as any)?.employee?.firstName ||
+    user?.firstName ||
     access?.ownerTitle ||
+    user?.username ||
     "Owner";
 
-  if (!hasCompanyAccessFlag()) return null;
+  if (!canShowCompanyDashboard) return null;
 
   const summary = overview?.summary ?? overview;
   const statusCounts = overview?.statusCounts ?? {};

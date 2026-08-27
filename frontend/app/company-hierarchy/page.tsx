@@ -56,14 +56,14 @@ export default function CompanyHierarchyPage() {
       title="Organization Hierarchy"
       description="Interactive reporting tree of owners, departments, and teams."
       icon={Network}
-      className="flex min-h-0 flex-1 flex-col overflow-hidden space-y-0"
+      className="flex min-h-0 flex-1 flex-col space-y-0"
     >
       {loading ? (
         <p className="py-16 text-center text-sm text-slate-400">Loading hierarchy…</p>
       ) : error ? (
         <p className="py-16 text-center text-sm text-destructive">{error}</p>
       ) : data ? (
-        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+        <div className="flex min-h-[520px] flex-1 flex-col">
           {source === "mock" ? (
             <p className="mb-2 shrink-0 text-xs text-slate-400">
               Showing sample org data. Live employees load from{" "}

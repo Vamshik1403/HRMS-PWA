@@ -32,6 +32,57 @@ export class CompanyService {
     return String(value || '').trim().toLowerCase();
   }
 
+  private normalizeUsername(value?: string | null): string {
+    return String(value || '').trim().toLowerCase();
+  }
+
+  async isUsernameAvailable(username?: string, excludeOwnerId?: number) {
+    const normalized = this.normalizeUsername(username);
+    if (!normalized) {
+      return { available: false, message: 'Username is required' };
+    }
+
+    const existingCred = await this.prisma.employeeCredentials.findFirst({
+      where: {
+        username: { equals: normalized, mode: 'insensitive' },
+        ...(excludeOwnerId
+          ? { employeeID: { not: excludeOwnerId } }
+          : {}),
+      },
+      select: { id: true },
+    });
+    if (existingCred) {
+      return { available: false, message: 'Username already exists' };
+    }
+
+    const existingUser = await this.prisma.user.findFirst({
+      where: { username: { equals: normalized, mode: 'insensitive' } },
+      select: { id: true },
+    });
+    if (existingUser) {
+      return { available: false, message: 'Username already exists' };
+    }
+
+    return { available: true };
+  }
+
+  private async assertEmailAvailable(email: string, excludeEmployeeId?: number) {
+    const existing = await this.prisma.manageEmployee.findFirst({
+      where: {
+        isDeleted: false,
+        ...(excludeEmployeeId ? { id: { not: excludeEmployeeId } } : {}),
+        OR: [
+          { businessEmail: { equals: email, mode: 'insensitive' } },
+          { personalEmail: { equals: email, mode: 'insensitive' } },
+        ],
+      },
+      select: { id: true },
+    });
+    if (existing) {
+      throw new ConflictException('Email already exists');
+    }
+  }
+
   private employeeInitialPassword(personalPhoneNo?: string | null): string {
     return this.digitsOnly(personalPhoneNo) || String(personalPhoneNo || '').trim();
   }
@@ -225,7 +276,8 @@ export class CompanyService {
     if (!email) throw new BadRequestException('Email is required');
     if (!mobile) throw new BadRequestException('Mobile is required');
 
-    const username = this.normalizeEmail(dto.username) || email;
+    const username = this.normalizeUsername(dto.username) || email;
+    await this.assertEmailAvailable(email);
     const existingCred = await this.prisma.employeeCredentials.findFirst({
       where: { username: { equals: username, mode: 'insensitive' } },
     });
@@ -385,8 +437,8 @@ export class CompanyService {
       ownerTitle,
       roleLabel: ownerTitle,
       message: isCompanyOwner
-        ? `Company admin (${ownerTitle}) created. Login with email and mobile.`
-        : 'Employee login created. Login with email and mobile.',
+        ? `Company admin (${ownerTitle}) created. Login with username.`
+        : 'Employee login created. Login with username.',
     };
   }
 
@@ -413,12 +465,17 @@ export class CompanyService {
       throw new BadRequestException('Mobile is required');
     }
 
+    if (dto.businessEmail !== undefined) {
+      await this.assertEmailAvailable(
+        this.normalizeEmail(dto.businessEmail),
+        owner.id,
+      );
+    }
+
     const nextUsername =
       dto.username !== undefined
-        ? this.normalizeEmail(dto.username) || this.normalizeEmail(dto.businessEmail)
-        : dto.businessEmail !== undefined
-          ? this.normalizeEmail(dto.businessEmail)
-          : undefined;
+        ? this.normalizeUsername(dto.username)
+        : undefined;
 
     if (nextUsername) {
       const taken = await this.prisma.employeeCredentials.findFirst({
@@ -428,6 +485,12 @@ export class CompanyService {
         },
       });
       if (taken) throw new ConflictException('Username already exists');
+
+      const takenUser = await this.prisma.user.findFirst({
+        where: { username: { equals: nextUsername, mode: 'insensitive' } },
+        select: { id: true },
+      });
+      if (takenUser) throw new ConflictException('Username already exists');
     }
 
     await this.prisma.$transaction(async (tx) => {

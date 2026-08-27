@@ -118,7 +118,7 @@ export class ApprovalEngineService {
 
     /*
      * No matching conditional workflow = direct approval.
-     */
+ */
     if (!workflow) {
       await tx.manageEmployee.update({
         where: {
@@ -225,7 +225,7 @@ export class ApprovalEngineService {
       ) ||
       regularisation.manageEmployeeID <= 0
     ) {
-      throw new BadRequestException(
+  throw new BadRequestException(
         'A valid employee is required before resolving attendance regularisation approval',
       );
     }
@@ -246,7 +246,7 @@ export class ApprovalEngineService {
       departmentID:
         regularisation.departmentID,
 
-      designationID:
+            designationID:
         regularisation.designationID,
 
       requestedStatus:
@@ -346,43 +346,43 @@ export class ApprovalEngineService {
             {
               OR:
                 subject.branchesID != null
-                  ? [
-                      {
-                        branchesID:
+                ? [
+                  {
+                    branchesID:
                           subject.branchesID,
-                      },
-                      {
-                        branchesID:
-                          null,
-                      },
-                    ]
-                  : [
-                      {
-                        branchesID:
-                          null,
-                      },
-                    ],
+                  },
+                  {
+                    branchesID:
+                      null,
+                  },
+                ]
+                : [
+                  {
+                    branchesID:
+                      null,
+                  },
+                ],
             },
 
             {
               OR:
                 subject.serviceProviderID != null
-                  ? [
-                      {
-                        serviceProviderID:
+                ? [
+                  {
+                    serviceProviderID:
                           subject.serviceProviderID,
-                      },
-                      {
-                        serviceProviderID:
-                          null,
-                      },
-                    ]
-                  : [
-                      {
-                        serviceProviderID:
-                          null,
-                      },
-                    ],
+                  },
+                  {
+                    serviceProviderID:
+                      null,
+                  },
+                ]
+                : [
+                  {
+                    serviceProviderID:
+                      null,
+                  },
+                ],
             },
           ],
         },
@@ -448,7 +448,7 @@ export class ApprovalEngineService {
         (a, b) => {
           const aExact =
             subject.branchesID != null &&
-            a.branchesID != null &&
+  a.branchesID != null &&
             Number(
               a.branchesID,
             ) ===
@@ -458,7 +458,7 @@ export class ApprovalEngineService {
 
           const bExact =
             subject.branchesID != null &&
-            b.branchesID != null &&
+  b.branchesID != null &&
             Number(
               b.branchesID,
             ) ===
@@ -470,20 +470,20 @@ export class ApprovalEngineService {
             return aExact
               ? -1
               : 1;
-          }
+        }
 
-          const effectiveDifference =
-            b.effectiveFrom.getTime() -
-            a.effectiveFrom.getTime();
+        const effectiveDifference =
+          b.effectiveFrom.getTime() -
+          a.effectiveFrom.getTime();
 
           if (
             effectiveDifference !==
             0
           ) {
-            return effectiveDifference;
-          }
+          return effectiveDifference;
+        }
 
-          return b.id - a.id;
+        return b.id - a.id;
         },
       );
 
@@ -507,45 +507,45 @@ export class ApprovalEngineService {
    * conditional approval.
    */
   private workflowConditionsMatch(
-    matchType:
-      WorkflowConditionMatchType,
+  matchType:
+    WorkflowConditionMatchType,
     conditions:
       Array<any>,
     subject:
       WorkflowSubject,
-  ): boolean {
-    if (!conditions.length) {
-      return false;
-    }
+): boolean {
+  if (!conditions.length) {
+    return false;
+  }
 
-    const results =
-      conditions.map(
-        (condition) =>
-          this.conditionMatches(
-            condition,
+  const results =
+    conditions.map(
+      (condition) =>
+        this.conditionMatches(
+          condition,
             subject,
-          ),
-      );
+        ),
+    );
 
-    if (
-      matchType ===
-      WorkflowConditionMatchType.ANY
-    ) {
-      return results.some(
+  if (
+    matchType ===
+    WorkflowConditionMatchType.ANY
+  ) {
+    return results.some(
         Boolean,
-      );
-    }
-
-    return results.every(
-      Boolean,
     );
   }
 
-  private conditionMatches(
-    condition: any,
+  return results.every(
+      Boolean,
+  );
+}
+
+private conditionMatches(
+  condition: any,
     subject:
       WorkflowSubject,
-  ): boolean {
+): boolean {
     switch (
       condition.fieldKey
     ) {
@@ -556,67 +556,67 @@ export class ApprovalEngineService {
           condition.operator,
         );
 
-      case 'DEPARTMENT':
-        return this.compareEquality(
+    case 'DEPARTMENT':
+      return this.compareEquality(
           subject.departmentID,
-          condition.departmentID,
-          condition.operator,
-        );
+        condition.departmentID,
+        condition.operator,
+      );
 
-      case 'DESIGNATION':
-        return this.compareEquality(
+    case 'DESIGNATION':
+      return this.compareEquality(
           subject.designationID,
-          condition.designationID,
-          condition.operator,
-        );
+        condition.designationID,
+        condition.operator,
+      );
 
-      case 'EMPLOYEE': {
-        const selectedEmployeeIDs =
-          Array.isArray(
-            condition.employees,
-          )
-            ? condition.employees
-                .map(
-                  (item: {
-                    manageEmployeeID:
-                      number;
-                  }) =>
-                    Number(
-                      item.manageEmployeeID,
-                    ),
-                )
-                .filter(
+    case 'EMPLOYEE': {
+      const selectedEmployeeIDs =
+        Array.isArray(
+          condition.employees,
+        )
+          ? condition.employees
+              .map(
+                (item: {
+                  manageEmployeeID:
+                    number;
+                }) =>
+                  Number(
+                    item.manageEmployeeID,
+                  ),
+              )
+              .filter(
                   (
                     id: number,
                   ) =>
                     Number.isInteger(
                       id,
                     ) &&
-                    id > 0,
-                )
-            : [];
+                  id > 0,
+              )
+          : [];
 
-        const included =
-          selectedEmployeeIDs.includes(
+      const included =
+        selectedEmployeeIDs.includes(
             subject.employeeID,
-          );
+        );
 
-        if (
-          condition.operator ===
-          'IN'
-        ) {
-          return included;
-        }
-
-        if (
-          condition.operator ===
-          'NOT_IN'
-        ) {
-          return !included;
-        }
-
-        return false;
+      if (
+        condition.operator ===
+        'IN'
+      ) {
+        return included;
       }
+
+      if (
+        condition.operator ===
+        'NOT_IN'
+      ) {
+        return !included;
+      }
+
+      return false;
+    }
 
       case 'REGULARISATION_TYPE': {
         const actual =
@@ -699,26 +699,26 @@ export class ApprovalEngineService {
        * in Attendance/Onboarding workflow matching here.
        */
       default:
-        return false;
-    }
+      return false;
   }
+}
 
   private compareEquality(
-    actualValue:
-      number | null,
-    expectedValue:
-      number | null,
-    operator:
-      string,
-  ): boolean {
-    if (
-      actualValue == null ||
-      expectedValue == null
-    ) {
-      return false;
-    }
+  actualValue:
+    number | null,
+  expectedValue:
+    number | null,
+  operator:
+    string,
+): boolean {
+  if (
+    actualValue == null ||
+    expectedValue == null
+  ) {
+    return false;
+  }
 
-    const equal =
+  const equal =
       Number(
         actualValue,
       ) ===
@@ -810,10 +810,10 @@ export class ApprovalEngineService {
         );
       }
 
-      default:
-        return false;
-    }
+    default:
+      return false;
   }
+}
 
   private normalizeTextValue(
     value:
@@ -841,7 +841,7 @@ export class ApprovalEngineService {
    * ============================================================
    */
   private async createApprovalRequest(
-    tx: TransactionClient,
+  tx: TransactionClient,
     workflow: any,
     subject:
       WorkflowSubject,
@@ -1323,13 +1323,13 @@ await tx.approvalRequestApprover.createMany({
 
     const managers =
       await tx.manageEmployee.findMany({
-        where: {
+    where: {
           id: {
             in:
               managerIDs,
           },
 
-          companyID:
+      companyID:
             subject.companyID,
 
           lifecycleStatus:
@@ -1475,28 +1475,28 @@ await tx.approvalRequestApprover.createMany({
          * keep approvers inside that branch.
          */
         ...(subject.branchesID != null
-          ? {
-              branchesID:
+        ? {
+            branchesID:
                 subject.branchesID,
-            }
-          : {}),
+          }
+        : {}),
 
         id: {
           not:
             subject.employeeID,
         },
 
-        /*
+      /*
          * Support both employee designation methods.
-         */
-        OR: [
-          {
+       */
+      OR: [
+        {
             designationID,
-          },
+        },
 
-          {
-            empDesignation: {
-              some: {
+        {
+          empDesignation: {
+            some: {
                 designationID,
               },
             },
@@ -1544,7 +1544,7 @@ await tx.approvalRequestApprover.createMany({
           },
 
           select: {
-            designationID:
+              designationID:
               true,
 
             designation: {
@@ -1660,10 +1660,10 @@ await tx.approvalRequestApprover.createMany({
                 some: {
                   companyID:
                     subject.companyID,
-                },
-              },
             },
-          ],
+          },
+        },
+      ],
         },
 
         select: {
@@ -1702,34 +1702,34 @@ await tx.approvalRequestApprover.createMany({
                 subject.employeeID,
             },
 
-            lifecycleStatus:
-              'ACTIVE',
+      lifecycleStatus:
+        'ACTIVE',
 
-            onboardingApprovalStatus:
-              'APPROVED',
+      onboardingApprovalStatus:
+        'APPROVED',
 
-            isDeleted:
-              false,
+      isDeleted:
+        false,
 
-            employeeCredentials: {
-              is: {
-                isActive:
-                  true,
+      employeeCredentials: {
+        is: {
+          isActive:
+            true,
 
                 username: {
                   in:
                     usernames,
                 },
-              },
-            },
-          },
+        },
+      },
+    },
 
-          select: {
-            id: true,
-            companyID: true,
-            branchesID: true,
-            departmentNameID: true,
-            designationID: true,
+    select: {
+      id: true,
+      companyID: true,
+      branchesID: true,
+      departmentNameID: true,
+      designationID: true,
 
             designations: {
               select: {
@@ -1737,13 +1737,13 @@ await tx.approvalRequestApprover.createMany({
                   true,
               },
             },
-          },
+    },
 
-          orderBy: {
+    orderBy: {
             id:
               'asc',
-          },
-        });
+    },
+  });
 
       const resolvedAdmins =
         admins

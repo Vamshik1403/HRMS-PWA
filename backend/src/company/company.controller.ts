@@ -36,6 +36,17 @@ export class CompanyController {
     return this.companyService.seedDefaultModules();
   }
 
+  @Get('owners/username-available')
+  usernameAvailable(
+    @Query('username') username?: string,
+    @Query('excludeOwnerId') excludeOwnerId?: string,
+  ) {
+    return this.companyService.isUsernameAvailable(
+      username,
+      excludeOwnerId ? Number(excludeOwnerId) : undefined,
+    );
+  }
+
   @Get('owners')
   listOwners(@Query('companyID') companyID?: string) {
     return this.companyService.listOwners(

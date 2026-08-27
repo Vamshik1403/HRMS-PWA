@@ -64,6 +64,13 @@ export function EmpNavLink({ item, pathname, collapsed, badgeCount = 0 }: EmpNav
       href={item.href}
       onClick={(e) => {
         if (!active) return;
+        // My Company: always open the tile menu (never Gmail-style history pop).
+        if (
+          (item.moduleId === "company" || item.href === "/my-company") &&
+          pathname !== "/my-company"
+        ) {
+          return;
+        }
         // Re-clicking the active sidebar item = step back within THIS section only
         // (e.g. employee form → employee list). Never jumps to another sidebar section.
         e.preventDefault();

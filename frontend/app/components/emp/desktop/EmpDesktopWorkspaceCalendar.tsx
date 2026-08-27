@@ -25,7 +25,7 @@ import {
   resolveCalendarDayDisplay,
   type CalendarDayKind,
 } from "../../../utils/empCalendarDayStatus";
-import { buildWeekOffDayNames, isWeekOffDate, type WorkShiftDayRow } from "../../../utils/empWorkShiftWeekOff";
+import { buildWeekOffDayNames, type WorkShiftDayRow } from "../../../utils/empWorkShiftWeekOff";
 import type { EmpHolidayRow } from "../EmpHolidayListMobile";
 import { useCurrentUser } from "@/app/hooks/useCurrentUser";
 import { taskFetch } from "@/app/utils/taskApi";
@@ -37,13 +37,37 @@ const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 type CalendarViewMode = "month" | "week" | "day";
 
-const LEGEND: { kind: CalendarDayKind; label: string; dot: string }[] = [
-  { kind: "present", label: "Present", dot: "bg-emerald-500" },
-  { kind: "absent", label: "Absent", dot: "bg-rose-500" },
-  { kind: "leave", label: "Leave", dot: "bg-sky-500" },
-  { kind: "holiday", label: "Holiday", dot: "bg-violet-500" },
-  { kind: "weekoff", label: "Weekend", dot: "bg-amber-500" },
+const LEGEND: { label: string; swatch: string }[] = [
+  { label: "Present", swatch: "bg-emerald-100 border border-emerald-300" },
+  { label: "Absent", swatch: "bg-rose-100 border border-rose-300" },
+  { label: "Leave", swatch: "bg-sky-100 border border-sky-300" },
+  { label: "Week off", swatch: "bg-amber-100 border border-amber-300" },
+  { label: "Public holiday", swatch: "bg-violet-500" },
+  { label: "Task", swatch: "bg-sky-500" },
+  { label: "ToDo", swatch: "bg-teal-500" },
 ];
+
+const ATTENDANCE_CHIP: Record<
+  Exclude<CalendarDayKind, "none" | "holiday">,
+  { label: string; className: string }
+> = {
+  present: {
+    label: "Present",
+    className: "border-emerald-200 bg-emerald-50 text-emerald-800",
+  },
+  absent: {
+    label: "Absent",
+    className: "border-rose-200 bg-rose-50 text-rose-800",
+  },
+  leave: {
+    label: "Leave",
+    className: "border-sky-200 bg-sky-50 text-sky-800",
+  },
+  weekoff: {
+    label: "Week off",
+    className: "border-amber-200 bg-amber-50 text-amber-900",
+  },
+};
 
 const VIEW_MODES: { id: CalendarViewMode; label: string }[] = [
   { id: "month", label: "Month" },
@@ -131,37 +155,6 @@ function authHeaders(): Record<string, string> {
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
-function resolveStatusKind(args: {
-  dateKey: string;
-  todayKey: string;
-  isOutside: boolean;
-  isWeekend: boolean;
-  isWeekOff: boolean;
-  isHoliday: boolean;
-  dayMap: Map<string, AttendanceDaySummary>;
-  weekOffDays: Set<string>;
-  holidayMap: Map<string, string>;
-  leaves: { fromDate?: string; toDate?: string; status?: string; appliedLeaveType?: string; dayStatuses?: unknown }[];
-}): CalendarDayKind {
-  const { dateKey, todayKey, isOutside, isWeekend, isWeekOff, isHoliday, dayMap, weekOffDays, holidayMap, leaves } =
-    args;
-  if (isOutside) return "none";
-  const display = resolveCalendarDayDisplay({
-    dateKey,
-    todayKey,
-    attendance: dayMap.get(dateKey),
-    weekOffDays,
-    holidayMap,
-    leaves,
-  });
-  if (display.kind === "leave") return "leave";
-  if (display.kind === "holiday" || isHoliday) return "holiday";
-  if (display.kind === "weekoff" || isWeekOff || isWeekend) return "weekoff";
-  if (display.kind === "present") return "present";
-  if (display.kind === "absent") return "absent";
-  return "none";
-}
-
 const DAY_DETAIL_TABS: {
   id: Exclude<CalendarDayDetailSection, "all">;
   label: string;
@@ -187,7 +180,7 @@ export function EmpDesktopWorkspaceCalendar() {
   const [leaves, setLeaves] = useState<
     { fromDate?: string; toDate?: string; status?: string; appliedLeaveType?: string; dayStatuses?: unknown }[]
   >([]);
-  const [tasksByDate, setTasksByDate] = useState<Map<string, number>>(new Map());
+  const [tasksByDate, setTasksByDate] = useState<Map<string, string[]>>(new Map());
   const [todosByDate, setTodosByDate] = useState<Map<string, string[]>>(new Map());
   const [selectedDateKey, setSelectedDateKey] = useState<string | null>(null);
   const [dayDetailSection, setDayDetailSection] = useState<Exclude<CalendarDayDetailSection, "all">>("punches");
@@ -267,18 +260,18 @@ export function EmpDesktopWorkspaceCalendar() {
 
         if (user) {
           try {
-            const taskData = await taskFetch<{ items: { scheduleDateTime?: string | null }[] }>(
-              "/task-projects",
-              user,
-              undefined,
-              { limit: 200 },
-            );
-            const taskMap = new Map<string, number>();
+            const taskData = await taskFetch<{
+              items: { scheduleDateTime?: string | null; taskName?: string | null }[];
+            }>("/task-projects", user, undefined, { limit: 200 });
+            const taskMap = new Map<string, string[]>();
             (taskData.items || []).forEach((t) => {
               if (!t.scheduleDateTime) return;
               const key = taskDateKey(t.scheduleDateTime);
               if (!key) return;
-              taskMap.set(key, (taskMap.get(key) ?? 0) + 1);
+              const name = String(t.taskName || "Task").trim() || "Task";
+              const list = taskMap.get(key) ?? [];
+              list.push(name);
+              taskMap.set(key, list);
             });
             setTasksByDate(taskMap);
           } catch {
@@ -359,33 +352,65 @@ export function EmpDesktopWorkspaceCalendar() {
 
   const renderDayCell = (
     cell: { dateKey: string; day: number; outside?: boolean },
-    idx: number,
+    _idx: number,
     compact: boolean,
   ) => {
     const isToday = cell.dateKey === todayKey;
     const isOutside = cell.outside === true;
-    const isWeekend = idx % 7 === 0 || idx % 7 === 6;
-    const isWeekOff = !isOutside && isWeekOffDate(cell.dateKey, weekOffDays);
-    const taskCount = tasksByDate.get(cell.dateKey) ?? 0;
+    const taskNames = tasksByDate.get(cell.dateKey) ?? [];
     const todoTexts = todosByDate.get(cell.dateKey) ?? [];
-    const todoCount = todoTexts.length;
-    const todoTooltip = todoTexts.length > 0 ? todoTexts.join("\n") : "";
-    const isHoliday = !isOutside && holidayMap.has(cell.dateKey);
-    const badgeKind = resolveStatusKind({
-      dateKey: cell.dateKey,
-      todayKey,
-      isOutside,
-      isWeekend,
-      isWeekOff,
-      isHoliday,
-      dayMap,
-      weekOffDays,
-      holidayMap,
-      leaves,
-    });
-    const hasStatus = badgeKind !== "none";
+    const holidayName = !isOutside ? holidayMap.get(cell.dateKey) : undefined;
+    const display = isOutside
+      ? null
+      : resolveCalendarDayDisplay({
+          dateKey: cell.dateKey,
+          todayKey,
+          attendance: dayMap.get(cell.dateKey),
+          weekOffDays,
+          holidayMap,
+          leaves,
+        });
+    const badgeKind = display?.kind ?? "none";
+    const attendanceChip =
+      badgeKind === "present" || badgeKind === "absent" || badgeKind === "leave" || badgeKind === "weekoff"
+        ? ATTENDANCE_CHIP[badgeKind]
+        : null;
     const clickable = !isOutside;
-    const legend = LEGEND.find((l) => l.kind === badgeKind);
+
+    const eventRows: {
+      key: string;
+      label: string;
+      className: string;
+      onActivate?: () => void;
+    }[] = [];
+    if (holidayName) {
+      eventRows.push({
+        key: `holiday-${cell.dateKey}`,
+        label: holidayName || "Public holiday",
+        className: "bg-violet-500 text-white",
+      });
+    }
+    taskNames.forEach((name, i) => {
+      eventRows.push({
+        key: `task-${cell.dateKey}-${i}`,
+        label: name,
+        className: "bg-sky-500 text-white",
+      });
+    });
+    todoTexts.forEach((text, i) => {
+      eventRows.push({
+        key: `todo-${cell.dateKey}-${i}`,
+        label: text,
+        className: "bg-teal-500 text-white",
+        onActivate: () => {
+          if (viewMode === "day") {
+            setFocusDateKey(cell.dateKey);
+            return;
+          }
+          openDaySheet(cell.dateKey, "todo");
+        },
+      });
+    });
 
     const inner = (
       <div
@@ -395,66 +420,72 @@ export function EmpDesktopWorkspaceCalendar() {
           compact && "min-h-[88px]",
         )}
       >
-        <div className="inline-flex flex-col items-center self-start">
-          <span
-            className={cn(
-              "inline-flex size-6 items-center justify-center rounded-full text-xs font-semibold sm:size-7 sm:text-sm",
-              isToday
-                ? "bg-primary text-primary-foreground shadow-sm"
-                : isOutside
-                  ? "text-muted-foreground/70"
-                  : "text-foreground",
-            )}
-          >
-            {cell.day}
-          </span>
-          {!isOutside && hasStatus ? (
-            <span
-              className={cn("mt-0.5 size-1 rounded-full", legend?.dot)}
-              title={legend?.label}
-              aria-label={legend?.label}
-            />
-          ) : null}
-        </div>
+        <span
+          className={cn(
+            "inline-flex size-6 shrink-0 items-center justify-center self-start rounded-full text-xs font-semibold sm:size-7 sm:text-sm",
+            isToday
+              ? "bg-primary text-primary-foreground shadow-sm"
+              : isOutside
+                ? "text-muted-foreground/70"
+                : "text-foreground",
+          )}
+        >
+          {cell.day}
+        </span>
 
         {!isOutside ? (
-          <div className="mt-auto flex flex-wrap items-center gap-1 pt-1">
-            {taskCount > 0 ? (
-              <span
-                className="inline-flex items-center gap-0.5 rounded-md bg-sky-100 px-1.5 py-0.5 text-[9px] font-semibold text-sky-800"
-                title={`${taskCount} task(s)`}
+          <div
+            className="mt-1 flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto overscroll-contain"
+            onWheel={(e) => e.stopPropagation()}
+          >
+            {attendanceChip ? (
+              <div
+                className={cn(
+                  "w-full shrink-0 rounded border px-1 py-0.5 text-center leading-tight",
+                  attendanceChip.className,
+                )}
               >
-                <ListTodo className="size-3" />
-                {taskCount > 1 ? taskCount : null}
-              </span>
+                <div className="truncate text-[10px] font-semibold">{attendanceChip.label}</div>
+                {badgeKind === "present" && display?.hoursLine ? (
+                  <div className="truncate text-[9px] font-medium opacity-80">{display.hoursLine}</div>
+                ) : null}
+              </div>
             ) : null}
-            {todoCount > 0 ? (
-              <span
-                role="button"
-                tabIndex={0}
-                className="inline-flex items-center gap-0.5 rounded-md bg-emerald-100 px-1.5 py-0.5 text-[9px] font-semibold text-emerald-800 hover:bg-emerald-200"
-                title={todoTooltip}
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  if (viewMode === "day") {
-                    setFocusDateKey(cell.dateKey);
-                    return;
-                  }
-                  openDaySheet(cell.dateKey, "todo");
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    openDaySheet(cell.dateKey, "todo");
-                  }
-                }}
+            {eventRows.map((row) => (
+              <div
+                key={row.key}
+                title={row.label}
+                role={row.onActivate ? "button" : undefined}
+                tabIndex={row.onActivate ? 0 : undefined}
+                className={cn(
+                  "w-full shrink-0 truncate rounded-sm px-1.5 py-0.5 text-left text-[10px] font-medium leading-tight",
+                  row.className,
+                  row.onActivate && "hover:brightness-95",
+                )}
+                onClick={
+                  row.onActivate
+                    ? (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        row.onActivate?.();
+                      }
+                    : undefined
+                }
+                onKeyDown={
+                  row.onActivate
+                    ? (e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          row.onActivate?.();
+                        }
+                      }
+                    : undefined
+                }
               >
-                <CheckSquare className="size-3" />
-                {todoCount > 1 ? todoCount : null}
-              </span>
-            ) : null}
+                {row.label}
+              </div>
+            ))}
           </div>
         ) : (
           <div className="flex-1" />
@@ -678,8 +709,8 @@ export function EmpDesktopWorkspaceCalendar() {
 
         <div className="flex shrink-0 flex-wrap items-center gap-4 border-t border-border px-5 py-3">
           {LEGEND.map((item) => (
-            <span key={item.kind} className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground">
-              <span className={cn("size-1 rounded-full", item.dot)} />
+            <span key={item.label} className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground">
+              <span className={cn("size-2.5 shrink-0 rounded-sm", item.swatch)} />
               {item.label}
             </span>
           ))}

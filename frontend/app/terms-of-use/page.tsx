@@ -1,7 +1,7 @@
 "use client";
 
-import { PublicPolicyPage } from "../components/app/public-policy-page";
+import { LegalPolicyLayout } from "../components/app/legal-policy-layout";
 
 export default function TermsOfUsePage() {
-  return <PublicPolicyPage type="TERMS_OF_USE" />;
+  return <LegalPolicyLayout type="TERMS_OF_USE" />;
 }

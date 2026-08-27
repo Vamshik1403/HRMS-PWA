@@ -2,7 +2,6 @@ import {
   BadRequestException,
   ForbiddenException,
   Injectable,
-  NotFoundException,
 } from '@nestjs/common';
 import { CompanyPolicyType } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
@@ -19,9 +18,59 @@ export class CompanyPolicyService {
   }
 
   findAll() {
-    return this.prisma.companyPolicy.findMany({
-      orderBy: [{ type: 'asc' }, { effectiveFrom: 'desc' }, { createdAt: 'desc' }],
-    });
+    return this.ensureDefaults().then(() =>
+      this.prisma.companyPolicy.findMany({
+        orderBy: [{ type: 'asc' }, { effectiveFrom: 'desc' }, { createdAt: 'desc' }],
+      }),
+    );
+  }
+
+  private async ensureDefaults() {
+    const defaults: Array<{
+      type: CompanyPolicyType;
+      policyName: string;
+      versionName: string;
+      bodyHtml: string;
+    }> = [
+      {
+        type: CompanyPolicyType.TERMS_OF_USE,
+        policyName: 'Terms of Use',
+        versionName: 'v1.0',
+        bodyHtml:
+          '<h2>Terms of Use</h2><p>These Terms of Use govern access to and use of OpenHRM. Update this version to publish the latest company terms.</p>',
+      },
+      {
+        type: CompanyPolicyType.PRIVACY_POLICY,
+        policyName: 'Privacy Policy',
+        versionName: 'v1.0',
+        bodyHtml:
+          '<h2>Privacy Policy</h2><p>This Privacy Policy describes how OpenHRM collects, uses and protects personal data. Update this version to publish the latest privacy terms.</p>',
+      },
+      {
+        type: CompanyPolicyType.SLA,
+        policyName: 'Service Level Agreement',
+        versionName: 'v1.0',
+        bodyHtml:
+          '<h2>Service Level Agreement</h2><p>This Service Level Agreement describes availability and support commitments for OpenHRM. Update this version to publish the latest SLA.</p>',
+      },
+    ];
+
+    for (const item of defaults) {
+      const existing = await this.prisma.companyPolicy.findFirst({
+        where: { type: item.type },
+        select: { id: true },
+      });
+      if (existing) continue;
+      await this.prisma.companyPolicy.create({
+        data: {
+          type: item.type,
+          policyName: item.policyName,
+          versionName: item.versionName,
+          effectiveFrom: new Date(),
+          bodyHtml: item.bodyHtml,
+        },
+      });
+    }
   }
 
   async create(dto: CreateCompanyPolicyDto) {
@@ -36,14 +85,14 @@ export class CompanyPolicyService {
     });
   }
 
-  async remove(id: number) {
-    const existing = await this.prisma.companyPolicy.findUnique({ where: { id } });
-    if (!existing) throw new NotFoundException('Policy not found');
-    await this.prisma.companyPolicy.delete({ where: { id } });
-    return { ok: true };
+  async remove(_id: number) {
+    throw new ForbiddenException(
+      'Policy versions cannot be deleted. Revise them to keep history.',
+    );
   }
 
   async getLatestPublic(typeParam: string) {
+    await this.ensureDefaults();
     const type = this.parseType(typeParam);
     const now = new Date();
 

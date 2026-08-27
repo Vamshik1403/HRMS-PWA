@@ -175,7 +175,9 @@ export function HrmsAppShell({ children }: { children: React.ReactNode }) {
       window.dispatchEvent(new Event("app-data-refresh"));
       dispatchAppRefresh();
       router.push(
-        currentUser?.role === "EMPLOYEE" ? "/empCompanyDashboard" : "/dashboard",
+        currentUser?.role === "EMPLOYEE" || currentUser?.role === "COMPANY_ADMIN"
+          ? "/my-company"
+          : "/dashboard",
       );
     },
     [router, currentUser?.role],

@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { FileText, Plus, Trash2 } from "lucide-react";
+import { useSearchParams } from "next/navigation";
+import { FileText, Eye, Pencil, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
@@ -103,14 +104,24 @@ function PolicyRichTextEditor({
   );
 }
 
-export function PolicyManagement() {
+export function PolicyManagement({
+  defaultType,
+}: {
+  defaultType?: PolicyType;
+} = {}) {
   const user = useCurrentUser();
   const isSuperAdmin = user?.role === "SUPERADMIN";
+  const searchParams = useSearchParams();
+  const typeFilter = (defaultType ||
+    (searchParams.get("type") as PolicyType | null) ||
+    "") as PolicyType | "";
   const table = useClientTable("effectiveFrom");
   const [rows, setRows] = useState<PolicyRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [isAddingNew, setIsAddingNew] = useState(false);
+  const [viewRow, setViewRow] = useState<PolicyRow | null>(null);
+  const [revising, setRevising] = useState(false);
   const [form, setForm] = useState({ ...emptyForm });
   const [editorKey, setEditorKey] = useState(0);
 
@@ -156,6 +167,9 @@ export function PolicyManagement() {
   const filteredRows = useMemo(() => {
     const t = table.search.trim().toLowerCase();
     let data = rows;
+    if (typeFilter) {
+      data = data.filter((r) => r.type === typeFilter);
+    }
     if (t) {
       data = data.filter((r) =>
         [TYPE_LABEL[r.type], r.policyName, r.versionName].some((x) =>
@@ -177,11 +191,44 @@ export function PolicyManagement() {
           return "";
       }
     });
-  }, [rows, table.search, table.sortBy, table.sortDir]);
+  }, [rows, table.search, table.sortBy, table.sortDir, typeFilter]);
 
-  const resetForm = () => {
-    setForm({ ...emptyForm });
+  const resetForm = (prefillLatest = false) => {
+    const latest =
+      prefillLatest && typeFilter
+        ? rows
+            .filter((r) => r.type === typeFilter)
+            .sort((a, b) => {
+              const ad = new Date(a.effectiveFrom).getTime();
+              const bd = new Date(b.effectiveFrom).getTime();
+              if (ad !== bd) return bd - ad;
+              return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+            })[0]
+        : null;
+    setForm({
+      ...emptyForm,
+      type: typeFilter || "",
+      policyName: typeFilter ? TYPE_LABEL[typeFilter] : "",
+      versionName: "",
+      effectiveFrom: new Date().toISOString().slice(0, 10),
+      bodyHtml: latest?.bodyHtml || "",
+    });
     setEditorKey((k) => k + 1);
+    setRevising(false);
+  };
+
+  const openRevise = (row: PolicyRow) => {
+    setViewRow(null);
+    setRevising(true);
+    setForm({
+      type: row.type,
+      policyName: row.policyName,
+      versionName: "",
+      effectiveFrom: new Date().toISOString().slice(0, 10),
+      bodyHtml: row.bodyHtml,
+    });
+    setEditorKey((k) => k + 1);
+    setIsAddingNew(true);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -212,7 +259,7 @@ export function PolicyManagement() {
         }),
       });
       if (!res.ok) throw new Error(await res.text());
-      toast.success("Policy version added");
+      toast.success(revising ? "Policy revision added" : "Policy version added");
       resetForm();
       setIsAddingNew(false);
       fetchRows();
@@ -223,30 +270,18 @@ export function PolicyManagement() {
     }
   };
 
-  const handleDelete = async (id: number) => {
-    if (!confirm("Delete this policy version?")) return;
-    try {
-      const token = localStorage.getItem("accessToken") || localStorage.getItem("token");
-      const res = await fetch(`${API}/${id}`, {
-        method: "DELETE",
-        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-      });
-      if (!res.ok) throw new Error(await res.text());
-      toast.success("Deleted");
-      fetchRows();
-    } catch (err: any) {
-      toast.error(err?.message || "Delete failed");
-    }
-  };
-
   const columns: Array<DataTableColumn<PolicyRow>> = useMemo(
     () => [
-      {
-        key: "type",
-        header: "Type",
-        sortable: true,
-        cell: (r) => TYPE_LABEL[r.type],
-      },
+      ...(!typeFilter
+        ? [
+            {
+              key: "type",
+              header: "Type",
+              sortable: true,
+              cell: (r: PolicyRow) => TYPE_LABEL[r.type],
+            } as DataTableColumn<PolicyRow>,
+          ]
+        : []),
       {
         key: "policyName",
         header: "Policy name",
@@ -280,18 +315,28 @@ export function PolicyManagement() {
         header: "Actions",
         align: "right",
         cell: (r) => (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="text-red-500 hover:text-red-700"
-            onClick={() => handleDelete(r.id)}
-          >
-            <Trash2 className="w-4 h-4" />
-          </Button>
+          <div className="flex justify-end gap-1">
+            <Button
+              variant="ghost"
+              size="sm"
+              title="View"
+              onClick={() => setViewRow(r)}
+            >
+              <Eye className="w-4 h-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              title="Revise / edit"
+              onClick={() => openRevise(r)}
+            >
+              <Pencil className="w-4 h-4" />
+            </Button>
+          </div>
         ),
       },
     ],
-    [latestIds],
+    [latestIds, typeFilter],
   );
 
   if (!isSuperAdmin) {
@@ -302,19 +347,23 @@ export function PolicyManagement() {
     <div className="space-y-6 w-full max-w-none animate-fade-in page-content-enter">
       <PageHeader
         icon={FileText}
-        title="Policy Management"
-        description="Terms of Use, Privacy Policy and SLA versions"
+        title={typeFilter ? TYPE_LABEL[typeFilter] : "Policy Management"}
+        description={
+          typeFilter
+            ? `View and revise ${TYPE_LABEL[typeFilter]} versions. History is kept — versions cannot be deleted.`
+            : "Default Terms of Use, Privacy Policy and SLA. Revise to keep version history — versions cannot be deleted."
+        }
         actions={
           !isAddingNew ? (
             <Button
               type="button"
               className={cn(listPrimaryButtonClass)}
               onClick={() => {
-                resetForm();
+                resetForm(true);
                 setIsAddingNew(true);
               }}
             >
-              <Plus className="w-4 h-4" /> Add policy
+              <Plus className="w-4 h-4" /> Add / revise policy
             </Button>
           ) : null
         }
@@ -328,14 +377,24 @@ export function PolicyManagement() {
             setIsAddingNew(false);
           }
         }}
-        title="Add policy"
+        title={revising ? "Revise policy" : "Add policy"}
       >
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
             <Label>Policy type</Label>
+            {typeFilter ? (
+              <Input value={TYPE_LABEL[typeFilter]} disabled />
+            ) : (
             <Select
               value={form.type || undefined}
-              onValueChange={(v) => setForm((p) => ({ ...p, type: v as PolicyType }))}
+              onValueChange={(v) =>
+                setForm((p) => ({
+                  ...p,
+                  type: v as PolicyType,
+                  policyName: p.policyName || TYPE_LABEL[v as PolicyType],
+                }))
+              }
+              disabled={revising}
             >
               <SelectTrigger>
                 <SelectValue placeholder="Select policy type" />
@@ -346,6 +405,7 @@ export function PolicyManagement() {
                 <SelectItem value="SLA">SLA</SelectItem>
               </SelectContent>
             </Select>
+            )}
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div className="space-y-2">
@@ -420,10 +480,50 @@ export function PolicyManagement() {
             onSort={table.setSort}
             emptyIcon={FileText}
             emptyTitle="No policies yet"
-            emptyDescription="Add Terms of Use, Privacy Policy or SLA versions."
+            emptyDescription="Default Terms of Use, Privacy Policy and SLA will appear here."
           />
         </>
       ) : null}
+
+      <FormDrawer
+        open={Boolean(viewRow)}
+        onOpenChange={(v) => {
+          if (!v) setViewRow(null);
+        }}
+        title={viewRow ? `View ${TYPE_LABEL[viewRow.type]}` : "View policy"}
+        showHeaderCancel
+        cancelLabel="Close"
+      >
+        {viewRow ? (
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
+              <div>
+                <p className="text-muted-foreground">Policy name</p>
+                <p className="font-medium">{viewRow.policyName}</p>
+              </div>
+              <div>
+                <p className="text-muted-foreground">Version</p>
+                <p className="font-medium">{viewRow.versionName}</p>
+              </div>
+              <div>
+                <p className="text-muted-foreground">Effective from</p>
+                <p className="font-medium">
+                  {new Date(viewRow.effectiveFrom).toLocaleDateString()}
+                </p>
+              </div>
+            </div>
+            <div
+              className="prose prose-sm max-w-none rounded-xl border p-4"
+              dangerouslySetInnerHTML={{ __html: viewRow.bodyHtml || "" }}
+            />
+            <div className="flex justify-end">
+              <Button type="button" onClick={() => openRevise(viewRow)}>
+                Revise this version
+              </Button>
+            </div>
+          </div>
+        ) : null}
+      </FormDrawer>
     </div>
   );
 }

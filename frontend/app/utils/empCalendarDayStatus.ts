@@ -97,7 +97,7 @@ export function resolveCalendarDayDisplay({
   if (holidayName) {
     return {
       kind: "holiday",
-      statusLabel: "Holiday",
+      statusLabel: "Public holiday",
       detailLine: holidayName,
       hoursLine: "",
     };
@@ -106,7 +106,7 @@ export function resolveCalendarDayDisplay({
   if (isWeekOffDate(dateKey, weekOffDays)) {
     return {
       kind: "weekoff",
-      statusLabel: "Weekoff",
+      statusLabel: "Week off",
       detailLine: "",
       hoursLine: "",
     };

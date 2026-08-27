@@ -515,7 +515,11 @@ const canShowCompanySwitcher =
     dispatchAppRefresh()
 
     const targetDashboard =
-      currentUser?.role === "SUPERADMIN" ? "/superdashboard" : "/dashboard"
+      currentUser?.role === "SUPERADMIN"
+        ? "/superdashboard"
+        : currentUser?.role === "COMPANY_ADMIN"
+          ? "/my-company"
+          : "/dashboard"
 
     if (pathname !== targetDashboard) {
       router.push(targetDashboard)

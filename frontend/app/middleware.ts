@@ -26,6 +26,7 @@ export function middleware(req: NextRequest) {
   if (
     pathname.startsWith('/_next') ||
     pathname.startsWith('/api') ||
+    pathname.startsWith('/backend/company-policies/public') ||
     pathname === '/favicon.ico' ||
     pathname.startsWith('/icons') ||
     pathname.startsWith('/img') ||
@@ -47,7 +48,12 @@ export function middleware(req: NextRequest) {
     req.headers.get('Authorization')?.replace('Bearer ', '') ||
     null
 
-  const isAuthPage = pathname.startsWith('/login') || pathname === '/'
+  const isAuthPage =
+    pathname.startsWith('/login') ||
+    pathname === '/' ||
+    pathname === '/terms-of-use' ||
+    pathname === '/privacy-policy' ||
+    pathname === '/sla'
 
   if (!token || !isTokenValid(token)) {
     if (isAuthPage) {

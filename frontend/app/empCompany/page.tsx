@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 
-/** Legacy Overview route — Dashboard now lives under My Company tabs. */
+/** Legacy Overview route — company hub now lives at /my-company. */
 export default function EmpCompanyPage() {
-  redirect("/empCompanyDashboard");
+  redirect("/my-company");
 }

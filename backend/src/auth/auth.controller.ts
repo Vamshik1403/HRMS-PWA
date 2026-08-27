@@ -8,6 +8,7 @@ import {
   ForgotPasswordDto,
   VerifyForgotPasswordDto,
   VerifyLoginOtpDto,
+  ResendLoginOtpDto,
 } from './dto/forgot-password.dto';
 
 @Controller('auth')
@@ -28,6 +29,11 @@ export class AuthController {
   @Post('login/verify-otp')
   verifyLoginOtp(@Body() dto: VerifyLoginOtpDto, @Req() req: Request) {
     return this.authService.verifyLoginOtp(dto, req);
+  }
+
+  @Post('login/resend-otp')
+  resendLoginOtp(@Body() dto: ResendLoginOtpDto) {
+    return this.authService.resendLoginOtp(dto);
   }
 
   @Post('forgot-password')

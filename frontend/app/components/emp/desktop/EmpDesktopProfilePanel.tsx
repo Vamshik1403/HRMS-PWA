@@ -441,17 +441,17 @@ export function EmpDesktopProfilePanel({
     async (u: any, token: string, targetId?: number) => {
       try {
         const empId = targetId ?? u?.employee?.id ?? u?.employeeId ?? u?.id;
-        if (!empId) return;
-        const res = await fetch(`${BACKEND}/manage-emp/${empId}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (!res.ok) return;
-        const data = await res.json();
-        setEmpData(data);
+      if (!empId) return;
+      const res = await fetch(`${BACKEND}/manage-emp/${empId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      setEmpData(data);
         if (!targetId) setPageCache("empProfileData", data);
-      } finally {
-        setLoading(false);
-      }
+    } finally {
+      setLoading(false);
+    }
     },
     [],
   );

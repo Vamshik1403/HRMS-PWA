@@ -222,6 +222,11 @@ const emptyCompanyAdminForm = {
   serviceProviderID: "" as string | number,
   companyID: "" as string | number,
   isActive: true,
+  useEmailMobileCreds: false,
+}
+
+function digitsOnly(value?: string | null): string {
+  return String(value || "").replace(/\D/g, "")
 }
 
 export function CompanyManagement() {
@@ -261,6 +266,11 @@ export function CompanyManagement() {
   const [companyAdminFormTab, setCompanyAdminFormTab] = useState("general")
   const [ownerModules, setOwnerModules] = useState<ModuleMeta[]>([])
   const [ownerPermissions, setOwnerPermissions] = useState<OwnerPermissionRow[]>([])
+  const [usernameCheck, setUsernameCheck] = useState<{
+    status: "idle" | "checking" | "ok" | "taken"
+    message: string
+  }>({ status: "idle", message: "" })
+  const usernameCheckTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const user = useCurrentUser()
 
@@ -1115,7 +1125,48 @@ setEditingCompany(null);
     setViewingCompanyAdmin(false)
     setCompanyAdminFormOpen(false)
     setCompanyAdminFormTab("general")
+    setUsernameCheck({ status: "idle", message: "" })
   }
+
+  const applyEmailMobileCreds = (form: typeof emptyCompanyAdminForm) => {
+    if (!form.useEmailMobileCreds) return form
+    return {
+      ...form,
+      username: form.email.trim(),
+      password: digitsOnly(form.contactNo) || form.contactNo.trim(),
+    }
+  }
+
+  const checkUsernameAvailable = useCallback(
+    (username: string, excludeOwnerId?: number | null) => {
+      if (usernameCheckTimer.current) clearTimeout(usernameCheckTimer.current)
+      const value = username.trim()
+      if (!value) {
+        setUsernameCheck({ status: "idle", message: "" })
+        return
+      }
+      setUsernameCheck({ status: "checking", message: "Checking username…" })
+      usernameCheckTimer.current = setTimeout(async () => {
+        try {
+          const params = new URLSearchParams({ username: value })
+          if (excludeOwnerId) params.set("excludeOwnerId", String(excludeOwnerId))
+          const res = await fetch(`/backend/company/owners/username-available?${params.toString()}`)
+          const data = await res.json().catch(() => null)
+          if (data?.available) {
+            setUsernameCheck({ status: "ok", message: "Username is available" })
+          } else {
+            setUsernameCheck({
+              status: "taken",
+              message: data?.message || "Username already exists",
+            })
+          }
+        } catch {
+          setUsernameCheck({ status: "idle", message: "" })
+        }
+      }, 400)
+    },
+    [],
+  )
 
   const createCompanyAdminUser = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -1129,28 +1180,48 @@ setEditingCompany(null);
 
     if (viewingCompanyAdmin) return
 
-    if (!companyAdminForm.email.trim()) {
+    const form = applyEmailMobileCreds(companyAdminForm)
+
+    if (!form.email.trim()) {
       toast.error("Email is required")
       return
     }
 
-    if (!companyAdminForm.contactNo.trim()) {
+    if (!form.contactNo.trim()) {
       toast.error("Mobile is required")
       return
     }
 
-    if (!companyAdminForm.firstName.trim()) {
+    if (!form.firstName.trim()) {
       toast.error("First name is required")
       return
     }
 
-    if (companyAdminForm.designation === "Other" && !companyAdminForm.designationOther.trim()) {
+    if (form.designation === "Other" && !form.designationOther.trim()) {
       toast.error("Specify designation")
       return
     }
 
-    if (companyAdminForm.password && companyAdminForm.password.length < 6) {
+    const isEdit = Boolean(editingCompanyAdmin?.id)
+
+    if (!form.useEmailMobileCreds) {
+      if (!form.username.trim()) {
+        toast.error("Username is required")
+        return
+      }
+      if (!isEdit && !form.password.trim()) {
+        toast.error("Password is required")
+        return
+      }
+    }
+
+    if (form.password && form.password.length < 6) {
       toast.error("Password must be at least 6 characters")
+      return
+    }
+
+    if (usernameCheck.status === "taken") {
+      toast.error(usernameCheck.message || "Username already exists")
       return
     }
 
@@ -1158,29 +1229,28 @@ setEditingCompany(null);
 
     try {
       const companyId = selectedCompanyForAdmin.id
-      const isEdit = Boolean(editingCompanyAdmin?.id)
       const ownerTitle =
-        resolvedDesignation(companyAdminForm) ||
+        resolvedDesignation(form) ||
         (selectedCompanyForAdmin as any)?.defaultOwnerTitle ||
         ownerTitleForLegalEntity(selectedCompanyForAdmin.legalEntityType) ||
         undefined
 
       const payload: any = {
-        firstName: companyAdminForm.firstName.trim(),
-        lastName: companyAdminForm.lastName || undefined,
-        username: companyAdminForm.username.trim() || companyAdminForm.email.trim(),
-        salutation: companyAdminForm.title || undefined,
-        personalPhoneNo: companyAdminForm.contactNo.trim(),
-        businessPhoneNo: companyAdminForm.phone.trim() || undefined,
-        businessEmail: companyAdminForm.email.trim(),
-        isActive: companyAdminForm.isActive,
+        firstName: form.firstName.trim(),
+        lastName: form.lastName || undefined,
+        username: form.username.trim() || form.email.trim(),
+        salutation: form.title || undefined,
+        personalPhoneNo: form.contactNo.trim(),
+        businessPhoneNo: form.phone.trim() || undefined,
+        businessEmail: form.email.trim(),
+        isActive: form.isActive,
         isCompanyOwner: true,
         ownerTitle,
         permissions: ownerPermissions,
       }
 
-      if (companyAdminForm.password.trim()) {
-        payload.password = companyAdminForm.password
+      if (form.password.trim()) {
+        payload.password = form.password
       }
 
       const res = await fetch(
@@ -1196,8 +1266,15 @@ setEditingCompany(null);
 
       if (!res.ok) {
         const errText = await res.text()
+        let message = errText
+        try {
+          const parsed = JSON.parse(errText)
+          message = parsed?.message || errText
+        } catch {
+          /* keep text */
+        }
         throw new Error(
-          errText ||
+          message ||
           (isEdit
             ? "Failed to update company owner"
             : "Failed to create company owner")
@@ -1207,12 +1284,13 @@ setEditingCompany(null);
       toast.success(
         isEdit
           ? "Company admin updated successfully"
-          : "Company admin created — they log in with email and mobile"
+          : "Company admin created — they log in with username"
       )
 
       setEditingCompanyAdmin(null)
       setViewingCompanyAdmin(false)
       setCompanyAdminFormOpen(false)
+      setUsernameCheck({ status: "idle", message: "" })
 
       await fetchCompanyAdminUsers(selectedCompanyForAdmin)
     } catch (error: any) {
@@ -1817,7 +1895,7 @@ setEditingCompany(null);
                             : "Create Company Admin"}
                       </h3>
                       <p className="text-sm text-gray-500">
-                        Login identity is email and mobile. Password override is optional.
+                        Company login uses a unique username. Password override is optional on update.
                       </p>
                     </div>
 
@@ -1831,90 +1909,109 @@ setEditingCompany(null);
                     />
 
                     {companyAdminFormTab === "general" && (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-4">
                       <div className="space-y-2">
-                        <Label>Title</Label>
-                        <Select
-                          value={companyAdminForm.title || "__none__"}
-                          onValueChange={(v) =>
-                            setCompanyAdminForm((p) => ({ ...p, title: v === "__none__" ? "" : v }))
-                          }
-                          disabled={viewingCompanyAdmin}
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select title" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="__none__">Select title</SelectItem>
-                            {CONTACT_TITLE_OPTIONS.map((opt) => (
-                              <SelectItem key={opt} value={opt}>{opt}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                        <Label>Status</Label>
+                        <label className="flex h-10 items-center gap-2 rounded-md border px-3 text-sm bg-white">
+                          <input
+                            type="checkbox"
+                            checked={companyAdminForm.isActive}
+                            onChange={(e) =>
+                              setCompanyAdminForm((p) => ({ ...p, isActive: e.target.checked }))
+                            }
+                            disabled={viewingCompanyAdmin}
+                          />
+                          Active
+                        </label>
                       </div>
-                      <div className="space-y-2">
-                        <Label>Username</Label>
-                        <Input
-                          autoComplete="new-username"
-                          value={companyAdminForm.username}
-                          onChange={(e) =>
-                            setCompanyAdminForm((p) => ({ ...p, username: e.target.value }))
-                          }
-                          placeholder="Defaults to email"
-                          disabled={viewingCompanyAdmin}
-                        />
+
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div className="space-y-2">
+                          <Label>Title</Label>
+                          <Select
+                            value={companyAdminForm.title || "__none__"}
+                            onValueChange={(v) =>
+                              setCompanyAdminForm((p) => ({ ...p, title: v === "__none__" ? "" : v }))
+                            }
+                            disabled={viewingCompanyAdmin}
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select title" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="__none__">Select title</SelectItem>
+                              {CONTACT_TITLE_OPTIONS.map((opt) => (
+                                <SelectItem key={opt} value={opt}>{opt}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-2">
+                          <Label>First Name *</Label>
+                          <Input
+                            value={companyAdminForm.firstName}
+                            onChange={(e) =>
+                              setCompanyAdminForm((p) => ({ ...p, firstName: e.target.value }))
+                            }
+                            disabled={viewingCompanyAdmin}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Last Name</Label>
+                          <Input
+                            value={companyAdminForm.lastName}
+                            onChange={(e) =>
+                              setCompanyAdminForm((p) => ({ ...p, lastName: e.target.value }))
+                            }
+                            disabled={viewingCompanyAdmin}
+                          />
+                        </div>
                       </div>
-                      <div className="space-y-2">
-                        <Label>First Name *</Label>
-                        <Input
-                          value={companyAdminForm.firstName}
-                          onChange={(e) =>
-                            setCompanyAdminForm((p) => ({ ...p, firstName: e.target.value }))
-                          }
-                          disabled={viewingCompanyAdmin}
-                        />
+
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div className="space-y-2">
+                          <Label>Email *</Label>
+                          <Input
+                            type="email"
+                            value={companyAdminForm.email}
+                            onChange={(e) => {
+                              const email = e.target.value
+                              setCompanyAdminForm((p) => {
+                                const next = applyEmailMobileCreds({ ...p, email })
+                                if (next.useEmailMobileCreds && !viewingCompanyAdmin) {
+                                  checkUsernameAvailable(next.username, editingCompanyAdmin?.id)
+                                }
+                                return next
+                              })
+                            }}
+                            disabled={viewingCompanyAdmin}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Phone</Label>
+                          <Input
+                            value={companyAdminForm.phone}
+                            onChange={(e) =>
+                              setCompanyAdminForm((p) => ({ ...p, phone: e.target.value }))
+                            }
+                            disabled={viewingCompanyAdmin}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Mobile *</Label>
+                          <Input
+                            value={companyAdminForm.contactNo}
+                            onChange={(e) => {
+                              const contactNo = e.target.value
+                              setCompanyAdminForm((p) =>
+                                applyEmailMobileCreds({ ...p, contactNo }),
+                              )
+                            }}
+                            disabled={viewingCompanyAdmin}
+                          />
+                        </div>
                       </div>
-                      <div className="space-y-2">
-                        <Label>Last Name</Label>
-                        <Input
-                          value={companyAdminForm.lastName}
-                          onChange={(e) =>
-                            setCompanyAdminForm((p) => ({ ...p, lastName: e.target.value }))
-                          }
-                          disabled={viewingCompanyAdmin}
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Email *</Label>
-                        <Input
-                          type="email"
-                          value={companyAdminForm.email}
-                          onChange={(e) =>
-                            setCompanyAdminForm((p) => ({ ...p, email: e.target.value }))
-                          }
-                          disabled={viewingCompanyAdmin}
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Phone</Label>
-                        <Input
-                          value={companyAdminForm.phone}
-                          onChange={(e) =>
-                            setCompanyAdminForm((p) => ({ ...p, phone: e.target.value }))
-                          }
-                          disabled={viewingCompanyAdmin}
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Mobile *</Label>
-                        <Input
-                          value={companyAdminForm.contactNo}
-                          onChange={(e) =>
-                            setCompanyAdminForm((p) => ({ ...p, contactNo: e.target.value }))
-                          }
-                          disabled={viewingCompanyAdmin}
-                        />
-                      </div>
+
                       <div className="space-y-2">
                         <Label>Designation</Label>
                         <Select
@@ -1952,33 +2049,102 @@ setEditingCompany(null);
                           />
                         </div>
                       ) : null}
-                      <div className="space-y-2">
-                        <Label>Password {editingCompanyAdmin ? "(optional)" : "(optional override)"}</Label>
-                        <Input
-                          autoComplete="new-password"
-                          type="text"
-                          value={companyAdminForm.password}
-                          onChange={(e) =>
-                            setCompanyAdminForm((p) => ({ ...p, password: e.target.value }))
-                          }
-                          placeholder="Defaults to mobile"
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label>Username{companyAdminForm.useEmailMobileCreds ? "" : " *"}</Label>
+                          <Input
+                            autoComplete="new-username"
+                            value={companyAdminForm.username}
+                            onChange={(e) => {
+                              const username = e.target.value
+                              setCompanyAdminForm((p) => ({ ...p, username }))
+                              if (!companyAdminForm.useEmailMobileCreds && !viewingCompanyAdmin) {
+                                checkUsernameAvailable(username, editingCompanyAdmin?.id)
+                              }
+                            }}
+                            onBlur={() => {
+                              if (!companyAdminForm.useEmailMobileCreds && !viewingCompanyAdmin) {
+                                checkUsernameAvailable(
+                                  companyAdminForm.username,
+                                  editingCompanyAdmin?.id,
+                                )
+                              }
+                            }}
+                            placeholder={companyAdminForm.useEmailMobileCreds ? "Uses email" : "Enter unique username"}
+                            disabled={viewingCompanyAdmin || companyAdminForm.useEmailMobileCreds}
+                          />
+                          {companyAdminForm.useEmailMobileCreds ? (
+                            <p className="text-xs text-muted-foreground">set email id as username</p>
+                          ) : usernameCheck.status !== "idle" ? (
+                            <p
+                              className={cn(
+                                "text-xs",
+                                usernameCheck.status === "taken"
+                                  ? "text-destructive"
+                                  : usernameCheck.status === "ok"
+                                    ? "text-emerald-600"
+                                    : "text-muted-foreground",
+                              )}
+                            >
+                              {usernameCheck.message}
+                            </p>
+                          ) : null}
+                        </div>
+                        <div className="space-y-2">
+                          <Label>
+                            Password
+                            {editingCompanyAdmin && !companyAdminForm.useEmailMobileCreds
+                              ? " (optional)"
+                              : companyAdminForm.useEmailMobileCreds
+                                ? ""
+                                : " *"}
+                          </Label>
+                          <Input
+                            autoComplete="new-password"
+                            type="text"
+                            value={companyAdminForm.password}
+                            onChange={(e) =>
+                              setCompanyAdminForm((p) => ({ ...p, password: e.target.value }))
+                            }
+                            placeholder={
+                              companyAdminForm.useEmailMobileCreds
+                                ? "Uses mobile number"
+                                : editingCompanyAdmin
+                                  ? "Leave blank to keep current"
+                                  : "Enter password"
+                            }
+                            disabled={viewingCompanyAdmin || companyAdminForm.useEmailMobileCreds}
+                          />
+                          {companyAdminForm.useEmailMobileCreds ? (
+                            <p className="text-xs text-muted-foreground">set Mobile no. as password</p>
+                          ) : null}
+                        </div>
+                      </div>
+
+                      <label className="flex items-start gap-2 rounded-md border px-3 py-2 text-sm bg-white">
+                        <input
+                          type="checkbox"
+                          className="mt-0.5"
+                          checked={companyAdminForm.useEmailMobileCreds}
+                          onChange={(e) => {
+                            const useEmailMobileCreds = e.target.checked
+                            setCompanyAdminForm((p) => {
+                              const next = applyEmailMobileCreds({ ...p, useEmailMobileCreds })
+                              if (useEmailMobileCreds && !viewingCompanyAdmin) {
+                                checkUsernameAvailable(next.username, editingCompanyAdmin?.id)
+                              } else {
+                                setUsernameCheck({ status: "idle", message: "" })
+                              }
+                              return next
+                            })
+                          }}
                           disabled={viewingCompanyAdmin}
                         />
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Status</Label>
-                        <label className="flex h-10 items-center gap-2 rounded-md border px-3 text-sm bg-white">
-                          <input
-                            type="checkbox"
-                            checked={companyAdminForm.isActive}
-                            onChange={(e) =>
-                              setCompanyAdminForm((p) => ({ ...p, isActive: e.target.checked }))
-                            }
-                            disabled={viewingCompanyAdmin}
-                          />
-                          Active
-                        </label>
-                      </div>
+                        <span>
+                          Set email as username and mobile as password
+                        </span>
+                      </label>
                     </div>
                     )}
 

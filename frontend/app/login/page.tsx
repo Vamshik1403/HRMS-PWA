@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import axios from 'axios'
 import { useRouter } from 'next/navigation'
 import { Eye, EyeOff, Lock, User, ArrowRight, Loader2 } from 'lucide-react'
@@ -17,11 +17,19 @@ import {
 } from '@/lib/companyAccess'
 import { preloadHeroImages } from '@/app/components/emp/desktop/HeroBackground'
 
+const LOGIN_OTP_TTL_MS = 5 * 60 * 1000
+
 function apiMessage(err: any, fallback: string) {
   const msg = err?.response?.data?.message
   if (Array.isArray(msg)) return msg.join(' ')
   if (typeof msg === 'string' && msg.trim()) return msg
   return fallback
+}
+
+function formatOtpCountdown(seconds: number) {
+  const m = Math.floor(seconds / 60)
+  const s = seconds % 60
+  return `${m}:${String(s).padStart(2, '0')}`
 }
 
 export default function LoginPage() {
@@ -34,8 +42,13 @@ export default function LoginPage() {
   const [authChecked, setAuthChecked] = useState(false)
 
   const [loginOtpToken, setLoginOtpToken] = useState('')
-  const [loginOtp, setLoginOtp] = useState('')
+  const [otpDigits, setOtpDigits] = useState(['', '', '', '', '', ''])
   const [loginOtpHint, setLoginOtpHint] = useState('')
+  const [otpExpiresAt, setOtpExpiresAt] = useState<number | null>(null)
+  const [otpSecondsLeft, setOtpSecondsLeft] = useState(0)
+  const otpRefs = useRef<Array<HTMLInputElement | null>>([])
+  const loginOtp = otpDigits.join('')
+  const otpExpired = !!loginOtpToken && otpSecondsLeft <= 0
 
   useEffect(() => {
     try {
@@ -88,7 +101,7 @@ export default function LoginPage() {
       if (role === 'EMPLOYEE' || user?.type === 'employee') {
         router.replace('/empdashboard')
       } else if (role) {
-        router.replace(role === 'SUPERADMIN' ? '/superdashboard' : '/dashboard')
+        router.replace(role === 'SUPERADMIN' ? '/superdashboard' : role === 'COMPANY_ADMIN' ? '/my-company' : '/dashboard')
       } else {
         setAuthChecked(true)
       }
@@ -115,6 +128,19 @@ export default function LoginPage() {
       body.style.overscrollBehavior = prevBodyOverscroll
     }
   }, [])
+
+  useEffect(() => {
+    if (!loginOtpToken || !otpExpiresAt) {
+      setOtpSecondsLeft(0)
+      return
+    }
+    const tick = () => {
+      setOtpSecondsLeft(Math.max(0, Math.ceil((otpExpiresAt - Date.now()) / 1000)))
+    }
+    tick()
+    const id = window.setInterval(tick, 1000)
+    return () => window.clearInterval(id)
+  }, [loginOtpToken, otpExpiresAt])
 
   const finishAuthenticatedSession = async (accessToken: string, basicUser: any) => {
     clearLegacyEmpPhoto()
@@ -167,7 +193,9 @@ export default function LoginPage() {
       const role = String(completeUser.role || '').toUpperCase()
       if (role === 'SUPERADMIN') {
         router.push('/superdashboard')
-      } else if (role === 'SERVICE_PROVIDER' || role === 'COMPANY_ADMIN' || role === 'ADMIN' || role === 'BRANCH_ADMIN') {
+      } else if (role === 'COMPANY_ADMIN') {
+        router.push('/my-company')
+      } else if (role === 'SERVICE_PROVIDER' || role === 'ADMIN' || role === 'BRANCH_ADMIN') {
         router.push('/dashboard')
       } else {
         preloadHeroImages(true)
@@ -178,12 +206,67 @@ export default function LoginPage() {
       const role = String(basicUser.role || '').toUpperCase()
       if (role === 'SUPERADMIN') {
         router.push('/superdashboard')
-      } else if (role === 'SERVICE_PROVIDER' || role === 'COMPANY_ADMIN' || role === 'ADMIN' || role === 'BRANCH_ADMIN') {
+      } else if (role === 'COMPANY_ADMIN') {
+        router.push('/my-company')
+      } else if (role === 'SERVICE_PROVIDER' || role === 'ADMIN' || role === 'BRANCH_ADMIN') {
         router.push('/dashboard')
       } else {
         preloadHeroImages(true)
         router.push('/empdashboard')
       }
+    }
+  }
+
+  const beginOtpStep = (pendingToken: string, maskedEmail?: string) => {
+    setLoginOtpToken(pendingToken)
+    setOtpDigits(['', '', '', '', '', ''])
+    setOtpExpiresAt(Date.now() + LOGIN_OTP_TTL_MS)
+    setOtpSecondsLeft(Math.floor(LOGIN_OTP_TTL_MS / 1000))
+    setLoginOtpHint(maskedEmail ? `OTP sent to ${maskedEmail}` : 'OTP sent to your email')
+    setTimeout(() => otpRefs.current[0]?.focus(), 0)
+  }
+
+  const handleOtpChange = (index: number, raw: string) => {
+    const digit = raw.replace(/\D/g, '').slice(-1)
+    const next = [...otpDigits]
+    next[index] = digit
+    setOtpDigits(next)
+    if (digit && index < 5) {
+      otpRefs.current[index + 1]?.focus()
+    }
+  }
+
+  const handleOtpKeyDown = (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Backspace' && !otpDigits[index] && index > 0) {
+      otpRefs.current[index - 1]?.focus()
+    }
+  }
+
+  const handleOtpPaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
+    const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6)
+    if (!pasted) return
+    e.preventDefault()
+    const next = ['', '', '', '', '', '']
+    pasted.split('').forEach((ch, i) => {
+      next[i] = ch
+    })
+    setOtpDigits(next)
+    otpRefs.current[Math.min(pasted.length, 5)]?.focus()
+  }
+
+  const handleResendOtp = async () => {
+    if (!loginOtpToken || loading) return
+    setError('')
+    setLoading(true)
+    try {
+      const res = await axios.post('/backend/auth/login/resend-otp', {
+        pendingToken: loginOtpToken,
+      })
+      beginOtpStep(res.data.pendingToken, res.data.maskedEmail)
+    } catch (err: any) {
+      setError(apiMessage(err, 'Could not resend OTP. Try signing in again.'))
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -193,6 +276,14 @@ export default function LoginPage() {
     setLoading(true)
     try {
       if (loginOtpToken) {
+        if (otpExpired) {
+          setError('This code has expired. Resend to get a new one.')
+          return
+        }
+        if (loginOtp.length !== 6) {
+          setError('Enter the 6-digit OTP sent to your email')
+          return
+        }
         const verifyRes = await axios.post('/backend/auth/login/verify-otp', {
           pendingToken: loginOtpToken,
           otp: loginOtp,
@@ -208,13 +299,7 @@ export default function LoginPage() {
       })
 
       if (loginRes.data?.requiresOtp) {
-        setLoginOtpToken(loginRes.data.pendingToken)
-        setLoginOtp('')
-        setLoginOtpHint(
-          loginRes.data.maskedEmail
-            ? `OTP sent to ${loginRes.data.maskedEmail}`
-            : 'OTP sent to your email',
-        )
+        beginOtpStep(loginRes.data.pendingToken, loginRes.data.maskedEmail)
         return
       }
 
@@ -289,19 +374,42 @@ export default function LoginPage() {
 
               {loginOtpToken ? (
                 <div className="space-y-2">
-                  <Label htmlFor="login-otp">Enter OTP</Label>
-                  <Input
-                    id="login-otp"
-                    inputMode="numeric"
-                    maxLength={6}
-                    placeholder="6-digit OTP"
-                    value={loginOtp}
-                    onChange={(e) => setLoginOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                    required
-                  />
+                  <Label>Enter OTP</Label>
+                  <div className="flex gap-2">
+                    {otpDigits.map((digit, index) => (
+                      <Input
+                        key={index}
+                        ref={(el) => {
+                          otpRefs.current[index] = el
+                        }}
+                        inputMode="numeric"
+                        maxLength={1}
+                        value={digit}
+                        onChange={(e) => handleOtpChange(index, e.target.value)}
+                        onKeyDown={(e) => handleOtpKeyDown(index, e)}
+                        onPaste={index === 0 ? handleOtpPaste : undefined}
+                        className="h-12 w-12 text-center text-lg"
+                        required
+                        disabled={otpExpired}
+                      />
+                    ))}
+                  </div>
                   {loginOtpHint ? (
                     <p className="text-xs text-muted-foreground">{loginOtpHint}</p>
                   ) : null}
+                  <p className="text-sm text-muted-foreground">
+                    {otpExpired
+                      ? 'Code expired. Resend to get a new one.'
+                      : `Code expires in ${formatOtpCountdown(otpSecondsLeft)}`}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={handleResendOtp}
+                    disabled={loading}
+                    className="text-sm text-primary underline underline-offset-2 hover:text-primary/80 font-medium disabled:opacity-50"
+                  >
+                    Didn’t receive code? Resend
+                  </button>
                 </div>
               ) : null}
 
@@ -311,7 +419,7 @@ export default function LoginPage() {
                 </div>
               )}
 
-              <Button type="submit" size="lg" className="w-full group" disabled={loading}>
+              <Button type="submit" size="lg" className="w-full group" disabled={loading || ( !!loginOtpToken && otpExpired)}>
                 {loading ? <Loader2 className="size-4 animate-spin" /> : <>{loginOtpToken ? 'Verify OTP' : 'Sign in'} <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" /></>}
               </Button>
             </form>

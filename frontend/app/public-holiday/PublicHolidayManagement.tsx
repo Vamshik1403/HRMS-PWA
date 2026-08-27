@@ -19,6 +19,10 @@ import { SearchSuggestInput } from "../components/SearchSuggestInput"
 import { CompanyBranchField } from "../components/app/company-branch-field"
 import { toast } from "sonner";
 import { getSidebarContext } from "../utils/sidebarContext";
+import {
+  canDesktopManagerManage,
+  isCompanyModuleOperator,
+} from "../utils/scopeContext";
 
 interface PublicHoliday {
   id: string
@@ -90,7 +94,7 @@ export function PublicHolidayManagement() {
   const [holidayOptions, setHolidayOptions] = useState<any[]>([])
   const [financialYearOptions, setFinancialYearOptions] = useState<string[]>([])
   const user = useCurrentUser()
-  const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN" || user?.role === "BRANCH_ADMIN"
+  const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN" || user?.role === "BRANCH_ADMIN" || canDesktopManagerManage(user) || hasModuleWriteAccess("HOLIDAYS")
 
   const [managerData, setManagerData] = useState<any>(null);
   const [empCreds, setEmpCreds] = useState<any>(null);
@@ -553,13 +557,49 @@ window.addEventListener("sidebar-context-changed", handler);
       companyID = formData.companyID ?? ctx?.companyID ?? user?.companyID;
       branchesID = formData.branchesID;
     } else if (user?.role === "EMPLOYEE") {
-      serviceProviderID = empCreds?.serviceProviderID;
-      companyID = empCreds?.companyID;
-      branchesID = empCreds?.branchesID;
+      serviceProviderID = empCreds?.serviceProviderID ?? formData.serviceProviderID;
+      companyID = formData.companyID ?? empCreds?.companyID;
+      branchesID = formData.branchesID ?? empCreds?.branchesID;
     }
 
-    // Ensure we have the required IDs
-    if (!companyID || !branchesID || !formData.manageHolidayID) {
+    const holidayName = formData.holidayName.trim()
+    if (!companyID || !branchesID || !holidayName) {
+      toast.error("Please make sure all required fields are selected: Branch and Holiday Name");
+      return;
+    }
+
+    try {
+    let manageHolidayID = formData.manageHolidayID
+    if (!editingHoliday) {
+      const catalog = await fetchManageHolidays(companyID, branchesID)
+      const existing = catalog.find(
+        (h: any) => String(h.holidayName || "").trim().toLowerCase() === holidayName.toLowerCase(),
+      )
+      if (existing?.id != null) {
+        manageHolidayID = Number(existing.id)
+      } else {
+        const mhRes = await fetch(`${BACKEND_URL}/manage-holiday`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            holidayName,
+            serviceProviderID,
+            companyID,
+            branchesID,
+          }),
+        })
+        if (!mhRes.ok) {
+          const errorText = await mhRes.text()
+          console.error("Manage holiday create error:", errorText)
+          toast.error("Could not create holiday name. Try again.")
+          return
+        }
+        const created = await mhRes.json()
+        manageHolidayID = Number(created?.id ?? created?.data?.id)
+      }
+    }
+
+    if (!manageHolidayID) {
       toast.error("Please make sure all required fields are selected: Branch and Holiday Name");
       return;
     }
@@ -568,7 +608,7 @@ window.addEventListener("sidebar-context-changed", handler);
       serviceProviderID,
       companyID,
       branchesID,
-      manageHolidayID: formData.manageHolidayID,
+      manageHolidayID,
       financialYear: formData.financialYear,
       startDate: formData.startDate ? new Date(formData.startDate) : null,
       endDate: formData.endDate ? new Date(formData.endDate) : null,
@@ -579,7 +619,6 @@ window.addEventListener("sidebar-context-changed", handler);
     const url = editingHoliday?`${BACKEND_URL}/public-holiday/${editingHoliday.id}`:`${BACKEND_URL}/public-holiday`
     const method = editingHoliday?"PATCH":"POST"
     
-    try {
       const response = await fetch(url,{
         method,
         headers:{"Content-Type":"application/json"},
@@ -848,8 +887,12 @@ window.addEventListener("sidebar-context-changed", handler);
 
                  
 
-                  {/* Branch - For SUPERADMIN, MANAGER, and COMPANY_ADMIN */}
-                  {(user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN") && (
+                  {/* Branch - admins and company operators pick a branch */}
+                  {(user?.role === "SUPERADMIN" ||
+                    user?.role === "SERVICE_PROVIDER" ||
+                    user?.role === "COMPANY_ADMIN" ||
+                    user?.role === "ADMIN" ||
+                    (user?.role === "EMPLOYEE" && isCompanyModuleOperator(user))) && (
                     <div className={`${user?.role === "SUPERADMIN" ? "col-span-1" : "col-span-3"}`}>
                       <CompanyBranchField 
                         label="Branch Name" 
@@ -871,8 +914,8 @@ window.addEventListener("sidebar-context-changed", handler);
                     </div>
                   )}
 
-                  {/* Display assigned branch for EMPLOYEE */}
-                  {user?.role === "EMPLOYEE" && (
+                  {/* Display assigned branch for non-operator employees */}
+                  {user?.role === "EMPLOYEE" && !isCompanyModuleOperator(user) && (
                     <div className="col-span-3 space-y-2">
                       <Label>Assigned Branch</Label>
                       <div className="p-2 border rounded bg-gray-50">
@@ -892,25 +935,24 @@ window.addEventListener("sidebar-context-changed", handler);
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <Label>Holiday Name *</Label>
-                    <select 
-                      value={formData.holidayName} 
-                      onChange={e=>{
-                        const sel = holidayOptions.find(h=>h.holidayName===e.target.value)
-                        setFormData(p=>({...p,holidayName:e.target.value,manageHolidayID:sel?.id}))
-                      }} 
-                      required 
-                      disabled={!formData.branchesID || holidayOptions.length === 0}
-                      className="w-full border px-2 py-1 rounded-md"
-                    >
-                      <option value="">
-                        {holidayOptions.length 
-                          ? "Select Holiday" 
-                          : (formData.branchesID ? `No holidays found for this branch` : "Select Branch first")}
-                      </option>
-                      {holidayOptions.map(h=>
-                        <option key={h.id} value={h.holidayName}>{h.holidayName}</option>
-                      )}
-                    </select>
+                    <Input
+                      value={formData.holidayName}
+                      onChange={e => {
+                        const value = e.target.value
+                        const sel = holidayOptions.find(
+                          (h: any) =>
+                            String(h.holidayName || "").trim().toLowerCase() === value.trim().toLowerCase(),
+                        )
+                        setFormData(p => ({
+                          ...p,
+                          holidayName: value,
+                          manageHolidayID: sel?.id != null ? Number(sel.id) : undefined,
+                        }))
+                      }}
+                      placeholder={formData.branchesID ? "e.g. Diwali" : "Select Branch first"}
+                      required
+                      disabled={!formData.branchesID || !!editingHoliday}
+                    />
                   </div>
                   
                 </div>
