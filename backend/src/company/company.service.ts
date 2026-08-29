@@ -575,7 +575,7 @@ export class CompanyService {
           employeeID: employee.id,
           username,
           password: passwordHash,
-          mustChangePassword: true,
+          mustChangePassword: false,
           requireLoginOtp: isCompanyOwner,
           isActive: true,
           serviceProviderID: company.serviceProviderID ?? undefined,

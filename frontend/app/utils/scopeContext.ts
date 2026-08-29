@@ -3,12 +3,13 @@ import {
   hasCompanyAccessFlag,
   isCompanyOwnerFlag,
 } from "@/lib/companyAccess";
-import { getSidebarContext } from "./sidebarContext";
+import { getActiveCompanyId, getSidebarContext } from "./sidebarContext";
 
 export type ScopedUser = {
   role?: string;
   username?: string;
   companyID?: number;
+  activeCompanyID?: number;
   branchesID?: number;
   serviceProviderID?: number;
 } | null;
@@ -49,6 +50,7 @@ const toPositiveId = (value: unknown): number | undefined => {
 
 /**
  * Resolve the active company for forms/lists.
+ * Admins with multiple companies follow the sidebar switcher (session + context).
  * Employee operators prefer credentials/user.companyID over stale sidebarContext
  * left behind by a previous admin session.
  */
@@ -59,6 +61,8 @@ export function resolveScopedCompanyId(
   if (!user) return undefined;
 
   const userCompanyId = toPositiveId(user.companyID);
+  const switchedId =
+    getActiveCompanyId() ?? toPositiveId(ctx?.companyID) ?? toPositiveId(user.activeCompanyID);
   const ctxCompanyId = toPositiveId(ctx?.companyID);
 
   if (user.role === "EMPLOYEE" && (isCompanyModuleOperator(user) || userCompanyId)) {
@@ -68,6 +72,7 @@ export function resolveScopedCompanyId(
     }
   }
 
+  if (switchedId) return switchedId;
   if (ctxCompanyId) return ctxCompanyId;
   return userCompanyId;
 }

@@ -14,6 +14,9 @@ import {
 import { canManageTaskModule, parseViewer, TaskViewerContext } from './task-context';
 import { nextTaskCode } from './task-code.util';
 import { EmployeeMemoService } from '../employee-memo/employee-memo.service';
+import { EnplSyncService } from '../enpl-sync/enpl-sync.service';
+import { loadEmployeePermissions } from '../common/employee-permission.util';
+import { hasModuleAction } from '../common/company-module-permissions';
 
 export function normalizeTaskStatus(status?: string | null): string | undefined {
   if (!status) return undefined;
@@ -73,9 +76,40 @@ type TaskChatRow = {
   employeeID: number | null;
   userID: number | null;
   recipientEmployeeID?: number | null;
+  message?: string | null;
 };
 
-/** Employees see their own messages and admin messages (broadcast or addressed to them). */
+const SITE_PUNCH_IN_RE = /site\s*mark\s*in\b/i;
+const SITE_PUNCH_OUT_RE = /site\s*mark\s*out\b/i;
+const SITE_PUNCH_ANY_RE =
+  /\b(mark(?:ed)?\s*(in|out)|check(?:ed)?\s*(in|out)|site\s*(?:mark\s*)?(?:in|out))\b/i;
+
+function isSitePunchText(text?: string | null): boolean {
+  return SITE_PUNCH_ANY_RE.test((text || '').trim());
+}
+
+function parseSitePunchKind(text?: string | null): 'in' | 'out' | null {
+  const msg = (text || '').trim();
+  if (!msg) return null;
+  if (SITE_PUNCH_OUT_RE.test(msg)) return 'out';
+  if (SITE_PUNCH_IN_RE.test(msg)) return 'in';
+  return null;
+}
+
+function lastSitePunchKindFromMessages(messages: { message?: string | null; createdAt?: Date | string }[]): 'in' | 'out' | null {
+  const ordered = [...messages].sort(
+    (a, b) => new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime(),
+  );
+  let last: 'in' | 'out' | null = null;
+  for (const row of ordered) {
+    const kind = parseSitePunchKind(row.message);
+    if (kind) last = kind;
+  }
+  return last;
+}
+
+/** Employees see their own messages and admin messages (broadcast or addressed to them).
+ *  Site check-in/out posts are visible to everyone with task access so the assigner can see punch times. */
 function filterChatsForEmployeeViewer(
   chats: TaskChatRow[],
   viewer: TaskViewerContext,
@@ -83,6 +117,7 @@ function filterChatsForEmployeeViewer(
   if (canManageTaskModule(viewer) || !viewer.employeeId) return chats;
   const me = viewer.employeeId;
   return chats.filter((c) => {
+    if (isSitePunchText(c.message)) return true;
     if (c.employeeID != null && c.employeeID === me) return true;
     if (c.employeeID != null && c.employeeID !== me) return false;
     // Admin / manager message (userID set, no employeeID)
@@ -101,7 +136,29 @@ export class TaskProjectsService {
     private mailService: MailService,
     private managerScope: EmpManagerScopeService,
     private employeeMemoService: EmployeeMemoService,
+    private enplSync: EnplSyncService,
   ) {}
+
+  private async resolveViewer(query: Record<string, string | undefined>): Promise<TaskViewerContext> {
+    const viewer = parseViewer(query);
+    if (canManageTaskModule(viewer) || !viewer.employeeId) return viewer;
+    const emp = await this.prisma.manageEmployee.findFirst({
+      where: { id: viewer.employeeId, isDeleted: false },
+      select: { isCompanyOwner: true, companyID: true },
+    });
+    if (!emp) return viewer;
+    if (emp.isCompanyOwner) {
+      viewer.isCompanyOwner = true;
+      if (!viewer.companyID && emp.companyID) viewer.companyID = emp.companyID;
+      return viewer;
+    }
+    const perms = await loadEmployeePermissions(this.prisma, viewer.employeeId, emp.companyID, false);
+    viewer.canManageTasks =
+      hasModuleAction(perms, false, 'TASKS', 'view') ||
+      hasModuleAction(perms, false, 'TASKS', 'create') ||
+      hasModuleAction(perms, false, 'TASKS', 'edit');
+    return viewer;
+  }
 
   private async visibilityWhere(viewer: TaskViewerContext, companyID?: number) {
     const base: Record<string, unknown> = { isDeleted: false };
@@ -132,7 +189,7 @@ export class TaskProjectsService {
 
     if (canManageTaskModule(viewer)) {
       if (
-        (viewer.role === 'COMPANY_ADMIN' || (viewer.role === 'EMPLOYEE' && viewer.isDesktopManager)) &&
+        viewer.role !== 'SUPERADMIN' &&
         viewer.companyID &&
         task.companyID !== viewer.companyID
       ) {
@@ -152,6 +209,65 @@ export class TaskProjectsService {
       : false;
     if (!isCreator && !isAssigned) throw new ForbiddenException('Access denied');
     return task;
+  }
+
+  private async attachSitePunches<T extends { id: number }>(
+    items: T[],
+  ): Promise<(T & { sitePunches: Array<{
+    id: number;
+    kind: 'in' | 'out';
+    at: Date;
+    message: string | null;
+    employeeID: number | null;
+    senderName: string | null;
+    employeeName: string | null;
+  }> })[]> {
+    const ids = items.map((item) => item.id);
+    if (!ids.length) {
+      return items.map((item) => ({ ...item, sitePunches: [] }));
+    }
+    const rows = await this.prisma.taskChat.findMany({
+      where: {
+        taskID: { in: ids },
+        OR: [
+          { message: { contains: 'Site Mark IN', mode: 'insensitive' } },
+          { message: { contains: 'Site Mark OUT', mode: 'insensitive' } },
+        ],
+      },
+      orderBy: { createdAt: 'asc' },
+      select: {
+        id: true,
+        taskID: true,
+        message: true,
+        createdAt: true,
+        employeeID: true,
+        senderName: true,
+      },
+    });
+    const byTask = new Map<number, typeof rows>();
+    for (const row of rows) {
+      const list = byTask.get(row.taskID) || [];
+      list.push(row);
+      byTask.set(row.taskID, list);
+    }
+    return items.map((item) => ({
+      ...item,
+      sitePunches: (byTask.get(item.id) || [])
+        .map((row) => {
+          const kind = parseSitePunchKind(row.message);
+          if (!kind) return null;
+          return {
+            id: row.id,
+            kind,
+            at: row.createdAt,
+            message: row.message,
+            employeeID: row.employeeID,
+            senderName: row.senderName,
+            employeeName: row.senderName,
+          };
+        })
+        .filter((p): p is NonNullable<typeof p> => p != null),
+    }));
   }
 
   private formatTaskDetailsMessage(task: {
@@ -246,6 +362,7 @@ export class TaskProjectsService {
             contactName: c.contactName.trim(),
             contactNumber: c.contactNumber.trim(),
             contactEmail: c.contactEmail?.trim() || null,
+            designation: c.designation?.trim() || null,
           })),
         });
       }
@@ -600,7 +717,7 @@ export class TaskProjectsService {
     employeeIds: number[],
     query: Record<string, string | undefined>,
   ) {
-    const viewer = parseViewer(query);
+    const viewer = await this.resolveViewer(query);
     assertCanManage(viewer);
     await this.assertTaskAccess(id, viewer);
     await this.syncAssignments(id, employeeIds, { notify: 'all' });
@@ -608,7 +725,7 @@ export class TaskProjectsService {
   }
 
   async findAll(query: Record<string, string | undefined>) {
-    const viewer = parseViewer(query);
+    const viewer = await this.resolveViewer(query);
     const page = Math.max(1, Number(query.page) || 1);
     const limit = Math.min(100, Math.max(1, Number(query.limit) || 10));
     const search = (query.search || '').trim();
@@ -630,16 +747,32 @@ export class TaskProjectsService {
     }
     if (priority) where.priority = priority;
     if (taskType) where.taskType = taskType;
+    const andParts: Record<string, unknown>[] = [];
     if (search) {
-      where.AND = [
-        {
-          OR: [
-            { taskName: { contains: search, mode: 'insensitive' } },
-            { taskCode: { contains: search, mode: 'insensitive' } },
-          ],
-        },
-      ];
+      andParts.push({
+        OR: [
+          { taskName: { contains: search, mode: 'insensitive' } },
+          { taskCode: { contains: search, mode: 'insensitive' } },
+        ],
+      });
     }
+    const assignedToMe =
+      query.assignedToMe === '1' ||
+      query.assignedToMe === 'true' ||
+      query.scope === 'assigned';
+    if (assignedToMe) {
+      if (viewer.employeeId) {
+        andParts.push({
+          OR: [
+            { assignments: { some: { manageEmployeeID: viewer.employeeId } } },
+            { engineerAssignments: { some: { manageEmployeeID: viewer.employeeId } } },
+          ],
+        });
+      } else {
+        andParts.push({ id: -1 });
+      }
+    }
+    if (andParts.length) where.AND = andParts;
     const [rawItems, total, grouped] = await Promise.all([
       this.prisma.taskProject.findMany({
         where,
@@ -666,15 +799,16 @@ export class TaskProjectsService {
             chats: filterChatsForEmployeeViewer(item.chats, viewer) as typeof item.chats,
           }))
         : rawItems;
+    const withPunches = await this.attachSitePunches(items);
     const statusCounts: Record<string, number> = {};
     for (const row of grouped) {
       statusCounts[row.status] = row._count._all;
     }
-    return { items, total, page, limit, totalPages: Math.ceil(total / limit), statusCounts };
+    return { items: withPunches, total, page, limit, totalPages: Math.ceil(total / limit), statusCounts };
   }
 
   async findOne(id: number, query: Record<string, string | undefined>) {
-    const viewer = parseViewer(query);
+    const viewer = await this.resolveViewer(query);
     await this.assertTaskAccess(id, viewer);
     const task = await this.prisma.taskProject.findFirst({
       where: { id, isDeleted: false },
@@ -690,11 +824,12 @@ export class TaskProjectsService {
     if (!canManageTaskModule(viewer) && viewer.employeeId) {
       task.chats = filterChatsForEmployeeViewer(task.chats, viewer) as typeof task.chats;
     }
-    return task;
+    const [withPunches] = await this.attachSitePunches([task]);
+    return withPunches;
   }
 
   async create(dto: CreateTaskProjectDto, query: Record<string, string | undefined>) {
-    const viewer = parseViewer(query);
+    const viewer = await this.resolveViewer(query);
     if (!canManageTaskModule(viewer) && !viewer.employeeId) {
       throw new ForbiddenException('Access denied');
     }
@@ -754,11 +889,12 @@ export class TaskProjectsService {
         (query.actorName as string) || undefined,
       );
     }
+    this.enplSync.notifyHrmsChange('task', task.id);
     return createdFull;
   }
 
   async update(id: number, dto: UpdateTaskProjectDto, query: Record<string, string | undefined>) {
-    const viewer = parseViewer(query);
+    const viewer = await this.resolveViewer(query);
     const existing = await this.assertTaskAccess(id, viewer);
     if (!canManageTaskModule(viewer) && existing.createdByEmployeeID !== viewer.employeeId) {
       throw new ForbiddenException('Only task creator or admin can edit task details');
@@ -785,18 +921,21 @@ export class TaskProjectsService {
       await this.syncAssignments(id, dto.assignedEmployeeIds);
     }
     await this.replaceTaskNested(id, dto);
+    this.enplSync.notifyHrmsChange('task', id);
     return this.findOne(id, query);
   }
 
   async remove(id: number, query: Record<string, string | undefined>) {
-    const viewer = parseViewer(query);
+    const viewer = await this.resolveViewer(query);
     assertCanManage(viewer);
     await this.assertTaskAccess(id, viewer);
-    return this.prisma.taskProject.update({ where: { id }, data: { isDeleted: true } });
+    const updated = await this.prisma.taskProject.update({ where: { id }, data: { isDeleted: true } });
+    this.enplSync.notifyHrmsChange('task', id);
+    return updated;
   }
 
   async changeStatus(id: number, dto: TaskStatusChangeDto, query: Record<string, string | undefined>) {
-    const viewer = parseViewer(query);
+    const viewer = await this.resolveViewer(query);
     const task = await this.assertTaskAccess(id, viewer);
     if (!canManageTaskModule(viewer)) {
       if (!viewer.employeeId || task.createdByEmployeeID !== viewer.employeeId) {
@@ -825,11 +964,12 @@ export class TaskProjectsService {
     if (dto.remark?.trim()) {
       await this.addRemark(id, { remark: dto.remark, userID: dto.userID, employeeID: dto.employeeID, authorName: dto.actorName }, query);
     }
+    this.enplSync.notifyHrmsChange('task', id);
     return updated;
   }
 
   async changePriority(id: number, dto: TaskPriorityChangeDto, query: Record<string, string | undefined>) {
-    const viewer = parseViewer(query);
+    const viewer = await this.resolveViewer(query);
     if (!canManageTaskModule(viewer)) {
       throw new ForbiddenException('Only administrators can change task priority');
     }
@@ -849,11 +989,12 @@ export class TaskProjectsService {
     if (dto.remark?.trim()) {
       await this.addRemark(id, { remark: dto.remark, userID: dto.userID, employeeID: dto.employeeID, authorName: dto.actorName }, query);
     }
+    this.enplSync.notifyHrmsChange('task', id);
     return updated;
   }
 
   async addRemark(id: number, dto: CreateTaskRemarkDto, query: Record<string, string | undefined>) {
-    const viewer = parseViewer(query);
+    const viewer = await this.resolveViewer(query);
     await this.assertTaskAccess(id, viewer);
     const remark = await this.prisma.taskRemark.create({
       data: {
@@ -872,22 +1013,50 @@ export class TaskProjectsService {
       actorName: dto.authorName,
       remark: dto.remark,
     });
+    if (dto.status) {
+      await this.prisma.taskProject.update({
+        where: { id },
+        data: { status: normalizeTaskStatus(dto.status) || dto.status },
+      });
+    }
+    this.enplSync.notifyHrmsChange('task', id);
     return remark;
   }
 
   async getRemarks(id: number, query: Record<string, string | undefined>) {
-    const viewer = parseViewer(query);
+    const viewer = await this.resolveViewer(query);
     await this.assertTaskAccess(id, viewer);
     return this.prisma.taskRemark.findMany({ where: { taskID: id }, orderBy: { createdAt: 'desc' } });
   }
 
   async addChat(id: number, dto: CreateTaskChatDto, query: Record<string, string | undefined>) {
-    const viewer = parseViewer(query);
+    const viewer = await this.resolveViewer(query);
     await this.assertTaskAccess(id, viewer);
     const text = (dto.message || '').trim();
     const attachmentUrl = (dto.attachmentUrl || '').trim() || null;
     if (!text && !attachmentUrl) {
       throw new BadRequestException('Message or attachment is required');
+    }
+    const incomingPunch = parseSitePunchKind(text);
+    if (incomingPunch) {
+      const previousPunches = await this.prisma.taskChat.findMany({
+        where: {
+          taskID: id,
+          OR: [
+            { message: { contains: 'Site Mark IN', mode: 'insensitive' } },
+            { message: { contains: 'Site Mark OUT', mode: 'insensitive' } },
+          ],
+        },
+        orderBy: { createdAt: 'asc' },
+        select: { message: true, createdAt: true },
+      });
+      const lastKind = lastSitePunchKindFromMessages(previousPunches);
+      if (incomingPunch === 'out' && lastKind !== 'in') {
+        throw new BadRequestException('Site check out is only allowed after a site check in');
+      }
+      if (incomingPunch === 'in' && lastKind === 'in') {
+        throw new BadRequestException('Already checked in. Site check out first.');
+      }
     }
     if (dto.status && !canManageTaskModule(viewer)) {
       throw new ForbiddenException('Only administrators can change task status');
@@ -961,7 +1130,7 @@ export class TaskProjectsService {
   }
 
   async getChats(id: number, query: Record<string, string | undefined>) {
-    const viewer = parseViewer(query);
+    const viewer = await this.resolveViewer(query);
     await this.assertTaskAccess(id, viewer);
     const chats = await this.prisma.taskChat.findMany({
       where: { taskID: id },
@@ -971,13 +1140,13 @@ export class TaskProjectsService {
   }
 
   async getActivities(id: number, query: Record<string, string | undefined>) {
-    const viewer = parseViewer(query);
+    const viewer = await this.resolveViewer(query);
     await this.assertTaskAccess(id, viewer);
     return this.prisma.taskActivityLog.findMany({ where: { taskID: id }, orderBy: { createdAt: 'desc' } });
   }
 
   async getTaskReport(id: number, query: Record<string, string | undefined>) {
-    const viewer = parseViewer(query);
+    const viewer = await this.resolveViewer(query);
     await this.assertTaskAccess(id, viewer);
     const task = await this.prisma.taskProject.findFirst({
       where: { id, isDeleted: false },
@@ -1148,7 +1317,7 @@ export class TaskProjectsService {
   }
 
   async getEmployeesByDepartment(departmentID: number, query: Record<string, string | undefined>) {
-    const viewer = parseViewer(query);
+    const viewer = await this.resolveViewer(query);
     const companyID =
       (query.companyID ? Number(query.companyID) : undefined) || viewer.companyID || undefined;
     const where: any = { lifecycleStatus: 'ACTIVE', isDeleted: false };

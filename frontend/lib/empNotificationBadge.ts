@@ -1,6 +1,7 @@
 /** Employee portal notification / sidebar badge helpers. */
 import { TASK_MANAGEMENT_ENABLED } from "@/app/config/featureFlags";
 import { taskFetch } from "@/app/utils/taskApi";
+import { isActiveTaskStatus } from "@/app/utils/taskStatusFlow";
 import {
   countUnseenLeaveBadge,
   countUnseenReimbursementBadge,
@@ -393,11 +394,9 @@ export async function fetchEmpSidebarBadgeCounts(
         "/task-projects",
         user,
         undefined,
-        { limit: 100 },
+        { limit: 100, assignedToMe: 1 },
       );
-      counts.tasks = (data.items || []).filter(
-        (t) => t.status === "Open" || t.status === "WIP" || t.status === "Reopen",
-      ).length;
+      counts.tasks = (data.items || []).filter((t) => isActiveTaskStatus(t.status)).length;
     } catch {
       counts.tasks = 0;
     }

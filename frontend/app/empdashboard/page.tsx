@@ -18,7 +18,9 @@ import {
 } from "../utils/empHomeSeen";
 import type { TodayStatus } from "../hooks/useEmpPunch";
 import { taskFetch } from "../utils/taskApi";
+import { isActiveTaskStatus } from "../utils/taskStatusFlow";
 import { syncAppBadge } from "@/lib/appBadge";
+import { isCompanyOwnerFlag } from "@/lib/companyAccess";
 import { TASK_MANAGEMENT_ENABLED } from "../config/featureFlags";
 import { Dialog, DialogContent, DialogTitle, DialogHeader } from "../components/ui/dialog";
 import { Button } from "../components/ui/button";
@@ -324,7 +326,14 @@ function EmpDashboardPageInner() {
         setEmpUser(u);
 
         // Check if mustChangePassword exists in the user object
-        const mustChange = u?.mustChangePassword === true;
+        const isOwner =
+          u?.isCompanyOwner === true ||
+          u?.employee?.isCompanyOwner === true ||
+          isCompanyOwnerFlag();
+        const role = String(u?.role || "").toUpperCase();
+        const skipForcePassword =
+          isOwner || role === "COMPANY_ADMIN" || role === "ADMIN";
+        const mustChange = !skipForcePassword && u?.mustChangePassword === true;
         console.log("mustChangePassword from user object:", mustChange);
 
         if (mustChange) {
@@ -384,7 +393,16 @@ function EmpDashboardPageInner() {
             setPhotoUrl(resolveEmpPhoto(empId, data.employeePhotoUrl));
           }
 
-          const mustChange = data?.employeeCredentials?.mustChangePassword === true;
+          const isOwner =
+            empUser?.isCompanyOwner === true ||
+            empUser?.employee?.isCompanyOwner === true ||
+            data?.isCompanyOwner === true ||
+            isCompanyOwnerFlag();
+          const role = String(empUser?.role || "").toUpperCase();
+          const skipForcePassword =
+            isOwner || role === "COMPANY_ADMIN" || role === "ADMIN";
+          const mustChange =
+            !skipForcePassword && data?.employeeCredentials?.mustChangePassword === true;
 
           if (mustChange) {
             setMustChangePassword(true);
@@ -424,10 +442,13 @@ function EmpDashboardPageInner() {
 
     if (TASK_MANAGEMENT_ENABLED) {
       const userForTask = empUser;
-      taskFetch<{ items: { status: string }[] }>("/task-projects", userForTask, undefined, { limit: 100 })
+      taskFetch<{ items: { status: string }[] }>("/task-projects", userForTask, undefined, {
+        limit: 100,
+        assignedToMe: 1,
+      })
         .then((data) => {
           const items = data.items || [];
-          setTaskBadge(items.filter((t) => t.status === "Open" || t.status === "WIP" || t.status === "Reopen").length);
+          setTaskBadge(items.filter((t) => isActiveTaskStatus(t.status)).length);
         })
         .catch(() => setTaskBadge(0));
     } else {

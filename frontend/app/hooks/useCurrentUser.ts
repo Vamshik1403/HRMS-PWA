@@ -13,6 +13,7 @@ export interface CurrentUser {
 
   serviceProviderID?: number
   companyID?: number
+  activeCompanyID?: number
   branchesID?: number
 
   // Nested objects from API
@@ -55,6 +56,21 @@ function readStoredUser(): CurrentUser | null {
 
 export function useCurrentUser() {
   const [user, setUser] = useState<CurrentUser | null>(readStoredUser)
+
+  useEffect(() => {
+    const onUserStorageChange = () => {
+      const stored = readStoredUser()
+      if (stored) setUser(stored)
+    }
+    window.addEventListener("sidebar-context-changed", onUserStorageChange)
+    window.addEventListener("app-data-refresh", onUserStorageChange)
+    window.addEventListener("storage", onUserStorageChange)
+    return () => {
+      window.removeEventListener("sidebar-context-changed", onUserStorageChange)
+      window.removeEventListener("app-data-refresh", onUserStorageChange)
+      window.removeEventListener("storage", onUserStorageChange)
+    }
+  }, [])
 
   useEffect(() => {
     const stored = readStoredUser()

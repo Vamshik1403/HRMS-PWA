@@ -1,6 +1,7 @@
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { taskFetch, type CurrentUserLike } from "./taskApi";
+import { isSitePunchTaskType } from "./taskSitePunch";
 
 export type TaskReportData = {
   generatedAt: string;
@@ -28,7 +29,7 @@ export function downloadTaskReportPdf(report: TaskReportData, fileName?: string)
   const doc = new jsPDF("p", "mm", "a4");
   const pageWidth = doc.internal.pageSize.width;
   const task = report.task as Record<string, unknown>;
-  const isSiteVisit = String(task.taskType || "").toLowerCase().includes("site visit");
+  const isSiteVisit = isSitePunchTaskType(String(task.taskType || ""));
   let y = 14;
 
   doc.setFont("helvetica", "bold");

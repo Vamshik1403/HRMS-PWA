@@ -99,7 +99,10 @@ export function useEmpCalendarDayDetail(dateKey: string | null) {
       return;
     }
 
-    taskFetch<{ items: CalendarDayTask[] }>("/task-projects", user, undefined, { limit: 100 })
+    taskFetch<{ items: CalendarDayTask[] }>("/task-projects", user, undefined, {
+      limit: 100,
+      assignedToMe: 1,
+    })
       .then((data) => {
         const items = data.items || [];
         const dayTasks = items.filter((t) => t.scheduleDateTime && taskDateKey(t.scheduleDateTime) === dateKey);

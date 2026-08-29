@@ -262,7 +262,7 @@ export function EmpDesktopWorkspaceCalendar() {
           try {
             const taskData = await taskFetch<{
               items: { scheduleDateTime?: string | null; taskName?: string | null }[];
-            }>("/task-projects", user, undefined, { limit: 200 });
+            }>("/task-projects", user, undefined, { limit: 200, assignedToMe: 1 });
             const taskMap = new Map<string, string[]>();
             (taskData.items || []).forEach((t) => {
               if (!t.scheduleDateTime) return;

@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { ListTodo } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { ListTodo, Plus } from "lucide-react";
 import EmpMobileLayout from "../components/layout/EmpMobileLayout";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import { taskFetch } from "../utils/taskApi";
@@ -14,14 +14,28 @@ import {
 } from "../components/task/mobile/MobileTaskCreateSheet";
 import { toast } from "sonner";
 import { fetchGPSOnUserGesture } from "../utils/empGeolocation";
-import { getNextSitePunchKind, sitePunchLabel } from "../utils/taskSitePunch";
+import {
+  getNextSitePunchKindForTask,
+  sitePunchLabel,
+  formatSitePunchAt,
+  isSitePunchTaskType,
+  sitePunchesFromTask,
+} from "../utils/taskSitePunch";
 import { downloadTaskReportForId } from "../utils/taskReportPdf";
 import { useTaskChatPolling } from "../hooks/useTaskChatPolling";
 import { useEmpManagerScope } from "../hooks/useEmpManagerScope";
 import { EmpDesktopPage } from "../components/emp/desktop/EmpDesktopPage";
+import { EmpDesktopTaskTable } from "../components/emp/desktop/EmpDesktopTaskTable";
+import { EmpTeamStyleDataSection } from "../components/emp/desktop/EmpTeamStyleDataSection";
 import { useEmpPortalDesktop } from "../components/layout/EmpPortalShell";
+import { Button } from "../components/ui/button";
+import { FormModal } from "../components/ui/form-modal";
+import { canonicalTaskStatus } from "../components/task/task-types";
+import { cn } from "@/app/utils/cn";
 
 const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL || "/backend";
+const STATUS_TABS = ["Open", "WIP", "Closed", "Reopen"] as const;
+type StatusTab = (typeof STATUS_TABS)[number];
 
 interface Task extends MobileTaskListItem {
   taskType: string;
@@ -39,6 +53,7 @@ export default function EmpMyTasksPage() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
+  const [statusTab, setStatusTab] = useState<StatusTab>("Open");
   const [detail, setDetail] = useState<Task | null>(null);
   const [infoTask, setInfoTask] = useState<Task | null>(null);
   const [chatMsg, setChatMsg] = useState("");
@@ -51,7 +66,10 @@ export default function EmpMyTasksPage() {
     if (!user) return;
     setLoading(true);
     try {
-      const data = await taskFetch<{ items: Task[] }>("/task-projects", user, undefined, { limit: 50 });
+      const data = await taskFetch<{ items: Task[] }>("/task-projects", user, undefined, {
+        limit: 50,
+        assignedToMe: 1,
+      });
       setTasks(data.items);
     } catch (e: any) {
       toast.error(e.message || "Failed to load tasks");
@@ -67,7 +85,10 @@ export default function EmpMyTasksPage() {
     fetch(`${BACKEND}/manage-emp/credentials/${encodeURIComponent(user.username)}`)
       .then((r) => (r.ok ? r.json() : null))
       .then((creds) => {
-        const empId = creds?.employee?.id;
+        if (typeof creds?.employee?.allowCreateTaskOnMobile === "boolean") {
+          setCanCreateTask(!!creds.employee.allowCreateTaskOnMobile);
+        }
+        const empId = creds?.employee?.id ?? user.employee?.id;
         if (!empId) return;
         return fetch(`${BACKEND}/manage-emp/${empId}`).then((r) => (r.ok ? r.json() : null));
       })
@@ -143,9 +164,18 @@ export default function EmpMyTasksPage() {
     }
   };
 
-  const postSitePunch = async (taskId: number, chats?: { message?: string; createdAt?: string }[]) => {
+  const postSitePunch = async (
+    taskId: number,
+    taskOrChats?:
+      | { message?: string; createdAt?: string }[]
+      | {
+          chats?: { message?: string; createdAt?: string }[];
+          sitePunches?: { kind?: string; at?: string; createdAt?: string; message?: string | null }[];
+        },
+  ) => {
     if (!user) return;
-    const kind = getNextSitePunchKind(chats);
+    const punchSource = Array.isArray(taskOrChats) ? { chats: taskOrChats } : taskOrChats || {};
+    const kind = getNextSitePunchKindForTask(punchSource);
     const label = sitePunchLabel(kind);
     let locationBlock = "";
     try {
@@ -185,65 +215,180 @@ export default function EmpMyTasksPage() {
 
   const sitePunch = async () => {
     if (!detail) return;
-    await postSitePunch(detail.id, detail.chats);
+    await postSitePunch(detail.id, detail);
   };
 
-  if (detail) {
+  const recordSitePunch = async (t: MobileTaskListItem) => {
+    try {
+      const full = await taskFetch<Task>(`/task-projects/${t.id}`, user);
+      await postSitePunch(t.id, full);
+    } catch (e: any) {
+      toast.error(e.message || "Could not record site attendance");
+    }
+  };
+
+  const desktopFiltered = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    let list = tasks.filter((t) => {
+      const canonical = canonicalTaskStatus(t.status);
+      if (statusTab === "Open") return canonical === "Open" || canonical === "Scheduled" || canonical === "Rescheduled";
+      if (statusTab === "WIP") return canonical === "Work in Progress" || canonical === "On-Hold";
+      if (statusTab === "Closed") return canonical === "Completed";
+      return canonical === "Reopen";
+    });
+    if (!q) return list;
+    return list.filter(
+      (t) =>
+        t.taskName.toLowerCase().includes(q) ||
+        String(t.id).includes(q) ||
+        t.taskCode.toLowerCase().includes(q) ||
+        (t.customer?.customerName || "").toLowerCase().includes(q) ||
+        (t.site?.branchName || "").toLowerCase().includes(q),
+    );
+  }, [tasks, searchQuery, statusTab]);
+
+  const chatView = detail ? (
+    <MobileTaskChatView
+      task={detail}
+      currentUserName={user?.username}
+      currentEmployeeId={
+        (user as { employee?: { id?: number } })?.employee?.id ??
+        (typeof user?.id === "number" ? user.id : undefined)
+      }
+      message={chatMsg}
+      onMessageChange={setChatMsg}
+      onSend={sendMsg}
+      sending={sending}
+      onBack={() => {
+        setDetail(null);
+        setChatMsg("");
+        load();
+      }}
+      onSitePunch={isSitePunchTaskType(detail.taskType) ? sitePunch : undefined}
+      sitePunchNextKind={getNextSitePunchKindForTask(detail)}
+      embedded={isDesktop}
+      onDownloadReport={async () => {
+        try {
+          await downloadTaskReportForId(detail.id, user, detail.taskCode);
+          toast.success("Report downloaded");
+        } catch (e: unknown) {
+          toast.error(e instanceof Error ? e.message : "Failed to download report");
+        }
+      }}
+    />
+  ) : null;
+
+  if (detail && !isDesktop) {
+    return <EmpMobileLayout hideBottomNav>{chatView}</EmpMobileLayout>;
+  }
+
+  if (detail && isDesktop) {
     return (
-      <EmpMobileLayout hideBottomNav>
-        <MobileTaskChatView
-          task={detail}
-          currentUserName={user?.username}
-          currentEmployeeId={
-            (user as { employee?: { id?: number } })?.employee?.id ??
-            (typeof user?.id === "number" ? user.id : undefined)
-          }
-          message={chatMsg}
-          onMessageChange={setChatMsg}
-          onSend={sendMsg}
-          sending={sending}
-          onBack={() => {
-            setDetail(null);
-            setChatMsg("");
-            load();
-          }}
-          onSitePunch={sitePunch}
-          sitePunchNextKind={detail ? getNextSitePunchKind(detail.chats) : "in"}
-          onDownloadReport={async () => {
-            try {
-              await downloadTaskReportForId(detail.id, user, detail.taskCode);
-              toast.success("Report downloaded");
-            } catch (e: unknown) {
-              toast.error(e instanceof Error ? e.message : "Failed to download report");
-            }
-          }}
-        />
-      </EmpMobileLayout>
+      <EmpDesktopPage title="Task" description={detail.taskName} icon={ListTodo}>
+        {chatView}
+      </EmpDesktopPage>
     );
   }
 
-  const listBody = (
-    <>
+  const createSheet = (
+    <MobileTaskCreateSheet
+      open={createOpen}
+      onClose={() => setCreateOpen(false)}
+      user={user}
+      creatorEmp={creatorEmp}
+      onCreated={() => load()}
+    />
+  );
+
+  if (isDesktop) {
+    return (
+      <EmpDesktopPage
+        title="Tasks"
+        description={isManagerView ? "Team member tasks" : "Assigned tasks"}
+        icon={ListTodo}
+        actions={
+          canCreateTask && !createOpen ? (
+            <Button type="button" size="sm" onClick={() => setCreateOpen(true)}>
+              <Plus className="size-4" />
+              Create task
+            </Button>
+          ) : undefined
+        }
+      >
+        <FormModal
+          open={createOpen}
+          onOpenChange={(open) => {
+            if (!open) setCreateOpen(false);
+          }}
+          title="New task"
+          description="Add details and assign team members."
+          showCloseButton
+          closeLabel="Close"
+        >
+          <MobileTaskCreateSheet
+            layout="form"
+            open={createOpen}
+            onClose={() => setCreateOpen(false)}
+            user={user}
+            creatorEmp={creatorEmp}
+            onCreated={() => {
+              setCreateOpen(false);
+              load();
+            }}
+          />
+        </FormModal>
+        {!createOpen ? (
+          <EmpTeamStyleDataSection
+            searchQuery={searchQuery}
+            onSearchChange={setSearchQuery}
+            searchPlaceholder="Search tasks…"
+            showViewToggle={false}
+            filterContent={STATUS_TABS.map((tab) => (
+              <button
+                key={tab}
+                type="button"
+                onClick={() => setStatusTab(tab)}
+                className={cn(
+                  "rounded-full px-3 py-1 text-xs font-semibold border transition-colors",
+                  statusTab === tab
+                    ? "border-primary bg-primary/10 text-primary"
+                    : "border-border text-muted-foreground hover:text-foreground",
+                )}
+              >
+                {tab}
+              </button>
+            ))}
+            loading={false}
+            empty={false}
+            emptyMessage="No tasks in this view"
+            listContent={
+              <EmpDesktopTaskTable
+                tasks={desktopFiltered}
+                loading={loading}
+                onOpen={(t) => void openTask(t as Task)}
+                onSitePunch={(t) => void recordSitePunch(t)}
+              />
+            }
+          />
+        ) : null}
+      </EmpDesktopPage>
+    );
+  }
+
+  return (
+    <EmpMobileLayout hideBottomNav={createOpen}>
       <MobileTaskListView
         tasks={tasks}
         loading={loading}
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
         onTaskClick={(t) => openTask(t as Task)}
-        onCheckInOut={async (t) => {
-          try {
-            const full = await taskFetch<Task>(`/task-projects/${t.id}`, user);
-            await postSitePunch(t.id, full.chats);
-          } catch (e: any) {
-            toast.error(e.message || "Could not record site attendance");
-          }
-        }}
+        onCheckInOut={(t) => void recordSitePunch(t)}
         onViewInfo={(t) => setInfoTask(t as Task)}
         onCreateClick={canCreateTask ? () => setCreateOpen(true) : undefined}
         showCreateFab={canCreateTask}
         managerScope={scope}
         isManagerView={isManagerView}
-        hidePageTitle={isDesktop}
       />
 
       {infoTask && (
@@ -256,8 +401,23 @@ export default function EmpMyTasksPage() {
               <p><span className="text-gray-500">Type:</span> {infoTask.taskType}</p>
               <p><span className="text-gray-500">Status:</span> {infoTask.status}</p>
               <p><span className="text-gray-500">Priority:</span> {infoTask.priority}</p>
-              {(infoTask.taskType || "").toLowerCase().includes("site visit") && (
+              {isSitePunchTaskType(infoTask.taskType) && (
                 <p><span className="text-gray-500">Site:</span> {infoTask.site?.branchName || "—"}</p>
+              )}
+              {isSitePunchTaskType(infoTask.taskType) && (
+                <div className="pt-2 space-y-1">
+                  <p className="text-gray-500 font-semibold">Site check-in / check-out</p>
+                  {sitePunchesFromTask(infoTask).length === 0 ? (
+                    <p className="text-gray-400">No site check-in yet</p>
+                  ) : (
+                    sitePunchesFromTask(infoTask).map((p, i) => (
+                      <p key={`${p.kind}-${p.at}-${i}`}>
+                        {p.kind === "in" ? "Site check in" : "Site check out"}: {formatSitePunchAt(p.at)}
+                        {p.employeeName ? ` · ${p.employeeName}` : ""}
+                      </p>
+                    ))
+                  )}
+                </div>
               )}
             </div>
             <button type="button" className="mt-4 w-full py-2.5 rounded-xl bg-[#2563eb] text-white font-semibold text-sm" onClick={() => { setInfoTask(null); openTask(infoTask); }}>
@@ -266,30 +426,7 @@ export default function EmpMyTasksPage() {
           </div>
         </>
       )}
-
-      <MobileTaskCreateSheet
-        open={createOpen}
-        onClose={() => setCreateOpen(false)}
-        user={user}
-        creatorEmp={creatorEmp}
-        onCreated={() => load()}
-      />
-    </>
-  );
-
-  return (
-    <EmpMobileLayout hideBottomNav={createOpen}>
-      {isDesktop ? (
-        <EmpDesktopPage
-          title="Tasks"
-          description={isManagerView ? "Team member tasks" : "Assigned tasks"}
-          icon={ListTodo}
-        >
-          {listBody}
-        </EmpDesktopPage>
-      ) : (
-        listBody
-      )}
+      {createSheet}
     </EmpMobileLayout>
   );
 }

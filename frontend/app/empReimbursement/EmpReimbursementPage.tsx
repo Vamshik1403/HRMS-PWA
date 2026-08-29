@@ -20,6 +20,7 @@ import html2canvas from "html2canvas"
 import { useCurrentUser } from "../hooks/useCurrentUser"
 import { toast } from "sonner"
 import { getPageCache, setPageCache } from "../utils/pageCache"
+import { localDateISO } from "../utils/localDate"
 
 interface ReimbursementItem {
   id?: number
@@ -285,7 +286,7 @@ const [employee, setEmployee] = useState<Employee | null>(null)
     companyName: "",
     branchName: "",
     employeeName: "",
-    date: new Date().toISOString().split('T')[0],
+    date: localDateISO(),
     status: "Pending",
     serviceProviderID: undefined as number | undefined,
     companyID: undefined as number | undefined,
@@ -666,6 +667,11 @@ if (employee) loadReimbursements(employee.id)
   // ---------- CRUD actions ----------
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    const today = localDateISO()
+    if (!formData.date || formData.date > today) {
+      toast.error("Date cannot be in the future.")
+      return
+    }
                                               
     const payload = {
    serviceProviderID: employee?.serviceProviderID,
@@ -727,7 +733,7 @@ if (employee) await loadReimbursements(employee.employeeID)
     setEditing(r)
     setFormData(prev => ({
       ...prev,
-      date: r.date || new Date().toISOString().split('T')[0],
+      date: r.date || localDateISO(),
       status: "Pending",
     }))
     setItems(r.items || [{ reimbursementType: "", amount: "", description: "" }])
@@ -760,6 +766,7 @@ if (employee) await loadReimbursements(employee.employeeID)
           <input
             type="date"
             value={formData.date}
+            max={localDateISO()}
             onChange={(e) => setFormData(p => ({ ...p, date: e.target.value }))}
             className="block w-full min-w-0 max-w-full box-border px-3 py-2.5 text-[13px] rounded-xl border border-gray-100 bg-gray-50 focus:outline-none appearance-none"
           />

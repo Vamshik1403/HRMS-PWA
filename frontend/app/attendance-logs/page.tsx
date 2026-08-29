@@ -12,7 +12,8 @@ import {
   TableRow,
 } from "../components/ui/table";
 import { useCurrentUser } from "../hooks/useCurrentUser";
-import { getSidebarContext } from "../utils/sidebarContext";
+import { getActiveCompanyId, getSidebarContext } from "../utils/sidebarContext";
+import { resolveScopedCompanyId } from "../utils/scopeContext";
 import { isDesktopManagerFlagSet } from "@/lib/desktopManager";
 import { TableBodySkeleton } from "@/app/components/ui/TableBodySkeleton";
 import { EmpDesktopPage } from "../components/emp/desktop/EmpDesktopPage";
@@ -116,11 +117,22 @@ export default function AttendanceLogsPage() {
     companyID?: number;
     branchesID?: number;
   } | null>(null);
+  const [companyScopeTick, setCompanyScopeTick] = useState(0);
 
   const desktopManager =
     typeof window !== "undefined" &&
     isDesktopManagerFlagSet() &&
     user?.role === "EMPLOYEE";
+
+  useEffect(() => {
+    const bump = () => setCompanyScopeTick((n) => n + 1);
+    window.addEventListener("sidebar-context-changed", bump);
+    window.addEventListener("app-data-refresh", bump);
+    return () => {
+      window.removeEventListener("sidebar-context-changed", bump);
+      window.removeEventListener("app-data-refresh", bump);
+    };
+  }, []);
 
   useEffect(() => {
     if (!user) return;
@@ -149,26 +161,23 @@ export default function AttendanceLogsPage() {
 
   useEffect(() => {
     if (!user) return;
-    if (
-      (user.role === "SERVICE_PROVIDER" ||
-        user.role === "COMPANY_ADMIN" ||
-        user.role === "ADMIN") &&
-      !currentUserMapping
-    ) {
+    if (user.role === "SERVICE_PROVIDER" && !currentUserMapping) {
       return;
     }
 
     const params = new URLSearchParams();
     const ctx = getSidebarContext();
-    if (user.role === "SUPERADMIN" && ctx?.companyID) {
-      params.set("companyID", String(ctx.companyID));
-    } else if (user.role === "SERVICE_PROVIDER" && currentUserMapping?.companyID) {
-      params.set("companyID", String(currentUserMapping.companyID));
-    } else if (
-      (user.role === "COMPANY_ADMIN" || user.role === "ADMIN") &&
-      currentUserMapping?.companyID
-    ) {
-      params.set("companyID", String(currentUserMapping.companyID));
+    const switchedCompanyId =
+      resolveScopedCompanyId(user) ?? getActiveCompanyId() ?? undefined;
+    if (user.role === "SUPERADMIN" && (switchedCompanyId || ctx?.companyID)) {
+      params.set("companyID", String(switchedCompanyId ?? ctx?.companyID));
+    } else if (user.role === "SERVICE_PROVIDER") {
+      const companyId = switchedCompanyId ?? currentUserMapping?.companyID;
+      if (companyId) params.set("companyID", String(companyId));
+    } else if (user.role === "COMPANY_ADMIN" || user.role === "ADMIN") {
+      const companyId =
+        switchedCompanyId ?? currentUserMapping?.companyID ?? user.companyID;
+      if (companyId) params.set("companyID", String(companyId));
     } else if (user.role === "BRANCH_ADMIN" || desktopManager) {
       if (user.companyID) params.set("companyID", String(user.companyID));
       if (user.role === "BRANCH_ADMIN" && user.branchesID) {
@@ -194,13 +203,13 @@ export default function AttendanceLogsPage() {
         const companyId =
           user.role === "BRANCH_ADMIN" || desktopManager
             ? user.companyID
-            : currentUserMapping?.companyID ?? ctx?.companyID;
+            : switchedCompanyId ?? currentUserMapping?.companyID ?? ctx?.companyID;
 
         const scopedBranches = (Array.isArray(branchJson) ? branchJson : []).filter(
-          (b: Branch) => !companyId || b.companyID === companyId,
+          (b: Branch) => !companyId || Number(b.companyID) === Number(companyId),
         );
         const scopedDepts = (Array.isArray(deptJson) ? deptJson : []).filter(
-          (d: Department) => !companyId || d.companyID === companyId,
+          (d: Department) => !companyId || Number(d.companyID) === Number(companyId),
         );
         setBranches(scopedBranches);
         setDepartments(scopedDepts);
@@ -211,7 +220,7 @@ export default function AttendanceLogsPage() {
         setDepartments([]);
       })
       .finally(() => setLoading(false));
-  }, [user, currentUserMapping, desktopManager]);
+  }, [user, currentUserMapping, desktopManager, companyScopeTick]);
 
   const filterDepartments = useMemo(() => {
     if (!branchFilter) return departments;

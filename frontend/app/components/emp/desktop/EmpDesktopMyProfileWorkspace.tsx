@@ -47,7 +47,7 @@ function EmpDesktopMyProfileWorkspaceInner() {
       const headers: HeadersInit = token ? { Authorization: `Bearer ${token}` } : {};
 
       const applyFlag = (value: unknown) => {
-        if (typeof value === "boolean") setShowLoanAdvances(value !== false);
+        if (typeof value === "boolean") setShowLoanAdvances(value === true);
       };
 
       const cached = getPageCache<{ pwaShowLoanAdvances?: boolean }>("empProfileData");

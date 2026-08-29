@@ -8,6 +8,7 @@ import EmpMobileLayout from "../../../components/layout/EmpMobileLayout";
 import { CATEGORIES } from "../../../components/emp/EmpReimbursementMobile";
 import { useCurrentUser } from "../../../hooks/useCurrentUser";
 import { taskFetch } from "../../../utils/taskApi";
+import { localDateISO } from "../../../utils/localDate";
 
 const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL || "/backend";
 
@@ -38,6 +39,7 @@ export default function EmpReimbursementEditPage() {
   const [taskSuggestOpen, setTaskSuggestOpen] = useState(false);
   const [items, setItems] = useState<LineItem[]>([]);
   const [date, setDate] = useState("");
+  const today = useMemo(() => localDateISO(), []);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
@@ -50,7 +52,10 @@ export default function EmpReimbursementEditPage() {
 
   useEffect(() => {
     if (!user || category !== "task") return;
-    taskFetch<{ items: EmployeeTask[] }>("/task-projects", user, undefined, { limit: 100 })
+    taskFetch<{ items: EmployeeTask[] }>("/task-projects", user, undefined, {
+      limit: 100,
+      assignedToMe: 1,
+    })
       .then((data) => setEmployeeTasks(data.items || []))
       .catch(() => setEmployeeTasks([]));
   }, [user, category]);
@@ -64,7 +69,7 @@ export default function EmpReimbursementEditPage() {
           router.replace(`/empReimbursement/${id}`);
           return;
         }
-        setDate(r.date || new Date().toISOString().slice(0, 10));
+        setDate((r.date || today).slice(0, 10));
         if (r.taskProjectID) {
           setCategory("task");
           setSelectedTask({
@@ -113,6 +118,10 @@ export default function EmpReimbursementEditPage() {
 
   const submit = async () => {
     if (!creds?.employee?.id || total <= 0) return;
+    if (date && date > today) {
+      alert("Date cannot be in the future.");
+      return;
+    }
     if (category === "task" && !selectedTask) {
       alert("Please select a task for task-based reimbursement.");
       return;
@@ -162,7 +171,13 @@ export default function EmpReimbursementEditPage() {
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 space-y-4">
           <div>
             <label className="text-[11px] font-semibold text-gray-500">Date</label>
-            <p className="text-[14px] font-semibold text-gray-900 mt-0.5">{date}</p>
+            <input
+              type="date"
+              value={date}
+              max={today}
+              onChange={(e) => setDate(e.target.value)}
+              className="mt-0.5 block w-full px-3 py-2 text-[14px] rounded-xl border border-gray-100 bg-gray-50 focus:outline-none"
+            />
           </div>
 
           <div>

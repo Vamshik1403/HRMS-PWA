@@ -139,22 +139,7 @@ export class DashboardOverviewService {
       ],
     };
     if (query.companyID != null) {
-      const branchIds = (
-        await this.prisma.branches.findMany({
-          where: { companyID: query.companyID },
-          select: { id: true },
-        })
-      ).map((b) => b.id);
-      employeeWhere.AND = [
-        {
-          OR: [
-            { companyID: query.companyID },
-            ...(branchIds.length > 0
-              ? [{ branchesID: { in: branchIds } }]
-              : []),
-          ],
-        },
-      ];
+      employeeWhere.companyID = query.companyID;
     }
     if (query.serviceProviderID != null) {
       employeeWhere.serviceProviderID = query.serviceProviderID;

@@ -1,12 +1,13 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { EnplSyncService } from '../enpl-sync/enpl-sync.service';
 import { CreateTaskCustomerSiteDto } from './dto/create-task-customer-site.dto';
 import { UpdateTaskCustomerSiteDto } from './dto/update-task-customer-site.dto';
 import { assertCanManageTaskModule, parseViewer, TaskViewerContext } from './task-context';
 
 @Injectable()
 export class TaskCustomerSitesService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService, private enplSync: EnplSyncService) {}
 
   private async assertCustomerAccess(customerID: number, viewer: TaskViewerContext) {
     const customer = await this.prisma.taskCustomer.findFirst({
@@ -121,6 +122,7 @@ export class TaskCustomerSitesService {
       },
       include: { customer: { select: { id: true, customerCode: true, customerName: true } }, contacts: true, notes: true },
     });
+    this.enplSync.notifyHrmsChange('site', created.id);
     return created;
   }
 
@@ -177,14 +179,18 @@ export class TaskCustomerSitesService {
         });
       }
     }
-    return this.findOne(id, query) ?? updated;
+    const row = await this.findOne(id, query);
+    this.enplSync.notifyHrmsChange('site', id);
+    return row ?? updated;
   }
 
   async remove(id: number, query: Record<string, string | undefined>) {
     const viewer = parseViewer(query);
     assertCanManageTaskModule(viewer);
     await this.findOne(id, query);
-    return this.prisma.taskCustomerSite.update({ where: { id }, data: { isDeleted: true } });
+    const updated = await this.prisma.taskCustomerSite.update({ where: { id }, data: { isDeleted: true } });
+    this.enplSync.notifyHrmsChange('site', id);
+    return updated;
   }
 
   async dropdown(query: Record<string, string | undefined>) {

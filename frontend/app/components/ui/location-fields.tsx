@@ -25,6 +25,7 @@ interface LocationFieldsProps {
   onChange: (patch: Partial<LocationValues>) => void;
   showCurrency?: boolean;
   disabled?: boolean;
+  pincodeLabel?: string;
 }
 
 export function LocationFields({
@@ -32,6 +33,7 @@ export function LocationFields({
   onChange,
   showCurrency = true,
   disabled = false,
+  pincodeLabel = "Pincode",
 }: LocationFieldsProps) {
   const pincodeTimerRef = useRef<ReturnType<typeof setTimeout>>();
   const pincodeLookupGen = useRef(0);
@@ -114,7 +116,7 @@ export function LocationFields({
           disabled={disabled}
         />
         <div className="space-y-2">
-          <Label>Pincode</Label>
+          <Label>{pincodeLabel}</Label>
           <Input
             value={values.pincode || ""}
             onChange={(e) => handlePincodeChange(e.target.value)}

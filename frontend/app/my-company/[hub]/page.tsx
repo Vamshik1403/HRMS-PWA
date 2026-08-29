@@ -52,6 +52,10 @@ const ContractorsPage = dynamic(() => import("../../contractors/page"), { ssr: f
 const TasksPage = dynamic(() => import("../../task-projects/page"), { ssr: false });
 const PromotionsPage = dynamic(() => import("../../employees-promotions/page"), { ssr: false });
 const ReportsPage = dynamic(() => import("../../attendance-reports/page"), { ssr: false });
+const LeaveReportsPage = dynamic(() => import("../../leave-reports/page"), { ssr: false });
+const PayrollReportsPage = dynamic(() => import("../../payroll-reports/page"), { ssr: false });
+const StatutoryReportsPage = dynamic(() => import("../../statutory-reports/page"), { ssr: false });
+const ContractorReportsPage = dynamic(() => import("../../contractor-reports/page"), { ssr: false });
 const NewJoinersPage = dynamic(() => import("../../new-joiners/page"), { ssr: false });
 const PayrollSetupPage = dynamic(() => import("../../payroll-setup/page"), { ssr: false });
 const SalaryAllowancesPage = dynamic(() => import("../../salary-allowances/page"), { ssr: false });
@@ -147,6 +151,14 @@ function HubEmbed({ tab }: { tab: CompanyHubTab }) {
       return <PromotionsPage />;
     case "reports":
       return <ReportsPage />;
+    case "leave-reports":
+      return <LeaveReportsPage />;
+    case "payroll-reports":
+      return <PayrollReportsPage />;
+    case "statutory-reports":
+      return <StatutoryReportsPage />;
+    case "contractor-reports":
+      return <ContractorReportsPage />;
     case "new-joiners":
       return <NewJoinersPage />;
     case "payroll-setup":

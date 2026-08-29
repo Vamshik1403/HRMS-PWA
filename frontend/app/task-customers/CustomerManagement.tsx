@@ -292,6 +292,7 @@ export default function CustomerManagement() {
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.customerName.trim()) { toast.error("Customer name is required"); return; }
+    if (!form.address.trim()) { toast.error("Registered address is required"); return; }
     if (!form.branchesID) {
       toast.error("Branch is required");
       return;
@@ -525,10 +526,10 @@ export default function CustomerManagement() {
       
 
           <div className="space-y-2">
-            <Label>Address</Label>
-            <Textarea value={form.address} onChange={(e) => setForm((p) => ({ ...p, address: e.target.value }))} rows={3} />
+            <Label>Registered Address *</Label>
+            <Textarea value={form.address} onChange={(e) => setForm((p) => ({ ...p, address: e.target.value }))} rows={3} required />
           </div>
-          <LocationFields values={form} onChange={(patch) => setForm((p) => ({ ...p, ...patch }))} showCurrency={false} />
+          <LocationFields values={form} onChange={(patch) => setForm((p) => ({ ...p, ...patch }))} showCurrency={false} pincodeLabel="PIN Code" />
           <TaskContactsRepeater contacts={contacts} onChange={setContacts} />
           <div className="flex justify-end gap-2 pt-4 border-t">
             <Button type="button" variant="outline" onClick={closeCustomerPagePanels}>Cancel</Button>
@@ -568,10 +569,10 @@ export default function CustomerManagement() {
               title="Location"
               subtitle="Address and regional details"
               rows={[
-                { label: "Address", value: viewRow.address },
+                { label: "Registered address", value: viewRow.address },
                 { label: "City", value: viewRow.city },
                 { label: "State", value: viewRow.state },
-                { label: "Pincode", value: viewRow.pincode },
+                { label: "PIN Code", value: viewRow.pincode },
                 { label: "Country", value: viewRow.country },
               ]}
             />

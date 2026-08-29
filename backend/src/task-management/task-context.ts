@@ -8,6 +8,8 @@ export interface TaskViewerContext {
   branchesID?:number;
   serviceProviderID?: number;
   isDesktopManager?: boolean;
+  isCompanyOwner?: boolean;
+  canManageTasks?: boolean;
 }
 
 export function parseViewer(query: Record<string, string | undefined>): TaskViewerContext {
@@ -23,12 +25,23 @@ export function parseViewer(query: Record<string, string | undefined>): TaskView
     companyID: query.companyID ? Number(query.companyID) : undefined,
     serviceProviderID: query.serviceProviderID ? Number(query.serviceProviderID) : undefined,
     isDesktopManager: query.viewerDesktopManager === '1',
+    isCompanyOwner: query.viewerCompanyOwner === '1',
+    canManageTasks: query.viewerManageTasks === '1',
   };
 }
 
+const TASK_MANAGER_ROLES = new Set([
+  'SUPERADMIN',
+  'COMPANY_ADMIN',
+  'ADMIN',
+  'SERVICE_PROVIDER',
+  'BRANCH_ADMIN',
+]);
+
 export function canManageTaskModule(viewer: TaskViewerContext): boolean {
-  if (viewer.role === 'SUPERADMIN' || viewer.role === 'COMPANY_ADMIN') return true;
+  if (TASK_MANAGER_ROLES.has(viewer.role)) return true;
   if (viewer.role === 'EMPLOYEE' && viewer.isDesktopManager) return true;
+  if (viewer.isCompanyOwner || viewer.canManageTasks) return true;
   return false;
 }
 

@@ -8,6 +8,7 @@ import type { EmpManagerScope } from "../../../utils/empManagerDisplay";
 import { splitPreviewRecords } from "../../../utils/empListLimit";
 import { EmpRecordHistorySheet } from "../../emp/EmpRecordHistorySheet";
 import { EmpListViewMoreButton } from "../../emp/EmpListViewMoreButton";
+import { canonicalTaskStatus } from "../task-types";
 
 const STATUS_TABS = ["Open", "WIP", "Closed", "Reopen"] as const;
 type StatusTab = (typeof STATUS_TABS)[number];
@@ -46,7 +47,13 @@ export function MobileTaskListView({
 
   const filtered = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
-    let list = tasks.filter((t) => (t.status || "Open") === statusTab);
+    let list = tasks.filter((t) => {
+      const canonical = canonicalTaskStatus(t.status);
+      if (statusTab === "Open") return canonical === "Open" || canonical === "Scheduled" || canonical === "Rescheduled";
+      if (statusTab === "WIP") return canonical === "Work in Progress" || canonical === "On-Hold";
+      if (statusTab === "Closed") return canonical === "Completed";
+      return canonical === "Reopen";
+    });
     if (!q) return list;
     return list.filter(
       (t) =>

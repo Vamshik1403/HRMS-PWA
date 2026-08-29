@@ -6,9 +6,13 @@ import { X } from "lucide-react";
 import { taskFetch } from "@/app/utils/taskApi";
 import type { CurrentUserLike } from "@/app/utils/taskApi";
 import { toast } from "sonner";
+import { Button } from "@/app/components/ui/button";
+import { Input } from "@/app/components/ui/input";
+import { Label } from "@/app/components/ui/label";
+import { Textarea } from "@/app/components/ui/textarea";
 
-const TASK_TYPES = ["Internal Task", "Customer Visit"];
-const PRIORITIES = ["Urgent", "Medium", "Low"];
+const TASK_TYPES = ["Internal Task", "Customer Visit", "SERVICE", "PRODUCT_INQUIRY", "PURCHASE_ORDER"];
+const PRIORITIES = ["Urgent", "High", "Medium", "Low"];
 
 type Dept = { id: number; departmentName?: string | null; companyID?: number | null };
 type AssignEmployee = {
@@ -74,6 +78,8 @@ type Props = {
   user: CurrentUserLike | null | undefined;
   creatorEmp: CreatorEmp | null;
   onCreated: () => void;
+  /** Desktop My Tasks uses an in-page form; PWA keeps the bottom sheet. */
+  layout?: "sheet" | "form";
 };
 
 export function MobileTaskCreateSheet({
@@ -82,6 +88,7 @@ export function MobileTaskCreateSheet({
   user,
   creatorEmp,
   onCreated,
+  layout = "sheet",
 }: Props) {
   const [form, setForm] = useState<MobileTaskCreateFormState>(() =>
     defaultForm(creatorEmp?.departmentNameID),
@@ -94,7 +101,11 @@ export function MobileTaskCreateSheet({
   const [loadingMeta, setLoadingMeta] = useState(false);
   const [creating, setCreating] = useState(false);
 
-  const isCustomerVisit = form.taskType === "Customer Visit";
+  const isCustomerVisit =
+    form.taskType === "Customer Visit" ||
+    form.taskType === "SERVICE" ||
+    form.taskType === "PRODUCT_INQUIRY" ||
+    form.taskType === "PURCHASE_ORDER";
 
   const reset = useCallback(() => {
     setForm(defaultForm(creatorEmp?.departmentNameID));
@@ -175,7 +186,7 @@ export function MobileTaskCreateSheet({
 
   const submit = async () => {
     if (!form.taskName.trim()) {
-      toast.error("Task name is required");
+      toast.error("Title is required");
       return;
     }
     if (!user || !creatorEmp) return;
@@ -212,6 +223,228 @@ export function MobileTaskCreateSheet({
       setCreating(false);
     }
   };
+
+  if (layout === "form") {
+    if (!open) return null;
+    return (
+      <div className="space-y-5">
+        {loadingMeta && (
+          <p className="text-sm text-muted-foreground">Loading options…</p>
+        )}
+
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div className="space-y-2">
+            <Label htmlFor="desktop-task-title">Title *</Label>
+            <Input
+              id="desktop-task-title"
+              value={form.taskName}
+              onChange={(e) => setForm((p) => ({ ...p, taskName: e.target.value }))}
+              placeholder="Enter task name"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="desktop-task-dept">Department</Label>
+            <select
+              id="desktop-task-dept"
+              className="app-select w-full"
+              value={form.departmentID}
+              onChange={(e) =>
+                setForm((p) => ({
+                  ...p,
+                  departmentID: e.target.value,
+                  assignedEmployeeIds: [],
+                }))
+              }
+            >
+              <option value="">Select department</option>
+              {departments.map((d) => (
+                <option key={d.id} value={String(d.id)}>
+                  {d.departmentName || `Department #${d.id}`}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="desktop-task-type">Task type</Label>
+            <select
+              id="desktop-task-type"
+              className="app-select w-full"
+              value={form.taskType}
+              onChange={(e) =>
+                setForm((p) => ({
+                  ...p,
+                  taskType: e.target.value,
+                  customerID: "",
+                  siteID: "",
+                }))
+              }
+            >
+              {TASK_TYPES.map((t) => (
+                <option key={t} value={t}>
+                  {t}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="desktop-task-priority">Priority</Label>
+            <select
+              id="desktop-task-priority"
+              className="app-select w-full"
+              value={form.priority}
+              onChange={(e) => setForm((p) => ({ ...p, priority: e.target.value }))}
+            >
+              {PRIORITIES.map((p) => (
+                <option key={p} value={p}>
+                  {p}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {isCustomerVisit ? (
+            <>
+              <div className="space-y-2">
+                <Label htmlFor="desktop-task-customer">Customer</Label>
+                <select
+                  id="desktop-task-customer"
+                  className="app-select w-full"
+                  value={form.customerID}
+                  onChange={(e) =>
+                    setForm((p) => ({ ...p, customerID: e.target.value, siteID: "" }))
+                  }
+                >
+                  <option value="">Select customer</option>
+                  {customers.map((c) => (
+                    <option key={c.id} value={String(c.id)}>
+                      {c.label ||
+                        `${c.customerCode ?? ""} — ${c.customerName ?? ""}`.trim()}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="desktop-task-site">Site</Label>
+                <select
+                  id="desktop-task-site"
+                  className="app-select w-full"
+                  value={form.siteID}
+                  onChange={(e) => setForm((p) => ({ ...p, siteID: e.target.value }))}
+                  disabled={!form.customerID}
+                >
+                  <option value="">
+                    {form.customerID ? "Select site" : "Select customer first"}
+                  </option>
+                  {sites.map((s) => (
+                    <option key={s.id} value={String(s.id)}>
+                      {s.branchName
+                        ? s.customer?.customerName
+                          ? `${s.branchName} — ${s.customer.customerName}`
+                          : s.branchName
+                        : `Site #${s.id}`}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </>
+          ) : null}
+
+          <div className="space-y-2">
+            <Label htmlFor="desktop-task-schedule">Schedule</Label>
+            <Input
+              id="desktop-task-schedule"
+              type="datetime-local"
+              value={form.scheduleDateTime}
+              onChange={(e) =>
+                setForm((p) => ({ ...p, scheduleDateTime: e.target.value }))
+              }
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="desktop-task-due">Due date</Label>
+            <Input
+              id="desktop-task-due"
+              type="datetime-local"
+              value={form.dueDateTime}
+              onChange={(e) => setForm((p) => ({ ...p, dueDateTime: e.target.value }))}
+            />
+          </div>
+
+          <div className="space-y-2 sm:col-span-2">
+            <Label htmlFor="desktop-task-desc">Description</Label>
+            <Textarea
+              id="desktop-task-desc"
+              value={form.description}
+              onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))}
+              placeholder="Task details (optional)"
+              rows={4}
+            />
+          </div>
+
+          <div className="space-y-2 sm:col-span-2">
+            <Label>Assign employees</Label>
+            {!form.departmentID ? (
+              <p className="text-sm text-amber-800 bg-amber-50 border border-amber-100 rounded-md px-3 py-2">
+                Select a department to see employees you can assign.
+              </p>
+            ) : (
+              <>
+                <Input
+                  type="search"
+                  value={assignSearch}
+                  onChange={(e) => setAssignSearch(e.target.value)}
+                  placeholder="Search by name or code"
+                />
+                <div className="max-h-48 overflow-y-auto rounded-md border border-border divide-y divide-border">
+                  {filteredAssignees.length === 0 ? (
+                    <p className="text-sm text-muted-foreground p-3 text-center">
+                      No employees in this department
+                    </p>
+                  ) : (
+                    filteredAssignees.map((emp) => (
+                      <label
+                        key={emp.id}
+                        className="flex items-center gap-3 px-3 py-2 hover:bg-muted/50 cursor-pointer"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={form.assignedEmployeeIds.includes(emp.id)}
+                          onChange={() => toggleAssignee(emp.id)}
+                          className="h-4 w-4 rounded border-input"
+                        />
+                        <span className="text-sm">{empLabel(emp)}</span>
+                      </label>
+                    ))
+                  )}
+                </div>
+                {form.assignedEmployeeIds.length > 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    {form.assignedEmployeeIds.length} selected
+                  </p>
+                )}
+              </>
+            )}
+          </div>
+        </div>
+
+        <div className="flex flex-wrap justify-end gap-2 border-t border-border pt-4">
+          <Button type="button" variant="outline" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button
+            type="button"
+            onClick={() => void submit()}
+            disabled={creating || !form.taskName.trim()}
+          >
+            {creating ? "Creating…" : "Create task"}
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   if (!open || typeof document === "undefined") return null;
 
@@ -259,7 +492,7 @@ export function MobileTaskCreateSheet({
           )}
 
           <div>
-            <label className={labelClass}>Task name *</label>
+            <label className={labelClass}>Title *</label>
             <input
               type="text"
               value={form.taskName}
@@ -350,7 +583,7 @@ export function MobileTaskCreateSheet({
                 </select>
               </div>
               <div>
-                <label className={labelClass}>Branch / site</label>
+                <label className={labelClass}>Site</label>
                 <select
                   className={fieldClass}
                   value={form.siteID}

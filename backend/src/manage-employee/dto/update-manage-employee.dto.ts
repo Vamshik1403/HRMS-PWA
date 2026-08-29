@@ -182,18 +182,22 @@ export class UpdateManageEmployeeDto {
 
   @IsOptional()
   @IsBoolean()
+  @Type(() => Boolean)
   allowRotatingShift?: boolean;
 
   @IsOptional()
   @IsBoolean()
+  @Type(() => Boolean)
   allowCreateTaskOnMobile?: boolean;
 
   @IsOptional()
   @IsBoolean()
+  @Type(() => Boolean)
   pwaShowLeaveBalance?: boolean;
 
   @IsOptional()
   @IsBoolean()
+  @Type(() => Boolean)
   pwaShowLoanAdvances?: boolean;
 
   @IsOptional()

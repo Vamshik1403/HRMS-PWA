@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateReimbursementDto } from './dto/create-reimbursement.dto';
 import { UpdateReimbursementDto } from './dto/update-reimbursement.dto';
@@ -19,6 +19,36 @@ export class ReimbursementService {
     private readonly managerScope: EmpManagerScopeService,
   ) {}
 
+  /** Calendar date in Asia/Kolkata (YYYY-MM-DD). Avoids UTC off-by-one vs IST. */
+  private kolkataDateISO(d = new Date()): string {
+    return new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Kolkata',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(d);
+  }
+
+  private parseDateOnly(dateStr?: string): string | null {
+    if (!dateStr) return null;
+    const s = String(dateStr).trim();
+    const iso = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (iso) return `${iso[1]}-${iso[2]}-${iso[3]}`;
+    const dmy = s.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})/);
+    if (dmy) {
+      return `${dmy[3]}-${dmy[2].padStart(2, '0')}-${dmy[1].padStart(2, '0')}`;
+    }
+    return null;
+  }
+
+  private assertNotFutureDate(dateStr?: string) {
+    const dateOnly = this.parseDateOnly(dateStr);
+    if (!dateOnly) return;
+    if (dateOnly > this.kolkataDateISO()) {
+      throw new BadRequestException('Reimbursement date cannot be in the future');
+    }
+  }
+
   /** Include all necessary relations in queries */
   private includeRels() {
     return {
@@ -33,12 +63,22 @@ export class ReimbursementService {
   /** ─────────────── CREATE ─────────────── */
   async create(dto: CreateReimbursementDto) {
     const { items = [], ...parent } = dto;
+    this.assertNotFutureDate(parent.date);
+    const date = this.parseDateOnly(parent.date) ?? parent.date ?? null;
 
-    // Create parent reimbursement record
     const created = await this.prisma.reimbursement.create({
       data: {
-        ...parent,
-        // Ensure payment fields are included
+        serviceProviderID: parent.serviceProviderID ?? null,
+        companyID: parent.companyID ?? null,
+        branchesID: parent.branchesID ?? null,
+        manageEmployeeID: parent.manageEmployeeID ?? null,
+        taskProjectID: parent.taskProjectID ?? null,
+        date,
+        status: parent.status ?? 'Pending',
+        approvalType: parent.approvalType ?? null,
+        salaryPeriod: parent.salaryPeriod ?? null,
+        voucherCode: parent.voucherCode ?? null,
+        voucherDate: parent.voucherDate ?? null,
         paymentMode: parent.paymentMode ?? null,
         paymentType: parent.paymentType ?? null,
         paymentDate: parent.paymentDate ?? null,
@@ -150,6 +190,7 @@ export class ReimbursementService {
   /** ─────────────── UPDATE ─────────────── */
   async update(id: number, dto: UpdateReimbursementDto) {
     const { items, actorRole, ...parent } = dto;
+    this.assertNotFutureDate(parent.date);
     const actorLabel = actorRole ? senderLabelFromRole(actorRole) : undefined;
 
     const before = await this.prisma.reimbursement.findUnique({

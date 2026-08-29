@@ -44,8 +44,6 @@ import { SalaryAdvanceRepaymentModule } from './salary-advance-repayment/salary-
 import { ReimbursementModule } from './reimbursement/reimbursement.module';
 import { UsersModule } from './users/users.module';
 import { AuthModule } from './auth/auth.module';
-import { AuthService } from './auth.service';
-import { AuthController } from './auth.controller';
 import { OvertimeModule } from './overtime/overtime.module';
 import { RosterModule } from './roster/roster.module';
 import { PfcomplianceModule } from './pfcompliance/pfcompliance.module';
@@ -69,6 +67,7 @@ import { PushNotificationsModule } from './push-notifications/push-notifications
 import { EmpLeaveBalanceModule } from './emp-leave-balance/emp-leave-balance.module';
 import { GeoModule } from './geo/geo.module';
 import { TaskManagementModule } from './task-management/task-management.module';
+import { EnplSyncModule } from './enpl-sync/enpl-sync.module';
 import { EmpNotificationsModule } from './emp-notifications/emp-notifications.module';
 import { DashboardOverviewModule } from './dashboard-overview/dashboard-overview.module';
 import { MailModule } from './mail/mail.module';
@@ -87,7 +86,7 @@ import { CompanyPolicyModule } from './company-policy/company-policy.module';
 
 @Module({
   imports: [
-    ConfigModule.forRoot({ isGlobal: true }),
+    ConfigModule.forRoot({ isGlobal: true, envFilePath: ['.env'] }),
     EmpManagerScopeModule,
     MailModule,
     PrismaModule,
@@ -158,6 +157,7 @@ import { CompanyPolicyModule } from './company-policy/company-policy.module';
     PushNotificationsModule,
     EmpLeaveBalanceModule,
     GeoModule,
+    EnplSyncModule,
     TaskManagementModule,
     EmpNotificationsModule,
     DashboardOverviewModule,
@@ -172,7 +172,5 @@ import { CompanyPolicyModule } from './company-policy/company-policy.module';
     EmployeePermissionsModule,
     CompanyPolicyModule,
   ],
-  providers: [AuthService],
-  controllers: [AuthController],
 })
 export class AppModule {}

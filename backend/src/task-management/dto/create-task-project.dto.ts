@@ -13,6 +13,7 @@ export class TaskProjectContactDto {
   @IsString() contactName!: string;
   @IsString() contactNumber!: string;
   @IsOptional() @IsString() contactEmail?: string;
+  @IsOptional() @IsString() designation?: string;
 }
 
 export class TaskWorkscopeDetailDto {

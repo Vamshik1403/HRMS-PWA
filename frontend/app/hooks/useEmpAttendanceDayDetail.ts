@@ -93,7 +93,10 @@ export function useEmpAttendanceDayDetail() {
 
   useEffect(() => {
     if (!user) return;
-    taskFetch<{ items: SiteVisitTask[] }>("/task-projects", user, undefined, { limit: 100 })
+    taskFetch<{ items: SiteVisitTask[] }>("/task-projects", user, undefined, {
+      limit: 100,
+      assignedToMe: 1,
+    })
       .then((data) => {
         const items = data.items || [];
         const visits = items.filter((t) => {

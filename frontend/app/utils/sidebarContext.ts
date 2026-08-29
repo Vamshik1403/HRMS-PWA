@@ -37,6 +37,20 @@ export function getSidebarContext(): SidebarContextData | null {
   }
 }
 
+/** Active company from the sidebar switcher (session), then persisted sidebar context. */
+export function getActiveCompanyId(): number | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const session = Number(sessionStorage.getItem("activeCompanyID") || 0);
+    if (Number.isFinite(session) && session > 0) return session;
+  } catch {
+    /* ignore */
+  }
+  const ctxId = Number(getSidebarContext()?.companyID || 0);
+  if (Number.isFinite(ctxId) && ctxId > 0) return ctxId;
+  return null;
+}
+
 export function clearSidebarContext() {
   try {
     localStorage.removeItem(STORAGE_KEY);

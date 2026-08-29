@@ -9,6 +9,7 @@ export type CompanyHubId =
   | "reimbursement"
   | "advances"
   | "payroll"
+  | "reports"
   | "tax"
   | "policy"
   | "documents"
@@ -60,7 +61,11 @@ export type CompanyHubTab = {
     | "devices"
     | "import-attendance"
     | "customers"
-    | "sites";
+    | "sites"
+    | "payroll-reports"
+    | "leave-reports"
+    | "statutory-reports"
+    | "contractor-reports";
   comingSoon?: boolean;
 };
 
@@ -179,6 +184,19 @@ export const COMPANY_HUB_TILES: CompanyHubTile[] = [
       { id: "deductions", label: "Deductions", embed: "salary-deductions" },
       { id: "paygrade", label: "Paygrade", embed: "paygrade" },
       { id: "setup", label: "Payroll Setup", embed: "payroll-setup" },
+    ],
+  },
+  {
+    id: "reports",
+    label: "Reports",
+    icon: "solar:chart-bold-duotone",
+    iconClassName: "text-blue-700",
+    tabs: [
+      { id: "attendance", label: "Attendance Reports", embed: "reports" },
+      { id: "leave", label: "Leave Reports", embed: "leave-reports" },
+      { id: "payroll", label: "Payroll Reports", embed: "payroll-reports" },
+      { id: "statutory", label: "Statutory Reports", embed: "statutory-reports" },
+      { id: "contractor", label: "Contractor Reports", embed: "contractor-reports" },
     ],
   },
   {

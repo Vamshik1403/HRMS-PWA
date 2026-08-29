@@ -8,9 +8,10 @@ import { TaskCustomerSitesController } from './task-customer-sites.controller';
 import { TaskCustomerSitesService } from './task-customer-sites.service';
 import { TaskProjectsController } from './task-projects.controller';
 import { TaskProjectsService } from './task-projects.service';
+import { EnplSyncModule } from '../enpl-sync/enpl-sync.module';
 
 @Module({
-  imports: [PushNotificationsModule, MailModule, EmployeeMemoModule],
+  imports: [PushNotificationsModule, MailModule, EmployeeMemoModule, EnplSyncModule],
   controllers: [TaskCustomersController, TaskCustomerSitesController, TaskProjectsController],
   providers: [TaskCustomersService, TaskCustomerSitesService, TaskProjectsService],
 })

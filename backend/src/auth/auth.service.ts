@@ -58,55 +58,13 @@ export class AuthService {
       });
     };
 
-    user = await this.usersService.findOneByUsername(dto.username);
+    const username = String(dto.username || '').trim();
+    dto.username = username;
+
+    user = await this.usersService.findOneByUsername(username);
 
     if (!user) {
-      const username = dto.username.trim();
-      const employeeCreds = await this.prisma.employeeCredentials.findFirst({
-        where: {
-          isActive: true,
-          username: { equals: username, mode: 'insensitive' },
-        },
-        include: {
-          employee: {
-            select: {
-              id: true,
-              employeeFirstName: true,
-              employeeLastName: true,
-              employeeID: true,
-              businessEmail: true,
-              personalEmail: true,
-              isCompanyOwner: true,
-              ownerTitle: true,
-              departments: {
-                select: {
-                  id: true,
-                  departmentName: true,
-                },
-              },
-              designations: {
-                select: {
-                  id: true,
-                  designation: true,
-                },
-              },
-              company: {
-                select: {
-                  id: true,
-                  companyName: true,
-                },
-              },
-              branches: {
-                select: {
-                  id: true,
-                  branchName: true,
-                },
-              },
-            },
-          },
-        },
-      });
-
+      const employeeCreds = await this.findEmployeeCredentialsForLogin(username);
       if (employeeCreds) {
         user = employeeCreds;
         userType = 'employee';
@@ -145,16 +103,11 @@ export class AuthService {
 
     const isDesktopClient = dto.client !== 'mobile';
 
-    if (
-      isDesktopClient &&
-      userType === 'user' &&
-      user.role === 'SUPERADMIN' &&
-      user.requireLoginOtp
-    ) {
-      const email = String(user.email || '').trim();
+    if (isDesktopClient && userType === 'user' && this.userRoleRequiresLoginOtp(user.role)) {
+      const email = await this.resolveUserLoginEmail(user);
       if (!email) {
         throw new BadRequestException(
-          'Email is not configured for this SuperAdmin. Contact your administrator.',
+          'Email is not configured for this admin account. Add an email in User Profile, then sign in again.',
         );
       }
 
@@ -163,8 +116,8 @@ export class AuthService {
         identifier: `user:${user.id}`,
         to: email,
         payload: JSON.stringify({ userId: user.id }),
-        subject: 'OpenHRM SuperAdmin login OTP',
-        bodyLine: 'Use this 6-digit code to complete your SuperAdmin login.',
+        subject: 'OpenHRM login OTP',
+        bodyLine: `Use this 6-digit code to complete your ${String(user.role).replace(/_/g, ' ')} login.`,
         ttlMs: LOGIN_OTP_TTL_MS,
       });
 
@@ -175,11 +128,7 @@ export class AuthService {
       };
     }
 
-    if (
-      isDesktopClient &&
-      userType === 'employee' &&
-      user.employee?.isCompanyOwner
-    ) {
+    if (isDesktopClient && userType === 'employee' && (await this.employeeNeedsLoginOtp(user))) {
       const email =
         String(user.employee?.businessEmail || '').trim() ||
         String(user.employee?.personalEmail || '').trim();
@@ -245,6 +194,9 @@ export class AuthService {
               personalEmail: true,
               isCompanyOwner: true,
               ownerTitle: true,
+              allowCreateTaskOnMobile: true,
+              pwaShowLeaveBalance: true,
+              pwaShowLoanAdvances: true,
               departments: {
                 select: { id: true, departmentName: true },
               },
@@ -307,9 +259,9 @@ export class AuthService {
 
     if (userId) {
       const user = await this.prisma.user.findUnique({ where: { id: userId } });
-      to = String(user?.email || '').trim();
-      subject = 'OpenHRM SuperAdmin login OTP';
-      bodyLine = 'Use this 6-digit code to complete your SuperAdmin login.';
+      to = user ? await this.resolveUserLoginEmail(user) : '';
+      subject = 'OpenHRM login OTP';
+      bodyLine = 'Use this 6-digit code to complete your login.';
     } else if (employeeId) {
       const employee = await this.prisma.manageEmployee.findUnique({
         where: { id: employeeId },
@@ -541,6 +493,9 @@ export class AuthService {
           email: user.employee.businessEmail,
           isCompanyOwner: !!user.employee?.isCompanyOwner,
           ownerTitle: user.employee?.ownerTitle ?? null,
+          allowCreateTaskOnMobile: user.employee?.allowCreateTaskOnMobile === true,
+          pwaShowLeaveBalance: user.employee?.pwaShowLeaveBalance !== false,
+          pwaShowLoanAdvances: user.employee?.pwaShowLoanAdvances !== false,
           department: user.employee.departments?.departmentName,
           designation: user.employee.designations?.designation,
           company: user.employee.company?.companyName,
@@ -581,6 +536,80 @@ export class AuthService {
       accessToken,
       user: userData,
     };
+  }
+
+  private employeeLoginInclude() {
+    return {
+      employee: {
+        select: {
+          id: true,
+          employeeFirstName: true,
+          employeeLastName: true,
+          employeeID: true,
+          businessEmail: true,
+          personalEmail: true,
+          isCompanyOwner: true,
+          ownerTitle: true,
+          allowCreateTaskOnMobile: true,
+          pwaShowLeaveBalance: true,
+          pwaShowLoanAdvances: true,
+          departments: {
+            select: {
+              id: true,
+              departmentName: true,
+            },
+          },
+          designations: {
+            select: {
+              id: true,
+              designation: true,
+            },
+          },
+          company: {
+            select: {
+              id: true,
+              companyName: true,
+            },
+          },
+          branches: {
+            select: {
+              id: true,
+              branchName: true,
+            },
+          },
+        },
+      },
+    };
+  }
+
+  private async findEmployeeCredentialsForLogin(username: string) {
+    const value = String(username || '').trim();
+    if (!value) return null;
+    return this.prisma.employeeCredentials.findFirst({
+      where: {
+        isActive: true,
+        employee: { isDeleted: false },
+        OR: [
+          { username: { equals: value, mode: 'insensitive' } },
+          {
+            employee: {
+              is: { employeeID: { equals: value, mode: 'insensitive' } },
+            },
+          },
+          {
+            employee: {
+              is: { personalEmail: { equals: value, mode: 'insensitive' } },
+            },
+          },
+          {
+            employee: {
+              is: { businessEmail: { equals: value, mode: 'insensitive' } },
+            },
+          },
+        ],
+      },
+      include: this.employeeLoginInclude(),
+    });
   }
 
   private async passwordMatches(plain: string, hash: string): Promise<boolean> {
@@ -659,6 +688,55 @@ export class AuthService {
       return withEmail[0] || matches[0];
     }
     return null;
+  }
+
+  private userRoleRequiresLoginOtp(role?: string): boolean {
+    const r = String(role || '').toUpperCase();
+    return (
+      r === 'SUPERADMIN' ||
+      r === 'COMPANY_ADMIN' ||
+      r === 'ADMIN' ||
+      r === 'SERVICE_PROVIDER' ||
+      r === 'CONTRACTOR_ADMIN'
+    );
+  }
+
+  private async resolveUserLoginEmail(user: {
+    id: number;
+    email?: string | null;
+  }): Promise<string> {
+    const direct = String(user.email || '').trim();
+    if (direct) return direct;
+    const profile = await this.prisma.userProfile.findUnique({
+      where: { userId: user.id },
+      select: { email: true },
+    });
+    return String(profile?.email || '').trim();
+  }
+
+  private async employeeNeedsLoginOtp(creds: any): Promise<boolean> {
+    if (creds?.employee?.isCompanyOwner) return true;
+    if (creds?.requireLoginOtp) return true;
+    const empId = Number(creds?.employeeID ?? creds?.employee?.id ?? 0);
+    const companyId = Number(creds?.companyID ?? creds?.employee?.companyID ?? 0);
+    if (!empId || !companyId) return false;
+    try {
+      const count = await this.prisma.employeeModulePermission.count({
+        where: {
+          manageEmployeeID: empId,
+          companyID: companyId,
+          OR: [
+            { canView: true },
+            { canCreate: true },
+            { canEdit: true },
+            { canDelete: true },
+          ],
+        },
+      });
+      return count > 0;
+    } catch {
+      return false;
+    }
   }
 
   private async createAndSendOtp(params: {

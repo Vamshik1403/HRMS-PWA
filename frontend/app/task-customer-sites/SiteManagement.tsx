@@ -159,7 +159,8 @@ export default function SiteManagement() {
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.branchName.trim() || !form.customerID) { toast.error("Customer and branch name are required"); return; }
+    if (!form.branchName.trim() || !form.customerID) { toast.error("Customer and site name are required"); return; }
+    if (!form.address.trim()) { toast.error("Site address is required"); return; }
     setSaving(true);
     const payload = { ...form, customerID: Number(form.customerID), contacts: sanitizeContacts(contacts), notes: notes.filter((n) => n.title.trim()) };
     try {
@@ -366,14 +367,14 @@ export default function SiteManagement() {
             </div>
           </div>
           <div className="space-y-2">
-            <Label>Branch Name *</Label>
+            <Label>Site Name *</Label>
             <Input value={form.branchName} onChange={(e) => setForm((p) => ({ ...p, branchName: e.target.value }))} required />
           </div>
           <div className="space-y-2">
-            <Label>Address</Label>
-            <Textarea value={form.address} onChange={(e) => setForm((p) => ({ ...p, address: e.target.value }))} rows={2} disabled={sameAsCustomer} />
+            <Label>Site Address *</Label>
+            <Textarea value={form.address} onChange={(e) => setForm((p) => ({ ...p, address: e.target.value }))} rows={2} disabled={sameAsCustomer} required />
           </div>
-          <LocationFields values={form} onChange={(patch) => setForm((p) => ({ ...p, ...patch }))} showCurrency={false} disabled={sameAsCustomer} />
+          <LocationFields values={form} onChange={(patch) => setForm((p) => ({ ...p, ...patch }))} showCurrency={false} disabled={sameAsCustomer} pincodeLabel="PIN Code" />
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2"><Label>Latitude</Label><Input value={form.latitude} onChange={(e) => setForm((p) => ({ ...p, latitude: e.target.value }))} /></div>
             <div className="space-y-2"><Label>Longitude</Label><Input value={form.longitude} onChange={(e) => setForm((p) => ({ ...p, longitude: e.target.value }))} /></div>
@@ -419,17 +420,17 @@ export default function SiteManagement() {
               subtitle="Site organisation mapping"
               rows={[
                 { label: "Customer", value: viewRow.customer?.customerName },
-                { label: "Branch / site", value: viewRow.branchName },
+                { label: "Site name", value: viewRow.branchName },
               ]}
             />
             <DetailCard
               title="Location"
               subtitle="Address and geo details"
               rows={[
-                { label: "Address", value: viewRow.address },
+                { label: "Site address", value: viewRow.address },
                 { label: "City", value: viewRow.city },
                 { label: "State", value: viewRow.state },
-                { label: "Pincode", value: viewRow.pincode },
+                { label: "PIN Code", value: viewRow.pincode },
                 { label: "Country", value: viewRow.country },
                 { label: "Latitude", value: viewRow.latitude },
                 { label: "Longitude", value: viewRow.longitude },

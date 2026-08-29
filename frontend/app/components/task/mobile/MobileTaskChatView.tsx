@@ -7,9 +7,14 @@ import { TaskStatusBadge } from "../task-ui";
 import { TaskChatAttachmentImage } from "../TaskChatAttachment";
 import { taskAttachmentSrc, uploadTaskAttachment } from "../../../utils/taskAttachment";
 import { toast } from "sonner";
-import type { SitePunchKind } from "../../../utils/taskSitePunch";
+import type { SitePunchKind, SitePunchEvent } from "../../../utils/taskSitePunch";
 import { nextTaskStatus } from "../../../utils/taskStatusFlow";
-import { sitePunchLabel } from "../../../utils/taskSitePunch";
+import {
+  formatSitePunchAt,
+  isSitePunchTaskType,
+  sitePunchMenuLabel,
+  sitePunchesFromTask,
+} from "../../../utils/taskSitePunch";
 
 export interface MobileChatMessage {
   id: number;
@@ -35,6 +40,7 @@ export interface MobileTaskChatDetail {
   site?: { branchName?: string; city?: string };
   department?: { departmentName?: string };
   chats?: MobileChatMessage[];
+  sitePunches?: SitePunchEvent[];
   assignments?: { manageEmployee?: { employeeFirstName?: string; employeeLastName?: string; employeeID?: string } }[];
 }
 
@@ -77,6 +83,7 @@ export function MobileTaskChatView({
   onSitePunch,
   sitePunchNextKind = "in",
   onDownloadReport,
+  embedded = false,
 }: {
   task: MobileTaskChatDetail;
   currentUserName?: string;
@@ -91,6 +98,8 @@ export function MobileTaskChatView({
   onSitePunch?: () => void | Promise<void>;
   sitePunchNextKind?: SitePunchKind;
   onDownloadReport?: () => void | Promise<void>;
+  /** When true, fill the parent instead of the full viewport (desktop portal). */
+  embedded?: boolean;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [infoOpen, setInfoOpen] = useState(false);
@@ -138,7 +147,7 @@ export function MobileTaskChatView({
   let lastDay = "";
 
   return (
-    <div className="flex flex-col h-[100dvh] bg-[#f0f2f5]">
+    <div className={embedded ? "flex flex-col h-full min-h-[560px] rounded-xl border border-border overflow-hidden bg-[#f0f2f5]" : "flex flex-col h-[100dvh] bg-[#f0f2f5]"}>
       <header className="mobile-chat-header sticky top-0 z-20 shrink-0 bg-white/90 backdrop-blur-xl border-b border-gray-200/60 px-2 pt-1 pb-2">
         <div className="flex items-center gap-1">
           <button
@@ -183,13 +192,13 @@ export function MobileTaskChatView({
                       Download report (PDF)
                     </button>
                   )}
-                  {(task.taskType || "").toLowerCase().includes("site visit") && onSitePunch && (
+                  {isSitePunchTaskType(task.taskType) && onSitePunch && (
                     <button
                       type="button"
                       className="w-full text-left px-4 py-2.5 text-[13px] text-[#2563eb] active:bg-gray-50"
                       onClick={() => { setMenuOpen(false); void onSitePunch(); }}
                     >
-                      {sitePunchLabel(sitePunchNextKind)}
+                      {sitePunchMenuLabel(sitePunchNextKind)}
                     </button>
                   )}
                   {onAdvanceStatus && nextTaskStatus(task.status) && (
@@ -351,20 +360,22 @@ export function MobileTaskChatView({
                   <p className="text-[13px] text-gray-800 leading-relaxed">{task.description}</p>
                 </div>
               )}
-              {(task.taskType || "").toLowerCase().includes("site visit") && (
+              {isSitePunchTaskType(task.taskType) && (
                 <div className="pt-3 border-t border-gray-100">
                   <p className="text-[12px] font-bold text-gray-400 uppercase mb-2">Site check-in / check-out</p>
                   <div className="space-y-1.5 max-h-40 overflow-y-auto">
-                    {(task.chats || [])
-                      .filter((c) => /\b(mark(?:ed)?\s*(in|out)|check(?:ed)?\s*(in|out)|site\s*check)/i.test(c.message || ""))
-                      .map((c) => (
-                        <div key={c.id} className="text-[11px] bg-gray-50 rounded-lg px-2 py-1.5">
-                          <span className="font-semibold text-gray-700">{c.senderName || "User"}</span>
-                          <span className="text-gray-400 ml-1">{formatBubbleTime(c.createdAt)}</span>
-                          <p className="text-gray-600 mt-0.5 line-clamp-2">{c.message}</p>
-                        </div>
-                      ))}
-                    {(task.chats || []).filter((c) => /\bmark/i.test(c.message || "")).length === 0 && (
+                    {sitePunchesFromTask(task).map((p, i) => (
+                      <div key={`${p.kind}-${p.at}-${i}`} className="text-[11px] bg-gray-50 rounded-lg px-2 py-1.5">
+                        <span className="font-semibold text-gray-700">
+                          {p.kind === "in" ? "Site check in" : "Site check out"}
+                        </span>
+                        {p.employeeName ? (
+                          <span className="text-gray-500 ml-1">{p.employeeName}</span>
+                        ) : null}
+                        <span className="text-gray-400 ml-1">{formatSitePunchAt(p.at)}</span>
+                      </div>
+                    ))}
+                    {sitePunchesFromTask(task).length === 0 && (
                       <p className="text-[12px] text-gray-400">No check-in/out logged yet</p>
                     )}
                   </div>

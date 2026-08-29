@@ -11,6 +11,7 @@ import {
   TableCell,
 } from "@/app/components/ui/table";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { fetchWithTimeout } from "../utils/fetchWithTimeout";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import { authHeaders } from "@/lib/auth";
@@ -228,6 +229,16 @@ interface ActivityComment {
 
 export default function DashboardPage({ embeddedInEmpPortal = false }: { embeddedInEmpPortal?: boolean } = {}) {
   const user = useCurrentUser();
+  const router = useRouter();
+
+  const isEmployeeSession =
+    user?.type === "employee" || String(user?.role || "").toUpperCase() === "EMPLOYEE";
+
+  useEffect(() => {
+    if (!embeddedInEmpPortal && isEmployeeSession) {
+      router.replace("/empdashboard");
+    }
+  }, [embeddedInEmpPortal, isEmployeeSession, router]);
 
   useAdminPageHeader(
     embeddedInEmpPortal ? null : { title: "Home", subtitle: "Your workspace overview" },
@@ -1095,6 +1106,10 @@ export default function DashboardPage({ embeddedInEmpPortal = false }: { embedde
         },
       ]
     : [{ label: "Pending", value: 0, color: "#f59e0b" }];
+
+  if (!embeddedInEmpPortal && isEmployeeSession) {
+    return null;
+  }
 
   if (user?.role === "COMPANY_ADMIN") {
     const newJoinersCount = hrWidgets?.newJoinersThisMonth ?? 0;

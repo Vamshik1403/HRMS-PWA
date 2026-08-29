@@ -1,5 +1,6 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { EnplSyncService } from '../enpl-sync/enpl-sync.service';
 import { CreateTaskCustomerDto } from './dto/create-task-customer.dto';
 import { UpdateTaskCustomerDto } from './dto/update-task-customer.dto';
 import { assertCanManageTaskModule, parseViewer, TaskViewerContext } from './task-context';
@@ -8,7 +9,7 @@ import { Prisma } from '@prisma/client';
 
 @Injectable()
 export class TaskCustomersService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService, private enplSync: EnplSyncService) {}
 
   private baseWhere(viewer: TaskViewerContext, companyID?: number) {
     const where: any = { isDeleted: false };
@@ -77,7 +78,7 @@ export class TaskCustomersService {
   }
 
   try {
-    return await this.prisma.taskCustomer.create({
+    const created = await this.prisma.taskCustomer.create({
       data: {
         customerCode: code,
         customerName: dto.customerName,
@@ -109,6 +110,8 @@ export class TaskCustomersService {
       },
       include: { contacts: true, branches: true },
     });
+    this.enplSync.notifyHrmsChange('customer', created.id);
+    return created;
   } catch (error) {
     if (
       error instanceof Prisma.PrismaClientKnownRequestError &&
@@ -158,14 +161,18 @@ export class TaskCustomersService {
         });
       }
     }
-    return this.findOne(id, query) ?? updated;
+    const row = await this.findOne(id, query);
+    this.enplSync.notifyHrmsChange('customer', id);
+    return row ?? updated;
   }
 
   async remove(id: number, query: Record<string, string | undefined>) {
     const viewer = parseViewer(query);
     assertCanManageTaskModule(viewer);
     await this.findOne(id, query);
-    return this.prisma.taskCustomer.update({ where: { id }, data: { isDeleted: true } });
+    const updated = await this.prisma.taskCustomer.update({ where: { id }, data: { isDeleted: true } });
+    this.enplSync.notifyHrmsChange('customer', id);
+    return updated;
   }
 
   async dropdown(query: Record<string, string | undefined>) {

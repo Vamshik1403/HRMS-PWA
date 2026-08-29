@@ -3,10 +3,10 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev -p 3001",
+    "dev": "next dev -p 3000",
     "build": "next build && node scripts/remove-workbox-sw.mjs",
-    "start": "next start -p 3001",
-    "start:prod": "next start -p 3001",
+    "start": "next start -p 3000",
+    "start:prod": "next start -p 3000",
     "lint": "next lint"
   },
   "dependencies": {

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { getSidebarContext } from "@/app/utils/sidebarContext";
+import { getActiveCompanyId, getSidebarContext } from "@/app/utils/sidebarContext";
 import { authHeaders } from "@/lib/auth";
 
 const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL || "/backend";
@@ -46,9 +46,8 @@ export function useCompanyBranches(companyID?: number | null) {
       const scopedCompanyID =
         companyID != null && Number(companyID) > 0
           ? Number(companyID)
-          : ctx?.companyID != null
-            ? Number(ctx.companyID)
-            : null;
+          : getActiveCompanyId() ??
+            (ctx?.companyID != null ? Number(ctx.companyID) : null);
 
       const res = await fetch(`${BACKEND}/branches`, {
         headers: authHeaders(),
@@ -61,10 +60,7 @@ export function useCompanyBranches(companyID?: number | null) {
       const data = await res.json();
       let list: CompanyBranch[] = Array.isArray(data) ? data : data?.data ?? [];
       if (scopedCompanyID != null) {
-        list = list.filter(
-          (b) =>
-            b.companyID == null || Number(b.companyID) === Number(scopedCompanyID),
-        );
+        list = list.filter((b) => Number(b.companyID) === Number(scopedCompanyID));
       }
       setBranches(dedupeBranches(list));
     } catch {

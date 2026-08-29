@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo, useCallback } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { Eye, EyeOff } from "lucide-react";
 import { useCurrentUser } from "@/app/hooks/useCurrentUser";
 import { authHeaders } from "@/lib/auth";
@@ -25,12 +25,14 @@ import { Label } from "@/app/components/ui/label";
 function getUserCompanyIds(user: any): number[] {
   const ids = new Set<number>();
   if (user?.companyID) ids.add(Number(user.companyID));
+  if (user?.activeCompanyID) ids.add(Number(user.activeCompanyID));
   if (Array.isArray(user?.userCompanies)) {
     user.userCompanies.forEach((uc: any) => {
       if (uc?.companyID) ids.add(Number(uc.companyID));
+      if (uc?.company?.id) ids.add(Number(uc.company.id));
     });
   }
-  return Array.from(ids);
+  return Array.from(ids).filter((id) => Number.isFinite(id) && id > 0);
 }
 
 function getStoredActiveCompanyID(): number {
@@ -44,9 +46,13 @@ function getStoredActiveCompanyID(): number {
 
 export function HrmsAppShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
+  const pathname = usePathname();
   const currentUser = useCurrentUser();
   const [collapsed, setCollapsed] = useState(false);
   const [sidebarRefreshKey, setSidebarRefreshKey] = useState(0);
+  const [sidebarCtx, setSidebarCtx] = useState(() =>
+    typeof window === "undefined" ? null : getSidebarContext(),
+  );
   const [fetchedServiceProviders, setFetchedServiceProviders] = useState<any[]>(
     () => getPageCache<any[]>("sidebarSPs") ?? [],
   );
@@ -120,6 +126,16 @@ export function HrmsAppShell({ children }: { children: React.ReactNode }) {
     fetchData();
   }, [sidebarRefreshKey]);
 
+  useEffect(() => {
+    const syncCtx = () => setSidebarCtx(getSidebarContext());
+    window.addEventListener("sidebar-context-changed", syncCtx);
+    window.addEventListener("app-data-refresh", syncCtx);
+    return () => {
+      window.removeEventListener("sidebar-context-changed", syncCtx);
+      window.removeEventListener("app-data-refresh", syncCtx);
+    };
+  }, []);
+
   const displaySPs = useMemo(() => {
     if (currentUser?.serviceProvider && currentUser.serviceProviderID) {
       return [{ id: currentUser.serviceProviderID, companyName: currentUser.serviceProvider.companyName }];
@@ -144,17 +160,21 @@ export function HrmsAppShell({ children }: { children: React.ReactNode }) {
     });
   }, [displaySPs, fetchedCompanies, isCompanyScopedSidebarUser, assignedCompanyIds]);
 
-  const sidebarCtx = getSidebarContext();
-
   const activeCompany = useMemo(() => {
     const storedCompanyID = getStoredActiveCompanyID();
     return (
       accessibleCompanies.find((c: any) => Number(c.id) === storedCompanyID) ||
       accessibleCompanies.find((c: any) => Number(c.id) === Number(sidebarCtx?.companyID)) ||
+      accessibleCompanies.find((c: any) => Number(c.id) === Number(currentUser?.activeCompanyID)) ||
       accessibleCompanies.find((c: any) => Number(c.id) === Number(currentUser?.companyID)) ||
       accessibleCompanies[0]
     );
-  }, [accessibleCompanies, sidebarCtx?.companyID, currentUser?.companyID]);
+  }, [
+    accessibleCompanies,
+    sidebarCtx?.companyID,
+    currentUser?.activeCompanyID,
+    currentUser?.companyID,
+  ]);
 
   const switchCompany = useCallback(
     (company: any) => {
@@ -165,6 +185,12 @@ export function HrmsAppShell({ children }: { children: React.ReactNode }) {
         company.id,
         company.companyName || "",
       );
+      setSidebarCtx({
+        serviceProviderID: company.serviceProviderID,
+        serviceProviderName: company.serviceProviderName || "",
+        companyID: company.id,
+        companyName: company.companyName || "",
+      });
       const userData = JSON.parse(localStorage.getItem("user") || "{}");
       userData.activeCompanyID = company.id;
       userData.companyID = company.id;
@@ -174,13 +200,18 @@ export function HrmsAppShell({ children }: { children: React.ReactNode }) {
       window.dispatchEvent(new Event("sidebar-context-changed"));
       window.dispatchEvent(new Event("app-data-refresh"));
       dispatchAppRefresh();
-      router.push(
+
+      const targetDashboard =
         currentUser?.role === "EMPLOYEE" || currentUser?.role === "COMPANY_ADMIN"
           ? "/my-company"
-          : "/dashboard",
-      );
+          : "/dashboard";
+      if (pathname !== targetDashboard) {
+        router.push(targetDashboard);
+      } else {
+        router.refresh();
+      }
     },
-    [router, currentUser?.role],
+    [router, pathname, currentUser?.role],
   );
 
   useEffect(() => {

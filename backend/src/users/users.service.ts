@@ -78,7 +78,11 @@ export class UsersService {
             lastName: createUserDto.lastName ?? null,
             contactNo: createUserDto.contactNo ?? null,
             email: createUserDto.email ?? null,
-            requireLoginOtp: role === UserRole.SUPERADMIN,
+            requireLoginOtp:
+              role === UserRole.SUPERADMIN ||
+              role === UserRole.SERVICE_PROVIDER ||
+              role === UserRole.ADMIN ||
+              role === UserRole.CONTRACTOR_ADMIN,
             serviceProviderID: createUserDto.serviceProviderID ?? null,
             companyID: primaryCompanyID,
             branchesID: createUserDto.branchesID ?? null,
@@ -353,8 +357,10 @@ export class UsersService {
   }
 
   async findOneByUsername(username: string) {
-    return this.prisma.user.findUnique({
-      where: { username },
+    const value = String(username || '').trim()
+    if (!value) return null
+    return this.prisma.user.findFirst({
+      where: { username: { equals: value, mode: 'insensitive' } },
       include: {
         serviceProvider: true,
         company: true,

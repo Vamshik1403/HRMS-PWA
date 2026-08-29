@@ -27,6 +27,7 @@ import { toast } from "sonner"
 import { getSidebarContext } from "../utils/sidebarContext"
 import { displayStatusLabel, isPartiallyApprovedStatus } from "../utils/statusDisplay"
 import { resolveScopedCompanyId } from "../utils/scopeContext"
+import { localDateISO } from "../utils/localDate"
 
 
 interface ReimbursementItem {
@@ -470,7 +471,7 @@ const isEmployee = !canManage
     companyName: "",
     branchName: "",
     employeeName: "",
-    date: new Date().toISOString().split('T')[0],
+    date: localDateISO(),
     status: "Pending",
     serviceProviderID: undefined as number | undefined,
     companyID: undefined as number | undefined,
@@ -1006,7 +1007,7 @@ useEffect(() => {
       companyName: "",
       branchName: "",
       employeeName: "",
-      date: new Date().toISOString().split('T')[0],
+      date: localDateISO(),
       status: "Pending",
       serviceProviderID: undefined,
       companyID: undefined,
@@ -1068,6 +1069,12 @@ useEffect(() => {
   // ---------- CRUD actions ----------
 const handleSubmit = async (e: React.FormEvent) => {
   e.preventDefault();
+
+  const today = localDateISO();
+  if (!formData.date || formData.date > today) {
+    toast.error("Date cannot be in the future.");
+    return;
+  }
 
   let payload: any = {
     date: formData.date,
@@ -1249,7 +1256,7 @@ const handleSubmit = async (e: React.FormEvent) => {
       companyName: r.companyName || "",
       branchName: r.branchName || "",
       employeeName: r.employeeName || "",
-      date: r.date || new Date().toISOString().split('T')[0],
+      date: r.date || localDateISO(),
       status: "Pending", // Reset to Pending when editing
       serviceProviderID: r.serviceProviderID,
       companyID: r.companyID,
@@ -1810,6 +1817,7 @@ return (
                     id="date"
                     type="date"
                     value={formData.date}
+                    max={localDateISO()}
                     onChange={(e) => setFormData(p => ({ ...p, date: e.target.value }))}
                     className="w-full p-2 border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                     required

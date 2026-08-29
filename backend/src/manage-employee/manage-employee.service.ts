@@ -243,6 +243,15 @@ export class ManageEmployeeService {
           ...(scalars.weeklyOffPattern !== undefined ? { weeklyOffPattern: scalars.weeklyOffPattern } : {}),
           ...(scalars.noticePeriodDaysForResignation !== undefined ? { noticePeriodDaysForResignation: scalars.noticePeriodDaysForResignation } : {}),
           ...(scalars.noticePeriodDaysForTermination !== undefined ? { noticePeriodDaysForTermination: scalars.noticePeriodDaysForTermination } : {}),
+          ...(scalars.allowCreateTaskOnMobile !== undefined
+            ? { allowCreateTaskOnMobile: !!scalars.allowCreateTaskOnMobile }
+            : {}),
+          ...(scalars.pwaShowLeaveBalance !== undefined
+            ? { pwaShowLeaveBalance: !!scalars.pwaShowLeaveBalance }
+            : {}),
+          ...(scalars.pwaShowLoanAdvances !== undefined
+            ? { pwaShowLoanAdvances: !!scalars.pwaShowLoanAdvances }
+            : {}),
 
           // Foreign key fields
           serviceProviderID: serviceProviderID ?? undefined,
@@ -730,9 +739,11 @@ export class ManageEmployeeService {
   async getCredentialsByUsername(username: string) {
     const row = await this.prisma.employeeCredentials.findFirst({
       where: {
-        username,
         isActive: true,
-
+        OR: [
+          { username: { equals: username, mode: 'insensitive' } },
+          { employee: { employeeID: { equals: username, mode: 'insensitive' } } },
+        ],
         employee: {
           onboardingApprovalStatus: 'APPROVED',
           lifecycleStatus: 'ACTIVE',
@@ -751,6 +762,7 @@ export class ManageEmployeeService {
             companyID: true,
             pwaShowLeaveBalance: true,
             pwaShowLoanAdvances: true,
+            allowCreateTaskOnMobile: true,
           }
         },
         serviceProvider: {
@@ -1729,7 +1741,15 @@ export class ManageEmployeeService {
             ...(scalars.weeklyOffPattern !== undefined ? { weeklyOffPattern: scalars.weeklyOffPattern } : {}),
             ...(scalars.noticePeriodDaysForResignation !== undefined ? { noticePeriodDaysForResignation: scalars.noticePeriodDaysForResignation } : {}),
             ...(scalars.noticePeriodDaysForTermination !== undefined ? { noticePeriodDaysForTermination: scalars.noticePeriodDaysForTermination } : {}),
-
+            ...(scalars.allowCreateTaskOnMobile !== undefined
+              ? { allowCreateTaskOnMobile: !!scalars.allowCreateTaskOnMobile }
+              : {}),
+            ...(scalars.pwaShowLeaveBalance !== undefined
+              ? { pwaShowLeaveBalance: !!scalars.pwaShowLeaveBalance }
+              : {}),
+            ...(scalars.pwaShowLoanAdvances !== undefined
+              ? { pwaShowLoanAdvances: !!scalars.pwaShowLoanAdvances }
+              : {}),
 
             // Foreign key fields
             serviceProviderID: serviceProviderID ?? undefined,
@@ -1756,7 +1776,8 @@ export class ManageEmployeeService {
           });
         }
 
-        // Keep employee login username in sync with email (not mobile)
+        // Create credentials on first save from email + mobile. Do not
+        // overwrite an existing login username when the employee is updated.
         const nextLoginUsername = this.employeeLoginUsername(
           scalars.personalEmail !== undefined
             ? scalars.personalEmail
@@ -1788,21 +1809,6 @@ export class ManageEmployeeService {
               companyID: companyID ?? undefined,
               branchesID: branchesID ?? undefined,
             };
-
-            if (nextLoginUsername && nextLoginUsername !== currentCredentials.username) {
-              const taken = await tx.employeeCredentials.findFirst({
-                where: {
-                  username: nextLoginUsername,
-                  employeeID: { not: id },
-                },
-              });
-              if (taken) {
-                throw new BadRequestException(
-                  'An employee login already exists for this email address',
-                );
-              }
-              updateData.username = nextLoginUsername;
-            }
 
             await tx.employeeCredentials.update({
               where: { employeeID: id },

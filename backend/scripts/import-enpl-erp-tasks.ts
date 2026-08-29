@@ -257,7 +257,8 @@ async function replaceTaskNested(
         taskID,
         contactName: String(c.contactName).trim(),
         contactNumber: String(c.contactNumber).trim(),
-        contactEmail: blank(c.contactEmail),
+        contactEmail: blank(c.contactEmail || c.emailAddress),
+        designation: blank(c.designation),
       })),
     });
   }
@@ -705,6 +706,32 @@ async function main() {
       console.log(`Tasks ${i + 1}/${tasks.length}`);
     }
   }
+
+  async function upsertMapping(
+    entityType: string,
+    hrmsId: number,
+    enplId: number | null,
+    enplCode: string | null,
+  ) {
+    await prisma.enplEntityMapping.upsert({
+      where: { entityType_hrmsId: { entityType, hrmsId } },
+      create: { companyID, entityType, hrmsId, enplId, enplCode },
+      update: { enplId, enplCode },
+    });
+  }
+  for (const [enpl, hrms] of erpAddressBookId) {
+    const row = await prisma.taskCustomer.findUnique({ where: { id: hrms }, select: { customerCode: true } });
+    await upsertMapping('customer', hrms, enpl, row?.customerCode ?? null);
+  }
+  for (const [enpl, hrms] of erpSiteId) {
+    const row = await prisma.taskCustomerSite.findUnique({ where: { id: hrms }, select: { siteCode: true } });
+    await upsertMapping('site', hrms, enpl, row?.siteCode ?? null);
+  }
+  for (const [enpl, hrms] of erpTaskId) {
+    const row = await prisma.taskProject.findUnique({ where: { id: hrms }, select: { taskCode: true } });
+    await upsertMapping('task', hrms, enpl, row?.taskCode ?? null);
+  }
+  console.log('Wrote ENPL id ↔ HRMS id mappings');
 
   const tenant = {
     customers: await prisma.taskCustomer.count({ where: { companyID, isDeleted: false } }),

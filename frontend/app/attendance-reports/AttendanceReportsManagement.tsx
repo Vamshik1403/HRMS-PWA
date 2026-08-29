@@ -66,7 +66,7 @@ interface Department {
   id: number;
   companyID: number;
   branchesID: number;
-  departmentName: string;
+  departmentName?: string | null;
 }
 
 interface Designation {
@@ -74,7 +74,7 @@ interface Designation {
   companyID: number;
   branchesID: number;
   designation: string;
-  departmentID: number;
+  departmentID?: number | null;
 }
 
 interface PublicHoliday {
@@ -560,7 +560,7 @@ const MultiSelect = ({ options, selectedValues, onChange, placeholder, disabled 
   }, []);
   
   const filteredOptions = options.filter(opt => 
-    opt.label.toLowerCase().includes(searchTerm.toLowerCase())
+    String(opt.label || "").toLowerCase().includes(searchTerm.toLowerCase())
   );
   
   const toggleOption = (value: string) => {
@@ -1262,36 +1262,43 @@ const handleBranchChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
   // ==================== FILTERED OPTIONS ====================
 
 const filteredDesignations = designations.filter((d: Designation) => 
-  selectedDepartments.length === 0 || selectedDepartments.includes(d.departmentID.toString())
+  selectedDepartments.length === 0 ||
+  (d.departmentID != null && selectedDepartments.includes(String(d.departmentID)))
 );
 
 const filteredEmployees = allEmployees.filter((e: Employee) => {
   if (selectedDesignations.length > 0) {
-    if (!e.designationID || !selectedDesignations.includes(e.designationID.toString())) {
+    if (e.designationID == null || !selectedDesignations.includes(String(e.designationID))) {
       return false;
     }
   }
   if (selectedDepartments.length > 0) {
-    if (!e.departmentNameID || !selectedDepartments.includes(e.departmentNameID.toString())) {
+    if (e.departmentNameID == null || !selectedDepartments.includes(String(e.departmentNameID))) {
       return false;
     }
   }
   return true;
 });
 
-const departmentOptions = departments.map((d: Department) => ({ 
-  value: d.id.toString(), 
-  label: d.departmentName 
-}));
-const designationOptions = filteredDesignations.map((d: Designation) => ({ 
-  value: d.id.toString(), 
-  label: d.designation 
-}));
+const departmentOptions = departments
+  .filter((d: Department) => d.id != null)
+  .map((d: Department) => ({
+    value: String(d.id),
+    label: d.departmentName || `Department ${d.id}`,
+  }));
+const designationOptions = filteredDesignations
+  .filter((d: Designation) => d.id != null)
+  .map((d: Designation) => ({
+    value: String(d.id),
+    label: d.designation || `Designation ${d.id}`,
+  }));
 
-const employeeOptions = filteredEmployees.map((e: Employee) => ({ 
-  value: e.id.toString(), 
-  label: `${e.employeeFirstName} ${e.employeeLastName} (${e.employeeID})` 
-}));
+const employeeOptions = filteredEmployees
+  .filter((e: Employee) => e.id != null)
+  .map((e: Employee) => ({
+    value: String(e.id),
+    label: `${e.employeeFirstName || ""} ${e.employeeLastName || ""} (${e.employeeID || e.id})`.trim(),
+  }));
 
   // ==================== CALCULATION FUNCTIONS ====================
 
@@ -2123,13 +2130,19 @@ if (!hasPunchesEffective) return { type: "ABSENT", label: "Absent", hasPunches: 
       let finalFilteredEmployees = [...filteredEmpData];
 
       if (selectedDepartments.length > 0) {
-        finalFilteredEmployees = finalFilteredEmployees.filter(e => e.departmentNameID && selectedDepartments.includes(e.departmentNameID.toString()));
+        finalFilteredEmployees = finalFilteredEmployees.filter(
+          (e) => e.departmentNameID != null && selectedDepartments.includes(String(e.departmentNameID)),
+        );
       }
       if (selectedDesignations.length > 0) {
-        finalFilteredEmployees = finalFilteredEmployees.filter(e => e.designationID && selectedDesignations.includes(e.designationID.toString()));
+        finalFilteredEmployees = finalFilteredEmployees.filter(
+          (e) => e.designationID != null && selectedDesignations.includes(String(e.designationID)),
+        );
       }
       if (selectedEmployees.length > 0) {
-        finalFilteredEmployees = finalFilteredEmployees.filter(e => selectedEmployees.includes(e.id.toString()));
+        finalFilteredEmployees = finalFilteredEmployees.filter(
+          (e) => e.id != null && selectedEmployees.includes(String(e.id)),
+        );
       }
 
       // Group logs by employee
@@ -2480,11 +2493,16 @@ if (!hasPunchesEffective) return { type: "ABSENT", label: "Absent", hasPunches: 
   const dateColumns = buildDateRangeColumns();
 
   const filteredReportData = useMemo(() => {
-    return reportData.filter(row => {
-      const fullName = `${row.employee.employeeFirstName} ${row.employee.employeeLastName}`.toLowerCase();
-      return fullName.includes(searchTerm.toLowerCase()) || row.employee.employeeID.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        row.companyName.toLowerCase().includes(searchTerm.toLowerCase()) || row.branchName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        row.departmentName.toLowerCase().includes(searchTerm.toLowerCase());
+    const q = searchTerm.toLowerCase();
+    return reportData.filter((row) => {
+      const fullName = `${row.employee.employeeFirstName || ""} ${row.employee.employeeLastName || ""}`.toLowerCase();
+      return (
+        fullName.includes(q) ||
+        String(row.employee.employeeID || "").toLowerCase().includes(q) ||
+        String(row.companyName || "").toLowerCase().includes(q) ||
+        String(row.branchName || "").toLowerCase().includes(q) ||
+        String(row.departmentName || "").toLowerCase().includes(q)
+      );
     });
   }, [reportData, searchTerm]);
 

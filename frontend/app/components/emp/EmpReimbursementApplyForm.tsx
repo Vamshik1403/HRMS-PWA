@@ -5,6 +5,7 @@ import { X } from "lucide-react";
 import { toast } from "sonner";
 import { useCurrentUser } from "@/app/hooks/useCurrentUser";
 import { taskFetch } from "@/app/utils/taskApi";
+import { localDateISO } from "@/app/utils/localDate";
 import { CATEGORIES } from "./EmpReimbursementMobile";
 import { Button } from "../ui/button";
 import { Label } from "../ui/label";
@@ -37,18 +38,50 @@ export function EmpReimbursementApplyForm({
   const [taskSuggestOpen, setTaskSuggestOpen] = useState(false);
   const [items, setItems] = useState<LineItem[]>([{ reimbursementType: "Travelling", amount: "", description: "" }]);
   const [submitting, setSubmitting] = useState(false);
-  const date = useMemo(() => new Date().toISOString().slice(0, 10), []);
+  const today = useMemo(() => localDateISO(), []);
+  const [date, setDate] = useState(today);
 
   useEffect(() => {
-    if (!user?.username) return;
-    fetch(`${BACKEND}/manage-emp/credentials/${encodeURIComponent(user.username)}`)
-      .then((r) => (r.ok ? r.json() : null))
-      .then(setCreds);
-  }, [user?.username]);
+    const username = user?.username;
+    const empId = user?.employee?.id ?? (user?.role === "EMPLOYEE" ? user?.id : undefined);
+    if (!username && !empId) return;
+    let cancelled = false;
+    (async () => {
+      let row: any = null;
+      if (username) {
+        const r = await fetch(`${BACKEND}/manage-emp/credentials/${encodeURIComponent(username)}`);
+        if (r.ok) row = await r.json();
+      }
+      if (!row?.employee?.id && empId) {
+        const r = await fetch(`${BACKEND}/manage-emp/${empId}/credentials`);
+        if (r.ok) {
+          const json = await r.json();
+          if (json?.employee?.id || json?.companyID) row = json;
+        }
+      }
+      if (!row?.employee?.id && (empId || user?.companyID)) {
+        row = {
+          serviceProviderID: user?.serviceProviderID ?? null,
+          companyID: user?.companyID ?? null,
+          branchesID: user?.branchesID ?? null,
+          employee: { id: empId },
+        };
+      }
+      if (!cancelled) setCreds(row);
+    })().catch(() => {
+      if (!cancelled) setCreds(null);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
 
   useEffect(() => {
     if (!user) return;
-    taskFetch<{ items: EmployeeTask[] }>("/task-projects", user, undefined, { limit: 100 })
+    taskFetch<{ items: EmployeeTask[] }>("/task-projects", user, undefined, {
+      limit: 100,
+      assignedToMe: 1,
+    })
       .then((data) => setEmployeeTasks(data.items || []))
       .catch(() => setEmployeeTasks([]));
   }, [user]);
@@ -75,6 +108,10 @@ export function EmpReimbursementApplyForm({
       toast.error("Please add at least one expense with an amount.");
       return;
     }
+    if (!date || date > today) {
+      toast.error("Date cannot be in the future.");
+      return;
+    }
     setSubmitting(true);
     try {
       const res = await fetch(`${BACKEND}/reimbursement`, {
@@ -91,11 +128,21 @@ export function EmpReimbursementApplyForm({
           items: items.filter((i) => i.amount && parseFloat(i.amount) > 0),
         }),
       });
-      if (!res.ok) throw new Error("fail");
+      if (!res.ok) {
+        let apiMessage = "Could not submit reimbursement";
+        try {
+          const body = await res.json();
+          if (typeof body?.message === "string" && body.message.trim()) apiMessage = body.message;
+          else if (Array.isArray(body?.message) && body.message[0]) apiMessage = String(body.message[0]);
+        } catch {
+          /* ignore */
+        }
+        throw new Error(apiMessage);
+      }
       toast.success("Reimbursement submitted");
       onSuccess();
-    } catch {
-      toast.error("Could not submit reimbursement");
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "Could not submit reimbursement");
     } finally {
       setSubmitting(false);
     }
@@ -105,7 +152,13 @@ export function EmpReimbursementApplyForm({
     <div className="space-y-4">
       <div>
         <Label>Date</Label>
-        <p className="text-sm font-medium mt-1">{date}</p>
+        <Input
+          type="date"
+          className="mt-1"
+          value={date}
+          max={today}
+          onChange={(e) => setDate(e.target.value)}
+        />
       </div>
 
       <div className="relative space-y-2">

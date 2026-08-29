@@ -8,6 +8,8 @@ import { authHeaders } from "@/lib/auth";
 import { hasCompanyAccessFlag, readCompanyAccess } from "@/lib/companyAccess";
 import { useCurrentUser } from "@/app/hooks/useCurrentUser";
 import { useOptionalEmpPortalPageContext } from "@/app/components/layout/emp-portal-page-context";
+import { getActiveCompanyId } from "@/app/utils/sidebarContext";
+import { resolveScopedCompanyId } from "@/app/utils/scopeContext";
 
 const BACKEND = "/backend";
 
@@ -28,17 +30,30 @@ export function EmpCompanyEnterpriseHome({ firstName }: { firstName?: string }) 
   const [overview, setOverview] = useState<any>(null);
   const [widgets, setWidgets] = useState<any>(null);
   const [deptRows, setDeptRows] = useState<{ name: string; count: number }[]>([]);
+  const [companyScopeTick, setCompanyScopeTick] = useState(0);
+
+  useEffect(() => {
+    const bump = () => setCompanyScopeTick((n) => n + 1);
+    window.addEventListener("sidebar-context-changed", bump);
+    window.addEventListener("app-data-refresh", bump);
+    return () => {
+      window.removeEventListener("sidebar-context-changed", bump);
+      window.removeEventListener("app-data-refresh", bump);
+    };
+  }, []);
 
   useEffect(() => {
     if (!canShowCompanyDashboard) return;
     let cancelled = false;
     const headers = authHeaders();
-    let companyID = 0;
-    try {
-      const user = JSON.parse(localStorage.getItem("user") || "{}");
-      companyID = Number(user.companyID || user.activeCompanyID || 0);
-    } catch {
-      companyID = 0;
+    let companyID = resolveScopedCompanyId(user) ?? getActiveCompanyId() ?? 0;
+    if (!companyID) {
+      try {
+        const stored = JSON.parse(localStorage.getItem("user") || "{}");
+        companyID = Number(stored.activeCompanyID || stored.companyID || 0);
+      } catch {
+        companyID = 0;
+      }
     }
     const q = companyID ? `?companyID=${companyID}` : "";
     const load = async () => {
@@ -70,7 +85,7 @@ export function EmpCompanyEnterpriseHome({ firstName }: { firstName?: string }) 
     return () => {
       cancelled = true;
     };
-  }, [canShowCompanyDashboard]);
+  }, [canShowCompanyDashboard, user, companyScopeTick]);
 
   const activityItems = useMemo(() => {
     const fromApi = (widgets?.recentActivities ?? []).map((a: any) => {

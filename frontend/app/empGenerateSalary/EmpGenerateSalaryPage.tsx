@@ -15,7 +15,8 @@ import { Plus, Search, Edit, Trash2, Download } from "lucide-react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { useCurrentUser } from "../hooks/useCurrentUser"
-import { getSidebarContext } from "../utils/sidebarContext";
+import { getActiveCompanyId, getSidebarContext } from "../utils/sidebarContext";
+import { resolveScopedCompanyId } from "../utils/scopeContext";
 import { getPageCache, setPageCache } from "../utils/pageCache";
 import { formatPayslipPeriodLabel } from "../utils/payslipPeriodLabel";
 
@@ -26,7 +27,7 @@ import { formatPayslipPeriodLabel } from "../utils/payslipPeriodLabel";
 
 interface SP { id: number; companyName?: string }
 interface CO { id: number; companyName?: string; financialYearStart?: string }
-interface BR { id: number; branchName?: string }
+interface BR { id: number; branchName?: string; companyID?: number }
 interface Emp {
   id: number
   employeeID?: string
@@ -1266,6 +1267,22 @@ const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDE
     monthLabel: "",
   });
 
+  useEffect(() => {
+    if (!user) return;
+    const scoped =
+      resolveScopedCompanyId(user) ?? getActiveCompanyId() ?? user.companyID ?? null;
+    if (!scoped) return;
+    setFormData((prev) => {
+      if (prev.companyID) return prev;
+      const ctx = getSidebarContext();
+      return {
+        ...prev,
+        companyID: scoped,
+        coAutocomplete: prev.coAutocomplete || ctx?.companyName || "",
+      };
+    });
+  }, [user]);
+
   // close popovers on outside click
   useEffect(() => {
     const onDocClick = (e: MouseEvent) => {
@@ -1393,9 +1410,15 @@ useEffect(() => {
 
   function resetForm() {
     const ctx = getSidebarContext();
+    const scopedCompanyID =
+      resolveScopedCompanyId(user) ??
+      getActiveCompanyId() ??
+      ctx?.companyID ??
+      user?.companyID ??
+      null;
     setFormData({
       serviceProviderID: ctx?.serviceProviderID ?? null,
-      companyID: ctx?.companyID ?? null,
+      companyID: scopedCompanyID,
       branchesID: null,
       spAutocomplete: ctx?.serviceProviderName ?? "",
       coAutocomplete: ctx?.companyName ?? "",
@@ -1473,9 +1496,20 @@ useEffect(() => {
   const runFetchBR = async (q: string) => {
     setBrLoading(true);
     try {
-      const url = formData.companyID ? `${API.br}?companyID=${formData.companyID}` : API.br;
+      const scoped =
+        formData.companyID ??
+        resolveScopedCompanyId(user) ??
+        getActiveCompanyId() ??
+        user?.companyID ??
+        null;
+      const url = scoped ? `${API.br}?companyID=${scoped}` : API.br;
       const data: BR[] = await robustGet(url);
-      const filtered = (q?.length ? data.filter((b) => (b.branchName ?? "").toLowerCase().includes(q.toLowerCase())) : data);
+      const byCompany = scoped
+        ? data.filter((b) => Number(b.companyID) === Number(scoped))
+        : data;
+      const filtered = (q?.length
+        ? byCompany.filter((b) => (b.branchName ?? "").toLowerCase().includes(q.toLowerCase()))
+        : byCompany);
       setBrList(filtered);
     } catch { /* noop */ }
     finally { setBrLoading(false); }

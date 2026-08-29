@@ -1,5 +1,4 @@
 import { authHeaders } from "@/lib/auth";
-import { MOCK_ORG_CHART } from "./mockData";
 import type { Employee, OrgChartData, OrgDepartment } from "./types";
 
 type ApiPerson = {
@@ -121,30 +120,34 @@ export function mapHierarchyApiToOrgData(payload: ApiHierarchy): OrgChartData {
 }
 
 /**
- * Load org-chart data.
- *
- * Swap point for the live HRMS API:
- *   GET /backend/company-hierarchy?companyID=<id>
- * If the request fails or returns no people, mock data is used so the page still works.
+ * Load org-chart data from GET /backend/company-hierarchy?companyID=<id>.
+ * Never substitutes sample/Acme data — an empty or failed company must stay empty.
  */
 export async function loadOrgChartData(companyID: string | number | null): Promise<{
   data: OrgChartData;
-  source: "api" | "mock";
+  source: "api";
 }> {
-  if (companyID == null || companyID === "") {
-    return { data: MOCK_ORG_CHART, source: "mock" };
+  const id = Number(companyID);
+  if (!Number.isFinite(id) || id <= 0) {
+    throw new Error("Select a company to load its organization hierarchy.");
   }
-  try {
-    const res = await fetch(`/backend/company-hierarchy?companyID=${companyID}`, {
-      headers: authHeaders(),
-      cache: "no-store",
-    });
-    if (!res.ok) throw new Error(await res.text());
-    const json = (await res.json()) as ApiHierarchy;
-    const mapped = mapHierarchyApiToOrgData(json);
-    if (!mapped.employees.length) return { data: MOCK_ORG_CHART, source: "mock" };
-    return { data: mapped, source: "api" };
-  } catch {
-    return { data: MOCK_ORG_CHART, source: "mock" };
+  const res = await fetch(`/backend/company-hierarchy?companyID=${id}`, {
+    headers: authHeaders(),
+    cache: "no-store",
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    let message = text || `Failed to load organization hierarchy (${res.status})`;
+    try {
+      const parsed = JSON.parse(text);
+      if (parsed?.message) {
+        message = Array.isArray(parsed.message) ? parsed.message.join(", ") : String(parsed.message);
+      }
+    } catch {
+      /* keep text */
+    }
+    throw new Error(message);
   }
+  const json = (await res.json()) as ApiHierarchy;
+  return { data: mapHierarchyApiToOrgData(json), source: "api" };
 }

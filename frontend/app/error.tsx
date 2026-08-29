@@ -3,6 +3,23 @@
 import { useEffect } from "react";
 import { Button } from "@/app/components/ui/button";
 
+function getDefaultHomeHref(): string {
+  if (typeof window === "undefined") return "/empdashboard";
+  try {
+    const user = JSON.parse(localStorage.getItem("user") || "{}");
+    const role = String(user?.role || "").toUpperCase();
+    if (user?.type === "employee" || role === "EMPLOYEE") return "/empdashboard";
+    if (role === "SUPERADMIN") return "/superdashboard";
+    if (role === "COMPANY_ADMIN") return "/my-company";
+    if (role === "SERVICE_PROVIDER" || role === "ADMIN" || role === "BRANCH_ADMIN") {
+      return "/dashboard";
+    }
+  } catch {
+    // fall through
+  }
+  return "/empdashboard";
+}
+
 export default function GlobalError({
   error,
   reset,
@@ -22,7 +39,7 @@ export default function GlobalError({
       </p>
       <div className="flex gap-2">
         <Button onClick={() => reset()}>Try again</Button>
-        <Button variant="outline" onClick={() => (window.location.href = "/dashboard")}>
+        <Button variant="outline" onClick={() => (window.location.href = getDefaultHomeHref())}>
           Go to dashboard
         </Button>
       </div>

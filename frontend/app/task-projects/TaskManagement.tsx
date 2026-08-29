@@ -39,6 +39,12 @@ import { EntityRowActions } from "../components/app/entity-row-actions";
 import { TaskContactsRepeater, sanitizeContacts, type TaskContactRow } from "../components/task/TaskContactsRepeater";
 import { canonicalTaskStatus } from "../components/task/task-types";
 import { useClientTable, sortRows } from "../hooks/use-client-table";
+import {
+  formatSitePunchAt,
+  isSitePunchTaskType,
+  lastSitePunchByKind,
+  sitePunchesFromTask,
+} from "../utils/taskSitePunch";
 
 const STATUSES = TASK_STATUSES;
 const PRIORITIES = ["Urgent", "High", "Medium", "Low"];
@@ -67,6 +73,7 @@ interface Task {
   purchase?: { purchaseType?: string | null; customerName?: string | null; address?: string | null };
   engineerAssignments?: { engineerName?: string | null; engineerEmail?: string | null; status?: string | null }[];
   chats?: { id: number; message: string; senderName?: string; attachmentUrl?: string | null; createdAt: string }[];
+  sitePunches?: { kind?: string; at?: string; createdAt?: string; senderName?: string; employeeName?: string; message?: string }[];
   activities?: { id: number; action: string; oldValue?: string; newValue?: string; remark?: string; actorName?: string; createdAt: string }[];
 }
 
@@ -407,7 +414,7 @@ useAppRefresh(() => {
 
   const submitTask = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.taskName.trim()) { toast.error("Task name required"); return; }
+    if (!form.taskName.trim()) { toast.error("Title is required"); return; }
     setSaving(true);
     const isCustomerVisit = taskNeedsCustomer(form.taskType);
     const payload = {
@@ -422,6 +429,7 @@ useAppRefresh(() => {
         contactName: c.contactPerson,
         contactNumber: c.contactNumber,
         contactEmail: c.email,
+        designation: c.designation,
       })),
     };
     try {
@@ -668,6 +676,40 @@ useAppRefresh(() => {
       ),
     },
     {
+      key: "siteCheckIn",
+      header: "Site check in",
+      colSpan: 1,
+      cell: (t) => {
+        if (!isSitePunchTaskType(t.taskType)) return <span className="text-xs text-gray-400">—</span>;
+        const punches = sitePunchesFromTask(t);
+        const lastIn = lastSitePunchByKind(punches, "in");
+        const inCount = punches.filter((p) => p.kind === "in").length;
+        return (
+          <span className="text-xs text-gray-700 whitespace-nowrap">
+            {lastIn ? formatSitePunchAt(lastIn.at) : "—"}
+            {inCount > 1 ? <span className="text-gray-400"> ({inCount})</span> : null}
+          </span>
+        );
+      },
+    },
+    {
+      key: "siteCheckOut",
+      header: "Site check out",
+      colSpan: 1,
+      cell: (t) => {
+        if (!isSitePunchTaskType(t.taskType)) return <span className="text-xs text-gray-400">—</span>;
+        const punches = sitePunchesFromTask(t);
+        const lastOut = lastSitePunchByKind(punches, "out");
+        const outCount = punches.filter((p) => p.kind === "out").length;
+        return (
+          <span className="text-xs text-gray-700 whitespace-nowrap">
+            {lastOut ? formatSitePunchAt(lastOut.at) : "—"}
+            {outCount > 1 ? <span className="text-gray-400"> ({outCount})</span> : null}
+          </span>
+        );
+      },
+    },
+    {
       key: "actions",
       header: "Actions",
       colSpan: 2,
@@ -881,8 +923,8 @@ useAppRefresh(() => {
               }} />
             <SearchSuggestInput
               key={form.customerID || "all-branches"}
-              label="Branch / Site"
-              placeholder="Search branch…"
+              label="Site"
+              placeholder="Search site…"
               value={branchLabel}
               onChange={setBranchLabel}
               fetchData={searchBranches}
@@ -904,7 +946,7 @@ useAppRefresh(() => {
           </div>
           ) : null}
           <div className="space-y-2">
-            <Label>Task Name *</Label>
+            <Label>Title *</Label>
             <Input value={form.taskName} onChange={(e) => setForm((p) => ({ ...p, taskName: e.target.value }))} required />
           </div>
           <div className="space-y-2">
@@ -1005,7 +1047,7 @@ useAppRefresh(() => {
                 rows={[
                   { label: "Department", value: detail.department?.departmentName },
                   { label: "Customer", value: detail.customer?.customerName },
-                  { label: "Branch / site", value: detail.site?.branchName },
+                  { label: "Site", value: detail.site?.branchName },
                   { label: "Schedule", value: formatTaskDate(detail.scheduleDateTime) },
                   { label: "Due date", value: formatTaskDate(detail.dueDateTime) },
                 ]}

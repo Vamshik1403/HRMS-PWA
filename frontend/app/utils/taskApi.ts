@@ -1,5 +1,6 @@
-import { getSidebarContext } from "./sidebarContext";
+import { getActiveCompanyId, getSidebarContext } from "./sidebarContext";
 import { isDesktopManagerFlagSet } from "@/lib/desktopManager";
+import { canViewModule, hasModuleWriteAccess, isCompanyOwnerFlag } from "@/lib/companyAccess";
 
 export type CurrentUserLike = {
   id?: number;
@@ -46,12 +47,20 @@ export function buildTaskViewerQuery(user: CurrentUserLike | null | undefined) {
     }
   }
   const isEmployee = role === "EMPLOYEE";
-  const companyID = isEmployee ? u?.companyID : (ctx?.companyID ?? u?.companyID);
+  const companyID = isEmployee
+    ? u?.companyID
+    : (getActiveCompanyId() ?? ctx?.companyID ?? u?.companyID);
   const spID = isEmployee ? u?.serviceProviderID : (ctx?.serviceProviderID ?? u?.serviceProviderID);
   if (companyID) params.set("companyID", String(companyID));
   if (spID) params.set("serviceProviderID", String(spID));
   if (isEmployee && isDesktopManagerFlagSet()) {
     params.set("viewerDesktopManager", "1");
+  }
+  if (isCompanyOwnerFlag()) {
+    params.set("viewerCompanyOwner", "1");
+  }
+  if (hasModuleWriteAccess("TASKS") || canViewModule("TASKS")) {
+    params.set("viewerManageTasks", "1");
   }
   return params;
 }

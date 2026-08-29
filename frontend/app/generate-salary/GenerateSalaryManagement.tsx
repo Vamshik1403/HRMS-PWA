@@ -21,7 +21,7 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { useCurrentUser } from "../hooks/useCurrentUser"
 import { toast } from "sonner";
-import { getSidebarContext } from "../utils/sidebarContext";
+import { getActiveCompanyId, getSidebarContext } from "../utils/sidebarContext";
 import { formatPayslipPeriodLabel } from "../utils/payslipPeriodLabel";
 import { dispatchAppRefresh, registerDataCacheClearer } from "../utils/appRefresh";
 import { useListAutoRefresh } from "../hooks/useListAutoRefresh";
@@ -1775,6 +1775,22 @@ export function GenerateSalaryManagement() {
     fetchManagerScope();
   }, [user]);
 
+  useEffect(() => {
+    if (!user || user.role === "SUPERADMIN") return;
+    const scoped =
+      resolveScopedCompanyId(user) ?? getActiveCompanyId() ?? user.companyID ?? null;
+    if (!scoped) return;
+    setFormData((prev) => {
+      if (prev.companyID) return prev;
+      const ctx = getSidebarContext();
+      return {
+        ...prev,
+        companyID: scoped,
+        coAutocomplete: prev.coAutocomplete || ctx?.companyName || "",
+      };
+    });
+  }, [user]);
+
   // Close popovers on outside click
   useEffect(() => {
     const onDocClick = (e: MouseEvent) => {
@@ -1828,16 +1844,24 @@ export function GenerateSalaryManagement() {
         }
       }
 
-      // COMPANY_ADMIN / BRANCH_ADMIN: filter by company
-      if (user?.role === "COMPANY_ADMIN" || user?.role === "BRANCH_ADMIN") {
-        const ctx = getSidebarContext()
-        const companyID = ctx?.companyID ?? user?.companyID
+      // COMPANY_ADMIN / BRANCH_ADMIN / company operators (employee-owner)
+      if (
+        user?.role === "COMPANY_ADMIN" ||
+        user?.role === "BRANCH_ADMIN" ||
+        user?.role === "ADMIN" ||
+        (user?.role === "EMPLOYEE" && isCompanyModuleOperator(user))
+      ) {
+        const companyID =
+          resolveScopedCompanyId(user) ??
+          getActiveCompanyId() ??
+          getSidebarContext()?.companyID ??
+          user?.companyID;
         if (companyID) {
-          setItems(allItems.filter((r: any) => r.companyID === companyID))
+          setItems(allItems.filter((r: any) => Number(r.companyID) === Number(companyID)));
         } else {
-          setItems([])
+          setItems([]);
         }
-        return
+        return;
       }
 
       const creds = await robustGet(`${BACKEND_URL}/manage-emp/credentials/all`);
@@ -1995,9 +2019,15 @@ export function GenerateSalaryManagement() {
 
   function resetForm() {
     const ctx = getSidebarContext();
+    const scopedCompanyID =
+      resolveScopedCompanyId(user) ??
+      getActiveCompanyId() ??
+      ctx?.companyID ??
+      user?.companyID ??
+      null;
     const baseForm: FormData = {
       serviceProviderID: ctx?.serviceProviderID ?? null,
-      companyID: ctx?.companyID ?? null,
+      companyID: scopedCompanyID,
       branchesID: null,
       spAutocomplete: ctx?.serviceProviderName ?? "",
       coAutocomplete: ctx?.companyName ?? "",
@@ -2347,9 +2377,26 @@ export function GenerateSalaryManagement() {
           updates.spAutocomplete = serviceProviderName;
         }
 
-        // Update company for both roles
-        updates.companyID = selectedBranch.companyID || null;
-        updates.coAutocomplete = companyName;
+        // Update company only when the branch belongs to the active company
+        const scopedCompanyID =
+          formData.companyID ??
+          resolveScopedCompanyId(user) ??
+          getActiveCompanyId() ??
+          user?.companyID ??
+          null;
+        if (
+          selectedBranch.companyID &&
+          scopedCompanyID &&
+          Number(selectedBranch.companyID) !== Number(scopedCompanyID)
+        ) {
+          toast.error("Selected branch is not in this company");
+          return;
+        }
+
+        if (selectedBranch.companyID) {
+          updates.companyID = selectedBranch.companyID;
+          updates.coAutocomplete = companyName;
+        }
 
         setFormData(prev => ({ ...prev, ...updates }));
 

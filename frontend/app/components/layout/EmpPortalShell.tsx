@@ -198,35 +198,34 @@ export default function EmpPortalShell({ children, hideBottomNav = false }: EmpP
         }
         setEmpUser(u);
 
-        // Keep org scope in sync for company owners / module operators so
-        // Branches/Departments/Designations forms resolve company + SP correctly.
-        const companyID = Number(u?.companyID || u?.activeCompanyID || 0);
+        // Fill missing sidebar context only. Never overwrite a switched company
+        // with the user's home companyID — that snaps the switcher back.
+        const ctx = getSidebarContext();
+        const sessionCompanyID = Number(sessionStorage.getItem("activeCompanyID") || 0);
+        const preferredCompanyID =
+          (sessionCompanyID > 0 ? sessionCompanyID : 0) ||
+          Number(ctx?.companyID || 0) ||
+          Number(u?.activeCompanyID || u?.companyID || 0);
         const serviceProviderID = Number(u?.serviceProviderID || 0);
         if (
           (hasCompanyAccessFlag() || u?.isCompanyOwner) &&
-          companyID > 0
+          preferredCompanyID > 0 &&
+          !ctx
         ) {
-          const ctx = getSidebarContext();
           const companyName =
             (typeof u?.company === "string" ? u.company : u?.company?.companyName) ||
             u?.employee?.company ||
-            ctx?.companyName ||
             "";
-          const serviceProviderName =
-            u?.serviceProvider?.companyName || ctx?.serviceProviderName || "";
-          if (
-            !ctx ||
-            Number(ctx.companyID) !== companyID ||
-            (serviceProviderID > 0 && Number(ctx.serviceProviderID) !== serviceProviderID)
-          ) {
-            setSidebarContext(
-              serviceProviderID || ctx?.serviceProviderID || 0,
-              serviceProviderName,
-              companyID,
-              companyName,
-            );
+          const serviceProviderName = u?.serviceProvider?.companyName || "";
+          setSidebarContext(
+            serviceProviderID || 0,
+            serviceProviderName,
+            preferredCompanyID,
+            companyName,
+          );
+          if (sessionCompanyID <= 0) {
+            sessionStorage.setItem("activeCompanyID", String(preferredCompanyID));
           }
-          sessionStorage.setItem("activeCompanyID", String(companyID));
         }
       } catch {
         /* ignore */
@@ -235,9 +234,11 @@ export default function EmpPortalShell({ children, hideBottomNav = false }: EmpP
     syncUserFromStorage();
     window.addEventListener("emp-photo-updated", syncUserFromStorage);
     window.addEventListener("storage", syncUserFromStorage);
+    window.addEventListener("sidebar-context-changed", syncUserFromStorage);
     return () => {
       window.removeEventListener("emp-photo-updated", syncUserFromStorage);
       window.removeEventListener("storage", syncUserFromStorage);
+      window.removeEventListener("sidebar-context-changed", syncUserFromStorage);
     };
   }, []);
 

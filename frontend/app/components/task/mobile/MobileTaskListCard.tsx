@@ -3,7 +3,14 @@
 import { useState } from "react";
 import { Icon } from "@iconify/react";
 import { PriorityBadge, TaskStatusBadge } from "../task-ui";
-import { getNextSitePunchKind } from "../../../utils/taskSitePunch";
+import {
+  formatSitePunchAt,
+  getNextSitePunchKindForTask,
+  isSitePunchTaskType,
+  sitePunchMenuLabel,
+  sitePunchesFromTask,
+  type SitePunchEvent,
+} from "../../../utils/taskSitePunch";
 import { taskAssigneeTeamLabel } from "../../../utils/empManagerDisplay";
 import type { EmpManagerScope } from "../../../utils/empManagerDisplay";
 
@@ -18,7 +25,8 @@ export interface MobileTaskListItem {
   dueDateTime?: string | null;
   customer?: { customerName?: string };
   site?: { branchName?: string; city?: string };
-  chats?: { message?: string | null; createdAt?: string }[];
+  chats?: { message?: string | null; createdAt?: string; senderName?: string | null }[];
+  sitePunches?: SitePunchEvent[];
   assignments?: {
     manageEmployeeID?: number;
     manageEmployee?: { employeeFirstName?: string; employeeLastName?: string; employeeID?: string };
@@ -32,10 +40,6 @@ function fmtSchedule(iso?: string | null) {
   const dd = d.toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric" });
   const tt = d.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: false });
   return `${dd} ${tt}`;
-}
-
-function isSiteVisit(type: string) {
-  return (type || "").toLowerCase().includes("site visit");
 }
 
 export function MobileTaskListCard({
@@ -52,15 +56,13 @@ export function MobileTaskListCard({
   managerScope?: EmpManagerScope | null;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
-  const siteLine = isSiteVisit(task.taskType)
+  const fieldTask = isSitePunchTaskType(task.taskType);
+  const siteLine = fieldTask
     ? [task.site?.branchName, task.site?.city].filter(Boolean).join(", ") || "—"
     : null;
+  const punches = fieldTask ? sitePunchesFromTask(task) : [];
   const siteCheckLabel =
-    isSiteVisit(task.taskType) && onCheckInOut
-      ? getNextSitePunchKind(task.chats) === "in"
-        ? "Check-In"
-        : "Check-Out"
-      : null;
+    fieldTask && onCheckInOut ? sitePunchMenuLabel(getNextSitePunchKindForTask(task)) : null;
 
   const teamLabel = taskAssigneeTeamLabel(managerScope ?? null, task.assignments);
 
@@ -92,6 +94,25 @@ export function MobileTaskListCard({
             <p className="text-[11px] text-gray-600">
               <span className="text-gray-400">ETC:</span> {fmtSchedule(task.dueDateTime)}
             </p>
+            {fieldTask && (
+              <div className="pt-0.5 space-y-0.5">
+                {punches.length === 0 ? (
+                  <p className="text-[11px] text-gray-400">No site check-in yet</p>
+                ) : (
+                  punches.map((p, i) => (
+                    <p key={`${p.kind}-${p.at}-${i}`} className="text-[11px] text-gray-700">
+                      <span className="text-gray-400">
+                        {p.kind === "in" ? "Site check in:" : "Site check out:"}
+                      </span>{" "}
+                      {formatSitePunchAt(p.at)}
+                      {p.employeeName ? (
+                        <span className="text-gray-400"> · {p.employeeName}</span>
+                      ) : null}
+                    </p>
+                  ))
+                )}
+              </div>
+            )}
           </div>
           <div className="flex flex-col items-end gap-1.5 shrink-0">
             <button
