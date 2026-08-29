@@ -15,6 +15,26 @@ import { canManageTaskModule, parseViewer, TaskViewerContext } from './task-cont
 import { nextTaskCode } from './task-code.util';
 import { EmployeeMemoService } from '../employee-memo/employee-memo.service';
 
+export function normalizeTaskStatus(status?: string | null): string | undefined {
+  if (!status) return undefined;
+  const value = String(status).trim();
+  if (!value) return undefined;
+  if (value === 'WIP') return 'Work in Progress';
+  if (value === 'Closed') return 'Completed';
+  return value;
+}
+
+const TASK_NESTED_INCLUDE = {
+  contacts: true,
+  workscopeDetails: { include: { category: true } },
+  schedules: true,
+  images: true,
+  notes: true,
+  inventories: { include: { product: true } },
+  purchase: { include: { products: true, attachments: true } },
+  engineerAssignments: true,
+};
+
 function taskListInclude(viewer: TaskViewerContext) {
   return {
     department: { select: { id: true, departmentName: true } },
@@ -45,6 +65,7 @@ function taskListInclude(viewer: TaskViewerContext) {
       },
     },
     _count: { select: { remarks: true, chats: true, activities: true } },
+    ...TASK_NESTED_INCLUDE,
   };
 }
 
@@ -209,6 +230,161 @@ export class TaskProjectsService {
       actorName: actorName?.trim() || 'System',
       remark: message.slice(0, 500),
     });
+  }
+
+  private async replaceTaskNested(
+    taskID: number,
+    dto: Partial<CreateTaskProjectDto> & Partial<UpdateTaskProjectDto>,
+  ) {
+    if (dto.contacts) {
+      await this.prisma.taskProjectContact.deleteMany({ where: { taskID } });
+      const rows = dto.contacts.filter((c) => c.contactName?.trim() && c.contactNumber?.trim());
+      if (rows.length) {
+        await this.prisma.taskProjectContact.createMany({
+          data: rows.map((c) => ({
+            taskID,
+            contactName: c.contactName.trim(),
+            contactNumber: c.contactNumber.trim(),
+            contactEmail: c.contactEmail?.trim() || null,
+          })),
+        });
+      }
+    }
+    if (dto.workscopeDetails) {
+      await this.prisma.taskWorkscopeDetail.deleteMany({ where: { taskID } });
+      if (dto.workscopeDetails.length) {
+        await this.prisma.taskWorkscopeDetail.createMany({
+          data: dto.workscopeDetails.map((row) => ({
+            taskID,
+            workscopeCategoryID: row.workscopeCategoryID ?? null,
+            workscopeDetails: row.workscopeDetails ?? null,
+            extraNote: row.extraNote ?? null,
+          })),
+        });
+      }
+    }
+    if (dto.schedules) {
+      await this.prisma.taskSchedule.deleteMany({ where: { taskID } });
+      if (dto.schedules.length) {
+        await this.prisma.taskSchedule.createMany({
+          data: dto.schedules.map((row) => ({
+            taskID,
+            proposedDateTime: row.proposedDateTime ? new Date(row.proposedDateTime) : null,
+            priority: row.priority ?? null,
+          })),
+        });
+      }
+    }
+    if (dto.images) {
+      await this.prisma.taskImage.deleteMany({ where: { taskID } });
+      if (dto.images.length) {
+        await this.prisma.taskImage.createMany({
+          data: dto.images.map((row) => ({
+            taskID,
+            filename: row.filename,
+            filepath: row.filepath ?? null,
+            fileUrl: row.fileUrl ?? null,
+            mimeType: row.mimeType ?? null,
+            fileSize: row.fileSize ?? null,
+            uploadedBy: row.uploadedBy ?? null,
+            uploadedByName: row.uploadedByName ?? null,
+          })),
+        });
+      }
+    }
+    if (dto.notes) {
+      await this.prisma.taskNote.deleteMany({ where: { taskID } });
+      if (dto.notes.length) {
+        await this.prisma.taskNote.createMany({
+          data: dto.notes.map((row) => ({
+            taskID,
+            filename: row.filename ?? null,
+            title: row.title ?? null,
+            description: row.description ?? null,
+            filepath: row.filepath ?? null,
+            fileUrl: row.fileUrl ?? null,
+            mimeType: row.mimeType ?? null,
+            fileSize: row.fileSize ?? null,
+            note: row.note ?? null,
+            uploadedBy: row.uploadedBy ?? null,
+            uploadedByName: row.uploadedByName ?? null,
+          })),
+        });
+      }
+    }
+    if (dto.inventories) {
+      await this.prisma.taskInventory.deleteMany({ where: { taskID } });
+      if (dto.inventories.length) {
+        await this.prisma.taskInventory.createMany({
+          data: dto.inventories.map((row) => ({
+            taskID,
+            productTypeId: row.productTypeId ?? null,
+            makeModel: row.makeModel ?? null,
+            snMac: row.snMac ?? null,
+            description: row.description ?? null,
+            purchaseDate: row.purchaseDate ? new Date(row.purchaseDate) : null,
+            warrantyPeriod: row.warrantyPeriod ?? null,
+            warrantyStatus: row.warrantyStatus ?? null,
+            thirdPartyPurchase: !!row.thirdPartyPurchase,
+          })),
+        });
+      }
+    }
+    if (dto.purchase) {
+      await this.prisma.taskPurchase.deleteMany({ where: { taskID } });
+      await this.prisma.taskPurchase.create({
+        data: {
+          taskID,
+          purchaseType: dto.purchase.purchaseType ?? null,
+          customerName: dto.purchase.customerName ?? null,
+          address: dto.purchase.address ?? null,
+          products: dto.purchase.products?.length
+            ? {
+                create: dto.purchase.products.map((p) => ({
+                  make: p.make ?? null,
+                  model: p.model ?? null,
+                  description: p.description ?? null,
+                  warranty: p.warranty ?? null,
+                  rate: p.rate ?? null,
+                  vendor: p.vendor ?? null,
+                  validity: p.validity ?? null,
+                  availability: p.availability ?? null,
+                })),
+              }
+            : undefined,
+          attachments: dto.purchase.attachments?.length
+            ? {
+                create: dto.purchase.attachments.map((a) => ({
+                  filename: a.filename,
+                  filepath: a.filepath ?? null,
+                  fileUrl: a.fileUrl ?? null,
+                  mimeType: a.mimeType ?? null,
+                  fileSize: a.fileSize ?? null,
+                })),
+              }
+            : undefined,
+        },
+      });
+    }
+    if (dto.engineerAssignments) {
+      await this.prisma.taskEngineerAssignment.deleteMany({ where: { taskID } });
+      if (dto.engineerAssignments.length) {
+        await this.prisma.taskEngineerAssignment.createMany({
+          data: dto.engineerAssignments.map((row) => ({
+            taskID,
+            manageEmployeeID: row.manageEmployeeID ?? null,
+            engineerName: row.engineerName ?? null,
+            engineerEmail: row.engineerEmail ?? null,
+            engineerPhone: row.engineerPhone ?? null,
+            proposedDateTime: row.proposedDateTime ? new Date(row.proposedDateTime) : null,
+            priority: row.priority ?? null,
+            status: row.status ?? null,
+            notes: row.notes ?? null,
+            assignedDate: row.assignedDate ? new Date(row.assignedDate) : null,
+          })),
+        });
+      }
+    }
   }
 
   private async logActivity(
@@ -440,7 +616,18 @@ export class TaskProjectsService {
     const priority = query.priority?.trim();
     const taskType = query.taskType?.trim();
     const where = await this.visibilityWhere(viewer, query.companyID ? Number(query.companyID) : undefined);
-    if (status) where.status = status;
+    if (status) {
+      const normalized = normalizeTaskStatus(status);
+      if (normalized !== status) {
+        where.status = { in: [status, normalized] };
+      } else if (status === 'Work in Progress') {
+        where.status = { in: ['Work in Progress', 'WIP'] };
+      } else if (status === 'Completed') {
+        where.status = { in: ['Completed', 'Closed'] };
+      } else {
+        where.status = status;
+      }
+    }
     if (priority) where.priority = priority;
     if (taskType) where.taskType = taskType;
     if (search) {
@@ -453,7 +640,7 @@ export class TaskProjectsService {
         },
       ];
     }
-    const [rawItems, total] = await Promise.all([
+    const [rawItems, total, grouped] = await Promise.all([
       this.prisma.taskProject.findMany({
         where,
         orderBy: { createdAt: 'desc' },
@@ -462,6 +649,15 @@ export class TaskProjectsService {
         include: taskListInclude(viewer),
       }),
       this.prisma.taskProject.count({ where }),
+      this.prisma.taskProject.groupBy({
+        by: ['status'],
+        where: (() => {
+          const countWhere = { ...where };
+          delete countWhere.status;
+          return countWhere;
+        })(),
+        _count: { _all: true },
+      }),
     ]);
     const items =
       !canManageTaskModule(viewer) && viewer.employeeId
@@ -470,7 +666,11 @@ export class TaskProjectsService {
             chats: filterChatsForEmployeeViewer(item.chats, viewer) as typeof item.chats,
           }))
         : rawItems;
-    return { items, total, page, limit, totalPages: Math.ceil(total / limit) };
+    const statusCounts: Record<string, number> = {};
+    for (const row of grouped) {
+      statusCounts[row.status] = row._count._all;
+    }
+    return { items, total, page, limit, totalPages: Math.ceil(total / limit), statusCounts };
   }
 
   async findOne(id: number, query: Record<string, string | undefined>) {
@@ -483,6 +683,7 @@ export class TaskProjectsService {
         remarks: { orderBy: { createdAt: 'desc' }, take: 50 },
         chats: { orderBy: { createdAt: 'asc' }, take: 200 },
         activities: { orderBy: { createdAt: 'desc' }, take: 100 },
+        ...TASK_NESTED_INCLUDE,
       },
     });
     if (!task) return null;
@@ -527,7 +728,9 @@ export class TaskProjectsService {
         scheduleDateTime: dto.scheduleDateTime ? new Date(dto.scheduleDateTime) : null,
         priority: dto.priority || 'Medium',
         dueDateTime: dto.dueDateTime ? new Date(dto.dueDateTime) : null,
-        status: dto.status || 'Open',
+        status: normalizeTaskStatus(dto.status) || 'Open',
+        attachment: dto.attachment ?? null,
+        createdByName: dto.createdByName ?? (query.actorName as string) ?? null,
         createdByUserID: dto.createdByUserID ?? viewer.userId ?? null,
         createdByEmployeeID: dto.createdByEmployeeID ?? viewer.employeeId ?? null,
       },
@@ -535,6 +738,7 @@ export class TaskProjectsService {
     if (dto.assignedEmployeeIds?.length) {
       await this.syncAssignments(task.id, dto.assignedEmployeeIds, { notify: 'added' });
     }
+    await this.replaceTaskNested(task.id, dto);
     await this.logActivity(task.id, 'CREATED', {
       userID: viewer.userId,
       employeeID: viewer.employeeId,
@@ -571,13 +775,16 @@ export class TaskProjectsService {
         scheduleDateTime: dto.scheduleDateTime ? new Date(dto.scheduleDateTime) : undefined,
         priority: dto.priority,
         dueDateTime: dto.dueDateTime ? new Date(dto.dueDateTime) : undefined,
-        status: dto.status,
+        status: normalizeTaskStatus(dto.status),
+        attachment: dto.attachment,
+        createdByName: dto.createdByName,
       },
     });
     if (dto.assignedEmployeeIds) {
       if (!canManageTaskModule(viewer)) throw new ForbiddenException('Only admin can change assignments');
       await this.syncAssignments(id, dto.assignedEmployeeIds);
     }
+    await this.replaceTaskNested(id, dto);
     return this.findOne(id, query);
   }
 
@@ -598,7 +805,7 @@ export class TaskProjectsService {
     }
     const updated = await this.prisma.taskProject.update({
       where: { id },
-      data: { status: dto.status },
+      data: { status: normalizeTaskStatus(dto.status) || dto.status },
     });
     const actorName = dto.actorName ?? (query.actorName as string) ?? undefined;
     await this.logActivity(id, 'STATUS_CHANGE', {
@@ -655,6 +862,8 @@ export class TaskProjectsService {
         userID: dto.userID ?? viewer.userId ?? null,
         employeeID: dto.employeeID ?? viewer.employeeId ?? null,
         authorName: dto.authorName,
+        createdBy: dto.createdBy ?? dto.authorName,
+        status: dto.status,
       },
     });
     await this.logActivity(id, 'REMARK', {
@@ -940,19 +1149,37 @@ export class TaskProjectsService {
 
   async getEmployeesByDepartment(departmentID: number, query: Record<string, string | undefined>) {
     const viewer = parseViewer(query);
-    const where: any = { departmentNameID: departmentID, lifecycleStatus: 'ACTIVE' };
-    if (viewer.companyID && viewer.role !== 'SUPERADMIN') where.companyID = viewer.companyID;
-    return this.prisma.manageEmployee.findMany({
-      where,
-      select: {
-        id: true,
-        employeeID: true,
-        employeeFirstName: true,
-        employeeLastName: true,
-        departments: { select: { departmentName: true } },
-      },
-      orderBy: { employeeFirstName: 'asc' },
-    });
+    const companyID =
+      (query.companyID ? Number(query.companyID) : undefined) || viewer.companyID || undefined;
+    const where: any = { lifecycleStatus: 'ACTIVE', isDeleted: false };
+    if (companyID) where.companyID = companyID;
+    else if (viewer.role !== 'SUPERADMIN') return [];
+
+    const select = {
+      id: true,
+      employeeID: true,
+      employeeFirstName: true,
+      employeeLastName: true,
+      departments: { select: { departmentName: true } },
+    } as const;
+    const orderBy = { employeeFirstName: 'asc' as const };
+
+    if (departmentID > 0) {
+      const inDepartment = await this.prisma.manageEmployee.findMany({
+        where: {
+          ...where,
+          OR: [
+            { departmentNameID: departmentID },
+            { empDepartment: { some: { departmentNameID: departmentID } } },
+          ],
+        },
+        select,
+        orderBy,
+      });
+      if (inDepartment.length) return inDepartment;
+    }
+
+    return this.prisma.manageEmployee.findMany({ where, select, orderBy });
   }
 }
 

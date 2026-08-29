@@ -27,6 +27,8 @@ import { useCompanyBranches } from "../hooks/useCompanyBranches";
 interface Contact { id?: number; contactPerson: string; contactNumber: string; designation?: string | null; email?: string | null; }
 interface Customer {
   id: number; customerCode: string; customerName: string;
+  addressType?: string | null; gstNo?: string | null;
+  relationshipManagerName?: string | null; relationshipManagerEmail?: string | null;
   address?: string | null; city?: string | null; state?: string | null;
   pincode?: string | null; country?: string | null; createdAt?: string;
   contacts?: Contact[]; _count?: { sites: number; tasks: number };
@@ -49,6 +51,10 @@ interface Branch {
 const emptyForm = {
   customerCode: "",
   customerName: "",
+  addressType: "Customer",
+  gstNo: "",
+  relationshipManagerName: "",
+  relationshipManagerEmail: "",
   branchesID: undefined as number | undefined,
   branchName: "",
   address: "",
@@ -257,6 +263,10 @@ export default function CustomerManagement() {
       setForm({
         customerCode: full.customerCode || "",
         customerName: full.customerName || "",
+        addressType: full.addressType || "Customer",
+        gstNo: full.gstNo || "",
+        relationshipManagerName: full.relationshipManagerName || "",
+        relationshipManagerEmail: full.relationshipManagerEmail || "",
         branchesID: full.branchesID ?? full.branches?.id ?? undefined,
         branchName: full.branchName || full.branches?.branchName || "",
         address: full.address || "",
@@ -490,6 +500,26 @@ export default function CustomerManagement() {
           <div className="space-y-2">
             <Label>Customer Name *</Label>
             <Input value={form.customerName} onChange={(e) => setForm((p) => ({ ...p, customerName: e.target.value }))} required />
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label>Address Type</Label>
+              <Input value={form.addressType} onChange={(e) => setForm((p) => ({ ...p, addressType: e.target.value }))} />
+            </div>
+            <div className="space-y-2">
+              <Label>GST No</Label>
+              <Input value={form.gstNo} onChange={(e) => setForm((p) => ({ ...p, gstNo: e.target.value }))} />
+            </div>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label>Relationship Manager</Label>
+              <Input value={form.relationshipManagerName} onChange={(e) => setForm((p) => ({ ...p, relationshipManagerName: e.target.value }))} />
+            </div>
+            <div className="space-y-2">
+              <Label>Manager Email</Label>
+              <Input value={form.relationshipManagerEmail} onChange={(e) => setForm((p) => ({ ...p, relationshipManagerEmail: e.target.value }))} />
+            </div>
           </div>
 
       

@@ -1,11 +1,13 @@
 import {
   BadRequestException,
   ConflictException,
+  HttpException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../prisma/prisma.service';
+import { UserRole } from '@prisma/client';
 import { CreateCompanyDto, PrimaryContactDto } from './dto/create-company.dto';
 import { UpdateCompanyDto } from './dto/update-company.dto';
 import {
@@ -36,6 +38,82 @@ export class CompanyService {
     return String(value || '').trim().toLowerCase();
   }
 
+  private liveEmployeeScope(excludeEmployeeId?: number) {
+    return {
+      isDeleted: false,
+      companyID: { not: null },
+      ...(excludeEmployeeId ? { id: { not: excludeEmployeeId } } : {}),
+    };
+  }
+
+  private activeUsernameUserWhere(normalized: string) {
+    return {
+      username: { equals: normalized, mode: 'insensitive' as const },
+      OR: [
+        { role: { not: UserRole.COMPANY_ADMIN } },
+        { companyID: { not: null } },
+      ],
+    };
+  }
+
+  private rethrowAsHttp(err: any): never {
+    if (err instanceof HttpException) throw err;
+    if (err?.code === 'P2002') {
+      const target = Array.isArray(err.meta?.target)
+        ? err.meta.target.join(' ')
+        : String(err.meta?.target || '');
+      if (/email/i.test(target)) {
+        throw new ConflictException('Email already exists');
+      }
+      if (/username/i.test(target)) {
+        throw new ConflictException('Username already exists');
+      }
+      if (/phone|mobile|contact/i.test(target)) {
+        throw new ConflictException('Mobile number already exists');
+      }
+      if (/gst/i.test(target)) {
+        throw new ConflictException('GST number already exists');
+      }
+      if (/pan/i.test(target)) {
+        throw new ConflictException('PAN already exists');
+      }
+      if (/companyName|company_name/i.test(target)) {
+        throw new ConflictException('Company name already exists');
+      }
+      throw new ConflictException('A record with these details already exists');
+    }
+    throw err;
+  }
+
+  /** Frees email/username/mobile held by deleted or orphaned tenant logins. */
+  private async releaseStaleLoginUniques() {
+    const stale = await this.prisma.manageEmployee.findMany({
+      where: {
+        OR: [
+          { isDeleted: true },
+          { isCompanyOwner: true, companyID: null },
+        ],
+      },
+      select: { id: true },
+    });
+    const ids = stale.map((row) => row.id);
+    if (ids.length === 0) return;
+
+    await this.prisma.employeeCredentials.deleteMany({
+      where: { employeeID: { in: ids } },
+    });
+    await this.prisma.manageEmployee.updateMany({
+      where: { id: { in: ids } },
+      data: {
+        isDeleted: true,
+        businessEmail: null,
+        personalEmail: null,
+        personalPhoneNo: null,
+        businessPhoneNo: null,
+      },
+    });
+  }
+
   async isUsernameAvailable(username?: string, excludeOwnerId?: number) {
     const normalized = this.normalizeUsername(username);
     if (!normalized) {
@@ -45,6 +123,7 @@ export class CompanyService {
     const existingCred = await this.prisma.employeeCredentials.findFirst({
       where: {
         username: { equals: normalized, mode: 'insensitive' },
+        employee: this.liveEmployeeScope(excludeOwnerId),
         ...(excludeOwnerId
           ? { employeeID: { not: excludeOwnerId } }
           : {}),
@@ -56,7 +135,7 @@ export class CompanyService {
     }
 
     const existingUser = await this.prisma.user.findFirst({
-      where: { username: { equals: normalized, mode: 'insensitive' } },
+      where: this.activeUsernameUserWhere(normalized),
       select: { id: true },
     });
     if (existingUser) {
@@ -69,8 +148,7 @@ export class CompanyService {
   private async assertEmailAvailable(email: string, excludeEmployeeId?: number) {
     const existing = await this.prisma.manageEmployee.findFirst({
       where: {
-        isDeleted: false,
-        ...(excludeEmployeeId ? { id: { not: excludeEmployeeId } } : {}),
+        ...this.liveEmployeeScope(excludeEmployeeId),
         OR: [
           { businessEmail: { equals: email, mode: 'insensitive' } },
           { personalEmail: { equals: email, mode: 'insensitive' } },
@@ -83,15 +161,110 @@ export class CompanyService {
     }
   }
 
+  private async assertMobileAvailable(mobile: string, excludeEmployeeId?: number) {
+    const digits = this.digitsOnly(mobile);
+    const trimmed = String(mobile || '').trim();
+    if (!digits && !trimmed) return;
+
+    const candidates = await this.prisma.manageEmployee.findMany({
+      where: {
+        ...this.liveEmployeeScope(excludeEmployeeId),
+        OR: [
+          ...(trimmed ? [{ personalPhoneNo: trimmed }, { businessPhoneNo: trimmed }] : []),
+          ...(digits
+            ? [
+                { personalPhoneNo: { contains: digits } },
+                { businessPhoneNo: { contains: digits } },
+              ]
+            : []),
+        ],
+      },
+      select: { id: true, personalPhoneNo: true, businessPhoneNo: true },
+      take: 50,
+    });
+    const taken = candidates.some((row) => {
+      const personal = this.digitsOnly(row.personalPhoneNo);
+      const business = this.digitsOnly(row.businessPhoneNo);
+      return (
+        (digits && (personal === digits || business === digits)) ||
+        String(row.personalPhoneNo || '').trim() === trimmed ||
+        String(row.businessPhoneNo || '').trim() === trimmed
+      );
+    });
+    if (taken) {
+      throw new ConflictException('Mobile number already exists');
+    }
+  }
+
+  private async assertPrimaryContactsAvailable(contacts?: PrimaryContactDto[]) {
+    if (!Array.isArray(contacts) || contacts.length === 0) return;
+
+    const seenEmails = new Set<string>();
+    const seenUsernames = new Set<string>();
+    const seenMobiles = new Set<string>();
+
+    for (const contact of contacts) {
+      const email = this.normalizeEmail(contact.email);
+      const mobile = String(contact.mobile || '').trim();
+      const username = this.normalizeUsername(contact.username) || email;
+      const firstName = String(contact.firstName || '').trim();
+      const lastName = String(contact.lastName || '').trim();
+      const isFilled = !!(email || mobile || firstName || lastName || username);
+      if (!isFilled) continue;
+      if (!email || !mobile) {
+        throw new BadRequestException(
+          'Each filled primary contact requires email and mobile',
+        );
+      }
+      if (seenEmails.has(email)) {
+        throw new ConflictException('Duplicate email in primary contacts');
+      }
+      if (seenUsernames.has(username)) {
+        throw new ConflictException('Duplicate username in primary contacts');
+      }
+      const mobileKey = this.digitsOnly(mobile) || mobile;
+      if (seenMobiles.has(mobileKey)) {
+        throw new ConflictException('Duplicate mobile number in primary contacts');
+      }
+      seenEmails.add(email);
+      seenUsernames.add(username);
+      seenMobiles.add(mobileKey);
+
+      await this.assertEmailAvailable(email);
+      await this.assertMobileAvailable(mobile);
+      const available = await this.isUsernameAvailable(username);
+      if (!available.available) {
+        throw new ConflictException(available.message || 'Username already exists');
+      }
+    }
+  }
+
   private employeeInitialPassword(personalPhoneNo?: string | null): string {
     return this.digitsOnly(personalPhoneNo) || String(personalPhoneNo || '').trim();
   }
 
   async create(data: CreateCompanyDto) {
     const { primaryContacts, ...companyData } = data;
-    const company = await this.prisma.company.create({ data: companyData as any });
-    await this.processPrimaryContacts(company.id, primaryContacts);
-    return company;
+    await this.releaseStaleLoginUniques();
+    await this.assertPrimaryContactsAvailable(primaryContacts);
+
+    let company;
+    try {
+      company = await this.prisma.company.create({ data: companyData as any });
+    } catch (err) {
+      this.rethrowAsHttp(err);
+    }
+    try {
+      await this.processPrimaryContacts(company!.id, primaryContacts);
+      return company;
+    } catch (err) {
+      try {
+        await this.remove(company.id);
+      } catch (cleanupErr) {
+        console.error('Rolled-back tenant cleanup failed:', cleanupErr);
+      }
+      this.rethrowAsHttp(err);
+    }
   }
 
   async listOwners(companyId?: number) {
@@ -278,13 +451,17 @@ export class CompanyService {
 
     const username = this.normalizeUsername(dto.username) || email;
     await this.assertEmailAvailable(email);
+    await this.assertMobileAvailable(mobile);
     const existingCred = await this.prisma.employeeCredentials.findFirst({
-      where: { username: { equals: username, mode: 'insensitive' } },
+      where: {
+        username: { equals: username, mode: 'insensitive' },
+        employee: this.liveEmployeeScope(),
+      },
     });
     if (existingCred) throw new ConflictException('Username already exists');
 
     const existingUser = await this.prisma.user.findFirst({
-      where: { username: { equals: username, mode: 'insensitive' } },
+      where: this.activeUsernameUserWhere(username),
     });
     if (existingUser) throw new ConflictException('Username already exists');
 
@@ -331,7 +508,9 @@ export class CompanyService {
       ? this.mapPermissionRows(dto.permissions)
       : [];
 
-    const created = await this.prisma.$transaction(async (tx) => {
+    let created;
+    try {
+      created = await this.prisma.$transaction(async (tx) => {
       let designationId: number | null = null;
       if (ownerTitle) {
         const existingDesg = await tx.designations.findFirst({
@@ -431,6 +610,9 @@ export class CompanyService {
         },
       });
     });
+    } catch (err) {
+      this.rethrowAsHttp(err);
+    }
 
     return {
       ...created,
@@ -482,12 +664,13 @@ export class CompanyService {
         where: {
           username: { equals: nextUsername, mode: 'insensitive' },
           employeeID: { not: owner.id },
+          employee: this.liveEmployeeScope(owner.id),
         },
       });
       if (taken) throw new ConflictException('Username already exists');
 
       const takenUser = await this.prisma.user.findFirst({
-        where: { username: { equals: nextUsername, mode: 'insensitive' } },
+        where: this.activeUsernameUserWhere(nextUsername),
         select: { id: true },
       });
       if (takenUser) throw new ConflictException('Username already exists');
@@ -914,6 +1097,54 @@ export class CompanyService {
     }
 
     try {
+      await this.releaseStaleLoginUniques();
+
+      const employees = await this.prisma.manageEmployee.findMany({
+        where: { companyID: companyId },
+        select: { id: true },
+      });
+      const employeeIds = employees.map((row) => row.id);
+      if (employeeIds.length > 0) {
+        await this.prisma.employeeCredentials.deleteMany({
+          where: { employeeID: { in: employeeIds } },
+        });
+        await this.prisma.manageEmployee.updateMany({
+          where: { id: { in: employeeIds } },
+          data: {
+            isDeleted: true,
+            businessEmail: null,
+            personalEmail: null,
+            personalPhoneNo: null,
+            businessPhoneNo: null,
+          },
+        });
+      }
+
+      const companyUsers = await this.prisma.user.findMany({
+        where: { companyID: companyId },
+        select: { id: true, username: true, email: true, contactNo: true },
+      });
+      for (const row of companyUsers) {
+        try {
+          await this.prisma.user.update({
+            where: { id: row.id },
+            data: {
+              isActive: false,
+              companyID: null,
+              username: `deleted_${row.id}_${row.username || 'user'}`.slice(0, 180),
+              email: row.email
+                ? `deleted_${row.id}_${row.email}`.slice(0, 180)
+                : `deleted_${row.id}@deleted.local`,
+              contactNo: row.contactNo
+                ? `deleted_${row.id}_${row.contactNo}`.slice(0, 40)
+                : null,
+            },
+          });
+        } catch (userCleanupErr) {
+          console.error('Company user unique cleanup failed:', userCleanupErr);
+        }
+      }
+
       await this.prisma.$executeRawUnsafe(
         `
         DO $del$

@@ -55,7 +55,12 @@ export type CompanyHubTab = {
     | "paygrade"
     | "forms"
     | "email-templates"
-    | "company-info";
+    | "company-info"
+    | "branches"
+    | "devices"
+    | "import-attendance"
+    | "customers"
+    | "sites";
   comingSoon?: boolean;
 };
 
@@ -76,6 +81,8 @@ export const COMPANY_HUB_TILES: CompanyHubTile[] = [
     tabs: [
       { id: "dashboard", label: "Dashboard", embed: "dashboard" },
       { id: "hierarchy", label: "Company Hierarchy", embed: "hierarchy" },
+      { id: "branches", label: "Branches", embed: "branches" },
+      { id: "devices", label: "Attendance Devices", embed: "devices" },
       { id: "directory", label: "Employee Directory", embed: "employees" },
       { id: "holidays", label: "Holiday Calendar", embed: "public-holiday" },
     ],
@@ -124,6 +131,7 @@ export const COMPANY_HUB_TILES: CompanyHubTile[] = [
       { id: "policy", label: "Attendance Policy", embed: "attendance-policy" },
       { id: "roster", label: "Roster", embed: "roster" },
       { id: "regularisation", label: "Regularisation", embed: "regularisation" },
+      { id: "import", label: "Import Attendance", embed: "import-attendance" },
     ],
   },
   {
@@ -219,7 +227,11 @@ export const COMPANY_HUB_TILES: CompanyHubTile[] = [
     label: "Task Management",
     icon: "solar:checklist-bold-duotone",
     iconClassName: "text-fuchsia-700",
-    tabs: [{ id: "tasks", label: "Tasks", embed: "tasks" }],
+    tabs: [
+      { id: "tasks", label: "Tasks", embed: "tasks" },
+      { id: "customers", label: "Customers", embed: "customers" },
+      { id: "sites", label: "Sites", embed: "sites" },
+    ],
   },
   {
     id: "crm",

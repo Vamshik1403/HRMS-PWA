@@ -27,6 +27,7 @@ import {
   ClipboardList,
   History,
   DollarSign,
+  Fingerprint,
   type LucideIcon,
 } from "lucide-react";
 import type { EmpModuleId } from "./emp-portal-workspaces";
@@ -353,6 +354,22 @@ export const EMP_SIDEBAR_NAVIGATION: EmpSidebarNavGroup[] = [
         moduleId: "company",
         companyAccessOnly: true,
       },
+      {
+        id: "company-branches",
+        label: "Branches",
+        href: "/my-company/company?tab=branches",
+        icon: MapPin,
+        companyAccessOnly: true,
+        show: canModule("BRANCHES"),
+      },
+      {
+        id: "company-devices",
+        label: "Attendance Devices",
+        href: "/my-company/company?tab=devices",
+        icon: Fingerprint,
+        companyAccessOnly: true,
+        show: canModule("DEVICES"),
+      },
     ],
   },
   {
@@ -418,6 +435,21 @@ export function isEmpNavItemActive(
 ): boolean {
   const tab = searchParams.get("tab");
 
+  if (item.id === "company-branches") {
+    return (
+      (pathname === "/my-company/company" && tab === "branches") ||
+      pathname === "/branches" ||
+      pathname.startsWith("/branches/")
+    );
+  }
+  if (item.id === "company-devices") {
+    return (
+      (pathname === "/my-company/company" && tab === "devices") ||
+      pathname === "/devices" ||
+      pathname.startsWith("/devices/")
+    );
+  }
+
   // Keep My Company highlighted across the tile hub and legacy company paths.
   if (
     item.moduleId === "company" ||
@@ -425,6 +457,12 @@ export function isEmpNavItemActive(
     item.href === "/empCompany" ||
     item.href === "/empCompanyDashboard"
   ) {
+    if (
+      pathname === "/my-company/company" &&
+      (tab === "branches" || tab === "devices")
+    ) {
+      return false;
+    }
     return isCompanyPath(pathname);
   }
 

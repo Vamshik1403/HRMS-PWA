@@ -38,6 +38,7 @@ export class TaskCustomerSitesService {
       where.OR = [
         { branchName: { contains: search, mode: 'insensitive' } },
         { city: { contains: search, mode: 'insensitive' } },
+        { siteCode: { contains: search, mode: 'insensitive' } },
       ];
     }
     const [items, total] = await Promise.all([
@@ -46,7 +47,7 @@ export class TaskCustomerSitesService {
         orderBy: { createdAt: 'desc' },
         skip: (page - 1) * limit,
         take: limit,
-        include: { customer: { select: { id: true, customerCode: true, customerName: true } } },
+        include: { customer: { select: { id: true, customerCode: true, customerName: true } }, contacts: true, notes: true },
       }),
       this.prisma.taskCustomerSite.count({ where }),
     ]);
@@ -67,7 +68,7 @@ export class TaskCustomerSitesService {
     assertCanManageTaskModule(viewer);
     const row = await this.prisma.taskCustomerSite.findFirst({
       where: { id, isDeleted: false },
-      include: { customer: true },
+      include: { customer: true, contacts: true, notes: true },
     });
     if (!row) throw new NotFoundException('Site not found');
     if (viewer.role !== 'SUPERADMIN' && viewer.companyID && row.customer?.companyID !== viewer.companyID) {
@@ -79,21 +80,48 @@ export class TaskCustomerSitesService {
   async create(dto: CreateTaskCustomerSiteDto, query: Record<string, string | undefined>) {
     const viewer = parseViewer(query);
     assertCanManageTaskModule(viewer);
-    await this.assertCustomerAccess(dto.customerID, viewer);
-    return this.prisma.taskCustomerSite.create({
+    const customer = await this.assertCustomerAccess(dto.customerID, viewer);
+    const created = await this.prisma.taskCustomerSite.create({
       data: {
         customerID: dto.customerID,
+        companyID: dto.companyID ?? customer.companyID ?? null,
+        siteCode: dto.siteCode?.trim() || null,
         branchName: dto.branchName,
         address: dto.address,
         city: dto.city,
         state: dto.state,
         pincode: dto.pincode,
         country: dto.country,
+        gstNo: dto.gstNo,
         latitude: dto.latitude,
         longitude: dto.longitude,
+        contacts: dto.contacts?.length
+          ? {
+              create: dto.contacts
+                .filter((c) => c.contactPerson?.trim() && c.contactNumber?.trim())
+                .map((c) => ({
+                  contactPerson: c.contactPerson.trim(),
+                  contactNumber: c.contactNumber.trim(),
+                  designation: c.designation?.trim() || null,
+                  email: c.email?.trim() || null,
+                })),
+            }
+          : undefined,
+        notes: dto.notes?.length
+          ? {
+              create: dto.notes
+                .filter((n) => n.title?.trim())
+                .map((n) => ({
+                  title: n.title.trim(),
+                  description: n.description?.trim() || null,
+                  createdBy: n.createdBy?.trim() || null,
+                })),
+            }
+          : undefined,
       },
-      include: { customer: { select: { id: true, customerCode: true, customerName: true } } },
+      include: { customer: { select: { id: true, customerCode: true, customerName: true } }, contacts: true, notes: true },
     });
+    return created;
   }
 
   async update(id: number, dto: UpdateTaskCustomerSiteDto, query: Record<string, string | undefined>) {
@@ -103,21 +131,53 @@ export class TaskCustomerSitesService {
     if (dto.customerID && dto.customerID !== existing.customerID) {
       await this.assertCustomerAccess(dto.customerID, viewer);
     }
-    return this.prisma.taskCustomerSite.update({
+    const updated = await this.prisma.taskCustomerSite.update({
       where: { id },
       data: {
         customerID: dto.customerID,
+        companyID: dto.companyID ?? existing.companyID ?? existing.customer?.companyID ?? undefined,
+        siteCode: dto.siteCode,
         branchName: dto.branchName,
         address: dto.address,
         city: dto.city,
         state: dto.state,
         pincode: dto.pincode,
         country: dto.country,
+        gstNo: dto.gstNo,
         latitude: dto.latitude,
         longitude: dto.longitude,
       },
-      include: { customer: { select: { id: true, customerCode: true, customerName: true } } },
     });
+    if (dto.contacts) {
+      await this.prisma.taskCustomerSiteContact.deleteMany({ where: { siteID: id } });
+      const rows = dto.contacts.filter((c) => c.contactPerson?.trim() && c.contactNumber?.trim());
+      if (rows.length) {
+        await this.prisma.taskCustomerSiteContact.createMany({
+          data: rows.map((c) => ({
+            siteID: id,
+            contactPerson: c.contactPerson.trim(),
+            contactNumber: c.contactNumber.trim(),
+            designation: c.designation?.trim() || null,
+            email: c.email?.trim() || null,
+          })),
+        });
+      }
+    }
+    if (dto.notes) {
+      await this.prisma.taskCustomerSiteNote.deleteMany({ where: { siteID: id } });
+      const notes = dto.notes.filter((n) => n.title?.trim());
+      if (notes.length) {
+        await this.prisma.taskCustomerSiteNote.createMany({
+          data: notes.map((n) => ({
+            siteID: id,
+            title: n.title.trim(),
+            description: n.description?.trim() || null,
+            createdBy: n.createdBy?.trim() || null,
+          })),
+        });
+      }
+    }
+    return this.findOne(id, query) ?? updated;
   }
 
   async remove(id: number, query: Record<string, string | undefined>) {
@@ -141,6 +201,7 @@ export class TaskCustomerSitesService {
       where.OR = [
         { branchName: { contains: q, mode: 'insensitive' } },
         { city: { contains: q, mode: 'insensitive' } },
+        { siteCode: { contains: q, mode: 'insensitive' } },
       ];
     }
     return this.prisma.taskCustomerSite.findMany({
@@ -150,7 +211,10 @@ export class TaskCustomerSitesService {
       select: {
         id: true,
         branchName: true,
+        siteCode: true,
+        gstNo: true,
         city: true,
+        address: true,
         customerID: true,
         customer: { select: { id: true, customerCode: true, customerName: true } },
       },

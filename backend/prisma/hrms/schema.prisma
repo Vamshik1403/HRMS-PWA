@@ -247,7 +247,10 @@ model Company {
   leavePolicy                    leavePolicy[]
   leavePolicyHoliday             leavePolicyHoliday[]
   taskCustomers                  TaskCustomer[]
+  taskCustomerSites              TaskCustomerSite[]
   taskProjects                   TaskProject[]
+  taskWorkscopeCategories        TaskWorkscopeCategory[]
+  taskProducts                   TaskProduct[]
   companyModules                 CompanyModule[]
   userCompanies                  UserCompany[]
   subscriptions                  CompanySubscription[]
@@ -911,6 +914,7 @@ model ManageEmployee {
   absentDeclarations                 EmpAbsentDeclaration[]
   empLeaveBalance                    EmpLeaveBalance?
   taskAssignments                    TaskAssignment[]
+  taskEngineerAssignments            TaskEngineerAssignment[]
   employeeBankDetails                EmployeeBankDetails[]
   employeeDocuments                  EmployeeDocument[]
   approvalWorkflowConditionEmployees ApprovalWorkflowConditionEmployee[]
@@ -2286,83 +2290,172 @@ model EmpAbsentDeclaration {
 // ==================== TASK MANAGEMENT SYSTEM ====================
 
 model TaskCustomer {
-  id                Int                @id @default(autoincrement())
-  serviceProviderID Int?
-  companyID         Int?
-  branchesID        Int?
-  customerCode      String             @unique @db.VarChar(32)
-  customerName      String             @db.VarChar(255)
-  address           String?
-  city              String?            @db.VarChar(128)
-  state             String?            @db.VarChar(128)
-  pincode           String?            @db.VarChar(32)
-  country           String?            @db.VarChar(128)
-  createdByUserID   Int?
-  isDeleted         Boolean            @default(false)
-  createdAt         DateTime           @default(now())
-  updatedAt         DateTime           @updatedAt
-  company           Company?           @relation(fields: [companyID], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  branches          Branches?          @relation(fields: [branchesID], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  serviceProvider   ServiceProvider?   @relation(fields: [serviceProviderID], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  sites             TaskCustomerSite[]
-  tasks             TaskProject[]
+  id                        Int                   @id @default(autoincrement())
+  serviceProviderID         Int?
+  companyID                 Int?
+  branchesID                Int?
+  customerCode              String                @unique @db.VarChar(64)
+  customerName              String                @db.VarChar(255)
+  addressType               String?               @db.VarChar(64)
+  address                   String?
+  city                      String?               @db.VarChar(128)
+  state                     String?               @db.VarChar(128)
+  pincode                   String?               @db.VarChar(32)
+  country                   String?               @db.VarChar(128)
+  gstNo                     String?               @db.VarChar(32)
+  erpAddressBookId          Int?                  @unique
+  relationshipManagerName   String?               @db.VarChar(255)
+  relationshipManagerEmail  String?               @db.VarChar(255)
+  createdByUserID           Int?
+  isDeleted                 Boolean               @default(false)
+  createdAt                 DateTime              @default(now())
+  updatedAt                 DateTime              @updatedAt
+  company                   Company?              @relation(fields: [companyID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  branches                  Branches?             @relation(fields: [branchesID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  serviceProvider           ServiceProvider?      @relation(fields: [serviceProviderID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  sites                     TaskCustomerSite[]
+  tasks                     TaskProject[]
+  contacts                  TaskCustomerContact[]
 
   @@index([companyID])
   @@index([customerName])
   @@index([isDeleted])
 }
 
-model TaskCustomerSite {
-  id         Int           @id @default(autoincrement())
-  customerID Int
-  branchName String        @db.VarChar(255)
-  address    String?
-  city       String?       @db.VarChar(128)
-  state      String?       @db.VarChar(128)
-  pincode    String?       @db.VarChar(32)
-  country    String?       @db.VarChar(128)
-  latitude   String?       @db.VarChar(64)
-  longitude  String?       @db.VarChar(64)
-  isDeleted  Boolean       @default(false)
-  createdAt  DateTime      @default(now())
-  updatedAt  DateTime      @updatedAt
-  customer   TaskCustomer  @relation(fields: [customerID], references: [id], onDelete: Cascade)
-  tasks      TaskProject[]
+model TaskCustomerContact {
+  id             Int          @id @default(autoincrement())
+  customerID     Int
+  contactPerson  String       @db.VarChar(255)
+  contactNumber  String       @db.VarChar(64)
+  designation    String?      @db.VarChar(128)
+  email          String?      @db.VarChar(255)
+  createdAt      DateTime     @default(now())
+  customer       TaskCustomer @relation(fields: [customerID], references: [id], onDelete: Cascade)
 
+  @@index([customerID])
+}
+
+model TaskCustomerSite {
+  id         Int                       @id @default(autoincrement())
+  companyID  Int?
+  customerID Int
+  siteCode   String?                   @unique @db.VarChar(64)
+  erpSiteId  Int?                      @unique
+  branchName String                    @db.VarChar(255)
+  address    String?
+  city       String?                   @db.VarChar(128)
+  state      String?                   @db.VarChar(128)
+  pincode    String?                   @db.VarChar(32)
+  country    String?                   @db.VarChar(128)
+  gstNo      String?                   @db.VarChar(32)
+  latitude   String?                   @db.VarChar(64)
+  longitude  String?                   @db.VarChar(64)
+  isDeleted  Boolean                   @default(false)
+  createdAt  DateTime                  @default(now())
+  updatedAt  DateTime                  @updatedAt
+  company    Company?                  @relation(fields: [companyID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  customer   TaskCustomer              @relation(fields: [customerID], references: [id], onDelete: Cascade)
+  tasks      TaskProject[]
+  contacts   TaskCustomerSiteContact[]
+  notes      TaskCustomerSiteNote[]
+
+  @@index([companyID])
   @@index([customerID])
   @@index([isDeleted])
 }
 
+model TaskCustomerSiteContact {
+  id             Int              @id @default(autoincrement())
+  siteID         Int
+  contactPerson  String           @db.VarChar(255)
+  contactNumber  String           @db.VarChar(64)
+  designation    String?          @db.VarChar(128)
+  email          String?          @db.VarChar(255)
+  createdAt      DateTime         @default(now())
+  site           TaskCustomerSite @relation(fields: [siteID], references: [id], onDelete: Cascade)
+
+  @@index([siteID])
+}
+
+model TaskCustomerSiteNote {
+  id          Int              @id @default(autoincrement())
+  siteID      Int
+  title       String           @db.VarChar(255)
+  description String?
+  createdBy   String?          @db.VarChar(255)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  site        TaskCustomerSite @relation(fields: [siteID], references: [id], onDelete: Cascade)
+
+  @@index([siteID])
+}
+
+model TaskWorkscopeCategory {
+  id                     Int                   @id @default(autoincrement())
+  companyID              Int?
+  workscopeCategoryName  String                @db.VarChar(255)
+  createdAt              DateTime              @default(now())
+  company                Company?              @relation(fields: [companyID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  details                TaskWorkscopeDetail[]
+
+  @@unique([companyID, workscopeCategoryName])
+  @@index([companyID])
+}
+
+model TaskProduct {
+  id          Int             @id @default(autoincrement())
+  companyID   Int?
+  productName String          @db.VarChar(255)
+  productCode String?         @db.VarChar(64)
+  createdAt   DateTime        @default(now())
+  company     Company?        @relation(fields: [companyID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  inventories TaskInventory[]
+
+  @@unique([companyID, productName])
+  @@index([companyID])
+}
+
 model TaskProject {
-  id                  Int               @id @default(autoincrement())
+  id                  Int                      @id @default(autoincrement())
   serviceProviderID   Int?
   companyID           Int?
-  taskCode            String            @unique @db.VarChar(32)
+  taskCode            String                   @unique @db.VarChar(64)
+  erpTaskId           Int?                     @unique
   departmentID        Int?
-  taskType            String            @db.VarChar(64)
+  taskType            String                   @db.VarChar(64)
   customerID          Int?
   siteID              Int?
-  taskName            String            @db.VarChar(255)
+  taskName            String                   @db.VarChar(255)
   description         String?
+  attachment          String?                  @db.VarChar(512)
   scheduleDateTime    DateTime?
-  priority            String            @default("Medium") @db.VarChar(32)
+  priority            String                   @default("Medium") @db.VarChar(32)
   dueDateTime         DateTime?
-  status              String            @default("Open") @db.VarChar(32)
+  status              String                   @default("Open") @db.VarChar(64)
+  createdByName       String?                  @db.VarChar(255)
   createdByUserID     Int?
   createdByEmployeeID Int?
-  isDeleted           Boolean           @default(false)
-  createdAt           DateTime          @default(now())
-  updatedAt           DateTime          @updatedAt
-  company             Company?          @relation(fields: [companyID], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  serviceProvider     ServiceProvider?  @relation(fields: [serviceProviderID], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  department          Departments?      @relation(fields: [departmentID], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  customer            TaskCustomer?     @relation(fields: [customerID], references: [id], onDelete: SetNull)
-  site                TaskCustomerSite? @relation(fields: [siteID], references: [id], onDelete: SetNull)
-  createdByEmployee   ManageEmployee?   @relation("TaskCreatorEmployee", fields: [createdByEmployeeID], references: [id], onDelete: SetNull)
+  isDeleted           Boolean                  @default(false)
+  createdAt           DateTime                 @default(now())
+  updatedAt           DateTime                 @updatedAt
+  company             Company?                 @relation(fields: [companyID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  serviceProvider     ServiceProvider?         @relation(fields: [serviceProviderID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  department          Departments?             @relation(fields: [departmentID], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  customer            TaskCustomer?            @relation(fields: [customerID], references: [id], onDelete: SetNull)
+  site                TaskCustomerSite?        @relation(fields: [siteID], references: [id], onDelete: SetNull)
+  createdByEmployee   ManageEmployee?          @relation("TaskCreatorEmployee", fields: [createdByEmployeeID], references: [id], onDelete: SetNull)
   assignments         TaskAssignment[]
+  engineerAssignments TaskEngineerAssignment[]
   remarks             TaskRemark[]
   chats               TaskChat[]
   activities          TaskActivityLog[]
+  contacts            TaskProjectContact[]
+  workscopeDetails    TaskWorkscopeDetail[]
+  schedules           TaskSchedule[]
+  images              TaskImage[]
+  notes               TaskNote[]
+  inventories         TaskInventory[]
+  purchase            TaskPurchase?
 
   @@index([companyID])
   @@index([status])
@@ -2384,17 +2477,175 @@ model TaskAssignment {
   @@index([manageEmployeeID])
 }
 
+model TaskEngineerAssignment {
+  id               Int             @id @default(autoincrement())
+  taskID           Int
+  manageEmployeeID Int?
+  engineerName     String?         @db.VarChar(255)
+  engineerEmail    String?         @db.VarChar(255)
+  engineerPhone    String?         @db.VarChar(64)
+  proposedDateTime DateTime?
+  priority         String?         @db.VarChar(32)
+  status           String?         @db.VarChar(64)
+  notes            String?
+  assignedDate     DateTime?
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+  task             TaskProject     @relation(fields: [taskID], references: [id], onDelete: Cascade)
+  manageEmployee   ManageEmployee? @relation(fields: [manageEmployeeID], references: [id], onDelete: SetNull)
+
+  @@index([taskID])
+  @@index([manageEmployeeID])
+}
+
 model TaskRemark {
   id         Int         @id @default(autoincrement())
   taskID     Int
   userID     Int?
   employeeID Int?
   authorName String?     @db.VarChar(255)
+  createdBy  String?     @db.VarChar(255)
   remark     String
+  status     String?     @db.VarChar(64)
   createdAt  DateTime    @default(now())
   task       TaskProject @relation(fields: [taskID], references: [id], onDelete: Cascade)
 
   @@index([taskID])
+}
+
+model TaskProjectContact {
+  id            Int         @id @default(autoincrement())
+  taskID        Int
+  contactName   String      @db.VarChar(255)
+  contactNumber String      @db.VarChar(64)
+  contactEmail  String?     @db.VarChar(255)
+  createdAt     DateTime    @default(now())
+  task          TaskProject @relation(fields: [taskID], references: [id], onDelete: Cascade)
+
+  @@index([taskID])
+}
+
+model TaskWorkscopeDetail {
+  id                   Int                    @id @default(autoincrement())
+  taskID               Int
+  workscopeCategoryID  Int?
+  workscopeDetails     String?
+  extraNote            String?
+  createdAt            DateTime               @default(now())
+  task                 TaskProject            @relation(fields: [taskID], references: [id], onDelete: Cascade)
+  category             TaskWorkscopeCategory? @relation(fields: [workscopeCategoryID], references: [id], onDelete: SetNull)
+
+  @@index([taskID])
+}
+
+model TaskSchedule {
+  id               Int         @id @default(autoincrement())
+  taskID           Int
+  proposedDateTime DateTime?
+  priority         String?     @db.VarChar(32)
+  createdAt        DateTime    @default(now())
+  task             TaskProject @relation(fields: [taskID], references: [id], onDelete: Cascade)
+
+  @@index([taskID])
+}
+
+model TaskImage {
+  id             Int         @id @default(autoincrement())
+  taskID         Int
+  filename       String      @db.VarChar(255)
+  filepath       String?     @db.VarChar(512)
+  fileUrl        String?     @db.VarChar(1024)
+  mimeType       String?     @db.VarChar(128)
+  fileSize       Int?
+  uploadedBy     String?     @db.VarChar(255)
+  uploadedByName String?     @db.VarChar(255)
+  uploadedAt     DateTime    @default(now())
+  erpFilepath    String?     @db.VarChar(512)
+  task           TaskProject @relation(fields: [taskID], references: [id], onDelete: Cascade)
+
+  @@index([taskID])
+}
+
+model TaskNote {
+  id             Int         @id @default(autoincrement())
+  taskID         Int
+  filename       String?     @db.VarChar(255)
+  title          String?     @db.VarChar(255)
+  description    String?
+  filepath       String?     @db.VarChar(512)
+  fileUrl        String?     @db.VarChar(1024)
+  mimeType       String?     @db.VarChar(128)
+  fileSize       Int?
+  note           String?
+  uploadedBy     String?     @db.VarChar(255)
+  uploadedByName String?     @db.VarChar(255)
+  uploadedAt     DateTime    @default(now())
+  erpFilepath    String?     @db.VarChar(512)
+  task           TaskProject @relation(fields: [taskID], references: [id], onDelete: Cascade)
+
+  @@index([taskID])
+}
+
+model TaskInventory {
+  id                 Int          @id @default(autoincrement())
+  taskID             Int
+  productTypeId      Int?
+  makeModel          String?      @db.VarChar(255)
+  snMac              String?      @db.VarChar(255)
+  description        String?
+  purchaseDate       DateTime?
+  warrantyPeriod     String?      @db.VarChar(128)
+  warrantyStatus     String?      @db.VarChar(32)
+  thirdPartyPurchase Boolean      @default(false)
+  createdAt          DateTime     @default(now())
+  task               TaskProject  @relation(fields: [taskID], references: [id], onDelete: Cascade)
+  product            TaskProduct? @relation(fields: [productTypeId], references: [id], onDelete: SetNull)
+
+  @@index([taskID])
+}
+
+model TaskPurchase {
+  id          Int                       @id @default(autoincrement())
+  taskID      Int                       @unique
+  purchaseType String?                  @db.VarChar(32)
+  customerName String?                  @db.VarChar(255)
+  address     String?
+  createdAt   DateTime                  @default(now())
+  task        TaskProject               @relation(fields: [taskID], references: [id], onDelete: Cascade)
+  products    TaskPurchaseProduct[]
+  attachments TaskPurchaseAttachment[]
+}
+
+model TaskPurchaseProduct {
+  id             Int          @id @default(autoincrement())
+  taskPurchaseID Int
+  make           String?      @db.VarChar(255)
+  model          String?      @db.VarChar(255)
+  description    String?
+  warranty       String?      @db.VarChar(128)
+  rate           String?      @db.VarChar(64)
+  vendor         String?      @db.VarChar(255)
+  validity       String?      @db.VarChar(128)
+  availability   String?      @db.VarChar(128)
+  createdAt      DateTime     @default(now())
+  purchase       TaskPurchase @relation(fields: [taskPurchaseID], references: [id], onDelete: Cascade)
+
+  @@index([taskPurchaseID])
+}
+
+model TaskPurchaseAttachment {
+  id             Int          @id @default(autoincrement())
+  taskPurchaseID Int
+  filename       String       @db.VarChar(255)
+  filepath       String?      @db.VarChar(512)
+  fileUrl        String?      @db.VarChar(1024)
+  mimeType       String?      @db.VarChar(128)
+  fileSize       Int?
+  uploadedAt     DateTime     @default(now())
+  erpFilepath    String?      @db.VarChar(512)
+  purchase       TaskPurchase @relation(fields: [taskPurchaseID], references: [id], onDelete: Cascade)
+
+  @@index([taskPurchaseID])
 }
 
 model TaskChat {

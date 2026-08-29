@@ -61,6 +61,29 @@ const PaygradePage = dynamic(() => import("../../monthly-pay-grade/page"), { ssr
 const FormsPage = dynamic(() => import("../../forms/page"), { ssr: false });
 const EmailTemplatesPage = dynamic(() => import("../../system-settings/email-templates/page"), { ssr: false });
 const CompanyInfoPage = dynamic(() => import("../../system-settings/general/page"), { ssr: false });
+const BranchManagement = dynamic(
+  () => import("../../branches/BranchManagement").then((m) => m.BranchManagement),
+  { ssr: false },
+);
+const DeviceManagement = dynamic(
+  () => import("../../devices/DeviceManagement").then((m) => m.DeviceManagement),
+  { ssr: false },
+);
+const ImportAttendanceManagement = dynamic(
+  () =>
+    import("../../import-attendance/ImportAttendanceManagement").then(
+      (m) => m.ImportAttendanceManagement,
+    ),
+  { ssr: false },
+);
+const CustomerManagement = dynamic(
+  () => import("../../task-customers/CustomerManagement"),
+  { ssr: false },
+);
+const SiteManagement = dynamic(
+  () => import("../../task-customer-sites/SiteManagement"),
+  { ssr: false },
+);
 
 function ComingSoon({ label }: { label: string }) {
   return (
@@ -142,6 +165,16 @@ function HubEmbed({ tab }: { tab: CompanyHubTab }) {
       return <EmailTemplatesPage />;
     case "company-info":
       return <CompanyInfoPage />;
+    case "branches":
+      return <BranchManagement />;
+    case "devices":
+      return <DeviceManagement />;
+    case "import-attendance":
+      return <ImportAttendanceManagement />;
+    case "customers":
+      return <CustomerManagement />;
+    case "sites":
+      return <SiteManagement />;
     default:
       return <ComingSoon label={tab.label} />;
   }

@@ -168,6 +168,41 @@ const emptyPrimaryContact = (): PrimaryContactRow => ({
   setAsCompanyAdmin: false,
 })
 
+function apiErrorMessage(raw: unknown, fallback: string): string {
+  const text = typeof raw === "string" ? raw.trim() : ""
+  if (!text) return fallback
+
+  const fromParsed = (parsed: any): string | null => {
+    const msg = parsed?.message
+    if (Array.isArray(msg)) {
+      const joined = msg.map((item) => String(item || "").trim()).filter(Boolean).join(". ")
+      return joined || null
+    }
+    if (typeof msg === "string" && msg.trim()) return msg.trim()
+    return null
+  }
+
+  try {
+    const parsed = JSON.parse(text)
+    const extracted = fromParsed(parsed)
+    if (extracted) return extracted
+  } catch {
+    const messageMatch = text.match(/"message"\s*:\s*"([^"]+)"/)
+    if (messageMatch?.[1]) return messageMatch[1]
+    const arrayMatch = text.match(/"message"\s*:\s*\[([^\]]+)\]/)
+    if (arrayMatch?.[1]) {
+      const items = arrayMatch[1]
+        .split(",")
+        .map((part) => part.replace(/["']/g, "").trim())
+        .filter(Boolean)
+      if (items.length) return items.join(". ")
+    }
+  }
+
+  if (text.length > 280 || /statusCode|stack|"error"/.test(text)) return fallback
+  return text
+}
+
 function formatCompanyDate(value?: string | Date | null) {
   if (!value) return "—"
   const d = new Date(value)
@@ -271,6 +306,7 @@ export function CompanyManagement() {
     message: string
   }>({ status: "idle", message: "" })
   const usernameCheckTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const savingRef = useRef(false)
 
   const user = useCurrentUser()
 
@@ -503,15 +539,29 @@ let filtered =
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Prevent double click / multiple submits
-    if (saving) return;
+    if (savingRef.current) return;
 
+    if ((formData as any).gstRegistrationType === "Registered" && !String(formData.gstNo || "").trim()) {
+      toast.error("GSTIN is required for Registered companies")
+      return
+    }
+
+    const filledContacts = primaryContacts.filter((row) =>
+      [row.email, row.mobile, row.firstName, row.lastName, row.username].some((v) => String(v || "").trim()),
+    )
+    for (const row of filledContacts) {
+      if (!row.email.trim() || !row.mobile.trim()) {
+        toast.error("Each filled primary contact requires Email and Mobile")
+        return
+      }
+      if (row.designation === "Other" && !row.designationOther.trim()) {
+        toast.error("Specify designation for contacts marked Other")
+        return
+      }
+    }
+
+    savingRef.current = true;
     setSaving(true);
-
-    // Safety timeout - unlock after 5 sec if API hangs
-    const saveTimeout = setTimeout(() => {
-      setSaving(false);
-    }, 5000);
 
     try {
       let companyLogoUrl = formData.companyLogoUrl || "";
@@ -527,25 +577,6 @@ let filtered =
       if (!resolvedServiceProviderID) {
         toast.error("Create a Service Provider first, then add a tenant.")
         return
-      }
-
-      if ((formData as any).gstRegistrationType === "Registered" && !String(formData.gstNo || "").trim()) {
-        toast.error("GSTIN is required for Registered companies")
-        return
-      }
-
-      const filledContacts = primaryContacts.filter((row) =>
-        [row.email, row.mobile, row.firstName, row.lastName, row.username].some((v) => String(v || "").trim()),
-      )
-      for (const row of filledContacts) {
-        if (!row.email.trim() || !row.mobile.trim()) {
-          toast.error("Each filled primary contact requires Email and Mobile")
-          return
-        }
-        if (row.designation === "Other" && !row.designationOther.trim()) {
-          toast.error("Specify designation for contacts marked Other")
-          return
-        }
       }
 
       const finalData = buildCompanyPayload(formData as Record<string, unknown>, {
@@ -578,22 +609,23 @@ let filtered =
           body: JSON.stringify(finalData),
         });
 
-      if (!res.ok) throw new Error(await res.text());
+      if (!res.ok) {
+        throw new Error(apiErrorMessage(await res.text(), "Failed to save company"));
+      }
 
       await fetchCompanies();
-      // For non-SUPERADMIN, stay in edit mode (useEffect will re-open)
       resetForm();
-setIsAddingNew(false);
-setEditingCompany(null);
+      setIsAddingNew(false);
+      setEditingCompany(null);
       toast.success("Company saved successfully");
       window.dispatchEvent(new Event("sidebar-refresh"));
     } catch (error) {
       console.error(error);
       const message =
         error instanceof Error ? error.message : "Failed to save company";
-      toast.error(message.includes("statusCode") ? "Failed to save company" : message);
+      toast.error(apiErrorMessage(message, "Failed to save company"));
     } finally {
-      clearTimeout(saveTimeout);
+      savingRef.current = false;
       setSaving(false);
     }
   };
@@ -767,26 +799,21 @@ setEditingCompany(null);
   }
 
   const handleDelete = async (id: number) => {
-    if (confirm("Are you sure you want to delete this company?")) {
-      try {
-        const res = await fetch(`/backend/company/${id}`, { method: "DELETE" })
-        if (!res.ok) {
-          const errText = await res.text()
-          let message = "Failed to delete company"
-          try {
-            const parsed = JSON.parse(errText)
-            message = parsed?.message || message
-          } catch {
-            if (errText) message = errText
-          }
-          throw new Error(message)
-        }
-        await fetchCompanies()
-        toast.success("Company deleted successfully")
-      } catch (error) {
-        console.error("Error deleting company:", error)
-        toast.error((error as any)?.message || "Failed to delete company")
+    try {
+      const res = await fetch(`/backend/company/${id}`, { method: "DELETE" })
+      if (!res.ok) {
+        throw new Error(apiErrorMessage(await res.text(), "Failed to delete company"))
       }
+      await fetchCompanies()
+      toast.success("Company deleted successfully")
+    } catch (error) {
+      console.error("Error deleting company:", error)
+      toast.error(
+        apiErrorMessage(
+          error instanceof Error ? error.message : "",
+          "Failed to delete company",
+        ),
+      )
     }
   }
 
@@ -1032,6 +1059,7 @@ setEditingCompany(null);
               ? () => handleDelete(c.id)
               : undefined
           }
+          deleteConfirmMessage="Are you sure you want to delete this company?"
           extra={
             user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER"
               ? [

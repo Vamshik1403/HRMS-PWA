@@ -24,6 +24,7 @@ import { Dialog, DialogContent, DialogTitle, DialogHeader } from "../components/
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
+import { Eye, EyeOff } from "lucide-react";
 
 // ─── Ambient Greeting Accent ───────────────────────────────────────────────────
 const _ambientCss = `
@@ -205,6 +206,63 @@ const menuCards = [
   { key: "leave", label: "Leaves", sub: "Pending approval", icon: "solar:calendar-bold-duotone", color: "bg-blue-50", iconColor: "text-blue-600", href: "/empLeaveApplication" },
 ];
 
+function ForcePasswordField({
+  label,
+  placeholder,
+  value,
+  onChange,
+  visible,
+  onToggleVisible,
+  autoComplete,
+  name,
+  visibilityLabel,
+}: {
+  label: string;
+  placeholder: string;
+  value: string;
+  onChange: (value: string) => void;
+  visible: boolean;
+  onToggleVisible: () => void;
+  autoComplete: string;
+  name: string;
+  visibilityLabel: string;
+}) {
+  return (
+    <div className="space-y-2">
+      <Label className="text-sm font-medium">{label}</Label>
+      <div className="relative">
+        <Input
+          type={visible ? "text" : "password"}
+          name={name}
+          placeholder={placeholder}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          autoComplete={autoComplete}
+          autoCorrect="off"
+          autoCapitalize="off"
+          spellCheck={false}
+          data-lpignore="true"
+          data-1p-ignore="true"
+          data-bwignore="true"
+          data-form-type="other"
+          readOnly
+          onFocus={(e) => e.currentTarget.removeAttribute("readonly")}
+          className="pr-10"
+        />
+        <button
+          type="button"
+          className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+          onClick={onToggleVisible}
+          aria-label={visible ? `Hide ${visibilityLabel}` : `Show ${visibilityLabel}`}
+          tabIndex={-1}
+        >
+          {visible ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function EmpDashboardPage() {
   return (
     <Suspense fallback={<div className="min-h-screen bg-[#f1f5f9]" />}>
@@ -248,6 +306,9 @@ function EmpDashboardPageInner() {
 
   const [forcePasswordModalOpen, setForcePasswordModalOpen] = useState(false);
   const [passwordSaving, setPasswordSaving] = useState(false);
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [passwordForm, setPasswordForm] = useState({
     currentPassword: "",
     newPassword: "",
@@ -269,6 +330,10 @@ function EmpDashboardPageInner() {
         if (mustChange) {
           setMustChangePassword(true);
           setForcePasswordModalOpen(true);
+          setPasswordForm({ currentPassword: "", newPassword: "", confirmPassword: "" });
+          setShowCurrentPassword(false);
+          setShowNewPassword(false);
+          setShowConfirmPassword(false);
         }
 
         const empId = u?.employee?.id;
@@ -609,47 +674,67 @@ function EmpDashboardPageInner() {
               You must change your temporary password before using the employee portal.
             </p>
 
-            <div className="space-y-2">
-              <Label className="text-sm font-medium">Old Password</Label>
-              <Input
-                type="password"
+            <form
+              autoComplete="off"
+              onSubmit={(e) => {
+                e.preventDefault();
+                void submitPasswordChange();
+              }}
+            >
+              {/* Absorb browser password-manager autofill (SuperAdmin creds on this origin). */}
+              <div className="absolute h-0 w-0 overflow-hidden opacity-0" aria-hidden="true">
+                <input type="text" name="username" autoComplete="username" tabIndex={-1} />
+                <input type="password" name="password" autoComplete="current-password" tabIndex={-1} />
+              </div>
+
+              <ForcePasswordField
+                label="Old Password"
                 placeholder="Enter old password"
                 value={passwordForm.currentPassword}
-                onChange={(e) => setPasswordForm((p) => ({ ...p, currentPassword: e.target.value }))}
-                autoComplete="current-password"
+                onChange={(value) => setPasswordForm((p) => ({ ...p, currentPassword: value }))}
+                visible={showCurrentPassword}
+                onToggleVisible={() => setShowCurrentPassword((v) => !v)}
+                autoComplete="off"
+                name="hrms-force-old-password"
+                visibilityLabel="old password"
               />
-            </div>
 
-            <div className="space-y-2">
-              <Label className="text-sm font-medium">New Password</Label>
-              <Input
-                type="password"
-                placeholder="Enter new password"
-                value={passwordForm.newPassword}
-                onChange={(e) => setPasswordForm((p) => ({ ...p, newPassword: e.target.value }))}
-                autoComplete="new-password"
-              />
-            </div>
+              <div className="mt-4">
+                <ForcePasswordField
+                  label="New Password"
+                  placeholder="Enter new password"
+                  value={passwordForm.newPassword}
+                  onChange={(value) => setPasswordForm((p) => ({ ...p, newPassword: value }))}
+                  visible={showNewPassword}
+                  onToggleVisible={() => setShowNewPassword((v) => !v)}
+                  autoComplete="new-password"
+                  name="hrms-force-new-password"
+                  visibilityLabel="new password"
+                />
+              </div>
 
-            <div className="space-y-2">
-              <Label className="text-sm font-medium">Confirm Password</Label>
-              <Input
-                type="password"
-                placeholder="Confirm new password"
-                value={passwordForm.confirmPassword}
-                onChange={(e) => setPasswordForm((p) => ({ ...p, confirmPassword: e.target.value }))}
-                autoComplete="new-password"
-              />
-            </div>
+              <div className="mt-4">
+                <ForcePasswordField
+                  label="Confirm Password"
+                  placeholder="Confirm new password"
+                  value={passwordForm.confirmPassword}
+                  onChange={(value) => setPasswordForm((p) => ({ ...p, confirmPassword: value }))}
+                  visible={showConfirmPassword}
+                  onToggleVisible={() => setShowConfirmPassword((v) => !v)}
+                  autoComplete="new-password"
+                  name="hrms-force-confirm-password"
+                  visibilityLabel="confirm password"
+                />
+              </div>
 
-            <Button
-              type="button"
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white"
-              disabled={passwordSaving}
-              onClick={submitPasswordChange}
-            >
-              {passwordSaving ? "Updating..." : "Update Password"}
-            </Button>
+              <Button
+                type="submit"
+                className="mt-4 w-full bg-blue-600 hover:bg-blue-700 text-white"
+                disabled={passwordSaving}
+              >
+                {passwordSaving ? "Updating..." : "Update Password"}
+              </Button>
+            </form>
           </div>
         </DialogContent>
       </Dialog>

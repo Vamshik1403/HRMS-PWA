@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { MessageSquare, Paperclip, Send, X } from "lucide-react";
 import { Button } from "../ui/button";
 import { Textarea } from "../ui/textarea";
@@ -61,13 +62,18 @@ export function TaskRemarksChatbox({
   const scrollRef = useRef<HTMLDivElement>(null);
   const [pendingAttachment, setPendingAttachment] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     if (!open || !scrollRef.current) return;
     scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
   }, [open, chats.length, chats[chats.length - 1]?.id]);
 
-  if (!open) return null;
+  if (!open || !mounted) return null;
 
   const transitions = [status, ...statusOptions.filter((s) => s !== status)].join(" \u2022 ");
   const canSend = (message.trim() || pendingAttachment) && !sending && !uploading;
@@ -95,8 +101,8 @@ export function TaskRemarksChatbox({
 
   const previewSrc = taskAttachmentSrc(pendingAttachment);
 
-  return (
-    <div className="fixed bottom-4 right-4 z-[60] w-[min(420px,calc(100vw-2rem))] rounded-xl shadow-2xl border border-gray-200 overflow-hidden bg-white flex flex-col max-h-[min(560px,calc(100vh-2rem))]">
+  return createPortal(
+    <div className="fixed bottom-4 right-4 z-[80] w-[min(420px,calc(100vw-2rem))] rounded-xl shadow-2xl border border-gray-200 overflow-hidden bg-white flex flex-col max-h-[min(560px,calc(100vh-2rem))]">
       <div className="flex items-center gap-2 px-4 py-3 bg-[#2563eb] text-white shrink-0">
         <MessageSquare className="w-4 h-4 shrink-0" />
         <p className="text-sm font-semibold truncate flex-1">Remarks · {taskCode}</p>
@@ -176,6 +182,7 @@ export function TaskRemarksChatbox({
           <p className="text-[10px] text-gray-400">Current: {status} · You can move to: {transitions}</p>
         )}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

@@ -36,10 +36,11 @@ export class TaskCustomersService {
         orderBy: { createdAt: 'desc' },
         skip: (page - 1) * limit,
         take: limit,
-include: {
-  branches: true,
-  _count: { select: { sites: true, tasks: true } },
-},
+        include: {
+          branches: true,
+          contacts: true,
+          _count: { select: { sites: true, tasks: true } },
+        },
       }),
       this.prisma.taskCustomer.count({ where }),
     ]);
@@ -51,11 +52,12 @@ include: {
     assertCanManageTaskModule(viewer);
     const row = await this.prisma.taskCustomer.findFirst({
       where: { id, isDeleted: false },
-include: {
-  branches: true,
-  sites: { where: { isDeleted: false } },
-  _count: { select: { tasks: true } },
-},
+      include: {
+        branches: true,
+        contacts: true,
+        sites: { where: { isDeleted: false } },
+        _count: { select: { tasks: true } },
+      },
     });
     if (!row) throw new NotFoundException('Customer not found');
     return row;
@@ -79,16 +81,33 @@ include: {
       data: {
         customerCode: code,
         customerName: dto.customerName,
+        addressType: dto.addressType || 'Customer',
         address: dto.address,
         city: dto.city,
         state: dto.state,
         pincode: dto.pincode,
         country: dto.country,
+        gstNo: dto.gstNo,
+        relationshipManagerName: dto.relationshipManagerName,
+        relationshipManagerEmail: dto.relationshipManagerEmail,
         serviceProviderID: dto.serviceProviderID ?? viewer.serviceProviderID ?? null,
         companyID,
         branchesID,
         createdByUserID: dto.createdByUserID ?? viewer.userId ?? null,
+        contacts: dto.contacts?.length
+          ? {
+              create: dto.contacts
+                .filter((c) => c.contactPerson?.trim() && c.contactNumber?.trim())
+                .map((c) => ({
+                  contactPerson: c.contactPerson.trim(),
+                  contactNumber: c.contactNumber.trim(),
+                  designation: c.designation?.trim() || null,
+                  email: c.email?.trim() || null,
+                })),
+            }
+          : undefined,
       },
+      include: { contacts: true, branches: true },
     });
   } catch (error) {
     if (
@@ -106,20 +125,40 @@ include: {
     const viewer = parseViewer(query);
     assertCanManageTaskModule(viewer);
     await this.findOne(id, query);
-    return this.prisma.taskCustomer.update({
+    const updated = await this.prisma.taskCustomer.update({
       where: { id },
-    data: {
-  customerName: dto.customerName,
-  address: dto.address,
-  city: dto.city,
-  state: dto.state,
-  pincode: dto.pincode,
-  country: dto.country,
-  serviceProviderID: dto.serviceProviderID ?? viewer.serviceProviderID ?? undefined,
-  companyID: dto.companyID ?? viewer.companyID ?? undefined,
-  branchesID: dto.branchesID ?? viewer.branchesID ?? undefined,
-},
+      data: {
+        customerName: dto.customerName,
+        addressType: dto.addressType,
+        address: dto.address,
+        city: dto.city,
+        state: dto.state,
+        pincode: dto.pincode,
+        country: dto.country,
+        gstNo: dto.gstNo,
+        relationshipManagerName: dto.relationshipManagerName,
+        relationshipManagerEmail: dto.relationshipManagerEmail,
+        serviceProviderID: dto.serviceProviderID ?? viewer.serviceProviderID ?? undefined,
+        companyID: dto.companyID ?? viewer.companyID ?? undefined,
+        branchesID: dto.branchesID ?? viewer.branchesID ?? undefined,
+      },
     });
+    if (dto.contacts) {
+      await this.prisma.taskCustomerContact.deleteMany({ where: { customerID: id } });
+      const rows = dto.contacts.filter((c) => c.contactPerson?.trim() && c.contactNumber?.trim());
+      if (rows.length) {
+        await this.prisma.taskCustomerContact.createMany({
+          data: rows.map((c) => ({
+            customerID: id,
+            contactPerson: c.contactPerson.trim(),
+            contactNumber: c.contactNumber.trim(),
+            designation: c.designation?.trim() || null,
+            email: c.email?.trim() || null,
+          })),
+        });
+      }
+    }
+    return this.findOne(id, query) ?? updated;
   }
 
   async remove(id: number, query: Record<string, string | undefined>) {
@@ -147,6 +186,10 @@ include: {
         id: true,
         customerCode: true,
         customerName: true,
+        gstNo: true,
+        addressType: true,
+        relationshipManagerName: true,
+        relationshipManagerEmail: true,
         branches:true,
         address: true,
         city: true,

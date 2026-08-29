@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
@@ -8,7 +9,7 @@ import { Textarea } from "../components/ui/textarea";
 import { FormDrawer } from "../components/ui/form-drawer";
 import { DetailCard } from "../components/app/detail-card";
 import { EntityDetailHero, EntityDetailLayout } from "../components/app/entity-detail-layout";
-import { MessageCircle, Plus, AlertTriangle, UserPlus, FileDown, ClipboardList } from "lucide-react";
+import { MessageCircle, Plus, AlertTriangle, UserPlus, FileDown, ClipboardList, ChevronLeft, ChevronRight } from "lucide-react";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import { isDesktopManagerFlagSet } from "@/lib/desktopManager";
 import { hasModuleWriteAccess, canViewModule } from "@/lib/companyAccess";
@@ -35,11 +36,17 @@ import { FilterBar, FilterSelect } from "../components/app/filter-bar";
 import { EntityListShell } from "../components/app/entity-list-shell";
 import type { DataTableColumn } from "../components/app/data-table";
 import { EntityRowActions } from "../components/app/entity-row-actions";
+import { TaskContactsRepeater, sanitizeContacts, type TaskContactRow } from "../components/task/TaskContactsRepeater";
+import { canonicalTaskStatus } from "../components/task/task-types";
 import { useClientTable, sortRows } from "../hooks/use-client-table";
 
 const STATUSES = TASK_STATUSES;
-const PRIORITIES = ["Urgent", "Medium", "Low"];
-const TASK_TYPES = ["Internal Task", "Customer Visit"];
+const PRIORITIES = ["Urgent", "High", "Medium", "Low"];
+const TASK_TYPES = ["Internal Task", "Customer Visit", "SERVICE", "PRODUCT_INQUIRY", "PURCHASE_ORDER"];
+
+function taskNeedsCustomer(taskType: string) {
+  return taskType === "Customer Visit" || taskType === "SERVICE" || taskType === "PRODUCT_INQUIRY" || taskType === "PURCHASE_ORDER";
+}
 
 interface Task {
   id: number; taskCode: string; taskName: string; taskType: string;
@@ -52,6 +59,13 @@ interface Task {
   customer?: { id: number; customerCode: string; customerName: string };
   site?: { id: number; branchName: string };
   assignments?: { manageEmployeeID: number; manageEmployee?: { employeeFirstName?: string; employeeLastName?: string } }[];
+  contacts?: { contactName?: string; contactPerson?: string; contactNumber: string; contactEmail?: string; email?: string; designation?: string }[];
+  workscopeDetails?: { workscopeDetails?: string | null; extraNote?: string | null }[];
+  images?: { fileUrl?: string | null; filename?: string }[];
+  notes?: { title?: string | null; note?: string | null; fileUrl?: string | null }[];
+  inventories?: { makeModel?: string | null; snMac?: string | null; description?: string | null }[];
+  purchase?: { purchaseType?: string | null; customerName?: string | null; address?: string | null };
+  engineerAssignments?: { engineerName?: string | null; engineerEmail?: string | null; status?: string | null }[];
   chats?: { id: number; message: string; senderName?: string; attachmentUrl?: string | null; createdAt: string }[];
   activities?: { id: number; action: string; oldValue?: string; newValue?: string; remark?: string; actorName?: string; createdAt: string }[];
 }
@@ -82,7 +96,7 @@ function getLastActivityTime(task: Task): number {
 }
 
 function isOverdue24h(task: Task) {
-  if (task.status === "Closed" || task.status === "Reopen") return false;
+  if (task.status === "Closed" || task.status === "Completed" || task.status === "Reopen") return false;
   const last = getLastActivityTime(task);
   if (!last) return false;
   return (Date.now() - last) / (1000 * 60 * 60) > 24;
@@ -104,11 +118,15 @@ export default function TaskManagement() {
     canViewModule("TASKS");
   const table = useClientTable("taskCode");
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
   const [loading, setLoading] = useState(true);
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [priorityFilter, setPriorityFilter] = useState("ALL");
   const [taskTypeFilter, setTaskTypeFilter] = useState("ALL");
+  const [statusCounts, setStatusCounts] = useState<Record<string, number>>({});
   const customerIdRef = useRef("");
   const [formOpen, setFormOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
@@ -135,6 +153,7 @@ export default function TaskManagement() {
   const [customerLabel, setCustomerLabel] = useState("");
   const [branchLabel, setBranchLabel] = useState("");
   const [departmentLabel, setDepartmentLabel] = useState("");
+  const [taskContacts, setTaskContacts] = useState<TaskContactRow[]>([]);
 
   useEffect(() => {
     customerIdRef.current = form.customerID;
@@ -145,6 +164,10 @@ export default function TaskManagement() {
     const t = setTimeout(() => setDebouncedSearch(table.search), 300);
     return () => clearTimeout(t);
   }, [table.search]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedSearch, statusFilter, priorityFilter, taskTypeFilter]);
 
   const searchCustomers = useCallback(async (q: string) => {
     const data = await taskFetch<any[]>("/task-customers/dropdown", user, undefined, { q, limit: 20 });
@@ -199,15 +222,18 @@ const searchDepartments = useCallback(async (q: string) => {
     if (!user) return;
     setLoading(true);
     try {
-      const params: Record<string, string | number> = { limit: 200, search: debouncedSearch };
+      const params: Record<string, string | number> = { page, limit: 10, search: debouncedSearch };
       if (statusFilter !== "ALL") params.status = statusFilter;
       if (priorityFilter !== "ALL") params.priority = priorityFilter;
       if (taskTypeFilter !== "ALL") params.taskType = taskTypeFilter;
-      const data = await taskFetch<{ items: Task[] }>("/task-projects", user, undefined, params);
+      const data = await taskFetch<{ items: Task[]; total: number; totalPages: number; statusCounts?: Record<string, number> }>("/task-projects", user, undefined, params);
       setTasks(data.items);
+      setTotal(data.total || 0);
+      setTotalPages(data.totalPages || 1);
+      setStatusCounts(data.statusCounts || {});
     } catch (e: any) { toast.error(e.message || "Failed to load tasks"); }
     finally { setLoading(false); }
-  }, [user, debouncedSearch, statusFilter, priorityFilter, taskTypeFilter]);
+  }, [user, page, debouncedSearch, statusFilter, priorityFilter, taskTypeFilter]);
 
 useEffect(() => {
   const load = () => {
@@ -266,28 +292,35 @@ useAppRefresh(() => {
     }
   };
 
-  // Load employees for assign modal based on task's department
+  // Load employees for assign modal: department first, then all company staff
   useEffect(() => {
-    if (!assignTask?.departmentID) { setAssignEmployees([]); return; }
-    taskFetch<Employee[]>(`/task-projects/employees-by-department/${assignTask.departmentID}`, user)
+    if (!assignTask) { setAssignEmployees([]); return; }
+    const departmentId = assignTask.departmentID || 0;
+    taskFetch<Employee[]>(`/task-projects/employees-by-department/${departmentId}`, user)
       .then(setAssignEmployees).catch(() => setAssignEmployees([]));
   }, [assignTask, user]);
 
   const stats = useMemo(() => {
-    const g = { Open: 0, WIP: 0, Closed: 0, Reopen: 0 };
-    tasks.forEach((t) => {
-      if (t.status === "Open") g.Open++;
-      else if (t.status === "WIP") g.WIP++;
-      else if (t.status === "Closed") g.Closed++;
-      else if (t.status === "Reopen") g.Reopen++;
+    const g = { Open: 0, WIP: 0, Closed: 0, Reopen: 0, Scheduled: 0, Rescheduled: 0, OnHold: 0 };
+    Object.entries(statusCounts).forEach(([status, n]) => {
+      const s = canonicalTaskStatus(status);
+      const count = Number(n) || 0;
+      if (s === "Open") g.Open += count;
+      else if (s === "Work in Progress") g.WIP += count;
+      else if (s === "Completed") g.Closed += count;
+      else if (s === "Reopen") g.Reopen += count;
+      else if (s === "Scheduled") g.Scheduled += count;
+      else if (s === "Rescheduled") g.Rescheduled += count;
+      else if (s === "On-Hold") g.OnHold += count;
     });
-    return { total: tasks.length, Open: g.Open, WIP: g.WIP, Closed: g.Closed, Reopen: g.Reopen };
-  }, [tasks]);
+    return { total, ...g };
+  }, [statusCounts, total]);
 
   const resetForm = () => {
     setForm({ departmentID: "", taskType: "Internal Task", customerID: "", siteID: "", taskName: "", description: "", scheduleDateTime: "", priority: "Medium", dueDateTime: "" });
     customerIdRef.current = "";
     setCustomerLabel(""); setBranchLabel(""); setDepartmentLabel(""); setEditingTask(null);
+    setTaskContacts([]);
   };
 
  const closeTaskPagePanels = () => {
@@ -353,6 +386,14 @@ useAppRefresh(() => {
       customerIdRef.current = full.customerID ? String(full.customerID) : "";
       setBranchLabel(full.site?.branchName || "");
       setDepartmentLabel(full.department?.departmentName || "");
+      setTaskContacts(
+        (full.contacts || []).map((c) => ({
+          contactPerson: c.contactName || c.contactPerson || "",
+          contactNumber: c.contactNumber || "",
+          designation: c.designation || "",
+          email: c.contactEmail || c.email || "",
+        })),
+      );
       setFormOpen(true);
     } catch (e: any) { toast.error(e.message); }
   };
@@ -368,7 +409,7 @@ useAppRefresh(() => {
     e.preventDefault();
     if (!form.taskName.trim()) { toast.error("Task name required"); return; }
     setSaving(true);
-    const isCustomerVisit = form.taskType === "Customer Visit";
+    const isCustomerVisit = taskNeedsCustomer(form.taskType);
     const payload = {
       departmentID: form.departmentID ? Number(form.departmentID) : undefined,
       taskType: form.taskType,
@@ -377,6 +418,11 @@ useAppRefresh(() => {
       taskName: form.taskName, description: form.description,
       scheduleDateTime: form.scheduleDateTime || undefined, priority: form.priority,
       dueDateTime: form.dueDateTime || undefined,
+      contacts: sanitizeContacts(taskContacts).map((c) => ({
+        contactName: c.contactPerson,
+        contactNumber: c.contactNumber,
+        contactEmail: c.email,
+      })),
     };
     try {
       if (editingTask) {
@@ -723,9 +769,12 @@ useAppRefresh(() => {
 
           <div className="flex flex-wrap items-center gap-2">
             {[
-              { label: "Completed", status: "Closed", value: stats.Closed, cls: "bg-emerald-50 text-emerald-700 border-emerald-200" },
+              { label: "Completed", status: "Completed", value: stats.Closed, cls: "bg-emerald-50 text-emerald-700 border-emerald-200" },
               { label: "Open", status: "Open", value: stats.Open, cls: "bg-slate-50 text-slate-700 border-slate-200" },
-              { label: "Work In Progress", status: "WIP", value: stats.WIP, cls: "bg-amber-50 text-amber-800 border-amber-200" },
+              { label: "Work In Progress", status: "Work in Progress", value: stats.WIP, cls: "bg-amber-50 text-amber-800 border-amber-200" },
+              { label: "Scheduled", status: "Scheduled", value: stats.Scheduled, cls: "bg-sky-50 text-sky-800 border-sky-200" },
+              { label: "Rescheduled", status: "Rescheduled", value: stats.Rescheduled, cls: "bg-orange-50 text-orange-800 border-orange-200" },
+              { label: "On-Hold", status: "On-Hold", value: stats.OnHold, cls: "bg-slate-50 text-slate-600 border-slate-200" },
               { label: "Reopened", status: "Reopen", value: stats.Reopen, cls: "bg-violet-50 text-violet-800 border-violet-200" },
             ].map((s) => (
               <button
@@ -741,7 +790,7 @@ useAppRefresh(() => {
 
           <EntityListShell
             title="All tasks"
-            totalLabel={() => `${tasks.length} tasks`}
+            totalLabel={() => `${total} tasks`}
             columns={taskColumns}
             rows={sortedTasks}
             rowKey={(t) => String(t.id)}
@@ -762,6 +811,31 @@ useAppRefresh(() => {
                 <Plus className="w-4 h-4 mr-1" /> Create Task
               </Button>
             }
+            footer={
+              <div className="flex flex-col gap-3 border-t border-border px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
+                <span className="text-[13px] text-muted-foreground">
+                  Page {page} of {totalPages}
+                </span>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={page <= 1}
+                    onClick={() => setPage((p) => p - 1)}
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={page >= totalPages}
+                    onClick={() => setPage((p) => p + 1)}
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </Button>
+                </div>
+              </div>
+            }
           />
         </>
       )}
@@ -779,7 +853,7 @@ useAppRefresh(() => {
                 value={form.taskType}
                 onChange={(e) => {
                   const nextType = e.target.value;
-                  const isCustomerVisit = nextType === "Customer Visit";
+                  const isCustomerVisit = taskNeedsCustomer(nextType);
                   setForm((p) => ({
                     ...p,
                     taskType: nextType,
@@ -796,7 +870,7 @@ useAppRefresh(() => {
               </select>
             </div>
           </div>
-          {form.taskType === "Customer Visit" ? (
+          {taskNeedsCustomer(form.taskType) ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <SearchSuggestInput label="Customer" placeholder="Search customer…" value={customerLabel} onChange={setCustomerLabel}
               fetchData={searchCustomers} displayField="label" valueField="id"
@@ -847,6 +921,55 @@ useAppRefresh(() => {
               {PRIORITIES.map((p) => <option key={p} value={p}>{p}</option>)}
             </select>
           </div>
+          <TaskContactsRepeater title="Task Contacts" contacts={taskContacts} onChange={setTaskContacts} />
+          {editingTask?.workscopeDetails?.length ? (
+            <div className="space-y-2 rounded-md border p-3">
+              <Label>Workscope</Label>
+              {editingTask.workscopeDetails.map((row, i) => (
+                <p key={i} className="text-sm text-muted-foreground">{row.workscopeDetails || "—"}{row.extraNote ? ` (${row.extraNote})` : ""}</p>
+              ))}
+            </div>
+          ) : null}
+          {editingTask?.inventories?.length ? (
+            <div className="space-y-2 rounded-md border p-3">
+              <Label>Inventory</Label>
+              {editingTask.inventories.map((row, i) => (
+                <p key={i} className="text-sm text-muted-foreground">{[row.makeModel, row.snMac, row.description].filter(Boolean).join(" · ")}</p>
+              ))}
+            </div>
+          ) : null}
+          {editingTask?.purchase ? (
+            <div className="space-y-2 rounded-md border p-3">
+              <Label>Purchase</Label>
+              <p className="text-sm text-muted-foreground">{editingTask.purchase.purchaseType} — {editingTask.purchase.customerName}</p>
+            </div>
+          ) : null}
+          {editingTask?.images?.length ? (
+            <div className="space-y-2 rounded-md border p-3">
+              <Label>Images</Label>
+              <div className="flex flex-wrap gap-2">
+                {editingTask.images.map((img, i) => img.fileUrl ? (
+                  <a key={i} href={img.fileUrl} target="_blank" rel="noreferrer" className="text-xs text-primary underline">{img.filename || `Image ${i + 1}`}</a>
+                ) : null)}
+              </div>
+            </div>
+          ) : null}
+          {editingTask?.notes?.length ? (
+            <div className="space-y-2 rounded-md border p-3">
+              <Label>Notes</Label>
+              {editingTask.notes.map((note, i) => (
+                <p key={i} className="text-sm text-muted-foreground">{note.title || note.note || "Note"}</p>
+              ))}
+            </div>
+          ) : null}
+          {editingTask?.engineerAssignments?.length ? (
+            <div className="space-y-2 rounded-md border p-3">
+              <Label>Engineers</Label>
+              {editingTask.engineerAssignments.map((row, i) => (
+                <p key={i} className="text-sm text-muted-foreground">{row.engineerName || row.engineerEmail} {row.status ? `(${row.status})` : ""}</p>
+              ))}
+            </div>
+          ) : null}
           <div className="flex justify-end gap-2 pt-4 border-t">
             <Button type="button" variant="outline" onClick={() => { setFormOpen(false); resetForm(); }}>Cancel</Button>
             <Button type="submit" disabled={saving}>{saving ? "Saving…" : editingTask ? "Update Task" : "Create Task"}</Button>
@@ -938,9 +1061,9 @@ useAppRefresh(() => {
       )}
 
       {/* Assign Employees Modal */}
-      {assignTask && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="bg-white rounded-xl shadow-2xl w-[min(440px,calc(100vw-2rem))] mx-4 overflow-hidden">
+      {assignTask && typeof document !== "undefined" ? createPortal(
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/40 p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-[min(440px,calc(100vw-2rem))] overflow-hidden">
             <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
               <div>
                 <p className="font-semibold text-gray-900">Assign Employees</p>
@@ -951,7 +1074,7 @@ useAppRefresh(() => {
             <div className="px-5 py-4 max-h-72 overflow-y-auto">
               {assignEmployees.length === 0 ? (
                 <p className="text-sm text-gray-400 text-center py-6">
-                  {assignTask.departmentID ? "No employees in this department" : "No department assigned to this task"}
+                  No employees found in this company
                 </p>
               ) : (
                 <div className="space-y-2">
@@ -981,8 +1104,9 @@ useAppRefresh(() => {
               </Button>
             </div>
           </div>
-        </div>
-      )}
+        </div>,
+        document.body,
+      ) : null}
     </div>
   );
 }

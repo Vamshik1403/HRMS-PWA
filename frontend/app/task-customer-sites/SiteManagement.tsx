@@ -28,12 +28,14 @@ interface CustomerOpt { id: number; customerCode: string; customerName: string; 
 interface Contact { id?: number; contactPerson: string; contactNumber: string; designation?: string | null; email?: string | null; }
 interface Site {
   id: number; customerID: number; branchName: string;
+  siteCode?: string | null; gstNo?: string | null;
   address?: string | null; city?: string | null; state?: string | null; pincode?: string | null; country?: string | null;
   latitude?: string | null; longitude?: string | null;
   customer?: CustomerOpt; contacts?: Contact[];
+  notes?: { id?: number; title: string; description?: string | null; createdBy?: string | null }[];
 }
 
-const emptyForm = { customerID: "", branchName: "", address: "", city: "", state: "", pincode: "", country: "", latitude: "", longitude: "" };
+const emptyForm = { customerID: "", siteCode: "", gstNo: "", branchName: "", address: "", city: "", state: "", pincode: "", country: "", latitude: "", longitude: "" };
 
 export default function SiteManagement() {
   const user = useCurrentUser();
@@ -56,6 +58,7 @@ export default function SiteManagement() {
   const [selectedCustomer, setSelectedCustomer] = useState<CustomerOpt | null>(null);
   const [sameAsCustomer, setSameAsCustomer] = useState(false);
   const [contacts, setContacts] = useState<TaskContactRow[]>([]);
+  const [notes, setNotes] = useState<{ title: string; description: string; createdBy: string }[]>([]);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -101,6 +104,7 @@ export default function SiteManagement() {
   setSelectedCustomer(null);
   setSameAsCustomer(false);
   setContacts([]);
+  setNotes([]);
   setSaving(false);
 };
 
@@ -127,19 +131,22 @@ export default function SiteManagement() {
     setForm((p) => ({ ...p, address: c.address || "", city: c.city || "", state: c.state || "", pincode: c.pincode || "", country: c.country || "" }));
   };
 
-  const openCreate = () => { setEditing(null); setForm(emptyForm); setCustomerLabel(""); setSelectedCustomer(null); setSameAsCustomer(false); setContacts([]); setFormOpen(true); };
+  const openCreate = () => { setEditing(null); setForm(emptyForm); setCustomerLabel(""); setSelectedCustomer(null); setSameAsCustomer(false); setContacts([]); setNotes([]); setFormOpen(true); };
 
   const openEdit = async (r: Site) => {
     try {
       const full = await taskFetch<Site>(`/task-customer-sites/${r.id}`, user);
       setEditing(full);
-      setForm({ customerID: String(full.customerID), branchName: full.branchName, address: full.address || "", city: full.city || "",
+      setForm({ customerID: String(full.customerID), siteCode: full.siteCode || "", gstNo: full.gstNo || "", branchName: full.branchName, address: full.address || "", city: full.city || "",
         state: full.state || "", pincode: full.pincode || "", country: full.country || "", latitude: full.latitude || "", longitude: full.longitude || "" });
       setSelectedCustomer(full.customer || null);
       setCustomerLabel(full.customer ? `${full.customer.customerCode} — ${full.customer.customerName}` : "");
       setSameAsCustomer(false);
       setContacts(full.contacts?.length
         ? full.contacts.map((c) => ({ contactPerson: c.contactPerson, contactNumber: c.contactNumber, designation: c.designation || "", email: c.email || "" }))
+        : []);
+      setNotes(full.notes?.length
+        ? full.notes.map((n) => ({ title: n.title || "", description: n.description || "", createdBy: n.createdBy || "" }))
         : []);
       setFormOpen(true);
     } catch (e: any) { toast.error(e.message || "Failed to load site"); }
@@ -154,7 +161,7 @@ export default function SiteManagement() {
     e.preventDefault();
     if (!form.branchName.trim() || !form.customerID) { toast.error("Customer and branch name are required"); return; }
     setSaving(true);
-    const payload = { ...form, customerID: Number(form.customerID), contacts: sanitizeContacts(contacts) };
+    const payload = { ...form, customerID: Number(form.customerID), contacts: sanitizeContacts(contacts), notes: notes.filter((n) => n.title.trim()) };
     try {
       if (editing) {
         await taskFetch(`/task-customer-sites/${editing.id}`, user, { method: "PATCH", body: JSON.stringify(payload) });
@@ -348,6 +355,16 @@ export default function SiteManagement() {
               onChange={(e) => { setSameAsCustomer(e.target.checked); if (e.target.checked && selectedCustomer) applyCustomerAddress(selectedCustomer); }} />
             Same as selected customer address
           </label>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label>Site ID</Label>
+              <Input value={form.siteCode} onChange={(e) => setForm((p) => ({ ...p, siteCode: e.target.value }))} placeholder="e.g. ENPL/2024/0001-SITE/01" />
+            </div>
+            <div className="space-y-2">
+              <Label>GST No</Label>
+              <Input value={form.gstNo} onChange={(e) => setForm((p) => ({ ...p, gstNo: e.target.value }))} />
+            </div>
+          </div>
           <div className="space-y-2">
             <Label>Branch Name *</Label>
             <Input value={form.branchName} onChange={(e) => setForm((p) => ({ ...p, branchName: e.target.value }))} required />
@@ -362,6 +379,18 @@ export default function SiteManagement() {
             <div className="space-y-2"><Label>Longitude</Label><Input value={form.longitude} onChange={(e) => setForm((p) => ({ ...p, longitude: e.target.value }))} /></div>
           </div>
           <TaskContactsRepeater title="Site Contacts" contacts={contacts} onChange={setContacts} />
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <Label>Site Notes</Label>
+              <Button type="button" variant="outline" size="sm" onClick={() => setNotes((p) => [...p, { title: "", description: "", createdBy: "" }])}>Add note</Button>
+            </div>
+            {notes.map((note, idx) => (
+              <div key={idx} className="grid grid-cols-1 gap-2 rounded-md border p-3">
+                <Input placeholder="Title" value={note.title} onChange={(e) => setNotes((p) => p.map((n, i) => i === idx ? { ...n, title: e.target.value } : n))} />
+                <Textarea placeholder="Description" value={note.description} onChange={(e) => setNotes((p) => p.map((n, i) => i === idx ? { ...n, description: e.target.value } : n))} rows={2} />
+              </div>
+            ))}
+          </div>
           <div className="flex justify-end gap-2 pt-4 border-t">
 <Button type="button" variant="outline" onClick={closeSitePagePanels}>Cancel</Button>
             <Button type="submit" disabled={saving}>{saving ? "Saving…" : "Save"}</Button>

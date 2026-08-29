@@ -12,6 +12,7 @@
     "studio": "prisma studio --schema=prisma/hrms/schema.prisma --port 5556",
     "seed": "ts-node prisma/seed.ts",
     "import:employees": "ts-node scripts/import-employees.ts",
+    "import:enpl-erp-tasks": "ts-node -r dotenv/config scripts/import-enpl-erp-tasks.ts",
     "import:attendance-logs": "ts-node scripts/import-attendance-logs.ts",
     "import:vamshik-attendance": "ts-node -r dotenv/config scripts/import-vamshik-attendance.ts",
     "reset:employee-memos": "ts-node -r dotenv/config scripts/reset-employee-memos.ts",

@@ -51,10 +51,56 @@ export const STATUS_META: Record<TaskStatus, {
     accent: "border-l-[#8b5cf6]",
     columnBg: "bg-[#faf9ff]",
   },
+  "Work in Progress": {
+    dot: "bg-[#f59e0b]",
+    ring: "ring-[#f59e0b]/20",
+    bg: "bg-[#fffbeb]",
+    text: "text-[#b45309]",
+    border: "border-[#fef3c7]",
+    accent: "border-l-[#f59e0b]",
+    columnBg: "bg-[#fffdf7]",
+  },
+  Scheduled: {
+    dot: "bg-[#0ea5e9]",
+    ring: "ring-[#0ea5e9]/20",
+    bg: "bg-[#f0f9ff]",
+    text: "text-[#0369a1]",
+    border: "border-[#e0f2fe]",
+    accent: "border-l-[#0ea5e9]",
+    columnBg: "bg-[#f8fcff]",
+  },
+  Rescheduled: {
+    dot: "bg-[#f97316]",
+    ring: "ring-[#f97316]/20",
+    bg: "bg-[#fff7ed]",
+    text: "text-[#c2410c]",
+    border: "border-[#ffedd5]",
+    accent: "border-l-[#f97316]",
+    columnBg: "bg-[#fffaf5]",
+  },
+  "On-Hold": {
+    dot: "bg-[#64748b]",
+    ring: "ring-[#64748b]/20",
+    bg: "bg-[#f8fafc]",
+    text: "text-[#334155]",
+    border: "border-[#e2e8f0]",
+    accent: "border-l-[#64748b]",
+    columnBg: "bg-[#fbfdff]",
+  },
+  Completed: {
+    dot: "bg-[#10b981]",
+    ring: "ring-[#10b981]/20",
+    bg: "bg-[#ecfdf5]",
+    text: "text-[#047857]",
+    border: "border-[#d1fae5]",
+    accent: "border-l-[#10b981]",
+    columnBg: "bg-[#f9fefb]",
+  },
 };
 
 export const PRIORITY_META: Record<string, { dot: string; label: string; className: string }> = {
   Urgent: { dot: "bg-red-500", label: "Urgent", className: "bg-red-50 text-red-700 border-red-100" },
+  High: { dot: "bg-orange-500", label: "High", className: "bg-orange-50 text-orange-700 border-orange-100" },
   Medium: { dot: "bg-amber-400", label: "Medium", className: "bg-amber-50 text-amber-700 border-amber-100" },
   Low: { dot: "bg-slate-400", label: "Low", className: "bg-slate-50 text-slate-600 border-slate-200" },
 };
@@ -88,7 +134,8 @@ export function initials(name?: string | null) {
 }
 
 export function TaskStatusBadge({ status, size = "sm", className = "" }: { status: string; size?: "sm" | "xs"; className?: string }) {
-  const meta = STATUS_META[status as TaskStatus] || STATUS_META.Open;
+  const key = status === "WIP" ? "Work in Progress" : status === "Closed" ? "Completed" : status;
+  const meta = STATUS_META[key as TaskStatus] || STATUS_META.Open;
   const cls = size === "xs" ? "text-[10px] px-2 py-0.5 gap-1" : "text-xs px-2.5 py-1 gap-1.5";
   return (
     <span className={`inline-flex items-center rounded-md font-medium border ${cls} ${meta.bg} ${meta.text} ${meta.border} ${className}`}>
