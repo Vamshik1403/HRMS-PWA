@@ -1,4 +1,5 @@
 // OpenHRM production — APPSERVER002 (ports 3000 / 8000)
+// Start: pm2 start /var/www/openhrm/scripts/ecosystem.config.js
 module.exports = {
   apps: [
     {

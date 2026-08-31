@@ -12,7 +12,9 @@ import {
   TableRow,
 } from "../components/ui/table";
 import { useCurrentUser } from "../hooks/useCurrentUser";
-import { getSidebarContext } from "../utils/sidebarContext";
+import { getActiveCompanyId, getSidebarContext } from "../utils/sidebarContext";
+import { resolveScopedCompanyId } from "../utils/scopeContext";
+import { hasCompanyAccessFlag, isCompanyOwnerFlag } from "@/lib/companyAccess";
 import { isDesktopManagerFlagSet } from "@/lib/desktopManager";
 import { TableBodySkeleton } from "@/app/components/ui/TableBodySkeleton";
 import { authHeaders } from "@/lib/auth";
@@ -60,6 +62,17 @@ export default function NewJoinersPage() {
     typeof window !== "undefined" &&
     isDesktopManagerFlagSet() &&
     user?.role === "EMPLOYEE";
+  const [companyScopeTick, setCompanyScopeTick] = useState(0);
+
+  useEffect(() => {
+    const bump = () => setCompanyScopeTick((n) => n + 1);
+    window.addEventListener("sidebar-context-changed", bump);
+    window.addEventListener("app-data-refresh", bump);
+    return () => {
+      window.removeEventListener("sidebar-context-changed", bump);
+      window.removeEventListener("app-data-refresh", bump);
+    };
+  }, []);
 
   useEffect(() => {
     if (!user) return;
@@ -99,20 +112,33 @@ export default function NewJoinersPage() {
 
     const params = new URLSearchParams();
     const ctx = getSidebarContext();
-    if (user.role === "SUPERADMIN" && ctx?.companyID) {
-      params.set("companyID", String(ctx.companyID));
-    } else if (user.role === "SERVICE_PROVIDER" && currentUserMapping?.companyID) {
-      params.set("companyID", String(currentUserMapping.companyID));
-    } else if (
-      (user.role === "COMPANY_ADMIN" || user.role === "ADMIN") &&
-      currentUserMapping?.companyID
-    ) {
-      params.set("companyID", String(currentUserMapping.companyID));
-    } else if (user.role === "BRANCH_ADMIN" || desktopManager) {
-      if (user.companyID) params.set("companyID", String(user.companyID));
-      if (user.role === "BRANCH_ADMIN" && user.branchesID) {
-        params.set("branchId", String(user.branchesID));
+    const switchedCompanyId =
+      resolveScopedCompanyId(user) ?? getActiveCompanyId() ?? undefined;
+    const scopedCompanyId =
+      switchedCompanyId ?? currentUserMapping?.companyID ?? user.companyID;
+    const isEmployeeOperator =
+      user.role === "EMPLOYEE" &&
+      (isCompanyOwnerFlag() || hasCompanyAccessFlag() || desktopManager);
+
+    if (isEmployeeOperator && !scopedCompanyId) {
+      setRows([]);
+      setMonthLabel("");
+      setLoading(false);
+      return;
+    }
+
+    if (user.role === "SUPERADMIN") {
+      if (switchedCompanyId || ctx?.companyID) {
+        params.set("companyID", String(switchedCompanyId ?? ctx?.companyID));
       }
+    } else if (user.role === "SERVICE_PROVIDER") {
+      const companyId = switchedCompanyId ?? currentUserMapping?.companyID;
+      if (companyId) params.set("companyID", String(companyId));
+    } else if (scopedCompanyId) {
+      params.set("companyID", String(scopedCompanyId));
+    }
+    if (user.role === "BRANCH_ADMIN" && user.branchesID) {
+      params.set("branchId", String(user.branchesID));
     }
 
     setLoading(true);
@@ -133,7 +159,7 @@ export default function NewJoinersPage() {
         setMonthLabel("");
       })
       .finally(() => setLoading(false));
-  }, [user, currentUserMapping, desktopManager]);
+  }, [user, currentUserMapping, desktopManager, companyScopeTick]);
 
   const countLabel = useMemo(() => {
     const n = rows.length;

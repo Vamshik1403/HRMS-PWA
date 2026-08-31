@@ -103,7 +103,12 @@ export class AuthService {
 
     const isDesktopClient = dto.client !== 'mobile';
 
-    if (isDesktopClient && userType === 'user' && this.userRoleRequiresLoginOtp(user.role)) {
+    if (
+      isDesktopClient &&
+      userType === 'user' &&
+      this.userRoleRequiresLoginOtp(user.role) &&
+      !this.isSeededDeveloperSuperadmin(user)
+    ) {
       const email = await this.resolveUserLoginEmail(user);
       if (!email) {
         throw new BadRequestException(
@@ -688,6 +693,13 @@ export class AuthService {
       return withEmail[0] || matches[0];
     }
     return null;
+  }
+
+  private isSeededDeveloperSuperadmin(user: { username?: string; role?: string }): boolean {
+    return (
+      String(user.role || '').toUpperCase() === 'SUPERADMIN' &&
+      String(user.username || '').trim().toLowerCase() === 'superadmin'
+    );
   }
 
   private userRoleRequiresLoginOtp(role?: string): boolean {

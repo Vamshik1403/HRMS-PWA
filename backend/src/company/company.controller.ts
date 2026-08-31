@@ -9,12 +9,17 @@ import {
   ParseIntPipe,
   Put,
   Query,
+  Req,
+  UseGuards,
 } from '@nestjs/common';
+import { AuthGuard } from '@nestjs/passport';
 import { CompanyService } from './company.service';
 import { CreateCompanyDto } from './dto/create-company.dto';
 import { UpdateCompanyDto } from './dto/update-company.dto';
 import { UpdateCompanyModulesDto } from './dto/update-company-modules.dto';
 import { CreateCompanyOwnerDto, SaveOwnerPermissionsDto } from './dto/create-company-owner.dto';
+import { UpdateTaskAssigneeLinksDto } from './dto/update-task-assignee-links.dto';
+import { FederalDomainCodeDto } from './dto/federal-domain-code.dto';
 
 @Controller('company')
 export class CompanyController {
@@ -117,6 +122,63 @@ export class CompanyController {
     @Param('ownerId', ParseIntPipe) ownerId: number,
   ) {
     return this.companyService.deactivateOwner(id, ownerId);
+  }
+
+  @Get(':id/federal-domain')
+  @UseGuards(AuthGuard('jwt'))
+  getFederalDomain(
+    @Req() req: { user?: { role?: string; sub?: number; companyID?: number; employeeId?: number } },
+    @Param('id', ParseIntPipe) id: number,
+  ) {
+    return this.companyService.getFederalDomain(id, req.user);
+  }
+
+  @Post(':id/federal-domain')
+  @UseGuards(AuthGuard('jwt'))
+  addFederalDomainCode(
+    @Req() req: { user?: { role?: string; sub?: number; companyID?: number; employeeId?: number } },
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: FederalDomainCodeDto,
+  ) {
+    return this.companyService.addFederalDomainCode(id, dto.code, req.user);
+  }
+
+  @Delete(':id/federal-domain')
+  @UseGuards(AuthGuard('jwt'))
+  removeFederalDomainCode(
+    @Req() req: { user?: { role?: string; sub?: number; companyID?: number; employeeId?: number } },
+    @Param('id', ParseIntPipe) id: number,
+    @Query('code') code?: string,
+    @Body() dto?: FederalDomainCodeDto,
+  ) {
+    return this.companyService.removeFederalDomainCode(
+      id,
+      code || dto?.code || '',
+      req.user,
+    );
+  }
+
+  @Get(':id/task-assignee-links')
+  @UseGuards(AuthGuard('jwt'))
+  getTaskAssigneeLinks(
+    @Req() req: { user?: { role?: string } },
+    @Param('id', ParseIntPipe) id: number,
+  ) {
+    return this.companyService.getTaskAssigneeLinks(id, req.user);
+  }
+
+  @Put(':id/task-assignee-links')
+  @UseGuards(AuthGuard('jwt'))
+  setTaskAssigneeLinks(
+    @Req() req: { user?: { role?: string } },
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: UpdateTaskAssigneeLinksDto,
+  ) {
+    return this.companyService.setTaskAssigneeLinks(
+      id,
+      dto.linkedCompanyIDs ?? [],
+      req.user,
+    );
   }
 
   @Get(':id')

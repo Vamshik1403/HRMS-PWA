@@ -769,7 +769,7 @@ const [designationFilterList, setDesignationFilterList] = useState<Desg[]>([]);
 
 const [filterLoading, setFilterLoading] = useState(false);
 
-const [isAddingNew, setIsAddingNew] = useState(false);
+  const [isAddingNew, setIsAddingNew] = useState(false);
   const [activeFormSection, setActiveFormSection] = useState<EmpFormSectionId>("basic");
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
   const toggleFormGroup = (key: string) =>
@@ -1417,7 +1417,7 @@ const [isAddingNew, setIsAddingNew] = useState(false);
           )
         : [];
     }
-
+    
     setRows(filteredRows);
   } catch (e) {
     console.error("Failed to load employees:", e);
@@ -1436,7 +1436,7 @@ if (user) {
     }
   }, [user]);
 
-useEffect(() => {
+  useEffect(() => {
   const handler = () => {
     if (user) {
       fetchRows();
@@ -1455,16 +1455,16 @@ useEffect(() => {
     }
   };
 
-  window.addEventListener("sidebar-context-changed", handler);
-  window.addEventListener("app-data-refresh", handler);
+    window.addEventListener("sidebar-context-changed", handler);
+    window.addEventListener("app-data-refresh", handler);
   window.addEventListener("sidebar-main-page-click", sidebarPageClickHandler);
 
-  return () => {
-    window.removeEventListener("sidebar-context-changed", handler);
-    window.removeEventListener("app-data-refresh", handler);
+    return () => {
+      window.removeEventListener("sidebar-context-changed", handler);
+      window.removeEventListener("app-data-refresh", handler);
     window.removeEventListener("sidebar-main-page-click", sidebarPageClickHandler);
-  };
-}, [user]);
+    };
+  }, [user]);
 
 
   const addTokenDevMap = () => setTokenDevMapForm(p => [...p, {
@@ -2402,7 +2402,7 @@ const addCombinedDevMap = () => {
       pwaShowLeaveBalance: true,
       pwaShowLoanAdvances: true,
       mobileAttendanceEnabled: false,
-      mobileBreakEnabled: true,
+    mobileBreakEnabled: true,
 
       typeOfEmployee: "employee",
 
@@ -2978,7 +2978,7 @@ const addCombinedDevMap = () => {
         skill: x.skill || undefined,
       }));
 
-        const devices = formData.devMapForm
+           const devices = formData.devMapForm
         .filter(d => !!d.deviceID)
         .map(d => ({
           id: d.id,
@@ -3227,9 +3227,9 @@ const addCombinedDevMap = () => {
         const res = await fetch(
           `${API.manageEmp}/${editingRow.id}`,
           {
-            method: "PATCH",
-            headers: jsonAuthHeaders(),
-            body: JSON.stringify(payload),
+          method: "PATCH",
+          headers: jsonAuthHeaders(),
+          body: JSON.stringify(payload),
           },
         );
 
@@ -3250,8 +3250,8 @@ const addCombinedDevMap = () => {
         const linkedResponse = await fetch(
           `${API.manageEmp}/${editingRow.id}/linked-employees`,
           {
-            method: "POST",
-            headers: jsonAuthHeaders(),
+          method: "POST",
+          headers: jsonAuthHeaders(),
             body: JSON.stringify({
               linkedEmployeeIds:
                 linkedEmployees.map(
@@ -3269,13 +3269,13 @@ const addCombinedDevMap = () => {
             ),
           );
         }
-            } else {
+      } else {
         const res = await fetch(
           API.manageEmp,
           {
-            method: "POST",
-            headers: jsonAuthHeaders(),
-            body: JSON.stringify(payload),
+          method: "POST",
+          headers: jsonAuthHeaders(),
+          body: JSON.stringify(payload),
           },
         );
 
@@ -3308,7 +3308,7 @@ const addCombinedDevMap = () => {
             await fetch(
               `${API.manageEmp}/${newId}/linked-employees`,
               {
-                method: "POST",
+            method: "POST",
                 headers:
                   jsonAuthHeaders(),
 
@@ -3831,12 +3831,12 @@ const addCombinedDevMap = () => {
   };
 
 const closeEmployeePagePanels = () => {
-  resetForm();
+    resetForm();
 
-  setIsAddingNew(false);
-  setIsViewing(false);
+    setIsAddingNew(false);
+    setIsViewing(false);
   setEditingRow(null);
-  setViewRow(null);
+    setViewRow(null);
 
   setQuickAddOpen(null);
   setQuickAddValue("");
@@ -3869,7 +3869,7 @@ const closeEmployeePagePanels = () => {
 
 const handleCancel = () => {
   closeEmployeePagePanels();
-};
+  };
 
   /* ==========
      Search
@@ -4918,7 +4918,7 @@ const handleCancel = () => {
                       This employee will also appear in the Contract Employee section.
                     </p>
                   )}
-                </div>
+              </div>
               </div>
               )}
 
@@ -6076,7 +6076,7 @@ const handleCancel = () => {
                   )}
                       </div>
 
-                <div>
+        <div>
                   <h2 className="text-2xl font-semibold tracking-tight">
                     {fullName(viewRow)}
                   </h2>
@@ -6114,18 +6114,18 @@ const handleCancel = () => {
                   </Button>
                 ) : null}
 
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-                  className="gap-1.5"
-                  onClick={() => void downloadJoiningForm(viewRow)}
-                >
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="gap-1.5"
+                onClick={() => void downloadJoiningForm(viewRow)}
+              >
                   <Download className="size-4" />
                   Joining Form
-      </Button>
-              </div>
+              </Button>
             </div>
+              </div>
 
             <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
               <DetailCard
@@ -6204,14 +6204,14 @@ const handleCancel = () => {
                     <p className="mt-1 text-sm text-muted-foreground">
                       Employee identity, statutory and supporting documents
             </p>
-          </div>
-        </div>
+                      </div>
+                  </div>
 
                 {((viewRow as any).employeeDocuments ?? []).length === 0 ? (
                   <div className="flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-border py-10 text-muted-foreground">
                     <FileText className="size-9" />
                     <p className="text-sm">No documents uploaded yet.</p>
-                  </div>
+                      </div>
                 ) : (
                   <div className="divide-y divide-border rounded-xl border border-border">
                     {((viewRow as any).employeeDocuments ?? []).map((doc: any) => (
@@ -6223,7 +6223,7 @@ const handleCancel = () => {
                           <div className="flex flex-wrap items-center gap-2">
                             <p className="font-medium">{doc.name}</p>
                             <Badge variant="secondary">{doc.category}</Badge>
-      </div>
+                  </div>
 
                           <p className="mt-1 text-xs text-muted-foreground">
                             {doc.fileName || "—"} · {formatFileSize(Number(doc.fileSize ?? 0))}
@@ -6238,7 +6238,7 @@ const handleCancel = () => {
                           <p className="mt-1 text-xs text-muted-foreground">
                             Issued: {doc.issuedDate || "—"} · Expiry: {doc.expiryDate || "—"}
                           </p>
-        </div>
+                      </div>
 
                         {doc.fileUrl ? (
               <Button
@@ -6253,11 +6253,11 @@ const handleCancel = () => {
                         ) : null}
                       </div>
                     ))}
-                  </div>
-            )}
-          </div>
+                </div>
+              )}
+                </div>
             </div>
-          </div>
+        </div>
         )}
       </FormDrawer>
 
@@ -6328,7 +6328,7 @@ const handleCancel = () => {
               canManage ? (
                 <Button onClick={() => { resetForm(); setIsAddingNew(true); }}>
                   <Plus className="w-4 h-4 mr-1" /> Add Employee
-                </Button>
+                              </Button>
               ) : undefined
             }
           />
@@ -6357,7 +6357,7 @@ const handleCancel = () => {
                     setCredentialForm((p) => ({ ...p, username: e.target.value }))
                   }
                 />
-            <Button
+                                <Button
               type="button"
               variant="outline"
                   size="icon"
@@ -6368,7 +6368,7 @@ const handleCancel = () => {
                   }}
                 >
                   <Copy className="w-4 h-4" />
-            </Button>
+                                </Button>
           </div>
         </div>
 
@@ -6381,14 +6381,14 @@ const handleCancel = () => {
                     setCredentialForm((p) => ({ ...p, password: e.target.value }))
                   }
                 />
-            <Button
+                                <Button
               type="button"
               variant="outline"
                   size="icon"
                   onClick={() => copyText(credentialForm.password, "Password")}
             >
                   <Copy className="w-4 h-4" />
-            </Button>
+                                </Button>
           </div>
               <p className="text-xs text-gray-500">
                 Employee must change this password on first login.
@@ -6396,22 +6396,22 @@ const handleCancel = () => {
       </div>
 
             <div className="flex justify-end gap-2 pt-2">
-        <Button
+                                <Button
           type="button"
           variant="outline"
                 onClick={() => setCredentialModalOpen(false)}
         >
                 Close
-        </Button>
-        <Button
+                                </Button>
+                              <Button
           type="button"
                 disabled={credentialSaving}
                 onClick={saveEmployeeCredentials}
         >
                 {credentialSaving ? "Saving..." : "Save Credentials"}
-        </Button>
-      </div>
-    </div>
+                              </Button>
+                            </div>
+              </div>
         </DialogContent>
       </Dialog>
 

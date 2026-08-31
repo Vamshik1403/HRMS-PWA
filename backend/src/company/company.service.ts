@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   HttpException,
   Injectable,
   NotFoundException,
@@ -21,6 +22,10 @@ import {
   type ModulePermissionDto,
 } from '../common/company-module-permissions';
 import { loadEmployeePermissions } from '../common/employee-permission.util';
+import {
+  getMutuallyLinkedCompanyIds,
+  normalizeFederalDomainCode,
+} from './federal-domain.util';
 
 @Injectable()
 export class CompanyService {
@@ -1191,5 +1196,299 @@ export class CompanyService {
           'Cannot delete company while related records still reference it.',
       );
     }
+  }
+
+  private jwtUserId(user?: {
+    sub?: number;
+    id?: number;
+    employeeId?: number;
+    employeeID?: number;
+  }): number | undefined {
+    const n = Number(user?.sub ?? user?.id);
+    return Number.isFinite(n) && n > 0 ? n : undefined;
+  }
+
+  private jwtEmployeeId(user?: { employeeId?: number; employeeID?: number }): number | undefined {
+    const n = Number(user?.employeeId ?? user?.employeeID);
+    return Number.isFinite(n) && n > 0 ? n : undefined;
+  }
+
+  private async assertCanManageFederalDomain(
+    companyId: number,
+    user?: {
+      role?: string;
+      sub?: number;
+      id?: number;
+      companyID?: number;
+      employeeId?: number;
+      employeeID?: number;
+    },
+  ) {
+    if (!user) throw new ForbiddenException('Authentication required');
+    const role = String(user.role || '').toUpperCase();
+    if (role === 'SUPERADMIN' || role === 'SERVICE_PROVIDER') return;
+
+    const tokenCompanyId = Number(user.companyID);
+    if (Number.isFinite(tokenCompanyId) && tokenCompanyId === companyId) return;
+
+    const userId = this.jwtUserId(user);
+    if (userId && role !== 'EMPLOYEE') {
+      const link = await this.prisma.userCompany.findFirst({
+        where: { userID: userId, companyID: companyId },
+        select: { id: true },
+      });
+      if (link) return;
+    }
+
+    const employeeId = this.jwtEmployeeId(user);
+    if (employeeId) {
+      const emp = await this.prisma.manageEmployee.findFirst({
+        where: { id: employeeId, companyID: companyId, isDeleted: false },
+        select: { id: true },
+      });
+      if (emp) return;
+    }
+
+    throw new ForbiddenException('You cannot manage Federal Domain for this company');
+  }
+
+  async getFederalDomain(
+    companyId: number,
+    user?: {
+      role?: string;
+      sub?: number;
+      id?: number;
+      companyID?: number;
+      employeeId?: number;
+      employeeID?: number;
+    },
+  ) {
+    await this.assertCanManageFederalDomain(companyId, user);
+    const company = await this.prisma.company.findUnique({
+      where: { id: companyId },
+      select: { id: true, companyName: true },
+    });
+    if (!company) throw new NotFoundException('Company not found');
+
+    const mine = await this.prisma.companyFederalDomain.findMany({
+      where: { companyID: companyId },
+      orderBy: { createdAt: 'asc' },
+      select: { code: true },
+    });
+    const myCodes = mine.map((row) => row.code);
+
+    const othersWithSame = myCodes.length
+      ? await this.prisma.companyFederalDomain.findMany({
+          where: { code: { in: myCodes }, companyID: { not: companyId } },
+          select: {
+            code: true,
+            companyID: true,
+            company: { select: { id: true, companyName: true } },
+          },
+        })
+      : [];
+
+    const byCode = new Map<
+      string,
+      { id: number; companyName: string | null }[]
+    >();
+    const linkedById = new Map<
+      number,
+      { id: number; companyName: string | null; sharedCodes: string[] }
+    >();
+    for (const row of othersWithSame) {
+      const peer = {
+        id: row.company.id,
+        companyName: row.company.companyName ?? null,
+      };
+      const list = byCode.get(row.code) || [];
+      if (!list.some((c) => c.id === peer.id)) list.push(peer);
+      byCode.set(row.code, list);
+
+      const existing = linkedById.get(peer.id) || {
+        id: peer.id,
+        companyName: peer.companyName,
+        sharedCodes: [],
+      };
+      if (!existing.sharedCodes.includes(row.code)) existing.sharedCodes.push(row.code);
+      linkedById.set(peer.id, existing);
+    }
+
+    const otherCodes = await this.prisma.companyFederalDomain.findMany({
+      where: { companyID: { not: companyId } },
+      distinct: ['code'],
+      orderBy: { code: 'asc' },
+      select: { code: true },
+    });
+    const mySet = new Set(myCodes);
+    const availableCodes = otherCodes
+      .map((row) => row.code)
+      .filter((code) => code && !mySet.has(code));
+
+    return {
+      companyID: company.id,
+      companyName: company.companyName,
+      codes: myCodes.map((code) => ({
+        code,
+        linkedCompanyCount: byCode.get(code)?.length ?? 0,
+        linkedCompanies: byCode.get(code) ?? [],
+      })),
+      availableCodes,
+      linkedCompanies: [...linkedById.values()],
+    };
+  }
+
+  async addFederalDomainCode(
+    companyId: number,
+    rawCode: string,
+    user?: {
+      role?: string;
+      sub?: number;
+      id?: number;
+      companyID?: number;
+      employeeId?: number;
+      employeeID?: number;
+    },
+  ) {
+    await this.assertCanManageFederalDomain(companyId, user);
+    const code = normalizeFederalDomainCode(rawCode);
+    if (!code) throw new BadRequestException('Enter a federal domain code');
+    if (code.length > 120) throw new BadRequestException('Code is too long');
+
+    const company = await this.prisma.company.findUnique({
+      where: { id: companyId },
+      select: { id: true },
+    });
+    if (!company) throw new NotFoundException('Company not found');
+
+    try {
+      await this.prisma.companyFederalDomain.create({
+        data: { companyID: companyId, code },
+      });
+    } catch (err: any) {
+      if (err?.code === 'P2002') {
+        throw new ConflictException('This company already has that code');
+      }
+      throw err;
+    }
+
+    return this.getFederalDomain(companyId, user);
+  }
+
+  async removeFederalDomainCode(
+    companyId: number,
+    rawCode: string,
+    user?: {
+      role?: string;
+      sub?: number;
+      id?: number;
+      companyID?: number;
+      employeeId?: number;
+      employeeID?: number;
+    },
+  ) {
+    await this.assertCanManageFederalDomain(companyId, user);
+    const code = normalizeFederalDomainCode(rawCode);
+    if (!code) throw new BadRequestException('Code is required');
+
+    await this.prisma.companyFederalDomain.deleteMany({
+      where: { companyID: companyId, code },
+    });
+    return this.getFederalDomain(companyId, user);
+  }
+
+  async getMutualLinkedCompanyIds(companyId: number): Promise<number[]> {
+    return getMutuallyLinkedCompanyIds(this.prisma, companyId);
+  }
+
+  private assertSuperAdmin(user: { role?: string } | undefined) {
+    if (String(user?.role || '').toUpperCase() !== 'SUPERADMIN') {
+      throw new ForbiddenException('Only SuperAdmin can manage task assignee company links');
+    }
+  }
+
+  async getTaskAssigneeLinks(companyId: number, user?: { role?: string }) {
+    this.assertSuperAdmin(user);
+    const company = await this.prisma.company.findUnique({
+      where: { id: companyId },
+      select: { id: true, companyName: true },
+    });
+    if (!company) throw new NotFoundException('Company not found');
+
+    const linkTable = (this.prisma as any).companyTaskAssigneeLink;
+    const outbound = await linkTable.findMany({
+      where: { companyID: companyId },
+      select: { linkedCompanyID: true },
+    });
+    const linkedCompanyIDs = outbound.map((r: { linkedCompanyID: number }) => r.linkedCompanyID);
+    let mutualCompanyIDs: number[] = [];
+    if (linkedCompanyIDs.length) {
+      const inbound = await linkTable.findMany({
+        where: {
+          companyID: { in: linkedCompanyIDs },
+          linkedCompanyID: companyId,
+        },
+        select: { companyID: true },
+      });
+      mutualCompanyIDs = inbound.map((r: { companyID: number }) => r.companyID);
+    }
+
+    return {
+      companyID: company.id,
+      companyName: company.companyName,
+      linkedCompanyIDs,
+      mutualCompanyIDs,
+    };
+  }
+
+  async setTaskAssigneeLinks(
+    companyId: number,
+    linkedCompanyIDs: number[],
+    user?: { role?: string },
+  ) {
+    this.assertSuperAdmin(user);
+    const company = await this.prisma.company.findUnique({
+      where: { id: companyId },
+      select: { id: true },
+    });
+    if (!company) throw new NotFoundException('Company not found');
+
+    const uniqueIds = [
+      ...new Set(
+        (Array.isArray(linkedCompanyIDs) ? linkedCompanyIDs : [])
+          .map((id) => Number(id))
+          .filter((id) => Number.isFinite(id) && id > 0 && id !== companyId),
+      ),
+    ];
+
+    if (uniqueIds.length) {
+      const found = await this.prisma.company.findMany({
+        where: { id: { in: uniqueIds } },
+        select: { id: true },
+      });
+      if (found.length !== uniqueIds.length) {
+        throw new BadRequestException('One or more selected companies were not found');
+      }
+    }
+
+    const linkTable = (this.prisma as any).companyTaskAssigneeLink;
+    await this.prisma.$transaction([
+      linkTable.deleteMany({
+        where: { companyID: companyId },
+      }),
+      ...(uniqueIds.length
+        ? [
+            linkTable.createMany({
+              data: uniqueIds.map((linkedCompanyID) => ({
+                companyID: companyId,
+                linkedCompanyID,
+              })),
+              skipDuplicates: true,
+            }),
+          ]
+        : []),
+    ]);
+
+    return this.getTaskAssigneeLinks(companyId, user);
   }
 }

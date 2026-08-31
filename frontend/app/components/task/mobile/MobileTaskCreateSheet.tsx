@@ -20,6 +20,7 @@ type AssignEmployee = {
   employeeID?: string | null;
   employeeFirstName?: string | null;
   employeeLastName?: string | null;
+  companyName?: string | null;
 };
 type CustomerOpt = { id: number; customerCode?: string; customerName?: string; label?: string };
 type SiteOpt = {
@@ -54,7 +55,8 @@ const labelClass = "text-xs font-semibold text-gray-600 mb-1 block";
 
 function empLabel(e: AssignEmployee): string {
   const name = `${e.employeeFirstName ?? ""} ${e.employeeLastName ?? ""}`.trim();
-  return name ? `${name}${e.employeeID ? ` (${e.employeeID})` : ""}` : e.employeeID || `#${e.id}`;
+  const base = name ? `${name}${e.employeeID ? ` (${e.employeeID})` : ""}` : e.employeeID || `#${e.id}`;
+  return e.companyName ? `${base} · ${e.companyName}` : base;
 }
 
 function defaultForm(departmentId?: number | null): MobileTaskCreateFormState {

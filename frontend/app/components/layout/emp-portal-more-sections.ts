@@ -1,4 +1,4 @@
-import { canViewModule, isCompanyOwnerFlag } from "@/lib/companyAccess";
+import { canViewModule, hasCompanyAccessFlag, isCompanyOwnerFlag } from "@/lib/companyAccess";
 
 export type EmpMoreGroupKey =
   | "organization"
@@ -72,6 +72,15 @@ export const EMP_MORE_SECTIONS: EmpMoreSection[] = [
     iconClassName: "text-slate-700",
     moduleKey: "DEVICES",
     group: "organization",
+  },
+  {
+    id: "admin-federal-domain",
+    label: "Federal Domain",
+    href: "/my-company/company?tab=federal-domain",
+    icon: "solar:link-round-bold-duotone",
+    iconClassName: "text-violet-700",
+    group: "organization",
+    show: () => hasCompanyAccessFlag(),
   },
 
   // ── Employee management ──
@@ -418,6 +427,7 @@ export function moreModuleDescription(section: EmpMoreSection): string {
     "admin-departments": "Manage departments",
     "admin-designations": "Manage job titles",
     "admin-devices": "Configure biometric devices",
+    "admin-federal-domain": "Link companies for task assignment",
     "admin-holidays": "Manage holidays",
     "admin-roster": "Plan and assign workshift rosters",
     "admin-import-attendance": "Import attendance records",

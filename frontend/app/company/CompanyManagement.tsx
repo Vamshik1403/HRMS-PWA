@@ -419,15 +419,15 @@ const shouldAutoOpenCompanyProfile = isCompanyProfileOnly
   // For non-SUPERADMIN users, auto-open edit form with their company
 // Company profile users open direct edit form.
 // SERVICE_PROVIDER must see company list, not direct edit form.
-useEffect(() => {
+  useEffect(() => {
   if (shouldAutoOpenCompanyProfile && companies.length > 0 && !isAddingNew && !editingCompany) {
-    const company = companies[0] as any
+      const company = companies[0] as any
     setServiceProviders([])
     setSpDropdownOpen(false)
     setFormData(mapCompanyToFormData(company))
-    setEditingCompany(company)
-    setIsAddingNew(true)
-  }
+      setEditingCompany(company)
+      setIsAddingNew(true)
+    }
 }, [companies, shouldAutoOpenCompanyProfile, isAddingNew, editingCompany])
 
   const fetchCompanies = async () => {
@@ -614,9 +614,9 @@ let filtered =
       }
 
       await fetchCompanies();
-      resetForm();
-      setIsAddingNew(false);
-      setEditingCompany(null);
+        resetForm();
+        setIsAddingNew(false);
+        setEditingCompany(null);
       toast.success("Company saved successfully");
       window.dispatchEvent(new Event("sidebar-refresh"));
     } catch (error) {
@@ -799,15 +799,15 @@ let filtered =
   }
 
   const handleDelete = async (id: number) => {
-    try {
+      try {
       const res = await fetch(`/backend/company/${id}`, { method: "DELETE" })
       if (!res.ok) {
         throw new Error(apiErrorMessage(await res.text(), "Failed to delete company"))
       }
-      await fetchCompanies()
-      toast.success("Company deleted successfully")
-    } catch (error) {
-      console.error("Error deleting company:", error)
+        await fetchCompanies()
+        toast.success("Company deleted successfully")
+      } catch (error) {
+        console.error("Error deleting company:", error)
       toast.error(
         apiErrorMessage(
           error instanceof Error ? error.message : "",
@@ -822,7 +822,7 @@ let filtered =
       companyName: "",
       companyType: "",
       legalEntityType: "",
-      noticePeriodDaysForResignation: "",
+      noticePeriodDaysForResignation: "", 
       noticePeriodDaysForTermination: "",
       address: "",
       country: "",
@@ -959,7 +959,7 @@ let filtered =
   const filteredCompanies = useMemo(() => {
     const t = table.search.trim().toLowerCase()
     let list = companies.filter(
-      (c) =>
+    (c) =>
         !t ||
         (c.companyName?.toLowerCase().includes(t) ||
           c.country?.toLowerCase().includes(t) ||
@@ -1346,26 +1346,26 @@ let filtered =
             description="Manage registered companies"
             actions={
               !isAddingNew && !isViewing && !isModuleDrawerOpen && user?.role === "SUPERADMIN" ? (
-                <Button
+            <Button
                   onClick={async () => {
-                    resetForm()
-                    setIsAddingNew(true)
+                resetForm()
+                setIsAddingNew(true)
                     await applySoleServiceProviderToForm()
-                  }}
-                >
+              }}
+            >
                   <Plus className="w-4 h-4 mr-1" /> Add Tenant
-                </Button>
+            </Button>
               ) : null
             }
           />
 
-          {/* Add/Edit Form - Drawer */}
-          <FormDrawer
-            open={isAddingNew}
-            onOpenChange={(v) => { if (!v) handleCancel(); }}
+      {/* Add/Edit Form - Drawer */}
+      <FormDrawer
+        open={isAddingNew}
+        onOpenChange={(v) => { if (!v) handleCancel(); }}
             title={editingCompany ? "Edit Tenant" : "Add New Tenant"}
-          >
-            <div>
+      >
+        <div>
               <form onSubmit={handleSubmit} className="space-y-8 pb-2">
                 <FormSectionNav
                   active={companyFormTab}
@@ -1384,7 +1384,7 @@ let filtered =
                   description="Core company details and registered address."
                 >
                   <FormField label="Company Name" required>
-                    <Input
+                <Input
                       value={formData.companyName || ""}
                       onChange={(e) => setFormData((p) => ({ ...p, companyName: e.target.value }))}
                       placeholder="Enter company name"
@@ -1395,8 +1395,8 @@ let filtered =
                     <Select
                       value={formData.legalEntityType || ""}
                       onValueChange={(v) =>
-                        setFormData((p) => ({
-                          ...p,
+                          setFormData((p) => ({
+                            ...p,
                           legalEntityType: v,
                           defaultOwnerTitle: defaultUserTypeForEntity(v),
                         }))
@@ -1416,27 +1416,27 @@ let filtered =
                   </FormField>
 
                   <FormField label="Registered / HO Address">
-                    <Textarea
-                      value={formData.address || ""}
-                      onChange={(e) => setFormData((p) => ({ ...p, address: e.target.value }))}
+                <Textarea
+                  value={formData.address || ""}
+                  onChange={(e) => setFormData((p) => ({ ...p, address: e.target.value }))}
                       placeholder="Street, area, landmark…"
-                      rows={3}
+                  rows={3}
                       showCount
                       maxLength={500}
-                    />
+                />
                   </FormField>
 
-                  <LocationFields
-                    values={{
-                      city: formData.city,
-                      state: formData.state,
-                      pincode: formData.pincode,
-                      country: formData.country,
-                      currency: formData.currency,
-                    }}
-                    onChange={(patch) => setFormData((p) => ({ ...p, ...patch }))}
-                    showCurrency={false}
-                  />
+              <LocationFields
+                values={{
+                  city: formData.city,
+                  state: formData.state,
+                  pincode: formData.pincode,
+                  country: formData.country,
+                  currency: formData.currency,
+                }}
+                onChange={(patch) => setFormData((p) => ({ ...p, ...patch }))}
+                showCurrency={false}
+              />
 
                   <FormField label="Website">
                     <Input
@@ -1465,9 +1465,9 @@ let filtered =
                       </SelectContent>
                     </Select>
                   </FormField>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <FormField label="GSTIN" required={(formData as any).gstRegistrationType === "Registered"}>
-                      <Input value={formData.gstNo || ""} onChange={(e) => setFormData((p) => ({ ...p, gstNo: e.target.value }))} />
+                  <Input value={formData.gstNo || ""} onChange={(e) => setFormData((p) => ({ ...p, gstNo: e.target.value }))} />
                     </FormField>
                     <FormField label="PAN">
                       <Input value={formData.panNo || ""} onChange={(e) => setFormData((p) => ({ ...p, panNo: e.target.value }))} />
@@ -1508,8 +1508,8 @@ let filtered =
                                 <Trash2 className="h-4 w-4 text-red-600" />
                               </Button>
                             ) : null}
-                          </div>
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <FormField label="Title">
                               <Select
                                 value={row.title || "__none__"}
@@ -1631,7 +1631,7 @@ let filtered =
                                 />
                               </FormField>
                             ) : null}
-                          </div>
+                </div>
                           <label className="flex items-center gap-2 text-sm">
                             <input
                               type="checkbox"
@@ -1646,7 +1646,7 @@ let filtered =
                             />
                             Set as Company Admin
                           </label>
-                        </div>
+                </div>
                       )
                     })}
                     <Button
@@ -1657,29 +1657,29 @@ let filtered =
                       <Plus className="w-4 h-4 mr-2" />
                       Add Primary Contact
                     </Button>
-                  </div>
+              </div>
                 </FormSection>
                 )}
 
                 <div className="flex justify-end gap-2 border-t border-border pt-5">
                   <Button type="submit" disabled={saving}>
-                    <Save className="w-4 h-4 mr-1" />
+                  <Save className="w-4 h-4 mr-1" />
                     {editingCompany ? "Save Changes" : "Add Tenant"}
-                  </Button>
-                </div>
-              </form>
-            </div>
-          </FormDrawer>
+                </Button>
+              </div>
+            </form>
+        </div>
+      </FormDrawer>
 
-          {/* View Details - Drawer */}
-          <FormDrawer
-            open={!!(isViewing && viewCompany)}
-            onOpenChange={(v) => { if (!v) handleCancel(); }}
-            title="Company Details"
+      {/* View Details - Drawer */}
+      <FormDrawer
+        open={!!(isViewing && viewCompany)}
+        onOpenChange={(v) => { if (!v) handleCancel(); }}
+        title="Company Details"
             showHeaderCancel
             cancelLabel="Close"
-          >
-            {viewCompany && (
+      >
+        {viewCompany && (
               <EntityDetailLayout
                 hero={
                   <EntityDetailHero
@@ -1752,7 +1752,7 @@ let filtered =
                   <DetailCard title="Branding" subtitle="Logo and signature" className="lg:col-span-2">
                     <div className="flex flex-wrap gap-6">
                       {viewCompany.companyLogoUrl ? (
-                        <div>
+        <div>
                           <p className="mb-2 text-sm text-muted-foreground">Company logo</p>
                           <img src={viewCompany.companyLogoUrl} alt="Company Logo" className="h-24 w-24 rounded-lg border object-contain" />
                         </div>
@@ -1816,9 +1816,9 @@ let filtered =
                         <p className="text-xs text-gray-500">{module.moduleKey}</p>
                       </div>
                     </div>
-                  ))}
-                </div>
-              )}
+                    ))}
+                  </div>
+                )}
 
               <div className="flex justify-end gap-3 pt-4">
 
@@ -1837,7 +1837,7 @@ let filtered =
             <Card className="w-full border border-gray-200 shadow-sm">
               <CardHeader className="border-b bg-white">
                 <div className="flex items-start justify-between gap-4">
-                  <div>
+                <div>
                     <CardTitle className="flex items-center gap-2 text-xl">
                       <UserPlus className="w-5 h-5 text-indigo-600" />
                       Company Admin
@@ -1845,7 +1845,7 @@ let filtered =
                     <p className="text-sm text-gray-500 mt-1">
                       Create and manage company admin employee logins for this tenant.
                     </p>
-                  </div>
+                </div>
 
                   <div className="flex gap-2">
                     {!companyAdminFormOpen ? (
@@ -1914,7 +1914,7 @@ let filtered =
                     onSubmit={createCompanyAdminUser}
                     className="rounded-xl border bg-white p-5 space-y-5"
                   >
-                    <div>
+                <div>
                       <h3 className="text-base font-semibold text-gray-900">
                         {viewingCompanyAdmin
                           ? "View Company Admin"
@@ -1925,7 +1925,7 @@ let filtered =
                       <p className="text-sm text-gray-500">
                         Company login uses a unique username. Password override is optional on update.
                       </p>
-                    </div>
+                </div>
 
                     <FormSectionNav
                       active={companyAdminFormTab}
@@ -1951,7 +1951,7 @@ let filtered =
                           />
                           Active
                         </label>
-                      </div>
+            </div>
 
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <div className="space-y-2">
@@ -1973,7 +1973,7 @@ let filtered =
                               ))}
                             </SelectContent>
                           </Select>
-                        </div>
+        </div>
                         <div className="space-y-2">
                           <Label>First Name *</Label>
                           <Input
@@ -2081,7 +2081,7 @@ let filtered =
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="space-y-2">
                           <Label>Username{companyAdminForm.useEmailMobileCreds ? "" : " *"}</Label>
-                          <Input
+                <Input
                             autoComplete="new-username"
                             value={companyAdminForm.username}
                             onChange={(e) => {
@@ -2118,7 +2118,7 @@ let filtered =
                               {usernameCheck.message}
                             </p>
                           ) : null}
-                        </div>
+              </div>
                         <div className="space-y-2">
                           <Label>
                             Password
@@ -2179,8 +2179,8 @@ let filtered =
                     {companyAdminFormTab === "permissions" && (
                       <div className="overflow-x-auto rounded-md border">
                         <Table>
-                          <TableHeader>
-                            <TableRow>
+                <TableHeader>
+                  <TableRow>
                               <TableHead>Module</TableHead>
                               <TableHead>Read</TableHead>
                               <TableHead>Write</TableHead>
@@ -2272,14 +2272,14 @@ let filtered =
                           <TableHead>Role</TableHead>
                           <TableHead>Designation</TableHead>
                           <TableHead>Status</TableHead>
-                          <TableHead className="text-right">Actions</TableHead>
-                        </TableRow>
-                      </TableHeader>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
 
-                      <TableBody>
+                <TableBody>
                         {companyAdminLoading ? (
-                          <TableRow>
-                            <TableCell colSpan={7} className="text-center py-8 text-gray-500">
+                    <TableRow>
+                      <TableCell colSpan={7} className="text-center py-8 text-gray-500">
                               Loading users...
                             </TableCell>
                           </TableRow>
@@ -2287,9 +2287,9 @@ let filtered =
                           <TableRow>
                             <TableCell colSpan={7} className="text-center py-8 text-gray-500">
                               No company admins found
-                            </TableCell>
-                          </TableRow>
-                        ) : (
+                      </TableCell>
+                    </TableRow>
+                  ) : (
                           companyAdminUsers.map((u) => (
                             <TableRow key={u.id}>
                               <TableCell className="font-medium">{u.username}</TableCell>
@@ -2304,40 +2304,40 @@ let filtered =
                                   {u.isActive ? "Active" : "Inactive"}
                                 </Badge>
                               </TableCell>
-                              <TableCell className="text-right">
+                        <TableCell className="text-right">
                                 <div className="flex justify-end gap-2">
-                                  <Button
-                                    variant="ghost"
+                            <Button
+                              variant="ghost"
                                     size="icon"
                                     onClick={() => handleViewCompanyAdmin(u)}
-                                  >
+                            >
                                     <Eye className="h-4 w-4" />
-                                  </Button>
-                                  <Button
-                                    variant="ghost"
+                            </Button>
+                              <Button
+                                variant="ghost"
                                     size="icon"
                                     onClick={() => handleEditCompanyAdmin(u)}
-                                  >
+                              >
                                     <Edit className="h-4 w-4 text-blue-600" />
-                                  </Button>
-                                  <Button
-                                    variant="ghost"
+                              </Button>
+                              <Button
+                                variant="ghost"
                                     size="icon"
                                     onClick={() => handleDeleteCompanyAdmin(u.id)}
-                                  >
+                              >
                                     <Trash2 className="h-4 w-4 text-red-600" />
-                                  </Button>
-                                </div>
-                              </TableCell>
-                            </TableRow>
-                          ))
-                        )}
-                      </TableBody>
-                    </Table>
+                              </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
                   </div>
                 )}
-              </CardContent>
-            </Card>
+            </CardContent>
+          </Card>
           )}
 
 {!isAddingNew && !isViewing && (isSuperAdmin || isServiceProvider) && !companyAdminDrawerOpen && !isModuleDrawerOpen && (<>

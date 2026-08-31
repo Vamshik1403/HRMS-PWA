@@ -73,6 +73,13 @@ const DeviceManagement = dynamic(
   () => import("../../devices/DeviceManagement").then((m) => m.DeviceManagement),
   { ssr: false },
 );
+const FederalDomainManagement = dynamic(
+  () =>
+    import("../../federal-domain/FederalDomainManagement").then(
+      (m) => m.FederalDomainManagement,
+    ),
+  { ssr: false },
+);
 const ImportAttendanceManagement = dynamic(
   () =>
     import("../../import-attendance/ImportAttendanceManagement").then(
@@ -181,6 +188,8 @@ function HubEmbed({ tab }: { tab: CompanyHubTab }) {
       return <BranchManagement />;
     case "devices":
       return <DeviceManagement />;
+    case "federal-domain":
+      return <FederalDomainManagement />;
     case "import-attendance":
       return <ImportAttendanceManagement />;
     case "customers":

@@ -232,7 +232,7 @@ export function AttendanceRegularisationManagement() {
     companyName: "",
     branchName: "",
 departmentName: "",
-employeeName: "",
+    employeeName: "",
     attendanceDate: "",
     checkInTime: "",
     day: "",
@@ -243,10 +243,10 @@ employeeName: "",
     remarks: "",
     serviceProviderID: undefined as number | undefined,
     companyID: undefined as number | undefined,
-branchesID: undefined as number | undefined,
+    branchesID: undefined as number | undefined,
 departmentID: undefined as number | undefined,
 designationID: undefined as number | undefined,
-manageEmployeeID: undefined as number | undefined,
+    manageEmployeeID: undefined as number | undefined,
     overtimeApplicable: false,
     otMealApply: false,
     otMealMinutes: "" as string | number,
@@ -526,12 +526,12 @@ manageEmployeeID: undefined as number | undefined,
         return fullName.includes(q) || employeeId.includes(q)
       }).map(mapDisplay)
 
-      const ctx = getSidebarContext();
+        const ctx = getSidebarContext();
       const companyID = formData.companyID ?? ctx?.companyID ?? user?.companyID ?? managerData?.companyID;
       const isOwner = !!(user as any)?.employee?.isCompanyOwner || !!(user as any)?.isCompanyOwner;
 
       let filtered = Array.isArray(data) ? data : []
-      if (companyID) {
+        if (companyID) {
         filtered = filtered.filter((item: any) => Number(item.companyID) === Number(companyID))
       }
       if (formData.branchesID) {
@@ -564,7 +564,7 @@ manageEmployeeID: undefined as number | undefined,
         }
       }
 
-      return applySearch(filtered)
+        return applySearch(filtered)
     } catch (error) {
       console.error("Error fetching employees:", error)
       return []
@@ -668,7 +668,7 @@ manageEmployeeID: undefined as number | undefined,
   currentEmployee?.isCompanyOwner === true
 ) {
   setMyAssignedApprovals([])
-  return []
+      return []
 }
 
     try {
@@ -880,7 +880,7 @@ serviceProviderID:
           manageEmployeeID: regularisation.manageEmployeeID,
           serviceProvider: regularisation.serviceProvider?.companyName || "",
           companyName: regularisation.company?.companyName || "",
-   branchName: regularisation.branches?.branchName || "",
+          branchName: regularisation.branches?.branchName || "",
 departmentID:
   regularisation.departmentID ??
   regularisation.manageEmployee?.departmentNameID ??
@@ -895,7 +895,7 @@ departmentName:
   regularisation.departments?.departmentName ||
   regularisation.manageEmployee?.departments?.departmentName ||
   "",
-employeeId: regularisation.manageEmployee?.employeeID || "",
+          employeeId: regularisation.manageEmployee?.employeeID || "",
 
           day: regularisation.day || "",
           employeeName: regularisation.manageEmployee ?
@@ -1325,8 +1325,8 @@ const statusBadgeVariant = (status?: AttendanceRegularisation["status"]) => {
         const earlyAllow = policy.earlyCheckoutBeforeEndMin || 0
 
         if (isFlexible) {
-          if (workedMinutes < halfDayMin) return applyStatus("ABSENT")
-          if (workedMinutes < totalShiftMinutes) return applyStatus("HALFDAY")
+        if (workedMinutes < halfDayMin) return applyStatus("ABSENT")
+        if (workedMinutes < totalShiftMinutes) return applyStatus("HALFDAY")
           return applyStatus("FULLDAY")
         }
 
@@ -1843,13 +1843,13 @@ if (
     }
   }
 
-const handleSubmit = async (e: React.FormEvent) => {
-  e.preventDefault()
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
 
 
     const serviceProviderID =
       user?.role === "SUPERADMIN"
-        ? formData.serviceProviderID
+      ? formData.serviceProviderID 
         : managerData?.serviceProviderID ||
           empCreds?.serviceProviderID ||
           formData.serviceProviderID ||
@@ -1857,7 +1857,7 @@ const handleSubmit = async (e: React.FormEvent) => {
 
     const companyID =
       user?.role === "SUPERADMIN"
-        ? formData.companyID
+      ? formData.companyID 
         : managerData?.companyID ||
           empCreds?.companyID ||
           currentEmployee?.companyID ||
@@ -2063,7 +2063,7 @@ const canModifyRegularisation = (
     return
   }
 
-  setFormData({
+    setFormData({
     serviceProvider:
       regularisation.serviceProvider ||
       "",
@@ -2155,7 +2155,7 @@ const canModifyRegularisation = (
       "",
   })
 
-  setSelectedEmployee({
+    setSelectedEmployee({
     id:
       regularisation.manageEmployeeID,
 
@@ -2555,7 +2555,7 @@ if (
       cell: (r) => {
         const state = getApprovalDisplayState(r)
 
-        return (
+  return (
           <Badge variant={state.variant}>
             {state.label}
           </Badge>
@@ -2682,9 +2682,9 @@ if (
         setIsDialogOpen(true)
       }}
     >
-      <Plus className="w-4 h-4 mr-1" />
-      Submit Regularisation
-    </Button>
+              <Plus className="w-4 h-4 mr-1" />
+              Submit Regularisation
+            </Button>
   ) : null
 }
       />
@@ -2847,10 +2847,10 @@ if (
                         <option value="PRESENT">Present</option>
 <option value="HALF_DAY">Half Day</option>
 <option value="LATE_MARK">Late Mark</option>
-<option value="SL">Sick Leave (SL)</option>
-<option value="CL">Casual Leave (CL)</option>
-<option value="PL">Privilege Leave (PL)</option>
-<option value="LOP">Loss of Pay (LOP)</option>
+                        <option value="SL">Sick Leave (SL)</option>
+                        <option value="CL">Casual Leave (CL)</option>
+                        <option value="PL">Privilege Leave (PL)</option>
+                        <option value="LOP">Loss of Pay (LOP)</option>
 <option value="WEEKOFF">Week Off</option>
                       </select>
                     </div>
@@ -2934,7 +2934,7 @@ if (
             emptyTitle="No attendance regularisations found"
             emptyDescription="Try adjusting your search or filters."
           emptyAction={
-  <Button
+                              <Button
     onClick={() => {
       closeRegularisationPagePanels()
       setIsDialogOpen(true)
@@ -2942,11 +2942,11 @@ if (
   >
     <Plus className="w-4 h-4 mr-1" />
     Submit Regularisation
-  </Button>
+                              </Button>
 }
           />
-        </>
-      )}
+  </>
+  )}
     </div>
   )
 }

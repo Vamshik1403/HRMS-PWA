@@ -84,7 +84,13 @@ interface Dept {
   serviceProviderID?: number | null;
 }
 
-interface Employee { id: number; employeeFirstName?: string; employeeLastName?: string; employeeID?: string; }
+interface Employee {
+  id: number;
+  employeeFirstName?: string;
+  employeeLastName?: string;
+  employeeID?: string;
+  companyName?: string | null;
+}
 
 function engineerNames(task: Task) {
   const names = (task.assignments || [])
@@ -299,7 +305,7 @@ useAppRefresh(() => {
     }
   };
 
-  // Load employees for assign modal: department first, then all company staff
+  // Load employees for assign modal: same-company and mutually linked companies, department only
   useEffect(() => {
     if (!assignTask) { setAssignEmployees([]); return; }
     const departmentId = assignTask.departmentID || 0;
@@ -1116,7 +1122,7 @@ useAppRefresh(() => {
             <div className="px-5 py-4 max-h-72 overflow-y-auto">
               {assignEmployees.length === 0 ? (
                 <p className="text-sm text-gray-400 text-center py-6">
-                  No employees found in this company
+                  No employees found in this department
                 </p>
               ) : (
                 <div className="space-y-2">
@@ -1133,6 +1139,9 @@ useAppRefresh(() => {
                       <span className="text-[13px] text-gray-800">
                         {[emp.employeeFirstName, emp.employeeLastName].filter(Boolean).join(" ")}
                         <span className="text-gray-400 ml-1">({emp.employeeID})</span>
+                        {emp.companyName ? (
+                          <span className="text-gray-400 ml-1">· {emp.companyName}</span>
+                        ) : null}
                       </span>
                     </label>
                   ))}

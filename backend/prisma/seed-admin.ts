@@ -22,6 +22,7 @@ async function main() {
         passwordHash,
         role: "SUPERADMIN",
         isActive: true,
+        requireLoginOtp: false,
       },
     });
     console.log(`Existing user "${username}" updated with new password and SUPERADMIN role.`);
@@ -32,6 +33,7 @@ async function main() {
         passwordHash,
         role: "SUPERADMIN",
         isActive: true,
+        requireLoginOtp: false,
       },
     });
     console.log(`New super admin user created.`);

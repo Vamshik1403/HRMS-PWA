@@ -1665,6 +1665,21 @@ export class DashboardOverviewService {
     return items;
   }
 
+  emptyTodayOverview(query: TodayOverviewQuery) {
+    return this.emptyResponse(dateKeyLocal(new Date()), query);
+  }
+
+  emptyNewJoiners() {
+    const today = new Date();
+    const monthStart = new Date(today.getFullYear(), today.getMonth(), 1, 0, 0, 0, 0);
+    return {
+      month: today.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }),
+      monthStart: dateKeyLocal(monthStart),
+      count: 0,
+      employees: [],
+    };
+  }
+
   private emptyResponse(date: string, query: TodayOverviewQuery) {
     return {
       date,

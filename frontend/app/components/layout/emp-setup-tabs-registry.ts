@@ -1,4 +1,4 @@
-import { canViewModule, isCompanyOwnerFlag } from "@/lib/companyAccess";
+import { canViewModule, hasCompanyAccessFlag, isCompanyOwnerFlag } from "@/lib/companyAccess";
 
 export interface EmpSetupTabItem {
   id: string;
@@ -51,6 +51,14 @@ export const COMPANY_SETUP_TABS: EmpSetupTab[] = [
         icon: "solar:smartphone-bold-duotone",
         iconClassName: "text-slate-700",
         show: () => canViewModule("DEVICES"),
+      },
+      {
+        id: "federal-domain",
+        label: "Federal Domain",
+        href: "/my-company/company?tab=federal-domain",
+        icon: "solar:link-round-bold-duotone",
+        iconClassName: "text-violet-700",
+        show: () => hasCompanyAccessFlag(),
       },
     ],
   },

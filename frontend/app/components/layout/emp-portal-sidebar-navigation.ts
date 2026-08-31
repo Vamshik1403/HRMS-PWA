@@ -28,6 +28,7 @@ import {
   History,
   DollarSign,
   Fingerprint,
+  Link2,
   type LucideIcon,
 } from "lucide-react";
 import type { EmpModuleId } from "./emp-portal-workspaces";
@@ -370,6 +371,13 @@ export const EMP_SIDEBAR_NAVIGATION: EmpSidebarNavGroup[] = [
         companyAccessOnly: true,
         show: canModule("DEVICES"),
       },
+      {
+        id: "company-federal-domain",
+        label: "Federal Domain",
+        href: "/my-company/company?tab=federal-domain",
+        icon: Link2,
+        companyAccessOnly: true,
+      },
     ],
   },
   {
@@ -449,6 +457,13 @@ export function isEmpNavItemActive(
       pathname.startsWith("/devices/")
     );
   }
+  if (item.id === "company-federal-domain") {
+    return (
+      (pathname === "/my-company/company" && tab === "federal-domain") ||
+      pathname === "/federal-domain" ||
+      pathname.startsWith("/federal-domain/")
+    );
+  }
 
   // Keep My Company highlighted across the tile hub and legacy company paths.
   if (
@@ -459,7 +474,7 @@ export function isEmpNavItemActive(
   ) {
     if (
       pathname === "/my-company/company" &&
-      (tab === "branches" || tab === "devices")
+      (tab === "branches" || tab === "devices" || tab === "federal-domain")
     ) {
       return false;
     }

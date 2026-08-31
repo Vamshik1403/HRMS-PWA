@@ -59,6 +59,7 @@ export type CompanyHubTab = {
     | "company-info"
     | "branches"
     | "devices"
+    | "federal-domain"
     | "import-attendance"
     | "customers"
     | "sites"
@@ -88,6 +89,7 @@ export const COMPANY_HUB_TILES: CompanyHubTile[] = [
       { id: "hierarchy", label: "Company Hierarchy", embed: "hierarchy" },
       { id: "branches", label: "Branches", embed: "branches" },
       { id: "devices", label: "Attendance Devices", embed: "devices" },
+      { id: "federal-domain", label: "Federal Domain", embed: "federal-domain" },
       { id: "directory", label: "Employee Directory", embed: "employees" },
       { id: "holidays", label: "Holiday Calendar", embed: "public-holiday" },
     ],

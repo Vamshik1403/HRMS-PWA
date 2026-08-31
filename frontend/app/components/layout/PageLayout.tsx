@@ -113,7 +113,7 @@ const sbSubIdle =
 
 // Path groups for section active-state detection
 const TASK_MANAGEMENT_PATHS = ["/task-customers", "/task-customer-sites", "/task-projects"];
-const SETUP_PATHS = ["/company", "/branches", "/devices"];
+const SETUP_PATHS = ["/company", "/branches", "/devices", "/federal-domain"];
 const CONTRACTOR_MANAGEMENT_PATHS = ["/contractors", "/contractor-rates"];
 const EMPLOYEE_PATHS = ["/departments", "/designations", "/manage-employees", "/employees-promotions", "/termination"];
 const IM_PATHS = ["/employee-memo"];
@@ -198,6 +198,7 @@ if (currentUser?.role !== "SUPERADMIN") return;
       "/manage-employees",
       "/branches",
       "/devices",
+      "/federal-domain",
       "/departments",
       "/designations",
       "/work-shifts",
@@ -779,6 +780,7 @@ const canShowCompanySwitcher =
                 )}
                 <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={(e) => onNav(e)} href="/branches" className={cn(sbSubRow, isActiveLink('/branches', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Branches</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
                 <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={(e) => onNav(e)} href="/devices" className={cn(sbSubRow, isActiveLink('/devices', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Devices</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
+                <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={(e) => onNav(e)} href="/federal-domain" className={cn(sbSubRow, isActiveLink('/federal-domain', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Federal Domain</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
                 <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={(e) => onNav(e)} href="/departments" className={cn(sbSubRow, isActiveLink('/departments', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Departments</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
                 <SidebarMenuSubItem><SidebarMenuSubButton asChild><Link onClick={(e) => onNav(e)} href="/designations" className={cn(sbSubRow, isActiveLink('/designations', companyId) ? sbSubActive : sbSubIdle)}><span className="font-medium truncate" style={{ display: "block" }}>Designations</span></Link></SidebarMenuSubButton></SidebarMenuSubItem>
 

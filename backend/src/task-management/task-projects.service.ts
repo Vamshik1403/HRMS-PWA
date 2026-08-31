@@ -17,6 +17,7 @@ import { EmployeeMemoService } from '../employee-memo/employee-memo.service';
 import { EnplSyncService } from '../enpl-sync/enpl-sync.service';
 import { loadEmployeePermissions } from '../common/employee-permission.util';
 import { hasModuleAction } from '../common/company-module-permissions';
+import { getMutuallyLinkedCompanyIds } from '../company/federal-domain.util';
 
 export function normalizeTaskStatus(status?: string | null): string | undefined {
   if (!status) return undefined;
@@ -160,24 +161,34 @@ export class TaskProjectsService {
     return viewer;
   }
 
-  private async visibilityWhere(viewer: TaskViewerContext, companyID?: number) {
-    const base: Record<string, unknown> = { isDeleted: false };
-    if (companyID) base.companyID = companyID;
-    else if (viewer.companyID && viewer.role !== 'SUPERADMIN') base.companyID = viewer.companyID;
+  private async visibilityWhere(
+    viewer: TaskViewerContext,
+    companyID?: number,
+  ): Promise<Record<string, unknown>> {
+    const companyFilter: Record<string, unknown> = {};
+    if (companyID) companyFilter.companyID = companyID;
+    else if (viewer.companyID && viewer.role !== 'SUPERADMIN') {
+      companyFilter.companyID = viewer.companyID;
+    }
 
-    if (canManageTaskModule(viewer)) return base;
+    if (canManageTaskModule(viewer)) {
+      return { isDeleted: false, ...companyFilter };
+    }
 
     const or: Record<string, unknown>[] = [];
     if (viewer.employeeId) {
       const scopeIds = await this.managerScope.getReporteeIds(viewer.employeeId);
-      or.push({ createdByEmployeeID: { in: scopeIds } });
+      or.push({
+        AND: [{ ...companyFilter }, { createdByEmployeeID: { in: scopeIds } }],
+      });
       or.push({ assignments: { some: { manageEmployeeID: { in: scopeIds } } } });
+      or.push({ engineerAssignments: { some: { manageEmployeeID: { in: scopeIds } } } });
     }
     if (viewer.userId) {
-      or.push({ createdByUserID: viewer.userId });
+      or.push({ AND: [{ ...companyFilter }, { createdByUserID: viewer.userId }] });
     }
     if (!or.length) throw new ForbiddenException('Access denied');
-    return { ...base, OR: or };
+    return { isDeleted: false, OR: or };
   }
 
   private async assertTaskAccess(taskId: number, viewer: TaskViewerContext) {
@@ -1320,35 +1331,61 @@ export class TaskProjectsService {
     const viewer = await this.resolveViewer(query);
     const companyID =
       (query.companyID ? Number(query.companyID) : undefined) || viewer.companyID || undefined;
-    const where: any = { lifecycleStatus: 'ACTIVE', isDeleted: false };
-    if (companyID) where.companyID = companyID;
-    else if (viewer.role !== 'SUPERADMIN') return [];
+    if (!companyID || !(departmentID > 0)) return [];
 
-    const select = {
-      id: true,
-      employeeID: true,
-      employeeFirstName: true,
-      employeeLastName: true,
-      departments: { select: { departmentName: true } },
-    } as const;
-    const orderBy = { employeeFirstName: 'asc' as const };
+    const taskDept = await this.prisma.departments.findUnique({
+      where: { id: departmentID },
+      select: { departmentName: true, companyID: true },
+    });
+    const deptName = (taskDept?.departmentName || '').trim();
+    if (!deptName) return [];
 
-    if (departmentID > 0) {
-      const inDepartment = await this.prisma.manageEmployee.findMany({
-        where: {
-          ...where,
-          OR: [
-            { departmentNameID: departmentID },
-            { empDepartment: { some: { departmentNameID: departmentID } } },
-          ],
-        },
-        select,
-        orderBy,
-      });
-      if (inDepartment.length) return inDepartment;
-    }
+    const linkedIds = companyID
+      ? await getMutuallyLinkedCompanyIds(this.prisma, companyID)
+      : [];
+    const companyIds = companyID ? [companyID, ...linkedIds] : linkedIds;
+    if (!companyIds.length && viewer.role !== 'SUPERADMIN') return [];
 
-    return this.prisma.manageEmployee.findMany({ where, select, orderBy });
+    const matchingDepts = await this.prisma.departments.findMany({
+      where: {
+        ...(companyIds.length ? { companyID: { in: companyIds } } : {}),
+        departmentName: { equals: deptName, mode: 'insensitive' },
+      },
+      select: { id: true },
+    });
+    const deptIds = [...new Set([departmentID, ...matchingDepts.map((d) => d.id)])];
+
+    const rows = await this.prisma.manageEmployee.findMany({
+      where: {
+        lifecycleStatus: 'ACTIVE',
+        isDeleted: false,
+        ...(companyIds.length ? { companyID: { in: companyIds } } : {}),
+        OR: [
+          { departmentNameID: { in: deptIds } },
+          { empDepartment: { some: { departmentNameID: { in: deptIds } } } },
+        ],
+      },
+      select: {
+        id: true,
+        employeeID: true,
+        employeeFirstName: true,
+        employeeLastName: true,
+        companyID: true,
+        company: { select: { companyName: true } },
+        departments: { select: { departmentName: true } },
+      },
+      orderBy: { employeeFirstName: 'asc' },
+    });
+
+    return rows.map((row) => ({
+      id: row.id,
+      employeeID: row.employeeID,
+      employeeFirstName: row.employeeFirstName,
+      employeeLastName: row.employeeLastName,
+      companyID: row.companyID,
+      companyName: row.company?.companyName ?? null,
+      departments: row.departments,
+    }));
   }
 }
 
