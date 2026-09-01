@@ -1,6 +1,7 @@
 import { AsyncLocalStorage } from 'async_hooks';
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { getMutuallyLinkedCompanyIds } from '../company/federal-domain.util';
 import { ENPL_COMPANY_NAMES, ENPL_ENTITY, ENPL_ERP_BASE_DEFAULT, EnplEntityType } from './enpl-sync.constants';
 import {
   asDate,
@@ -22,6 +23,7 @@ export class EnplSyncService {
   private readonly logger = new Logger(EnplSyncService.name);
   private readonly als = new AsyncLocalStorage<SyncStore>();
   private companyCache: { id: number; companyName: string | null; serviceProviderID: number | null } | null = null;
+  private inboundLookups: any = null;
 
   constructor(private prisma: PrismaService) {}
 
@@ -50,51 +52,120 @@ export class EnplSyncService {
         customers: '/api/integrations/enpl/customers',
         sites: '/api/integrations/enpl/sites',
         tasks: '/api/integrations/enpl/tasks',
+        employees: '/api/integrations/enpl/employees',
       },
     };
   }
 
   async bulkImportFromEnpl() {
     const payload = await this.fetchEnplExport();
-    const customers = payload.customers || [];
-    const sites = payload.sites || [];
-    const tasks = payload.tasks || [];
-    let customerOk = 0;
-    let siteOk = 0;
-    let taskOk = 0;
-    const errors: Array<{ type: string; id?: unknown; message: string }> = [];
-    for (const row of customers) {
-      try {
-        await this.upsertCustomerFromEnpl(row);
-        customerOk += 1;
-      } catch (err) {
-        errors.push({ type: 'customer', id: row?.id, message: (err as Error).message });
+    this.inboundLookups = payload.lookups || null;
+    try {
+      const customers = payload.customers || [];
+      const sites = payload.sites || [];
+      const tasks = payload.tasks || [];
+      let customerOk = 0;
+      let siteOk = 0;
+      let taskOk = 0;
+      const errors: Array<{ type: string; id?: unknown; message: string }> = [];
+      for (const row of customers) {
+        try {
+          await this.upsertCustomerFromEnpl(row);
+          customerOk += 1;
+        } catch (err) {
+          errors.push({ type: 'customer', id: row?.id, message: (err as Error).message });
+        }
       }
-    }
-    for (const row of sites) {
-      try {
-        await this.upsertSiteFromEnpl(row);
-        siteOk += 1;
-      } catch (err) {
-        errors.push({ type: 'site', id: row?.id, message: (err as Error).message });
+      for (const row of sites) {
+        try {
+          await this.upsertSiteFromEnpl(row);
+          siteOk += 1;
+        } catch (err) {
+          errors.push({ type: 'site', id: row?.id, message: (err as Error).message });
+        }
       }
-    }
-    for (const row of tasks) {
-      try {
-        await this.upsertTaskFromEnpl(row);
-        taskOk += 1;
-      } catch (err) {
-        errors.push({ type: 'task', id: row?.id, message: (err as Error).message });
+      for (const row of tasks) {
+        try {
+          await this.upsertTaskFromEnpl(row);
+          taskOk += 1;
+        } catch (err) {
+          errors.push({ type: 'task', id: row?.id, message: (err as Error).message });
+        }
       }
+      const company = await this.resolveCompany();
+      await this.backfillMappingsFromErpColumns();
+      const statusRepair = await this.recomputeStatusesFromRemarks();
+      return {
+        companyId: company.id,
+        imported: { customers: customerOk, sites: siteOk, tasks: taskOk },
+        statusRepair,
+        errors: errors.slice(0, 50),
+        errorCount: errors.length,
+      };
+    } finally {
+      this.inboundLookups = null;
     }
+  }
+
+  async listEmployeesForEnpl() {
     const company = await this.resolveCompany();
-    await this.backfillMappingsFromErpColumns();
-    return {
-      companyId: company.id,
-      imported: { customers: customerOk, sites: siteOk, tasks: taskOk },
-      errors: errors.slice(0, 50),
-      errorCount: errors.length,
-    };
+    const linked = await getMutuallyLinkedCompanyIds(this.prisma, company.id);
+    const companyIds = [...new Set([company.id, ...linked])];
+    const rows = await this.prisma.manageEmployee.findMany({
+      where: {
+        companyID: { in: companyIds },
+        isDeleted: false,
+        lifecycleStatus: 'ACTIVE',
+      },
+      select: {
+        id: true,
+        employeeID: true,
+        employeeFirstName: true,
+        employeeLastName: true,
+        businessEmail: true,
+        personalEmail: true,
+        personalPhoneNo: true,
+        businessPhoneNo: true,
+        departments: { select: { departmentName: true } },
+        company: { select: { companyName: true } },
+      },
+      orderBy: [{ employeeFirstName: 'asc' }, { employeeLastName: 'asc' }],
+    });
+    return rows.map((row) => ({
+      id: row.id,
+      employeeID: row.employeeID,
+      name: [row.employeeFirstName, row.employeeLastName].filter(Boolean).join(' ').trim() || null,
+      email: row.businessEmail || row.personalEmail || null,
+      phone: row.personalPhoneNo || row.businessPhoneNo || null,
+      department: row.departments?.departmentName || null,
+      companyName: row.company?.companyName || null,
+    }));
+  }
+
+  async recomputeStatusesFromRemarks(): Promise<{ scanned: number; updated: number }> {
+    const company = await this.resolveCompany();
+    const tasks = await this.prisma.taskProject.findMany({
+      where: { companyID: company.id, isDeleted: false },
+      select: {
+        id: true,
+        status: true,
+        remarks: { orderBy: { createdAt: 'desc' }, select: { status: true } },
+      },
+    });
+    let updated = 0;
+    for (const task of tasks) {
+      const latest = task.remarks.find((row) => blank(row.status));
+      if (!latest?.status) continue;
+      const next = normalizeEnplTaskStatus(latest.status);
+      if (!next || next === task.status) continue;
+      await this.prisma.taskProject.update({
+        where: { id: task.id },
+        data: { status: next },
+      });
+      updated += 1;
+    }
+    this.logger.log(`ENPL status recompute: scanned ${tasks.length}, updated ${updated}`);
+    return { scanned: tasks.length, updated };
   }
 
   async upsertCustomerFromEnpl(body: any): Promise<{ hrmsId: number }> {
@@ -387,6 +458,11 @@ export class EnplSyncService {
         });
       }
     }
+
+    await this.syncTaskWorkscopeFromEnpl(saved.id, company.id, body);
+    await this.syncTaskInventoryFromEnpl(saved.id, company.id, body);
+    await this.syncTaskPurchaseFromEnpl(saved.id, body);
+    await this.syncTaskEngineersFromEnpl(saved.id, body);
 
     await this.saveMapping(company.id, 'task', saved.id, data.erpTaskId, taskCode);
     return { hrmsId: saved.id };
@@ -856,6 +932,245 @@ export class EnplSyncService {
       data: { companyID, departmentName: name },
     });
     return created.id;
+  }
+
+  private async linkedCompanyIds(): Promise<number[]> {
+    const company = await this.resolveCompany();
+    const linked = await getMutuallyLinkedCompanyIds(this.prisma, company.id);
+    return [...new Set([company.id, ...linked])];
+  }
+
+  private lookupName(kind: 'workscopeCategories' | 'products', enplId: number | null): string | null {
+    if (enplId == null || !this.inboundLookups) return null;
+    const rows = this.inboundLookups[kind] || [];
+    const match = rows.find((row: any) => Number(row.id) === enplId);
+    if (!match) return null;
+    return blank(match.workscopeCategoryName || match.productName || match.name);
+  }
+
+  private async resolveWorkscopeCategoryId(companyId: number, row: any): Promise<number | null> {
+    const enplCatId = asInt(row?.workscopeCategoryId ?? row?.workscopeCategoryID);
+    const name =
+      blank(row?.workscopeCategoryName || row?.category?.workscopeCategoryName || row?.categoryName) ||
+      this.lookupName('workscopeCategories', enplCatId);
+    if (!name) return null;
+    const existing = await this.prisma.taskWorkscopeCategory.findFirst({
+      where: { companyID: companyId, workscopeCategoryName: { equals: name, mode: 'insensitive' } },
+    });
+    if (existing) return existing.id;
+    const created = await this.prisma.taskWorkscopeCategory.create({
+      data: { companyID: companyId, workscopeCategoryName: name },
+    });
+    return created.id;
+  }
+
+  private async resolveProductId(companyId: number, row: any): Promise<number | null> {
+    const enplProductId = asInt(row?.productTypeId ?? row?.productId);
+    const name =
+      blank(row?.productName || row?.product?.productName) ||
+      this.lookupName('products', enplProductId);
+    if (!name) return null;
+    const existing = await this.prisma.taskProduct.findFirst({
+      where: { companyID: companyId, productName: { equals: name, mode: 'insensitive' } },
+    });
+    if (existing) return existing.id;
+    const created = await this.prisma.taskProduct.create({
+      data: { companyID: companyId, productName: name, productCode: blank(row?.productCode || row?.productId) },
+    });
+    return created.id;
+  }
+
+  private async findEmployeeForEngineer(row: any): Promise<number | null> {
+    const companyIds = await this.linkedCompanyIds();
+    const email = blank(row?.engineer?.email || row?.engineerEmail || row?.email)?.toLowerCase();
+    if (email) {
+      const byEmail = await this.prisma.manageEmployee.findFirst({
+        where: {
+          isDeleted: false,
+          companyID: { in: companyIds },
+          OR: [
+            { businessEmail: { equals: email, mode: 'insensitive' } },
+            { personalEmail: { equals: email, mode: 'insensitive' } },
+          ],
+        },
+        select: { id: true },
+      });
+      if (byEmail) return byEmail.id;
+    }
+    const code = blank(row?.employeeID || row?.engineer?.employeeID || row?.engineerCode);
+    if (code) {
+      const byCode = await this.prisma.manageEmployee.findFirst({
+        where: {
+          isDeleted: false,
+          companyID: { in: companyIds },
+          employeeID: { equals: code, mode: 'insensitive' },
+        },
+        select: { id: true },
+      });
+      if (byCode) return byCode.id;
+    }
+    const hrmsId = asInt(row?.hrmsEmployeeId || row?.manageEmployeeID || row?.hrmsId);
+    if (hrmsId) {
+      const byId = await this.prisma.manageEmployee.findFirst({
+        where: { id: hrmsId, isDeleted: false, companyID: { in: companyIds } },
+        select: { id: true },
+      });
+      if (byId) return byId.id;
+    }
+    return null;
+  }
+
+  private async syncTaskWorkscopeFromEnpl(taskID: number, companyId: number, body: any) {
+    const workscope = Array.isArray(body?.workscopeDetails)
+      ? body.workscopeDetails
+      : Array.isArray(body?.workscope)
+        ? body.workscope
+        : null;
+    if (!workscope) return;
+    await this.prisma.taskWorkscopeDetail.deleteMany({ where: { taskID } });
+    if (!workscope.length) return;
+    await this.prisma.taskWorkscopeDetail.createMany({
+      data: await Promise.all(
+        workscope.map(async (row: any) => ({
+          taskID,
+          workscopeCategoryID: await this.resolveWorkscopeCategoryId(companyId, row),
+          workscopeDetails: blank(row.workscopeDetails || row.details),
+          extraNote: blank(row.extraNote || row.note),
+        })),
+      ),
+    });
+  }
+
+  private async syncTaskInventoryFromEnpl(taskID: number, companyId: number, body: any) {
+    const inventories = Array.isArray(body?.taskInventories)
+      ? body.taskInventories
+      : Array.isArray(body?.inventories)
+        ? body.inventories
+        : Array.isArray(body?.inventory)
+          ? body.inventory
+          : null;
+    if (!inventories) return;
+    await this.prisma.taskInventory.deleteMany({ where: { taskID } });
+    if (!inventories.length) return;
+    await this.prisma.taskInventory.createMany({
+      data: await Promise.all(
+        inventories.map(async (row: any) => ({
+          taskID,
+          productTypeId: await this.resolveProductId(companyId, row),
+          makeModel: blank(row.makeModel),
+          snMac: blank(row.snMac),
+          description: blank(row.description),
+          purchaseDate: asDate(row.purchaseDate),
+          warrantyPeriod: blank(row.warrantyPeriod),
+          warrantyStatus: blank(row.warrantyStatus),
+          thirdPartyPurchase: !!row.thirdPartyPurchase,
+        })),
+      ),
+    });
+  }
+
+  private async syncTaskPurchaseFromEnpl(taskID: number, body: any) {
+    if (!body?.purchase || typeof body.purchase !== 'object') return;
+    const purchase = body.purchase;
+    await this.prisma.taskPurchase.deleteMany({ where: { taskID } });
+    const products = Array.isArray(purchase.products) ? purchase.products : [];
+    const attachments = Array.isArray(purchase.taskPurchaseAttachments)
+      ? purchase.taskPurchaseAttachments
+      : Array.isArray(purchase.attachments)
+        ? purchase.attachments
+        : [];
+    await this.prisma.taskPurchase.create({
+      data: {
+        taskID,
+        purchaseType: blank(purchase.purchaseType),
+        customerName: blank(purchase.customerName),
+        address: blank(purchase.address),
+        products: products.length
+          ? {
+              create: products.map((p: any) => ({
+                make: blank(p.make),
+                model: blank(p.model),
+                description: blank(p.description),
+                warranty: blank(p.warranty),
+                rate: p.rate != null ? String(p.rate) : null,
+                vendor: blank(p.vendor),
+                validity: p.validity != null ? String(p.validity) : null,
+                availability: blank(p.availability),
+              })),
+            }
+          : undefined,
+        attachments: attachments.length
+          ? {
+              create: attachments
+                .filter((att: any) => blank(att.filename) || blank(att.fileUrl))
+                .map((att: any) => ({
+                  filename: blank(att.filename) || 'attachment',
+                  filepath: blank(att.filepath),
+                  fileUrl: blank(att.fileUrl),
+                  mimeType: blank(att.mimeType),
+                  fileSize: asInt(att.fileSize),
+                  erpFilepath: blank(att.filepath || att.erpFilepath),
+                })),
+            }
+          : undefined,
+      },
+    });
+  }
+
+  private async syncTaskEngineersFromEnpl(taskID: number, body: any) {
+    const engineerRows = Array.isArray(body?.engineerAssignments)
+      ? body.engineerAssignments
+      : Array.isArray(body?.engineers)
+        ? body.engineers
+        : Array.isArray(body?.assignedEngineers)
+          ? body.assignedEngineers
+          : null;
+    if (!engineerRows) return;
+    await this.prisma.taskEngineerAssignment.deleteMany({ where: { taskID } });
+    await this.prisma.taskAssignment.deleteMany({ where: { taskID } });
+    if (!engineerRows.length) return;
+    const assignedEmployeeIds = new Set<number>();
+    const data: Array<{
+      taskID: number;
+      manageEmployeeID: number | null;
+      engineerName: string | null;
+      engineerEmail: string | null;
+      engineerPhone: string | null;
+      proposedDateTime: Date | null;
+      priority: string | null;
+      status: string | null;
+      notes: string | null;
+      assignedDate: Date | null;
+    }> = [];
+    for (const row of engineerRows) {
+      const manageEmployeeID = await this.findEmployeeForEngineer(row);
+      if (manageEmployeeID) assignedEmployeeIds.add(manageEmployeeID);
+      data.push({
+        taskID,
+        manageEmployeeID,
+        engineerName: blank(
+          row.engineer
+            ? `${row.engineer.firstName || row.engineer.employeeFirstName || ''} ${row.engineer.lastName || row.engineer.employeeLastName || ''}`.trim()
+            : row.engineerName || row.name,
+        ),
+        engineerEmail: blank(row.engineer?.email || row.engineerEmail || row.email),
+        engineerPhone: blank(row.engineer?.phoneNumber || row.engineerPhone || row.phone),
+        proposedDateTime: asDate(row.proposedDateTime),
+        priority: blank(row.priority) ? normalizeEnplPriority(row.priority) : null,
+        status: blank(row.status),
+        notes: blank(row.notes),
+        assignedDate: asDate(row.assignedDate),
+      });
+    }
+    if (data.length) {
+      await this.prisma.taskEngineerAssignment.createMany({ data });
+    }
+    if (assignedEmployeeIds.size) {
+      await this.prisma.taskAssignment.createMany({
+        data: [...assignedEmployeeIds].map((manageEmployeeID) => ({ taskID, manageEmployeeID })),
+        skipDuplicates: true,
+      });
+    }
   }
 
   private async fetchEnplExport() {

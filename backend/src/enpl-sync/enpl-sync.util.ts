@@ -37,13 +37,13 @@ export function normalizeEnplPriority(priority?: string | null): string {
 }
 
 export function liveTaskStatus(body: any): string {
-  const fromBody = blank(body?.status);
-  if (fromBody) return normalizeEnplTaskStatus(fromBody);
   const remarks = Array.isArray(body?.remarks) ? [...body.remarks] : [];
   remarks.sort(
     (a, b) => new Date(b?.createdAt || 0).getTime() - new Date(a?.createdAt || 0).getTime(),
   );
-  return normalizeEnplTaskStatus(remarks[0]?.status);
+  const fromRemark = remarks.find((row) => blank(row?.status));
+  if (fromRemark) return normalizeEnplTaskStatus(fromRemark.status);
+  return normalizeEnplTaskStatus(body?.status);
 }
 
 export function inboundDeletedFlag(body: any): boolean | null {

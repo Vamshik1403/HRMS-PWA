@@ -33,6 +33,11 @@ export class EnplSyncController {
     return this.service.runInbound(source, () => this.service.upsertTaskFromEnpl(body));
   }
 
+  @Get('employees')
+  employees() {
+    return this.service.listEmployeesForEnpl();
+  }
+
   @Post('bulk-import')
   @HttpCode(200)
   bulkImport() {

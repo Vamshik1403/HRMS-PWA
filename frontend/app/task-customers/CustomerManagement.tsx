@@ -12,6 +12,7 @@ import { toast } from "sonner";
 import { LocationFields } from "../components/ui/location-fields";
 import { taskFetch } from "../utils/taskApi";
 import { TaskContactsRepeater, sanitizeContacts, type TaskContactRow } from "../components/task/TaskContactsRepeater";
+import { EnplSyncButton } from "../components/task/EnplSyncButton";
 import { SearchSuggestInput } from "../components/SearchSuggestInput";
 import { getSidebarContext } from "../utils/sidebarContext";
 import { PageHeader } from "../components/app/page-header";
@@ -386,7 +387,10 @@ export default function CustomerManagement() {
         description="Manage task customers and contacts"
         actions={
           !formOpen && !viewOpen && canManage ? (
-            <Button onClick={openCreate}><Plus className="w-4 h-4 mr-1" /> Add Customer</Button>
+            <div className="flex items-center gap-2">
+              <EnplSyncButton user={user} onDone={load} />
+              <Button onClick={openCreate}><Plus className="w-4 h-4 mr-1" /> Add Customer</Button>
+            </div>
           ) : null
         }
       />

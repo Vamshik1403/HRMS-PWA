@@ -37,6 +37,7 @@ import { EntityListShell } from "../components/app/entity-list-shell";
 import type { DataTableColumn } from "../components/app/data-table";
 import { EntityRowActions } from "../components/app/entity-row-actions";
 import { TaskContactsRepeater, sanitizeContacts, type TaskContactRow } from "../components/task/TaskContactsRepeater";
+import { EnplSyncButton } from "../components/task/EnplSyncButton";
 import { canonicalTaskStatus } from "../components/task/task-types";
 import { useClientTable, sortRows } from "../hooks/use-client-table";
 import {
@@ -767,14 +768,17 @@ useAppRefresh(() => {
             description="Manage tasks and project assignments"
             actions={
               canManage ? (
-              <Button
-                onClick={() => {
-                  closeTaskPagePanels();
-                  setFormOpen(true);
-                }}
-              >
-                <Plus className="w-4 h-4 mr-1" /> Create Task
-              </Button>
+              <div className="flex items-center gap-2">
+                <EnplSyncButton user={user} onDone={loadTasks} />
+                <Button
+                  onClick={() => {
+                    closeTaskPagePanels();
+                    setFormOpen(true);
+                  }}
+                >
+                  <Plus className="w-4 h-4 mr-1" /> Create Task
+                </Button>
+              </div>
               ) : undefined
             }
           />

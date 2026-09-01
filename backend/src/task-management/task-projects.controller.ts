@@ -1,4 +1,5 @@
-import { Body, Controller, Delete, Get, Param, ParseIntPipe, Patch, Post, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, Param, ParseIntPipe, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import { AuthGuard } from '@nestjs/passport';
 import { TaskProjectsService } from './task-projects.service';
 import {
   CreateTaskProjectDto,
@@ -24,6 +25,13 @@ export class TaskProjectsController {
     @Query() query: Record<string, string>,
   ) {
     return this.service.getEmployeesByDepartment(departmentId, query);
+  }
+
+  @Post('sync-from-enpl')
+  @UseGuards(AuthGuard('jwt'))
+  @HttpCode(200)
+  syncFromEnpl(@Query() query: Record<string, string>) {
+    return this.service.syncFromEnpl(query);
   }
 
   @Get(':id/report')

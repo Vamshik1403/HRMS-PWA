@@ -15,6 +15,7 @@ import { taskFetch } from "../utils/taskApi";
 import { useListAutoRefresh } from "../hooks/useListAutoRefresh";
 import { SearchSuggestInput } from "../components/SearchSuggestInput";
 import { TaskContactsRepeater, sanitizeContacts, type TaskContactRow } from "../components/task/TaskContactsRepeater";
+import { EnplSyncButton } from "../components/task/EnplSyncButton";
 import { PageHeader } from "../components/app/page-header";
 import { FilterBar, FilterSelect } from "../components/app/filter-bar";
 import { EntityListShell } from "../components/app/entity-list-shell";
@@ -261,7 +262,10 @@ export default function SiteManagement() {
         description="Manage customer sites and branch locations"
         actions={
           !formOpen && !viewOpen && canManage ? (
-            <Button onClick={openCreate}><Plus className="w-4 h-4 mr-1" /> Add Site</Button>
+            <div className="flex items-center gap-2">
+              <EnplSyncButton user={user} onDone={load} />
+              <Button onClick={openCreate}><Plus className="w-4 h-4 mr-1" /> Add Site</Button>
+            </div>
           ) : null
         }
       />

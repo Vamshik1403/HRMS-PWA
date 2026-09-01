@@ -140,6 +140,14 @@ export class TaskProjectsService {
     private enplSync: EnplSyncService,
   ) {}
 
+  async syncFromEnpl(query: Record<string, string | undefined>) {
+    const viewer = await this.resolveViewer(query);
+    if (!canManageTaskModule(viewer)) {
+      throw new ForbiddenException('Only company operators can sync from ENPL');
+    }
+    return this.enplSync.runInbound('enpl', () => this.enplSync.bulkImportFromEnpl());
+  }
+
   private async resolveViewer(query: Record<string, string | undefined>): Promise<TaskViewerContext> {
     const viewer = parseViewer(query);
     if (canManageTaskModule(viewer) || !viewer.employeeId) return viewer;
@@ -764,6 +772,8 @@ export class TaskProjectsService {
         OR: [
           { taskName: { contains: search, mode: 'insensitive' } },
           { taskCode: { contains: search, mode: 'insensitive' } },
+          { customer: { is: { customerName: { contains: search, mode: 'insensitive' } } } },
+          { customer: { is: { customerCode: { contains: search, mode: 'insensitive' } } } },
         ],
       });
     }

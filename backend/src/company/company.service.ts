@@ -1219,20 +1219,30 @@ export class CompanyService {
       role?: string;
       sub?: number;
       id?: number;
+      type?: string;
       companyID?: number;
       employeeId?: number;
       employeeID?: number;
+      branchesID?: number;
+      serviceProviderID?: number;
     },
   ) {
     if (!user) throw new ForbiddenException('Authentication required');
     const role = String(user.role || '').toUpperCase();
+    const isEmployee = role === 'EMPLOYEE' || String(user.type || '').toLowerCase() === 'employee';
     if (role === 'SUPERADMIN' || role === 'SERVICE_PROVIDER') return;
+
+    const target = await this.prisma.company.findUnique({
+      where: { id: companyId },
+      select: { id: true, serviceProviderID: true },
+    });
+    if (!target) throw new NotFoundException('Company not found');
 
     const tokenCompanyId = Number(user.companyID);
     if (Number.isFinite(tokenCompanyId) && tokenCompanyId === companyId) return;
 
     const userId = this.jwtUserId(user);
-    if (userId && role !== 'EMPLOYEE') {
+    if (userId) {
       const link = await this.prisma.userCompany.findFirst({
         where: { userID: userId, companyID: companyId },
         select: { id: true },
@@ -1240,13 +1250,78 @@ export class CompanyService {
       if (link) return;
     }
 
-    const employeeId = this.jwtEmployeeId(user);
+    if (role === 'BRANCH_ADMIN') {
+      const branchId = Number(user.branchesID);
+      if (Number.isFinite(branchId) && branchId > 0) {
+        const branch = await this.prisma.branches.findFirst({
+          where: { id: branchId },
+          select: { companyID: true },
+        });
+        if (branch?.companyID === companyId) return;
+      }
+    }
+
+    if (role === 'COMPANY_ADMIN' || role === 'ADMIN' || role === 'BRANCH_ADMIN') {
+      if (Number.isFinite(tokenCompanyId) && tokenCompanyId > 0) {
+        const home = await this.prisma.company.findUnique({
+          where: { id: tokenCompanyId },
+          select: { serviceProviderID: true },
+        });
+        if (
+          home?.serviceProviderID != null &&
+          target.serviceProviderID != null &&
+          home.serviceProviderID === target.serviceProviderID
+        ) {
+          return;
+        }
+      }
+    }
+
+    const employeeId = this.jwtEmployeeId(user) ?? (isEmployee ? this.jwtUserId(user) : undefined);
     if (employeeId) {
       const emp = await this.prisma.manageEmployee.findFirst({
-        where: { id: employeeId, companyID: companyId, isDeleted: false },
-        select: { id: true },
+        where: { id: employeeId, isDeleted: false },
+        select: {
+          id: true,
+          companyID: true,
+          serviceProviderID: true,
+          isCompanyOwner: true,
+        },
       });
-      if (emp) return;
+      if (emp?.companyID === companyId) return;
+
+      if (emp && (emp.isCompanyOwner || isEmployee)) {
+        const permissions = await loadEmployeePermissions(
+          this.prisma,
+          emp.id,
+          emp.companyID || companyId,
+          !!emp.isCompanyOwner,
+        );
+        const hasAccess =
+          !!emp.isCompanyOwner ||
+          permissions.some((p) => p.canView || p.canCreate || p.canEdit || p.canDelete);
+        if (hasAccess) {
+          const homeSp =
+            emp.serviceProviderID ??
+            (emp.companyID
+              ? (
+                  await this.prisma.company.findUnique({
+                    where: { id: emp.companyID },
+                    select: { serviceProviderID: true },
+                  })
+                )?.serviceProviderID
+              : null);
+          const jwtSp = Number(user.serviceProviderID);
+          const operatorSp = homeSp ?? (Number.isFinite(jwtSp) ? jwtSp : null);
+          if (
+            operatorSp != null &&
+            target.serviceProviderID != null &&
+            operatorSp === target.serviceProviderID
+          ) {
+            return;
+          }
+        }
+      }
     }
 
     throw new ForbiddenException('You cannot manage Federal Domain for this company');
