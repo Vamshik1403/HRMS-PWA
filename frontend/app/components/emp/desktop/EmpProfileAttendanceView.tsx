@@ -13,12 +13,21 @@ import {
   Clock3,
   Flag,
   Home,
+  MapPin,
   Timer,
 } from "lucide-react";
 import { Button } from "../../ui/button";
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "../../ui/dialog";
+import {
   groupAttendanceByDay,
   formatPunchTime,
+  formatLocationLines,
+  extractDayPunchTimes,
   type AttendanceDaySummary,
   type AttendanceLocationRecord,
 } from "../../../utils/empAttendanceHistory";
@@ -255,6 +264,33 @@ async function resolveWorkShiftName(
   return "—";
 }
 
+function PunchLocationBlock({
+  label,
+  punch,
+}: {
+  label: string;
+  punch: AttendanceLocationRecord | null;
+}) {
+  const { address, coordinates } = formatLocationLines(punch);
+  return (
+    <div className="rounded-xl border border-[#E5E7EB] bg-[#FAFAFA] p-4">
+      <p className="text-xs font-semibold uppercase tracking-wide text-[#6B7280]">{label}</p>
+      <p className="mt-2 text-lg font-semibold tabular-nums text-[#111827]">
+        {punch ? formatPunchTime(punch.checkinTime) : "—"}
+      </p>
+      <div className="mt-3 flex items-start gap-2 text-sm text-[#374151]">
+        <MapPin className="mt-0.5 size-4 shrink-0 text-[#9CA3AF]" strokeWidth={1.75} />
+        <div className="min-w-0">
+          <p>{address || "Location not recorded"}</p>
+          {coordinates ? (
+            <p className="mt-1 font-mono text-xs text-[#6B7280]">{coordinates}</p>
+          ) : null}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function EmpProfileAttendanceView({ employeeId: viewEmployeeId }: { employeeId?: number } = {}) {
   const today = new Date();
   const todayKey = `${today.getFullYear()}-${pad2(today.getMonth() + 1)}-${pad2(today.getDate())}`;
@@ -265,6 +301,7 @@ export function EmpProfileAttendanceView({ employeeId: viewEmployeeId }: { emplo
   const [regularizedDates, setRegularizedDates] = useState<Set<string>>(new Set());
   const [workShiftName, setWorkShiftName] = useState<string>("—");
   const [employeeId, setEmployeeId] = useState<number | null>(null);
+  const [selectedDateKey, setSelectedDateKey] = useState<string | null>(null);
   const monthInputRef = useRef<HTMLInputElement>(null);
 
   const loadMonth = useCallback(async (year: number, month: number) => {
@@ -363,6 +400,11 @@ export function EmpProfileAttendanceView({ employeeId: viewEmployeeId }: { emplo
     }
     return rows.reverse();
   }, [viewYear, viewMonth, dayMap, todayKey]);
+
+  const selectedDay = selectedDateKey ? dayMap.get(selectedDateKey) ?? null : null;
+  const selectedPunches = selectedDay?.records?.length
+    ? extractDayPunchTimes(selectedDay.records)
+    : null;
 
   const summary = useMemo(() => {
     let present = 0;
@@ -527,8 +569,17 @@ export function EmpProfileAttendanceView({ employeeId: viewEmployeeId }: { emplo
                     return (
                       <tr
                         key={dateKey}
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => setSelectedDateKey(dateKey)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            setSelectedDateKey(dateKey);
+                          }
+                        }}
                         className={cn(
-                          "border-b border-[#F3F4F6] last:border-0 transition-colors hover:bg-[#FAFAFA]",
+                          "border-b border-[#F3F4F6] last:border-0 transition-colors hover:bg-[#FAFAFA] cursor-pointer",
                           dateKey === todayKey && "bg-[#FAFAFA]/80",
                         )}
                       >
@@ -572,7 +623,19 @@ export function EmpProfileAttendanceView({ employeeId: viewEmployeeId }: { emplo
                 const status = resolveAttendanceStatus(day, dateKey);
                 const isRegularized = regularizedDates.has(dateKey);
                 return (
-                  <div key={dateKey} className="px-6 py-5 transition-colors hover:bg-[#FAFAFA]">
+                  <div
+                    key={dateKey}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => setSelectedDateKey(dateKey)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        setSelectedDateKey(dateKey);
+                      }
+                    }}
+                    className="px-6 py-5 transition-colors hover:bg-[#FAFAFA] cursor-pointer"
+                  >
                     <div className="flex items-start justify-between gap-4">
                       <div className="min-w-0">
                         <p className="text-sm font-medium tabular-nums text-[#111827]">
@@ -598,6 +661,28 @@ export function EmpProfileAttendanceView({ employeeId: viewEmployeeId }: { emplo
           </>
         )}
       </div>
+
+      <Dialog open={!!selectedDateKey} onOpenChange={(open) => { if (!open) setSelectedDateKey(null); }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>
+              {selectedDateKey
+                ? `${fullDateLabel(selectedDateKey)} · ${dayName(selectedDateKey)}`
+                : "Attendance"}
+            </DialogTitle>
+          </DialogHeader>
+          {selectedPunches?.checkIn || selectedPunches?.checkOut ? (
+            <div className="grid gap-3 sm:grid-cols-2">
+              <PunchLocationBlock label="Check-in" punch={selectedPunches.checkIn} />
+              <PunchLocationBlock label="Check-out" punch={selectedPunches.checkOut} />
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground py-4 text-center">
+              No check-in or check-out recorded for this date.
+            </p>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

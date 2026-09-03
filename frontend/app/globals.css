@@ -1376,6 +1376,15 @@ html[data-emp-theme="dark"] .emp-pwa-shell .emp-mobile-date-field input[type="da
   to { opacity: 1; transform: translateY(0); }
 }
 
+/* ── Hidden scrollbar (overflow still works) ── */
+.scrollbar-hidden {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.scrollbar-hidden::-webkit-scrollbar {
+  display: none;
+}
+
 /* ── Auto-hide scrollbars until hover / scroll ── */
 .scrollbar-auto-hide {
   overflow-y: auto;

@@ -3794,23 +3794,8 @@ const addCombinedDevMap = () => {
     }
   };
 
-  const handleView = async (r: ManageEmpRead) => {
-    try {
-      const res = await fetch(`${API.manageEmp}/${r.id}`, {
-        headers: authHeaders(),
-        cache: "no-store",
-      });
-
-      const fresh = res.ok ? await res.json() : r;
-
-      setViewRow(fresh?.data ?? fresh);
-      setIsViewing(true);
-      setIsAddingNew(false);
-    } catch {
-    setViewRow(r);
-    setIsViewing(true);
-    setIsAddingNew(false);
-    }
+  const handleView = (r: ManageEmpRead) => {
+    router.push(`/empTeam/member/${r.id}?tab=profile`);
   };
 
   const handleDelete = async (id: ID) => {
@@ -4002,7 +3987,7 @@ const handleCancel = () => {
       colSpan: 3,
       cell: (r) => (
         <div className="flex flex-col gap-1">
-          <span>
+          <span className="font-medium text-foreground">
             {r.employeeFirstName}{" "}
             {r.employeeLastName}
           </span>
@@ -4094,7 +4079,7 @@ const handleCancel = () => {
         />
       ),
     },
-  ], [canManage, terminationMap]);
+  ], [canManage, terminationMap, router]);
 
 
   const dash = displayValue;
@@ -6321,6 +6306,7 @@ const handleCancel = () => {
             sortBy={table.sortBy}
             sortDir={table.sortDir}
             onSort={table.setSort}
+            onRowClick={(r) => handleView(r)}
             emptyIcon={Users}
             emptyTitle="No employees found"
             emptyDescription="Try adjusting your search or filter criteria."

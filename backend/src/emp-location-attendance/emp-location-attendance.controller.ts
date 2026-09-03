@@ -46,7 +46,7 @@ export class EmpLocationAttendanceController {
   }
 
   @Get('my')
-  getMyRecords(
+  async getMyRecords(
     @Req() req: any,
     @Query('from') from?: string,
     @Query('to') to?: string,
@@ -72,10 +72,18 @@ export class EmpLocationAttendanceController {
         Date.UTC(toDate.getUTCFullYear(), toDate.getUTCMonth(), toDate.getUTCDate(), 23, 59, 59, 999),
       );
     }
-    return this.svc.getMyRecords(this.getEmployeeId(req), {
+    const employeeId = this.getEmployeeId(req);
+    const records = await this.svc.getMyRecords(employeeId, {
       from: fromDate,
       to: toDate,
     });
+    const merged = await this.svc.mergeDevicePunchesIntoRecords(
+      employeeId,
+      fromDate,
+      toDate,
+      records,
+    );
+    return this.svc.enrichAddressesFromProcessLogs(employeeId, fromDate, toDate, merged);
   }
 
   @Get('today')

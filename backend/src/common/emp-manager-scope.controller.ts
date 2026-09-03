@@ -365,26 +365,60 @@ export class EmpManagerScopeController {
 
   @Get('member/:id/attendance-history')
   async memberAttendanceHistory(
-    @Req() req: { user?: { employeeId?: number; sub?: number } },
+    @Req()
+    req: {
+      user?: {
+        employeeId?: number;
+        sub?: number;
+        role?: string;
+        companyID?: number;
+        type?: string;
+      };
+    },
     @Param('id') id: string,
     @Query('from') from?: string,
     @Query('to') to?: string,
   ) {
-    const managerId = this.getEmployeeId(req);
     const targetId = Number(id);
     if (!targetId) return { days: [] };
 
-    const allowed = await this.scope.canViewEmployee(managerId, targetId);
-    if (!allowed) throw new ForbiddenException('Not allowed to view this employee');
+    await this.assertCanViewMemberAttendance(req.user, targetId);
 
-    const toDate = to ? new Date(to) : new Date();
-    const fromDate = from ? new Date(from) : new Date(toDate.getTime() - 30 * 86400000);
+    const parseBound = (v?: string) => {
+      if (!v?.trim()) return undefined;
+      const d = new Date(v);
+      return Number.isNaN(d.getTime()) ? undefined : d;
+    };
+    let toDate = parseBound(to) ?? new Date();
+    if (to) {
+      toDate = new Date(
+        Date.UTC(toDate.getUTCFullYear(), toDate.getUTCMonth(), toDate.getUTCDate(), 23, 59, 59, 999),
+      );
+    }
+    let fromDate = parseBound(from) ?? new Date(toDate.getTime() - 30 * 86400000);
+    if (from) {
+      fromDate = new Date(
+        Date.UTC(fromDate.getUTCFullYear(), fromDate.getUTCMonth(), fromDate.getUTCDate(), 0, 0, 0, 0),
+      );
+    }
 
-    const records = await this.attendance.getMyRecords(targetId, {
+    const rawRecords = await this.attendance.getMyRecords(targetId, {
       from: fromDate,
       to: toDate,
       limit: 500,
     });
+    const merged = await this.attendance.mergeDevicePunchesIntoRecords(
+      targetId,
+      fromDate,
+      toDate,
+      rawRecords,
+    );
+    const records = await this.attendance.enrichAddressesFromProcessLogs(
+      targetId,
+      fromDate,
+      toDate,
+      merged,
+    );
 
     const byDay = new Map<string, { date: string; status: string; inTime?: string; outTime?: string }>();
     for (const log of records) {
@@ -401,6 +435,59 @@ export class EmpManagerScopeController {
       days: Array.from(byDay.values()).sort((a, b) => b.date.localeCompare(a.date)),
       records,
     };
+  }
+
+  private async assertCanViewMemberAttendance(
+    user:
+      | {
+          employeeId?: number;
+          sub?: number;
+          role?: string;
+          companyID?: number;
+          type?: string;
+        }
+      | undefined,
+    targetId: number,
+  ) {
+    if (!user) throw new UnauthorizedException('Authentication required');
+    const role = String(user.role || '').toUpperCase();
+    const privileged = new Set([
+      'SUPERADMIN',
+      'SERVICE_PROVIDER',
+      'COMPANY_ADMIN',
+      'ADMIN',
+      'BRANCH_ADMIN',
+    ]);
+
+    const target = await this.prisma.manageEmployee.findUnique({
+      where: { id: targetId },
+      select: { id: true, companyID: true, isDeleted: true },
+    });
+    if (!target || target.isDeleted) {
+      throw new ForbiddenException('Not allowed to view this employee');
+    }
+
+    if (role === 'SUPERADMIN' || role === 'SERVICE_PROVIDER') return;
+
+    const tokenCompanyId = Number(user.companyID);
+    if (
+      privileged.has(role) &&
+      Number.isFinite(tokenCompanyId) &&
+      tokenCompanyId > 0 &&
+      target.companyID === tokenCompanyId
+    ) {
+      return;
+    }
+
+    const viewerEmployeeId = Number(
+      user.employeeId ?? (role === 'EMPLOYEE' || user.type === 'employee' ? user.sub : 0),
+    );
+    if (viewerEmployeeId > 0) {
+      const allowed = await this.scope.canViewEmployee(viewerEmployeeId, targetId);
+      if (allowed) return;
+    }
+
+    throw new ForbiddenException('Not allowed to view this employee');
   }
 
   private delegationSelect = {

@@ -28,6 +28,7 @@ export interface DataTableProps<T> {
   onSort?: (field: string) => void;
   /** Fit parent width — no min-width / horizontal scrollbar (e.g. narrow sidebar cards). */
   fitContainer?: boolean;
+  onRowClick?: (row: T) => void;
 }
 
 function sortIndicator(isSorted: boolean, sortDir: "asc" | "desc" | undefined) {
@@ -49,6 +50,7 @@ export function DataTable<T>({
   sortDir,
   onSort,
   fitContainer = false,
+  onRowClick,
 }: DataTableProps<T>) {
   const cellPad = fitContainer ? "px-3" : "px-6";
   const colSpanTotal = fitContainer
@@ -131,7 +133,11 @@ export function DataTable<T>({
               rows.map((row) => (
                 <tr
                   key={rowKey(row)}
-                  className="h-16 border-b border-border transition-colors last:border-0 hover:bg-[#F8FAFC] dark:border-border dark:hover:bg-muted/40"
+                  className={cn(
+                    "h-16 border-b border-border transition-colors last:border-0 hover:bg-[#F8FAFC] dark:border-border dark:hover:bg-muted/40",
+                    onRowClick && "cursor-pointer",
+                  )}
+                  onClick={onRowClick ? () => onRowClick(row) : undefined}
                 >
                   {columns.map((c) => (
                     <td

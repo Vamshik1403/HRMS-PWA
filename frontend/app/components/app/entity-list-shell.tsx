@@ -25,6 +25,7 @@ interface EntityListShellProps<T> {
   hideHeader?: boolean;
   footer?: ReactNode;
   className?: string;
+  onRowClick?: (row: T) => void;
 }
 
 export function EntityListShell<T>({
@@ -44,6 +45,7 @@ export function EntityListShell<T>({
   hideHeader = true,
   footer,
   className,
+  onRowClick,
 }: EntityListShellProps<T>) {
   const total = rows?.length ?? 0;
   const description = totalLabel ? totalLabel(total) : `${total} total`;
@@ -70,6 +72,7 @@ export function EntityListShell<T>({
           emptyIcon={emptyIcon}
           emptyTitle={emptyTitle}
           emptyDescription={emptyDescription}
+          onRowClick={onRowClick}
         />
         {footer != null ? (
           footer

@@ -18,7 +18,7 @@ export function EmpProfileWorkspaceTabNav({
 }) {
   return (
     <div className="rounded-xl border border-border bg-card shadow-sm overflow-hidden">
-      <div className="flex gap-0.5 overflow-x-auto border-b border-border px-2">
+      <div className="scrollbar-hidden flex gap-0.5 overflow-x-auto border-b border-border px-2">
         {tabs.map((tab) => {
           const active = activeTab === tab.id;
           return (

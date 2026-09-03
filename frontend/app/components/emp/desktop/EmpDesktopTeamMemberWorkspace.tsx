@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense } from "react";
+import { Suspense, useEffect, useLayoutEffect, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import { User } from "lucide-react";
 import { EmpDesktopPage } from "./EmpDesktopPage";
@@ -19,6 +19,8 @@ import {
   EmpTeamMemberPromotions,
 } from "../EmpTeamMemberSections";
 import { Icon } from "@iconify/react";
+
+const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL || "/backend";
 
 const MEMBER_TABS = [
   "profile",
@@ -48,15 +50,48 @@ function resolveMemberTab(searchParams: URLSearchParams): MemberTab {
   return "profile";
 }
 
+function scrollMemberWorkspaceToTop() {
+  const el = document.querySelector(".emp-portal-main");
+  el?.scrollTo({ top: 0, left: 0, behavior: "auto" });
+  window.scrollTo(0, 0);
+}
+
 function EmpDesktopTeamMemberWorkspaceInner() {
   const params = useParams();
   const searchParams = useSearchParams();
   const employeeId = Number(params.id);
   const activeTab = resolveMemberTab(searchParams);
+  const [employeeName, setEmployeeName] = useState("Employee profile");
+
+  useLayoutEffect(() => {
+    if (!employeeId || Number.isNaN(employeeId)) return;
+    scrollMemberWorkspaceToTop();
+    const raf = requestAnimationFrame(() => scrollMemberWorkspaceToTop());
+    return () => cancelAnimationFrame(raf);
+  }, [employeeId]);
+
+  useEffect(() => {
+    if (!employeeId || Number.isNaN(employeeId)) return;
+    const token =
+      typeof window !== "undefined"
+        ? localStorage.getItem("token") || localStorage.getItem("accessToken") || ""
+        : "";
+    const headers: HeadersInit = token ? { Authorization: `Bearer ${token}` } : {};
+    fetch(`${BACKEND}/manage-emp/${employeeId}`, { headers, cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        const name = [data?.employeeFirstName, data?.employeeLastName]
+          .filter(Boolean)
+          .join(" ")
+          .trim();
+        if (name) setEmployeeName(name);
+      })
+      .catch(() => {});
+  }, [employeeId]);
 
   if (!employeeId || Number.isNaN(employeeId)) {
     return (
-      <EmpDesktopPage title="Team member" description="Employee not found" icon={User}>
+      <EmpDesktopPage title="Employee profile" description="Employee not found" icon={User}>
         <p className="text-sm text-muted-foreground">Invalid employee.</p>
       </EmpDesktopPage>
     );
@@ -77,7 +112,7 @@ function EmpDesktopTeamMemberWorkspaceInner() {
   ];
 
   return (
-    <EmpDesktopPage title="Team member" description="Employee profile and records" icon={User}>
+    <EmpDesktopPage title={employeeName} description="Employee profile and workspace sections" icon={User}>
       <div className="space-y-3">
         <EmpProfileWorkspaceTabNav tabs={tabs} activeTab={activeTab} />
 

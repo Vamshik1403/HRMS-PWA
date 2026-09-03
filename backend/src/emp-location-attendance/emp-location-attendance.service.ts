@@ -306,6 +306,291 @@ export class EmpLocationAttendanceService {
     });
   }
 
+  /**
+   * Display-only: for days with no GPS CHECK_IN/CHECK_OUT, synthesize records
+   * from biometric process_att_logs so the Attendance tab matches reports.
+   */
+  async mergeDevicePunchesIntoRecords<T extends {
+    id: number;
+    checkType: string;
+    checkinTime: Date;
+    address?: string | null;
+    latitude?: number | null;
+    longitude?: number | null;
+  }>(
+    employeeId: number,
+    from: Date | undefined,
+    to: Date | undefined,
+    records: T[],
+  ): Promise<T[]> {
+    const punchTime =
+      from || to
+        ? {
+            punch_time: {
+              ...(from ? { gte: from } : {}),
+              ...(to ? { lte: to } : {}),
+            },
+          }
+        : {};
+
+    const logSelect = {
+      id: true,
+      punch_time: true,
+      device_sn: true,
+      device_id: true,
+    } as const;
+
+    const notLocationApp = {
+      OR: [{ device_sn: null }, { device_sn: { not: 'LOCATION_APP' } }],
+    };
+
+    let logs = await this.prisma.process_att_logs.findMany({
+      where: {
+        manage_employee_id: employeeId,
+        AND: [notLocationApp],
+        ...punchTime,
+      },
+      orderBy: { punch_time: 'asc' },
+      select: logSelect,
+    });
+
+    if (!logs.length) {
+      const emp = await this.prisma.manageEmployee.findUnique({
+        where: { id: employeeId },
+        select: { employeeID: true },
+      });
+      const code = emp?.employeeID?.trim();
+      if (code) {
+        logs = await this.prisma.process_att_logs.findMany({
+          where: {
+            AND: [notLocationApp],
+            OR: [{ user_id: code }, { device_emp_code: code }],
+            ...punchTime,
+          },
+          orderBy: { punch_time: 'asc' },
+          select: logSelect,
+        });
+      }
+    }
+
+    if (!logs.length) return records;
+
+    const gpsDays = new Set<string>();
+    for (const r of records) {
+      if (r.checkType !== 'CHECK_IN' && r.checkType !== 'CHECK_OUT') continue;
+      gpsDays.add(this.punchDateKey(r.checkinTime));
+    }
+
+    const byDay = new Map<string, typeof logs>();
+    for (const log of logs) {
+      if (!log.punch_time) continue;
+      const key = this.punchDateKey(log.punch_time);
+      if (gpsDays.has(key)) continue;
+      const arr = byDay.get(key) ?? [];
+      arr.push(log);
+      byDay.set(key, arr);
+    }
+    if (byDay.size === 0) return records;
+
+    const deviceSnSet = new Set<string>();
+    const deviceIdSet = new Set<number>();
+    for (const dayLogs of byDay.values()) {
+      for (const log of dayLogs) {
+        if (log.device_sn) deviceSnSet.add(log.device_sn);
+        if (log.device_id != null) deviceIdSet.add(log.device_id);
+      }
+    }
+    const deviceLocOr: { id?: { in: number[] }; deviceSN?: { in: string[] } }[] = [];
+    if (deviceIdSet.size > 0) deviceLocOr.push({ id: { in: [...deviceIdSet] } });
+    if (deviceSnSet.size > 0) deviceLocOr.push({ deviceSN: { in: [...deviceSnSet] } });
+    const deviceRows =
+      deviceLocOr.length > 0
+        ? await this.prisma.devices.findMany({
+            where: { OR: deviceLocOr },
+            select: { id: true, deviceSN: true, address: true, latitude: true, longitude: true },
+          })
+        : [];
+    const addressByDeviceId = new Map<number, string | null>();
+    const addressByDeviceSn = new Map<string, string | null>();
+    const latLngByDeviceId = new Map<number, { latitude: number | null; longitude: number | null }>();
+    const latLngByDeviceSn = new Map<string, { latitude: number | null; longitude: number | null }>();
+    for (const d of deviceRows) {
+      const addr = d.address?.trim() || null;
+      addressByDeviceId.set(d.id, addr);
+      addressByDeviceSn.set(d.deviceSN, addr);
+      latLngByDeviceId.set(d.id, { latitude: d.latitude, longitude: d.longitude });
+      latLngByDeviceSn.set(d.deviceSN, { latitude: d.latitude, longitude: d.longitude });
+    }
+
+    const synthesized: T[] = [];
+    for (const dayLogs of byDay.values()) {
+      const sorted = [...dayLogs].sort(
+        (a, b) => (a.punch_time?.getTime() ?? 0) - (b.punch_time?.getTime() ?? 0),
+      );
+      sorted.forEach((log, index) => {
+        if (!log.punch_time) return;
+        const checkType = index % 2 === 0 ? 'CHECK_IN' : 'CHECK_OUT';
+        const address =
+          (log.device_id != null ? addressByDeviceId.get(log.device_id) : null) ??
+          (log.device_sn ? addressByDeviceSn.get(log.device_sn) : null) ??
+          null;
+        const coords =
+          (log.device_id != null ? latLngByDeviceId.get(log.device_id) : null) ??
+          (log.device_sn ? latLngByDeviceSn.get(log.device_sn) : null);
+        synthesized.push({
+          id: -log.id,
+          employeeId,
+          checkType,
+          checkinTime: log.punch_time,
+          latitude: coords?.latitude ?? null,
+          longitude: coords?.longitude ?? null,
+          accuracy: null,
+          address,
+          ipAddress: null,
+          deviceType: null,
+          browser: null,
+          operatingSystem: null,
+          userAgent: null,
+          companyID: null,
+          branchesID: null,
+          serviceProviderID: null,
+          createdAt: log.punch_time,
+          updatedAt: log.punch_time,
+        } as unknown as T);
+      });
+    }
+
+    return [...records, ...synthesized].sort(
+      (a, b) => b.checkinTime.getTime() - a.checkinTime.getTime(),
+    );
+  }
+
+  /** Fill missing GPS addresses from process_att_logs + device location (same source as today-overview). */
+  async enrichAddressesFromProcessLogs<T extends {
+    checkType: string;
+    checkinTime: Date;
+    address?: string | null;
+    latitude?: number | null;
+    longitude?: number | null;
+  }>(
+    employeeId: number,
+    from: Date | undefined,
+    to: Date | undefined,
+    records: T[],
+  ): Promise<T[]> {
+    if (!records.length) return records;
+    const needsFill = records.some((r) => !String(r.address || '').trim());
+    if (!needsFill) return records;
+
+    const logs = await this.prisma.process_att_logs.findMany({
+      where: {
+        manage_employee_id: employeeId,
+        ...(from || to
+          ? {
+              punch_time: {
+                ...(from ? { gte: from } : {}),
+                ...(to ? { lte: to } : {}),
+              },
+            }
+          : {}),
+      },
+      select: {
+        punch_time: true,
+        device_sn: true,
+        device_id: true,
+        raw_body: true,
+      },
+      orderBy: { punch_time: 'asc' },
+    });
+    if (!logs.length) return records;
+
+    const deviceSnSet = new Set<string>();
+    const deviceIdSet = new Set<number>();
+    for (const log of logs) {
+      if (log.device_sn && log.device_sn !== 'LOCATION_APP') deviceSnSet.add(log.device_sn);
+      if (log.device_id != null) deviceIdSet.add(log.device_id);
+    }
+    const deviceLocOr: { id?: { in: number[] }; deviceSN?: { in: string[] } }[] = [];
+    if (deviceIdSet.size > 0) deviceLocOr.push({ id: { in: [...deviceIdSet] } });
+    if (deviceSnSet.size > 0) deviceLocOr.push({ deviceSN: { in: [...deviceSnSet] } });
+    const deviceRows =
+      deviceLocOr.length > 0
+        ? await this.prisma.devices.findMany({
+            where: { OR: deviceLocOr },
+            select: { id: true, deviceSN: true, address: true, latitude: true, longitude: true },
+          })
+        : [];
+    const addressByDeviceId = new Map<number, string | null>();
+    const addressByDeviceSn = new Map<string, string | null>();
+    const latLngByDeviceId = new Map<number, { latitude: number | null; longitude: number | null }>();
+    const latLngByDeviceSn = new Map<string, { latitude: number | null; longitude: number | null }>();
+    for (const d of deviceRows) {
+      const addr = d.address?.trim() || null;
+      addressByDeviceId.set(d.id, addr);
+      addressByDeviceSn.set(d.deviceSN, addr);
+      latLngByDeviceId.set(d.id, { latitude: d.latitude, longitude: d.longitude });
+      latLngByDeviceSn.set(d.deviceSN, { latitude: d.latitude, longitude: d.longitude });
+    }
+
+    type Loc = {
+      address: string | null;
+      latitude: number | null;
+      longitude: number | null;
+    };
+    const locByDay = new Map<string, { first: Loc; last: Loc }>();
+    for (const log of logs) {
+      if (!log.punch_time) continue;
+      const key = this.punchDateKey(log.punch_time);
+      const isApp = log.device_sn === 'LOCATION_APP';
+      let address: string | null = null;
+      let latitude: number | null = null;
+      let longitude: number | null = null;
+      if (isApp && log.raw_body) {
+        try {
+          const parsed = JSON.parse(log.raw_body);
+          address = parsed?.address ?? null;
+          latitude = parsed?.latitude ?? parsed?.lat ?? null;
+          longitude = parsed?.longitude ?? parsed?.lng ?? null;
+        } catch {
+          address = null;
+        }
+      } else if (!isApp) {
+        address =
+          (log.device_id != null ? addressByDeviceId.get(log.device_id) : null) ??
+          (log.device_sn ? addressByDeviceSn.get(log.device_sn) : null) ??
+          null;
+        const coords =
+          (log.device_id != null ? latLngByDeviceId.get(log.device_id) : null) ??
+          (log.device_sn ? latLngByDeviceSn.get(log.device_sn) : null);
+        latitude = coords?.latitude ?? null;
+        longitude = coords?.longitude ?? null;
+      }
+      const loc: Loc = { address, latitude, longitude };
+      const existing = locByDay.get(key);
+      if (!existing) locByDay.set(key, { first: loc, last: loc });
+      else existing.last = loc;
+    }
+
+    return records.map((row) => {
+      if (String(row.address || '').trim()) return row;
+      const key = this.punchDateKey(row.checkinTime);
+      const dayLoc = locByDay.get(key);
+      if (!dayLoc) return row;
+      const pick = row.checkType === 'CHECK_OUT' ? dayLoc.last : dayLoc.first;
+      if (!pick.address && pick.latitude == null) return row;
+      return {
+        ...row,
+        address: pick.address ?? row.address,
+        latitude: row.latitude ?? pick.latitude,
+        longitude: row.longitude ?? pick.longitude,
+      };
+    });
+  }
+
+  private punchDateKey(d: Date): string {
+    return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
+  }
+
   async getTodayStatus(employeeId: number) {
     const empFlags = await this.prisma.manageEmployee.findUnique({
       where: { id: employeeId },
