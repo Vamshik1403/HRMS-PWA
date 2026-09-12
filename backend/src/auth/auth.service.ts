@@ -77,7 +77,7 @@ export class AuthService {
     }
 
     let isValidPassword = false;
-
+    
     if (userType === 'user') {
       isValidPassword = await bcrypt.compare(dto.password, user.passwordHash);
     } else {
@@ -441,9 +441,9 @@ export class AuthService {
     let userData: any;
 
     if (userType === 'user') {
-      payload = {
-        sub: user.id,
-        username: user.username,
+      payload = { 
+        sub: user.id, 
+        username: user.username, 
         role: user.role,
         type: 'user',
         companyID: user.companyID ?? undefined,
@@ -545,13 +545,13 @@ export class AuthService {
 
   private employeeLoginInclude() {
     return {
-      employee: {
-        select: {
-          id: true,
-          employeeFirstName: true,
-          employeeLastName: true,
-          employeeID: true,
-          businessEmail: true,
+          employee: {
+            select: {
+              id: true,
+              employeeFirstName: true,
+              employeeLastName: true,
+              employeeID: true,
+              businessEmail: true,
           personalEmail: true,
           isCompanyOwner: true,
           ownerTitle: true,

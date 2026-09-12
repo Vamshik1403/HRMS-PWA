@@ -21,12 +21,19 @@ self.addEventListener('push', function (event) {
   if (inner.tag) {
     options.tag = String(inner.tag);
   }
+
+  if (isTaskRequestNotification(inner)) {
+    options.actions = [
+      { action: 'accept', title: 'Accept' },
+      { action: 'reschedule', title: 'Reschedule' },
+    ];
+  }
   event.waitUntil(self.registration.showNotification(title, options));
 });
 
 self.addEventListener('notificationclick', function (event) {
   event.notification.close();
   var inner = event.notification.data || {};
-  var path = resolveNotificationPath(inner);
+  var path = resolveTaskRequestClickPath(inner, event.action);
   event.waitUntil(navigateToNotificationPath(path));
 });

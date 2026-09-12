@@ -18,6 +18,18 @@ export function asDate(value: unknown): Date | null {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
+export function normalizeEnplSiteVisits(raw: unknown): unknown {
+  if (!Array.isArray(raw)) return raw;
+  return raw.map((row: any) => {
+    const addressText = blank(row?.addressText || row?.locationLabel || row?.address);
+    return {
+      ...row,
+      addressText,
+      locationLabel: blank(row?.locationLabel) || addressText,
+    };
+  });
+}
+
 export function normalizeEnplTaskStatus(status?: string | null): string {
   const value = String(status || '').trim();
   if (value === 'WIP') return 'Work in Progress';
@@ -37,6 +49,8 @@ export function normalizeEnplPriority(priority?: string | null): string {
 }
 
 export function liveTaskStatus(body: any): string {
+  const job = blank(body?.status);
+  if (job) return normalizeEnplTaskStatus(job);
   const remarks = Array.isArray(body?.remarks) ? [...body.remarks] : [];
   remarks.sort(
     (a, b) => new Date(b?.createdAt || 0).getTime() - new Date(a?.createdAt || 0).getTime(),

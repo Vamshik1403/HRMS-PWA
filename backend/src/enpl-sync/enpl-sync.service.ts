@@ -1,7 +1,14 @@
 import { AsyncLocalStorage } from 'async_hooks';
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { getMutuallyLinkedCompanyIds } from '../company/federal-domain.util';
+import {
+  asEngineerAssignmentRows,
+  assignmentRequestKind,
+  inboundEngineerAssignmentStatus,
+} from '../task-management/assignment-request.util';
+import { PushNotificationsService } from '../push-notifications/push-notifications.service';
 import { ENPL_COMPANY_NAMES, ENPL_ENTITY, ENPL_ERP_BASE_DEFAULT, EnplEntityType } from './enpl-sync.constants';
 import {
   asDate,
@@ -12,6 +19,7 @@ import {
   liveTaskStatus,
   mapEnplContacts,
   normalizeEnplPriority,
+  normalizeEnplSiteVisits,
   normalizeEnplTaskStatus,
   toEnplContacts,
 } from './enpl-sync.util';
@@ -25,7 +33,10 @@ export class EnplSyncService {
   private companyCache: { id: number; companyName: string | null; serviceProviderID: number | null } | null = null;
   private inboundLookups: any = null;
 
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private push: PushNotificationsService,
+  ) {}
 
   runInbound<T>(source: string | undefined, fn: () => Promise<T>): Promise<T> {
     const skip = !source || String(source).toLowerCase() === 'enpl';
@@ -126,20 +137,42 @@ export class EnplSyncService {
         personalEmail: true,
         personalPhoneNo: true,
         businessPhoneNo: true,
+        amc: true,
         departments: { select: { departmentName: true } },
+        empDepartment: {
+          orderBy: { id: 'desc' },
+          take: 1,
+          select: { department: { select: { departmentName: true } } },
+        },
+        employeeCredentials: { select: { username: true } },
         company: { select: { companyName: true } },
       },
       orderBy: [{ employeeFirstName: 'asc' }, { employeeLastName: 'asc' }],
     });
-    return rows.map((row) => ({
-      id: row.id,
-      employeeID: row.employeeID,
-      name: [row.employeeFirstName, row.employeeLastName].filter(Boolean).join(' ').trim() || null,
-      email: row.businessEmail || row.personalEmail || null,
-      phone: row.personalPhoneNo || row.businessPhoneNo || null,
-      department: row.departments?.departmentName || null,
-      companyName: row.company?.companyName || null,
-    }));
+    return rows.map((row) => {
+      const credUser = row.employeeCredentials?.username || '';
+      const email =
+        row.businessEmail ||
+        row.personalEmail ||
+        (credUser.includes('@') ? credUser : null) ||
+        null;
+      const department =
+        row.departments?.departmentName ||
+        row.empDepartment[0]?.department?.departmentName ||
+        null;
+      return {
+        id: row.id,
+        hrmsEmployeeId: row.id,
+        employeeID: row.employeeID,
+        name: [row.employeeFirstName, row.employeeLastName].filter(Boolean).join(' ').trim() || null,
+        email,
+        phone: row.personalPhoneNo || row.businessPhoneNo || null,
+        department,
+        departmentName: department,
+        companyName: row.company?.companyName || null,
+        amc: !!row.amc,
+      };
+    });
   }
 
   async recomputeStatusesFromRemarks(): Promise<{ scanned: number; updated: number }> {
@@ -150,10 +183,16 @@ export class EnplSyncService {
         id: true,
         status: true,
         remarks: { orderBy: { createdAt: 'desc' }, select: { status: true } },
+        engineerAssignments: { select: { status: true } },
       },
     });
     let updated = 0;
     for (const task of tasks) {
+      const pending = task.engineerAssignments.some(
+        (row) => assignmentRequestKind(row.status) !== 'working',
+      );
+      if (pending) continue;
+      if (String(task.status || '').trim() === 'On-Hold') continue;
       const latest = task.remarks.find((row) => blank(row.status));
       if (!latest?.status) continue;
       const next = normalizeEnplTaskStatus(latest.status);
@@ -166,6 +205,71 @@ export class EnplSyncService {
     }
     this.logger.log(`ENPL status recompute: scanned ${tasks.length}, updated ${updated}`);
     return { scanned: tasks.length, updated };
+  }
+
+  /** ENPL assignment-action and site-visit are open JSON routes. Do not send HRMS_SYNC_TOKEN. */
+  private async postEnplOpenJson(path: string, payload: Record<string, unknown>, label: string) {
+    const base = (process.env.ENPL_ERP_BASE_URL || ENPL_ERP_BASE_DEFAULT).replace(/\/$/, '');
+    const res = await fetch(`${base}/${path.replace(/^\//, '')}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const text = await res.text();
+    if (!res.ok) {
+      throw new BadRequestException(
+        `ENPL ${label} failed HTTP ${res.status}${text ? `: ${text.slice(0, 400)}` : ''}`,
+      );
+    }
+    return text;
+  }
+
+  async postTaskAssignmentAction(body: {
+    action: 'accept' | 'reschedule';
+    hrmsEmployeeId: number;
+    email?: string | null;
+    enplTaskId?: number | null;
+    hrmsTaskId: number;
+    reason?: string | null;
+  }) {
+    const payload: Record<string, unknown> = {
+      action: body.action,
+      hrmsEmployeeId: String(body.hrmsEmployeeId),
+      hrmsTaskId: String(body.hrmsTaskId),
+    };
+    if (body.email) payload.email = body.email;
+    if (body.enplTaskId != null) payload.enplTaskId = body.enplTaskId;
+    if (body.reason) payload.reason = body.reason;
+    return this.postEnplOpenJson('hrms-sync/task-assignment-action', payload, 'assignment action');
+  }
+
+  async postTaskSiteVisit(body: {
+    kind: 'checkin' | 'checkout';
+    hrmsEmployeeId: number;
+    email?: string | null;
+    enplTaskId?: number | null;
+    hrmsTaskId: number;
+    latitude: number;
+    longitude: number;
+    accuracyMeters?: number | null;
+    addressText?: string | null;
+    at?: string | null;
+  }) {
+    const payload: Record<string, unknown> = {
+      kind: body.kind,
+      hrmsEmployeeId: String(body.hrmsEmployeeId),
+      hrmsTaskId: String(body.hrmsTaskId),
+      latitude: body.latitude,
+      longitude: body.longitude,
+    };
+    if (body.email) payload.email = body.email;
+    if (body.enplTaskId != null) payload.enplTaskId = body.enplTaskId;
+    if (body.accuracyMeters != null && Number.isFinite(body.accuracyMeters)) {
+      payload.accuracyMeters = body.accuracyMeters;
+    }
+    if (body.addressText) payload.addressText = body.addressText;
+    if (body.at) payload.at = body.at;
+    return this.postEnplOpenJson('hrms-sync/task-site-visit', payload, 'site visit');
   }
 
   async upsertCustomerFromEnpl(body: any): Promise<{ hrmsId: number }> {
@@ -389,7 +493,8 @@ export class EnplSyncService {
     });
 
     const firstSchedule = Array.isArray(body.schedule) ? body.schedule[0] : body.schedule;
-    const data = {
+    const dueAt = asDate(body.dueAt || body.dueDateTime);
+    const data: Prisma.TaskProjectUncheckedCreateInput = {
       serviceProviderID: company.serviceProviderID,
       companyID: company.id,
       taskCode,
@@ -402,6 +507,17 @@ export class EnplSyncService {
       description: blank(body.description),
       attachment: blank(body.attachment),
       scheduleDateTime: asDate(firstSchedule?.proposedDateTime || body.scheduleDateTime),
+      dueDateTime: dueAt ?? (existing as any)?.dueDateTime ?? null,
+      expectedDurationMinutes:
+        asInt(body.expectedDurationMinutes) ?? (existing as any)?.expectedDurationMinutes ?? null,
+      siteVisits:
+        body.siteVisits !== undefined
+          ? (normalizeEnplSiteVisits(body.siteVisits) as Prisma.InputJsonValue)
+          : ((existing as any)?.siteVisits as Prisma.InputJsonValue | undefined),
+      siteVisitSummary:
+        body.siteVisitSummary !== undefined
+          ? (body.siteVisitSummary as Prisma.InputJsonValue)
+          : ((existing as any)?.siteVisitSummary as Prisma.InputJsonValue | undefined),
       priority: normalizeEnplPriority(firstSchedule?.priority || body.priority),
       status: status,
       createdByName: blank(body.createdBy || body.createdByName),
@@ -462,9 +578,9 @@ export class EnplSyncService {
     await this.syncTaskWorkscopeFromEnpl(saved.id, company.id, body);
     await this.syncTaskInventoryFromEnpl(saved.id, company.id, body);
     await this.syncTaskPurchaseFromEnpl(saved.id, body);
-    await this.syncTaskEngineersFromEnpl(saved.id, body);
+    await this.syncTaskEngineersFromEnpl(saved.id, body, status);
 
-    await this.saveMapping(company.id, 'task', saved.id, data.erpTaskId, taskCode);
+    await this.saveMapping(company.id, 'task', saved.id, data.erpTaskId ?? null, taskCode);
     return { hrmsId: saved.id };
   }
 
@@ -538,9 +654,19 @@ export class EnplSyncService {
           department: true,
           customer: true,
           site: true,
+          engineerAssignments: { select: { status: true } },
         },
       });
       if (!row || row.companyID !== company.id) return;
+      const pendingAssignment = row.engineerAssignments.some(
+        (a) => assignmentRequestKind(a.status) !== 'working',
+      );
+      const outboundStatus = row.isDeleted
+        ? 'Cancelled'
+        : pendingAssignment &&
+            (row.status === 'Work in Progress' || row.status === 'WIP')
+          ? 'On-Hold'
+          : row.status;
       payload = {
         id: row.id,
         taskName: row.taskName,
@@ -549,11 +675,12 @@ export class EnplSyncService {
         customerID: row.customerID,
         siteID: row.siteID,
         description: row.description,
-        status: row.isDeleted ? 'Cancelled' : row.status,
+        status: outboundStatus,
         isDeleted: row.isDeleted,
         priority: row.priority,
         taskType: row.taskType,
         createdBy: row.createdByName,
+        dueAt: row.dueDateTime ? row.dueDateTime.toISOString() : null,
         departmentName: row.department?.departmentName || null,
         customer: row.customer
           ? {
@@ -982,6 +1109,14 @@ export class EnplSyncService {
 
   private async findEmployeeForEngineer(row: any): Promise<number | null> {
     const companyIds = await this.linkedCompanyIds();
+    const hrmsId = asInt(row?.hrmsEmployeeId || row?.manageEmployeeID || row?.hrmsId);
+    if (hrmsId) {
+      const byId = await this.prisma.manageEmployee.findFirst({
+        where: { id: hrmsId, isDeleted: false, companyID: { in: companyIds } },
+        select: { id: true },
+      });
+      if (byId) return byId.id;
+    }
     const email = blank(row?.engineer?.email || row?.engineerEmail || row?.email)?.toLowerCase();
     if (email) {
       const byEmail = await this.prisma.manageEmployee.findFirst({
@@ -1008,14 +1143,6 @@ export class EnplSyncService {
         select: { id: true },
       });
       if (byCode) return byCode.id;
-    }
-    const hrmsId = asInt(row?.hrmsEmployeeId || row?.manageEmployeeID || row?.hrmsId);
-    if (hrmsId) {
-      const byId = await this.prisma.manageEmployee.findFirst({
-        where: { id: hrmsId, isDeleted: false, companyID: { in: companyIds } },
-        select: { id: true },
-      });
-      if (byId) return byId.id;
     }
     return null;
   }
@@ -1117,15 +1244,21 @@ export class EnplSyncService {
     });
   }
 
-  private async syncTaskEngineersFromEnpl(taskID: number, body: any) {
-    const engineerRows = Array.isArray(body?.engineerAssignments)
-      ? body.engineerAssignments
-      : Array.isArray(body?.engineers)
-        ? body.engineers
-        : Array.isArray(body?.assignedEngineers)
-          ? body.assignedEngineers
-          : null;
+  private async syncTaskEngineersFromEnpl(taskID: number, body: any, taskStatus?: string | null) {
+    const engineerRows = asEngineerAssignmentRows(body);
     if (!engineerRows) return;
+    const previous = await this.prisma.taskEngineerAssignment.findMany({
+      where: { taskID },
+      select: { manageEmployeeID: true, status: true },
+    });
+    const alreadyPending = new Set(
+      previous
+        .filter(
+          (row) =>
+            row.manageEmployeeID != null && assignmentRequestKind(row.status) === 'pending',
+        )
+        .map((row) => row.manageEmployeeID as number),
+    );
     await this.prisma.taskEngineerAssignment.deleteMany({ where: { taskID } });
     await this.prisma.taskAssignment.deleteMany({ where: { taskID } });
     if (!engineerRows.length) return;
@@ -1141,10 +1274,13 @@ export class EnplSyncService {
       status: string | null;
       notes: string | null;
       assignedDate: Date | null;
+      rescheduleReason: string | null;
+      managerReason: string | null;
     }> = [];
     for (const row of engineerRows) {
       const manageEmployeeID = await this.findEmployeeForEngineer(row);
       if (manageEmployeeID) assignedEmployeeIds.add(manageEmployeeID);
+      const rawStatus = blank(row.assignmentStatus || row.status);
       data.push({
         taskID,
         manageEmployeeID,
@@ -1157,9 +1293,17 @@ export class EnplSyncService {
         engineerPhone: blank(row.engineer?.phoneNumber || row.engineerPhone || row.phone),
         proposedDateTime: asDate(row.proposedDateTime),
         priority: blank(row.priority) ? normalizeEnplPriority(row.priority) : null,
-        status: blank(row.status),
+        status: inboundEngineerAssignmentStatus(rawStatus, taskStatus, {
+          requiresAccept: row.requiresAccept === true,
+          showInRequests: row.showInRequests === true,
+          hasPendingAssignment: body?.hasPendingAssignment === true,
+          pendingAssignmentHrmsEmployeeIds: body?.pendingAssignmentHrmsEmployeeIds,
+          hrmsEmployeeId: manageEmployeeID ?? asInt(row.hrmsEmployeeId || row.manageEmployeeID || row.hrmsId),
+        }),
         notes: blank(row.notes),
         assignedDate: asDate(row.assignedDate),
+        rescheduleReason: blank(row.rescheduleReason),
+        managerReason: blank(row.managerReason),
       });
     }
     if (data.length) {
@@ -1169,6 +1313,64 @@ export class EnplSyncService {
       await this.prisma.taskAssignment.createMany({
         data: [...assignedEmployeeIds].map((manageEmployeeID) => ({ taskID, manageEmployeeID })),
         skipDuplicates: true,
+      });
+    }
+    const newlyPending = [
+      ...new Set(
+        data
+          .filter(
+            (row) =>
+              row.manageEmployeeID != null &&
+              assignmentRequestKind(row.status) === 'pending' &&
+              !alreadyPending.has(row.manageEmployeeID),
+          )
+          .map((row) => row.manageEmployeeID as number),
+      ),
+    ];
+    if (newlyPending.length) {
+      void this.notifyNewPendingAssignments(taskID, newlyPending).catch((err) =>
+        this.logger.warn(`Task request push failed for task ${taskID}: ${err?.message || err}`),
+      );
+    }
+  }
+
+  private formatAssignmentPushSchedule(iso?: Date | string | null): string {
+    if (!iso) return '';
+    const d = iso instanceof Date ? iso : new Date(iso);
+    if (Number.isNaN(d.getTime())) return '';
+    return new Intl.DateTimeFormat('en-IN', {
+      timeZone: 'Asia/Kolkata',
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true,
+    }).format(d);
+  }
+
+  private async notifyNewPendingAssignments(taskID: number, employeeIds: number[]) {
+    const task = await this.prisma.taskProject.findFirst({
+      where: { id: taskID },
+      select: {
+        taskName: true,
+        scheduleDateTime: true,
+        customer: { select: { customerName: true } },
+        site: { select: { branchName: true, city: true } },
+      },
+    });
+    const taskName = task?.taskName || `Task ${taskID}`;
+    const customer = task?.customer?.customerName || '';
+    const site = [task?.site?.branchName, task?.site?.city].filter(Boolean).join(', ');
+    const schedule = this.formatAssignmentPushSchedule(task?.scheduleDateTime);
+    const body = [customer, site, schedule].filter(Boolean).join(' · ') || 'New task request';
+    for (const employeeId of employeeIds) {
+      await this.push.sendToEmployee(employeeId, `Task request: ${taskName}`, body, {
+        kind: 'task',
+        event: 'task-request',
+        url: `/empMyTasks?tab=Requests&taskId=${taskID}`,
+        taskId: taskID,
+        tag: `task-request-${taskID}-${employeeId}`,
       });
     }
   }

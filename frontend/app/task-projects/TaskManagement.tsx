@@ -15,6 +15,7 @@ import { isDesktopManagerFlagSet } from "@/lib/desktopManager";
 import { hasModuleWriteAccess, canViewModule } from "@/lib/companyAccess";
 import { toast } from "sonner";
 import { taskFetch } from "../utils/taskApi";
+import { toDatetimeLocalValue, toIsoFromDatetimeLocal } from "../utils/taskDueAt";
 import { NEXT_TASK_STATUS } from "../utils/taskStatusFlow";
 import { SearchSuggestInput } from "../components/SearchSuggestInput";
 import { TaskDetailTabs } from "../components/task/TaskDetailTabs";
@@ -58,7 +59,7 @@ function taskNeedsCustomer(taskType: string) {
 interface Task {
   id: number; taskCode: string; taskName: string; taskType: string;
   status: string; priority: string;
-  scheduleDateTime?: string | null; dueDateTime?: string | null;
+  scheduleDateTime?: string | null; dueDateTime?: string | null; dueAt?: string | null;
   description?: string | null;
   departmentID?: number | null; customerID?: number | null; siteID?: number | null;
   createdAt?: string; updatedAt?: string;
@@ -158,6 +159,7 @@ export default function TaskManagement() {
   const [assignTask, setAssignTask] = useState<Task | null>(null);
   const [assignEmployees, setAssignEmployees] = useState<Employee[]>([]);
   const [assignIds, setAssignIds] = useState<number[]>([]);
+  const [assignDue, setAssignDue] = useState("");
   const [assignSaving, setAssignSaving] = useState(false);
   const [form, setForm] = useState({
     departmentID: "", taskType: "Internal Task", customerID: "", siteID: "",
@@ -356,15 +358,25 @@ useAppRefresh(() => {
     const full = await taskFetch<Task>(`/task-projects/${t.id}`, user).catch(() => t);
     setAssignTask(full);
     setAssignIds((full.assignments || []).map((a) => a.manageEmployeeID));
+    setAssignDue(toDatetimeLocalValue(full.dueDateTime || full.dueAt));
   };
 
   const saveAssign = async () => {
     if (!assignTask) return;
+    if (assignIds.length > 0 && !assignDue) {
+      toast.error("Due date & time is required when an engineer is assigned");
+      return;
+    }
     setAssignSaving(true);
     try {
+      const dueIso = toIsoFromDatetimeLocal(assignDue);
       await taskFetch(`/task-projects/${assignTask.id}/assign`, user, {
         method: "PATCH",
-        body: JSON.stringify({ assignedEmployeeIds: assignIds }),
+        body: JSON.stringify({
+          assignedEmployeeIds: assignIds,
+          dueAt: dueIso,
+          dueDateTime: dueIso,
+        }),
       });
       toast.success("Employees assigned");
       setAssignTask(null);
@@ -392,9 +404,9 @@ useAppRefresh(() => {
         taskType: full.taskType, customerID: full.customerID ? String(full.customerID) : "",
         siteID: full.siteID ? String(full.siteID) : "", taskName: full.taskName,
         description: full.description || "",
-        scheduleDateTime: full.scheduleDateTime ? full.scheduleDateTime.slice(0, 16) : "",
+        scheduleDateTime: toDatetimeLocalValue(full.scheduleDateTime),
         priority: full.priority,
-        dueDateTime: full.dueDateTime ? full.dueDateTime.slice(0, 16) : "",
+        dueDateTime: toDatetimeLocalValue(full.dueDateTime || full.dueAt),
       });
       setCustomerLabel(full.customer ? `${full.customer.customerCode} — ${full.customer.customerName}` : "");
       customerIdRef.current = full.customerID ? String(full.customerID) : "";
@@ -422,8 +434,16 @@ useAppRefresh(() => {
   const submitTask = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.taskName.trim()) { toast.error("Title is required"); return; }
+    const engineersAssigned = !!(
+      editingTask?.engineerAssignments?.length || editingTask?.assignments?.length
+    );
+    if (engineersAssigned && !form.dueDateTime) {
+      toast.error("Due date & time is required when an engineer is assigned");
+      return;
+    }
     setSaving(true);
     const isCustomerVisit = taskNeedsCustomer(form.taskType);
+    const dueIso = toIsoFromDatetimeLocal(form.dueDateTime);
     const payload = {
       departmentID: form.departmentID ? Number(form.departmentID) : undefined,
       taskType: form.taskType,
@@ -431,7 +451,8 @@ useAppRefresh(() => {
       siteID: isCustomerVisit && form.siteID ? Number(form.siteID) : undefined,
       taskName: form.taskName, description: form.description,
       scheduleDateTime: form.scheduleDateTime || undefined, priority: form.priority,
-      dueDateTime: form.dueDateTime || undefined,
+      dueDateTime: dueIso,
+      dueAt: dueIso,
       contacts: sanitizeContacts(taskContacts).map((c) => ({
         contactName: c.contactPerson,
         contactNumber: c.contactNumber,
@@ -965,7 +986,7 @@ useAppRefresh(() => {
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2"><Label>Schedule</Label><Input type="datetime-local" className="cursor-pointer" value={form.scheduleDateTime} onChange={(e) => setForm((p) => ({ ...p, scheduleDateTime: e.target.value }))} /></div>
-            <div className="space-y-2"><Label>Due</Label><Input type="datetime-local" className="cursor-pointer" value={form.dueDateTime} onChange={(e) => setForm((p) => ({ ...p, dueDateTime: e.target.value }))} /></div>
+            <div className="space-y-2"><Label>Due date & time</Label><Input type="datetime-local" className="cursor-pointer" value={form.dueDateTime} onChange={(e) => setForm((p) => ({ ...p, dueDateTime: e.target.value }))} required={!!(editingTask?.engineerAssignments?.length || editingTask?.assignments?.length)} /></div>
           </div>
           <div className="space-y-2">
             <Label>Priority</Label>
@@ -1123,7 +1144,18 @@ useAppRefresh(() => {
               </div>
               <button type="button" onClick={() => setAssignTask(null)} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500">✕</button>
             </div>
-            <div className="px-5 py-4 max-h-72 overflow-y-auto">
+            <div className="px-5 py-4 space-y-3 max-h-[70vh] overflow-y-auto">
+              <div className="space-y-2">
+                <Label htmlFor="assign-due">Due date & time</Label>
+                <Input
+                  id="assign-due"
+                  type="datetime-local"
+                  className="cursor-pointer"
+                  value={assignDue}
+                  onChange={(e) => setAssignDue(e.target.value)}
+                  required={assignIds.length > 0}
+                />
+              </div>
               {assignEmployees.length === 0 ? (
                 <p className="text-sm text-gray-400 text-center py-6">
                   No employees found in this department

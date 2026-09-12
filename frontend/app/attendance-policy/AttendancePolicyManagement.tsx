@@ -163,11 +163,14 @@ export function AttendancePolicyManagement() {
   // Auto-fill SP + Company + Branch for MANAGER / BRANCH_ADMIN
   useEffect(() => {
     if (user?.role === "SERVICE_PROVIDER" && currentUserMapping) {
+      const ctx = getSidebarContext();
+      const companyID = ctx?.companyID ?? currentUserMapping.companyID;
+      const sameCompany = Number(companyID) === Number(currentUserMapping.companyID);
       setFormData((p) => ({
         ...p,
         serviceProviderID: currentUserMapping.serviceProviderID,
-        companyID: currentUserMapping.companyID,
-        branchesID: currentUserMapping.branchesID,
+        companyID,
+        branchesID: sameCompany ? currentUserMapping.branchesID : undefined,
       }));
     } else if (user?.role === "BRANCH_ADMIN" && currentUserMapping) {
       setFormData((p) => ({
@@ -462,9 +465,12 @@ useEffect(() => {
     if (!formData.attendancePolicyName?.trim()) validationErrors.push("Attendance Policy Name is required");
 
     // Check unique policy name per company
-    const targetCompanyID = user?.role === "SERVICE_PROVIDER"
-      ? currentUserMapping?.companyID
-      : formData.companyID;
+    const ctx = getSidebarContext();
+    const targetCompanyID =
+      ctx?.companyID ??
+      formData.companyID ??
+      currentUserMapping?.companyID ??
+      user?.companyID;
     if (formData.attendancePolicyName?.trim() && targetCompanyID) {
       const duplicate = policies.find(
         (p) =>
@@ -483,19 +489,26 @@ useEffect(() => {
     }
 
     try {
+      const ctx = getSidebarContext();
+      const companyID =
+        ctx?.companyID ??
+        formData.companyID ??
+        currentUserMapping?.companyID ??
+        user?.companyID ??
+        null;
       const attendancePolicyData = {
         serviceProviderID:
-          user?.role === "SERVICE_PROVIDER"
-            ? currentUserMapping?.serviceProviderID
-            : formData.serviceProviderID,
-        companyID:
-          user?.role === "SERVICE_PROVIDER"
-            ? currentUserMapping?.companyID
-            : formData.companyID,
-branchesID:
-  user?.role === "BRANCH_ADMIN"
-    ? currentUserMapping?.branchesID ?? user?.branchesID
-    : formData.branchesID,
+          ctx?.serviceProviderID ??
+          formData.serviceProviderID ??
+          currentUserMapping?.serviceProviderID ??
+          user?.serviceProviderID ??
+          null,
+        companyID,
+        branchesID:
+          formData.branchesID ??
+          (user?.role === "BRANCH_ADMIN"
+            ? currentUserMapping?.branchesID ?? user?.branchesID
+            : null),
             attendancePolicyName: formData.attendancePolicyName,
         workingHoursType: formData.workingHoursType,
         checkin_begin_before_min: formData.checkin_begin_before_min,

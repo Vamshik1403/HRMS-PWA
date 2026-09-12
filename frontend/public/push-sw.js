@@ -71,6 +71,13 @@ self.addEventListener("push", function (event) {
     options.tag = "openhrm-" + Date.now();
   }
 
+  if (isTaskRequestNotification(inner)) {
+    options.actions = [
+      { action: "accept", title: "Accept" },
+      { action: "reschedule", title: "Reschedule" },
+    ];
+  }
+
   var badgePromise;
   if (typeof inner.badgeCount === "number" && inner.badgeCount >= 0) {
     badgePromise = writeBadgeCount(inner.badgeCount).then(applyAppBadge);
@@ -119,6 +126,6 @@ self.addEventListener("message", function (event) {
 self.addEventListener("notificationclick", function (event) {
   event.notification.close();
   var inner = event.notification.data || {};
-  var path = resolveNotificationPath(inner);
+  var path = resolveTaskRequestClickPath(inner, event.action);
   event.waitUntil(navigateToNotificationPath(path));
 });

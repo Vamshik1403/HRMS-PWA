@@ -160,11 +160,14 @@ export function FactualAttendancePolicyManagement() {
   // Auto-fill SP + Company + Branch for MANAGER / BRANCH_ADMIN
   useEffect(() => {
     if (user?.role === "SERVICE_PROVIDER" && currentUserMapping) {
+      const ctx = getSidebarContext();
+      const companyID = ctx?.companyID ?? currentUserMapping.companyID;
+      const sameCompany = Number(companyID) === Number(currentUserMapping.companyID);
       setFormData((p) => ({
         ...p,
         serviceProviderID: currentUserMapping.serviceProviderID,
-        companyID: currentUserMapping.companyID,
-        branchesID: currentUserMapping.branchesID,
+        companyID,
+        branchesID: sameCompany ? currentUserMapping.branchesID : undefined,
       }));
     } else if (user?.role === "BRANCH_ADMIN" && currentUserMapping) {
       setFormData((p) => ({
@@ -371,19 +374,23 @@ export function FactualAttendancePolicyManagement() {
     }
 
     try {
+      const ctx = getSidebarContext();
       const attendancePolicyData = {
         serviceProviderID:
-          user?.role === "SERVICE_PROVIDER"
-            ? currentUserMapping?.serviceProviderID
-            : formData.serviceProviderID,
+          ctx?.serviceProviderID ??
+          formData.serviceProviderID ??
+          currentUserMapping?.serviceProviderID ??
+          user?.serviceProviderID ??
+          null,
         companyID:
-          user?.role === "SERVICE_PROVIDER"
-            ? currentUserMapping?.companyID
-            : formData.companyID,
+          ctx?.companyID ??
+          formData.companyID ??
+          currentUserMapping?.companyID ??
+          user?.companyID ??
+          null,
         branchesID:
-          user?.role === "SERVICE_PROVIDER"
-            ? currentUserMapping?.branchesID
-            : formData.branchesID,
+          formData.branchesID ??
+          (user?.role === "BRANCH_ADMIN" ? currentUserMapping?.branchesID : null),
         attendancePolicyName: formData.attendancePolicyName,
         workingHoursType: formData.workingHoursType,
         checkin_begin_before_min: formData.checkin_begin_before_min,

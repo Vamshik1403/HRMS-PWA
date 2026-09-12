@@ -7,7 +7,9 @@ import {
   CreateTaskProjectDto,
   CreateTaskChatDto,
   CreateTaskRemarkDto,
+  TaskAssignmentActionDto,
   TaskPriorityChangeDto,
+  TaskSiteVisitDto,
   TaskStatusChangeDto,
   UpdateTaskProjectDto,
 } from './dto/create-task-project.dto';
@@ -18,6 +20,13 @@ import { EnplSyncService } from '../enpl-sync/enpl-sync.service';
 import { loadEmployeePermissions } from '../common/employee-permission.util';
 import { hasModuleAction } from '../common/company-module-permissions';
 import { getMutuallyLinkedCompanyIds } from '../company/federal-domain.util';
+import { reverseGeocode } from '../common/reverse-geocode';
+import {
+  assignmentRequestKindFromRow,
+  assignmentRowMatchesEmployee,
+  canRecordSiteVisitForAssignment,
+  decorateTaskAssignmentHelpers,
+} from './assignment-request.util';
 
 export function normalizeTaskStatus(status?: string | null): string | undefined {
   if (!status) return undefined;
@@ -26,6 +35,13 @@ export function normalizeTaskStatus(status?: string | null): string | undefined 
   if (value === 'WIP') return 'Work in Progress';
   if (value === 'Closed') return 'Completed';
   return value;
+}
+
+function resolveDueAt(dto: { dueAt?: string; dueDateTime?: string }): Date | null {
+  const raw = dto.dueAt || dto.dueDateTime;
+  if (!raw) return null;
+  const d = new Date(raw);
+  return Number.isNaN(d.getTime()) ? null : d;
 }
 
 const TASK_NESTED_INCLUDE = {
@@ -43,7 +59,7 @@ function taskListInclude(viewer: TaskViewerContext) {
   return {
     department: { select: { id: true, departmentName: true } },
     customer: { select: { id: true, customerCode: true, customerName: true } },
-    site: { select: { id: true, branchName: true, city: true } },
+    site: { select: { id: true, branchName: true, city: true, address: true } },
     createdByEmployee: {
       select: { id: true, employeeFirstName: true, employeeLastName: true, employeeID: true },
     },
@@ -202,7 +218,7 @@ export class TaskProjectsService {
   private async assertTaskAccess(taskId: number, viewer: TaskViewerContext) {
     const task = await this.prisma.taskProject.findFirst({
       where: { id: taskId, isDeleted: false },
-      include: { assignments: true },
+      include: { assignments: true, engineerAssignments: true },
     });
     if (!task) throw new NotFoundException('Task not found');
 
@@ -224,10 +240,53 @@ export class TaskProjectsService {
       (viewer.employeeId && task.createdByEmployeeID != null && scopeIds.includes(task.createdByEmployeeID)) ||
       (viewer.userId && task.createdByUserID === viewer.userId);
     const isAssigned = viewer.employeeId
-      ? task.assignments.some((a) => scopeIds.includes(a.manageEmployeeID))
+      ? task.assignments.some((a) => scopeIds.includes(a.manageEmployeeID)) ||
+        task.engineerAssignments.some(
+          (a) => a.manageEmployeeID != null && scopeIds.includes(a.manageEmployeeID),
+        )
       : false;
     if (!isCreator && !isAssigned) throw new ForbiddenException('Access denied');
     return task;
+  }
+
+  private decorateTaskAssignments<T extends {
+    engineerAssignments?: Array<Record<string, unknown>>;
+    dueDateTime?: Date | string | null;
+    site?: { address?: string | null; city?: string | null; branchName?: string | null } | null;
+    siteAddress?: string | null;
+    siteCity?: string | null;
+  }>(task: T): T {
+    const decorated = decorateTaskAssignmentHelpers(
+      task as T & { engineerAssignments?: Array<Record<string, unknown>> },
+    ) as T;
+    const site = task.site;
+    return {
+      ...decorated,
+      dueAt: (task as T & { dueAt?: Date | string | null }).dueAt ?? task.dueDateTime ?? null,
+      siteAddress: task.siteAddress ?? site?.address ?? null,
+      siteCity: task.siteCity ?? site?.city ?? null,
+    } as T;
+  }
+
+  private async employeeContact(employeeId: number) {
+    const emp = await this.prisma.manageEmployee.findFirst({
+      where: { id: employeeId },
+      select: {
+        employeeFirstName: true,
+        employeeLastName: true,
+        businessEmail: true,
+        personalEmail: true,
+        employeeCredentials: { select: { username: true } },
+      },
+    });
+    const credUser = emp?.employeeCredentials?.username || '';
+    const email =
+      emp?.businessEmail ||
+      emp?.personalEmail ||
+      (credUser.includes('@') ? credUser : null) ||
+      null;
+    const name = [emp?.employeeFirstName, emp?.employeeLastName].filter(Boolean).join(' ').trim() || null;
+    return { emp, email, name };
   }
 
   private async attachSitePunches<T extends { id: number }>(
@@ -517,6 +576,8 @@ export class TaskProjectsService {
             status: row.status ?? null,
             notes: row.notes ?? null,
             assignedDate: row.assignedDate ? new Date(row.assignedDate) : null,
+            rescheduleReason: row.rescheduleReason ?? null,
+            managerReason: row.managerReason ?? null,
           })),
         });
       }
@@ -735,11 +796,23 @@ export class TaskProjectsService {
     id: number,
     employeeIds: number[],
     query: Record<string, string | undefined>,
+    dueDto?: { dueAt?: string; dueDateTime?: string },
   ) {
     const viewer = await this.resolveViewer(query);
     assertCanManage(viewer);
-    await this.assertTaskAccess(id, viewer);
+    const task = await this.assertTaskAccess(id, viewer);
+    const due = resolveDueAt(dueDto || {}) ?? task.dueDateTime;
+    if (employeeIds.length && !due) {
+      throw new BadRequestException('Due date & time is required when an engineer is assigned');
+    }
+    if (resolveDueAt(dueDto || {})) {
+      await this.prisma.taskProject.update({
+        where: { id },
+        data: { dueDateTime: due },
+      });
+    }
     await this.syncAssignments(id, employeeIds, { notify: 'all' });
+    this.enplSync.notifyHrmsChange('task', id);
     return this.findOne(id, query);
   }
 
@@ -821,11 +894,12 @@ export class TaskProjectsService {
           }))
         : rawItems;
     const withPunches = await this.attachSitePunches(items);
+    const decorated = withPunches.map((task) => this.decorateTaskAssignments(task));
     const statusCounts: Record<string, number> = {};
     for (const row of grouped) {
       statusCounts[row.status] = row._count._all;
     }
-    return { items: withPunches, total, page, limit, totalPages: Math.ceil(total / limit), statusCounts };
+    return { items: decorated, total, page, limit, totalPages: Math.ceil(total / limit), statusCounts };
   }
 
   async findOne(id: number, query: Record<string, string | undefined>) {
@@ -846,7 +920,132 @@ export class TaskProjectsService {
       task.chats = filterChatsForEmployeeViewer(task.chats, viewer) as typeof task.chats;
     }
     const [withPunches] = await this.attachSitePunches([task]);
-    return withPunches;
+    return this.decorateTaskAssignments(withPunches);
+  }
+
+  async assignmentAction(
+    id: number,
+    dto: TaskAssignmentActionDto,
+    query: Record<string, string | undefined>,
+  ) {
+    const viewer = await this.resolveViewer(query);
+    if (!viewer.employeeId) {
+      throw new ForbiddenException('Only the assigned employee can accept or reschedule');
+    }
+    await this.assertTaskAccess(id, viewer);
+    const task = await this.prisma.taskProject.findFirst({
+      where: { id, isDeleted: false },
+      include: { engineerAssignments: true },
+    });
+    if (!task) throw new NotFoundException('Task not found');
+    const { email } = await this.employeeContact(viewer.employeeId);
+    const mine = task.engineerAssignments.find((row) =>
+      assignmentRowMatchesEmployee(row, viewer.employeeId, email),
+    );
+    if (!mine) {
+      throw new ForbiddenException('You are not assigned to this task');
+    }
+    const action = dto.action === 'reschedule' ? 'reschedule' : dto.action === 'accept' ? 'accept' : null;
+    if (!action) {
+      throw new BadRequestException('action must be accept or reschedule');
+    }
+    const reason = (dto.reason || '').trim();
+    if (action === 'reschedule' && !reason) {
+      throw new BadRequestException('A reason is required to request reschedule');
+    }
+    await this.enplSync.postTaskAssignmentAction({
+      action,
+      hrmsEmployeeId: viewer.employeeId,
+      email: email || mine.engineerEmail,
+      enplTaskId: task.erpTaskId,
+      hrmsTaskId: task.id,
+      reason: action === 'reschedule' ? reason : undefined,
+    });
+    await this.enplSync.runInbound('enpl', async () => {
+      await this.prisma.taskEngineerAssignment.update({
+        where: { id: mine.id },
+        data: {
+          status: action === 'accept' ? 'Accepted' : 'RescheduleRequested',
+          rescheduleReason: action === 'reschedule' ? reason : mine.rescheduleReason,
+        },
+      });
+    });
+    return this.findOne(id, query);
+  }
+
+  async recordSiteVisit(
+    id: number,
+    dto: TaskSiteVisitDto,
+    query: Record<string, string | undefined>,
+  ) {
+    const viewer = await this.resolveViewer(query);
+    if (!viewer.employeeId) {
+      throw new ForbiddenException('Only the assigned employee can check in or out');
+    }
+    await this.assertTaskAccess(id, viewer);
+    const task = await this.prisma.taskProject.findFirst({
+      where: { id, isDeleted: false },
+      include: { engineerAssignments: true },
+    });
+    if (!task) throw new NotFoundException('Task not found');
+    const { email, name } = await this.employeeContact(viewer.employeeId);
+    const mine = task.engineerAssignments.find((row) =>
+      assignmentRowMatchesEmployee(row, viewer.employeeId, email),
+    );
+    if (!mine) {
+      throw new ForbiddenException('You are not assigned to this task');
+    }
+    if (!canRecordSiteVisitForAssignment(mine)) {
+      throw new BadRequestException(
+        assignmentRequestKindFromRow(mine) === 'waiting'
+          ? 'Site check-in is not available while a reschedule is waiting for manager review'
+          : 'Accept the task before site check-in or check-out',
+      );
+    }
+    const kind = dto.kind === 'checkout' ? 'checkout' : dto.kind === 'checkin' ? 'checkin' : null;
+    if (!kind) {
+      throw new BadRequestException('kind must be checkin or checkout');
+    }
+    const latitude = Number(dto.latitude);
+    const longitude = Number(dto.longitude);
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+      throw new BadRequestException('latitude and longitude are required');
+    }
+    if (!task.erpTaskId) {
+      throw new BadRequestException('This task is not linked to ENPL for GPS site visits');
+    }
+    const at = (dto.at || '').trim() || new Date().toISOString();
+    let addressText = (dto.addressText || '').trim() || null;
+    if (!addressText) {
+      addressText = await reverseGeocode(latitude, longitude);
+    }
+    await this.enplSync.postTaskSiteVisit({
+      kind,
+      hrmsEmployeeId: viewer.employeeId,
+      email: email || mine.engineerEmail,
+      enplTaskId: task.erpTaskId,
+      hrmsTaskId: task.id,
+      latitude,
+      longitude,
+      accuracyMeters: dto.accuracyMeters != null ? Number(dto.accuracyMeters) : null,
+      addressText,
+      at,
+    });
+    const label = kind === 'checkin' ? 'Site Mark IN' : 'Site Mark OUT';
+    const locationLine = addressText
+      ? `Location: ${addressText}\nCoordinates: ${latitude}, ${longitude}`
+      : `Coordinates: ${latitude}, ${longitude}`;
+    await this.enplSync.runInbound('enpl', async () => {
+      await this.prisma.taskChat.create({
+        data: {
+          taskID: id,
+          message: `${label} at ${new Date(at).toLocaleString('en-IN')}\n${locationLine}`,
+          employeeID: viewer.employeeId,
+          senderName: (query.actorName as string) || name,
+        },
+      });
+    });
+    return this.findOne(id, query);
   }
 
   async create(dto: CreateTaskProjectDto, query: Record<string, string | undefined>) {
@@ -862,6 +1061,12 @@ export class TaskProjectsService {
       if (!emp?.allowCreateTaskOnMobile) {
         throw new ForbiddenException('Task creation is not enabled for your account');
       }
+    }
+    const due = resolveDueAt(dto);
+    const assigning =
+      (dto.assignedEmployeeIds?.length || 0) > 0 || (dto.engineerAssignments?.length || 0) > 0;
+    if (assigning && !due) {
+      throw new BadRequestException('Due date & time is required when an engineer is assigned');
     }
     const companyID = dto.companyID ?? viewer.companyID ?? null;
     let code = await nextTaskCode(this.prisma, companyID);
@@ -883,7 +1088,7 @@ export class TaskProjectsService {
         description: dto.description,
         scheduleDateTime: dto.scheduleDateTime ? new Date(dto.scheduleDateTime) : null,
         priority: dto.priority || 'Medium',
-        dueDateTime: dto.dueDateTime ? new Date(dto.dueDateTime) : null,
+        dueDateTime: due,
         status: normalizeTaskStatus(dto.status) || 'Open',
         attachment: dto.attachment ?? null,
         createdByName: dto.createdByName ?? (query.actorName as string) ?? null,
@@ -920,6 +1125,15 @@ export class TaskProjectsService {
     if (!canManageTaskModule(viewer) && existing.createdByEmployeeID !== viewer.employeeId) {
       throw new ForbiddenException('Only task creator or admin can edit task details');
     }
+    const dueProvided = dto.dueAt !== undefined || dto.dueDateTime !== undefined;
+    const due = dueProvided ? resolveDueAt(dto) : existing.dueDateTime;
+    const assigning =
+      (dto.assignedEmployeeIds?.length || 0) > 0 || (dto.engineerAssignments?.length || 0) > 0;
+    const alreadyAssigned =
+      existing.assignments.length > 0 || existing.engineerAssignments.length > 0;
+    if ((assigning || alreadyAssigned) && !due) {
+      throw new BadRequestException('Due date & time is required when an engineer is assigned');
+    }
     await this.prisma.taskProject.update({
       where: { id },
       data: {
@@ -931,7 +1145,7 @@ export class TaskProjectsService {
         description: dto.description,
         scheduleDateTime: dto.scheduleDateTime ? new Date(dto.scheduleDateTime) : undefined,
         priority: dto.priority,
-        dueDateTime: dto.dueDateTime ? new Date(dto.dueDateTime) : undefined,
+        dueDateTime: dueProvided ? due : undefined,
         status: normalizeTaskStatus(dto.status),
         attachment: dto.attachment,
         createdByName: dto.createdByName,
@@ -963,9 +1177,21 @@ export class TaskProjectsService {
         throw new ForbiddenException('Only task creator or admin can change task status');
       }
     }
+    const nextStatus = normalizeTaskStatus(dto.status) || dto.status;
+    const pendingAssignment = task.engineerAssignments.some(
+      (row) => assignmentRequestKindFromRow(row) !== 'working',
+    );
+    if (
+      pendingAssignment &&
+      (nextStatus === 'Work in Progress' || nextStatus === 'WIP')
+    ) {
+      throw new BadRequestException(
+        'Cannot set Work in Progress while an assignment is still pending accept',
+      );
+    }
     const updated = await this.prisma.taskProject.update({
       where: { id },
-      data: { status: normalizeTaskStatus(dto.status) || dto.status },
+      data: { status: nextStatus },
     });
     const actorName = dto.actorName ?? (query.actorName as string) ?? undefined;
     await this.logActivity(id, 'STATUS_CHANGE', {

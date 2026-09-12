@@ -872,6 +872,7 @@ model ManageEmployee {
   pwaShowLoanAdvances                Boolean                             @default(true)
   mobileAttendanceEnabled            Boolean                             @default(false)
   mobileBreakEnabled                 Boolean                             @default(true)
+  amc                                Boolean                             @default(false)
   bonusAllocation                    BonusAllocation[]
   empAttendanceRegularise            EmpAttendanceRegularise[]
   empCurrentPosition                 EmpCurrentPosition[]
@@ -2461,8 +2462,11 @@ model TaskProject {
   attachment          String?                  @db.VarChar(512)
   scheduleDateTime    DateTime?
   priority            String                   @default("Medium") @db.VarChar(32)
-  dueDateTime         DateTime?
-  status              String                   @default("Open") @db.VarChar(64)
+  dueDateTime             DateTime?
+  expectedDurationMinutes Int?
+  siteVisits              Json?
+  siteVisitSummary        Json?
+  status                  String                   @default("Open") @db.VarChar(64)
   createdByName       String?                  @db.VarChar(255)
   createdByUserID     Int?
   createdByEmployeeID Int?
@@ -2520,6 +2524,8 @@ model TaskEngineerAssignment {
   status           String?         @db.VarChar(64)
   notes            String?
   assignedDate     DateTime?
+  rescheduleReason String?
+  managerReason    String?
   createdAt        DateTime        @default(now())
   updatedAt        DateTime        @updatedAt
   task             TaskProject     @relation(fields: [taskID], references: [id], onDelete: Cascade)

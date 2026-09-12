@@ -5,7 +5,9 @@ import {
   CreateTaskProjectDto,
   CreateTaskChatDto,
   CreateTaskRemarkDto,
+  TaskAssignmentActionDto,
   TaskPriorityChangeDto,
+  TaskSiteVisitDto,
   TaskStatusChangeDto,
   UpdateTaskProjectDto,
 } from './dto/create-task-project.dto';
@@ -37,6 +39,28 @@ export class TaskProjectsController {
   @Get(':id/report')
   getReport(@Param('id', ParseIntPipe) id: number, @Query() query: Record<string, string>) {
     return this.service.getTaskReport(id, query);
+  }
+
+  @Post(':id/assignment-action')
+  @UseGuards(AuthGuard('jwt'))
+  @HttpCode(200)
+  assignmentAction(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: TaskAssignmentActionDto,
+    @Query() query: Record<string, string>,
+  ) {
+    return this.service.assignmentAction(id, dto, query);
+  }
+
+  @Post(':id/site-visit')
+  @UseGuards(AuthGuard('jwt'))
+  @HttpCode(200)
+  recordSiteVisit(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: TaskSiteVisitDto,
+    @Query() query: Record<string, string>,
+  ) {
+    return this.service.recordSiteVisit(id, dto, query);
   }
 
   @Get(':id')
@@ -112,10 +136,13 @@ export class TaskProjectsController {
   @Patch(':id/assign')
   assignEmployees(
     @Param('id', ParseIntPipe) id: number,
-    @Body() body: { assignedEmployeeIds: number[] },
+    @Body() body: { assignedEmployeeIds: number[]; dueAt?: string; dueDateTime?: string },
     @Query() query: Record<string, string>,
   ) {
-    return this.service.assignEmployees(id, body.assignedEmployeeIds ?? [], query);
+    return this.service.assignEmployees(id, body.assignedEmployeeIds ?? [], query, {
+      dueAt: body.dueAt,
+      dueDateTime: body.dueDateTime,
+    });
   }
 
   @Get(':id/activities')

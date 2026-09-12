@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ListTodo, Plus } from "lucide-react";
 import EmpMobileLayout from "../components/layout/EmpMobileLayout";
 import { useCurrentUser } from "../hooks/useCurrentUser";
@@ -21,6 +21,11 @@ import {
   isSitePunchTaskType,
   sitePunchesFromTask,
 } from "../utils/taskSitePunch";
+import {
+  isEnplLinkedTask,
+  taskSiteAddress,
+} from "../utils/taskSiteVisit";
+import { TaskSiteVisitSummary } from "../components/task/mobile/TaskSiteVisitPanel";
 import { downloadTaskReportForId } from "../utils/taskReportPdf";
 import { useTaskChatPolling } from "../hooks/useTaskChatPolling";
 import { useEmpManagerScope } from "../hooks/useEmpManagerScope";
@@ -30,11 +35,16 @@ import { EmpTeamStyleDataSection } from "../components/emp/desktop/EmpTeamStyleD
 import { useEmpPortalDesktop } from "../components/layout/EmpPortalShell";
 import { Button } from "../components/ui/button";
 import { FormModal } from "../components/ui/form-modal";
-import { canonicalTaskStatus } from "../components/task/task-types";
 import { cn } from "@/app/utils/cn";
+import {
+  isAssignmentRequestTask,
+  matchesEmpTaskTab,
+  myAssignmentRequestKind,
+} from "../utils/taskAssignmentRequest";
+import { TaskAssignmentRequestPanel } from "../components/task/mobile/TaskAssignmentRequestPanel";
 
 const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL || "/backend";
-const STATUS_TABS = ["Open", "WIP", "Closed", "Reopen"] as const;
+const STATUS_TABS = ["Requests", "Open", "WIP", "Closed", "Reopen"] as const;
 type StatusTab = (typeof STATUS_TABS)[number];
 
 interface Task extends MobileTaskListItem {
@@ -53,7 +63,9 @@ export default function EmpMyTasksPage() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
-  const [statusTab, setStatusTab] = useState<StatusTab>("Open");
+  const [statusTab, setStatusTab] = useState<StatusTab>("Requests");
+  const [rescheduleTaskId, setRescheduleTaskId] = useState<number | null>(null);
+  const deepLinkHandled = useRef(false);
   const [detail, setDetail] = useState<Task | null>(null);
   const [infoTask, setInfoTask] = useState<Task | null>(null);
   const [chatMsg, setChatMsg] = useState("");
@@ -61,6 +73,15 @@ export default function EmpMyTasksPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [canCreateTask, setCanCreateTask] = useState(false);
   const [creatorEmp, setCreatorEmp] = useState<CreatorEmp | null>(null);
+  const employeeId =
+    (user as { employee?: { id?: number } } | null)?.employee?.id ??
+    (typeof user?.id === "number" ? user.id : undefined);
+  const employeeEmail = (user?.email || "").trim() || null;
+
+  const requestCount = useMemo(
+    () => tasks.filter((t) => isAssignmentRequestTask(t, employeeId, employeeEmail)).length,
+    [tasks, employeeId, employeeEmail],
+  );
 
   const load = useCallback(async () => {
     if (!user) return;
@@ -112,6 +133,7 @@ export default function EmpMyTasksPage() {
   }, [user, load]);
 
   const openTask = async (t: Task) => {
+    if (isAssignmentRequestTask(t, employeeId, employeeEmail)) return;
     try {
       const full = await taskFetch<Task>(`/task-projects/${t.id}`, user);
       setChatMsg("");
@@ -135,7 +157,7 @@ export default function EmpMyTasksPage() {
     detail?.id,
     user,
     (full) => setDetail((prev) => (prev?.id === full.id ? full : prev)),
-    !!detail,
+    !!detail && !isAssignmentRequestTask(detail, employeeId, employeeEmail),
   );
 
   const sendMsg = async (payload: { message: string; attachmentUrl?: string }) => {
@@ -164,28 +186,74 @@ export default function EmpMyTasksPage() {
     }
   };
 
-  const postSitePunch = async (
-    taskId: number,
-    taskOrChats?:
-      | { message?: string; createdAt?: string }[]
-      | {
-          chats?: { message?: string; createdAt?: string }[];
-          sitePunches?: { kind?: string; at?: string; createdAt?: string; message?: string | null }[];
-        },
-  ) => {
-    if (!user) return;
-    const punchSource = Array.isArray(taskOrChats) ? { chats: taskOrChats } : taskOrChats || {};
-    const kind = getNextSitePunchKindForTask(punchSource);
-    const label = sitePunchLabel(kind);
-    let locationBlock = "";
+  const resolveGpsWithAddress = async () => {
+    const coords = await fetchGPSOnUserGesture();
+    let address = "";
     try {
-      const coords = await fetchGPSOnUserGesture();
       const addrRes = await fetch(
         `${BACKEND}/devices/resolve-address?latitude=${encodeURIComponent(String(coords.latitude))}&longitude=${encodeURIComponent(String(coords.longitude))}`,
         { cache: "no-store" },
       );
       const addrJson = addrRes.ok ? await addrRes.json() : {};
-      const address = typeof addrJson.address === "string" ? addrJson.address : "";
+      address = typeof addrJson.address === "string" ? addrJson.address : "";
+    } catch {
+      address = "";
+    }
+    return { coords, address };
+  };
+
+  const postEnplSiteVisit = async (
+    taskId: number,
+    kind: "checkin" | "checkout",
+  ) => {
+    if (!user) return;
+    setSending(true);
+    try {
+      const coordsAndAddr = await resolveGpsWithAddress();
+      await taskFetch(`/task-projects/${taskId}/site-visit`, user, {
+        method: "POST",
+        body: JSON.stringify({
+          kind,
+          latitude: coordsAndAddr.coords.latitude,
+          longitude: coordsAndAddr.coords.longitude,
+          accuracyMeters: coordsAndAddr.coords.accuracy,
+          addressText: coordsAndAddr.address || undefined,
+          at: new Date().toISOString(),
+        }),
+      });
+      toast.success(kind === "checkin" ? "Site check in recorded" : "Site check out recorded");
+      if (detail?.id === taskId) await refreshDetail();
+      load();
+    } catch (e: any) {
+      toast.error(e.message || "GPS is required for site check-in and check-out");
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const postSitePunch = async (
+    taskId: number,
+    taskOrChats?:
+      | { message?: string; createdAt?: string }[]
+      | {
+          erpTaskId?: number | null;
+          chats?: { message?: string; createdAt?: string }[];
+          sitePunches?: { kind?: string; at?: string; createdAt?: string; message?: string | null }[];
+        },
+    explicitKind?: "checkin" | "checkout",
+  ) => {
+    if (!user) return;
+    const punchSource = Array.isArray(taskOrChats) ? { chats: taskOrChats } : taskOrChats || {};
+    if (!Array.isArray(taskOrChats) && isEnplLinkedTask(punchSource)) {
+      const next = explicitKind || (getNextSitePunchKindForTask(punchSource) === "out" ? "checkout" : "checkin");
+      await postEnplSiteVisit(taskId, next);
+      return;
+    }
+    const kind = getNextSitePunchKindForTask(punchSource);
+    const label = sitePunchLabel(kind);
+    let locationBlock = "";
+    try {
+      const { coords, address } = await resolveGpsWithAddress();
       locationBlock = `\nLocation: ${address || "—"}\nCoordinates: ${coords.latitude}, ${coords.longitude}`;
     } catch {
       locationBlock = "\nLocation: unavailable";
@@ -227,15 +295,70 @@ export default function EmpMyTasksPage() {
     }
   };
 
+  const assignmentAction = useCallback(
+    async (taskId: number, action: "accept" | "reschedule", reason?: string) => {
+      if (!user || !taskId) return;
+      setSending(true);
+      try {
+        await taskFetch<Task>(`/task-projects/${taskId}/assignment-action`, user, {
+          method: "POST",
+          body: JSON.stringify({ action, reason }),
+        });
+        if (action === "accept") {
+          toast.success("Task accepted");
+          setDetail((prev) => (prev?.id === taskId ? null : prev));
+        } else {
+          toast.success("Reschedule requested");
+        }
+        setRescheduleTaskId(null);
+        await load();
+      } catch (e: any) {
+        toast.error(e.message || "Could not update assignment");
+      } finally {
+        setSending(false);
+      }
+    },
+    [user, load],
+  );
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const q = new URLSearchParams(window.location.search);
+    const tab = q.get("tab");
+    if (tab && (STATUS_TABS as readonly string[]).includes(tab)) {
+      setStatusTab(tab as StatusTab);
+    }
+    const rescheduleId = Number(q.get("rescheduleTask") || "");
+    const taskId = Number(q.get("taskId") || "");
+    const acceptId = Number(q.get("acceptTask") || "");
+    if (Number.isFinite(rescheduleId) && rescheduleId > 0) {
+      setStatusTab("Requests");
+      setRescheduleTaskId(rescheduleId);
+    } else if (
+      (!Number.isFinite(acceptId) || acceptId <= 0) &&
+      Number.isFinite(taskId) &&
+      taskId > 0
+    ) {
+      setStatusTab("Requests");
+      setRescheduleTaskId(taskId);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!user || loading || deepLinkHandled.current) return;
+    if (typeof window === "undefined") return;
+    const q = new URLSearchParams(window.location.search);
+    const acceptId = Number(q.get("acceptTask") || "");
+    if (!Number.isFinite(acceptId) || acceptId <= 0) return;
+    deepLinkHandled.current = true;
+    setStatusTab("Requests");
+    void assignmentAction(acceptId, "accept");
+    window.history.replaceState({}, "", "/empMyTasks?tab=Requests");
+  }, [user, loading, assignmentAction]);
+
   const desktopFiltered = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
-    let list = tasks.filter((t) => {
-      const canonical = canonicalTaskStatus(t.status);
-      if (statusTab === "Open") return canonical === "Open" || canonical === "Scheduled" || canonical === "Rescheduled";
-      if (statusTab === "WIP") return canonical === "Work in Progress" || canonical === "On-Hold";
-      if (statusTab === "Closed") return canonical === "Completed";
-      return canonical === "Reopen";
-    });
+    let list = tasks.filter((t) => matchesEmpTaskTab(t, statusTab, employeeId, employeeEmail));
     if (!q) return list;
     return list.filter(
       (t) =>
@@ -245,9 +368,27 @@ export default function EmpMyTasksPage() {
         (t.customer?.customerName || "").toLowerCase().includes(q) ||
         (t.site?.branchName || "").toLowerCase().includes(q),
     );
-  }, [tasks, searchQuery, statusTab]);
+  }, [tasks, searchQuery, statusTab, employeeId, employeeEmail]);
 
-  const chatView = detail ? (
+  const requestKind = detail ? myAssignmentRequestKind(detail, employeeId, employeeEmail) : "working";
+  const requestView =
+    detail && requestKind !== "working" ? (
+      <TaskAssignmentRequestPanel
+        task={detail}
+        employeeId={employeeId}
+        employeeEmail={employeeEmail}
+        sending={sending}
+        embedded={isDesktop}
+        onBack={() => {
+          setDetail(null);
+          load();
+        }}
+        onAccept={() => void assignmentAction(detail.id, "accept")}
+        onReschedule={(reason) => void assignmentAction(detail.id, "reschedule", reason)}
+      />
+    ) : null;
+
+  const chatView = detail && requestKind === "working" ? (
     <MobileTaskChatView
       task={detail}
       currentUserName={user?.username}
@@ -264,8 +405,19 @@ export default function EmpMyTasksPage() {
         setChatMsg("");
         load();
       }}
-      onSitePunch={isSitePunchTaskType(detail.taskType) ? sitePunch : undefined}
+      onSitePunch={
+        isEnplLinkedTask(detail)
+          ? undefined
+          : isSitePunchTaskType(detail.taskType)
+            ? sitePunch
+            : undefined
+      }
       sitePunchNextKind={getNextSitePunchKindForTask(detail)}
+      onEnplSiteVisit={
+        isEnplLinkedTask(detail)
+          ? (kind) => postEnplSiteVisit(detail.id, kind)
+          : undefined
+      }
       embedded={isDesktop}
       onDownloadReport={async () => {
         try {
@@ -279,13 +431,13 @@ export default function EmpMyTasksPage() {
   ) : null;
 
   if (detail && !isDesktop) {
-    return <EmpMobileLayout hideBottomNav>{chatView}</EmpMobileLayout>;
+    return <EmpMobileLayout hideBottomNav>{requestView || chatView}</EmpMobileLayout>;
   }
 
   if (detail && isDesktop) {
     return (
       <EmpDesktopPage title="Task" description={detail.taskName} icon={ListTodo}>
-        {chatView}
+        {requestView || chatView}
       </EmpDesktopPage>
     );
   }
@@ -355,7 +507,7 @@ export default function EmpMyTasksPage() {
                     : "border-border text-muted-foreground hover:text-foreground",
                 )}
               >
-                {tab}
+                {tab === "Requests" && requestCount ? `${tab} (${requestCount})` : tab}
               </button>
             ))}
             loading={false}
@@ -365,8 +517,14 @@ export default function EmpMyTasksPage() {
               <EmpDesktopTaskTable
                 tasks={desktopFiltered}
                 loading={loading}
+                employeeId={employeeId}
+                employeeEmail={employeeEmail}
+                sendingAction={sending}
+                rescheduleTaskId={rescheduleTaskId}
                 onOpen={(t) => void openTask(t as Task)}
                 onSitePunch={(t) => void recordSitePunch(t)}
+                onAcceptRequest={(t) => void assignmentAction(t.id, "accept")}
+                onRescheduleRequest={(t, reason) => void assignmentAction(t.id, "reschedule", reason)}
               />
             }
           />
@@ -389,6 +547,14 @@ export default function EmpMyTasksPage() {
         showCreateFab={canCreateTask}
         managerScope={scope}
         isManagerView={isManagerView}
+        employeeId={employeeId}
+        employeeEmail={employeeEmail}
+        statusTab={statusTab}
+        onStatusTabChange={setStatusTab}
+        sendingAction={sending}
+        rescheduleTaskId={rescheduleTaskId}
+        onAcceptRequest={(t) => void assignmentAction(t.id, "accept")}
+        onRescheduleRequest={(t, reason) => void assignmentAction(t.id, "reschedule", reason)}
       />
 
       {infoTask && (
@@ -401,10 +567,16 @@ export default function EmpMyTasksPage() {
               <p><span className="text-gray-500">Type:</span> {infoTask.taskType}</p>
               <p><span className="text-gray-500">Status:</span> {infoTask.status}</p>
               <p><span className="text-gray-500">Priority:</span> {infoTask.priority}</p>
-              {isSitePunchTaskType(infoTask.taskType) && (
-                <p><span className="text-gray-500">Site:</span> {infoTask.site?.branchName || "—"}</p>
-              )}
-              {isSitePunchTaskType(infoTask.taskType) && (
+              <p><span className="text-gray-500">Site:</span> {taskSiteAddress(infoTask) || infoTask.site?.branchName || "—"}</p>
+              {(infoTask.dueAt || infoTask.dueDateTime) ? (
+                <p><span className="text-gray-500">Due date & time:</span> {new Date(String(infoTask.dueAt || infoTask.dueDateTime)).toLocaleString("en-IN")}</p>
+              ) : null}
+              {isEnplLinkedTask(infoTask) ? (
+                <div className="pt-2">
+                  <p className="text-gray-500 font-semibold mb-2">Site visit</p>
+                  <TaskSiteVisitSummary task={infoTask} compact />
+                </div>
+              ) : isSitePunchTaskType(infoTask.taskType) ? (
                 <div className="pt-2 space-y-1">
                   <p className="text-gray-500 font-semibold">Site check-in / check-out</p>
                   {sitePunchesFromTask(infoTask).length === 0 ? (
@@ -418,10 +590,10 @@ export default function EmpMyTasksPage() {
                     ))
                   )}
                 </div>
-              )}
+              ) : null}
             </div>
-            <button type="button" className="mt-4 w-full py-2.5 rounded-xl bg-[#2563eb] text-white font-semibold text-sm" onClick={() => { setInfoTask(null); openTask(infoTask); }}>
-              Open chat
+            <button type="button" className="mt-4 w-full py-2.5 rounded-xl bg-[#2563eb] text-white font-semibold text-sm" onClick={() => { setInfoTask(null); if (!isAssignmentRequestTask(infoTask, employeeId, employeeEmail)) openTask(infoTask); }}>
+              {isAssignmentRequestTask(infoTask, employeeId, employeeEmail) ? "Close" : "Open chat"}
             </button>
           </div>
         </>

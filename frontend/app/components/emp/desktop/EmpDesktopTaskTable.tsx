@@ -14,6 +14,9 @@ import {
   sitePunchMenuLabel,
   sitePunchesFromTask,
 } from "../../../utils/taskSitePunch";
+import { firstCheckInVisit, isEnplLinkedTask, lastCheckOutVisit } from "../../../utils/taskSiteVisit";
+import { isAssignmentRequestTask } from "../../../utils/taskAssignmentRequest";
+import { TaskRequestInlineActions } from "../../task/mobile/TaskAssignmentRequestPanel";
 
 function fmtSchedule(iso?: string | null) {
   if (!iso) return "—";
@@ -30,6 +33,15 @@ function fmtSchedule(iso?: string | null) {
 }
 
 function punchCell(task: MobileTaskListItem, kind: "in" | "out") {
+  if (isEnplLinkedTask(task)) {
+    const visit = kind === "in" ? firstCheckInVisit(task) : lastCheckOutVisit(task);
+    const at = visit?.at || visit?.createdAt;
+    return (
+      <span className="text-xs tabular-nums whitespace-nowrap">
+        {at ? formatSitePunchAt(at) : "—"}
+      </span>
+    );
+  }
   if (!isSitePunchTaskType(task.taskType)) {
     return <span className="text-xs text-muted-foreground">—</span>;
   }
@@ -49,11 +61,23 @@ export function EmpDesktopTaskTable({
   loading,
   onOpen,
   onSitePunch,
+  employeeId,
+  employeeEmail,
+  sendingAction,
+  rescheduleTaskId,
+  onAcceptRequest,
+  onRescheduleRequest,
 }: {
   tasks: MobileTaskListItem[];
   loading?: boolean;
   onOpen: (task: MobileTaskListItem) => void;
   onSitePunch?: (task: MobileTaskListItem) => void;
+  employeeId?: number | null;
+  employeeEmail?: string | null;
+  sendingAction?: boolean;
+  rescheduleTaskId?: number | null;
+  onAcceptRequest?: (task: MobileTaskListItem) => void;
+  onRescheduleRequest?: (task: MobileTaskListItem, reason: string) => void;
 }) {
   const { sortBy, sortDir, setSort } = useClientTable("scheduleDateTime");
 
@@ -112,9 +136,9 @@ export function EmpDesktopTaskTable({
     },
     {
       key: "dueDateTime",
-      header: "ETC",
+      header: "Due date & time",
       sortable: true,
-      cell: (t) => <span className="text-xs tabular-nums whitespace-nowrap">{fmtSchedule(t.dueDateTime)}</span>,
+      cell: (t) => <span className="text-xs tabular-nums whitespace-nowrap">{fmtSchedule(t.dueAt || t.dueDateTime)}</span>,
     },
     {
       key: "siteCheckIn",
@@ -130,18 +154,32 @@ export function EmpDesktopTaskTable({
       key: "actions",
       header: "",
       align: "right",
-      cell: (t) => (
-        <div className="flex justify-end gap-1 flex-wrap">
-          <Button variant="ghost" size="sm" onClick={() => onOpen(t)}>
-            Open
-          </Button>
-          {isSitePunchTaskType(t.taskType) && onSitePunch ? (
-            <Button variant="outline" size="sm" onClick={() => onSitePunch(t)}>
-              {sitePunchMenuLabel(getNextSitePunchKindForTask(t))}
+      cell: (t) =>
+        isAssignmentRequestTask(t, employeeId, employeeEmail) && onAcceptRequest && onRescheduleRequest ? (
+          <div className="min-w-[220px] max-w-[280px] text-left">
+            <TaskRequestInlineActions
+              task={t}
+              employeeId={employeeId}
+              employeeEmail={employeeEmail}
+              sending={sendingAction}
+              startRescheduleOpen={rescheduleTaskId === t.id}
+              compact
+              onAccept={() => onAcceptRequest(t)}
+              onReschedule={(reason) => onRescheduleRequest(t, reason)}
+            />
+          </div>
+        ) : (
+          <div className="flex justify-end gap-1 flex-wrap">
+            <Button variant="ghost" size="sm" onClick={() => onOpen(t)}>
+              Open
             </Button>
-          ) : null}
-        </div>
-      ),
+            {(isSitePunchTaskType(t.taskType) || isEnplLinkedTask(t)) && onSitePunch ? (
+              <Button variant="outline" size="sm" onClick={() => onSitePunch(t)}>
+                {sitePunchMenuLabel(getNextSitePunchKindForTask(t))}
+              </Button>
+            ) : null}
+          </div>
+        ),
     },
   ];
 

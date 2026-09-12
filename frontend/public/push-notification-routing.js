@@ -46,6 +46,25 @@ function resolveNotificationPath(inner) {
   }
 }
 
+function isTaskRequestNotification(inner) {
+  inner = inner || {};
+  if (String(inner.event || "") === "task-request") return true;
+  var tag = String(inner.tag || "");
+  return tag.indexOf("task-request-") === 0;
+}
+
+function resolveTaskRequestClickPath(inner, action) {
+  inner = inner || {};
+  var taskId = inner.taskId;
+  if (isTaskRequestNotification(inner) && taskId != null && String(taskId) !== "") {
+    if (action === "accept") {
+      return "/empMyTasks?tab=Requests&acceptTask=" + encodeURIComponent(String(taskId));
+    }
+    return "/empMyTasks?tab=Requests&rescheduleTask=" + encodeURIComponent(String(taskId));
+  }
+  return resolveNotificationPath(inner);
+}
+
 function buildNotificationClickData(inner) {
   inner = inner || {};
   var path = resolveNotificationPath(inner);
@@ -55,6 +74,7 @@ function buildNotificationClickData(inner) {
     event: inner.event || "",
     memoId: inner.memoId != null ? inner.memoId : undefined,
     taskId: inner.taskId != null ? inner.taskId : undefined,
+    tag: inner.tag || "",
   };
 }
 

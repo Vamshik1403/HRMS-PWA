@@ -8,10 +8,13 @@ import type { EmpManagerScope } from "../../../utils/empManagerDisplay";
 import { splitPreviewRecords } from "../../../utils/empListLimit";
 import { EmpRecordHistorySheet } from "../../emp/EmpRecordHistorySheet";
 import { EmpListViewMoreButton } from "../../emp/EmpListViewMoreButton";
-import { canonicalTaskStatus } from "../task-types";
+import {
+  isAssignmentRequestTask,
+  matchesEmpTaskTab,
+} from "../../../utils/taskAssignmentRequest";
 
-const STATUS_TABS = ["Open", "WIP", "Closed", "Reopen"] as const;
-type StatusTab = (typeof STATUS_TABS)[number];
+const STATUS_TABS = ["Requests", "Open", "WIP", "Closed", "Reopen"] as const;
+export type StatusTab = (typeof STATUS_TABS)[number];
 
 export function MobileTaskListView({
   tasks,
@@ -26,6 +29,14 @@ export function MobileTaskListView({
   managerScope,
   isManagerView = false,
   hidePageTitle = false,
+  employeeId,
+  employeeEmail,
+  statusTab: statusTabProp,
+  onStatusTabChange,
+  sendingAction,
+  rescheduleTaskId,
+  onAcceptRequest,
+  onRescheduleRequest,
 }: {
   tasks: MobileTaskListItem[];
   loading: boolean;
@@ -40,20 +51,29 @@ export function MobileTaskListView({
   isManagerView?: boolean;
   /** When true, title is shown in the portal navbar instead. */
   hidePageTitle?: boolean;
+  employeeId?: number | null;
+  employeeEmail?: string | null;
+  statusTab?: StatusTab;
+  onStatusTabChange?: (tab: StatusTab) => void;
+  sendingAction?: boolean;
+  rescheduleTaskId?: number | null;
+  onAcceptRequest?: (task: MobileTaskListItem) => void;
+  onRescheduleRequest?: (task: MobileTaskListItem, reason: string) => void;
 }) {
   const [searchOpen, setSearchOpen] = useState(false);
-  const [statusTab, setStatusTab] = useState<StatusTab>("Open");
+  const [internalTab, setInternalTab] = useState<StatusTab>("Requests");
+  const statusTab = statusTabProp ?? internalTab;
+  const setStatusTab = onStatusTabChange ?? setInternalTab;
   const [historyOpen, setHistoryOpen] = useState(false);
+
+  const requestCount = useMemo(
+    () => tasks.filter((t) => isAssignmentRequestTask(t, employeeId, employeeEmail)).length,
+    [tasks, employeeId, employeeEmail],
+  );
 
   const filtered = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
-    let list = tasks.filter((t) => {
-      const canonical = canonicalTaskStatus(t.status);
-      if (statusTab === "Open") return canonical === "Open" || canonical === "Scheduled" || canonical === "Rescheduled";
-      if (statusTab === "WIP") return canonical === "Work in Progress" || canonical === "On-Hold";
-      if (statusTab === "Closed") return canonical === "Completed";
-      return canonical === "Reopen";
-    });
+    let list = tasks.filter((t) => matchesEmpTaskTab(t, statusTab, employeeId, employeeEmail));
     if (!q) return list;
     return list.filter(
       (t) =>
@@ -63,7 +83,7 @@ export function MobileTaskListView({
         (t.customer?.customerName || "").toLowerCase().includes(q) ||
         (t.site?.branchName || "").toLowerCase().includes(q),
     );
-  }, [tasks, searchQuery, statusTab]);
+  }, [tasks, searchQuery, statusTab, employeeId, employeeEmail]);
 
   const { preview, history, hasHistory } = splitPreviewRecords(filtered);
 
@@ -98,7 +118,7 @@ export function MobileTaskListView({
                     : "bg-white text-gray-600 border border-gray-100"
                 }`}
               >
-                {tab}
+                {tab === "Requests" && requestCount ? `${tab} (${requestCount})` : tab}
               </button>
             ))}
           </div>
@@ -141,7 +161,9 @@ export function MobileTaskListView({
         ) : filtered.length === 0 ? (
           <div className="flex flex-col items-center py-20 text-center px-6">
             <Icon icon="solar:clipboard-list-linear" className="w-10 h-10 text-gray-300 mb-3" />
-            <p className="text-[15px] font-semibold text-gray-800">No {statusTab.toLowerCase()} tasks</p>
+            <p className="text-[15px] font-semibold text-gray-800">
+              {statusTab === "Requests" ? "No task requests" : `No ${statusTab.toLowerCase()} tasks`}
+            </p>
           </div>
         ) : (
           <>
@@ -151,9 +173,25 @@ export function MobileTaskListView({
                   key={t.id}
                   task={t}
                   managerScope={managerScope}
+                  employeeId={employeeId}
+                  employeeEmail={employeeEmail}
                   onOpenChat={() => onTaskClick(t)}
-                  onCheckInOut={onCheckInOut ? () => onCheckInOut(t) : undefined}
+                  onCheckInOut={
+                    onCheckInOut && !isAssignmentRequestTask(t, employeeId, employeeEmail)
+                      ? () => onCheckInOut(t)
+                      : undefined
+                  }
                   onViewInfo={onViewInfo ? () => onViewInfo(t) : undefined}
+                  requestActions={
+                    onAcceptRequest && onRescheduleRequest && isAssignmentRequestTask(t, employeeId, employeeEmail)
+                      ? {
+                          sending: sendingAction,
+                          startRescheduleOpen: rescheduleTaskId === t.id,
+                          onAccept: () => onAcceptRequest(t),
+                          onReschedule: (reason) => onRescheduleRequest(t, reason),
+                        }
+                      : undefined
+                  }
                 />
               ))}
             </div>
@@ -176,9 +214,25 @@ export function MobileTaskListView({
               key={t.id}
               task={t}
               managerScope={managerScope}
+              employeeId={employeeId}
+              employeeEmail={employeeEmail}
               onOpenChat={() => onTaskClick(t)}
-              onCheckInOut={onCheckInOut ? () => onCheckInOut(t) : undefined}
+              onCheckInOut={
+                onCheckInOut && !isAssignmentRequestTask(t, employeeId, employeeEmail)
+                  ? () => onCheckInOut(t)
+                  : undefined
+              }
               onViewInfo={onViewInfo ? () => onViewInfo(t) : undefined}
+              requestActions={
+                onAcceptRequest && onRescheduleRequest && isAssignmentRequestTask(t, employeeId, employeeEmail)
+                  ? {
+                      sending: sendingAction,
+                      startRescheduleOpen: rescheduleTaskId === t.id,
+                      onAccept: () => onAcceptRequest(t),
+                      onReschedule: (reason) => onRescheduleRequest(t, reason),
+                    }
+                  : undefined
+              }
             />
           ))}
         </div>

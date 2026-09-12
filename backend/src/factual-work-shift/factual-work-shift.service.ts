@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { snapBranchesIDToCompany } from '../common/org-scope.util';
 import { CreateFactualWorkShiftDto } from './dto/create-factual-work-shift.dto';
 import { UpdateFactualWorkShiftDto } from './dto/update-factual-work-shift.dto';
 
@@ -9,12 +10,13 @@ export class FactualWorkShiftService {
 
   async create(dto: CreateFactualWorkShiftDto) {
     const { workShiftDays, ...shiftData } = dto;
+    const branchesID = await snapBranchesIDToCompany(this.prisma, shiftData.companyID, shiftData.branchesID);
 
     const shift = await this.prisma.factualWorkShift.create({
       data: {
         serviceProviderID: shiftData.serviceProviderID,
         companyID: shiftData.companyID,
-        branchesID: shiftData.branchesID,
+        branchesID,
         workShiftName: shiftData.workShiftName,
         isActive: shiftData.isActive,
         workShiftType: shiftData.workShiftType,
@@ -74,8 +76,16 @@ export class FactualWorkShiftService {
 
     const updateData: any = {};
     if (shiftData.serviceProviderID !== undefined) updateData.serviceProviderID = shiftData.serviceProviderID;
-    if (shiftData.companyID !== undefined) updateData.companyID = shiftData.companyID;
-    if (shiftData.branchesID !== undefined) updateData.branchesID = shiftData.branchesID;
+    if (shiftData.companyID !== undefined || shiftData.branchesID !== undefined) {
+      const existing = await this.prisma.factualWorkShift.findUnique({
+        where: { id },
+        select: { companyID: true, branchesID: true },
+      });
+      const companyID = shiftData.companyID !== undefined ? shiftData.companyID : existing?.companyID;
+      const requestedBranch = shiftData.branchesID !== undefined ? shiftData.branchesID : existing?.branchesID;
+      updateData.branchesID = await snapBranchesIDToCompany(this.prisma, companyID, requestedBranch);
+      if (shiftData.companyID !== undefined) updateData.companyID = shiftData.companyID;
+    }
     if (shiftData.workShiftName !== undefined) updateData.workShiftName = shiftData.workShiftName;
     if (shiftData.isActive !== undefined) updateData.isActive = shiftData.isActive;
     if (shiftData.workShiftType !== undefined) updateData.workShiftType = shiftData.workShiftType;

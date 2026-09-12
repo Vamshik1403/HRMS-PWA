@@ -1,6 +1,7 @@
 // attendance-policy.service.ts
 import { Injectable, ConflictException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { snapBranchesIDToCompany } from '../common/org-scope.util';
 import { CreateAttendancePolicyDto } from './dto/create-attendance-policy.dto';
 import { UpdateAttendancePolicyDto } from './dto/update-attendance-policy.dto';
 
@@ -23,11 +24,12 @@ export class AttendancePolicyService {
         );
       }
     }
+    const branchesID = await snapBranchesIDToCompany(this.prisma, data.companyID, data.branchesID);
     return this.prisma.attendancePolicy.create({
       data: {
         serviceProviderID: data.serviceProviderID,
         companyID: data.companyID,
-        branchesID: data.branchesID,
+        branchesID,
         attendancePolicyName: data.attendancePolicyName,
         workingHoursType: data.workingHoursType,
         checkin_begin_before_min: data.checkin_begin_before_min,
@@ -111,8 +113,16 @@ export class AttendancePolicyService {
 
     // Only include fields that are provided
     if (data.serviceProviderID !== undefined) updateData.serviceProviderID = data.serviceProviderID;
-    if (data.companyID !== undefined) updateData.companyID = data.companyID;
-    if (data.branchesID !== undefined) updateData.branchesID = data.branchesID;
+    if (data.companyID !== undefined || data.branchesID !== undefined) {
+      const existing = await this.prisma.attendancePolicy.findUnique({
+        where: { id },
+        select: { companyID: true, branchesID: true },
+      });
+      const companyID = data.companyID !== undefined ? data.companyID : existing?.companyID;
+      const requestedBranch = data.branchesID !== undefined ? data.branchesID : existing?.branchesID;
+      updateData.branchesID = await snapBranchesIDToCompany(this.prisma, companyID, requestedBranch);
+      if (data.companyID !== undefined) updateData.companyID = data.companyID;
+    }
     if (data.attendancePolicyName !== undefined) updateData.attendancePolicyName = data.attendancePolicyName;
     if (data.workingHoursType !== undefined) updateData.workingHoursType = data.workingHoursType;
     if (data.checkin_begin_before_min !== undefined) updateData.checkin_begin_before_min = data.checkin_begin_before_min;

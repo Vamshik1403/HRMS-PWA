@@ -150,11 +150,14 @@ export function FactualWorkShiftsManagement() {
   // Auto-inject mapped IDs for MANAGER / BRANCH_ADMIN
   useEffect(() => {
     if (user?.role === "SERVICE_PROVIDER" && currentUserMapping) {
+      const ctx = getSidebarContext();
+      const companyID = ctx?.companyID ?? currentUserMapping.companyID;
+      const sameCompany = Number(companyID) === Number(currentUserMapping.companyID);
       setFormData((p) => ({
         ...p,
         serviceProviderID: currentUserMapping.serviceProviderID,
-        companyID: currentUserMapping.companyID,
-        branchesID: currentUserMapping.branchesID,
+        companyID,
+        branchesID: sameCompany ? currentUserMapping.branchesID : undefined,
       }));
     } else if (user?.role === "BRANCH_ADMIN" && currentUserMapping) {
       setFormData((p) => ({
@@ -465,19 +468,23 @@ export function FactualWorkShiftsManagement() {
         }
       });
 
+      const ctx = getSidebarContext();
       const workShiftData = {
         serviceProviderID:
-          user?.role === "SERVICE_PROVIDER"
-            ? currentUserMapping?.serviceProviderID
-            : formData.serviceProviderID,
+          ctx?.serviceProviderID ??
+          formData.serviceProviderID ??
+          currentUserMapping?.serviceProviderID ??
+          user?.serviceProviderID ??
+          null,
         companyID:
-          user?.role === "SERVICE_PROVIDER"
-            ? currentUserMapping?.companyID
-            : formData.companyID,
+          ctx?.companyID ??
+          formData.companyID ??
+          currentUserMapping?.companyID ??
+          user?.companyID ??
+          null,
         branchesID:
-          user?.role === "SERVICE_PROVIDER"
-            ? currentUserMapping?.branchesID
-            : formData.branchesID,
+          formData.branchesID ??
+          (user?.role === "BRANCH_ADMIN" ? currentUserMapping?.branchesID : null),
         workShiftName: formData.workShiftName,
         isFlexible: formData.isFlexible === true,
         isRotating: formData.isRotating === true,

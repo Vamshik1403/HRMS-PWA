@@ -15,6 +15,8 @@ import {
   sitePunchMenuLabel,
   sitePunchesFromTask,
 } from "../../../utils/taskSitePunch";
+import { isEnplLinkedTask, type TaskWithSiteVisits } from "../../../utils/taskSiteVisit";
+import { TaskSiteVisitSummary } from "./TaskSiteVisitPanel";
 
 export interface MobileChatMessage {
   id: number;
@@ -36,8 +38,15 @@ export interface MobileTaskChatDetail {
   description?: string | null;
   scheduleDateTime?: string | null;
   dueDateTime?: string | null;
+  dueAt?: string | null;
+  erpTaskId?: number | null;
+  expectedDurationMinutes?: number | null;
+  siteAddress?: string | null;
+  siteCity?: string | null;
+  siteVisits?: TaskWithSiteVisits["siteVisits"];
+  siteVisitSummary?: TaskWithSiteVisits["siteVisitSummary"];
   customer?: { customerName?: string };
-  site?: { branchName?: string; city?: string };
+  site?: { branchName?: string; city?: string; address?: string };
   department?: { departmentName?: string };
   chats?: MobileChatMessage[];
   sitePunches?: SitePunchEvent[];
@@ -82,6 +91,7 @@ export function MobileTaskChatView({
   onAdvanceStatus,
   onSitePunch,
   sitePunchNextKind = "in",
+  onEnplSiteVisit,
   onDownloadReport,
   embedded = false,
 }: {
@@ -97,6 +107,7 @@ export function MobileTaskChatView({
   onAdvanceStatus?: () => void | Promise<void>;
   onSitePunch?: () => void | Promise<void>;
   sitePunchNextKind?: SitePunchKind;
+  onEnplSiteVisit?: (kind: "checkin" | "checkout") => void | Promise<void>;
   onDownloadReport?: () => void | Promise<void>;
   /** When true, fill the parent instead of the full viewport (desktop portal). */
   embedded?: boolean;
@@ -192,7 +203,24 @@ export function MobileTaskChatView({
                       Download report (PDF)
                     </button>
                   )}
-                  {isSitePunchTaskType(task.taskType) && onSitePunch && (
+                  {isEnplLinkedTask(task) && onEnplSiteVisit ? (
+                    <>
+                      <button
+                        type="button"
+                        className="w-full text-left px-4 py-2.5 text-[13px] text-[#2563eb] active:bg-gray-50"
+                        onClick={() => { setMenuOpen(false); void onEnplSiteVisit("checkin"); }}
+                      >
+                        Site check in
+                      </button>
+                      <button
+                        type="button"
+                        className="w-full text-left px-4 py-2.5 text-[13px] text-[#2563eb] active:bg-gray-50"
+                        onClick={() => { setMenuOpen(false); void onEnplSiteVisit("checkout"); }}
+                      >
+                        Site check out
+                      </button>
+                    </>
+                  ) : isSitePunchTaskType(task.taskType) && onSitePunch ? (
                     <button
                       type="button"
                       className="w-full text-left px-4 py-2.5 text-[13px] text-[#2563eb] active:bg-gray-50"
@@ -200,7 +228,7 @@ export function MobileTaskChatView({
                     >
                       {sitePunchMenuLabel(sitePunchNextKind)}
                     </button>
-                  )}
+                  ) : null}
                   {onAdvanceStatus && nextTaskStatus(task.status) && (
                     <button
                       type="button"
@@ -218,6 +246,17 @@ export function MobileTaskChatView({
       </header>
 
       <div ref={scrollRef} className="mobile-chat-bg flex-1 overflow-y-auto overscroll-contain px-3 py-3 space-y-1">
+        {isEnplLinkedTask(task) ? (
+          <div className="mb-3">
+            <TaskSiteVisitSummary
+              task={task}
+              allowActions={!!onEnplSiteVisit}
+              sending={sending}
+              onCheckIn={onEnplSiteVisit ? () => void onEnplSiteVisit("checkin") : undefined}
+              onCheckOut={onEnplSiteVisit ? () => void onEnplSiteVisit("checkout") : undefined}
+            />
+          </div>
+        ) : null}
         {chats.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-center">
             <div className="w-14 h-14 rounded-full bg-white/80 flex items-center justify-center mb-3 shadow-sm">
@@ -345,7 +384,7 @@ export function MobileTaskChatView({
                 ["Site", task.site?.branchName || task.site?.city],
                 ["Type", task.taskType],
                 ["Schedule", task.scheduleDateTime ? new Date(task.scheduleDateTime).toLocaleString("en-IN") : "—"],
-                ["ETC", task.dueDateTime ? new Date(task.dueDateTime).toLocaleString("en-IN") : "—"],
+                ["Due date & time", (task.dueAt || task.dueDateTime) ? new Date(String(task.dueAt || task.dueDateTime)).toLocaleString("en-IN") : "—"],
                 ["Priority", task.priority],
                 ["Status", task.status],
               ].map(([label, val]) => (
@@ -360,7 +399,12 @@ export function MobileTaskChatView({
                   <p className="text-[13px] text-gray-800 leading-relaxed">{task.description}</p>
                 </div>
               )}
-              {isSitePunchTaskType(task.taskType) && (
+              {isEnplLinkedTask(task) ? (
+                <div className="pt-3 border-t border-gray-100">
+                  <p className="text-[12px] font-bold text-gray-400 uppercase mb-2">Site visit</p>
+                  <TaskSiteVisitSummary task={task} compact />
+                </div>
+              ) : isSitePunchTaskType(task.taskType) ? (
                 <div className="pt-3 border-t border-gray-100">
                   <p className="text-[12px] font-bold text-gray-400 uppercase mb-2">Site check-in / check-out</p>
                   <div className="space-y-1.5 max-h-40 overflow-y-auto">
@@ -380,7 +424,7 @@ export function MobileTaskChatView({
                     )}
                   </div>
                 </div>
-              )}
+              ) : null}
             </div>
           </div>
         </>

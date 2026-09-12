@@ -1,0 +1,209 @@
+{
+  "runAt": "2026-09-12T08:28:39.647Z",
+  "dryRun": false,
+  "dateFrom": "2026-01-21",
+  "dateTo": "2026-08-20",
+  "filesRead": [
+    "/var/www/openhrm/3S Janurary to August/3S 21 APRIL TO 20 MAY.xlsx",
+    "/var/www/openhrm/3S Janurary to August/3S 21 JULY TO 20 AUG.xlsx",
+    "/var/www/openhrm/3S Janurary to August/3S 21 JUNE TO 20 JULY.xlsx",
+    "/var/www/openhrm/3S Janurary to August/3S 21 MARCH TO 20 APRIL.xlsx",
+    "/var/www/openhrm/3S Janurary to August/3S 21 MAY TO 20 JUNE.xlsx",
+    "/var/www/openhrm/3S Janurary to August/3S INFOCOM 21 FEB TO 20 MARCH.xlsx",
+    "/var/www/openhrm/3S Janurary to August/3s 21 jan to 20 feb.xlsx",
+    "/var/www/openhrm/ENPL 21 Janurary to August/ENPL 21 APRIL TO 20 MAY.xlsx",
+    "/var/www/openhrm/ENPL 21 Janurary to August/ENPL 21 FEB TO 20 MARCH.xlsx",
+    "/var/www/openhrm/ENPL 21 Janurary to August/ENPL 21 JAN TO 20 FEB.xlsx",
+    "/var/www/openhrm/ENPL 21 Janurary to August/ENPL 21 JULY TO 20 AUG.xlsx",
+    "/var/www/openhrm/ENPL 21 Janurary to August/ENPL 21 MARCH TO 20 APRIL.xlsx",
+    "/var/www/openhrm/ENPL 21 Janurary to August/ENPL 21MAY TO 20 JUNE.xlsx",
+    "/var/www/openhrm/ENPL 21 Janurary to August/enpl 21 JUNE TO 20 JULY.xlsx"
+  ],
+  "excelNamesSeen": [
+    "Abhishek Maddheshiya",
+    "Anil Singh",
+    "Arif Solkar",
+    "Bhavesh Bhatkar",
+    "Kalpesh Rathod",
+    "Mangesh Yewale",
+    "Mayur Sawant",
+    "Mayur Sunil Zepale",
+    "Mayur Ujal",
+    "Mitesh Paradkar",
+    "Nilesh Mahadeshwar",
+    "Omkumar Nirmal",
+    "Prakash S",
+    "Rahul Joshi",
+    "Sagar Madhav",
+    "Seema Kawle",
+    "Shrvan Kumar Singh",
+    "Sujit Waghmare",
+    "VISHAL PARDULE",
+    "Vamshik Maidham",
+    "Vighnesh Banbe",
+    "Vinay Yadav",
+    "Vinit Pradip",
+    "Vinit Pradip chavan",
+    "Vishal Pardule",
+    "Vishal pardule"
+  ],
+  "matched": [
+    {
+      "excelName": "Abhishek Maddheshiya",
+      "employeeID": "3S_111",
+      "manageEmployeeId": 63,
+      "username": "Abhishek Maddheshiya"
+    },
+    {
+      "excelName": "Anil Singh",
+      "employeeID": "ENPL_103",
+      "manageEmployeeId": 38,
+      "username": "ANIL SINGH"
+    },
+    {
+      "excelName": "Arif Solkar",
+      "employeeID": "ENPL_102",
+      "manageEmployeeId": 37,
+      "username": "ARIF SOLKAR"
+    },
+    {
+      "excelName": "Bhavesh Bhatkar",
+      "employeeID": "3S_112",
+      "manageEmployeeId": 64,
+      "username": "Bhavesh Bhatkar"
+    },
+    {
+      "excelName": "Kalpesh Rathod",
+      "employeeID": "ENPL_121",
+      "manageEmployeeId": 43,
+      "username": "KALPESH RATHOD"
+    },
+    {
+      "excelName": "Mangesh Yewale",
+      "employeeID": "3S_105",
+      "manageEmployeeId": 60,
+      "username": "Mangesh Yewale"
+    },
+    {
+      "excelName": "Mayur Sunil Zepale",
+      "employeeID": "3S_114",
+      "manageEmployeeId": 65,
+      "username": "Mayur Zepale"
+    },
+    {
+      "excelName": "Mayur Ujal",
+      "employeeID": "ENPL_104",
+      "manageEmployeeId": 39,
+      "username": "MAYUR UJAL"
+    },
+    {
+      "excelName": "Mitesh Paradkar",
+      "employeeID": "3S_118",
+      "manageEmployeeId": 69,
+      "username": "Mitesh Paradkar"
+    },
+    {
+      "excelName": "Nilesh Mahadeshwar",
+      "employeeID": "ENPL_122",
+      "manageEmployeeId": 44,
+      "username": "NILESH MAHADESHWAR"
+    },
+    {
+      "excelName": "Prakash S",
+      "employeeID": "3s_113",
+      "manageEmployeeId": 51,
+      "username": "Prakash S"
+    },
+    {
+      "excelName": "Rahul Joshi",
+      "employeeID": "3S_117",
+      "manageEmployeeId": 68,
+      "username": "Rahul Joshi"
+    },
+    {
+      "excelName": "Sagar Madhav",
+      "employeeID": "ENPL_109",
+      "manageEmployeeId": 40,
+      "username": "SAGAR MADHAV"
+    },
+    {
+      "excelName": "Seema Kawle",
+      "employeeID": "Enpl_101",
+      "manageEmployeeId": 36,
+      "username": "SEEMA KAWLE"
+    },
+    {
+      "excelName": "Shrvan Kumar Singh",
+      "employeeID": "3s_109",
+      "manageEmployeeId": 62,
+      "username": "Shravan Singh"
+    },
+    {
+      "excelName": "Sujit Waghmare",
+      "employeeID": "ENPL_111",
+      "manageEmployeeId": 41,
+      "username": "SUJIT WAGHMARE"
+    },
+    {
+      "excelName": "VISHAL PARDULE",
+      "employeeID": "3s_116",
+      "manageEmployeeId": 67,
+      "username": "Vishal Pardule"
+    },
+    {
+      "excelName": "Vamshik Maidham",
+      "employeeID": "ENPL_123",
+      "manageEmployeeId": 45,
+      "username": "VAMSHIK MAIDHAM"
+    },
+    {
+      "excelName": "Vighnesh Banbe",
+      "employeeID": "3S_103",
+      "manageEmployeeId": 61,
+      "username": "Vignesh Banbe"
+    },
+    {
+      "excelName": "Vinay Yadav",
+      "employeeID": "ENPL_118",
+      "manageEmployeeId": 42,
+      "username": "VINAY YADAV"
+    },
+    {
+      "excelName": "Vinit Pradip",
+      "employeeID": "3S_115",
+      "manageEmployeeId": 66,
+      "username": "Vinit Chavan"
+    },
+    {
+      "excelName": "Vinit Pradip chavan",
+      "employeeID": "3S_115",
+      "manageEmployeeId": 66,
+      "username": "Vinit Chavan"
+    },
+    {
+      "excelName": "Vishal Pardule",
+      "employeeID": "3s_116",
+      "manageEmployeeId": 67,
+      "username": "Vishal Pardule"
+    },
+    {
+      "excelName": "Vishal pardule",
+      "employeeID": "3s_116",
+      "manageEmployeeId": 67,
+      "username": "Vishal Pardule"
+    }
+  ],
+  "unmatchedNames": [
+    "Mayur Sawant",
+    "Omkumar Nirmal"
+  ],
+  "ambiguousNames": [],
+  "punchesParsed": 2960,
+  "skippedOutOfRange": 0,
+  "skippedNoTime": 1201,
+  "skippedDayAlreadyPresent": 920,
+  "skippedDuplicatePunch": 0,
+  "skippedUnmatched": 2,
+  "esslInserted": 2960,
+  "processInserted": 2960
+}

@@ -15,6 +15,7 @@
     "import:enpl-erp-tasks": "ts-node -r dotenv/config scripts/import-enpl-erp-tasks.ts",
     "import:attendance-logs": "ts-node scripts/import-attendance-logs.ts",
     "import:vamshik-attendance": "ts-node -r dotenv/config scripts/import-vamshik-attendance.ts",
+    "import:excel-attendance": "ts-node -r dotenv/config scripts/import-excel-attendance-jan-aug.ts",
     "reset:employee-memos": "ts-node -r dotenv/config scripts/reset-employee-memos.ts",
     "markout-reminders": "ts-node -r dotenv/config scripts/send-markout-reminders.ts",
     "backup:daily": "ts-node -r dotenv/config scripts/daily-backup.ts",

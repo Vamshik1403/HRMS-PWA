@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { snapBranchesIDToCompany } from '../common/org-scope.util';
 import { CreateFactualAttendancePolicyDto } from './dto/create-factual-attendance-policy.dto';
 import { UpdateFactualAttendancePolicyDto } from './dto/update-factual-attendance-policy.dto';
 
@@ -8,7 +9,9 @@ export class FactualAttendancePolicyService {
   constructor(private prisma: PrismaService) {}
 
   async create(dto: CreateFactualAttendancePolicyDto) {
-    return this.prisma.factualAttendancePolicy.create({ data: dto as any });
+    const data: any = { ...dto };
+    data.branchesID = await snapBranchesIDToCompany(this.prisma, data.companyID, data.branchesID);
+    return this.prisma.factualAttendancePolicy.create({ data });
   }
 
   async findAll(query: {
@@ -30,8 +33,14 @@ export class FactualAttendancePolicyService {
   }
 
   async update(id: number, dto: UpdateFactualAttendancePolicyDto) {
-    await this.findOne(id);
-    return this.prisma.factualAttendancePolicy.update({ where: { id }, data: dto as any });
+    const existing = await this.findOne(id);
+    const data: any = { ...dto };
+    if (data.companyID !== undefined || data.branchesID !== undefined) {
+      const companyID = data.companyID !== undefined ? data.companyID : existing.companyID;
+      const requestedBranch = data.branchesID !== undefined ? data.branchesID : existing.branchesID;
+      data.branchesID = await snapBranchesIDToCompany(this.prisma, companyID, requestedBranch);
+    }
+    return this.prisma.factualAttendancePolicy.update({ where: { id }, data });
   }
 
   async remove(id: number) {

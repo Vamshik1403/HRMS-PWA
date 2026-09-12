@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { snapBranchesIDToCompany } from '../common/org-scope.util';
 import { CreateLeavePolicyDto } from './dto/create-leave-policy.dto';
 import { UpdateLeavePolicyDto } from './dto/update-leave-policy.dto';
 
@@ -13,7 +14,7 @@ export class LeavePolicyService {
     // Sanitize FK fields: 0 or falsy values should be null (not valid FK references)
     if (!rest.serviceProviderID) rest.serviceProviderID = null;
     if (!rest.companyID) rest.companyID = null;
-    if (!rest.branchesID) rest.branchesID = null;
+    rest.branchesID = await snapBranchesIDToCompany(this.prisma, rest.companyID, rest.branchesID);
 
     // Convert lapseEncashmentDate to full ISO-8601 DateTime if it's a date-only string
     if (rest.lapseEncashmentDate && typeof rest.lapseEncashmentDate === 'string' && !rest.lapseEncashmentDate.includes('T')) {
@@ -118,7 +119,15 @@ export class LeavePolicyService {
     // Sanitize FK fields: 0 or falsy values should be null (not valid FK references)
     if (rest.serviceProviderID === 0) rest.serviceProviderID = null;
     if (rest.companyID === 0) rest.companyID = null;
-    if (rest.branchesID === 0) rest.branchesID = null;
+    if (rest.companyID !== undefined || rest.branchesID !== undefined) {
+      const existing = await this.prisma.leavePolicy.findUnique({
+        where: { id },
+        select: { companyID: true, branchesID: true },
+      });
+      const companyID = rest.companyID !== undefined ? rest.companyID : existing?.companyID;
+      const requestedBranch = rest.branchesID !== undefined ? rest.branchesID : existing?.branchesID;
+      rest.branchesID = await snapBranchesIDToCompany(this.prisma, companyID, requestedBranch);
+    }
 
     // Convert lapseEncashmentDate to full ISO-8601 DateTime if it's a date-only string
     if (rest.lapseEncashmentDate && typeof rest.lapseEncashmentDate === 'string' && !rest.lapseEncashmentDate.includes('T')) {

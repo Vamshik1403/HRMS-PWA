@@ -184,11 +184,14 @@ useEffect(() => {
 useEffect(() => {
   if (!currentUserMapping) return;
   if (user?.role === "SERVICE_PROVIDER") {
+    const ctx = getSidebarContext();
+    const companyID = ctx?.companyID ?? currentUserMapping.companyID;
+    const sameCompany = Number(companyID) === Number(currentUserMapping.companyID);
     setFormData((p) => ({
       ...p,
       serviceProviderID: currentUserMapping.serviceProviderID,
-      companyID: currentUserMapping.companyID,
-      branchesID: currentUserMapping.branchesID ?? p.branchesID,
+      companyID,
+      branchesID: sameCompany ? (currentUserMapping.branchesID ?? p.branchesID) : 0,
     }));
   } else if (user?.role === "COMPANY_ADMIN" || user?.role === "ADMIN") {
     setFormData((p) => ({

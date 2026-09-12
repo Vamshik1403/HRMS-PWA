@@ -3,7 +3,9 @@ import {
   IsArray,
   IsBoolean,
   IsDateString,
+  IsIn,
   IsInt,
+  IsNumber,
   IsOptional,
   IsString,
   ValidateNested,
@@ -106,6 +108,8 @@ export class TaskEngineerAssignmentDto {
   @IsOptional() @IsString() status?: string;
   @IsOptional() @IsString() notes?: string;
   @IsOptional() @IsDateString() assignedDate?: string;
+  @IsOptional() @IsString() rescheduleReason?: string;
+  @IsOptional() @IsString() managerReason?: string;
 }
 
 export class CreateTaskProjectDto {
@@ -121,6 +125,7 @@ export class CreateTaskProjectDto {
   @IsOptional() @IsDateString() scheduleDateTime?: string;
   @IsOptional() @IsString() priority?: string;
   @IsOptional() @IsDateString() dueDateTime?: string;
+  @IsOptional() @IsDateString() dueAt?: string;
   @IsOptional() @IsString() status?: string;
   @IsOptional() @IsString() createdByName?: string;
   @IsOptional() @IsInt() createdByUserID?: number;
@@ -178,6 +183,7 @@ export class UpdateTaskProjectDto {
   @IsOptional() @IsDateString() scheduleDateTime?: string;
   @IsOptional() @IsString() priority?: string;
   @IsOptional() @IsDateString() dueDateTime?: string;
+  @IsOptional() @IsDateString() dueAt?: string;
   @IsOptional() @IsString() status?: string;
   @IsOptional() @IsString() createdByName?: string;
   @IsOptional() @IsArray() @IsInt({ each: true }) assignedEmployeeIds?: number[];
@@ -236,6 +242,28 @@ export class TaskPriorityChangeDto {
   @IsOptional() @IsInt() userID?: number;
   @IsOptional() @IsInt() employeeID?: number;
   @IsOptional() @IsString() actorName?: string;
+}
+
+export class TaskAssignmentActionDto {
+  @IsString()
+  @IsIn(['accept', 'reschedule'])
+  action!: 'accept' | 'reschedule';
+  @IsOptional() @IsString() reason?: string;
+}
+
+export class TaskSiteVisitDto {
+  @IsString()
+  @IsIn(['checkin', 'checkout'])
+  kind!: 'checkin' | 'checkout';
+  @Type(() => Number)
+  @IsNumber()
+  latitude!: number;
+  @Type(() => Number)
+  @IsNumber()
+  longitude!: number;
+  @IsOptional() @Type(() => Number) @IsNumber() accuracyMeters?: number;
+  @IsOptional() @IsString() addressText?: string;
+  @IsOptional() @IsString() at?: string;
 }
 
 export class CreateTaskRemarkDto {

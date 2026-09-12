@@ -154,11 +154,14 @@ export function WorkShiftsManagement() {
   // Auto-inject mapped IDs for MANAGER / BRANCH_ADMIN
   useEffect(() => {
     if (user?.role === "SERVICE_PROVIDER" && currentUserMapping) {
+      const ctx = getSidebarContext();
+      const companyID = ctx?.companyID ?? currentUserMapping.companyID;
+      const sameCompany = Number(companyID) === Number(currentUserMapping.companyID);
       setFormData((p) => ({
         ...p,
         serviceProviderID: currentUserMapping.serviceProviderID,
-        companyID: currentUserMapping.companyID,
-        branchesID: currentUserMapping.branchesID,
+        companyID,
+        branchesID: sameCompany ? currentUserMapping.branchesID : undefined,
       }));
     } else if (user?.role === "BRANCH_ADMIN" && currentUserMapping) {
       setFormData((p) => ({

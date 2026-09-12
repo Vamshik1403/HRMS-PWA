@@ -6,6 +6,7 @@ import { X } from "lucide-react";
 import { taskFetch } from "@/app/utils/taskApi";
 import type { CurrentUserLike } from "@/app/utils/taskApi";
 import { toast } from "sonner";
+import { toIsoFromDatetimeLocal } from "@/app/utils/taskDueAt";
 import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
@@ -191,16 +192,22 @@ export function MobileTaskCreateSheet({
       toast.error("Title is required");
       return;
     }
+    if (form.assignedEmployeeIds.length > 0 && !form.dueDateTime) {
+      toast.error("Due date & time is required when an engineer is assigned");
+      return;
+    }
     if (!user || !creatorEmp) return;
     setCreating(true);
     try {
+      const dueIso = toIsoFromDatetimeLocal(form.dueDateTime);
       const payload: Record<string, unknown> = {
         departmentID: form.departmentID ? Number(form.departmentID) : undefined,
         taskType: form.taskType,
         taskName: form.taskName.trim(),
         description: form.description.trim() || undefined,
         scheduleDateTime: form.scheduleDateTime || undefined,
-        dueDateTime: form.dueDateTime || undefined,
+        dueDateTime: dueIso,
+        dueAt: dueIso,
         priority: form.priority,
         createdByEmployeeID: creatorEmp.id,
         assignedEmployeeIds:
@@ -366,12 +373,13 @@ export function MobileTaskCreateSheet({
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="desktop-task-due">Due date</Label>
+            <Label htmlFor="desktop-task-due">Due date & time</Label>
             <Input
               id="desktop-task-due"
               type="datetime-local"
               value={form.dueDateTime}
               onChange={(e) => setForm((p) => ({ ...p, dueDateTime: e.target.value }))}
+              required={form.assignedEmployeeIds.length > 0}
             />
           </div>
 
@@ -633,12 +641,13 @@ export function MobileTaskCreateSheet({
               />
             </div>
             <div>
-              <label className={labelClass}>Due date</label>
+              <label className={labelClass}>Due date & time</label>
               <input
                 type="datetime-local"
                 value={form.dueDateTime}
                 onChange={(e) => setForm((p) => ({ ...p, dueDateTime: e.target.value }))}
                 className={fieldClass}
+                required={form.assignedEmployeeIds.length > 0}
               />
             </div>
           </div>

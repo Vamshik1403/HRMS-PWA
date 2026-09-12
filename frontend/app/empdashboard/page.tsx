@@ -18,7 +18,7 @@ import {
 } from "../utils/empHomeSeen";
 import type { TodayStatus } from "../hooks/useEmpPunch";
 import { taskFetch } from "../utils/taskApi";
-import { isActiveTaskStatus } from "../utils/taskStatusFlow";
+import { isWorkingActiveAssignedTask } from "../utils/taskAssignmentRequest";
 import { syncAppBadge } from "@/lib/appBadge";
 import { isCompanyOwnerFlag } from "@/lib/companyAccess";
 import { TASK_MANAGEMENT_ENABLED } from "../config/featureFlags";
@@ -442,13 +442,13 @@ function EmpDashboardPageInner() {
 
     if (TASK_MANAGEMENT_ENABLED) {
       const userForTask = empUser;
-      taskFetch<{ items: { status: string }[] }>("/task-projects", userForTask, undefined, {
+      taskFetch<{ items: { status: string; engineerAssignments?: { manageEmployeeID?: number | null; status?: string | null }[] }[] }>("/task-projects", userForTask, undefined, {
         limit: 100,
         assignedToMe: 1,
       })
         .then((data) => {
           const items = data.items || [];
-          setTaskBadge(items.filter((t) => isActiveTaskStatus(t.status)).length);
+          setTaskBadge(items.filter((t) => isWorkingActiveAssignedTask(t, eid)).length);
         })
         .catch(() => setTaskBadge(0));
     } else {

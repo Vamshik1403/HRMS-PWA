@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { snapBranchesIDToCompany } from '../common/org-scope.util';
 import { CreateWorkShiftDto } from './dto/create-work-shift.dto';
 import { UpdateWorkShiftDto } from './dto/update-work-shift.dto';
 
@@ -7,14 +8,19 @@ import { UpdateWorkShiftDto } from './dto/update-work-shift.dto';
 export class WorkShiftService {
   constructor(private prisma: PrismaService) {}
 
-  create(data: CreateWorkShiftDto) {
+  async create(data: CreateWorkShiftDto) {
     const { workShiftDays, ...workShiftData } = data;
+    const branchesID = await snapBranchesIDToCompany(
+      this.prisma,
+      workShiftData.companyID,
+      workShiftData.branchesID,
+    );
 
     // Prepare the data object for creation
     const createData: any = {
       serviceProviderID: workShiftData.serviceProviderID,
       companyID: workShiftData.companyID,
-      branchesID: workShiftData.branchesID,
+      branchesID,
       workShiftName: workShiftData.workShiftName,
       workShiftType: workShiftData.workShiftType,
       isFlexible: workShiftData.isFlexible ?? false,
@@ -80,7 +86,7 @@ export class WorkShiftService {
     });
   }
 
-  update(id: number, data: UpdateWorkShiftDto) {
+  async update(id: number, data: UpdateWorkShiftDto) {
     const { workShiftDays, ...workShiftData } = data;
 
     // Prepare the update data object
@@ -90,11 +96,18 @@ export class WorkShiftService {
     if (workShiftData.serviceProviderID !== undefined) {
       updateData.serviceProviderID = workShiftData.serviceProviderID;
     }
-    if (workShiftData.companyID !== undefined) {
-      updateData.companyID = workShiftData.companyID;
-    }
-    if (workShiftData.branchesID !== undefined) {
-      updateData.branchesID = workShiftData.branchesID;
+    if (workShiftData.companyID !== undefined || workShiftData.branchesID !== undefined) {
+      const existing = await this.prisma.workShift.findUnique({
+        where: { id },
+        select: { companyID: true, branchesID: true },
+      });
+      const companyID = workShiftData.companyID !== undefined ? workShiftData.companyID : existing?.companyID;
+      const requestedBranch =
+        workShiftData.branchesID !== undefined ? workShiftData.branchesID : existing?.branchesID;
+      updateData.branchesID = await snapBranchesIDToCompany(this.prisma, companyID, requestedBranch);
+      if (workShiftData.companyID !== undefined) {
+        updateData.companyID = workShiftData.companyID;
+      }
     }
     if (workShiftData.workShiftName !== undefined) {
       updateData.workShiftName = workShiftData.workShiftName;

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef, useMemo, useCallback } from "react";
+import { useEffect, useState, useRef, useMemo, useCallback, Fragment } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
@@ -13,10 +13,9 @@ import { formatWorkedDuration } from "../utils/attendanceDuration";
 import { getSidebarContext } from "@/app/utils/sidebarContext";
 import { canViewModule } from "@/lib/companyAccess";
 import { PageHeader } from "../components/app/page-header";
+import { weekdayNameForDateKey } from "../utils/empWorkShiftWeekOff";
 
 type ReportMode = "actual" | "factual";
-
-// ==================== INTERFACES ====================
 
 interface ProcessAttLog {
   id: number;
@@ -49,6 +48,10 @@ interface Employee {
   designationID?: number | null;
   username?: string;
   workShiftID?: number;
+  attendancePolicyID?: number;
+  workShift?: any;
+  empWorkShift?: { workShiftID?: number; workShift?: any }[];
+  empAttendancePolicy?: { attendancePolicyID?: number }[];
 }
 
 interface Company {
@@ -222,6 +225,7 @@ type ReportMasterData = {
   attendanceRegularizations: AttendanceRegularize[];
   leaveApplications: LeaveApplication[];
   attendancePolicy: AttendancePolicy | null;
+  empAttendancePolicies: Map<number, AttendancePolicy | null>;
   factualWeekoffOverrides: Map<number, Set<string>>;
   isFactualMode: boolean;
 };
@@ -292,8 +296,6 @@ const LEFT_WIDTHS_MOBILE = {
   emp: 110
 };
 
-const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-
 // Global cache for status calculations
 const globalStatusCache = new Map<string, any>();
 
@@ -363,7 +365,7 @@ const extractEmpWorkShiftMappings = (
 
   return employees.flatMap((employee: any) => {
     const mappings = Array.isArray(employee?.[mappingKey]) ? employee[mappingKey] : [];
-    if (isFactualMode && mappings.length === 0 && employee?.workShiftID) {
+    if (mappings.length === 0 && employee?.workShiftID) {
       const fallbackShift = shiftById.get(employee.workShiftID) || normalizeWorkShift(employee?.workShift);
       if (fallbackShift?.id) {
         return [{
@@ -530,11 +532,102 @@ const formatSummaryExcelCell = (punches: string[], status: AttendanceStatus): st
   return lines.join("\n");
 };
 
-const formatFILOExcelCell = (punches: string[]): string => {
-  if (punches.length === 0) return "";
-  if (punches.length === 1) return punches[0];
-  return `${punches[0]}\n${punches[punches.length - 1]}`;
+const isPunchLogReport = (reportType?: string) =>
+  reportType === "All Punches Logs" || reportType === "FILO Punches Logs";
+
+/** Even punches are IN, odd punches are OUT. FILO uses first IN / last OUT only. */
+const splitInOutPunches = (punches: string[], reportType?: string): { ins: string[]; outs: string[] } => {
+  if (!punches.length) return { ins: [], outs: [] };
+  if (reportType === "FILO Punches Logs") {
+    return {
+      ins: [punches[0]],
+      outs: punches.length >= 2 ? [punches[punches.length - 1]] : [],
+    };
+  }
+  const ins: string[] = [];
+  const outs: string[] = [];
+  punches.forEach((time, idx) => {
+    if (idx % 2 === 0) ins.push(time);
+    else outs.push(time);
+  });
+  return { ins, outs };
 };
+
+const punchDayStatusLabel = (status: any | null | undefined): { label: string; className: string } | null => {
+  if (!status) return null;
+  if (status.type === "WEEK_OFF") {
+    return { label: "WO", className: "bg-orange-100 text-orange-800" };
+  }
+  if (status.type === "HOLIDAY") {
+    return {
+      label: status.label === "PH-P" ? "PH-P" : "PH",
+      className: "bg-purple-100 text-purple-800",
+    };
+  }
+  if (status.type === "LEAVE") {
+    return { label: status.label, className: "bg-pink-100 text-pink-800" };
+  }
+  return { label: "Absent", className: "bg-red-100 text-red-800" };
+};
+
+function PunchTimesColumn({ times, kind }: { times: string[]; kind: "in" | "out" }) {
+  return (
+    <td className="px-1.5 py-1 border-b border-l min-w-[70px] text-center align-top">
+      <div className="flex flex-col gap-1 items-center">
+        {times.map((time, idx) => (
+          <span
+            key={`${kind}-${idx}`}
+            className={`inline-block px-2 py-0.5 text-white text-[9px] font-medium rounded-full ${
+              kind === "in" ? "bg-green-600" : "bg-red-600"
+            }`}
+          >
+            {time}
+          </span>
+        ))}
+      </div>
+    </td>
+  );
+}
+
+function PunchLogDayCells({
+  punches,
+  reportType,
+  status,
+}: {
+  punches: string[];
+  reportType: string;
+  status?: any | null;
+}) {
+  if (punches.length > 0) {
+    const { ins, outs } = splitInOutPunches(punches, reportType);
+    return (
+      <>
+        <PunchTimesColumn times={ins} kind="in" />
+        <PunchTimesColumn times={outs} kind="out" />
+      </>
+    );
+  }
+  if (!status) {
+    return (
+      <>
+        <td className="px-1.5 py-1 border-b border-l min-w-[70px] text-center align-top">
+          <div className="text-[10px] text-gray-400">...</div>
+        </td>
+        <td className="px-1.5 py-1 border-b min-w-[70px] text-center align-top">
+          <div className="text-[10px] text-gray-400">...</div>
+        </td>
+      </>
+    );
+  }
+  const dayStatus = punchDayStatusLabel(status);
+  return (
+    <td colSpan={2} className="px-2 py-1 border-b border-l min-w-[140px] text-center align-top">
+      <span className={`inline-block px-2 py-0.5 text-[9px] font-medium rounded-full ${dayStatus?.className || ""}`}>
+        {dayStatus?.label || "Absent"}
+      </span>
+    </td>
+  );
+}
 
 // ==================== MULTI SELECT COMPONENT ====================
 
@@ -692,107 +785,20 @@ const DateCell = ({ punches, date, employeeID, formData, reportData, selectedCom
 
   // Fast path: punch times are already in props — paint immediately (no "...").
   if (canPaintPunchesImmediately) {
-    if (formData.reportType === "FILO Punches Logs") {
-      const firstPunch = punches[0];
-      const lastPunch = punches.length >= 2 ? punches[punches.length - 1] : null;
-      return (
-        <td className="px-2 py-1 border-b min-w-[100px] text-center align-top">
-          <div className="flex flex-col gap-1">
-            <span className="inline-block px-2 py-0.5 bg-green-600 text-white text-[9px] font-medium rounded-full">{firstPunch}</span>
-            {lastPunch ? (
-              <span className="inline-block px-2 py-0.5 bg-red-600 text-white text-[9px] font-medium rounded-full">{lastPunch}</span>
-            ) : null}
-          </div>
-        </td>
-      );
-    }
-    return (
-      <td className="px-2 py-1 border-b min-w-[100px] text-center align-top">
-        <div className="flex flex-wrap justify-center gap-1">
-          {punches.map((time: string, idx: number) => (
-            <span key={idx} className="inline-block px-2 py-0.5 bg-gray-800 text-white text-[9px] font-medium rounded-full">
-              {time}
-            </span>
-          ))}
-        </div>
-      </td>
-    );
+    return <PunchLogDayCells punches={punches} reportType={formData.reportType} />;
+  }
+
+  if (isPunchOnlyReport && !status) {
+    return <PunchLogDayCells punches={punches} reportType={formData.reportType} status={null} />;
   }
 
   if (!status) {
     return <td className="px-2 py-1 border-b min-w-[80px] text-center align-top"><div className="text-[10px] text-gray-400">...</div></td>;
   }
 
-  // ALL PUNCHES LOGS
-  if (formData.reportType === "All Punches Logs") {
-    if (status.type === "WEEK_OFF") {
-      return (
-        <td className="px-2 py-1 border-b min-w-[100px] text-center align-top">
-          <span className="inline-block px-2 py-0.5 bg-orange-100 text-orange-800 text-[9px] font-medium rounded-full">WO</span>
-        </td>
-      );
-    }
-    if (status.type === "HOLIDAY") {
-      return (
-        <td className="px-2 py-1 border-b min-w-[100px] text-center align-top">
-          <span className="inline-block px-2 py-0.5 bg-purple-100 text-purple-800 text-[9px] font-medium rounded-full">{status.label === "PH-P" ? "PH-P" : "PH"}</span>
-        </td>
-      );
-    }
-    return (
-      <td className="px-2 py-1 border-b min-w-[100px] text-center align-top">
-        {punches.length > 0 ? (
-          <div className="flex flex-wrap justify-center gap-1">
-            {punches.map((time: string, idx: number) => (
-              <span key={idx} className="inline-block px-2 py-0.5 bg-gray-800 text-white text-[9px] font-medium rounded-full">
-                {time}
-              </span>
-            ))}
-          </div>
-       ) : status.type === "LEAVE" ? (
-  <div className="text-[10px] font-medium text-pink-700">{status.label}</div>
-) : (
-  <div className="text-[10px] font-medium text-red-600">Absent</div>
-)}
-      </td>
-    );
-  }
-
-  // FILO PUNCHES LOGS
-  if (formData.reportType === "FILO Punches Logs") {
-    if (status.type === "WEEK_OFF") {
-      return (
-        <td className="px-2 py-1 border-b min-w-[100px] text-center align-top">
-          <span className="inline-block px-2 py-0.5 bg-orange-100 text-orange-800 text-[9px] font-medium rounded-full">WO</span>
-        </td>
-      );
-    }
-    if (status.type === "HOLIDAY") {
-      return (
-        <td className="px-2 py-1 border-b min-w-[100px] text-center align-top">
-          <span className="inline-block px-2 py-0.5 bg-purple-100 text-purple-800 text-[9px] font-medium rounded-full">{status.label === "PH-P" ? "PH-P" : "PH"}</span>
-        </td>
-      );
-    }
-   if (punches.length === 0) {
-  return (
-    <td className="px-2 py-1 border-b min-w-[100px] text-center align-top">
-      <div className={`text-[10px] font-medium ${status.type === "LEAVE" ? "text-pink-700" : "text-red-600"}`}>
-        {status.type === "LEAVE" ? status.label : "Absent"}
-      </div>
-    </td>
-  );
-}
-    const firstPunch = punches[0];
-    const lastPunch = punches.length >= 2 ? punches[punches.length - 1] : null;
-    return (
-      <td className="px-2 py-1 border-b min-w-[100px] text-center align-top">
-        <div className="flex flex-col gap-1">
-          <span className="inline-block px-2 py-0.5 bg-green-600 text-white text-[9px] font-medium rounded-full">{firstPunch}</span>
-          {lastPunch && <span className="inline-block px-2 py-0.5 bg-red-600 text-white text-[9px] font-medium rounded-full">{lastPunch}</span>}
-        </div>
-      </td>
-    );
+  // ALL PUNCHES / FILO — separate IN and OUT columns
+  if (isPunchOnlyReport) {
+    return <PunchLogDayCells punches={punches} reportType={formData.reportType} status={status} />;
   }
 
   // ATTENDANCE MARKING LOGS
@@ -1421,8 +1427,11 @@ const employeeOptions = filteredEmployees
         const rosterDay = roster?.days?.find((d: RosterDay) => new Date(d.workDate).toISOString().split('T')[0] === date);
         return rosterDay?.dayType === "WEEKLY_OFF";
       }
-      const dayOfWeek = WEEKDAYS[new Date(date).getDay()];
-      const shiftDay = workShift.workShiftDay.find((d: WorkShiftDay) => d.weekDay === dayOfWeek && d.shiftType === "WORK");
+      const dayOfWeekName = weekdayNameForDateKey(date);
+      const shiftDay = workShift.workShiftDay.find(
+        (d: WorkShiftDay) =>
+          (d.weekDay || "").trim().toLowerCase() === dayOfWeekName && d.shiftType === "WORK"
+      );
       return shiftDay?.weeklyOff === true;
     };
 
@@ -1494,9 +1503,10 @@ const employeeOptions = filteredEmployees
 
       if (!workShift.workShiftDay?.length) continue;
 
-      const dayOfWeek = WEEKDAYS[new Date(date).getDay()];
+      const dayOfWeekName = weekdayNameForDateKey(date);
       const shiftDay = workShift.workShiftDay.find(
-        (day: WorkShiftDay) => day.weekDay === dayOfWeek && day.shiftType === "WORK"
+        (day: WorkShiftDay) =>
+          (day.weekDay || "").trim().toLowerCase() === dayOfWeekName && day.shiftType === "WORK"
       );
       if (shiftDay?.weeklyOff) {
         result.add(date);
@@ -1551,7 +1561,10 @@ const employeeOptions = filteredEmployees
     const sourcePublicHolidays = md?.publicHolidays ?? publicHolidays;
     const sourceRegularizations = md?.attendanceRegularizations ?? attendanceRegularizations;
     const sourceLeaveApplications = md?.leaveApplications ?? leaveApplications;
-    const sourceAttendancePolicy = md?.attendancePolicy ?? attendancePolicy;
+    const sourceAttendancePolicy =
+      md?.empAttendancePolicies?.get(employeeID) ??
+      md?.attendancePolicy ??
+      attendancePolicy;
     const sourceFactualWeekoffOverrides = md?.factualWeekoffOverrides ?? factualWeekoffOverrides;
     const sourceIsFactualMode = md?.isFactualMode ?? isFactualMode;
     
@@ -1595,15 +1608,17 @@ const employeeOptions = filteredEmployees
 
     const isRotating = workShift?.isRotating || false;
     const isFlexible = !!(workShift?.isFlexible || String(sourceAttendancePolicy?.workingHoursType || "").toLowerCase().includes("flex"));
-    const dayOfWeek = WEEKDAYS[new Date(date).getDay()];
-    const dayConfig = workShift?.workShiftDay?.find((d) => d.weekDay === dayOfWeek);
+    const dayOfWeekName = weekdayNameForDateKey(date);
+    const dayConfig = workShift?.workShiftDay?.find((d) => (d.weekDay || "").trim().toLowerCase() === dayOfWeekName);
     const shiftDay =
       dayConfig?.shiftType === "WORK"
         ? dayConfig
         : workShift?.workShiftDay?.find(
-            (d) => d.weekDay === dayOfWeek && d.shiftType === "WORK",
+            (d) => (d.weekDay || "").trim().toLowerCase() === dayOfWeekName && d.shiftType === "WORK",
           );
-    const otDay = workShift?.workShiftDay?.find(d => d.weekDay === dayOfWeek && d.shiftType === "OT");
+    const otDay = workShift?.workShiftDay?.find(
+      (d) => (d.weekDay || "").trim().toLowerCase() === dayOfWeekName && d.shiftType === "OT",
+    );
     const defaultWorkedMinutes = shiftDay?.totalMinutes || 480;
 
     if (sourceIsFactualMode && sourceFactualWeekoffOverrides.get(employeeID)?.has(date)) {
@@ -2026,9 +2041,9 @@ if (!hasPunchesEffective) return { type: "ABSENT", label: "Absent", hasPunches: 
         return Number(branchesID) === Number(selectedBranchID) || branchesID == null;
       };
 
-      let normalizedShifts = (safeShiftsData as any[])
+      let companyShifts = (safeShiftsData as any[])
         .map(normalizeWorkShift)
-        .filter((shift: WorkShift) => matchesCompanyBranch(shift.companyID, shift.branchesID));
+        .filter((shift: WorkShift) => Number(shift.companyID) === Number(selectedCompanyID));
 
       if (isFactualMode) {
         try {
@@ -2037,9 +2052,9 @@ if (!hasPunchesEffective) return { type: "ABSENT", label: "Absent", hasPunches: 
             const actualShiftsData = await actualShiftsRes.json();
             const actualShifts = (Array.isArray(actualShiftsData) ? actualShiftsData : [])
               .map(normalizeWorkShift)
-              .filter((shift: WorkShift) => matchesCompanyBranch(shift.companyID, shift.branchesID));
+              .filter((shift: WorkShift) => Number(shift.companyID) === Number(selectedCompanyID));
             const actualById = new Map<number, WorkShift>(actualShifts.map((shift: WorkShift) => [shift.id, shift]));
-            normalizedShifts = normalizedShifts.map((shift: WorkShift) => {
+            companyShifts = companyShifts.map((shift: WorkShift) => {
               if ((shift.workShiftDay?.length || 0) > 0) return shift;
               return actualById.get(shift.id) || shift;
             });
@@ -2047,7 +2062,8 @@ if (!hasPunchesEffective) return { type: "ABSENT", label: "Absent", hasPunches: 
         } catch (err) {}
       }
 
-      const shiftById = new Map<number, WorkShift>(normalizedShifts.map((shift: WorkShift) => [shift.id, shift]));
+      const shiftById = new Map<number, WorkShift>(companyShifts.map((shift: WorkShift) => [shift.id, shift]));
+      const normalizedShifts = companyShifts;
 
       const relevantRosters = (safeRostersData as any[]).filter((roster: any) =>
         Number(roster.companyID) === Number(selectedCompanyID) && Number(roster.branchesID) === Number(selectedBranchID)
@@ -2056,9 +2072,26 @@ if (!hasPunchesEffective) return { type: "ABSENT", label: "Absent", hasPunches: 
         .flatMap((roster: any) => roster.employees ?? [])
         .map((employee: any) => normalizeRosterEmployee(employee, shiftById));
 
-      const selectedPolicy = (safePolicyData as AttendancePolicy[]).find(
-        (policy: AttendancePolicy) => matchesCompanyBranch(policy.companyID, policy.branchesID)
-      ) || null;
+      const companyPolicies = (safePolicyData as AttendancePolicy[]).filter(
+        (policy: AttendancePolicy) => Number(policy.companyID) === Number(selectedCompanyID)
+      );
+      const selectedPolicy =
+        companyPolicies.find((policy: AttendancePolicy) => matchesCompanyBranch(policy.companyID, policy.branchesID)) ||
+        companyPolicies[0] ||
+        null;
+
+      const policyById = new Map<number, AttendancePolicy>(
+        (safePolicyData as AttendancePolicy[]).map((policy) => [Number(policy.id), policy]),
+      );
+      const empAttendancePolicies = new Map<number, AttendancePolicy | null>();
+      for (const emp of safeEmpData as Employee[]) {
+        const mappings = Array.isArray(emp.empAttendancePolicy) ? emp.empAttendancePolicy : [];
+        const mappedId = mappings[mappings.length - 1]?.attendancePolicyID ?? emp.attendancePolicyID;
+        empAttendancePolicies.set(
+          Number(emp.id),
+          (mappedId != null ? policyById.get(Number(mappedId)) : undefined) ?? selectedPolicy,
+        );
+      }
 
       const shifts = extractEmpWorkShiftMappings(safeEmpData, isFactualMode, shiftById);
 
@@ -2072,7 +2105,6 @@ if (!hasPunchesEffective) return { type: "ABSENT", label: "Absent", hasPunches: 
       setLeaveApplications(filteredLeaves);
       setRosters(flatRosterEmployees);
       setAttendancePolicy(selectedPolicy);
-      setEmpWorkShifts(shifts);
       
       const fromDate = new Date(formData.dateFrom);
       const toDate = new Date(formData.dateTo);
@@ -2187,11 +2219,12 @@ if (!hasPunchesEffective) return { type: "ABSENT", label: "Absent", hasPunches: 
 
       const enrichedShifts = shifts.map(s => {
         if (!s.workShift?.workShiftDay?.length) {
-          const fullShift = normalizedShifts.find((ws: WorkShift) => ws.id === s.workShiftID);
+          const fullShift = normalizedShifts.find((ws: WorkShift) => ws.id === s.workShiftID) || shiftById.get(s.workShiftID);
           if (fullShift) return { ...s, workShift: fullShift };
         }
         return s;
       });
+      setEmpWorkShifts(enrichedShifts);
 
       const newFactualWeekoffOverrides = new Map<number, Set<string>>();
       if (isFactualMode) {
@@ -2203,13 +2236,14 @@ if (!hasPunchesEffective) return { type: "ABSENT", label: "Absent", hasPunches: 
 
       masterDataRef.current = {
         reportRows: rows,
-        empWorkShifts: shifts,
+        empWorkShifts: enrichedShifts,
         workShifts: normalizedShifts,
         rosters: flatRosterEmployees,
         publicHolidays: filteredHolidays,
         attendanceRegularizations: filteredRegularizations,
         leaveApplications: filteredLeaves,
         attendancePolicy: selectedPolicy,
+        empAttendancePolicies,
         factualWeekoffOverrides: newFactualWeekoffOverrides,
         isFactualMode,
       };
@@ -2265,32 +2299,10 @@ if (!hasPunchesEffective) return { type: "ABSENT", label: "Absent", hasPunches: 
       };
     };
 
-    const cellValueForDate = (
-      punches: string[],
-      status: AttendanceStatus | undefined,
-    ): string => {
-      if (reportType === "FILO Punches Logs") {
-        if (punches.length === 0) {
-          return status?.type === "LEAVE"
-            ? status.label
-            : status?.type === "WEEK_OFF"
-              ? "WO"
-              : status?.type === "HOLIDAY"
-                ? (status.label === "PH-P" ? "PH-P" : "PH")
-              : status?.type === "ABSENT"
-                ? "Absent"
-                : "";
-        }
-        return formatFILOExcelCell(punches);
-      }
-      if (reportType === "Attendance Marking Logs") {
-        return status ? formatMarkingExcelCell(status) : "";
-      }
-      if (reportType === "Attendance Summary Logs") {
-        return status ? formatSummaryExcelCell(punches, status) : "";
-      }
-      // All Punches Logs — timestamps on present days, "Absent" when missing
-      if (punches.length > 0) return punches.join("\n");
+    const punchSplit = isPunchLogReport(reportType);
+
+    const dayStatusExcelValue = (punches: string[], status: AttendanceStatus | undefined): string => {
+      if (punches.length > 0) return "";
       if (status?.type === "LEAVE") return status.label;
       if (status?.type === "WEEK_OFF") return "WO";
       if (status?.type === "HOLIDAY") return status.label === "PH-P" ? "PH-P" : "PH";
@@ -2298,20 +2310,47 @@ if (!hasPunchesEffective) return { type: "ABSENT", label: "Absent", hasPunches: 
       return "";
     };
 
-    // Row 0: meta headers + date labels (1-Jul-26)
-    // Row 1: blank meta (merged) + weekday labels (Wed)
-    const aoa: (string | number)[][] = [
-      [
-        ...metaLabels,
-        ...dateColumns.map((date) => formatExcelDateHeader(date).dateLabel),
-      ],
-      [
-        ...Array(metaCount).fill(""),
-        ...dateColumns.map((date) => formatExcelDateHeader(date).dayLabel),
-      ],
-    ];
+    const cellValueForDate = (
+      punches: string[],
+      status: AttendanceStatus | undefined,
+    ): string => {
+      if (reportType === "Attendance Marking Logs") {
+        return status ? formatMarkingExcelCell(status) : "";
+      }
+      if (reportType === "Attendance Summary Logs") {
+        return status ? formatSummaryExcelCell(punches, status) : "";
+      }
+      if (punches.length > 0) return punches.join("\n");
+      return dayStatusExcelValue(punches, status);
+    };
+
+    const aoa: (string | number)[][] = punchSplit
+      ? [
+          [
+            ...metaLabels,
+            ...dateColumns.flatMap((date) => {
+              const h = formatExcelDateHeader(date);
+              return [`${h.dateLabel}\n${h.dayLabel}`, ""];
+            }),
+          ],
+          [
+            ...Array(metaCount).fill(""),
+            ...dateColumns.flatMap(() => ["IN", "OUT"]),
+          ],
+        ]
+      : [
+          [
+            ...metaLabels,
+            ...dateColumns.map((date) => formatExcelDateHeader(date).dateLabel),
+          ],
+          [
+            ...Array(metaCount).fill(""),
+            ...dateColumns.map((date) => formatExcelDateHeader(date).dayLabel),
+          ],
+        ];
 
     const rowPunchCounts: number[] = [];
+    const dayMerges: Array<{ s: { r: number; c: number }; e: { r: number; c: number } }> = [];
 
     for (let index = 0; index < filteredReportData.length; index++) {
       const row = filteredReportData[index];
@@ -2325,13 +2364,27 @@ if (!hasPunchesEffective) return { type: "ABSENT", label: "Absent", hasPunches: 
       ];
 
       let maxPunches = 1;
-      for (const date of dateColumns) {
+      for (let d = 0; d < dateColumns.length; d++) {
+        const date = dateColumns[d];
         const punches = getDisplayPunches(row.employee.id, date, row.punches[date] || []);
         const cacheKey = buildStatusCacheKey(date, row.employee.id, punches);
         const status = globalStatusCache.get(cacheKey) as AttendanceStatus | undefined;
-        const value = cellValueForDate(punches, status);
-        dataRow.push(value);
-        if (punches.length > maxPunches) maxPunches = punches.length;
+        if (punchSplit) {
+          if (punches.length > 0) {
+            const { ins, outs } = splitInOutPunches(punches, reportType);
+            dataRow.push(ins.join("\n"), outs.join("\n"));
+            maxPunches = Math.max(maxPunches, ins.length, outs.length, 1);
+          } else {
+            dataRow.push(dayStatusExcelValue(punches, status), "");
+            const excelRow = index + 2;
+            const col = metaCount + d * 2;
+            dayMerges.push({ s: { r: excelRow, c: col }, e: { r: excelRow, c: col + 1 } });
+          }
+        } else {
+          const value = cellValueForDate(punches, status);
+          dataRow.push(value);
+          if (punches.length > maxPunches) maxPunches = punches.length;
+        }
       }
       aoa.push(dataRow);
       rowPunchCounts.push(maxPunches);
@@ -2340,11 +2393,19 @@ if (!hasPunchesEffective) return { type: "ABSENT", label: "Absent", hasPunches: 
     const ws = XLSX.utils.aoa_to_sheet(aoa);
     const range = XLSX.utils.decode_range(ws["!ref"] || "A1");
 
-    // Merge meta header cells across the two header rows (like reference sheet)
-    ws["!merges"] = Array.from({ length: metaCount }, (_, c) => ({
-      s: { r: 0, c },
-      e: { r: 1, c },
-    }));
+    ws["!merges"] = [
+      ...Array.from({ length: metaCount }, (_, c) => ({
+        s: { r: 0, c },
+        e: { r: 1, c },
+      })),
+      ...(punchSplit
+        ? dateColumns.map((_, i) => ({
+            s: { r: 0, c: metaCount + i * 2 },
+            e: { r: 0, c: metaCount + i * 2 + 1 },
+          }))
+        : []),
+      ...dayMerges,
+    ];
 
     const thinBorder = {
       top: { style: "thin", color: { rgb: "000000" } },
@@ -2390,6 +2451,15 @@ if (!hasPunchesEffective) return { type: "ABSENT", label: "Absent", hasPunches: 
 
         if (isHeader) {
           ws[cellRef].s.fill = solidFill(HEADER_FILL);
+          if (punchSplit && R === 1 && isDateCol) {
+            const isInCol = (C - metaCount) % 2 === 0;
+            ws[cellRef].s.font = {
+              name: "Calibri",
+              sz: 9,
+              bold: true,
+              color: { rgb: isInCol ? "006600" : "9B1C1C" },
+            };
+          }
           continue;
         }
 
@@ -2397,6 +2467,18 @@ if (!hasPunchesEffective) return { type: "ABSENT", label: "Absent", hasPunches: 
 
         const cv = ws[cellRef].v?.toString() || "";
         if (!cv) continue;
+
+        if (punchSplit && looksLikePunchTimes(cv)) {
+          const isInCol = (C - metaCount) % 2 === 0;
+          ws[cellRef].s.fill = solidFill(PRESENT_FILL);
+          ws[cellRef].s.font = {
+            name: "Calibri",
+            sz: 9,
+            bold: false,
+            color: { rgb: isInCol ? "006600" : "C00000" },
+          };
+          continue;
+        }
 
         if (cv.includes("Absent") || cv === "A" || cv.includes("Marking: A")) {
           ws[cellRef].s.fill = solidFill(ABSENT_FILL);
@@ -2442,12 +2524,18 @@ if (!hasPunchesEffective) return { type: "ABSENT", label: "Absent", hasPunches: 
       { wch: 16 },
       { wch: 22 },
     ];
-    dateColumns.forEach(() => colWidths.push({ wch: 12 }));
+    dateColumns.forEach(() => {
+      if (punchSplit) {
+        colWidths.push({ wch: 11 }, { wch: 11 });
+      } else {
+        colWidths.push({ wch: 12 });
+      }
+    });
     ws["!cols"] = colWidths;
 
     // Header rows + taller data rows when multiple punches (reference layout)
     ws["!rows"] = [
-      { hpt: 18 },
+      { hpt: punchSplit ? 28 : 18 },
       { hpt: 16 },
       ...rowPunchCounts.map((count) => ({ hpt: Math.max(22, count * 14) })),
     ];
@@ -2491,6 +2579,8 @@ if (!hasPunchesEffective) return { type: "ABSENT", label: "Absent", hasPunches: 
   };
 
   const dateColumns = buildDateRangeColumns();
+  const punchSplit = isPunchLogReport(formData.reportType);
+  const headerRowSpan = punchSplit ? 2 : 1;
 
   const filteredReportData = useMemo(() => {
     const q = searchTerm.toLowerCase();
@@ -2522,6 +2612,18 @@ if (!hasPunchesEffective) return { type: "ABSENT", label: "Absent", hasPunches: 
 
   const renderDateHeaders = () => dateColumns.map(date => {
     const { dayName, dateStr } = formatHeaderDate(date);
+    if (punchSplit) {
+      return (
+        <th
+          key={date}
+          colSpan={2}
+          className="px-2 py-1 text-center min-w-[140px] border-l border-teal-100 text-[11px] bg-teal-50 text-teal-900"
+        >
+          <div className="font-semibold">{dateStr}</div>
+          <div className="text-[10px] opacity-80 mt-1">{dayName}</div>
+        </th>
+      );
+    }
     return (
       <th key={date} className="px-2 py-1 text-center min-w-[90px] border-l border-teal-100 text-[11px] bg-teal-50 text-teal-900">
         <div className="font-semibold">{dateStr}</div>
@@ -2662,30 +2764,35 @@ if (!hasPunchesEffective) return { type: "ABSENT", label: "Absent", hasPunches: 
                 <thead data-hrms-report-header className="bg-teal-50 text-teal-900 sticky top-0 z-20 border-b border-teal-100">
                   <tr>
                     <th 
+                      rowSpan={headerRowSpan}
                       className="sticky left-0 z-30 bg-teal-50 text-teal-900 px-2 py-2 text-center border-r border-teal-100" 
                       style={{ left: 0, width: responsiveLeftWidths.sno, minWidth: responsiveLeftWidths.sno }}
                     >
                       S.NO
                     </th>
                     {!isMobile && <th 
+                      rowSpan={headerRowSpan}
                       className="sticky z-30 bg-teal-50 text-teal-900 px-2 py-2 text-left border-r border-teal-100" 
                       style={{ left: responsiveLeftWidths.sno, width: responsiveLeftWidths.company, minWidth: responsiveLeftWidths.company }}
                     >
                       COMPANY
                     </th>}
                     {!isMobile && <th 
+                      rowSpan={headerRowSpan}
                       className="sticky z-30 bg-teal-50 text-teal-900 px-2 py-2 text-left border-r border-teal-100" 
                       style={{ left: responsiveLeftWidths.sno + responsiveLeftWidths.company, width: responsiveLeftWidths.branch, minWidth: responsiveLeftWidths.branch }}
                     >
                       BRANCH
                     </th>}
                     {!isMobile && <th 
+                      rowSpan={headerRowSpan}
                       className="sticky z-30 bg-teal-50 text-teal-900 px-2 py-2 text-left border-r border-teal-100" 
                       style={{ left: responsiveLeftWidths.sno + responsiveLeftWidths.company + responsiveLeftWidths.branch, width: responsiveLeftWidths.dept, minWidth: responsiveLeftWidths.dept }}
                     >
                       DEPT
                     </th>}
                     <th 
+                      rowSpan={headerRowSpan}
                       className="sticky z-30 bg-teal-50 text-teal-900 px-2 py-2 text-left border-r border-teal-100" 
                       style={{ left: responsiveLeftWidths.sno + (isMobile ? 0 : responsiveLeftWidths.company + responsiveLeftWidths.branch + responsiveLeftWidths.dept), width: responsiveLeftWidths.emp, minWidth: responsiveLeftWidths.emp }}
                     >
@@ -2693,6 +2800,20 @@ if (!hasPunchesEffective) return { type: "ABSENT", label: "Absent", hasPunches: 
                     </th>
                     {renderDateHeaders()}
                   </tr>
+                  {punchSplit ? (
+                    <tr>
+                      {dateColumns.map((date) => (
+                        <Fragment key={`${date}-inout`}>
+                          <th className="px-1 py-1 text-center min-w-[70px] border-l border-teal-100 text-[10px] font-semibold bg-teal-50 text-green-800">
+                            IN
+                          </th>
+                          <th className="px-1 py-1 text-center min-w-[70px] border-l border-teal-100 text-[10px] font-semibold bg-teal-50 text-red-800">
+                            OUT
+                          </th>
+                        </Fragment>
+                      ))}
+                    </tr>
+                  ) : null}
                 </thead>
                 <tbody>
                   {filteredReportData.map((row, index) => (

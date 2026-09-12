@@ -13,6 +13,8 @@ import {
 } from "../../../utils/taskSitePunch";
 import { taskAssigneeTeamLabel } from "../../../utils/empManagerDisplay";
 import type { EmpManagerScope } from "../../../utils/empManagerDisplay";
+import { TaskRequestInlineActions } from "./TaskAssignmentRequestPanel";
+import { isAssignmentRequestTask } from "../../../utils/taskAssignmentRequest";
 
 export interface MobileTaskListItem {
   id: number;
@@ -23,13 +25,37 @@ export interface MobileTaskListItem {
   priority: string;
   scheduleDateTime?: string | null;
   dueDateTime?: string | null;
+  dueAt?: string | null;
+  erpTaskId?: number | null;
+  expectedDurationMinutes?: number | null;
+  siteAddress?: string | null;
+  siteCity?: string | null;
+  siteVisits?: import("../../../utils/taskSiteVisit").EnplSiteVisit[] | null;
+  siteVisitSummary?: import("../../../utils/taskSiteVisit").EnplSiteVisitSummary | null;
+  hasPendingAssignment?: boolean | null;
+  pendingAssignmentHrmsEmployeeIds?: Array<string | number> | null;
   customer?: { customerName?: string };
-  site?: { branchName?: string; city?: string };
+  site?: { branchName?: string; city?: string; address?: string };
   chats?: { message?: string | null; createdAt?: string; senderName?: string | null }[];
   sitePunches?: SitePunchEvent[];
   assignments?: {
     manageEmployeeID?: number;
     manageEmployee?: { employeeFirstName?: string; employeeLastName?: string; employeeID?: string };
+  }[];
+  engineerAssignments?: {
+    manageEmployeeID?: number | null;
+    hrmsEmployeeId?: number | string | null;
+    engineerEmail?: string | null;
+    email?: string | null;
+    status?: string | null;
+    assignmentStatus?: string | null;
+    requiresAccept?: boolean | null;
+    showInRequests?: boolean | null;
+    assignedDate?: string | Date | null;
+    rescheduleReason?: string | null;
+    managerReason?: string | null;
+    stale?: boolean | null;
+    staleAssignment?: boolean | null;
   }[];
 }
 
@@ -48,15 +74,27 @@ export function MobileTaskListCard({
   onCheckInOut,
   onViewInfo,
   managerScope,
+  employeeId,
+  employeeEmail,
+  requestActions,
 }: {
   task: MobileTaskListItem;
   onOpenChat: () => void;
   onCheckInOut?: () => void;
   onViewInfo?: () => void;
   managerScope?: EmpManagerScope | null;
+  employeeId?: number | null;
+  employeeEmail?: string | null;
+  requestActions?: {
+    sending?: boolean;
+    startRescheduleOpen?: boolean;
+    onAccept: () => void;
+    onReschedule: (reason: string) => void;
+  };
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
-  const fieldTask = isSitePunchTaskType(task.taskType);
+  const requestMode = !!requestActions && isAssignmentRequestTask(task, employeeId, employeeEmail);
+  const fieldTask = isSitePunchTaskType(task.taskType) || !!task.erpTaskId;
   const siteLine = fieldTask
     ? [task.site?.branchName, task.site?.city].filter(Boolean).join(", ") || "—"
     : null;
@@ -66,72 +104,100 @@ export function MobileTaskListCard({
 
   const teamLabel = taskAssigneeTeamLabel(managerScope ?? null, task.assignments);
 
-  return (
-    <div className="mobile-task-card w-full rounded-[16px] bg-white border border-gray-100 shadow-sm overflow-hidden">
-      <button type="button" onClick={onOpenChat} className="w-full text-left px-3 py-3 active:bg-gray-50">
-        <div className="flex gap-2">
-          <div className="flex-1 min-w-0 space-y-1">
-            {teamLabel && (
-              <p className="text-[10px] font-bold uppercase tracking-wide text-[#2563eb]">
-                Team · {teamLabel}
-              </p>
-            )}
-            <p className="text-[14px] font-bold text-gray-900 leading-tight line-clamp-2">{task.taskName}</p>
-            <p className="text-[11px] text-gray-500">
-              <span className="text-gray-400">Task ID:</span> {task.id}
-            </p>
-            <p className="text-[11px] text-gray-500">
-              <span className="text-gray-400">Type:</span> {task.taskType}
-            </p>
-            {siteLine && (
-              <p className="text-[11px] text-gray-600 line-clamp-1">
-                <span className="text-gray-400">Customer Site:</span> {siteLine}
-              </p>
-            )}
+  const header = (
+    <div className="flex gap-2">
+      <div className="flex-1 min-w-0 space-y-1">
+        {teamLabel && (
+          <p className="text-[10px] font-bold uppercase tracking-wide text-[#2563eb]">
+            Team · {teamLabel}
+          </p>
+        )}
+        <p className="text-[14px] font-bold text-gray-900 leading-tight line-clamp-2">{task.taskName}</p>
+        <p className="text-[11px] text-gray-500">
+          <span className="text-gray-400">Task ID:</span> {task.id}
+        </p>
+        <p className="text-[11px] text-gray-500">
+          <span className="text-gray-400">Type:</span> {task.taskType}
+        </p>
+        {!requestMode && siteLine && (
+          <p className="text-[11px] text-gray-600 line-clamp-1">
+            <span className="text-gray-400">Customer Site:</span> {siteLine}
+          </p>
+        )}
+        {!requestMode ? (
+          <>
             <p className="text-[11px] text-gray-600">
               <span className="text-gray-400">Schedule:</span> {fmtSchedule(task.scheduleDateTime)}
             </p>
             <p className="text-[11px] text-gray-600">
-              <span className="text-gray-400">ETC:</span> {fmtSchedule(task.dueDateTime)}
+              <span className="text-gray-400">Due date & time:</span> {fmtSchedule(task.dueAt || task.dueDateTime)}
             </p>
-            {fieldTask && (
-              <div className="pt-0.5 space-y-0.5">
-                {punches.length === 0 ? (
-                  <p className="text-[11px] text-gray-400">No site check-in yet</p>
-                ) : (
-                  punches.map((p, i) => (
-                    <p key={`${p.kind}-${p.at}-${i}`} className="text-[11px] text-gray-700">
-                      <span className="text-gray-400">
-                        {p.kind === "in" ? "Site check in:" : "Site check out:"}
-                      </span>{" "}
-                      {formatSitePunchAt(p.at)}
-                      {p.employeeName ? (
-                        <span className="text-gray-400"> · {p.employeeName}</span>
-                      ) : null}
-                    </p>
-                  ))
-                )}
-              </div>
+          </>
+        ) : null}
+        {fieldTask && !requestMode && (
+          <div className="pt-0.5 space-y-0.5">
+            {punches.length === 0 ? (
+              <p className="text-[11px] text-gray-400">No site check-in yet</p>
+            ) : (
+              punches.map((p, i) => (
+                <p key={`${p.kind}-${p.at}-${i}`} className="text-[11px] text-gray-700">
+                  <span className="text-gray-400">
+                    {p.kind === "in" ? "Site check in:" : "Site check out:"}
+                  </span>{" "}
+                  {formatSitePunchAt(p.at)}
+                  {p.employeeName ? (
+                    <span className="text-gray-400"> · {p.employeeName}</span>
+                  ) : null}
+                </p>
+              ))
             )}
           </div>
-          <div className="flex flex-col items-end gap-1.5 shrink-0">
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                setMenuOpen((v) => !v);
-              }}
-              className="w-8 h-8 rounded-lg flex items-center justify-center text-gray-500"
-              aria-label="Task menu"
-            >
-              <Icon icon="solar:menu-dots-bold" className="w-5 h-5" />
-            </button>
-            <TaskStatusBadge status={task.status} size="xs" className="!rounded-full" />
-            <PriorityBadge priority={task.priority} size="xs" />
-          </div>
+        )}
+      </div>
+      <div className="flex flex-col items-end gap-1.5 shrink-0">
+        {!requestMode ? (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setMenuOpen((v) => !v);
+            }}
+            className="w-8 h-8 rounded-lg flex items-center justify-center text-gray-500"
+            aria-label="Task menu"
+          >
+            <Icon icon="solar:menu-dots-bold" className="w-5 h-5" />
+          </button>
+        ) : null}
+        <TaskStatusBadge status={task.status} size="xs" className="!rounded-full" />
+        <PriorityBadge priority={task.priority} size="xs" />
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="mobile-task-card w-full rounded-[16px] bg-white border border-gray-100 shadow-sm overflow-hidden">
+      {requestMode ? (
+        <div className="w-full text-left px-3 py-3">{header}</div>
+      ) : (
+        <button type="button" onClick={onOpenChat} className="w-full text-left px-3 py-3 active:bg-gray-50">
+          {header}
+        </button>
+      )}
+      {requestMode && requestActions ? (
+        <div className="border-t border-gray-100 px-3 pt-2">
+          <TaskRequestInlineActions
+            task={task}
+            employeeId={employeeId}
+            employeeEmail={employeeEmail}
+            sending={requestActions.sending}
+            startRescheduleOpen={requestActions.startRescheduleOpen}
+            compact
+            onAccept={requestActions.onAccept}
+            onReschedule={requestActions.onReschedule}
+          />
         </div>
-      </button>
-      {menuOpen && (
+      ) : null}
+      {menuOpen && !requestMode && (
         <div className="border-t border-gray-100 flex flex-wrap px-1 py-1 bg-gray-50/80">
           {siteCheckLabel && (
             <button type="button" className="text-[12px] font-semibold text-[#2563eb] px-3 py-2" onClick={() => { setMenuOpen(false); onCheckInOut?.(); }}>
