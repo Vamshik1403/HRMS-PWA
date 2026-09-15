@@ -149,7 +149,6 @@ export const COMPANY_HUB_TILES: CompanyHubTile[] = [
     tabs: [
       { id: "applications", label: "Leave Applications", embed: "leave-applications" },
       { id: "policy", label: "Leave Policy", embed: "leave-policy" },
-      { id: "holidays", label: "Holidays", embed: "holidays" },
       { id: "public-holiday", label: "Public Holiday", embed: "public-holiday" },
     ],
   },

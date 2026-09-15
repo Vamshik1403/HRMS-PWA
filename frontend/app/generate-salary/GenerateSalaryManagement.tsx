@@ -18,11 +18,9 @@ import type { DataTableColumn } from "../components/app/data-table";
 import { EntityRowActions } from "../components/app/entity-row-actions";
 import { useClientTable, sortRows } from "../hooks/use-client-table";
 import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable";
 import { useCurrentUser } from "../hooks/useCurrentUser"
 import { toast } from "sonner";
 import { getActiveCompanyId, getSidebarContext } from "../utils/sidebarContext";
-import { formatPayslipPeriodLabel } from "../utils/payslipPeriodLabel";
 import { dispatchAppRefresh, registerDataCacheClearer } from "../utils/appRefresh";
 import { useListAutoRefresh } from "../hooks/useListAutoRefresh";
 import { AutocompleteBranchField } from "../components/app/autocomplete-branch-field";
@@ -1176,206 +1174,253 @@ export function downloadSalarySlipPDF(payload: {
     return words + " Only";
   }
 
+  const blank = (v: unknown) => {
+    if (v == null) return "";
+    const s = String(v).trim();
+    if (!s || s === "N/A" || s === "-") return "";
+    return s;
+  };
+
+  const formatAmount = (n: number) => {
+    if (!Number.isFinite(n)) return "";
+    const rounded = Math.round(n * 100) / 100;
+    if (Math.abs(rounded - Math.round(rounded)) < 0.001) return String(Math.round(rounded));
+    return rounded.toFixed(2);
+  };
+
+  const formatJoinDate = (raw?: string | null) => {
+    if (!raw) return "";
+    const d = new Date(String(raw).includes("T") ? raw : `${raw}T00:00:00`);
+    if (Number.isNaN(d.getTime())) return "";
+    return d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+  };
+
   try {
     const doc = new jsPDF("p", "mm", "a4");
     const pageWidth = doc.internal.pageSize.width;
-    const gray: [number, number, number] = [100, 60, 150];
-    let y = 15;
+    const boxL = 12;
+    const boxR = pageWidth - 12;
+    const boxT = 12;
+    const boxW = boxR - boxL;
+    const midX = boxL + boxW / 2;
+    const lineW = 0.35;
+    const emp = payload.employee || {};
+    const company = emp.company || {};
+    const branch = emp.branches || {};
+    const bank = Array.isArray(emp.employeeBankDetails) ? emp.employeeBankDetails[0] : null;
 
-    const companyName = payload.companyName || payload.employee?.company?.companyName || "Company";
-    const companyAddress = payload.employee?.company?.address || "Head Office";
+    const companyName = blank(payload.companyName || company.companyName || "Company").toUpperCase();
+    const addressLines: string[] = [];
+    if (blank(company.address)) addressLines.push(blank(company.address));
+    const cityPin = [blank(company.city), blank(company.pincode)].filter(Boolean).join(" - ");
+    if (cityPin) addressLines.push(`${cityPin},`);
+    if (blank(company.state)) addressLines.push(`${blank(company.state)},`);
+    if (blank(company.country)) addressLines.push(blank(company.country));
 
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(15);
-    doc.setTextColor(gray[0], gray[1], gray[2]);
-    doc.text(companyName, pageWidth / 2, 20, { align: "center" });
+    const periodDate =
+      payload.end && !Number.isNaN(new Date(payload.end).getTime())
+        ? new Date(payload.end)
+        : payload.start && !Number.isNaN(new Date(payload.start).getTime())
+          ? new Date(payload.start)
+          : null;
+    const monthTitle = periodDate
+      ? `Payslip for the month of ${periodDate.toLocaleString("en-GB", { month: "short" })} ${periodDate.getFullYear()}`
+      : `Payslip for the month of ${blank(payload.monthLabel)}`;
 
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(9);
-    doc.setTextColor(80, 80, 80);
-    doc.text(companyAddress, pageWidth / 2, 25, { align: "center" });
+    const empName = `${blank(emp.employeeFirstName)} ${blank(emp.employeeLastName)}`.trim();
+    const dept = blank(emp.departments?.departmentName);
+    const desg = blank(emp.designations?.designation);
+    const location = blank(company.city) || blank(branch.city);
 
-    doc.setFontSize(8);
-    doc.setTextColor(100, 100, 100);
+    const isBasicName = (name: string) => /^basic(\s*pay)?$/i.test(name.trim());
+    const earnItems = [
+      { name: "BASIC", amount: payload.basic },
+      ...(payload.earnings || [])
+        .filter((e) => !isBasicName(String(e?.name || "")))
+        .map((e) => ({ name: String(e.name || "").toUpperCase(), amount: Number(e.amount) || 0 })),
+    ];
+    const dedItems = [
+      ...(payload.deductions || []).map((d) => ({
+        name: String(d.name || "").toUpperCase(),
+        amount: Number(d.amount) || 0,
+      })),
+    ];
+    if ((payload.lopAmount || 0) > 0) {
+      dedItems.push({ name: "LOSS OF PAY", amount: payload.lopAmount });
+    }
+    const earningsTotal = payload.earningsTotal;
+    const deductionsTotal = payload.deductionsTotal + ((payload.lopAmount || 0) > 0 ? payload.lopAmount : 0);
+    const netPay = Math.max(0, Math.round(payload.netPay || 0));
+    const rowCount = Math.max(earnItems.length, dedItems.length, 1);
 
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(11);
+    const hLine = (y: number) => {
+      doc.setDrawColor(0);
+      doc.setLineWidth(lineW);
+      doc.line(boxL, y, boxR, y);
+    };
+    const vLine = (x: number, y1: number, y2: number) => {
+      doc.setDrawColor(0);
+      doc.setLineWidth(lineW);
+      doc.line(x, y1, x, y2);
+    };
+
     doc.setTextColor(0, 0, 0);
-    doc.text("Salary Slip", pageWidth / 2, 38, { align: "center" });
+    let y = boxT + 9;
 
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(9);
-    doc.text(`Branch: ${payload.branchName}`, 15, 45);
-    const periodLabel = formatPayslipPeriodLabel(
-      payload.monthLabel,
-      payload.start,
-      payload.end,
-    );
-    doc.text(`Period: ${periodLabel}`, pageWidth - 15, 45, { align: "right" });
+    doc.setFont("times", "bold");
+    doc.setFontSize(14);
+    doc.text(companyName, pageWidth / 2, y, { align: "center" });
+    y += 5;
 
-    const empName = `${payload.employee.employeeFirstName || ""} ${payload.employee.employeeLastName || ""}`.trim();
-    const dept = payload.employee.departments?.departmentName || "N/A";
-    const desg = payload.employee.designations?.designation || "N/A";
+    doc.setFont("times", "normal");
+    doc.setFontSize(8.5);
+    const addrMax = boxW - 10;
+    for (const line of addressLines) {
+      const wrapped = doc.splitTextToSize(line, addrMax);
+      for (const w of wrapped) {
+        doc.text(w, pageWidth / 2, y, { align: "center" });
+        y += 3.8;
+      }
+    }
 
-    const joiningDays = payload.joiningCalendarDays ?? payload.cycleDays;
-    const actualPaidDays = payload.paidUnits;
-    const lopBreakdown = `${payload.absentCount} Absent + ${payload.halfDayCount} Half Day × 0.5 = ${payload.lopDays.toFixed(2)}`;
-
-    autoTable(doc, {
-      startY: 47,
-      theme: "grid",
-      styles: { fontSize: 9, cellPadding: 2, lineWidth: 0.1 },
-      headStyles: { fillColor: gray, textColor: [255, 255, 255], halign: "center" },
-      body: [
-        ["Employee ID", payload.employee.employeeID || "-", "Name", empName],
-        ["Department", dept, "Designation", desg],
-        ["Joining Date", payload.employee.joiningDate || "-", "Working Days", payload.totalWorkingDaysInCycle],
-        ["Paid Days", actualPaidDays.toFixed(2), "LOP Days", payload.lopDays.toFixed(2)],
-        ["LOP Breakdown", lopBreakdown, "Joining Days", String(joiningDays)],
-        ["Monthly Gross", `₹ ${payload.gross.toLocaleString()}`, "Per-Day Rate", `₹ ${payload.perDayGross.toFixed(2)}`],
-      ],
-      columnStyles: {
-        0: { cellWidth: 30 },
-        1: { cellWidth: 60 },
-        2: { cellWidth: 30 },
-        3: { cellWidth: 60 },
-      },
-      margin: { left: 15 },
-      tableWidth: pageWidth - 30,
-    });
-
-    y = (doc as any).lastAutoTable.finalY + 5;
-
-    // Calculation Summary
-    autoTable(doc, {
-      startY: y,
-      theme: "plain",
-      styles: { fontSize: 8, cellPadding: 1 },
-      body: [
-        ["Calculation Summary:", ""],
-        ["Monthly Gross:", `₹ ${payload.gross.toLocaleString()}`],
-        ["Working Days in Month:", `${payload.totalWorkingDaysInCycle}`],
-        ["Paid Days:", `${payload.paidUnits.toFixed(2)} (calendar ${joiningDays} − LOP ${payload.lopDays.toFixed(2)})`],
-        ["LOP Breakdown:", lopBreakdown],
-        ["Pro-rate Ratio (joining):", `${joiningDays}/${payload.totalWorkingDaysInCycle} = ${((joiningDays / payload.totalWorkingDaysInCycle) * 100).toFixed(1)}%`],
-        ["Per-Day Rate:", `₹ ${payload.gross.toLocaleString()} ÷ ${payload.totalWorkingDaysInCycle} = ₹ ${payload.perDayGross.toFixed(2)}`],
-        ["LOP Amount:", `₹ ${payload.perDayGross.toFixed(2)} × ${payload.lopDays.toFixed(2)} = ₹ ${payload.lopAmount}`],
-      ],
-      margin: { left: 15 },
-      tableWidth: pageWidth - 30,
-    });
-
-    y = (doc as any).lastAutoTable.finalY + 5;
-
-    const earningsRows = [
-      ["Basic Pay", `₹ ${payload.basic.toFixed(2)}`],
-      ...payload.earnings.map((e: any) => [e.name, `₹ ${e.amount.toFixed(2)}`]),
-      ["Total Earnings", `₹ ${payload.earningsTotal.toFixed(2)}`],
-    ];
-
-    const dedRows = [
-      ...payload.deductions.map((d: any) => [d.name, `₹ ${d.amount.toFixed(2)}`]),
-      ["Loss of Pay", `₹ ${payload.lopAmount.toFixed(2)}`],
-      ["Total Deductions", `₹ ${(payload.deductionsTotal + payload.lopAmount).toFixed(2)}`],
-    ];
-
-    autoTable(doc, {
-      startY: y,
-      theme: "grid",
-      styles: { fontSize: 9, lineWidth: 0.1 },
-      headStyles: { fillColor: gray, textColor: [255, 255, 255], halign: "center" },
-      head: [
-        [
-          { content: "Earnings", colSpan: 2, styles: { halign: "center" } },
-          { content: "Deductions", colSpan: 2, styles: { halign: "center" } },
-        ],
-      ],
-      body: (() => {
-        const rows: any[] = [];
-        const max = Math.max(earningsRows.length, dedRows.length);
-        for (let i = 0; i < max; i++) {
-          rows.push([
-            earningsRows[i]?.[0] || "",
-            earningsRows[i]?.[1] || "",
-            dedRows[i]?.[0] || "",
-            dedRows[i]?.[1] || "",
-          ]);
-        }
-        return rows;
-      })(),
-      columnStyles: {
-        0: { cellWidth: 40 },
-        1: { cellWidth: 40 },
-        2: { cellWidth: 40 },
-        3: { cellWidth: 40 },
-      },
-      margin: { left: 15 },
-      tableWidth: pageWidth - 30,
-    });
-
-    y = (doc as any).lastAutoTable.finalY + 5;
-
-    // Final Calculation
-    autoTable(doc, {
-      startY: y,
-      theme: "grid",
-      styles: { fontSize: 10, lineWidth: 0.1, halign: "center" },
-      headStyles: { fillColor: gray, textColor: [255, 255, 255] },
-      head: [["Final Calculation", "Amount"]],
-      body: [
-        ["Total Earnings", `₹ ${payload.earningsTotal.toFixed(2)}`],
-        ["Total Deductions", `₹ ${(payload.deductionsTotal + payload.lopAmount).toFixed(2)}`],
-        ["Net Pay", `₹ ${payload.netPay.toFixed(0)}`],
-      ],
-      margin: { left: 15 },
-      tableWidth: pageWidth - 30,
-    });
-
-    y = (doc as any).lastAutoTable.finalY + 8;
-
-    doc.setFont("helvetica", "italic");
-    doc.setFontSize(9);
-    doc.text(
-      `Net Payable (in words): ${numberToWords(Math.max(0, Math.round(payload.netPay || 0)))}`,
-      15,
-      y
-    );
-
-    y += 15;
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(8);
-    doc.setTextColor(100, 100, 100);
-
-    // Calculation breakdown
-    doc.text(`Paid days: ${joiningDays} − LOP ${payload.lopDays.toFixed(2)} = ${payload.paidUnits.toFixed(2)}`, 15, y);
     y += 4;
-    doc.text(`LOP: ${lopBreakdown}; ₹${payload.perDayGross.toFixed(2)} × ${payload.lopDays.toFixed(2)} = ₹${payload.lopAmount}`, 15, y);
+    doc.setFont("times", "bold");
+    doc.setFontSize(12);
+    doc.text(monthTitle, pageWidth / 2, y, { align: "center" });
+    y += 5;
+    const empTop = y;
+    hLine(empTop);
 
-    y += 15;
-    doc.setDrawColor(0);
-    const empSigLineStart = pageWidth - 80;
-    const empSigLineEnd = pageWidth - 30;
-    doc.line(30, y, 80, y);
-    doc.line(empSigLineStart, y, empSigLineEnd, y);
-    doc.setFont("helvetica", "bold");
+    const empRowH = 5.7;
+    const leftRows: [string, string][] = [
+      ["Name:", empName],
+      ["Join Date:", formatJoinDate(emp.joiningDate)],
+      ["Designation:", desg],
+      ["Department:", dept],
+      ["Location:", location],
+      ["Effective Work Days:", formatAmount(payload.paidUnits)],
+      ["LOP:", formatAmount(payload.lopDays)],
+    ];
+    const rightRows: [string, string][] = [
+      ["Employee No:", blank(emp.employeeID)],
+      ["Bank Name:", blank(bank?.bankName)],
+      ["Bank Account No.:", blank(bank?.accNumber)],
+      ["PF No.:", blank(emp.pfNumber)],
+      ["PF UAN:", blank(emp.uanNo)],
+      ["PAN No.:", blank(emp.panNo)],
+    ];
+    const empRows = Math.max(leftRows.length, rightRows.length);
+    const halfW = boxW / 2;
+    const labelPad = 3.5;
+    const valueXOff = halfW * 0.42;
+
+    doc.setFont("times", "normal");
+    doc.setFontSize(9.5);
+    for (let i = 0; i < empRows; i++) {
+      const baseline = empTop + 4.2 + i * empRowH;
+      const left = leftRows[i];
+      if (left) {
+        doc.text(left[0], boxL + labelPad, baseline);
+        if (left[1]) doc.text(left[1], boxL + valueXOff, baseline);
+      }
+      const right = rightRows[i];
+      if (right) {
+        doc.text(right[0], midX + labelPad, baseline);
+        if (right[1]) doc.text(right[1], midX + valueXOff, baseline);
+      }
+    }
+
+    const empBottom = empTop + empRows * empRowH + 2.2;
+    hLine(empBottom);
+    vLine(midX, empTop, empBottom);
+
+    const leftHalf = boxW / 2;
+    const xEarn = boxL;
+    const xMaster = xEarn + leftHalf * 0.55;
+    const xEarnAmt = xMaster + leftHalf * 0.25;
+    const xDed = midX;
+    const xDedAmt = xDed + leftHalf * 0.75;
+    const headerH = 7;
+    const bodyH = 6;
+    const totalH = 7;
+    const tableTop = empBottom;
+    const headerBottom = tableTop + headerH;
+    const bodyBottom = headerBottom + rowCount * bodyH;
+    const totalsBottom = bodyBottom + totalH;
+
+    hLine(headerBottom);
+    vLine(xMaster, tableTop, totalsBottom);
+    vLine(xEarnAmt, tableTop, totalsBottom);
+    vLine(midX, tableTop, totalsBottom);
+    vLine(xDedAmt, tableTop, totalsBottom);
+
+    const headerBaseline = tableTop + 4.8;
+    doc.setFont("times", "bold");
+    doc.setFontSize(10);
+    doc.text("Earnings", xEarn + (xMaster - xEarn) / 2, headerBaseline, { align: "center" });
+    doc.text("Master", xMaster + (xEarnAmt - xMaster) / 2, headerBaseline, { align: "center" });
+    doc.text("Amount", xEarnAmt + (midX - xEarnAmt) / 2, headerBaseline, { align: "center" });
+    doc.text("Deductions", xDed + (xDedAmt - xDed) / 2, headerBaseline, { align: "center" });
+    doc.text("Amount", xDedAmt + (boxR - xDedAmt) / 2, headerBaseline, { align: "center" });
+
+    doc.setFont("times", "normal");
+    doc.setFontSize(9.5);
+    const amtPad = 2.5;
+    const namePad = 3;
+    for (let i = 0; i < rowCount; i++) {
+      const baseline = headerBottom + 4.2 + i * bodyH;
+      const earn = earnItems[i];
+      if (earn) {
+        doc.text(earn.name, xEarn + namePad, baseline);
+        doc.text(formatAmount(earn.amount), midX - amtPad, baseline, { align: "right" });
+      }
+      const ded = dedItems[i];
+      if (ded) {
+        doc.text(ded.name, xDed + namePad, baseline);
+        doc.text(formatAmount(ded.amount), boxR - amtPad, baseline, { align: "right" });
+      }
+    }
+
+    hLine(bodyBottom);
+    const totBaseline = bodyBottom + 4.8;
+    doc.setFont("times", "normal");
+    doc.setFontSize(10);
+    doc.text("Total Earnings", xEarn + namePad, totBaseline);
+    doc.text(formatAmount(earningsTotal), midX - amtPad, totBaseline, { align: "right" });
+    doc.text("Total Deductions", xDed + namePad, totBaseline);
+    doc.text(formatAmount(deductionsTotal), boxR - amtPad, totBaseline, { align: "right" });
+    hLine(totalsBottom);
+
+    const netTop = totalsBottom;
+    doc.setFont("times", "normal");
+    doc.setFontSize(10);
+    doc.text("Net Pay for the Month", boxL + namePad, netTop + 6);
+    doc.setFont("times", "bold");
+    doc.setFontSize(11);
+    doc.text(formatAmount(netPay), midX - amtPad, netTop + 6, { align: "right" });
+
+    doc.setFont("times", "italic");
     doc.setFontSize(9);
-    doc.text("Employer's Signature", 55, y + 5, { align: "center" });
+    doc.text(`(${numberToWords(netPay)})`, boxL + namePad, netTop + 13);
+
+    const footerY = netTop + 24;
+    doc.setFont("times", "normal");
+    doc.setFontSize(8.5);
     doc.text(
-      "Employee's Signature",
-      (empSigLineStart + empSigLineEnd) / 2,
-      y + 5,
+      "This is a system generated payslip and does not require signature.",
+      pageWidth / 2,
+      footerY,
       { align: "center" },
     );
 
-    y += 15;
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(7);
-    doc.setTextColor(100);
-    doc.text("This is a system generated document.", pageWidth / 2, y, { align: "center" });
-    doc.text(`Generated on: ${new Date().toLocaleDateString("en-IN")}`, pageWidth / 2, y + 4, { align: "center" });
+    const boxB = footerY + 6;
+    doc.setDrawColor(0);
+    doc.setLineWidth(0.45);
+    doc.rect(boxL, boxT, boxW, boxB - boxT);
 
-    const fn = `Salary_Slip_${payload.employee.employeeID || payload.employee.id}_${payload.start.getFullYear()}_${(
-      payload.start.getMonth() + 1
+    const startDate = payload.start instanceof Date ? payload.start : new Date(payload.start);
+    const fn = `Salary_Slip_${emp.employeeID || emp.id}_${startDate.getFullYear()}_${(
+      startDate.getMonth() + 1
     )
       .toString()
       .padStart(2, "0")}.pdf`;

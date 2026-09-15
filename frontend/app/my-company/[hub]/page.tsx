@@ -216,7 +216,9 @@ function CompanyHubPageInner() {
     );
   }
 
-  const activeId = searchParams.get("tab") || hub.tabs[0]?.id;
+  const rawTab = searchParams.get("tab");
+  const requested = hub.id === "leave" && rawTab === "holidays" ? "public-holiday" : rawTab;
+  const activeId = requested || hub.tabs[0]?.id;
   const activeTab = hub.tabs.find((t) => t.id === activeId) || hub.tabs[0];
 
   return (
