@@ -421,8 +421,10 @@ async function getMonthlyPayGrade(companyId: number, branchId: number, emp?: any
 }
 
 async function getCompanyAndBranch(companyId: number, branchId: number) {
-  const companies: any[] = await robustGet(API.co);
-  const branches: any[] = await robustGet(API.br);
+  const [companies, branches]: [any[], any[]] = await Promise.all([
+    robustGet(API.co),
+    robustGet(API.br),
+  ]);
   const company = companies.find((c: any) => c.id === companyId) || {};
   const branch = branches.find((b: any) => b.id === branchId) || {};
   return {
@@ -462,6 +464,19 @@ function countWeeklyOffOccurrences(
   }
 
   return count;
+}
+
+function weeklyOffLabel(shiftDays: any[], count: number) {
+  const abbrev = [
+    ...new Set(
+      (shiftDays || [])
+        .filter((d: any) => d.weeklyOff)
+        .map((d: any) => String(d.weekDay || "").slice(0, 3).toUpperCase())
+        .filter(Boolean),
+    ),
+  ];
+  if (!count) return "00";
+  return abbrev.length ? `${count}(${abbrev.join(",")})` : String(count);
 }
 
 async function getHolidayCount(branchId: number, start: Date, end: Date, companyId?: number) {
@@ -601,7 +616,7 @@ async function fetchProcessAttLogsForEmployee(empId: number, dateFrom: string, d
       offset: String(offset),
       orderBy: "asc",
     });
-    const raw: any = await robustGet(`/backend/process-att-logs?${params.toString()}`, { fresh: true });
+    const raw: any = await robustGet(`/backend/process-att-logs?${params.toString()}`);
     const items: any[] = Array.isArray(raw) ? raw : (raw?.data ?? []);
     all.push(...items);
     const hasMore = Boolean(raw?.hasMore) || (!Array.isArray(raw) && items.length === limit);
@@ -668,28 +683,17 @@ async function getReimbursementAmount(employeeId: number, selectedMonthLabel: st
    ======================= */
 
 async function fetchAllLogs(empId: number, dateFrom: string, dateTo: string): Promise<any[]> {
-  const all: any[] = [];
-
-  try {
-    const res: any[] = await robustGet(API.empAttendanceLogs);
-    all.push(...(Array.isArray(res) ? res : []));
-  } catch (err) {
-    console.error("Failed to fetch /emp-attendance-logs", err);
-  }
-
   try {
     const items = await fetchProcessAttLogsForEmployee(empId, dateFrom, dateTo);
-    const normalized = items.map((r: any) => ({
+    return items.map((r: any) => ({
       ...r,
       employeeID: r.manage_employee_id ?? r.employeeID,
       punchTimeStamp: r.punch_time ?? r.punchTimeStamp,
     }));
-    all.push(...normalized);
   } catch (err) {
     console.error("Failed to fetch /process-att-logs", err);
+    return [];
   }
-
-  return all;
 }
 
 async function calculateSalaryCounts(
@@ -697,7 +701,8 @@ async function calculateSalaryCounts(
   monthLabel: string,
   companyId: number,
   branchId: number,
-  effectiveStartParam?: Date
+  effectiveStartParam?: Date,
+  empOverride?: any,
 ) {
   try {
     const monthNum = (name: string) => {
@@ -733,9 +738,12 @@ async function calculateSalaryCounts(
       return new Date(local);
     };
 
-    const empList: any[] = await robustGet(API.emp);
-    let emp = empList.find((e) => e.id === employeeId) ??
-      empList.find((e) => [e.employeeID, e.empId, e.employeeId].includes(employeeId as any));
+    let emp = empOverride;
+    if (!emp) {
+      const empList: any[] = await robustGet(API.emp);
+      emp = empList.find((e) => e.id === employeeId) ??
+        empList.find((e) => [e.employeeID, e.empId, e.employeeId].includes(employeeId as any));
+    }
     if (!emp) throw new Error("Employee not found: " + employeeId);
 
     // Fallback: if scalar IDs are null, derive from history child records (most recent effectFrom)
@@ -789,7 +797,28 @@ async function calculateSalaryCounts(
 
     const DEBUG_LOP = false; // set to false in production
 
-    const policies: any[] = await robustGet(API.attendancePolicy);
+    const logFrom = ymd(startDate);
+    const logToDate = new Date(endDate);
+    logToDate.setDate(logToDate.getDate() + 1);
+
+    const [
+      policies,
+      workShifts,
+      rostersRaw,
+      holidays,
+      leaves,
+      regs,
+      allLogs,
+    ]: [any[], any[], any[], any[], any[], any[], any[]] = await Promise.all([
+      robustGet(API.attendancePolicy),
+      robustGet(API.workShift),
+      robustGet(API.rosters),
+      robustGet(API.publicHoliday),
+      robustGet(API.leaveApplication),
+      robustGet(API.empAttendanceRegularise),
+      fetchAllLogs(Number(emp.id), logFrom, ymd(logToDate)),
+    ]);
+
     const policy = policies.find((p: any) => p.id === effectiveAttPolicyID) ?? {};
     const workingType = (policy?.workingHoursType ?? "").toLowerCase();
     const checkinBeginBeforeMin = readNum(policy, "checkin_begin_before_min", "checkinBeginBeforeMin") ?? 0;
@@ -802,16 +831,13 @@ async function calculateSalaryCounts(
     const lateMarkMarkAsAction = (policy?.lateMarkMarkAs ?? policy?.markAs ?? "Half Day").toString().toLowerCase();
     const maxLateCheckinMarkAs = (policy?.maxLateCheckinMarkAs ?? "Absent").toString().toLowerCase();
 
-    const workShifts: any[] = await robustGet(API.workShift);
     const empShift = workShifts.find((ws: any) => ws.id === effectiveWorkShiftID);
     if (!empShift) return null;
     const isFlexible = workingType.includes("flex") || empShift?.isFlexible === true;
     const shiftDays: any[] = empShift.workShiftDay ?? [];
     const weeklyOffDays = new Set(shiftDays.filter((d: any) => d.weeklyOff).map((d: any) => d.weekDay));
 
-    // Fetch roster data so we can respect temporary work shift overrides per date.
-    const rostersRaw: any[] = await robustGet(API.rosters);
-    const rosterEmployees = rostersRaw.flatMap((r: any) => r.employees ?? []);
+    const rosterEmployees = (rostersRaw || []).flatMap((r: any) => r.employees ?? []);
     const empRosterEntry = rosterEmployees.find((re: any) => re.employeeID === employeeId) ?? null;
 
     // Parse "HH:MM" or full ISO datetime strings into { h, m }
@@ -858,9 +884,8 @@ async function calculateSalaryCounts(
       return { shiftStart, shiftEnd, earliestIn, latestOut, graceEnd, lateEnd, earlyOutStart, fullMinutes, weekDay: sd.weekDay };
     };
 
-    const holidays: any[] = await robustGet(API.publicHoliday);
     const holidaySet = new Set<string>();
-    for (const h of holidays) {
+    for (const h of holidays || []) {
       if (!holidayMatchesCompanyBranch(h, companyId, branchId)) continue;
       const hs = isoDatePrefix(h.startDate);
       const he = isoDatePrefix(h.endDate) || hs;
@@ -870,8 +895,7 @@ async function calculateSalaryCounts(
       }
     }
 
-    const leaves: any[] = await robustGet(API.leaveApplication);
-    const empLeaves = leaves.filter(
+    const empLeaves = (leaves || []).filter(
       (l) =>
         l.manageEmployeeID === employeeId &&
         l.status === "Approved"   // 🔥 ONLY approved leaves affect salary
@@ -886,16 +910,11 @@ async function calculateSalaryCounts(
       }
     }
 
-    const regs: any[] = await robustGet(API.empAttendanceRegularise);
-    const empRegs = regs.filter((r) => r.manageEmployeeID === employeeId && r.status === "Approved");
+    const empRegs = (regs || []).filter((r) => r.manageEmployeeID === employeeId && r.status === "Approved");
     const regulariseMap = new Map<string, any>();
     for (const r of empRegs) regulariseMap.set(ymd(new Date(r.attendanceDate)), r);
 
-    const logFrom = ymd(startDate);
-    const logToDate = new Date(endDate);
-    logToDate.setDate(logToDate.getDate() + 1);
-    const allLogs = await fetchAllLogs(Number(emp.id), logFrom, ymd(logToDate));
-    const logs = allLogs.filter((l: any) => String(l.employeeID) === String(emp.id) || String(l.employeeID) === String(emp.employeeID))
+    const logs = (allLogs || []).filter((l: any) => String(l.employeeID) === String(emp.id) || String(l.employeeID) === String(emp.employeeID))
       .map((l: any) => ({ ...l, t: parseCDataTs(l.punchTimeStamp) }))
       .filter((l: any) => l.t >= startDate && l.t <= endDate)
       .sort((a: any, b: any) => a.t.getTime() - b.t.getTime());
@@ -907,6 +926,8 @@ async function calculateSalaryCounts(
     }
 
     let flex_fullDayPresent = 0, flex_halfDayPresent = 0, flex_absent = 0;
+    let paidLeaveDays = 0;
+    let punchPresentDays = 0;
     const lateMarksByMonth = new Map<string, number>();
 
     // Loop through each day in the effective period
@@ -984,6 +1005,7 @@ async function calculateSalaryCounts(
             debug.final = "LEAVE → LOP";
           } else {
             flex_fullDayPresent++;      // ← PAID LEAVE
+            paidLeaveDays++;
             debug.final = "LEAVE → PAID";
           }
 
@@ -1055,9 +1077,11 @@ async function calculateSalaryCounts(
       debug.logs = (logsByDate.get(key) || []).length;
       if (dayStatus === "full") {
         flex_fullDayPresent++;
+        punchPresentDays += 1;
         debug.final = "ATTENDANCE → FULL";
       } else if (dayStatus === "half") {
         flex_halfDayPresent++;
+        punchPresentDays += 0.5;
         debug.final = "ATTENDANCE → HALF";
       } else {
         flex_absent++;
@@ -1075,6 +1099,8 @@ async function calculateSalaryCounts(
       flex_fullDayPresent,
       flex_halfDayPresent,
       flex_absent,
+      paidLeaveDays,
+      punchPresentDays,
       lateMarksByMonth,
       lateMarkCount
     };
@@ -1100,12 +1126,19 @@ export type SalarySlipComputed = {
   lopDays: number
   nonLoPLeaveDays: number
   weeklyOffDays: number
+  weeklyOffDisplay: string
   holidays: number
+  unpaidHolidays: number
+  workingDays: number
+  presentDays: number
+  maxPayableDays: number
   halfDaysUnits: number
   gross: number
   basic: number
   earnings: { name: string; amount: number }[]
   deductions: { name: string; amount: number }[]
+  earningRows: { name: string; monthly: number; payable: number }[]
+  deductionRows: { name: string; monthly: number; amount: number }[]
   lopAmount: number
   earningsTotal: number
   deductionsTotal: number
@@ -1120,42 +1153,12 @@ export type SalarySlipComputed = {
    PDF generation
    ======================= */
 
-export function downloadSalarySlipPDF(payload: {
-  companyName: string;
-  branchName: string;
-  employee: any;
-  monthLabel: string;
-  start: Date;
-  end: Date;
-  cycleDays: number;
-  paidUnits: number;
-  joiningCalendarDays: number;
-  absentCount: number;
-  halfDayCount: number;
-  lopDays: number;
-  nonLoPLeaveDays: number;
-  weeklyOffDays: number;
-  holidays: number;
-  halfDaysUnits: number;
-  gross: number;
-  basic: number;
-  earnings: { name: string; amount: number }[];
-  deductions: { name: string; amount: number }[];
-  lopAmount: number;
-  earningsTotal: number;
-  deductionsTotal: number;
-  netPay: number;
-  perDayGross: number;
-  perDayBasic: number;
-  proRatedGross: number;
-  totalWorkingDaysInCycle: number;
-}) {
-
+export function downloadSalarySlipPDF(payload: SalarySlipComputed) {
   function numberToWords(amount: number): string {
     const ones = [
       "", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine",
       "Ten", "Eleven", "Twelve", "Thirteen", "Fourteen", "Fifteen",
-      "Sixteen", "Seventeen", "Eighteen", "Nineteen"
+      "Sixteen", "Seventeen", "Eighteen", "Nineteen",
     ];
     const tens = ["", "", "Twenty", "Thirty", "Forty", "Fifty", "Sixty", "Seventy", "Eighty", "Ninety"];
 
@@ -1168,10 +1171,8 @@ export function downloadSalarySlipPDF(payload: {
       return numToWords(Math.floor(n / 10000000)) + " Crore" + (n % 10000000 ? " " + numToWords(n % 10000000) : "");
     }
 
-    const [rupees, paise] = amount.toFixed(2).split(".").map(Number);
-    let words = `Rupees ${numToWords(rupees)}`;
-    if (paise > 0) words += ` and ${numToWords(paise)} Paise`;
-    return words + " Only";
+    const rupees = Math.round(Math.abs(amount));
+    return `Rs. ${numToWords(rupees)} Only`;
   }
 
   const blank = (v: unknown) => {
@@ -1181,252 +1182,302 @@ export function downloadSalarySlipPDF(payload: {
     return s;
   };
 
-  const formatAmount = (n: number) => {
-    if (!Number.isFinite(n)) return "";
-    const rounded = Math.round(n * 100) / 100;
-    if (Math.abs(rounded - Math.round(rounded)) < 0.001) return String(Math.round(rounded));
-    return rounded.toFixed(2);
+  const money = (n: number) => {
+    if (!Number.isFinite(n)) return "0.00";
+    return n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   };
 
-  const formatJoinDate = (raw?: string | null) => {
+  const pad2 = (n: number) => String(Math.round(n)).padStart(2, "0");
+
+  const formatDoj = (raw?: string | null) => {
     if (!raw) return "";
     const d = new Date(String(raw).includes("T") ? raw : `${raw}T00:00:00`);
     if (Number.isNaN(d.getTime())) return "";
-    return d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+    const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+    return `${months[d.getMonth()]} ${String(d.getDate()).padStart(2, "0")}, ${d.getFullYear()}`;
   };
 
   try {
     const doc = new jsPDF("p", "mm", "a4");
     const pageWidth = doc.internal.pageSize.width;
-    const boxL = 12;
-    const boxR = pageWidth - 12;
-    const boxT = 12;
+    const boxL = 10;
+    const boxR = pageWidth - 10;
     const boxW = boxR - boxL;
     const midX = boxL + boxW / 2;
-    const lineW = 0.35;
-    const emp = payload.employee || {};
+    const lineW = 0.3;
+    const p = payload as SalarySlipComputed & Record<string, any>;
+    const emp = p.employee || {};
     const company = emp.company || {};
     const branch = emp.branches || {};
     const bank = Array.isArray(emp.employeeBankDetails) ? emp.employeeBankDetails[0] : null;
 
-    const companyName = blank(payload.companyName || company.companyName || "Company").toUpperCase();
-    const addressLines: string[] = [];
-    if (blank(company.address)) addressLines.push(blank(company.address));
-    const cityPin = [blank(company.city), blank(company.pincode)].filter(Boolean).join(" - ");
-    if (cityPin) addressLines.push(`${cityPin},`);
-    if (blank(company.state)) addressLines.push(`${blank(company.state)},`);
-    if (blank(company.country)) addressLines.push(blank(company.country));
-
-    const periodDate =
-      payload.end && !Number.isNaN(new Date(payload.end).getTime())
-        ? new Date(payload.end)
-        : payload.start && !Number.isNaN(new Date(payload.start).getTime())
-          ? new Date(payload.start)
-          : null;
-    const monthTitle = periodDate
-      ? `Payslip for the month of ${periodDate.toLocaleString("en-GB", { month: "short" })} ${periodDate.getFullYear()}`
-      : `Payslip for the month of ${blank(payload.monthLabel)}`;
-
-    const empName = `${blank(emp.employeeFirstName)} ${blank(emp.employeeLastName)}`.trim();
-    const dept = blank(emp.departments?.departmentName);
-    const desg = blank(emp.designations?.designation);
-    const location = blank(company.city) || blank(branch.city);
-
-    const isBasicName = (name: string) => /^basic(\s*pay)?$/i.test(name.trim());
-    const earnItems = [
-      { name: "BASIC", amount: payload.basic },
-      ...(payload.earnings || [])
-        .filter((e) => !isBasicName(String(e?.name || "")))
-        .map((e) => ({ name: String(e.name || "").toUpperCase(), amount: Number(e.amount) || 0 })),
-    ];
-    const dedItems = [
-      ...(payload.deductions || []).map((d) => ({
-        name: String(d.name || "").toUpperCase(),
-        amount: Number(d.amount) || 0,
-      })),
-    ];
-    if ((payload.lopAmount || 0) > 0) {
-      dedItems.push({ name: "LOSS OF PAY", amount: payload.lopAmount });
-    }
-    const earningsTotal = payload.earningsTotal;
-    const deductionsTotal = payload.deductionsTotal + ((payload.lopAmount || 0) > 0 ? payload.lopAmount : 0);
-    const netPay = Math.max(0, Math.round(payload.netPay || 0));
-    const rowCount = Math.max(earnItems.length, dedItems.length, 1);
-
-    const hLine = (y: number) => {
+    const hLine = (y: number, x1 = boxL, x2 = boxR) => {
       doc.setDrawColor(0);
       doc.setLineWidth(lineW);
-      doc.line(boxL, y, boxR, y);
+      doc.line(x1, y, x2, y);
     };
     const vLine = (x: number, y1: number, y2: number) => {
       doc.setDrawColor(0);
       doc.setLineWidth(lineW);
       doc.line(x, y1, x, y2);
     };
+    const rect = (x: number, y: number, w: number, h: number) => {
+      doc.setDrawColor(0);
+      doc.setLineWidth(lineW);
+      doc.rect(x, y, w, h);
+    };
+
+    const drawKvTable = (
+      top: number,
+      leftRows: [string, string][],
+      rightRows: [string, string][],
+      rowH: number,
+    ) => {
+      const n = Math.max(leftRows.length, rightRows.length);
+      const bottom = top + n * rowH;
+      rect(boxL, top, boxW, bottom - top);
+      vLine(midX, top, bottom);
+      for (let i = 1; i < n; i++) hLine(top + i * rowH);
+      const halfW = boxW / 2;
+      const labelX = (side: "L" | "R") => (side === "L" ? boxL : midX) + 2.2;
+      const colonX = (side: "L" | "R") => (side === "L" ? boxL : midX) + halfW * 0.30;
+      const valueX = (side: "L" | "R") => (side === "L" ? boxL : midX) + halfW * 0.34;
+      for (let i = 0; i < n; i++) {
+        const baseline = top + rowH * i + rowH * 0.68;
+        const left = leftRows[i];
+        const right = rightRows[i];
+        doc.setFont("times", "normal");
+        doc.setFontSize(8.5);
+        if (left) {
+          doc.text(left[0], labelX("L"), baseline);
+          doc.text(":", colonX("L"), baseline);
+          doc.setFont("times", "bold");
+          if (left[1]) doc.text(left[1], valueX("L"), baseline);
+          doc.setFont("times", "normal");
+        }
+        if (right) {
+          doc.text(right[0], labelX("R"), baseline);
+          doc.text(":", colonX("R"), baseline);
+          doc.setFont("times", "bold");
+          if (right[1]) doc.text(right[1], valueX("R"), baseline);
+          doc.setFont("times", "normal");
+        }
+      }
+      return bottom;
+    };
 
     doc.setTextColor(0, 0, 0);
-    let y = boxT + 9;
+    let y = 14;
 
+    const companyName = blank(p.companyName || company.companyName || "Company").toUpperCase();
     doc.setFont("times", "bold");
-    doc.setFontSize(14);
+    doc.setFontSize(13.5);
     doc.text(companyName, pageWidth / 2, y, { align: "center" });
     y += 5;
 
-    doc.setFont("times", "normal");
-    doc.setFontSize(8.5);
-    const addrMax = boxW - 10;
-    for (const line of addressLines) {
-      const wrapped = doc.splitTextToSize(line, addrMax);
-      for (const w of wrapped) {
-        doc.text(w, pageWidth / 2, y, { align: "center" });
-        y += 3.8;
-      }
+    const addressLines: string[] = [];
+    if (blank(company.address)) addressLines.push(blank(company.address));
+    const cityPin = [blank(company.city), blank(company.pincode)].filter(Boolean).join(" - ");
+    const addrJoined = addressLines.join(" ").toLowerCase();
+    if (cityPin && !addrJoined.includes(blank(company.city).toLowerCase())) {
+      addressLines.push(cityPin);
     }
-
-    y += 4;
     doc.setFont("times", "bold");
-    doc.setFontSize(12);
-    doc.text(monthTitle, pageWidth / 2, y, { align: "center" });
-    y += 5;
-    const empTop = y;
-    hLine(empTop);
-
-    const empRowH = 5.7;
-    const leftRows: [string, string][] = [
-      ["Name:", empName],
-      ["Join Date:", formatJoinDate(emp.joiningDate)],
-      ["Designation:", desg],
-      ["Department:", dept],
-      ["Location:", location],
-      ["Effective Work Days:", formatAmount(payload.paidUnits)],
-      ["LOP:", formatAmount(payload.lopDays)],
-    ];
-    const rightRows: [string, string][] = [
-      ["Employee No:", blank(emp.employeeID)],
-      ["Bank Name:", blank(bank?.bankName)],
-      ["Bank Account No.:", blank(bank?.accNumber)],
-      ["PF No.:", blank(emp.pfNumber)],
-      ["PF UAN:", blank(emp.uanNo)],
-      ["PAN No.:", blank(emp.panNo)],
-    ];
-    const empRows = Math.max(leftRows.length, rightRows.length);
-    const halfW = boxW / 2;
-    const labelPad = 3.5;
-    const valueXOff = halfW * 0.42;
-
-    doc.setFont("times", "normal");
-    doc.setFontSize(9.5);
-    for (let i = 0; i < empRows; i++) {
-      const baseline = empTop + 4.2 + i * empRowH;
-      const left = leftRows[i];
-      if (left) {
-        doc.text(left[0], boxL + labelPad, baseline);
-        if (left[1]) doc.text(left[1], boxL + valueXOff, baseline);
-      }
-      const right = rightRows[i];
-      if (right) {
-        doc.text(right[0], midX + labelPad, baseline);
-        if (right[1]) doc.text(right[1], midX + valueXOff, baseline);
-      }
-    }
-
-    const empBottom = empTop + empRows * empRowH + 2.2;
-    hLine(empBottom);
-    vLine(midX, empTop, empBottom);
-
-    const leftHalf = boxW / 2;
-    const xEarn = boxL;
-    const xMaster = xEarn + leftHalf * 0.55;
-    const xEarnAmt = xMaster + leftHalf * 0.25;
-    const xDed = midX;
-    const xDedAmt = xDed + leftHalf * 0.75;
-    const headerH = 7;
-    const bodyH = 6;
-    const totalH = 7;
-    const tableTop = empBottom;
-    const headerBottom = tableTop + headerH;
-    const bodyBottom = headerBottom + rowCount * bodyH;
-    const totalsBottom = bodyBottom + totalH;
-
-    hLine(headerBottom);
-    vLine(xMaster, tableTop, totalsBottom);
-    vLine(xEarnAmt, tableTop, totalsBottom);
-    vLine(midX, tableTop, totalsBottom);
-    vLine(xDedAmt, tableTop, totalsBottom);
-
-    const headerBaseline = tableTop + 4.8;
-    doc.setFont("times", "bold");
-    doc.setFontSize(10);
-    doc.text("Earnings", xEarn + (xMaster - xEarn) / 2, headerBaseline, { align: "center" });
-    doc.text("Master", xMaster + (xEarnAmt - xMaster) / 2, headerBaseline, { align: "center" });
-    doc.text("Amount", xEarnAmt + (midX - xEarnAmt) / 2, headerBaseline, { align: "center" });
-    doc.text("Deductions", xDed + (xDedAmt - xDed) / 2, headerBaseline, { align: "center" });
-    doc.text("Amount", xDedAmt + (boxR - xDedAmt) / 2, headerBaseline, { align: "center" });
-
-    doc.setFont("times", "normal");
-    doc.setFontSize(9.5);
-    const amtPad = 2.5;
-    const namePad = 3;
-    for (let i = 0; i < rowCount; i++) {
-      const baseline = headerBottom + 4.2 + i * bodyH;
-      const earn = earnItems[i];
-      if (earn) {
-        doc.text(earn.name, xEarn + namePad, baseline);
-        doc.text(formatAmount(earn.amount), midX - amtPad, baseline, { align: "right" });
-      }
-      const ded = dedItems[i];
-      if (ded) {
-        doc.text(ded.name, xDed + namePad, baseline);
-        doc.text(formatAmount(ded.amount), boxR - amtPad, baseline, { align: "right" });
-      }
-    }
-
-    hLine(bodyBottom);
-    const totBaseline = bodyBottom + 4.8;
-    doc.setFont("times", "normal");
-    doc.setFontSize(10);
-    doc.text("Total Earnings", xEarn + namePad, totBaseline);
-    doc.text(formatAmount(earningsTotal), midX - amtPad, totBaseline, { align: "right" });
-    doc.text("Total Deductions", xDed + namePad, totBaseline);
-    doc.text(formatAmount(deductionsTotal), boxR - amtPad, totBaseline, { align: "right" });
-    hLine(totalsBottom);
-
-    const netTop = totalsBottom;
-    doc.setFont("times", "normal");
-    doc.setFontSize(10);
-    doc.text("Net Pay for the Month", boxL + namePad, netTop + 6);
-    doc.setFont("times", "bold");
-    doc.setFontSize(11);
-    doc.text(formatAmount(netPay), midX - amtPad, netTop + 6, { align: "right" });
-
-    doc.setFont("times", "italic");
     doc.setFontSize(9);
-    doc.text(`(${numberToWords(netPay)})`, boxL + namePad, netTop + 13);
+    const wrappedAddr = doc.splitTextToSize(addressLines.join(", "), boxW - 8) as string[];
+    for (const line of wrappedAddr) {
+      doc.text(line, pageWidth / 2, y, { align: "center" });
+      y += 3.7;
+    }
 
-    const footerY = netTop + 24;
+    y += 2;
     doc.setFont("times", "normal");
-    doc.setFontSize(8.5);
-    doc.text(
-      "This is a system generated payslip and does not require signature.",
-      pageWidth / 2,
-      footerY,
-      { align: "center" },
+    doc.setFontSize(9);
+    const contact = blank(company.contactNo);
+    const email = blank(company.emailAdd);
+    doc.text(`Contact : ${contact}`, boxL + 4, y);
+    doc.text(`E-mail : ${email}`, boxR - 4, y, { align: "right" });
+    y += 4;
+    doc.text(`PAN : ${blank(company.panNo)}`, boxL + 4, y);
+    doc.text(`GST : ${blank(company.gstNo)}`, boxR - 4, y, { align: "right" });
+    y += 6;
+
+    const periodDate =
+      p.end && !Number.isNaN(new Date(p.end).getTime())
+        ? new Date(p.end)
+        : p.start && !Number.isNaN(new Date(p.start).getTime())
+          ? new Date(p.start)
+          : null;
+    const monthYear = periodDate
+      ? periodDate.toLocaleString("en-US", { month: "long", year: "numeric" })
+      : blank(p.monthLabel);
+    doc.setFont("times", "bold");
+    doc.setFontSize(13);
+    doc.text(`PAY SLIP For the Month of ${monthYear}`, pageWidth / 2, y, { align: "center" });
+    y += 4;
+
+    const empName = `${blank(emp.employeeFirstName)} ${blank(emp.employeeLastName)}`.trim();
+    const dept = blank(emp.departments?.departmentName);
+    const desg = blank(emp.designations?.designation);
+    const location = blank(company.city) || blank(branch.city);
+    const phone = blank(emp.personalPhoneNo) || blank(emp.businessPhoneNo);
+    const mail = blank(emp.personalEmail) || blank(emp.businessEmail);
+
+    y = drawKvTable(
+      y,
+      [
+        ["Emp ID", blank(emp.employeeID)],
+        ["Employee Name", empName],
+        ["DOJ", formatDoj(emp.joiningDate)],
+        ["Department", dept],
+        ["Designation", desg],
+        ["Gender", blank(emp.gender)],
+        ["Contact", phone],
+      ],
+      [
+        ["PAN", blank(emp.panNo)],
+        ["UAN", blank(emp.uanNo)],
+        ["ESI No.", blank(emp.esiNo)],
+        ["Bank A/c No.", blank(bank?.accNumber)],
+        ["Bank Name", blank(bank?.bankName)],
+        ["Bank IFSC", blank(bank?.ifscCode)],
+        ["Office Location", location],
+        ["E-mail", mail],
+      ],
+      5.6,
     );
 
-    const boxB = footerY + 6;
-    doc.setDrawColor(0);
-    doc.setLineWidth(0.45);
-    doc.rect(boxL, boxT, boxW, boxB - boxT);
+    const daysDisp = (n: unknown, twoDigit = false) => {
+      const v = Number(n);
+      if (!Number.isFinite(v)) return "";
+      if (Math.abs(v - Math.round(v)) < 0.001) return twoDigit ? pad2(v) : String(Math.round(v));
+      return String(v);
+    };
+    const attLeft: [string, string][] = [
+      ["Total Days", daysDisp(p.maxPayableDays ?? p.totalWorkingDaysInCycle, true)],
+      ["Weekly-Off", blank(p.weeklyOffDisplay) || daysDisp(p.weeklyOffDays, true)],
+      ["Paid Holidays", daysDisp(p.holidays, true)],
+      ["Unpaid Holidays", daysDisp(p.unpaidHolidays, true)],
+      ["Working Days", daysDisp(p.workingDays, true)],
+    ];
+    const attRight: [string, string][] = [
+      ["Paid Leaves", daysDisp(p.nonLoPLeaveDays, true)],
+      ["LOP", daysDisp(p.lopDays, true)],
+      ["Present Days", daysDisp(p.presentDays, true)],
+      ["Max Payable Days", daysDisp(p.maxPayableDays ?? p.totalWorkingDaysInCycle, true)],
+      ["Net Paid Days", daysDisp(p.paidUnits, true)],
+    ];
+    y = drawKvTable(y, attLeft, attRight, 5.6);
 
-    const startDate = payload.start instanceof Date ? payload.start : new Date(payload.start);
-    const fn = `Salary_Slip_${emp.employeeID || emp.id}_${startDate.getFullYear()}_${(
-      startDate.getMonth() + 1
-    )
-      .toString()
-      .padStart(2, "0")}.pdf`;
+    y += 4;
+    const earnRows = p.earningRows?.length
+      ? p.earningRows
+      : [
+          { name: "Basic", monthly: p.gross || 0, payable: p.basic || 0 },
+          ...(p.earnings || []).map((e) => ({ name: e.name, monthly: e.amount, payable: e.amount })),
+        ];
+    const dedRows = p.deductionRows?.length
+      ? p.deductionRows
+      : [
+          ...(p.deductions || []).map((d) => ({ name: d.name, monthly: d.amount, amount: d.amount })),
+          ...((p.lopAmount || 0) > 0 ? [{ name: "LOSS OF PAY", monthly: p.lopAmount, amount: p.lopAmount }] : []),
+        ];
+    const payRows = Math.max(earnRows.length, dedRows.length, 1);
+    const headerH = 6.2;
+    const bodyH = 5.6;
+    const totalH = 6.2;
+    const payTop = y;
+    const headerBot = payTop + headerH;
+    const bodyBot = headerBot + payRows * bodyH;
+    const totalsBot = bodyBot + totalH;
+    const x = [
+      boxL,
+      boxL + boxW * 0.28,
+      boxL + boxW * 0.39,
+      boxL + boxW * 0.50,
+      boxL + boxW * 0.78,
+      boxL + boxW * 0.89,
+      boxR,
+    ];
+    rect(boxL, payTop, boxW, totalsBot - payTop);
+    hLine(headerBot);
+    for (let i = 1; i <= 5; i++) vLine(x[i], payTop, totalsBot);
+    for (let i = 1; i < payRows; i++) hLine(headerBot + i * bodyH);
+    doc.setLineWidth(0.55);
+    hLine(bodyBot);
+    doc.setLineWidth(lineW);
+
+    doc.setFont("times", "bold");
+    doc.setFontSize(9);
+    const heads = ["Earnings", "Monthly", "Payable", "Deductions", "Monthly", "Amount"];
+    for (let i = 0; i < 6; i++) {
+      doc.text(heads[i], (x[i] + x[i + 1]) / 2, payTop + 4.2, { align: "center" });
+    }
+
+    doc.setFont("times", "normal");
+    doc.setFontSize(8.5);
+    const amtPad = 1.8;
+    const namePad = 2;
+    for (let i = 0; i < payRows; i++) {
+      const baseline = headerBot + i * bodyH + bodyH * 0.68;
+      const er = earnRows[i];
+      const dr = dedRows[i];
+      if (er) {
+        doc.text(er.name, x[0] + namePad, baseline);
+        doc.text(money(er.monthly), x[2] - amtPad, baseline, { align: "right" });
+        doc.text(money(er.payable), x[3] - amtPad, baseline, { align: "right" });
+      }
+      if (dr) {
+        doc.text(dr.name, x[3] + namePad, baseline);
+        doc.text(money(dr.monthly), x[5] - amtPad, baseline, { align: "right" });
+        doc.text(money(dr.amount), x[6] - amtPad, baseline, { align: "right" });
+      }
+    }
+
+    const totPay = earnRows.reduce((s, e) => s + Number(e.payable || 0), 0);
+    const totDed = dedRows.reduce((s, d) => s + Number(d.amount || 0), 0);
+    const totBase = bodyBot + totalH * 0.68;
+    doc.setFont("times", "bold");
+    doc.setFontSize(9);
+    doc.text("Total Earnings", x[0] + namePad, totBase);
+    doc.text(money(totPay), x[3] - amtPad, totBase, { align: "right" });
+    doc.text("Total Deductions", x[3] + namePad, totBase);
+    doc.text(money(totDed), x[6] - amtPad, totBase, { align: "right" });
+
+    y = totalsBot;
+    const sumH = 16;
+    rect(boxL, y, boxW, sumH);
+    const colonX = boxL + 32;
+    const netPay = Math.max(0, Math.round(p.netPay || 0));
+    doc.setFont("times", "bold");
+    doc.setFontSize(9);
+    doc.text("Payable Gross", boxL + 2.2, y + 4.5);
+    doc.text(":", colonX, y + 4.5);
+    doc.text(`Rs. ${money(totPay)}`, colonX + 4, y + 4.5);
+    doc.text("Net Pay", boxL + 2.2, y + 9);
+    doc.text(":", colonX, y + 9);
+    doc.text(`Rs. ${money(netPay)}`, colonX + 4, y + 9);
+    doc.text("In Words", boxL + 2.2, y + 13.5);
+    doc.text(":", colonX, y + 13.5);
+    doc.text(numberToWords(netPay), colonX + 4, y + 13.5);
+
+    y += sumH;
+    const footH = 20;
+    rect(boxL, y, boxW, footH);
+    doc.setFont("times", "bold");
+    doc.setFontSize(9);
+    doc.text("This is Computer Generated Slip, does not require Signature", boxL + 2.2, y + 5);
+    doc.setFont("times", "normal");
+    doc.setFontSize(8.5);
+    doc.text("Employee Signature", boxL + boxW / 4, y + footH - 3.5, { align: "center" });
+    doc.text("Authorised Signatory", boxL + (boxW * 3) / 4, y + footH - 3.5, { align: "center" });
+
+    const startDate = p.start instanceof Date ? p.start : new Date(p.start);
+    const fn = `Salary_Slip_${emp.employeeID || emp.id}_${startDate.getFullYear()}_${String(
+      startDate.getMonth() + 1,
+    ).padStart(2, "0")}.pdf`;
     doc.save(fn);
-  }
-  catch (err) {
+  } catch (err) {
     console.error("Error generating salary slip:", err);
     toast.error("Error generating salary slip. Please check console for details.");
   }
@@ -1479,21 +1530,34 @@ export async function computeSalarySlipForRow(
      KEEP YOUR EXISTING ATTENDANCE
   =============================== */
 
-  const shiftDays = await getShiftDays(emp)
-
+  const [
+    shiftDays,
+    holidaysEffective,
+    counts,
+    grade,
+    names,
+    reimbursementAmount,
+    advanceRepayments,
+  ] = await Promise.all([
+    getShiftDays(emp),
+    getHolidayCount(branchId, effectiveStart, effectiveEnd, companyId),
+    calculateSalaryCounts(
+      employeeId,
+      monthLabel,
+      companyId,
+      branchId,
+      effectiveStart,
+      emp,
+    ),
+    getMonthlyPayGrade(companyId, branchId, emp),
+    getCompanyAndBranch(companyId, branchId),
+    getReimbursementAmount(employeeId, monthLabel),
+    getSalaryAdvanceRepayments(employeeId, monthLabel),
+  ])
+  const { companyName, branchName } = names
   const weeklyOffDaysEffective =
     countWeeklyOffOccurrences(shiftDays, effectiveStart, effectiveEnd)
 
-  const holidaysEffective =
-    await getHolidayCount(branchId, effectiveStart, effectiveEnd, companyId)
-
-  const counts = await calculateSalaryCounts(
-    employeeId,
-    monthLabel,
-    companyId,
-    branchId,
-    effectiveStart,
-  )
   // If counts is null (e.g. employee has no work shift assigned), default to 0 absent days → no LOP
   const fullDays = Number(counts?.flex_fullDayPresent || 0)
   const halfDays = Number(counts?.flex_halfDayPresent || 0)
@@ -1510,10 +1574,6 @@ export async function computeSalarySlipForRow(
   /* ===============================
      SALARY BASE
   =============================== */
-
-  const grade = await getMonthlyPayGrade(companyId, branchId, emp)
-  const { companyName, branchName } =
-    await getCompanyAndBranch(companyId, branchId)
 
   const monthlyGross = getGrossFromEmp(emp, grade)
 
@@ -1587,9 +1647,6 @@ export async function computeSalarySlipForRow(
     amount: Math.round(a.amount * proRateRatio)
   }))
 
-  const reimbursementAmount =
-    await getReimbursementAmount(employeeId, monthLabel)
-
   if (reimbursementAmount > 0) {
     proRatedAllowances.push({
       name: "Reimbursement",
@@ -1601,9 +1658,6 @@ export async function computeSalarySlipForRow(
     name: d.name,
     amount: Math.round(d.amount * proRateRatio)
   }))
-
-  const advanceRepayments =
-    await getSalaryAdvanceRepayments(employeeId, monthLabel)
 
   advanceRepayments.forEach(repayment => {
     proRatedDeductions.push({
@@ -1638,6 +1692,40 @@ export async function computeSalarySlipForRow(
   const proRatedGross =
     monthlyGross * proRateRatio
 
+  const paidLeaveDays = Number(counts?.paidLeaveDays || 0)
+  const punchPresentDays = Number(counts?.punchPresentDays || 0)
+  const unpaidHolidays = 0
+  const workingDays = Math.max(0, totalCalendarDaysInMonth - weeklyOffDaysEffective)
+  const weeklyOffDisplay = weeklyOffLabel(shiftDays, weeklyOffDaysEffective)
+
+  const earningRows = [
+    { name: "Basic", monthly: fullMonthBasic, payable: proRatedBasic },
+    ...fullMonthAllowances.map((a) => ({
+      name: a.name,
+      monthly: a.amount,
+      payable: Math.round(a.amount * proRateRatio),
+    })),
+    ...(reimbursementAmount > 0
+      ? [{ name: "Reimbursement", monthly: reimbursementAmount, payable: reimbursementAmount }]
+      : []),
+  ]
+
+  const deductionRows = [
+    ...fullMonthDeductions.map((d) => ({
+      name: d.name,
+      monthly: d.amount,
+      amount: Math.round(d.amount * proRateRatio),
+    })),
+    ...advanceRepayments.map((r) => ({
+      name: r.name,
+      monthly: Math.round(r.amount),
+      amount: Math.round(r.amount),
+    })),
+    ...(lopAmount > 0
+      ? [{ name: "LOSS OF PAY", monthly: lopAmount, amount: lopAmount }]
+      : []),
+  ]
+
   /* ===============================
      RETURN
   =============================== */
@@ -1655,14 +1743,21 @@ export async function computeSalarySlipForRow(
     absentCount: absentDays,
     halfDayCount: halfDays,
     lopDays: Number(totalLopEquivalentDays.toFixed(2)),
-    nonLoPLeaveDays: 0,
+    nonLoPLeaveDays: paidLeaveDays,
     weeklyOffDays: weeklyOffDaysEffective,
+    weeklyOffDisplay,
     holidays: holidaysEffective,
+    unpaidHolidays,
+    workingDays,
+    presentDays: punchPresentDays,
+    maxPayableDays: totalCalendarDaysInMonth,
     halfDaysUnits: Number((halfDays * 0.5).toFixed(2)),
     gross: monthlyGross,
     basic: proRatedBasic,
     earnings: proRatedAllowances,
     deductions: proRatedDeductions,
+    earningRows,
+    deductionRows,
     lopAmount,
     earningsTotal: Math.round(totalEarnings),
     deductionsTotal: Math.round(totalDeductions),
