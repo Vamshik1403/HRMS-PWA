@@ -1362,7 +1362,7 @@ export function downloadSalarySlipPDF(payload: SalarySlipComputed) {
     ];
     const attRight: [string, string][] = [
       ["Paid Leaves", daysDisp(p.nonLoPLeaveDays, true)],
-      ["LOP", daysDisp(p.lopDays, true)],
+      ["LWP", daysDisp(p.lopDays, true)],
       ["Present Days", daysDisp(p.presentDays, true)],
       ["Max Payable Days", daysDisp(p.maxPayableDays ?? p.totalWorkingDaysInCycle, true)],
       ["Net Paid Days", daysDisp(p.paidUnits, true)],

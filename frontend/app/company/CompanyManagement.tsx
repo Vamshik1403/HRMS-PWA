@@ -1472,6 +1472,14 @@ let filtered =
                     <FormField label="PAN">
                       <Input value={formData.panNo || ""} onChange={(e) => setFormData((p) => ({ ...p, panNo: e.target.value }))} />
                     </FormField>
+                    <FormField label="Email">
+                      <Input
+                        type="email"
+                        value={formData.emailAdd || ""}
+                        onChange={(e) => setFormData((p) => ({ ...p, emailAdd: e.target.value }))}
+                        placeholder="accounts@company.com"
+                      />
+                    </FormField>
                     <FormField label="Business Trade Name" className="sm:col-span-2">
                       <Input
                         value={(formData as any).businessTradeName || ""}
@@ -1732,6 +1740,7 @@ let filtered =
                     { label: "Business trade name", value: viewCompany.businessTradeName },
                     { label: "GSTIN", value: viewCompany.gstNo },
                     { label: "PAN", value: viewCompany.panNo },
+                    { label: "Email", value: viewCompany.emailAdd },
                   ]}
                 />
                 <DetailCard
