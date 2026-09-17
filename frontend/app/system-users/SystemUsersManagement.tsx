@@ -22,6 +22,8 @@ import { useClientTable, sortRows } from "../hooks/use-client-table";
 import type { DataTableColumn } from "../components/app/data-table";
 import { listPrimaryButtonClass } from "../components/app/list-ui-styles";
 import { cn } from "@/app/utils/cn";
+import { isPasswordValid, PASSWORD_POLICY_MESSAGE } from "@/lib/passwordRules";
+import { PasswordRuleHints } from "../components/ui/password-rule-hints";
 import { ownerTitleForLegalEntity } from "@/lib/companyAccess";
 
 const API = "/backend/users";
@@ -240,6 +242,10 @@ const filteredCompanies = useMemo(() => {
     e.preventDefault();
     if (!form.username) { toast.error("Username is required"); return; }
     if (!editingRow && !form.password) { toast.error("Password is required"); return; }
+    if (form.password && !isPasswordValid(form.password)) {
+      toast.error(PASSWORD_POLICY_MESSAGE);
+      return;
+    }
     if (!form.email.trim()) {
       toast.error("Email is required");
       return;
@@ -674,11 +680,12 @@ if (isAdmin && user?.companyID) {
   autoComplete="new-password"
   name="new-user-password"
   type={showPassword ? "text" : "password"}
-  value={form.password} onChange={(e) => setForm((p) => ({ ...p, password: e.target.value }))} placeholder={editingRow ? "Leave blank to keep current" : "Minimum 6 characters"} className="pr-10" {...(!editingRow ? { required: true, minLength: 6 } : {})} />
+  value={form.password} onChange={(e) => setForm((p) => ({ ...p, password: e.target.value }))} placeholder={editingRow ? "Leave blank to keep current" : "Enter a strong password"} className="pr-10" {...(!editingRow ? { required: true } : {})} />
               <button type="button" onClick={() => setShowPassword((v) => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600" tabIndex={-1}>
                 {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
             </div>
+            <PasswordRuleHints password={form.password} />
           </div>
 
           <div className="space-y-2">

@@ -26,6 +26,7 @@ import {
   getMutuallyLinkedCompanyIds,
   normalizeFederalDomainCode,
 } from './federal-domain.util';
+import { assertPasswordMeetsPolicy } from '../auth/password-policy';
 
 @Injectable()
 export class CompanyService {
@@ -496,8 +497,12 @@ export class CompanyService {
       select: { id: true },
     });
 
+    const chosenPassword = (dto.password || '').trim();
+    if (chosenPassword) {
+      assertPasswordMeetsPolicy(chosenPassword);
+    }
     const plainPassword =
-      (dto.password || '').trim() || this.employeeInitialPassword(mobile);
+      chosenPassword || this.employeeInitialPassword(mobile);
     if (!plainPassword || plainPassword.length < 6) {
       throw new BadRequestException(
         'Mobile number must have at least 6 digits to use as the initial password',
@@ -717,6 +722,7 @@ export class CompanyService {
         const credUpdate: any = {};
         if (nextUsername) credUpdate.username = nextUsername;
         if (dto.password) {
+          assertPasswordMeetsPolicy(dto.password);
           const saltRounds = Number(process.env.BCRYPT_SALT_ROUNDS) || 12;
           credUpdate.password = await bcrypt.hash(dto.password, saltRounds);
           credUpdate.mustChangePassword = false;

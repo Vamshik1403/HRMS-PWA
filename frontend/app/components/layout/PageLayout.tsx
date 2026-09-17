@@ -37,6 +37,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../ui/dialog";
 import { Button } from "../ui/button";
 import { Label } from "../ui/label";
 import { toast } from "sonner";
+import { isPasswordValid, PASSWORD_POLICY_MESSAGE } from "@/lib/passwordRules";
+import { PasswordRuleHints } from "../ui/password-rule-hints";
 import { Eye, EyeOff } from "lucide-react";
 import { TASK_MANAGEMENT_ENABLED } from "@/app/config/featureFlags";
 import { dispatchAppRefresh } from "@/app/utils/appRefresh";
@@ -337,8 +339,8 @@ const isCompanyScopedSidebarUser =
       toast.error("Passwords do not match")
       return
     }
-    if (profileForm.password && profileForm.password.length < 6) {
-      toast.error("Password must be at least 6 characters")
+    if (profileForm.password && !isPasswordValid(profileForm.password)) {
+      toast.error(PASSWORD_POLICY_MESSAGE)
       return
     }
     setProfileSaving(true)
@@ -1662,6 +1664,7 @@ className={cn(sbRow, isActiveLink(isSuperAdmin ? "/superdashboard" : "/dashboard
                         {showNewPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                       </button>
                     </div>
+                    <PasswordRuleHints password={profileForm.password} />
                   </div>
                   <div className="space-y-2">
                     <Label>Confirm Password</Label>

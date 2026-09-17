@@ -7,6 +7,8 @@ import { Button } from '@/app/components/ui/button'
 import { Input } from '@/app/components/ui/input'
 import { Label } from '@/app/components/ui/label'
 import { LoginBrandPanel } from '../login/LoginBrandPanel'
+import { isPasswordValid, PASSWORD_POLICY_MESSAGE } from '@/lib/passwordRules'
+import { PasswordRuleHints } from '@/app/components/ui/password-rule-hints'
 
 function apiMessage(err: any, fallback: string) {
   const msg = err?.response?.data?.message
@@ -95,8 +97,8 @@ export default function ForgotPasswordPage() {
       setError('New password and confirm password do not match')
       return
     }
-    if (newPassword.length < 8) {
-      setError('New password must be at least 8 characters')
+    if (!isPasswordValid(newPassword)) {
+      setError(PASSWORD_POLICY_MESSAGE)
       return
     }
     setError('')
@@ -203,7 +205,6 @@ export default function ForgotPasswordPage() {
                     onChange={(e) => setNewPassword(e.target.value)}
                     className="pr-10"
                     required
-                    minLength={8}
                   />
                   <button
                     type="button"
@@ -214,6 +215,7 @@ export default function ForgotPasswordPage() {
                     {showNewPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
                   </button>
                 </div>
+                <PasswordRuleHints password={newPassword} />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="reset-confirm">Confirm password</Label>

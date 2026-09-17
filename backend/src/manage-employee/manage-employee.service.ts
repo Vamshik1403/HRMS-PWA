@@ -7,6 +7,7 @@ import { UpdateManageEmployeeDto } from './dto/update-manage-employee.dto';
 import { JoiningFormService } from './joining-form.service';
 import * as bcrypt from 'bcrypt';
 import { ApprovalEngineService } from '../approval-workflow/approval-engine.service';
+import { assertPasswordMeetsPolicy } from '../auth/password-policy';
 
 @Injectable()
 export class ManageEmployeeService {
@@ -1170,6 +1171,8 @@ export class ManageEmployeeService {
         'Current password is incorrect',
       );
     }
+
+    assertPasswordMeetsPolicy(newPassword);
 
     const hashed =
       await this.hashPassword(

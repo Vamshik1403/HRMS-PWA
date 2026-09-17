@@ -27,6 +27,8 @@ import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 import { Eye, EyeOff } from "lucide-react";
+import { isPasswordValid, PASSWORD_POLICY_MESSAGE } from "@/lib/passwordRules";
+import { PasswordRuleHints } from "@/app/components/ui/password-rule-hints";
 
 // ─── Ambient Greeting Accent ───────────────────────────────────────────────────
 const _ambientCss = `
@@ -591,13 +593,8 @@ function EmpDashboardPageInner() {
       return;
     }
 
-    if (newPassword.length < 8) {
-      alert("New password must be at least 8 characters");
-      return;
-    }
-
-    if (!/[A-Z]/.test(newPassword) || !/[a-z]/.test(newPassword) || !/[0-9]/.test(newPassword) || !/[^A-Za-z0-9]/.test(newPassword)) {
-      alert("Password must contain uppercase, lowercase, number and special character");
+    if (!isPasswordValid(newPassword)) {
+      alert(PASSWORD_POLICY_MESSAGE);
       return;
     }
 
@@ -732,6 +729,7 @@ function EmpDashboardPageInner() {
                   name="hrms-force-new-password"
                   visibilityLabel="new password"
                 />
+                <PasswordRuleHints password={passwordForm.newPassword} />
               </div>
 
               <div className="mt-4">

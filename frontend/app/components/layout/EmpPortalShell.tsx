@@ -18,6 +18,8 @@ import {
 import { empPayoutHrefForPeriod } from "@/app/utils/empPayslipApi";
 import { EmpMarkoutReminderBanner } from "@/app/components/emp/EmpMarkoutReminderBanner";
 import { toast } from "sonner";
+import { isPasswordValid, PASSWORD_POLICY_MESSAGE } from "@/lib/passwordRules";
+import { PasswordRuleHints } from "@/app/components/ui/password-rule-hints";
 import { ensureFetchRefreshPatch } from "@/app/utils/patchFetchForRefresh";
 import { useEmpManagerScope } from "@/app/hooks/useEmpManagerScope";
 import { isDesktopBrowser } from "@/lib/desktopManager";
@@ -343,6 +345,10 @@ export default function EmpPortalShell({ children, hideBottomNav = false }: EmpP
       toast.error("All fields are required");
       return;
     }
+    if (!isPasswordValid(pwdForm.newPassword)) {
+      toast.error(PASSWORD_POLICY_MESSAGE);
+      return;
+    }
     if (pwdForm.newPassword !== pwdForm.confirmPassword) {
       toast.error("Passwords do not match");
       return;
@@ -487,6 +493,7 @@ export default function EmpPortalShell({ children, hideBottomNav = false }: EmpP
                   {showNewPwd ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
+              <PasswordRuleHints password={pwdForm.newPassword} />
             </div>
             <div>
               <Label>Confirm New Password</Label>

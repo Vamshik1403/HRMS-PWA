@@ -31,6 +31,8 @@ import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import { Label } from "../../components/ui/label";
 import { Eye, EyeOff } from "lucide-react";
+import { isPasswordValid, PASSWORD_POLICY_MESSAGE } from "@/lib/passwordRules";
+import { PasswordRuleHints } from "@/app/components/ui/password-rule-hints";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 
@@ -50,8 +52,8 @@ export default function EmpLayout({ children }: EmpLayoutProps) {
 
   const handleChangePassword = async () => {
     if (!pwdForm.oldPassword || !pwdForm.newPassword) { toast.error("All fields are required"); return; }
+    if (!isPasswordValid(pwdForm.newPassword)) { toast.error(PASSWORD_POLICY_MESSAGE); return; }
     if (pwdForm.newPassword !== pwdForm.confirmPassword) { toast.error("Passwords do not match"); return; }
-    if (pwdForm.newPassword.length < 4) { toast.error("Password must be at least 4 characters"); return; }
     try {
       setPwdLoading(true);
       const user = JSON.parse(localStorage.getItem("user") || "{}");
@@ -276,6 +278,7 @@ export default function EmpLayout({ children }: EmpLayoutProps) {
                   {showNewPwd ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
+              <PasswordRuleHints password={pwdForm.newPassword} />
             </div>
             <div>
               <Label>Confirm New Password</Label>

@@ -21,6 +21,7 @@ import {
   ResendLoginOtpDto,
 } from './dto/forgot-password.dto';
 import { AuthOtpPurpose, SubscriptionStatus } from '@prisma/client';
+import { assertPasswordMeetsPolicy } from './password-policy';
 
 const SUBSCRIPTION_EXEMPT_ROLES = ['SUPERADMIN', 'SERVICE_PROVIDER'];
 const EMAIL_NOT_FOUND_MSG =
@@ -339,9 +340,7 @@ export class AuthService {
       throw new BadRequestException('New password and confirm password do not match');
     }
 
-    if (dto.newPassword.length < 8) {
-      throw new BadRequestException('New password must be at least 8 characters');
-    }
+    assertPasswordMeetsPolicy(dto.newPassword);
 
     const row = await this.consumeOtpIfValid(
       dto.resetToken,

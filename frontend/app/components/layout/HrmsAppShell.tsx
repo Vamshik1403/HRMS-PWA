@@ -21,6 +21,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/app/componen
 import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
+import { isPasswordValid, PASSWORD_POLICY_MESSAGE } from "@/lib/passwordRules";
+import { PasswordRuleHints } from "@/app/components/ui/password-rule-hints";
 
 function getUserCompanyIds(user: any): number[] {
   const ids = new Set<number>();
@@ -299,6 +301,10 @@ export function HrmsAppShell({ children }: { children: React.ReactNode }) {
       toast.error("Passwords do not match");
       return;
     }
+    if (profileForm.password && !isPasswordValid(profileForm.password)) {
+      toast.error(PASSWORD_POLICY_MESSAGE);
+      return;
+    }
     setProfileSaving(true);
     try {
       const payload: any = { username: profileForm.username };
@@ -388,6 +394,7 @@ export function HrmsAppShell({ children }: { children: React.ReactNode }) {
                     <button type="button" className="absolute right-3 top-8 text-muted-foreground" onClick={() => setShowNewPassword((v) => !v)}>
                       {showNewPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
                     </button>
+                    <PasswordRuleHints password={profileForm.password} />
                   </div>
                   <div className="space-y-2 relative">
                     <Label>Confirm password</Label>

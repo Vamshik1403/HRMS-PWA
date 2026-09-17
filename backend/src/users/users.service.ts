@@ -10,6 +10,7 @@ import { CreateUserDto } from './dto/create-user.dto'
 import { UpdateUserDto } from './dto/update-user.dto'
 import { UserRole } from '@prisma/client'
 import * as bcrypt from 'bcrypt'
+import { assertPasswordMeetsPolicy } from '../auth/password-policy'
 
 @Injectable()
 export class UsersService {
@@ -66,6 +67,7 @@ export class UsersService {
         createUserDto.companyID ?? companyIDs[0] ?? null
 
       const saltRounds = Number(process.env.BCRYPT_SALT_ROUNDS) || 12
+      assertPasswordMeetsPolicy(createUserDto.password)
       const passwordHash = await bcrypt.hash(createUserDto.password, saltRounds)
 
       const user = await this.prisma.$transaction(async (tx) => {
@@ -259,6 +261,7 @@ export class UsersService {
       }
 
       if (updateUserDto.password) {
+        assertPasswordMeetsPolicy(updateUserDto.password)
         const saltRounds = Number(process.env.BCRYPT_SALT_ROUNDS) || 12
         updateData.passwordHash = await bcrypt.hash(
           updateUserDto.password,
@@ -311,7 +314,7 @@ export class UsersService {
 
       return this.excludePassword(updatedUser)
     } catch (error) {
-      if (error instanceof NotFoundException || error instanceof ConflictException) {
+      if (error instanceof NotFoundException || error instanceof ConflictException || error instanceof BadRequestException) {
         throw error
       }
 

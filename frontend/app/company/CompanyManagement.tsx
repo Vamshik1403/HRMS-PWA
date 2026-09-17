@@ -16,6 +16,8 @@ import { LocationFields } from "../components/ui/location-fields"
 import { PdfUploadField } from "../components/PdfUploadField"
 import { ListAreaSkeleton } from "../components/ui/TableBodySkeleton"
 import { toast } from "sonner"
+import { isPasswordValid, PASSWORD_POLICY_MESSAGE } from "@/lib/passwordRules"
+import { PasswordRuleHints } from "../components/ui/password-rule-hints"
 import { getSidebarContext, clearSidebarContext, setSidebarContext } from "../utils/sidebarContext"
 import { isDesktopManagerFlagSet } from "@/lib/desktopManager"
 import {
@@ -1243,8 +1245,8 @@ let filtered =
       }
     }
 
-    if (form.password && form.password.length < 6) {
-      toast.error("Password must be at least 6 characters")
+    if (form.password && !isPasswordValid(form.password)) {
+      toast.error(PASSWORD_POLICY_MESSAGE)
       return
     }
 
@@ -2153,6 +2155,7 @@ let filtered =
                             }
                             disabled={viewingCompanyAdmin || companyAdminForm.useEmailMobileCreds}
                           />
+                          <PasswordRuleHints password={companyAdminForm.password} />
                           {companyAdminForm.useEmailMobileCreds ? (
                             <p className="text-xs text-muted-foreground">set Mobile no. as password</p>
                           ) : null}
