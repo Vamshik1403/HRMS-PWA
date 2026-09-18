@@ -1,5 +1,6 @@
-import { hasModuleWriteAccess } from "@/lib/companyAccess";
 "use client"
+
+import { hasModuleWriteAccess, isCompanyAdminLikeRole } from "@/lib/companyAccess";
 
 import { useEffect, useState, useRef, useMemo } from "react"
 import { Button } from "../components/ui/button"
@@ -462,7 +463,7 @@ export function ReimbursementManagement() {
 const [empCreds, setEmpCreds] = useState<any>(null);
 
   const user = useCurrentUser()
-const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN" || user?.role === "BRANCH_ADMIN"
+const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || isCompanyAdminLikeRole(user?.role) || user?.role === "BRANCH_ADMIN"
 const isEmployee = !canManage
 
   const [formData, setFormData] = useState({
@@ -926,7 +927,7 @@ useEffect(() => {
   }
 
   // COMPANY_ADMIN / BRANCH_ADMIN: filter by company
-  if (user?.role === "COMPANY_ADMIN" || user?.role === "BRANCH_ADMIN") {
+  if (isCompanyAdminLikeRole(user?.role) || user?.role === "BRANCH_ADMIN") {
     const ctx = getSidebarContext()
     const companyID = ctx?.companyID ?? user?.companyID
     if (companyID) {
@@ -1105,7 +1106,7 @@ const handleSubmit = async (e: React.FormEvent) => {
   }
 
   // COMPANY_ADMIN / BRANCH_ADMIN
-  if (user?.role === "COMPANY_ADMIN" || user?.role === "BRANCH_ADMIN") {
+  if (isCompanyAdminLikeRole(user?.role) || user?.role === "BRANCH_ADMIN") {
     payload.serviceProviderID = formData.serviceProviderID;
     payload.companyID = formData.companyID;
     payload.branchesID = formData.branchesID;
@@ -1575,7 +1576,7 @@ return (
                 }
               }
 
-              if (user?.role === "COMPANY_ADMIN" || user?.role === "BRANCH_ADMIN") {
+              if (isCompanyAdminLikeRole(user?.role) || user?.role === "BRANCH_ADMIN") {
                 const ctx = getSidebarContext();
                 const companyID =
                   resolveScopedCompanyId(user) ?? ctx?.companyID ?? user?.companyID;
@@ -1756,7 +1757,7 @@ return (
 )}
 
 {/* COMPANY_ADMIN / BRANCH_ADMIN → only Branch input */}
-{(user?.role === "COMPANY_ADMIN" || user?.role === "BRANCH_ADMIN") && (
+{(isCompanyAdminLikeRole(user?.role) || user?.role === "BRANCH_ADMIN") && (
   <div className="grid grid-cols-1 gap-4">
     <CompanyBranchField
       label="Branch"

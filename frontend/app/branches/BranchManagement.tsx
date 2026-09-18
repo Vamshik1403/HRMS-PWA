@@ -1,7 +1,7 @@
 "use client";
 import { TableBodySkeleton } from "../components/ui/TableBodySkeleton";
 
-import { hasCompanyAccessFlag, hasModuleWriteAccess } from "@/lib/companyAccess";
+import { hasCompanyAccessFlag, hasModuleWriteAccess, isCompanyAdminLikeRole } from "@/lib/companyAccess";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
 import { Button } from "../components/ui/button";
@@ -257,12 +257,12 @@ export function BranchManagement() {
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [signatureFile, setSignatureFile] = useState<File | null>(null);
   const user = useCurrentUser();
-  const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN" || user?.role === "ADMIN" || hasModuleWriteAccess("BRANCHES");
-  const canCreate = user?.role === "SUPERADMIN" || user?.role === "COMPANY_ADMIN" || user?.role === "ADMIN" || hasModuleWriteAccess("BRANCHES");
+  const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || isCompanyAdminLikeRole(user?.role) || user?.role === "ADMIN" || hasModuleWriteAccess("BRANCHES");
+  const canCreate = user?.role === "SUPERADMIN" || isCompanyAdminLikeRole(user?.role) || user?.role === "ADMIN" || hasModuleWriteAccess("BRANCHES");
   const isEmployee = user?.role === "EMPLOYEE";
 
   const canManageBranchAdmins =
-    user?.role === "SUPERADMIN" || user?.role === "COMPANY_ADMIN";
+    user?.role === "SUPERADMIN" || isCompanyAdminLikeRole(user?.role);
 
   // Add this with your other state declarations
   const [currentUserMapping, setCurrentUserMapping] = useState<any>(null);
@@ -470,7 +470,7 @@ geofenchradius:"",
       user?.role === "EMPLOYEE" || hasCompanyAccessFlag();
 
     const isCompanyScopedUser =
-      user?.role === "COMPANY_ADMIN" ||
+      isCompanyAdminLikeRole(user?.role) ||
       user?.role === "ADMIN" ||
       user?.role === "BRANCH_ADMIN" ||
       isEmployeeOperator;
@@ -885,7 +885,7 @@ geofenchradius: formData.geofenchradius || undefined,
 
     if (
       user?.role === "SERVICE_PROVIDER" ||
-      user?.role === "COMPANY_ADMIN" ||
+      isCompanyAdminLikeRole(user?.role) ||
       user?.role === "ADMIN" ||
       user?.role === "EMPLOYEE" ||
       hasCompanyAccessFlag()
@@ -1725,7 +1725,7 @@ setIsViewing(false);
               {branchFormTab === "banking" && (
               <>
               {/* Bank Details repeater - hidden for ADMIN and COMPANY_ADMIN */}
-              {!(user?.role === "ADMIN" || user?.role === "COMPANY_ADMIN") && <div className="space-y-4">
+              {!(user?.role === "ADMIN" || isCompanyAdminLikeRole(user?.role)) && <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <h3 className="text-lg font-semibold">Bank Details</h3>
                   <Button variant="outline" size="sm" type="button" onClick={addBankDetail}>

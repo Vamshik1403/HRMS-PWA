@@ -8,7 +8,7 @@ import { FormDrawer } from "../components/ui/form-drawer"
 import { Icon } from "@iconify/react"
 import { Plus, Calendar } from "lucide-react"
 import { PageHeader } from "../components/app/page-header";
-import { hasModuleWriteAccess } from "@/lib/companyAccess";
+import { hasModuleWriteAccess, isCompanyAdminLikeRole } from "@/lib/companyAccess";
 import { FilterBar, FilterSelect } from "../components/app/filter-bar";
 import { EntityListShell } from "../components/app/entity-list-shell";
 import type { DataTableColumn } from "../components/app/data-table";
@@ -126,7 +126,7 @@ const [isDialogOpen, setIsDialogOpen] = useState(false)
   })
   
   const user = useCurrentUser();
-  const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN" || user?.role === "BRANCH_ADMIN" || canDesktopManagerManage(user) || hasModuleWriteAccess("HOLIDAYS");
+  const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || isCompanyAdminLikeRole(user?.role) || user?.role === "BRANCH_ADMIN" || canDesktopManagerManage(user) || hasModuleWriteAccess("HOLIDAYS");
 
   const [managerData, setManagerData] = useState<any>(null);
   const [empCreds, setEmpCreds] = useState<any>(null);
@@ -408,7 +408,7 @@ const handler = () => {
         serviceProviderID = managerData?.serviceProviderID;
         companyID = managerData?.companyID;
         branchesID = formData.branchesID; // MANAGER can select branch
-      } else if (user?.role === "COMPANY_ADMIN" || user?.role === "BRANCH_ADMIN") {
+      } else if (isCompanyAdminLikeRole(user?.role) || user?.role === "BRANCH_ADMIN") {
         const ctx = getSidebarContext();
         serviceProviderID = ctx?.serviceProviderID ?? formData.serviceProviderID;
         companyID = formData.companyID ?? ctx?.companyID ?? user?.companyID;
@@ -740,7 +740,7 @@ const handler = () => {
                     {/* Branch - admins and company operators pick a branch */}
                     {(user?.role === "SUPERADMIN" ||
                       user?.role === "SERVICE_PROVIDER" ||
-                      user?.role === "COMPANY_ADMIN" ||
+                      isCompanyAdminLikeRole(user?.role) ||
                       user?.role === "ADMIN" ||
                       (user?.role === "EMPLOYEE" && isCompanyModuleOperator(user))) && (
                       <div className={`${user?.role === "SUPERADMIN" ? "col-span-1" : "col-span-3"}`}>

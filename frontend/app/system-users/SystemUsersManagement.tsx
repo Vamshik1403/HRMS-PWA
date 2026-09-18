@@ -65,13 +65,14 @@ interface UserRow {
 
 // Roles available based on the current user's role.
 // COMPANY_OWNER logins are created only via the Tenants "Company Owners" icon.
-const SUPERADMIN_ROLES = ["SUPERADMIN"];
+const SUPERADMIN_ROLES = ["SUPERADMIN", "MULTI_COMPANY_ADMIN"];
 const SERVICE_PROVIDER_ROLES = ["SERVICE_PROVIDER"];
 
 const ADMIN_ROLES = ["BRANCH_ADMIN"];
 
 const ROLE_DISPLAY: Record<string, string> = {
   SUPERADMIN: "SUPERADMIN",
+  MULTI_COMPANY_ADMIN: "Multiple Company Access",
   SERVICE_PROVIDER: "SERVICE PROVIDER",
   COMPANY_OWNER: "COMPANY OWNER",
   COMPANY_ADMIN: "COMPANY ADMIN (legacy)",
@@ -171,6 +172,8 @@ const canAccess = isSuperAdmin || isServiceProvider || isAdmin;
   };
 
 const filteredCompanies = useMemo(() => {
+  if (form.role === "MULTI_COMPANY_ADMIN") return companyList;
+
   const spId =
     isServiceProvider && user?.serviceProviderID
       ? Number(user.serviceProviderID)
@@ -183,7 +186,7 @@ const filteredCompanies = useMemo(() => {
   return companyList.filter(
     (c: any) => Number(c.serviceProviderID) === Number(spId)
   );
-}, [companyList, form.serviceProviderID, isServiceProvider, user?.serviceProviderID]);
+}, [companyList, form.role, form.serviceProviderID, isServiceProvider, user?.serviceProviderID]);
 
   const selectedCompanies = useMemo(() => {
     return companyList.filter((c: any) =>
@@ -254,7 +257,11 @@ const filteredCompanies = useMemo(() => {
       toast.error("Contact number is required");
       return;
     }
-if ((form.role === "COMPANY_OWNER") && form.companyIDs.length === 0 && !form.companyID) {
+    if (form.role === "MULTI_COMPANY_ADMIN" && form.companyIDs.length < 2) {
+      toast.error("Select at least two companies for Multiple Company Access");
+      return;
+    }
+    if ((form.role === "COMPANY_OWNER") && form.companyIDs.length === 0 && !form.companyID) {
         toast.error("Select a company for the Company Owner");
       return;
     }
@@ -319,8 +326,20 @@ serviceProviderID: isServiceProvider
     ? Number(form.serviceProviderID)
     : undefined,
     
-    companyID: form.role === "SUPERADMIN" ? undefined : form.companyID ? Number(form.companyID) : undefined,
-companyIDs: form.role === "SUPERADMIN" ? undefined : form.companyIDs?.length ? form.companyIDs : undefined,
+    companyID:
+      form.role === "SUPERADMIN"
+        ? undefined
+        : form.companyID
+          ? Number(form.companyID)
+          : form.companyIDs[0]
+            ? Number(form.companyIDs[0])
+            : undefined,
+    companyIDs:
+      form.role === "SUPERADMIN"
+        ? undefined
+        : form.companyIDs?.length
+          ? form.companyIDs
+          : undefined,
         branchesID: form.branchesID ? Number(form.branchesID) : undefined,
         isActive: form.isActive,
       };
@@ -690,32 +709,40 @@ if (isAdmin && user?.companyID) {
 
           <div className="space-y-2">
             <Label>Role</Label>
-            {isSuperAdmin ? (
-              <Input value="SUPERADMIN" readOnly className="bg-muted/40" />
-            ) : (
             <Select
               value={form.role}
               onValueChange={(v) =>
-  setForm((p) => ({
-    ...p,
-    role: v,
-    serviceProviderID: isServiceProvider ? user?.serviceProviderID ?? "" : p.serviceProviderID,
-    companyID: "",
-    companyIDs: [],
-    branchesID: "",
-  }))
-}
+                setForm((p) => ({
+                  ...p,
+                  role: v,
+                  serviceProviderID:
+                    v === "SUPERADMIN" || v === "MULTI_COMPANY_ADMIN"
+                      ? ""
+                      : isServiceProvider
+                        ? user?.serviceProviderID ?? ""
+                        : p.serviceProviderID,
+                  companyID: "",
+                  companyIDs: [],
+                  branchesID: "",
+                }))
+              }
             >
-                <SelectTrigger><SelectValue placeholder="Select role…" /></SelectTrigger>
+              <SelectTrigger><SelectValue placeholder="Select role…" /></SelectTrigger>
               <SelectContent>
-{(isServiceProvider ? SERVICE_PROVIDER_ROLES : isAdmin ? ADMIN_ROLES : []).map((r) => (
-  <SelectItem key={r} value={r}>
-    {ROLE_DISPLAY[r] || r}
-  </SelectItem>
-))}
+                {(isSuperAdmin
+                  ? SUPERADMIN_ROLES
+                  : isServiceProvider
+                    ? SERVICE_PROVIDER_ROLES
+                    : isAdmin
+                      ? ADMIN_ROLES
+                      : []
+                ).map((r) => (
+                  <SelectItem key={r} value={r}>
+                    {ROLE_DISPLAY[r] || r}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
-            )}
           </div>
 
           {/* SP field: shown for SERVICE_PROVIDER, COMPANY_OWNER, ADMIN, BRANCH_ADMIN */}
@@ -739,6 +766,57 @@ if (isAdmin && user?.companyID) {
                   {spList.map((s: any) => <SelectItem key={s.id} value={String(s.id)}>{s.companyName}</SelectItem>)}
                 </SelectContent>
               </Select>
+            </div>
+          )}
+
+          {form.role === "MULTI_COMPANY_ADMIN" && (
+            <div className="space-y-2">
+              <Label>Companies *</Label>
+              {selectedCompanies.length > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                  {selectedCompanies.map((c: any) => (
+                    <Badge key={c.id} variant="secondary" className="gap-1 pr-1">
+                      {c.companyName}
+                      <button
+                        type="button"
+                        className="rounded-sm p-0.5 hover:bg-muted"
+                        onClick={() => removeCompanyFromUser(Number(c.id))}
+                        aria-label={`Remove ${c.companyName}`}
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </Badge>
+                  ))}
+                </div>
+              )}
+              <div className="relative">
+                <Input
+                  value={companySearch}
+                  onChange={(e) => {
+                    setCompanySearch(e.target.value);
+                    setCompanyDropdownOpen(true);
+                  }}
+                  onFocus={() => setCompanyDropdownOpen(true)}
+                  placeholder="Search and add companies…"
+                />
+                {companyDropdownOpen && companySuggestions.length > 0 && (
+                  <div className="absolute z-20 mt-1 max-h-48 w-full overflow-auto rounded-md border bg-popover shadow-md">
+                    {companySuggestions.map((c: any) => (
+                      <button
+                        key={c.id}
+                        type="button"
+                        className="flex w-full px-3 py-2 text-left text-sm hover:bg-muted"
+                        onClick={() => addCompanyToUser(c)}
+                      >
+                        {c.companyName}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Select at least two tenants. The first company is the primary login company.
+              </p>
             </div>
           )}
 

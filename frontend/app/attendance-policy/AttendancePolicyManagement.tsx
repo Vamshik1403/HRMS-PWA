@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
-import { hasModuleWriteAccess } from "@/lib/companyAccess";
+import { hasModuleWriteAccess, isCompanyAdminLikeRole } from "@/lib/companyAccess";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
@@ -85,7 +85,7 @@ export function AttendancePolicyManagement() {
   const canManage =
     user?.role === "SUPERADMIN" ||
     user?.role === "SERVICE_PROVIDER" ||
-    user?.role === "COMPANY_ADMIN" ||
+    isCompanyAdminLikeRole(user?.role) ||
     user?.role === "BRANCH_ADMIN" ||
     canDesktopManagerManage(user) ||
     hasModuleWriteAccess("ATTENDANCE_POLICY");
@@ -760,7 +760,7 @@ useEffect(() => {
                   </>
                 )}
 
-{(user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN") && (
+{(user?.role === "SERVICE_PROVIDER" || isCompanyAdminLikeRole(user?.role)) && (
                     <CompanyBranchField
                     label="Branch Name"
                     placeholder="Select Branch"

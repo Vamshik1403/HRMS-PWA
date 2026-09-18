@@ -1,7 +1,7 @@
 "use client";
 import { TableBodySkeleton } from "../components/ui/TableBodySkeleton";
 
-import { hasModuleWriteAccess } from "@/lib/companyAccess";
+import { hasModuleWriteAccess, isCompanyAdminLikeRole } from "@/lib/companyAccess";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
 import { Button } from "../components/ui/button";
@@ -114,7 +114,7 @@ export function DepartmentManagement() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const user = useCurrentUser();
-  const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN" || user?.role === "ADMIN" || user?.role === "BRANCH_ADMIN" || hasModuleWriteAccess("DEPARTMENTS");
+  const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || isCompanyAdminLikeRole(user?.role) || user?.role === "ADMIN" || user?.role === "BRANCH_ADMIN" || hasModuleWriteAccess("DEPARTMENTS");
   const isEmployee = user?.role === "EMPLOYEE";
   const [currentUserMapping, setCurrentUserMapping] = useState<any>(null);
 
@@ -519,7 +519,7 @@ if (ctx) {
   finalCompanyID = ctx.companyID;
   spName = ctx.serviceProviderName || "";
   coName = ctx.companyName || "";
-} else if ((user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN" || user?.role === "ADMIN") && currentUserMapping) {
+} else if ((user?.role === "SERVICE_PROVIDER" || isCompanyAdminLikeRole(user?.role) || user?.role === "ADMIN") && currentUserMapping) {
   finalServiceProviderID = currentUserMapping.serviceProviderID;
   finalCompanyID = currentUserMapping.companyID;
   spName = currentUserMapping.serviceProvider?.companyName ?? "";

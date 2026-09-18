@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { randomInt } from 'crypto';
 import type { Request } from 'express';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditLogService } from '../audit-log/audit-log.service';
@@ -89,23 +90,38 @@ export class ManageEmployeeService {
     return bcrypt.compare(plainPassword, hashedPassword);
   }
 
-  private normalizeEmail(value?: string | null): string {
-    return String(value || '').trim().toLowerCase();
-  }
-
   private digitsOnly(value?: string | null): string {
     return String(value || '').replace(/\D/g, '');
   }
 
-  private employeeLoginUsername(
-    personalEmail?: string | null,
-    businessEmail?: string | null,
-  ): string {
-    return this.normalizeEmail(personalEmail) || this.normalizeEmail(businessEmail);
+  private employeeCodeUsername(employeeID?: string | null): string {
+    return String(employeeID || '').trim();
   }
 
   private employeeInitialPassword(personalPhoneNo?: string | null): string {
     return this.digitsOnly(personalPhoneNo) || String(personalPhoneNo || '').trim();
+  }
+
+  private generateTemporaryPassword(): string {
+    const upper = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+    const lower = 'abcdefghijkmnopqrstuvwxyz';
+    const digits = '23456789';
+    const special = '!@#$%&*?';
+    const all = upper + lower + digits + special;
+    const chars = [
+      upper[randomInt(upper.length)],
+      lower[randomInt(lower.length)],
+      digits[randomInt(digits.length)],
+      special[randomInt(special.length)],
+    ];
+    for (let i = 0; i < 8; i++) {
+      chars.push(all[randomInt(all.length)]);
+    }
+    for (let i = chars.length - 1; i > 0; i--) {
+      const j = randomInt(i + 1);
+      [chars[i], chars[j]] = [chars[j], chars[i]];
+    }
+    return chars.join('');
   }
 
   /**
@@ -153,11 +169,341 @@ export class ManageEmployeeService {
     return `${prefix}${String(nextSeq).padStart(3, '0')}`;
   }
 
+  private toPositiveId(value: unknown): number | null {
+    const n = Number(value);
+    return Number.isFinite(n) && n > 0 ? n : null;
+  }
+
+  private async tenantForcedCompanyID(req?: Request): Promise<number | null> {
+    const user = (req as any)?.user ?? null;
+    const role = String(user?.role || '').toUpperCase();
+    if (!role || role === 'SUPERADMIN' || role === 'SERVICE_PROVIDER') {
+      return null;
+    }
+
+    if (role === 'MULTI_COMPANY_ADMIN') {
+      const userId = this.toPositiveId(user?.sub ?? user?.id);
+      const assigned = userId
+        ? await this.prisma.userCompany.findMany({
+            where: { userID: userId },
+            select: { companyID: true, isPrimary: true },
+          })
+        : [];
+      const assignedIds = assigned
+        .map((row) => this.toPositiveId(row.companyID))
+        .filter((id): id is number => !!id);
+      const headerRaw =
+        (req as any)?.headers?.['x-active-company-id'] ??
+        (req as any)?.headers?.['X-Active-Company-ID'];
+      const headerId = this.toPositiveId(headerRaw);
+      if (headerId) {
+        if (!assignedIds.includes(headerId)) {
+          throw new BadRequestException('You do not have access to this company');
+        }
+        return headerId;
+      }
+      const primary = assigned.find((row) => row.isPrimary);
+      return (
+        this.toPositiveId(primary?.companyID) ??
+        this.toPositiveId(user?.companyID) ??
+        assignedIds[0] ??
+        null
+      );
+    }
+
+    return this.toPositiveId(user?.companyID);
+  }
+
+  private uniquePositiveIds(
+    ...groups: Array<Array<number | null | undefined> | number | null | undefined>
+  ): number[] {
+    const ids = new Set<number>();
+    for (const group of groups) {
+      const values = Array.isArray(group) ? group : [group];
+      for (const value of values) {
+        const id = this.toPositiveId(value);
+        if (id) ids.add(id);
+      }
+    }
+    return [...ids];
+  }
+
+  private async assertRowsBelongToCompany(
+    label: string,
+    companyID: number,
+    rows: Array<{ id: number; companyID?: number | null }>,
+    ids: number[],
+  ) {
+    const byId = new Map(rows.map((row) => [row.id, row]));
+    for (const id of ids) {
+      const row = byId.get(id);
+      if (!row) {
+        throw new BadRequestException(`${label} was not found`);
+      }
+      if (this.toPositiveId(row.companyID) !== companyID) {
+        throw new BadRequestException(
+          `${label} does not belong to this company`,
+        );
+      }
+    }
+  }
+
+  private async assertMasterDataBelongsToCompany(params: {
+    companyID: number | null | undefined;
+    departmentIDs?: Array<number | null | undefined>;
+    designationIDs?: Array<number | null | undefined>;
+    branchIDs?: Array<number | null | undefined>;
+    leavePolicyIDs?: Array<number | null | undefined>;
+    attendancePolicyIDs?: Array<number | null | undefined>;
+    factualAttendancePolicyIDs?: Array<number | null | undefined>;
+    workShiftIDs?: Array<number | null | undefined>;
+    factualWorkShiftIDs?: Array<number | null | undefined>;
+    monthlyPayGradeIDs?: Array<number | null | undefined>;
+    hourlyPayGradeIDs?: Array<number | null | undefined>;
+    contractorIDs?: Array<number | null | undefined>;
+    deviceIDs?: Array<number | null | undefined>;
+  }) {
+    const companyID = this.toPositiveId(params.companyID);
+    if (!companyID) return;
+
+    const departmentIDs = this.uniquePositiveIds(params.departmentIDs ?? []);
+    const designationIDs = this.uniquePositiveIds(params.designationIDs ?? []);
+    const branchIDs = this.uniquePositiveIds(params.branchIDs ?? []);
+    const leavePolicyIDs = this.uniquePositiveIds(params.leavePolicyIDs ?? []);
+    const attendancePolicyIDs = this.uniquePositiveIds(params.attendancePolicyIDs ?? []);
+    const factualAttendancePolicyIDs = this.uniquePositiveIds(params.factualAttendancePolicyIDs ?? []);
+    const workShiftIDs = this.uniquePositiveIds(params.workShiftIDs ?? []);
+    const factualWorkShiftIDs = this.uniquePositiveIds(params.factualWorkShiftIDs ?? []);
+    const monthlyPayGradeIDs = this.uniquePositiveIds(params.monthlyPayGradeIDs ?? []);
+    const hourlyPayGradeIDs = this.uniquePositiveIds(params.hourlyPayGradeIDs ?? []);
+    const contractorIDs = this.uniquePositiveIds(params.contractorIDs ?? []);
+    const deviceIDs = this.uniquePositiveIds(params.deviceIDs ?? []);
+
+    if (departmentIDs.length) {
+      await this.assertRowsBelongToCompany(
+        'Department',
+        companyID,
+        await this.prisma.departments.findMany({
+          where: { id: { in: departmentIDs } },
+          select: { id: true, companyID: true },
+        }),
+        departmentIDs,
+      );
+    }
+    if (designationIDs.length) {
+      await this.assertRowsBelongToCompany(
+        'Designation',
+        companyID,
+        await this.prisma.designations.findMany({
+          where: { id: { in: designationIDs } },
+          select: { id: true, companyID: true },
+        }),
+        designationIDs,
+      );
+    }
+    if (branchIDs.length) {
+      await this.assertRowsBelongToCompany(
+        'Branch',
+        companyID,
+        await this.prisma.branches.findMany({
+          where: { id: { in: branchIDs } },
+          select: { id: true, companyID: true },
+        }),
+        branchIDs,
+      );
+    }
+    if (leavePolicyIDs.length) {
+      await this.assertRowsBelongToCompany(
+        'Leave policy',
+        companyID,
+        await this.prisma.leavePolicy.findMany({
+          where: { id: { in: leavePolicyIDs } },
+          select: { id: true, companyID: true },
+        }),
+        leavePolicyIDs,
+      );
+    }
+    if (attendancePolicyIDs.length) {
+      await this.assertRowsBelongToCompany(
+        'Attendance policy',
+        companyID,
+        await this.prisma.attendancePolicy.findMany({
+          where: { id: { in: attendancePolicyIDs } },
+          select: { id: true, companyID: true },
+        }),
+        attendancePolicyIDs,
+      );
+    }
+    if (factualAttendancePolicyIDs.length) {
+      await this.assertRowsBelongToCompany(
+        'Attendance policy',
+        companyID,
+        await this.prisma.factualAttendancePolicy.findMany({
+          where: { id: { in: factualAttendancePolicyIDs } },
+          select: { id: true, companyID: true },
+        }),
+        factualAttendancePolicyIDs,
+      );
+    }
+    if (workShiftIDs.length) {
+      await this.assertRowsBelongToCompany(
+        'Work shift',
+        companyID,
+        await this.prisma.workShift.findMany({
+          where: { id: { in: workShiftIDs } },
+          select: { id: true, companyID: true },
+        }),
+        workShiftIDs,
+      );
+    }
+    if (factualWorkShiftIDs.length) {
+      await this.assertRowsBelongToCompany(
+        'Work shift',
+        companyID,
+        await this.prisma.factualWorkShift.findMany({
+          where: { id: { in: factualWorkShiftIDs } },
+          select: { id: true, companyID: true },
+        }),
+        factualWorkShiftIDs,
+      );
+    }
+    if (monthlyPayGradeIDs.length) {
+      await this.assertRowsBelongToCompany(
+        'Pay grade',
+        companyID,
+        await this.prisma.monthlyPayGrade.findMany({
+          where: { id: { in: monthlyPayGradeIDs } },
+          select: { id: true, companyID: true },
+        }),
+        monthlyPayGradeIDs,
+      );
+    }
+    if (hourlyPayGradeIDs.length) {
+      await this.assertRowsBelongToCompany(
+        'Pay grade',
+        companyID,
+        await this.prisma.hourlyPayGrade.findMany({
+          where: { id: { in: hourlyPayGradeIDs } },
+          select: { id: true, companyID: true },
+        }),
+        hourlyPayGradeIDs,
+      );
+    }
+    if (contractorIDs.length) {
+      await this.assertRowsBelongToCompany(
+        'Contractor',
+        companyID,
+        await this.prisma.contractors.findMany({
+          where: { id: { in: contractorIDs } },
+          select: { id: true, companyID: true },
+        }),
+        contractorIDs,
+      );
+    }
+    if (deviceIDs.length) {
+      await this.assertRowsBelongToCompany(
+        'Device',
+        companyID,
+        await this.prisma.devices.findMany({
+          where: { id: { in: deviceIDs } },
+          select: { id: true, companyID: true },
+        }),
+        deviceIDs,
+      );
+    }
+  }
+
+  private masterDataIdsFromEmployeeInput(input: {
+    departmentNameID?: number | null;
+    designationID?: number | null;
+    branchesID?: number | null;
+    leavePolicyID?: number | null;
+    attendancePolicyID?: number | null;
+    workShiftID?: number | null;
+    monthlyPayGradeID?: number | null;
+    hourlyPayGradeID?: number | null;
+    contractorID?: number | null;
+    empDepartments?: Array<{ departmentNameID?: number | null }>;
+    empDesignations?: Array<{ designationID?: number | null }>;
+    empBranches?: Array<{ branchesID?: number | null }>;
+    empLeavePolicies?: Array<{ leavePolicyID?: number | null }>;
+    empAttendancePolicies?: Array<{ attendancePolicyID?: number | null }>;
+    empFactualAttendancePolicies?: Array<{ factualAttendancePolicyID?: number | null }>;
+    empWorkShifts?: Array<{ workShiftID?: number | null }>;
+    empFactualWorkShifts?: Array<{ factualWorkShiftID?: number | null }>;
+    empContractors?: Array<{ contractorID?: number | null }>;
+    devices?: Array<{ deviceID?: number | null }>;
+    tokenDevices?: Array<{ deviceID?: number | null }>;
+    promotion?: {
+      departmentNameID?: number | null;
+      designationID?: number | null;
+      workShiftID?: number | null;
+      attendancePolicyID?: number | null;
+      leavePolicyID?: number | null;
+      monthlyPayGradeID?: number | null;
+      hourlyPayGradeID?: number | null;
+    } | null;
+  }) {
+    return {
+      departmentIDs: [
+        input.departmentNameID,
+        input.promotion?.departmentNameID,
+        ...(input.empDepartments || []).map((row) => row.departmentNameID),
+      ],
+      designationIDs: [
+        input.designationID,
+        input.promotion?.designationID,
+        ...(input.empDesignations || []).map((row) => row.designationID),
+      ],
+      branchIDs: [
+        input.branchesID,
+        ...(input.empBranches || []).map((row) => row.branchesID),
+      ],
+      leavePolicyIDs: [
+        input.leavePolicyID,
+        input.promotion?.leavePolicyID,
+        ...(input.empLeavePolicies || []).map((row) => row.leavePolicyID),
+      ],
+      attendancePolicyIDs: [
+        input.attendancePolicyID,
+        input.promotion?.attendancePolicyID,
+        ...(input.empAttendancePolicies || []).map((row) => row.attendancePolicyID),
+      ],
+      factualAttendancePolicyIDs: (input.empFactualAttendancePolicies || []).map(
+        (row) => row.factualAttendancePolicyID,
+      ),
+      workShiftIDs: [
+        input.workShiftID,
+        input.promotion?.workShiftID,
+        ...(input.empWorkShifts || []).map((row) => row.workShiftID),
+      ],
+      factualWorkShiftIDs: (input.empFactualWorkShifts || []).map(
+        (row) => row.factualWorkShiftID,
+      ),
+      monthlyPayGradeIDs: [
+        input.monthlyPayGradeID,
+        input.promotion?.monthlyPayGradeID,
+      ],
+      hourlyPayGradeIDs: [
+        input.hourlyPayGradeID,
+        input.promotion?.hourlyPayGradeID,
+      ],
+      contractorIDs: [
+        input.contractorID,
+        ...(input.empContractors || []).map((row) => row.contractorID),
+      ],
+      deviceIDs: [
+        ...(input.devices || []).map((row) => row.deviceID),
+        ...(input.tokenDevices || []).map((row) => row.deviceID),
+      ],
+    };
+  }
+
   // CREATE employee with nested rows AND credentials with hashed password
   async create(dto: CreateManageEmployeeDto, req?: Request) {
     const {
       serviceProviderID,
-      companyID,
+      companyID: incomingCompanyID,
       branchesID,
       contractorID,
       departmentNameID,
@@ -192,6 +538,38 @@ export class ManageEmployeeService {
       promotion,
       ...scalars
     } = dto;
+
+    const forcedCompanyID = await this.tenantForcedCompanyID(req);
+    const companyID = forcedCompanyID ?? incomingCompanyID;
+    if (forcedCompanyID && !this.toPositiveId(companyID)) {
+      throw new BadRequestException('Company is required to save an employee');
+    }
+    await this.assertMasterDataBelongsToCompany({
+      companyID,
+      ...this.masterDataIdsFromEmployeeInput({
+        departmentNameID,
+        designationID,
+        branchesID,
+        leavePolicyID,
+        attendancePolicyID,
+        workShiftID,
+        monthlyPayGradeID,
+        hourlyPayGradeID,
+        contractorID,
+        empDepartments,
+        empDesignations,
+        empBranches,
+        empLeavePolicies,
+        empAttendancePolicies,
+        empFactualAttendancePolicies,
+        empWorkShifts,
+        empFactualWorkShifts,
+        empContractors,
+        devices,
+        tokenDevices,
+        promotion,
+      }),
+    });
 
     const created = await this.prisma.$transaction(async (tx) => {
       // Auto-generate the employee ID from the company name prefix when not
@@ -495,31 +873,28 @@ export class ManageEmployeeService {
 
       let plainInitialPassword: string | null = null;
 
-      const loginUsername = this.employeeLoginUsername(
-        scalars.personalEmail,
-        scalars.businessEmail,
-      );
+      const loginUsername = this.employeeCodeUsername(employee.employeeID);
       const initialPassword = this.employeeInitialPassword(scalars.personalPhoneNo);
 
       if ((scalars.personalPhoneNo || scalars.personalEmail || scalars.businessEmail) &&
           (!loginUsername || !initialPassword)) {
         throw new BadRequestException(
-          'Employee email and mobile number are required to create login credentials',
+          'Employee ID and mobile number are required to create login credentials',
         );
       }
 
-      if (loginUsername && initialPassword) {
+      if (loginUsername && initialPassword && !employee.isCompanyOwner) {
         const existingCred = await tx.employeeCredentials.findUnique({
           where: { employeeID: employee.id },
         });
 
         if (!existingCred) {
           const taken = await tx.employeeCredentials.findFirst({
-            where: { username: loginUsername },
+            where: { username: { equals: loginUsername, mode: 'insensitive' } },
           });
           if (taken) {
             throw new BadRequestException(
-              'An employee login already exists for this email address',
+              'An employee login already exists for this employee ID',
             );
           }
 
@@ -950,18 +1325,23 @@ export class ManageEmployeeService {
         },
 
         select: {
+          employeeID: true,
+          isCompanyOwner: true,
           onboardingApprovalStatus: true,
           lifecycleStatus: true,
           isDeleted: true,
-          personalPhoneNo: true,
-          personalEmail: true,
-          businessEmail: true,
         },
       });
 
     if (!employee) {
       throw new NotFoundException(
         `Employee ${employeeID} not found`,
+      );
+    }
+
+    if (employee.isCompanyOwner) {
+      throw new BadRequestException(
+        'Login credentials for company owners are managed from the company form',
       );
     }
 
@@ -985,22 +1365,32 @@ export class ManageEmployeeService {
       throw new Error('Employee credentials not found');
     }
 
-    const plainPassword = this.employeeInitialPassword(employee.personalPhoneNo);
-    if (!plainPassword) {
+    const loginUsername = this.employeeCodeUsername(employee.employeeID);
+    if (!loginUsername) {
       throw new BadRequestException(
-        'Employee mobile number is required to reset password',
+        'Employee ID is required to generate login credentials',
       );
     }
+
+    const taken = await this.prisma.employeeCredentials.findFirst({
+      where: {
+        username: { equals: loginUsername, mode: 'insensitive' },
+        employeeID: { not: employeeID },
+      },
+    });
+    if (taken) {
+      throw new BadRequestException(
+        'An employee login already exists for this employee ID',
+      );
+    }
+
+    const plainPassword = this.generateTemporaryPassword();
     const hashedPassword = await this.hashPassword(plainPassword);
-    const loginUsername = this.employeeLoginUsername(
-      employee.personalEmail,
-      employee.businessEmail,
-    );
 
     const updated = await this.prisma.employeeCredentials.update({
       where: { employeeID },
       data: {
-        ...(loginUsername ? { username: loginUsername } : {}),
+        username: loginUsername,
         password: hashedPassword,
         mustChangePassword: true,
         passwordChangedAt: null,
@@ -1039,6 +1429,8 @@ export class ManageEmployeeService {
 
         select: {
           id: true,
+          employeeID: true,
+          isCompanyOwner: true,
           onboardingApprovalStatus: true,
           lifecycleStatus: true,
           isDeleted: true,
@@ -1048,6 +1440,12 @@ export class ManageEmployeeService {
     if (!employee) {
       throw new NotFoundException(
         `Employee ${employeeID} not found`,
+      );
+    }
+
+    if (employee.isCompanyOwner) {
+      throw new BadRequestException(
+        'Login credentials for company owners are managed from the company form',
       );
     }
 
@@ -1086,6 +1484,16 @@ export class ManageEmployeeService {
     } = {
       ...data,
     };
+
+    if (data.username) {
+      const loginUsername = this.employeeCodeUsername(employee.employeeID);
+      if (!loginUsername) {
+        throw new BadRequestException(
+          'Employee ID is required to save login credentials',
+        );
+      }
+      updateData.username = loginUsername;
+    }
 
     if (data.password) {
       updateData.password =
@@ -1272,6 +1680,7 @@ export class ManageEmployeeService {
         employeeFirstName: true,
         employeeLastName: true,
         employeeID: true,
+        isCompanyOwner: true,
         businessEmail: true,
         companyID: true,
         branchesID: true,
@@ -1572,7 +1981,7 @@ export class ManageEmployeeService {
   async update(id: number, dto: UpdateManageEmployeeDto, req?: Request) {
     const {
       serviceProviderID,
-      companyID,
+      companyID: incomingCompanyID,
       branchesID,
       contractorID,
       // Extract basic position fields
@@ -1640,6 +2049,47 @@ export class ManageEmployeeService {
         `Employee ${id} not found`,
       );
     }
+
+    const forcedCompanyID = await this.tenantForcedCompanyID(req);
+    if (
+      forcedCompanyID &&
+      this.toPositiveId(beforeUpdate.companyID) &&
+      this.toPositiveId(beforeUpdate.companyID) !== forcedCompanyID
+    ) {
+      throw new BadRequestException(
+        'Employee does not belong to your company',
+      );
+    }
+
+    const companyID = forcedCompanyID ?? incomingCompanyID;
+    await this.assertMasterDataBelongsToCompany({
+      companyID:
+        this.toPositiveId(companyID) ??
+        this.toPositiveId(beforeUpdate.companyID),
+      ...this.masterDataIdsFromEmployeeInput({
+        departmentNameID,
+        designationID,
+        branchesID,
+        leavePolicyID,
+        attendancePolicyID,
+        workShiftID,
+        monthlyPayGradeID,
+        hourlyPayGradeID,
+        contractorID,
+        empDepartments,
+        empDesignations,
+        empBranches,
+        empLeavePolicies,
+        empAttendancePolicies,
+        empFactualAttendancePolicies,
+        empWorkShifts,
+        empFactualWorkShifts,
+        empContractors,
+        devices,
+        tokenDevices,
+        promotion,
+      }),
+    });
 
     if (
       beforeUpdate.onboardingApprovalStatus ===
@@ -1779,15 +2229,10 @@ export class ManageEmployeeService {
           });
         }
 
-        // Create credentials on first save from email + mobile. Do not
+        // Create credentials on first save from employee ID + mobile. Do not
         // overwrite an existing login username when the employee is updated.
-        const nextLoginUsername = this.employeeLoginUsername(
-          scalars.personalEmail !== undefined
-            ? scalars.personalEmail
-            : oldData?.personalEmail,
-          scalars.businessEmail !== undefined
-            ? scalars.businessEmail
-            : oldData?.businessEmail,
+        const nextLoginUsername = this.employeeCodeUsername(
+          oldData?.employeeID,
         );
         const nextPhone =
           scalars.personalPhoneNo !== undefined
@@ -1818,13 +2263,17 @@ export class ManageEmployeeService {
               data: updateData,
             });
 
-          } else if (nextLoginUsername && nextInitialPassword) {
+          } else if (
+            nextLoginUsername &&
+            nextInitialPassword &&
+            !oldData?.isCompanyOwner
+          ) {
             const taken = await tx.employeeCredentials.findFirst({
-              where: { username: nextLoginUsername },
+              where: { username: { equals: nextLoginUsername, mode: 'insensitive' } },
             });
             if (taken) {
               throw new BadRequestException(
-                'An employee login already exists for this email address',
+                'An employee login already exists for this employee ID',
               );
             }
 

@@ -5,7 +5,7 @@ import { LayoutDashboard } from "lucide-react";
 import { CompanyAdminEnterpriseDashboard } from "@/app/dashboard/components/CompanyAdminEnterpriseDashboard";
 import { EmpDesktopPage } from "@/app/components/emp/desktop/EmpDesktopPage";
 import { authHeaders } from "@/lib/auth";
-import { hasCompanyAccessFlag, readCompanyAccess } from "@/lib/companyAccess";
+import { hasCompanyAccessFlag, isCompanyAdminLikeRole, readCompanyAccess } from "@/lib/companyAccess";
 import { useCurrentUser } from "@/app/hooks/useCurrentUser";
 import { useOptionalEmpPortalPageContext } from "@/app/components/layout/emp-portal-page-context";
 import { getActiveCompanyId } from "@/app/utils/sidebarContext";
@@ -25,7 +25,7 @@ export function EmpCompanyEnterpriseHome({ firstName }: { firstName?: string }) 
   const inPortal = Boolean(useOptionalEmpPortalPageContext());
   const canShowCompanyDashboard =
     hasCompanyAccessFlag() ||
-    String(user?.role || "").toUpperCase() === "COMPANY_ADMIN";
+    isCompanyAdminLikeRole(user?.role);
   const [ready, setReady] = useState(false);
   const [overview, setOverview] = useState<any>(null);
   const [widgets, setWidgets] = useState<any>(null);
@@ -69,10 +69,17 @@ export function EmpCompanyEnterpriseHome({ firstName }: { firstName?: string }) 
         if (dRes.ok) {
           const rows = await dRes.json();
           setDeptRows(
-            (Array.isArray(rows) ? rows : []).map((r: any) => ({
-              name: r.departmentName || r.name || "Department",
-              count: Number(r.employeeCount ?? r.count ?? 0),
-            })),
+            (Array.isArray(rows) ? rows : [])
+              .filter(
+                (r: any) =>
+                  !companyID ||
+                  Number(r.companyID) === Number(companyID) ||
+                  r.companyID == null,
+              )
+              .map((r: any) => ({
+                name: r.departmentName || r.name || "Department",
+                count: Number(r.employeeCount ?? r.count ?? 0),
+              })),
           );
         }
       } catch {

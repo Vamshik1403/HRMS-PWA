@@ -1267,7 +1267,7 @@ export class CompanyService {
       }
     }
 
-    if (role === 'COMPANY_ADMIN' || role === 'ADMIN' || role === 'BRANCH_ADMIN') {
+    if (role === 'COMPANY_ADMIN' || role === 'MULTI_COMPANY_ADMIN' || role === 'ADMIN' || role === 'BRANCH_ADMIN') {
       if (Number.isFinite(tokenCompanyId) && tokenCompanyId > 0) {
         const home = await this.prisma.company.findUnique({
           where: { id: tokenCompanyId },

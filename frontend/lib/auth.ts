@@ -28,5 +28,18 @@ export function authHeaders(
   extra: Record<string, string> = {},
 ): Record<string, string> {
   const token = getAccessToken();
-  return token ? { Authorization: `Bearer ${token}`, ...extra } : { ...extra };
+  const headers: Record<string, string> = token
+    ? { Authorization: `Bearer ${token}`, ...extra }
+    : { ...extra };
+  if (typeof window !== "undefined") {
+    try {
+      const activeCompanyID = Number(sessionStorage.getItem("activeCompanyID") || 0);
+      if (Number.isFinite(activeCompanyID) && activeCompanyID > 0) {
+        headers["X-Active-Company-ID"] = String(activeCompanyID);
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+  return headers;
 }

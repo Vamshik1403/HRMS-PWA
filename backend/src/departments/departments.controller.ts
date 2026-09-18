@@ -7,6 +7,7 @@ import {
   Param,
   Delete,
   ParseIntPipe,
+  Query,
 } from '@nestjs/common';
 import { DepartmentsService } from './departments.service';
 import { CreateDepartmentsDto } from './dto/create-department.dto';
@@ -27,8 +28,11 @@ export class DepartmentsController {
   }
 
   @Get('with-headcount')
-  withHeadcount() {
-    return this.departmentsService.findAllWithHeadcount();
+  withHeadcount(@Query('companyID') companyID?: string) {
+    const parsed = Number(companyID);
+    const scopedId =
+      Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
+    return this.departmentsService.findAllWithHeadcount(scopedId);
   }
 
   @Get(':id')

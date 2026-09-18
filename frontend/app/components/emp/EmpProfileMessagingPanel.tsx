@@ -23,7 +23,7 @@ import { useCurrentUser } from "@/app/hooks/useCurrentUser";
 import { useEmpManagerScope } from "@/app/hooks/useEmpManagerScope";
 import { useMemoChatPolling } from "@/app/hooks/useMemoChatPolling";
 import { authHeaders } from "@/lib/auth";
-import { isCompanyOwnerFlag } from "@/lib/companyAccess";
+import { isCompanyOwnerFlag, isCompanyAdminLikeRole } from "@/lib/companyAccess";
 import { useEmpPortalPageHeader } from "@/app/components/layout/emp-portal-page-context";
 import { reporteeDisplayName } from "@/app/utils/empManagerDisplay";
 import { resolveAttachmentUrl, uploadAttachmentFile } from "@/app/utils/uploadFile";
@@ -699,7 +699,7 @@ export function EmpProfileMessagingPanel({
 
   const issuedByRoleLabel = useMemo(() => {
     if (isManagerView) return "MANAGER";
-    if (user?.role === "COMPANY_ADMIN") return "COMPANY_ADMIN";
+    if (isCompanyAdminLikeRole(user?.role)) return "COMPANY_ADMIN";
     if (user?.role === "BRANCH_ADMIN") return "BRANCH_ADMIN";
     if (user?.role === "SUPERADMIN") return "SUPERADMIN";
     if (user?.role === "SERVICE_PROVIDER") return "SERVICE_PROVIDER";

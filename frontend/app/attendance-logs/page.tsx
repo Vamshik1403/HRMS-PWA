@@ -17,6 +17,7 @@ import { resolveScopedCompanyId } from "../utils/scopeContext";
 import { isDesktopManagerFlagSet } from "@/lib/desktopManager";
 import { TableBodySkeleton } from "@/app/components/ui/TableBodySkeleton";
 import { EmpDesktopPage } from "../components/emp/desktop/EmpDesktopPage";
+import { isCompanyAdminLikeRole } from "@/lib/companyAccess";
 
 const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL || "/backend";
 
@@ -146,7 +147,7 @@ export default function AttendanceLogsPage() {
     }
     if (
       user.role === "SERVICE_PROVIDER" ||
-      user.role === "COMPANY_ADMIN" ||
+      isCompanyAdminLikeRole(user.role) ||
       user.role === "ADMIN"
     ) {
       fetch(`${BACKEND}/users`, { cache: "no-store" })
@@ -174,7 +175,7 @@ export default function AttendanceLogsPage() {
     } else if (user.role === "SERVICE_PROVIDER") {
       const companyId = switchedCompanyId ?? currentUserMapping?.companyID;
       if (companyId) params.set("companyID", String(companyId));
-    } else if (user.role === "COMPANY_ADMIN" || user.role === "ADMIN") {
+    } else if (isCompanyAdminLikeRole(user.role) || user.role === "ADMIN") {
       const companyId =
         switchedCompanyId ?? currentUserMapping?.companyID ?? user.companyID;
       if (companyId) params.set("companyID", String(companyId));

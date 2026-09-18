@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { hasModuleWriteAccess } from "@/lib/companyAccess";
+import { hasModuleWriteAccess, isCompanyAdminLikeRole } from "@/lib/companyAccess";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
@@ -740,9 +740,9 @@ async function calculateSalaryCounts(
 
     let emp = empOverride;
     if (!emp) {
-      const empList: any[] = await robustGet(API.emp);
+    const empList: any[] = await robustGet(API.emp);
       emp = empList.find((e) => e.id === employeeId) ??
-        empList.find((e) => [e.employeeID, e.empId, e.employeeId].includes(employeeId as any));
+      empList.find((e) => [e.employeeID, e.empId, e.employeeId].includes(employeeId as any));
     }
     if (!emp) throw new Error("Employee not found: " + employeeId);
 
@@ -1043,11 +1043,11 @@ async function calculateSalaryCounts(
           }
         }
       } else if (dayLogs.length >= 2) {
-        const totalWorkedMinutes = Math.round((dayLogs[dayLogs.length - 1].getTime() - dayLogs[0].getTime()) / 60000);
-        const firstPunch = dayLogs[0];
-        const lastPunch = dayLogs[dayLogs.length - 1];
-        const isLateMark = firstPunch > frame.graceEnd && firstPunch <= frame.lateEnd;
-        const isVeryLate = firstPunch > frame.lateEnd;
+          const totalWorkedMinutes = Math.round((dayLogs[dayLogs.length - 1].getTime() - dayLogs[0].getTime()) / 60000);
+          const firstPunch = dayLogs[0];
+          const lastPunch = dayLogs[dayLogs.length - 1];
+          const isLateMark = firstPunch > frame.graceEnd && firstPunch <= frame.lateEnd;
+          const isVeryLate = firstPunch > frame.lateEnd;
         const isEarlyCheckout = lastPunch < frame.earlyOutStart;
 
         if (totalWorkedMinutes < halfDayMin) {
@@ -1061,17 +1061,17 @@ async function calculateSalaryCounts(
           const used = lateMarksByMonth.get(monthKey) || 0;
           const nextCount = used + 1;
           if (nextCount >= lateMarkCount) {
-            dayStatus = lateMarkMarkAsAction.includes("absent") ? "absent" : "half";
+                dayStatus = lateMarkMarkAsAction.includes("absent") ? "absent" : "half";
             lateMarksByMonth.set(monthKey, 0);
-          } else {
+              } else {
             lateMarksByMonth.set(monthKey, nextCount);
-            dayStatus = "full";
-          }
+                dayStatus = "full";
+              }
         } else {
           dayStatus = "full";
-        }
-      } else {
-        dayStatus = "absent";
+          }
+        } else {
+          dayStatus = "absent";
       }
 
       debug.logs = (logsByDate.get(key) || []).length;
@@ -1542,11 +1542,11 @@ export async function computeSalarySlipForRow(
     getShiftDays(emp),
     getHolidayCount(branchId, effectiveStart, effectiveEnd, companyId),
     calculateSalaryCounts(
-      employeeId,
-      monthLabel,
-      companyId,
-      branchId,
-      effectiveStart,
+    employeeId,
+    monthLabel,
+    companyId,
+    branchId,
+    effectiveStart,
       emp,
     ),
     getMonthlyPayGrade(companyId, branchId, emp),
@@ -1783,7 +1783,7 @@ export function GenerateSalaryManagement() {
   const user = useCurrentUser()
   const [items, setItems] = useState<GenerateSalaryRow[]>([])
   const [listLoading, setListLoading] = useState(true)
-  const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN" || user?.role === "BRANCH_ADMIN" || hasModuleWriteAccess("PAYROLL")
+  const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || isCompanyAdminLikeRole(user?.role) || user?.role === "BRANCH_ADMIN" || hasModuleWriteAccess("PAYROLL")
 
   const [spList, setSpList] = useState<SP[]>([]);
   const [coList, setCoList] = useState<CO[]>([]);
@@ -1986,7 +1986,7 @@ export function GenerateSalaryManagement() {
 
       // COMPANY_ADMIN / BRANCH_ADMIN / company operators (employee-owner)
       if (
-        user?.role === "COMPANY_ADMIN" ||
+        isCompanyAdminLikeRole(user?.role) ||
         user?.role === "BRANCH_ADMIN" ||
         user?.role === "ADMIN" ||
         (user?.role === "EMPLOYEE" && isCompanyModuleOperator(user))
@@ -2321,7 +2321,7 @@ export function GenerateSalaryManagement() {
 
       // COMPANY_ADMIN / BRANCH_ADMIN / company operators
       if (
-        user?.role === "COMPANY_ADMIN" ||
+        isCompanyAdminLikeRole(user?.role) ||
         user?.role === "BRANCH_ADMIN" ||
         user?.role === "ADMIN" ||
         (user?.role === "EMPLOYEE" && isCompanyModuleOperator(user))
@@ -2384,7 +2384,7 @@ export function GenerateSalaryManagement() {
         branchId = Number(formData.branchesID);
       }
     } else if (
-      user?.role === "COMPANY_ADMIN" ||
+      isCompanyAdminLikeRole(user?.role) ||
       user?.role === "BRANCH_ADMIN" ||
       user?.role === "ADMIN" ||
       (user?.role === "EMPLOYEE" && isCompanyModuleOperator(user))
@@ -2535,7 +2535,7 @@ export function GenerateSalaryManagement() {
 
         if (selectedBranch.companyID) {
           updates.companyID = selectedBranch.companyID;
-          updates.coAutocomplete = companyName;
+        updates.coAutocomplete = companyName;
         }
 
         setFormData(prev => ({ ...prev, ...updates }));
@@ -2587,10 +2587,10 @@ export function GenerateSalaryManagement() {
         branchFilter === "ALL" || branchFilter === String(g.branchesID ?? "");
       const matchesSearch =
         !q ||
-        (g.serviceProvider?.companyName ?? "").toLowerCase().includes(q) ||
-        (g.company?.companyName ?? "").toLowerCase().includes(q) ||
-        (g.branches?.branchName ?? "").toLowerCase().includes(q) ||
-        empName(g.manageEmployee).toLowerCase().includes(q) ||
+      (g.serviceProvider?.companyName ?? "").toLowerCase().includes(q) ||
+      (g.company?.companyName ?? "").toLowerCase().includes(q) ||
+      (g.branches?.branchName ?? "").toLowerCase().includes(q) ||
+      empName(g.manageEmployee).toLowerCase().includes(q) ||
         (g.monthPeriod ?? "").toLowerCase().includes(q);
       return matchesBranch && matchesSearch;
     });
@@ -3288,7 +3288,7 @@ export function GenerateSalaryManagement() {
                           ) : null
                         }
                       />
-                    </div>
+                            </div>
                   </div>
                 </div>
 

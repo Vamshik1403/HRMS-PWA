@@ -33,6 +33,7 @@ export function parseViewer(query: Record<string, string | undefined>): TaskView
 const TASK_MANAGER_ROLES = new Set([
   'SUPERADMIN',
   'COMPANY_ADMIN',
+  'MULTI_COMPANY_ADMIN',
   'ADMIN',
   'SERVICE_PROVIDER',
   'BRANCH_ADMIN',

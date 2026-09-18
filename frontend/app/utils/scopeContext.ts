@@ -1,6 +1,7 @@
 import { isDesktopManagerFlagSet } from "@/lib/desktopManager";
 import {
   hasCompanyAccessFlag,
+  isCompanyAdminLikeRole,
   isCompanyOwnerFlag,
 } from "@/lib/companyAccess";
 import { getActiveCompanyId, getSidebarContext } from "./sidebarContext";
@@ -32,7 +33,7 @@ export function canDesktopManagerManage(user?: ScopedUser): boolean {
 /** Company owners / granted module operators logged in as EMPLOYEE. */
 export function isCompanyModuleOperator(user?: ScopedUser): boolean {
   if (!user?.role) return false;
-  if (user.role === "COMPANY_ADMIN" || user.role === "ADMIN") return true;
+  if (isCompanyAdminLikeRole(user.role) || user.role === "ADMIN") return true;
   if (user.role === "EMPLOYEE") {
     return (
       isCompanyOwnerFlag() ||
@@ -195,7 +196,7 @@ export async function filterCompanyScopedRecords<T extends ScopeRecord>(
     return all;
   }
 
-  if (user.role === "COMPANY_ADMIN" || user.role === "ADMIN") {
+  if (isCompanyAdminLikeRole(user.role) || user.role === "ADMIN") {
     const companyId = resolveScopedCompanyId(user);
     return companyId != null
       ? all.filter((r) => Number(r.companyID) === Number(companyId))
@@ -271,7 +272,7 @@ export async function filterBranchesForUser<T extends ScopeRecord>(
     return all;
   }
 
-  if (user.role === "COMPANY_ADMIN" || user.role === "ADMIN") {
+  if (isCompanyAdminLikeRole(user.role) || user.role === "ADMIN") {
     const companyId = resolveScopedCompanyId(user);
     return companyId != null
       ? all.filter((r) => Number(r.companyID) === Number(companyId))
@@ -357,7 +358,7 @@ export async function filterCompaniesForUser<
   }
 
   if (
-    user.role === "COMPANY_ADMIN" ||
+    isCompanyAdminLikeRole(user.role) ||
     user.role === "ADMIN" ||
     user.role === "BRANCH_ADMIN"
   ) {

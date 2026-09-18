@@ -39,6 +39,7 @@ import { Label } from "../ui/label";
 import { toast } from "sonner";
 import { isPasswordValid, PASSWORD_POLICY_MESSAGE } from "@/lib/passwordRules";
 import { PasswordRuleHints } from "../ui/password-rule-hints";
+import { isCompanyAdminLikeRole } from "@/lib/companyAccess";
 import { Eye, EyeOff } from "lucide-react";
 import { TASK_MANAGEMENT_ENABLED } from "@/app/config/featureFlags";
 import { dispatchAppRefresh } from "@/app/utils/appRefresh";
@@ -226,7 +227,7 @@ if (currentUser?.role !== "SUPERADMIN") return;
 
   const isSuperAdmin = currentUser?.role === 'SUPERADMIN'
   const isServiceProvider = currentUser?.role === 'SERVICE_PROVIDER'
-  const isCompanyAdmin = currentUser?.role === 'COMPANY_ADMIN'
+  const isCompanyAdmin = isCompanyAdminLikeRole(currentUser?.role)
   const isAdmin = currentUser?.role === 'ADMIN'
   const isBranchAdmin = currentUser?.role === 'BRANCH_ADMIN'
 const isDesktopManager = desktopManager && currentUser?.role === 'EMPLOYEE'
@@ -272,7 +273,10 @@ const isCompanyScopedSidebarUser =
 
     setProfileForm({
       username: currentUser?.username || "", password: "", confirmPassword: "",
-      fullName: "", email: "", mobileNo: "", address: "", city: "", state: "", pincode: "",
+      fullName: [currentUser?.firstName, currentUser?.lastName].filter(Boolean).join(" ").trim(),
+      email: currentUser?.email || "",
+      mobileNo: currentUser?.contactNo || "",
+      address: "", city: "", state: "", pincode: "",
     })
     setProfileOpen(true)
     setProfileLoading(true)
@@ -316,18 +320,16 @@ const isCompanyScopedSidebarUser =
       })
       if (res.ok) {
         const data = await res.json()
-        if (data) {
-          setProfileForm(prev => ({
-            ...prev,
-            fullName: data.fullName || "",
-            email: data.email || "",
-            mobileNo: data.mobileNo || "",
-            address: data.address || "",
-            city: data.city || "",
-            state: data.state || "",
-            pincode: data.pincode || "",
-          }))
-        }
+        setProfileForm(prev => ({
+          ...prev,
+          fullName: data?.fullName || [currentUser?.firstName, currentUser?.lastName].filter(Boolean).join(" ").trim() || prev.fullName,
+          email: data?.email || currentUser?.email || prev.email,
+          mobileNo: data?.mobileNo || currentUser?.contactNo || prev.mobileNo,
+          address: data?.address || "",
+          city: data?.city || "",
+          state: data?.state || "",
+          pincode: data?.pincode || "",
+        }))
       }
     } catch { /* ignore */ }
     finally { setProfileLoading(false) }
@@ -463,7 +465,7 @@ const isCompanyScopedSidebarUser =
 const currentRole = String(currentUser?.role || "").toUpperCase();
 
 const canShowCompanySwitcher =
-  currentRole === "COMPANY_ADMIN" && accessibleCompanies.length > 1;
+  isCompanyAdminLikeRole(currentRole) && accessibleCompanies.length > 1;
 
   const activeCompany = useMemo(() => {
     const storedCompanyID = getStoredActiveCompanyID();
@@ -520,7 +522,7 @@ const canShowCompanySwitcher =
     const targetDashboard =
       currentUser?.role === "SUPERADMIN"
         ? "/superdashboard"
-        : currentUser?.role === "COMPANY_ADMIN"
+        : isCompanyAdminLikeRole(currentUser?.role)
           ? "/my-company"
           : "/dashboard"
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { hasModuleWriteAccess } from "@/lib/companyAccess";
+import { hasModuleWriteAccess, isCompanyAdminLikeRole } from "@/lib/companyAccess";
 import { getSidebarContext } from "../utils/sidebarContext";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
@@ -107,7 +107,7 @@ function exitTypeRequiresNotice(exitType: string) {
 
 export default function TerminationManagement() {
   const user = useCurrentUser();
-  const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN" || user?.role === "BRANCH_ADMIN" || user?.role === "ADMIN" || hasModuleWriteAccess("OFFBOARDING");
+  const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || isCompanyAdminLikeRole(user?.role) || user?.role === "BRANCH_ADMIN" || user?.role === "ADMIN" || hasModuleWriteAccess("OFFBOARDING");
 
   const [terminations, setTerminations] = useState<Termination[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);

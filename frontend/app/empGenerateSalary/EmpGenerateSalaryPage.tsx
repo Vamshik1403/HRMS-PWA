@@ -19,6 +19,7 @@ import { getActiveCompanyId, getSidebarContext } from "../utils/sidebarContext";
 import { resolveScopedCompanyId } from "../utils/scopeContext";
 import { getPageCache, setPageCache } from "../utils/pageCache";
 import { formatPayslipPeriodLabel } from "../utils/payslipPeriodLabel";
+import { isCompanyAdminLikeRole } from "@/lib/companyAccess";
 
 
 /* =======================
@@ -1144,7 +1145,7 @@ export function EmpGenerateSalary() {
 
 const user = useCurrentUser()
 const [items, setItems] = useState<GenerateSalaryRow[]>(() => getPageCache<GenerateSalaryRow[]>("empPayslips") ?? [])
-const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN" || user?.role === "BRANCH_ADMIN"
+const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || isCompanyAdminLikeRole(user?.role) || user?.role === "BRANCH_ADMIN"
 
   // suggestion states
   const [spList, setSpList] = useState<SP[]>([]);

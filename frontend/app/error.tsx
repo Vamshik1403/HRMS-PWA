@@ -10,7 +10,7 @@ function getDefaultHomeHref(): string {
     const role = String(user?.role || "").toUpperCase();
     if (user?.type === "employee" || role === "EMPLOYEE") return "/empdashboard";
     if (role === "SUPERADMIN") return "/superdashboard";
-    if (role === "COMPANY_ADMIN") return "/my-company";
+    if (role === "COMPANY_ADMIN" || role === "MULTI_COMPANY_ADMIN") return "/my-company";
     if (role === "SERVICE_PROVIDER" || role === "ADMIN" || role === "BRANCH_ADMIN") {
       return "/dashboard";
     }

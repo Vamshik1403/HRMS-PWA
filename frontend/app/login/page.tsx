@@ -14,6 +14,7 @@ import { isDesktopBrowser, resolveDesktopManagerAfterLogin } from '@/lib/desktop
 import { isJwtExpired } from '@/lib/jwtUtils'
 import {
   persistCompanyAccessFromUser,
+  isCompanyAdminLikeRole,
 } from '@/lib/companyAccess'
 import { preloadHeroImages } from '@/app/components/emp/desktop/HeroBackground'
 
@@ -101,7 +102,7 @@ export default function LoginPage() {
       if (role === 'EMPLOYEE' || user?.type === 'employee') {
         router.replace('/empdashboard')
       } else if (role) {
-        router.replace(role === 'SUPERADMIN' ? '/superdashboard' : role === 'COMPANY_ADMIN' ? '/my-company' : '/dashboard')
+        router.replace(role === 'SUPERADMIN' ? '/superdashboard' : isCompanyAdminLikeRole(role) ? '/my-company' : '/dashboard')
       } else {
         setAuthChecked(true)
       }
@@ -188,12 +189,29 @@ export default function LoginPage() {
           Authorization: `Bearer ${accessToken}`,
         },
       })
-      const completeUser = userDetailsRes.data
+      const completeUser = {
+        ...basicUser,
+        ...userDetailsRes.data,
+        userCompanies:
+          userDetailsRes.data?.userCompanies?.length
+            ? userDetailsRes.data.userCompanies
+            : basicUser.userCompanies,
+        companyIDs:
+          userDetailsRes.data?.companyIDs?.length
+            ? userDetailsRes.data.companyIDs
+            : basicUser.companyIDs,
+      }
       localStorage.setItem('user', JSON.stringify(completeUser))
       const role = String(completeUser.role || '').toUpperCase()
+      const activeCompanyID = Number(
+        completeUser.activeCompanyID || completeUser.companyID || completeUser.companyIDs?.[0] || 0,
+      )
+      if (Number.isFinite(activeCompanyID) && activeCompanyID > 0) {
+        sessionStorage.setItem('activeCompanyID', String(activeCompanyID))
+      }
       if (role === 'SUPERADMIN') {
         router.push('/superdashboard')
-      } else if (role === 'COMPANY_ADMIN') {
+      } else if (isCompanyAdminLikeRole(role)) {
         router.push('/my-company')
       } else if (role === 'SERVICE_PROVIDER' || role === 'ADMIN' || role === 'BRANCH_ADMIN') {
         router.push('/dashboard')
@@ -204,9 +222,15 @@ export default function LoginPage() {
     } catch {
       localStorage.setItem('user', JSON.stringify(basicUser))
       const role = String(basicUser.role || '').toUpperCase()
+      const activeCompanyID = Number(
+        basicUser.activeCompanyID || basicUser.companyID || basicUser.companyIDs?.[0] || 0,
+      )
+      if (Number.isFinite(activeCompanyID) && activeCompanyID > 0) {
+        sessionStorage.setItem('activeCompanyID', String(activeCompanyID))
+      }
       if (role === 'SUPERADMIN') {
         router.push('/superdashboard')
-      } else if (role === 'COMPANY_ADMIN') {
+      } else if (isCompanyAdminLikeRole(role)) {
         router.push('/my-company')
       } else if (role === 'SERVICE_PROVIDER' || role === 'ADMIN' || role === 'BRANCH_ADMIN') {
         router.push('/dashboard')

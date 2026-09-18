@@ -58,9 +58,6 @@ import { EmployeeHolidayOverrideModule } from './employee-holiday-override/emplo
 import { EmployeeWeeklyOffModule } from './employee-weekly-off/employee-weekly-off.module';
 import { ImportAttendanceModule } from './import-attendance/import-attendance.module';
 import { ContractorPayoutModule } from './contractor-payout/contractor-payout.module';
-import { FactualWorkShiftModule } from './factual-work-shift/factual-work-shift.module';
-import { FactualAttendancePolicyModule } from './factual-attendance-policy/factual-attendance-policy.module';
-import { FactualRosterModule } from './factual-roster/factual-roster.module';
 import { ComplianceRulesModule } from './compliance-rules/compliance-rules.module';
 import { EmpLocationAttendanceModule } from './emp-location-attendance/emp-location-attendance.module';
 import { PushNotificationsModule } from './push-notifications/push-notifications.module';
@@ -149,9 +146,6 @@ import { CompanyPolicyModule } from './company-policy/company-policy.module';
     EmployeeWeeklyOffModule,
     ImportAttendanceModule,
     ContractorPayoutModule,
-    FactualWorkShiftModule,
-    FactualAttendancePolicyModule,
-    FactualRosterModule,
     ComplianceRulesModule,
     EmpLocationAttendanceModule,
     PushNotificationsModule,

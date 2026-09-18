@@ -16,7 +16,7 @@ import { useClientTable, sortRows } from "../hooks/use-client-table"
 import { SearchSuggestInput } from "../components/SearchSuggestInput"
 import { CompanyBranchField } from "../components/app/company-branch-field"
 import { useCurrentUser } from "../hooks/useCurrentUser";
-import { hasModuleWriteAccess } from "@/lib/companyAccess";
+import { hasModuleWriteAccess, isCompanyAdminLikeRole } from "@/lib/companyAccess";
 import { toast } from "sonner";
 import { readApiErrorMessage } from "../utils/api-error";
 import { getSidebarContext } from "../utils/sidebarContext";
@@ -135,7 +135,7 @@ export function LeavePolicyManagement() {
   const canManage =
     user?.role === "SUPERADMIN" ||
     user?.role === "SERVICE_PROVIDER" ||
-    user?.role === "COMPANY_ADMIN" ||
+    isCompanyAdminLikeRole(user?.role) ||
     user?.role === "ADMIN" ||
     user?.role === "BRANCH_ADMIN" ||
     hasModuleWriteAccess("LEAVE_POLICY");
@@ -168,7 +168,7 @@ useEffect(() => {
   }
   if (
     user.role === "SERVICE_PROVIDER" ||
-    user.role === "COMPANY_ADMIN" ||
+    isCompanyAdminLikeRole(user.role) ||
     user.role === "ADMIN"
   ) {
     (async () => {
@@ -193,7 +193,7 @@ useEffect(() => {
       companyID,
       branchesID: sameCompany ? (currentUserMapping.branchesID ?? p.branchesID) : 0,
     }));
-  } else if (user?.role === "COMPANY_ADMIN" || user?.role === "ADMIN") {
+  } else if (isCompanyAdminLikeRole(user?.role) || user?.role === "ADMIN") {
     setFormData((p) => ({
       ...p,
       serviceProviderID: currentUserMapping.serviceProviderID ?? p.serviceProviderID,

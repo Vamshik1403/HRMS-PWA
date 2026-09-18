@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
-import { hasModuleWriteAccess } from "@/lib/companyAccess";
+import { hasModuleWriteAccess, isCompanyAdminLikeRole } from "@/lib/companyAccess";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
@@ -87,7 +87,7 @@ export function WorkShiftsManagement() {
   const canManage =
     user?.role === "SUPERADMIN" ||
     user?.role === "SERVICE_PROVIDER" ||
-    user?.role === "COMPANY_ADMIN" ||
+    isCompanyAdminLikeRole(user?.role) ||
     user?.role === "BRANCH_ADMIN" ||
     canDesktopManagerManage(user) ||
     hasModuleWriteAccess("WORK_SHIFTS");
@@ -863,7 +863,7 @@ await loadBranchFilterList();
 
                 {/* MANAGER → Only Branch input */}
 {(user?.role === "SERVICE_PROVIDER" ||
-  user?.role === "COMPANY_ADMIN" ||
+  isCompanyAdminLikeRole(user?.role) ||
   user?.role === "BRANCH_ADMIN") && (
                   <CompanyBranchField
                     label="Branch Name"

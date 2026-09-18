@@ -5,7 +5,7 @@ import { useCurrentUser } from "../../hooks/useCurrentUser";
 import { getSidebarContext } from "../../utils/sidebarContext";
 import { NoticeBanner } from "../../components/ui/notice-banner";
 import { toast } from "sonner";
-import { isCompanyOwnerFlag, canViewModule } from "@/lib/companyAccess";
+import { isCompanyOwnerFlag, canViewModule, isCompanyAdminLikeRole } from "@/lib/companyAccess";
 
 const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL || "/backend";
 
@@ -18,7 +18,7 @@ export default function GeneralSettingsPage() {
 
   const canAccess =
     user?.role === "SUPERADMIN" ||
-    user?.role === "COMPANY_ADMIN" ||
+    isCompanyAdminLikeRole(user?.role) ||
     (user?.role === "EMPLOYEE" && (isCompanyOwnerFlag() || canViewModule("SETTINGS")));
 
   const resolveCompanyId = useCallback(async () => {
@@ -29,11 +29,11 @@ export default function GeneralSettingsPage() {
       return user.companyID;
     }
 
-    if (user?.role === "COMPANY_ADMIN" || user?.role === "ADMIN") {
+    if (isCompanyAdminLikeRole(user?.role) || user?.role === "ADMIN") {
       const res = await fetch(`${BACKEND}/users`, { cache: "no-store" });
       if (!res.ok) return null;
       const users = await res.json();
-      const me = users.find((u: { username?: string }) => u.username === user.username);
+      const me = users.find((u: { username?: string }) => u.username === user?.username);
       return me?.companyID ?? null;
     }
     return null;

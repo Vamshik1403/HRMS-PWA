@@ -39,6 +39,17 @@ export class UsersService {
         )
       }
 
+      const companyIDs = this.normalizeCompanyIDs(
+        createUserDto.companyID,
+        createUserDto.companyIDs,
+      )
+
+      if (role === UserRole.MULTI_COMPANY_ADMIN && companyIDs.length < 2) {
+        throw new BadRequestException(
+          'Select at least two companies for Multiple Company Access',
+        )
+      }
+
       if (!createUserDto.email?.trim()) {
         throw new BadRequestException('Email is required')
       }
@@ -57,11 +68,6 @@ export class UsersService {
       if (existingUser) {
         throw new ConflictException('Username already exists')
       }
-
-      const companyIDs = this.normalizeCompanyIDs(
-        createUserDto.companyID,
-        createUserDto.companyIDs,
-      )
 
       const primaryCompanyID =
         createUserDto.companyID ?? companyIDs[0] ?? null
@@ -84,7 +90,8 @@ export class UsersService {
               role === UserRole.SUPERADMIN ||
               role === UserRole.SERVICE_PROVIDER ||
               role === UserRole.ADMIN ||
-              role === UserRole.CONTRACTOR_ADMIN,
+              role === UserRole.CONTRACTOR_ADMIN ||
+              role === UserRole.MULTI_COMPANY_ADMIN,
             serviceProviderID: createUserDto.serviceProviderID ?? null,
             companyID: primaryCompanyID,
             branchesID: createUserDto.branchesID ?? null,
@@ -241,6 +248,13 @@ export class UsersService {
         updateUserDto.companyIDs,
       )
 
+      const nextRole = (updateUserDto.role as UserRole) || user.role
+      if (nextRole === UserRole.MULTI_COMPANY_ADMIN && companyIDs.length < 2) {
+        throw new BadRequestException(
+          'Select at least two companies for Multiple Company Access',
+        )
+      }
+
       const primaryCompanyID =
         updateUserDto.companyID ?? user.companyID ?? companyIDs[0] ?? null
 
@@ -258,6 +272,9 @@ export class UsersService {
         companyID: primaryCompanyID,
         branchesID: updateUserDto.branchesID ?? user.branchesID,
         contractorID: updateUserDto.contractorID ?? user.contractorID,
+        ...(nextRole === UserRole.MULTI_COMPANY_ADMIN
+          ? { requireLoginOtp: true }
+          : {}),
       }
 
       if (updateUserDto.password) {
@@ -383,9 +400,36 @@ export class UsersService {
   }
 
   async getProfile(userId: number) {
-    return this.prisma.userProfile.findUnique({
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        email: true,
+        contactNo: true,
+      },
+    })
+    if (!user) throw new NotFoundException(`User with ID ${userId} not found`)
+
+    const profile = await this.prisma.userProfile.findUnique({
       where: { userId },
     })
+    const fullNameFromUser = [user.firstName, user.lastName]
+      .filter(Boolean)
+      .join(' ')
+      .trim()
+
+    return {
+      userId,
+      fullName: String(profile?.fullName || '').trim() || fullNameFromUser || null,
+      email: String(profile?.email || '').trim() || user.email || null,
+      mobileNo: String(profile?.mobileNo || '').trim() || user.contactNo || null,
+      address: profile?.address ?? null,
+      city: profile?.city ?? null,
+      state: profile?.state ?? null,
+      pincode: profile?.pincode ?? null,
+    }
   }
 
   async upsertProfile(
@@ -400,11 +444,34 @@ export class UsersService {
       pincode?: string
     },
   ) {
-    return this.prisma.userProfile.upsert({
-      where: { userId },
-      update: data,
-      create: { userId, ...data },
-    })
+    const user = await this.prisma.user.findUnique({ where: { id: userId } })
+    if (!user) throw new NotFoundException(`User with ID ${userId} not found`)
+
+    const fullName = String(data.fullName || '').trim()
+    const nameParts = fullName.split(/\s+/).filter(Boolean)
+    const firstName = nameParts[0] || null
+    const lastName = nameParts.slice(1).join(' ') || null
+    const email = String(data.email || '').trim()
+    const mobileNo = String(data.mobileNo || '').trim()
+
+    const [profile] = await this.prisma.$transaction([
+      this.prisma.userProfile.upsert({
+        where: { userId },
+        update: data,
+        create: { userId, ...data },
+      }),
+      this.prisma.user.update({
+        where: { id: userId },
+        data: {
+          ...(firstName ? { firstName } : {}),
+          lastName,
+          ...(email ? { email } : {}),
+          ...(mobileNo ? { contactNo: mobileNo } : {}),
+        },
+      }),
+    ])
+
+    return profile
   }
 
   private excludePassword(user: any) {

@@ -8,7 +8,7 @@ import { authHeaders } from "@/lib/auth";
 import { setSidebarContext, getSidebarContext } from "@/app/utils/sidebarContext";
 import { getPageCache, setPageCache } from "@/app/utils/pageCache";
 import { isDesktopManagerFlagSet } from "@/lib/desktopManager";
-import { hasCompanyAccessFlag } from "@/lib/companyAccess";
+import { hasCompanyAccessFlag, isCompanyAdminLikeRole } from "@/lib/companyAccess";
 import { dispatchAppRefresh } from "@/app/utils/appRefresh";
 import { ensureFetchRefreshPatch } from "@/app/utils/patchFetchForRefresh";
 import { toast } from "sonner";
@@ -28,6 +28,12 @@ function getUserCompanyIds(user: any): number[] {
   const ids = new Set<number>();
   if (user?.companyID) ids.add(Number(user.companyID));
   if (user?.activeCompanyID) ids.add(Number(user.activeCompanyID));
+  if (Array.isArray(user?.companyIDs)) {
+    user.companyIDs.forEach((id: unknown) => {
+      const n = Number(id);
+      if (Number.isFinite(n) && n > 0) ids.add(n);
+    });
+  }
   if (Array.isArray(user?.userCompanies)) {
     user.userCompanies.forEach((uc: any) => {
       if (uc?.companyID) ids.add(Number(uc.companyID));
@@ -93,7 +99,7 @@ export function HrmsAppShell({ children }: { children: React.ReactNode }) {
 
   const isSuperAdmin = currentUser?.role === "SUPERADMIN";
   const isCompanyScopedSidebarUser =
-    currentUser?.role === "COMPANY_ADMIN" ||
+    isCompanyAdminLikeRole(currentUser?.role) ||
     currentUser?.role === "ADMIN" ||
     currentUser?.role === "BRANCH_ADMIN" ||
     (currentUser?.role === "EMPLOYEE" &&
@@ -149,11 +155,19 @@ export function HrmsAppShell({ children }: { children: React.ReactNode }) {
   }, [currentUser?.serviceProvider, currentUser?.serviceProviderID, fetchedServiceProviders]);
 
   const accessibleCompanies = useMemo(() => {
+    if (isCompanyScopedSidebarUser && assignedCompanyIds.length > 0) {
+      const spNameById = new Map(
+        displaySPs.map((sp) => [Number(sp.id), sp.companyName || ""]),
+      );
+      return fetchedCompanies
+        .filter((c) => assignedCompanyIds.includes(Number(c.id)))
+        .map((company: any) => ({
+          ...company,
+          serviceProviderName: spNameById.get(Number(company.serviceProviderID)) || "",
+        }));
+    }
     return displaySPs.flatMap((sp) => {
-      let companies = fetchedCompanies.filter((c) => c.serviceProviderID === sp.id);
-      if (isCompanyScopedSidebarUser && assignedCompanyIds.length > 0) {
-        companies = companies.filter((c) => assignedCompanyIds.includes(Number(c.id)));
-      }
+      const companies = fetchedCompanies.filter((c) => c.serviceProviderID === sp.id);
       return companies.map((company: any) => ({
         ...company,
         serviceProviderID: sp.id,
@@ -204,7 +218,7 @@ export function HrmsAppShell({ children }: { children: React.ReactNode }) {
       dispatchAppRefresh();
 
       const targetDashboard =
-        currentUser?.role === "EMPLOYEE" || currentUser?.role === "COMPANY_ADMIN"
+        currentUser?.role === "EMPLOYEE" || isCompanyAdminLikeRole(currentUser?.role)
           ? "/my-company"
           : "/dashboard";
       if (pathname !== targetDashboard) {
@@ -257,13 +271,17 @@ export function HrmsAppShell({ children }: { children: React.ReactNode }) {
   };
 
   const handleProfileOpen = async () => {
+    const fallbackName = [currentUser?.firstName, currentUser?.lastName]
+      .filter(Boolean)
+      .join(" ")
+      .trim();
     setProfileForm({
       username: currentUser?.username || "",
       password: "",
       confirmPassword: "",
-      fullName: "",
-      email: "",
-      mobileNo: "",
+      fullName: fallbackName,
+      email: currentUser?.email || "",
+      mobileNo: currentUser?.contactNo || "",
       address: "",
       city: "",
       state: "",
@@ -275,18 +293,16 @@ export function HrmsAppShell({ children }: { children: React.ReactNode }) {
       const res = await fetch(`/backend/users/${currentUser?.id}/profile`, { headers: authHeaders() });
       if (res.ok) {
         const data = await res.json();
-        if (data) {
-          setProfileForm((prev) => ({
-            ...prev,
-            fullName: data.fullName || "",
-            email: data.email || "",
-            mobileNo: data.mobileNo || "",
-            address: data.address || "",
-            city: data.city || "",
-            state: data.state || "",
-            pincode: data.pincode || "",
-          }));
-        }
+        setProfileForm((prev) => ({
+          ...prev,
+          fullName: data?.fullName || fallbackName || prev.fullName,
+          email: data?.email || currentUser?.email || prev.email,
+          mobileNo: data?.mobileNo || currentUser?.contactNo || prev.mobileNo,
+          address: data?.address || "",
+          city: data?.city || "",
+          state: data?.state || "",
+          pincode: data?.pincode || "",
+        }));
       }
     } catch {
       /* ignore */

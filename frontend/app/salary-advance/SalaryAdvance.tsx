@@ -12,7 +12,7 @@ import { FormDrawer } from "../components/ui/form-drawer"
 import { Badge } from "../components/ui/badge"
 import { Edit, Trash2, Check, X, Plus, Settings, PlusCircle, MinusCircle, AlertCircle, Loader2, Wallet } from "lucide-react"
 import { PageHeader } from "../components/app/page-header";
-import { hasModuleWriteAccess } from "@/lib/companyAccess";
+import { hasModuleWriteAccess, isCompanyAdminLikeRole } from "@/lib/companyAccess";
 import { FilterBar } from "../components/app/filter-bar"
 import { EntityListShell } from "../components/app/entity-list-shell"
 import type { DataTableColumn } from "../components/app/data-table"
@@ -140,7 +140,7 @@ export function SalaryAdvanceManagement() {
   const [selectedSalaryPeriod, setSelectedSalaryPeriod] = useState("")
   
   const user = useCurrentUser()
-  const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN" || user?.role === "BRANCH_ADMIN"
+  const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || isCompanyAdminLikeRole(user?.role) || user?.role === "BRANCH_ADMIN"
   const isEmployee = !canManage
 
   const ctx = getSidebarContext();
@@ -153,7 +153,7 @@ export function SalaryAdvanceManagement() {
 const resolvedCompanyID =
   user?.role === "SERVICE_PROVIDER"
     ? (managerData?.companyID ?? ctx?.companyID ?? user?.companyID)
-    : (user?.role === "COMPANY_ADMIN" || user?.role === "BRANCH_ADMIN")
+    : (isCompanyAdminLikeRole(user?.role) || user?.role === "BRANCH_ADMIN")
     ? (formData.companyID ?? ctx?.companyID ?? user?.companyID)
     : (
         formData.companyID ??
@@ -536,7 +536,7 @@ const fetchCompanies = useCallback(
       }
 
       // COMPANY_ADMIN / BRANCH_ADMIN: filter by company
-      if (user?.role === "COMPANY_ADMIN" || user?.role === "BRANCH_ADMIN") {
+      if (isCompanyAdminLikeRole(user?.role) || user?.role === "BRANCH_ADMIN") {
         const ctx = getSidebarContext()
         const companyID = ctx?.companyID ?? user?.companyID
         if (companyID) {
@@ -650,7 +650,7 @@ const fetchCompanies = useCallback(
       serviceProviderID: user?.role === "SERVICE_PROVIDER" ? managerData?.serviceProviderID : undefined,
       companyID: user?.role === "SERVICE_PROVIDER"
         ? managerData?.companyID
-        : (user?.role === "COMPANY_ADMIN" || user?.role === "BRANCH_ADMIN" || user?.role === "EMPLOYEE")
+        : (isCompanyAdminLikeRole(user?.role) || user?.role === "BRANCH_ADMIN" || user?.role === "EMPLOYEE")
         ? scopedCompany
         : undefined,
       branchesID: user?.role === "SERVICE_PROVIDER" ? managerData?.branchesID : undefined,
@@ -1047,7 +1047,7 @@ const fetchCompanies = useCallback(
               )}
 
               {/* For COMPANY_ADMIN / BRANCH_ADMIN - Show branch input */}
-              {(user?.role === "COMPANY_ADMIN" || user?.role === "BRANCH_ADMIN") && (
+              {(isCompanyAdminLikeRole(user?.role) || user?.role === "BRANCH_ADMIN") && (
                 <div className="grid grid-cols-1 gap-4">
                   <CompanyBranchField 
                     label="Branch" 

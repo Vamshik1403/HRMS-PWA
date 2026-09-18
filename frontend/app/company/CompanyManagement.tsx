@@ -37,7 +37,7 @@ import {
   buildCompanyPayload,
   mapCompanyToFormData,
 } from "../utils/companyFormPayload"
-import { LEGAL_ENTITY_OPTIONS, ownerTitleForLegalEntity, defaultUserTypeForEntity, userTypeOptionsForEntity } from "@/lib/companyAccess"
+import { LEGAL_ENTITY_OPTIONS, ownerTitleForLegalEntity, defaultUserTypeForEntity, userTypeOptionsForEntity, isCompanyAdminLikeRole } from "@/lib/companyAccess"
 import { cn } from "@/app/utils/cn"
 import { FormSection } from "../components/ui/form-section"
 import { FormField } from "../components/ui/form-field"
@@ -318,10 +318,10 @@ export function CompanyManagement() {
   }, [user?.id])
 
   const isDesktopManager = desktopManager && user?.role === "EMPLOYEE"
-  const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN" || user?.role === "ADMIN" || canDesktopManagerManage(user)
+  const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || isCompanyAdminLikeRole(user?.role) || user?.role === "ADMIN" || canDesktopManagerManage(user)
  const isServiceProvider = user?.role === "SERVICE_PROVIDER"
 const isSuperAdmin = user?.role === "SUPERADMIN"
-const isCompanyProfileOnly = user?.role === "COMPANY_ADMIN" || user?.role === "ADMIN" || isDesktopManager
+const isCompanyProfileOnly = isCompanyAdminLikeRole(user?.role) || user?.role === "ADMIN" || isDesktopManager
 const shouldAutoOpenCompanyProfile = isCompanyProfileOnly
 
   interface CompanyFormData extends Partial<Company> {
@@ -1052,12 +1052,12 @@ let filtered =
         <EntityRowActions
           onView={() => handleView(c)}
           onEdit={
-            user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN"
+            user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || isCompanyAdminLikeRole(user?.role)
               ? () => handleEdit(c)
               : undefined
           }
           onDelete={
-            user?.role === "SUPERADMIN" || user?.role === "COMPANY_ADMIN" || user?.role === "SERVICE_PROVIDER"
+            user?.role === "SUPERADMIN" || isCompanyAdminLikeRole(user?.role) || user?.role === "SERVICE_PROVIDER"
               ? () => handleDelete(c.id)
               : undefined
           }

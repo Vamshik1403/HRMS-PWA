@@ -11,6 +11,7 @@ import { useCurrentUser } from "../hooks/useCurrentUser";
 import { getSidebarContext } from "../utils/sidebarContext";
 import * as XLSX from "xlsx";
 import { PageHeader } from "../components/app/page-header";
+import { isCompanyAdminLikeRole } from "@/lib/companyAccess";
 import {
   isCompanyModuleOperator,
   resolveEmployeeCreds,
@@ -276,7 +277,7 @@ export function LeaveReportsManagement() {
         data = data.filter((b: any) => Number(b.serviceProviderID) === Number(managerData.serviceProviderID));
       }
     } else if (
-      user.role === "COMPANY_ADMIN" ||
+      isCompanyAdminLikeRole(user.role) ||
       user.role === "ADMIN" ||
       user.role === "BRANCH_ADMIN" ||
       (user.role === "EMPLOYEE" && isCompanyModuleOperator(user))
@@ -379,7 +380,7 @@ export function LeaveReportsManagement() {
             ? Number(managerData.branchesID)
             : null);
       } else if (
-        user?.role === "COMPANY_ADMIN" ||
+        isCompanyAdminLikeRole(user?.role) ||
         user?.role === "ADMIN" ||
         user?.role === "BRANCH_ADMIN" ||
         (user?.role === "EMPLOYEE" && isCompanyModuleOperator(user))

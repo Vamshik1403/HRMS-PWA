@@ -28,6 +28,7 @@ import { Plus, Search, Edit, Trash2, Check, X } from "lucide-react"
 import { useCurrentUser } from "../hooks/useCurrentUser"
 import { getSidebarContext } from "../utils/sidebarContext"
 import { getPageCache, setPageCache } from "../utils/pageCache"
+import { isCompanyAdminLikeRole } from "@/lib/companyAccess";
 
 interface LeaveApplication {
   id: string
@@ -95,7 +96,7 @@ export function EmpLeaveApplication() {
   const [childrenCountWarning, setChildrenCountWarning] = useState<string | null>(null)
 
   const user = useCurrentUser()
-  const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN" || user?.role === "BRANCH_ADMIN"
+  const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || isCompanyAdminLikeRole(user?.role) || user?.role === "BRANCH_ADMIN"
 
   // Leave balance state
   const [leaveBalance, setLeaveBalance] = useState<Record<string, { used: number; total: number; remaining: number }>>({})

@@ -7,6 +7,8 @@ import { Input } from "@/app/components/ui/input";
 import { cn } from "@/app/utils/cn";
 import { useCurrentUser } from "@/app/hooks/useCurrentUser";
 import { isDesktopManagerFlagSet } from "@/lib/desktopManager";
+import { isCompanyAdminLikeRole } from "@/lib/companyAccess";
+import { COMPANY_HUB_TILES } from "@/app/my-company/hubs";
 import { buildNavContext, filterNavigation } from "./hrms-navigation";
 
 interface SearchHit {
@@ -36,11 +38,22 @@ export function GlobalNavSearch({
   const items = useMemo<SearchHit[]>(() => {
     if (!user) return [];
     const ctx = buildNavContext(user, isDesktopManagerFlagSet());
-    return filterNavigation(ctx).flatMap((group) =>
+    const navItems = filterNavigation(ctx).flatMap((group) =>
       group.items
         .filter((item) => !item.comingSoon)
         .map((item) => ({ label: item.label, href: item.href, group: group.label })),
     );
+    if (!isCompanyAdminLikeRole(user.role)) return navItems;
+
+    const tileItems = COMPANY_HUB_TILES.filter((tile) =>
+      tile.tabs.some((tab) => !tab.comingSoon),
+    ).map((tile) => ({
+      label: tile.label,
+      href: `/my-company/${tile.id}`,
+      group: "Modules",
+    }));
+    const withoutLauncher = navItems.filter((item) => item.href !== "/my-company");
+    return [...tileItems, ...withoutLauncher];
   }, [user]);
 
   const results = useMemo(() => {

@@ -19,6 +19,7 @@ import { toast } from "sonner";
 import { getSidebarContext } from "../utils/sidebarContext";
 import { useCompanyBranches } from "../hooks/useCompanyBranches";
 import { formatDevicePunchForDisplay } from "../utils/devicePunchTime";
+import { isCompanyAdminLikeRole } from "@/lib/companyAccess";
 
 interface AttendanceRegularisation {
   id: string
@@ -265,7 +266,7 @@ designationID: undefined as number | undefined,
   const [linkedManagersByEmployee, setLinkedManagersByEmployee] = useState<Record<number, LinkedManager[]>>({})
   
   const user = useCurrentUser()
-  const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN"
+  const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || isCompanyAdminLikeRole(user?.role)
   const isCompanyOwner =
   user?.role === "EMPLOYEE" &&
   currentEmployee?.isCompanyOwner === true
@@ -953,7 +954,7 @@ departmentName:
       }
 
       // COMPANY_ADMIN / BRANCH_ADMIN → filter by company
-      if (user.role === "COMPANY_ADMIN" || user.role === "BRANCH_ADMIN") {
+      if (isCompanyAdminLikeRole(user.role) || user.role === "BRANCH_ADMIN") {
         const ctx = getSidebarContext()
         const companyID = ctx?.companyID ?? user?.companyID
         if (companyID) {

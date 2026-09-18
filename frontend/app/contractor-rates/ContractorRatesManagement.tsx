@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { hasModuleWriteAccess } from "@/lib/companyAccess";
+import { hasModuleWriteAccess, isCompanyAdminLikeRole } from "@/lib/companyAccess";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
@@ -78,7 +78,7 @@ function useSearchSuggest<T>(
 export function ContractorRatesManagement() {
   const user = useCurrentUser();
   const canManage =
-    user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN" || user?.role === "BRANCH_ADMIN" ||
+    user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || isCompanyAdminLikeRole(user?.role) || user?.role === "BRANCH_ADMIN" ||
     hasModuleWriteAccess("CONTRACTOR_RATES");
 
   const [contractors, setContractors] = useState<ContractorRead[]>([]);
@@ -142,7 +142,7 @@ export function ContractorRatesManagement() {
 
   useEffect(() => {
     if (!user) return;
-    if (user.role === "SERVICE_PROVIDER" || user.role === "COMPANY_ADMIN" || user.role === "BRANCH_ADMIN") {
+    if (user.role === "SERVICE_PROVIDER" || isCompanyAdminLikeRole(user.role) || user.role === "BRANCH_ADMIN") {
       fetch("/backend/users")
         .then((r) => r.json())
         .then((users) => {
@@ -156,7 +156,7 @@ export function ContractorRatesManagement() {
   useEffect(() => {
     if (!user) return;
     // For roles that need user mapping, wait for it
-    if ((user.role === "SERVICE_PROVIDER" || user.role === "COMPANY_ADMIN" || user.role === "BRANCH_ADMIN") && !currentUserMapping) return;
+    if ((user.role === "SERVICE_PROVIDER" || isCompanyAdminLikeRole(user.role) || user.role === "BRANCH_ADMIN") && !currentUserMapping) return;
     loadContractors();
     loadBranchFilterList();
   }, [user, currentUserMapping]);

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { hasModuleWriteAccess } from "@/lib/companyAccess";
+import { hasModuleWriteAccess, isCompanyAdminLikeRole } from "@/lib/companyAccess";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
@@ -222,7 +222,7 @@ export function EmployeesPromotionsManagement({ embedded = false }: { embedded?:
   const canManage =
     user?.role === "SUPERADMIN" ||
     user?.role === "SERVICE_PROVIDER" ||
-    user?.role === "COMPANY_ADMIN" ||
+    isCompanyAdminLikeRole(user?.role) ||
     user?.role === "BRANCH_ADMIN" ||
     isManagerView ||
     hasModuleWriteAccess("EMPLOYEES");
@@ -656,7 +656,7 @@ export function EmployeesPromotionsManagement({ embedded = false }: { embedded?:
       }
 
       // � COMPANY_ADMIN / BRANCH_ADMIN → filter by company
-      if (user?.role === "COMPANY_ADMIN" || user?.role === "BRANCH_ADMIN") {
+      if (isCompanyAdminLikeRole(user?.role) || user?.role === "BRANCH_ADMIN") {
         const ctx = getSidebarContext();
         const companyID = ctx?.companyID ?? user?.companyID;
         if (companyID) {

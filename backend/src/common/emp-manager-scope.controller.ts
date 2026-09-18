@@ -455,6 +455,7 @@ export class EmpManagerScopeController {
       'SUPERADMIN',
       'SERVICE_PROVIDER',
       'COMPANY_ADMIN',
+      'MULTI_COMPANY_ADMIN',
       'ADMIN',
       'BRANCH_ADMIN',
     ]);

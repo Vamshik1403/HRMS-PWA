@@ -36,10 +36,12 @@ import { useClientTable, sortRows } from "../hooks/use-client-table";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import { dispatchAppRefresh, registerDataCacheClearer } from "../utils/appRefresh";
 import { authHeaders } from "@/lib/auth";
-import { hasModuleWriteAccess } from "@/lib/companyAccess";
+import { hasModuleWriteAccess, isCompanyAdminLikeRole } from "@/lib/companyAccess";
 import {
   canDesktopManagerManage,
   filterCompanyScopedRecords,
+  isCompanyModuleOperator,
+  resolveScopedCompanyId,
 } from "../utils/scopeContext";
 
 const jsonAuthHeaders = () => authHeaders({ "Content-Type": "application/json" });
@@ -235,6 +237,7 @@ interface ManageEmpRead {
   employeeLastName?: string | null;
   deviceEmpCode?: string | null;
   employeeID?: string | null;
+  isCompanyOwner?: boolean | null;
   joiningDate?: string | null;
 
   empType?: string | null;
@@ -361,9 +364,7 @@ const API = {
   employees: "/backend/manage-emp",
   contractors: "/backend/contractors",
   workShifts: "/backend/work-shift",
-  factualWorkShifts: "/backend/factual-work-shift",
   attendancePolicies: "/backend/attendance-policy",
-  factualAttendancePolicies: "/backend/factual-attendance-policy",
   leavePolicies: "/backend/leave-policy",
   devices: "/backend/devices",
   monthlyGrades: "/backend/monthly-pay-grade",
@@ -580,13 +581,13 @@ export function ManageEmployeesManagement() {
   const canManage =
     user?.role === "SUPERADMIN" ||
     user?.role === "SERVICE_PROVIDER" ||
-    user?.role === "COMPANY_ADMIN" ||
+    isCompanyAdminLikeRole(user?.role) ||
     user?.role === "ADMIN" ||
     user?.role === "BRANCH_ADMIN" ||
     canDesktopManagerManage(user) ||
     hasModuleWriteAccess("EMPLOYEES");
   const isAdmin = user?.role === "ADMIN";
-  const isCompanyAdmin = user?.role === "COMPANY_ADMIN";
+  const isCompanyAdmin = isCompanyAdminLikeRole(user?.role);
   const isBranchAdmin = user?.role === "BRANCH_ADMIN";
   const isSuperAdmin = user?.role === "SUPERADMIN";
   const isEmployee = user?.role === "EMPLOYEE";
@@ -630,6 +631,13 @@ export function ManageEmployeesManagement() {
   const openCredentialModal = async (
     r: ManageEmpRead,
   ) => {
+    if (r.isCompanyOwner) {
+      toast.error(
+        "Login credentials for company owners are managed from the company form",
+      );
+      return;
+    }
+
     if (
       r.onboardingApprovalStatus !==
       "APPROVED"
@@ -659,7 +667,7 @@ export function ManageEmployeesManagement() {
 
       setCredentialEmployee(r);
       setCredentialForm({
-        username: data?.username ?? r.personalEmail ?? r.businessEmail ?? "",
+        username: data?.username ?? r.employeeID ?? "",
         password: data?.initialPassword ?? "",
       });
       setCredentialModalOpen(true);
@@ -677,8 +685,12 @@ export function ManageEmployeesManagement() {
   const saveEmployeeCredentials = async () => {
     if (!credentialEmployee) return;
 
-    if (!credentialForm.username.trim()) {
-      toast.error("Username is required");
+    const username = String(
+      credentialEmployee.employeeID || credentialForm.username || "",
+    ).trim();
+
+    if (!username) {
+      toast.error("Employee ID is required");
       return;
     }
 
@@ -694,7 +706,7 @@ export function ManageEmployeesManagement() {
         method: "PATCH",
         headers: jsonAuthHeaders(),
         body: JSON.stringify({
-          username: credentialForm.username.trim(),
+          username,
           password: credentialForm.password.trim(),
           isActive: true,
         }),
@@ -1021,8 +1033,6 @@ const [filterLoading, setFilterLoading] = useState(false);
   const [originalEmpEmploymentStatusIds, setOriginalEmpEmploymentStatusIds] = useState<ID[]>([]);
   const [originalEmpWorkShiftIds, setOriginalEmpWorkShiftIds] = useState<ID[]>([]);
   const [originalEmpAttendancePolicyIds, setOriginalEmpAttendancePolicyIds] = useState<ID[]>([]);
-  const [originalEmpFactualWorkShiftIds, setOriginalEmpFactualWorkShiftIds] = useState<ID[]>([]);
-  const [originalEmpFactualAttendancePolicyIds, setOriginalEmpFactualAttendancePolicyIds] = useState<ID[]>([]);
   const [originalEmpLeavePolicyIds, setOriginalEmpLeavePolicyIds] = useState<ID[]>([]);
   const [originalEmpContractorIds, setOriginalEmpContractorIds] = useState<ID[]>([]);
   // For Token Device Mapping
@@ -1057,7 +1067,7 @@ const [filterLoading, setFilterLoading] = useState(false);
   const runFetchLinkedEmpSuggestions = (q: string) => {
     if (linkedEmpTimerRef.current) clearTimeout(linkedEmpTimerRef.current);
     linkedEmpTimerRef.current = setTimeout(async () => {
-      if (!formData.companyID) {
+      if (!resolveFormCompanyID()) {
         setLinkedEmpSuggestions([]);
         return;
       }
@@ -1067,7 +1077,7 @@ const [filterLoading, setFilterLoading] = useState(false);
       setLinkedEmpLoading(true);
       try {
         let all = await fetchRefCached<Mgr[]>(API.employees, ctrl.signal);
-        all = all.filter(e => e.companyID === formData.companyID);
+        all = scopeRecordsToFormCompany(all);
         // Exclude already linked employees and the current employee being edited
         const excludeIds = new Set(linkedEmployees.map(le => le.id));
         if (editingRow) excludeIds.add(editingRow.id);
@@ -1103,17 +1113,24 @@ const [filterLoading, setFilterLoading] = useState(false);
   const [currentUserMapping, setCurrentUserMapping] = useState<any>(null);
 
   useEffect(() => {
-    if (user?.role !== "SERVICE_PROVIDER" && user?.role !== "BRANCH_ADMIN" && user?.role !== "ADMIN") return;
+    if (!user) return;
 
-    if (user?.role === "SERVICE_PROVIDER") {
+    if (user.role === "SERVICE_PROVIDER") {
       (async () => {
         const res = await fetch("/backend/users");
         const list = await res.json();
         const me = list.find((u: any) => u.username === user.username);
         setCurrentUserMapping(me || null);
       })();
-    } else if (user?.role === "BRANCH_ADMIN" || user?.role === "ADMIN") {
-      // BRANCH_ADMIN / ADMIN: user object from localStorage already has full details
+      return;
+    }
+
+    if (
+      user.role === "BRANCH_ADMIN" ||
+      user.role === "ADMIN" ||
+      isCompanyAdminLikeRole(user.role) ||
+      isCompanyModuleOperator(user)
+    ) {
       setCurrentUserMapping(user);
     }
   }, [user]);
@@ -1146,8 +1163,41 @@ const [filterLoading, setFilterLoading] = useState(false);
         coAutocomplete: currentUserMapping.company?.companyName ?? currentUserMapping.companyName ?? "",
         brAutocomplete: "",
       }));
+    } else if (
+      user?.role !== "SUPERADMIN" &&
+      user?.role !== "SERVICE_PROVIDER" &&
+      (isCompanyAdminLikeRole(user?.role) || isCompanyModuleOperator(user))
+    ) {
+      const ctx = getSidebarContext();
+      const companyID =
+        getActiveEmployeeCompanyID() ??
+        resolveScopedCompanyId(user) ??
+        currentUserMapping?.companyID ??
+        (user as any)?.companyID ??
+        null;
+      if (!companyID) return;
+      setFormData((p) => {
+        if (editingRow) return p;
+        if (Number(p.companyID) === Number(companyID)) return p;
+        return {
+          ...p,
+          serviceProviderID:
+            p.serviceProviderID ??
+            currentUserMapping?.serviceProviderID ??
+            (user as any)?.serviceProviderID ??
+            ctx?.serviceProviderID ??
+            null,
+          companyID,
+          coAutocomplete:
+            p.coAutocomplete ||
+            currentUserMapping?.company?.companyName ||
+            currentUserMapping?.companyName ||
+            ctx?.companyName ||
+            "",
+        };
+      });
     }
-  }, [user, currentUserMapping]);
+  }, [user, currentUserMapping, editingRow]);
 
   // Helper: filter items for MANAGER role based on available user mapping fields
   const filterForManager = (items: any[]) => {
@@ -1310,6 +1360,28 @@ const [filterLoading, setFilterLoading] = useState(false);
     }));
   }, [formData.joiningDate]);
 
+  const resolveFormCompanyID = (): number | null => {
+    const fromForm = Number(formData.companyID);
+    if (Number.isFinite(fromForm) && fromForm > 0) return fromForm;
+    const active = Number(getActiveEmployeeCompanyID());
+    if (Number.isFinite(active) && active > 0) return active;
+    const scoped = Number(resolveScopedCompanyId(user));
+    if (Number.isFinite(scoped) && scoped > 0) return scoped;
+    return null;
+  };
+
+  const scopeRecordsToFormCompany = <T extends { companyID?: ID | null }>(
+    items: T[] | null | undefined,
+  ): T[] => {
+    const companyId = resolveFormCompanyID();
+    if (!companyId) return [];
+    let next = (items || []).filter((x) => Number(x.companyID) === Number(companyId));
+    if (user?.role === "SERVICE_PROVIDER" && currentUserMapping) {
+      next = filterForManager(next);
+    }
+    return next;
+  };
+
   /* ===========
      Data load
      =========== */
@@ -1324,23 +1396,22 @@ const [filterLoading, setFilterLoading] = useState(false);
       fetchRefCached<Desg[]>(API.designations),
     ]);
 
-    const ctx = getSidebarContext();
-
-    const activeCompanyID =
-      ctx?.companyID ??
-      user?.companyID ??
-      currentUserMapping?.companyID ??
-      null;
+    const activeCompanyID = resolveFormCompanyID();
 
     let branches = Array.isArray(branchesRes) ? branchesRes : [];
     let departments = Array.isArray(departmentsRes) ? departmentsRes : [];
     let designations = Array.isArray(designationsRes) ? designationsRes : [];
 
-    if (activeCompanyID) {
-      branches = branches.filter((b) => Number(b.companyID) === Number(activeCompanyID));
-      departments = departments.filter((d) => Number(d.companyID) === Number(activeCompanyID));
-      designations = designations.filter((d) => Number(d.companyID) === Number(activeCompanyID));
+    if (!activeCompanyID) {
+      setBranchFilterList([]);
+      setDepartmentFilterList([]);
+      setDesignationFilterList([]);
+      return;
     }
+
+    branches = branches.filter((b) => Number(b.companyID) === Number(activeCompanyID));
+    departments = departments.filter((d) => Number(d.companyID) === Number(activeCompanyID));
+    designations = designations.filter((d) => Number(d.companyID) === Number(activeCompanyID));
 
     if (user?.role === "BRANCH_ADMIN") {
       const branchID = currentUserMapping?.branchesID ?? user?.branchesID;
@@ -1409,7 +1480,7 @@ const [filterLoading, setFilterLoading] = useState(false);
     let filteredRows = await filterCompanyScopedRecords(enrichedEmployees, user);
 
     // COMPANY_ADMIN / ADMIN may switch active company — prefer that over generic scope.
-    if (user?.role === "COMPANY_ADMIN" || user?.role === "ADMIN") {
+    if (isCompanyAdminLikeRole(user?.role) || user?.role === "ADMIN") {
       const activeCompanyID = getActiveEmployeeCompanyID();
       filteredRows = activeCompanyID
         ? enrichedEmployees.filter(
@@ -1494,11 +1565,7 @@ const runFetchTokenDevices = (q: string) => {
     setTokenDevLoading(true);
     try {
       let all = await fetchRefCached<Device[]>(API.devices, ctrl.signal);
-      if (user?.role === "SERVICE_PROVIDER" && currentUserMapping) {
-        all = filterForManager(all);
-      } else if (formData.companyID) {
-        all = all.filter(x => x.companyID === formData.companyID);
-      }
+      all = scopeRecordsToFormCompany(all);
       // Filter for TR and AT+TR devices (token register capable)
       const tokenDevices = all.filter(d => d.deviceType === 'TR' || (d.deviceType && d.deviceType.includes('AT') && d.deviceType.includes('TR')));
       
@@ -1542,11 +1609,7 @@ const runFetchTokenVerifierDevices = (q: string) => {
     setTokenVerifierDevLoading(true);
     try {
       let all = await fetchRefCached<Device[]>(API.devices, ctrl.signal);
-      if (user?.role === "SERVICE_PROVIDER" && currentUserMapping) {
-        all = filterForManager(all);
-      } else if (formData.companyID) {
-        all = all.filter(x => x.companyID === formData.companyID);
-      }
+      all = scopeRecordsToFormCompany(all);
       // Filter for TV devices only
       const tvDevices = all.filter(d => d.deviceType === 'TV');
       
@@ -1568,11 +1631,7 @@ useEffect(() => {
   (async () => {
     try {
       let all = await fetchRefCached<Device[]>(API.devices);
-      if (user?.role === "SERVICE_PROVIDER" && currentUserMapping) {
-        all = filterForManager(all);
-      } else if (formData.companyID) {
-        all = all.filter(x => x.companyID === formData.companyID);
-      }
+      all = scopeRecordsToFormCompany(all);
       const hasMulti = all.some(d => d.deviceType && d.deviceType.includes('+'));
       setHasMultiTypeDevices(hasMulti);
     } catch {
@@ -1595,11 +1654,7 @@ const runFetchCombinedDev = (q: string) => {
     setCombinedDevLoading(true);
     try {
       let all = await fetchRefCached<Device[]>(API.devices, ctrl.signal);
-      if (user?.role === "SERVICE_PROVIDER" && currentUserMapping) {
-        all = filterForManager(all);
-      } else if (formData.companyID) {
-        all = all.filter(x => x.companyID === formData.companyID);
-      }
+      all = scopeRecordsToFormCompany(all);
       // Filter for multi-type devices (devices that have '+' in deviceType)
       const multiTypeDevices = all.filter(d => d.deviceType && d.deviceType.includes('+'));
       const filtered = multiTypeDevices.filter(d =>
@@ -1644,11 +1699,7 @@ const runFetchCombinedDev = (q: string) => {
       setMonthlyPGLoading(true);
       try {
         let all = await fetchRefCached<MonthlyPG[]>(API.monthlyGrades, ctrl.signal);
-        if (user?.role === "SERVICE_PROVIDER" && currentUserMapping) {
-          all = filterForManager(all);
-        } else if (formData.companyID) {
-          all = all.filter(x => x.companyID === formData.companyID);
-        }
+        all = scopeRecordsToFormCompany(all);
         const filtered = (all || []).filter(x =>
           (x.monthlyPayGradeName ?? "").toLowerCase().includes(q.toLowerCase())
         );
@@ -1671,14 +1722,14 @@ const runFetchCombinedDev = (q: string) => {
       const ctrl = new AbortController(); salaryCycleAbortRef.current = ctrl;
       setSalaryCycleLoading(true);
       try {
-        const companyID = formData.companyID;
-        const url = companyID
-          ? `${API.salaryCycles}/company/${companyID}`
-          : API.salaryCycles;
-        let all = await fetchRefCached<SalaryCycle[]>(url, ctrl.signal);
-        if (companyID) {
-          all = (all || []).filter((x) => Number(x.companyID) === Number(companyID));
+        const companyID = resolveFormCompanyID();
+        if (!companyID) {
+          setSalaryCycleList([]);
+          return;
         }
+        const url = `${API.salaryCycles}/company/${companyID}`;
+        let all = await fetchRefCached<SalaryCycle[]>(url, ctrl.signal);
+        all = scopeRecordsToFormCompany(all);
         const filtered = (all || []).filter((x) =>
           salaryCycleLabel(x).toLowerCase().includes(q.toLowerCase())
         );
@@ -1708,11 +1759,7 @@ const runFetchCombinedDev = (q: string) => {
       try {
         let all = await fetchRefCached<Dept[]>(API.departments, ctrl.signal);
 
-        if (user?.role === "SERVICE_PROVIDER" && currentUserMapping) {
-          all = filterForManager(all);
-        } else if (formData.companyID) {
-          all = all.filter(x => x.companyID === formData.companyID);
-        }
+        all = scopeRecordsToFormCompany(all);
 
         const filtered = all.filter(d =>
           (d.departmentName ?? "").toLowerCase().includes(q.toLowerCase())
@@ -1740,17 +1787,7 @@ const runFetchCombinedDev = (q: string) => {
       setDesgLoading(true);
       try {
         let all = await fetchRefCached<Desg[]>(API.designations, ctrl.signal);
-        const companyId =
-          formData.companyID ??
-          getActiveEmployeeCompanyID() ??
-          currentUserMapping?.companyID ??
-          user?.companyID ??
-          null;
-        if (user?.role === "SERVICE_PROVIDER" && currentUserMapping) {
-          all = filterForManager(all);
-        } else if (companyId) {
-          all = all.filter((x) => Number(x.companyID) === Number(companyId));
-        }
+        all = scopeRecordsToFormCompany(all);
         const deptId =
           formData.departmentNameID ??
           formData.empDepartmentForm?.[formData.empDepartmentForm.length - 1]?.departmentNameID ??
@@ -1780,11 +1817,7 @@ const runFetchCombinedDev = (q: string) => {
       setContrLoading(true);
       try {
         let all = await fetchRefCached<Contr[]>(API.contractors, ctrl.signal);
-        if (user?.role === "SERVICE_PROVIDER" && currentUserMapping) {
-          all = filterForManager(all);
-        } else if (formData.companyID) {
-          all = all.filter(x => x.companyID === formData.companyID);
-        }
+        all = scopeRecordsToFormCompany(all);
         const filtered = (all || []).filter(c => (c.contractorName ?? "").toLowerCase().includes(q.toLowerCase()));
         setContrList(filtered.slice(0, 20));
       } finally { setContrLoading(false); }
@@ -1808,11 +1841,7 @@ const runFetchCombinedDev = (q: string) => {
     try {
       let all = await fetchRefCached<Device[]>(API.devices, ctrl.signal);
 
-      if (user?.role === "SERVICE_PROVIDER" && currentUserMapping) {
-        all = filterForManager(all);
-      } else if (formData.companyID) {
-        all = all.filter(x => x.companyID === formData.companyID);
-      }
+      all = scopeRecordsToFormCompany(all);
 
       // Filter for AT and AT+TR devices (attendance capable)
       const atDevices = all.filter(d => d.deviceType === 'AT' || (d.deviceType && d.deviceType.includes('AT')));
@@ -1841,17 +1870,9 @@ const runFetchCombinedDev = (q: string) => {
       const ctrl = new AbortController(); wsAbortRef.current = ctrl;
       setWsLoading(true);
       try {
-        const [regular, factual] = await Promise.all([
-          fetchRefCached<WS[]>(API.workShifts, ctrl.signal),
-          fetchRefCached<WS[]>(API.factualWorkShifts, ctrl.signal),
-        ]);
-        const factualTagged = (factual || []).map(w => ({ ...w, _isFactual: true as const }));
-        let all = [...(regular || []), ...factualTagged];
-        if (user?.role === "SERVICE_PROVIDER" && currentUserMapping) {
-          all = filterForManager(all);
-        } else if (formData.companyID) {
-          all = all.filter(x => x.companyID === formData.companyID);
-        }
+        const regular = await fetchRefCached<WS[]>(API.workShifts, ctrl.signal);
+        let all = [...(regular || [])];
+        all = scopeRecordsToFormCompany(all);
         const filtered = (all || []).filter(w => (w.workShiftName ?? "").toLowerCase().includes(q.toLowerCase()));
         setWsList(filtered.slice(0, 20));
       } finally { setWsLoading(false); }
@@ -1866,17 +1887,8 @@ const runFetchCombinedDev = (q: string) => {
       const ctrl = new AbortController(); apAbortRef.current = ctrl;
       setApLoading(true);
       try {
-        const [regular, factual] = await Promise.all([
-          fetchRefCached<AP[]>(API.attendancePolicies, ctrl.signal),
-          fetchRefCached<AP[]>(API.factualAttendancePolicies, ctrl.signal),
-        ]);
-        const factualTagged = (factual || []).map(a => ({ ...a, _isFactual: true as const }));
-        let all = [...(regular || []), ...factualTagged];
-        if (user?.role === "SERVICE_PROVIDER" && currentUserMapping) {
-          all = filterForManager(all);
-        } else if (formData.companyID) {
-          all = all.filter(x => x.companyID === formData.companyID);
-        }
+        let all = await fetchRefCached<AP[]>(API.attendancePolicies, ctrl.signal);
+        all = scopeRecordsToFormCompany(all);
         const filtered = (all || []).filter(a => (a.attendancePolicyName ?? "").toLowerCase().includes(q.toLowerCase()));
         setApList(filtered.slice(0, 20));
       } finally { setApLoading(false); }
@@ -1892,16 +1904,10 @@ const runFetchCombinedDev = (q: string) => {
       setLpLoading(true);
       try {
         let all = await fetchRefCached<LP[]>(API.leavePolicies, ctrl.signal);
-        const ctx = getSidebarContext();
-        const companyId = formData.companyID ?? ctx?.companyID ?? user?.companyID;
+        all = scopeRecordsToFormCompany(all);
         const branchId = formData.branchesID ?? user?.branchesID;
-        if (user?.role === "SERVICE_PROVIDER" && currentUserMapping) {
-          all = filterForManager(all);
-        } else if (companyId) {
-          all = all.filter((x) => x.companyID === companyId);
-        }
         if (branchId) {
-          all = all.filter((x) => !x.branchesID || x.branchesID === branchId);
+          all = all.filter((x) => !x.branchesID || Number(x.branchesID) === Number(branchId));
         }
         const filtered = (all || []).filter(l => (l.leavePolicyName ?? "").toLowerCase().includes(q.toLowerCase()));
         setLpList(filtered.slice(0, 20));
@@ -1950,10 +1956,7 @@ const runFetchCombinedDev = (q: string) => {
     if (brTimerRef.current) clearTimeout(brTimerRef.current);
 
     brTimerRef.current = setTimeout(async () => {
-      const companyID =
-        user?.role === "SERVICE_PROVIDER"
-          ? currentUserMapping?.companyID
-          : formData.companyID;
+      const companyID = resolveFormCompanyID();
 
       if (!companyID || query.length < MIN_CHARS) {
         setBrList([]);
@@ -1968,7 +1971,7 @@ const runFetchCombinedDev = (q: string) => {
       try {
         let all = await fetchRefCached<BR[]>(API.branches, ctrl.signal);
 
-        all = all.filter(b => b.companyID === companyID);
+        all = scopeRecordsToFormCompany(all);
         // 🔒 BRANCH_ADMIN — restrict to their own branch only
         if (user?.role === "BRANCH_ADMIN" && user?.branchesID) {
           all = all.filter(b => Number(b.id) === Number(user.branchesID));
@@ -2360,7 +2363,7 @@ const addCombinedDevMap = () => {
      =============== */
   const resetForm = () => {
     const ctx = getSidebarContext();
-    const activeCompanyID = getActiveEmployeeCompanyID();
+    const activeCompanyID = getActiveEmployeeCompanyID() ?? resolveScopedCompanyId(user) ?? ctx?.companyID ?? null;
      setFormData({
       serviceProviderID: ctx?.serviceProviderID ?? null,
       companyID: activeCompanyID ?? ctx?.companyID ?? null,
@@ -2500,8 +2503,6 @@ const addCombinedDevMap = () => {
     setOriginalEmpEmploymentStatusIds([]);
     setOriginalEmpWorkShiftIds([]);
     setOriginalEmpAttendancePolicyIds([]);
-    setOriginalEmpFactualWorkShiftIds([]);
-    setOriginalEmpFactualAttendancePolicyIds([]);
     setOriginalEmpLeavePolicyIds([]);
     setOriginalEmpContractorIds([]);
     setActiveDesgLocalId(null);
@@ -2577,12 +2578,7 @@ const addCombinedDevMap = () => {
             return;
         }
         const all = await fetchRefCached<any[]>(url);
-        let scoped = all;
-        if (user?.role === "SERVICE_PROVIDER" && currentUserMapping) {
-          scoped = filterForManager(scoped);
-        } else if (formData.companyID) {
-          scoped = scoped.filter((x: any) => x.companyID === formData.companyID);
-        }
+        const scoped = scopeRecordsToFormCompany(all);
         const ql = query.toLowerCase();
         const filtered = scoped.filter((item: any) =>
           (item[displayField] ?? "").toLowerCase().includes(ql)
@@ -2664,8 +2660,9 @@ const addCombinedDevMap = () => {
     setQuickAddSaving(true);
     try {
       const basePayload: any = {};
+      const companyID = resolveFormCompanyID();
       if (formData.serviceProviderID) basePayload.serviceProviderID = formData.serviceProviderID;
-      if (formData.companyID) basePayload.companyID = formData.companyID;
+      if (companyID) basePayload.companyID = companyID;
       if (formData.branchesID) basePayload.branchesID = formData.branchesID;
 
       let url = "";
@@ -2922,7 +2919,7 @@ const addCombinedDevMap = () => {
         const duplicate = emps.find(
           (r: any) =>
             r.employeeID?.toLowerCase() === formData.employeeID.trim().toLowerCase() &&
-            r.companyID === formData.companyID &&
+            Number(r.companyID) === Number(resolveFormCompanyID() ?? formData.companyID) &&
             (!editingRow || r.id !== editingRow.id)
         );
         if (duplicate) {
@@ -3047,17 +3044,9 @@ const addCombinedDevMap = () => {
         .filter(w => w.workShiftID != null && !w._isFactual)
         .map(w => ({ id: w.id, workShiftID: w.workShiftID!, effectFrom: w.effectFrom || undefined }));
 
-      const empFactualWorkShifts = formData.empWorkShiftForm
-        .filter(w => w.workShiftID != null && w._isFactual)
-        .map(w => ({ id: w.id, factualWorkShiftID: w.workShiftID!, effectFrom: w.effectFrom || undefined }));
-
       const empAttendancePolicies = formData.empAttendancePolicyForm
         .filter(a => a.attendancePolicyID != null && !a._isFactual)
         .map(a => ({ id: a.id, attendancePolicyID: a.attendancePolicyID!, effectFrom: a.effectFrom || undefined }));
-
-      const empFactualAttendancePolicies = formData.empAttendancePolicyForm
-        .filter(a => a.attendancePolicyID != null && a._isFactual)
-        .map(a => ({ id: a.id, factualAttendancePolicyID: a.attendancePolicyID!, effectFrom: a.effectFrom || undefined }));
 
       const empLeavePolicies = formData.empLeavePolicyForm
         .filter(l => l.leavePolicyID != null)
@@ -3079,15 +3068,13 @@ const addCombinedDevMap = () => {
       const empEmpStatusRemaining = new Set(empEmploymentStatuses.filter(s => s.id != null).map(s => s.id as number));
       const empWSRemaining = new Set(empWorkShifts.filter(w => w.id != null).map(w => w.id as number));
       const empAPRemaining = new Set(empAttendancePolicies.filter(a => a.id != null).map(a => a.id as number));
-      const empFWSRemaining = new Set(empFactualWorkShifts.filter(w => w.id != null).map(w => w.id as number));
-      const empFAPRemaining = new Set(empFactualAttendancePolicies.filter(a => a.id != null).map(a => a.id as number));
       const empLPRemaining = new Set(empLeavePolicies.filter(l => l.id != null).map(l => l.id as number));
       const empCtrRemaining = new Set(empContractors.filter(c => c.id != null).map(c => c.id as number));
       const type = formData.promotion?.salaryPayGradeType;
 
       const payload: any = {
         serviceProviderID: formData.serviceProviderID ?? undefined,
-        companyID: formData.companyID ?? undefined,
+        companyID: resolveFormCompanyID() ?? formData.companyID ?? undefined,
         branchesID: formData.branchesID ?? undefined,
         contractorID:
           formData.promotion?.employmentType === "Contract"
@@ -3197,9 +3184,7 @@ const addCombinedDevMap = () => {
         empEmploymentTypes,
         empEmploymentStatuses,
         empWorkShifts,
-        empFactualWorkShifts,
         empAttendancePolicies,
-        empFactualAttendancePolicies,
         empLeavePolicies,
         empContractors,
 
@@ -3216,8 +3201,6 @@ const addCombinedDevMap = () => {
           empEmploymentStatusIdsToDelete: originalEmpEmploymentStatusIds.filter(id => !empEmpStatusRemaining.has(id)),
           empWorkShiftIdsToDelete: originalEmpWorkShiftIds.filter(id => !empWSRemaining.has(id)),
           empAttendancePolicyIdsToDelete: originalEmpAttendancePolicyIds.filter(id => !empAPRemaining.has(id)),
-          empFactualWorkShiftIdsToDelete: originalEmpFactualWorkShiftIds.filter(id => !empFWSRemaining.has(id)),
-          empFactualAttendancePolicyIdsToDelete: originalEmpFactualAttendancePolicyIds.filter(id => !empFAPRemaining.has(id)),
           empLeavePolicyIdsToDelete: originalEmpLeavePolicyIds.filter(id => !empLPRemaining.has(id)),
           empContractorIdsToDelete: originalEmpContractorIds.filter(id => !empCtrRemaining.has(id)),
         } : {}),
@@ -3640,10 +3623,7 @@ const addCombinedDevMap = () => {
       empBranchForm: (freshData.empBranch ?? []).map((d: any) => ({ id: d.id, _localId: uid(), branchesID: d.branchesID ?? null, _brAutocomplete: d.branch?.branchName ?? "", effectFrom: d.effectFrom ?? "" })),
       empEmploymentTypeForm: (freshData.empEmploymentType ?? []).map((d: any) => ({ id: d.id, _localId: uid(), employmentType: d.employmentType ?? "", effectFrom: d.effectFrom ?? "" })),
       empEmploymentStatusForm: (freshData.empEmploymentStatus ?? []).map((d: any) => ({ id: d.id, _localId: uid(), employmentStatus: d.employmentStatus ?? "", probationPeriod: d.probationPeriod ?? "", effectFrom: d.effectFrom ?? "" })),
-      empWorkShiftForm: [
-        ...(freshData.empWorkShift ?? []).map((d: any) => ({ id: d.id, _localId: uid(), workShiftID: d.workShiftID ?? null, _wsAutocomplete: d.workShift?.workShiftName ?? "", effectFrom: d.effectFrom ?? "", _isFactual: false })),
-        ...(freshData.empFactualWorkShift ?? []).map((d: any) => ({ id: d.id, _localId: uid(), workShiftID: d.factualWorkShiftID ?? null, _wsAutocomplete: d.factualWorkShift?.workShiftName ?? '', effectFrom: d.effectFrom ?? "", _isFactual: true })),
-      ],
+      empWorkShiftForm: (freshData.empWorkShift ?? []).map((d: any) => ({ id: d.id, _localId: uid(), workShiftID: d.workShiftID ?? null, _wsAutocomplete: d.workShift?.workShiftName ?? "", effectFrom: d.effectFrom ?? "", _isFactual: false })),
         employeeDocuments: (freshData.employeeDocuments ?? []).map((d: any) => ({
           id: d.id,
           _localId: String(d.id ?? uid()),
@@ -3658,10 +3638,7 @@ const addCombinedDevMap = () => {
           fileSize: Number(d.fileSize ?? 0),
         })),
       empLeavePolicyForm: (freshData.empLeavePolicy ?? []).map((d: any) => ({ id: d.id, _localId: uid(), leavePolicyID: d.leavePolicyID ?? null, _lpAutocomplete: d.leavePolicy?.leavePolicyName ?? "", effectFrom: d.effectFrom ?? "" })),
-      empAttendancePolicyForm: [
-        ...(freshData.empAttendancePolicy ?? []).map((d: any) => ({ id: d.id, _localId: uid(), attendancePolicyID: d.attendancePolicyID ?? null, _apAutocomplete: d.attendancePolicy?.attendancePolicyName ?? "", effectFrom: d.effectFrom ?? "", _isFactual: false })),
-        ...(freshData.empFactualAttendancePolicy ?? []).map((d: any) => ({ id: d.id, _localId: uid(), attendancePolicyID: d.factualAttendancePolicyID ?? null, _apAutocomplete: d.factualAttendancePolicy?.attendancePolicyName ?? '', effectFrom: d.effectFrom ?? "", _isFactual: true })),
-      ],
+      empAttendancePolicyForm: (freshData.empAttendancePolicy ?? []).map((d: any) => ({ id: d.id, _localId: uid(), attendancePolicyID: d.attendancePolicyID ?? null, _apAutocomplete: d.attendancePolicy?.attendancePolicyName ?? "", effectFrom: d.effectFrom ?? "", _isFactual: false })),
       empContractorForm: (freshData.empContractor ?? []).map((d: any) => ({ id: d.id, _localId: uid(), contractorID: d.contractorID ?? null, _contrAutocomplete: d.contractor?.contractorName ?? "", effectFrom: d.effectFrom ?? "" })),
     });
 
@@ -3733,8 +3710,6 @@ const addCombinedDevMap = () => {
     setOriginalEmpEmploymentStatusIds(empEmploymentStatusForm.filter((x: any) => x.id != null).map((x: any) => x.id));
     setOriginalEmpWorkShiftIds(empWorkShiftForm.filter((x: any) => x.id != null && !x._isFactual).map((x: any) => x.id));
     setOriginalEmpAttendancePolicyIds(empAttendancePolicyForm.filter((x: any) => x.id != null && !x._isFactual).map((x: any) => x.id));
-    setOriginalEmpFactualWorkShiftIds((freshData.empFactualWorkShift ?? []).filter((x: any) => x.id != null).map((x: any) => x.id));
-    setOriginalEmpFactualAttendancePolicyIds((freshData.empFactualAttendancePolicy ?? []).filter((x: any) => x.id != null).map((x: any) => x.id));
     setOriginalEmpLeavePolicyIds(empLeavePolicyForm.filter((x: any) => x.id != null).map((x: any) => x.id));
     setOriginalEmpContractorIds(empContractorForm.filter((x: any) => x.id != null).map((x: any) => x.id));
 
@@ -3975,6 +3950,7 @@ const handleCancel = () => {
        const canManageEmployeeCredentials = (
     employee: ManageEmpRead,
   ) =>
+    !employee.isCompanyOwner &&
     employee.onboardingApprovalStatus ===
       "APPROVED" &&
     employee.lifecycleStatus !== "EXITED";
@@ -6335,13 +6311,11 @@ const handleCancel = () => {
             </div>
 
             <div className="space-y-2">
-              <Label>Username / Mobile No.</Label>
+              <Label>Username (Employee ID)</Label>
               <div className="flex gap-2">
                 <Input
                   value={credentialForm.username}
-                  onChange={(e) =>
-                    setCredentialForm((p) => ({ ...p, username: e.target.value }))
-                  }
+                  readOnly
                 />
                                 <Button
               type="button"
@@ -6377,7 +6351,7 @@ const handleCancel = () => {
                                 </Button>
           </div>
               <p className="text-xs text-gray-500">
-                Employee must change this password on first login.
+                Give this temporary password to the employee. They must change it on first login.
               </p>
       </div>
 

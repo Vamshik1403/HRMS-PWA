@@ -440,12 +440,22 @@ export class AuthService {
     let userData: any;
 
     if (userType === 'user') {
+      const userCompanies = Array.isArray(user.userCompanies)
+        ? user.userCompanies.map((uc: any) => ({
+            companyID: Number(uc.companyID ?? uc.company?.id),
+            companyName: uc.company?.companyName ?? uc.companyName ?? '',
+            isPrimary: !!uc.isPrimary,
+          })).filter((uc: any) => Number.isFinite(uc.companyID) && uc.companyID > 0)
+        : [];
+      const companyIDs = userCompanies.map((uc: any) => uc.companyID);
+
       payload = { 
         sub: user.id, 
         username: user.username, 
         role: user.role,
         type: 'user',
-        companyID: user.companyID ?? undefined,
+        companyID: user.companyID ?? companyIDs[0] ?? undefined,
+        companyIDs,
       };
       userData = {
         id: user.id,
@@ -453,22 +463,38 @@ export class AuthService {
         role: user.role,
         type: 'user',
         serviceProviderID: user.serviceProviderID ?? undefined,
-        companyID: user.companyID ?? undefined,
+        companyID: user.companyID ?? companyIDs[0] ?? undefined,
+        activeCompanyID: user.companyID ?? companyIDs[0] ?? undefined,
         branchesID: user.branchesID ?? undefined,
+        userCompanies,
+        companyIDs,
       };
 
-      if (user.serviceProviderID || user.companyID || user.branchesID) {
+      if (user.serviceProviderID || user.companyID || user.branchesID || userCompanies.length) {
         const fullUser = await this.prisma.user.findUnique({
           where: { id: user.id },
           include: {
             serviceProvider: { select: { companyName: true } },
             company: { select: { companyName: true } },
             branches: { select: { branchName: true } },
+            userCompanies: {
+              include: {
+                company: { select: { id: true, companyName: true } },
+              },
+            },
           },
         });
         if (fullUser?.serviceProvider) userData.serviceProvider = fullUser.serviceProvider;
         if (fullUser?.company) userData.company = fullUser.company;
         if (fullUser?.branches) userData.branches = fullUser.branches;
+        if (fullUser?.userCompanies?.length) {
+          userData.userCompanies = fullUser.userCompanies.map((uc) => ({
+            companyID: uc.companyID,
+            companyName: uc.company?.companyName ?? '',
+            isPrimary: !!uc.isPrimary,
+          }));
+          userData.companyIDs = userData.userCompanies.map((uc: any) => uc.companyID);
+        }
       }
     } else {
       payload = {
@@ -706,6 +732,7 @@ export class AuthService {
     return (
       r === 'SUPERADMIN' ||
       r === 'COMPANY_ADMIN' ||
+      r === 'MULTI_COMPANY_ADMIN' ||
       r === 'ADMIN' ||
       r === 'SERVICE_PROVIDER' ||
       r === 'CONTRACTOR_ADMIN'

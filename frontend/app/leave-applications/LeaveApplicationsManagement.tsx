@@ -5,7 +5,7 @@ import { Button } from "../components/ui/button"
 import { Input } from "../components/ui/input"
 import { Label } from "../components/ui/label"
 import { FormDrawer } from "../components/ui/form-drawer";
-import { hasModuleWriteAccess } from "@/lib/companyAccess";
+import { hasModuleWriteAccess, isCompanyAdminLikeRole } from "@/lib/companyAccess";
 import { NoticeBanner } from "../components/ui/notice-banner";
 import { FormModal } from "../components/ui/form-modal";
 import { Badge } from "../components/ui/badge"
@@ -137,7 +137,7 @@ export function LeaveApplicationsManagement() {
   })
 
   const user = useCurrentUser()
-  const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN" || user?.role === "BRANCH_ADMIN"
+  const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || isCompanyAdminLikeRole(user?.role) || user?.role === "BRANCH_ADMIN"
   const isNormalUser = user?.role === "EMPLOYEE"
 
   // Revoke Modal State
@@ -1116,7 +1116,7 @@ export function LeaveApplicationsManagement() {
       }
 
       // COMPANY_ADMIN / BRANCH_ADMIN → filter by company (branch admin also by branch)
-      if (user.role === "COMPANY_ADMIN" || user.role === "BRANCH_ADMIN") {
+      if (isCompanyAdminLikeRole(user.role) || user.role === "BRANCH_ADMIN") {
         const ctx = getSidebarContext()
         const companyID = ctx?.companyID ?? user?.companyID
         if (companyID) {

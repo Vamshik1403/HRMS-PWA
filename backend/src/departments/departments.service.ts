@@ -69,8 +69,9 @@ export class DepartmentsService {
     });
   }
 
-  async findAllWithHeadcount() {
+  async findAllWithHeadcount(companyID?: number) {
     const depts = await this.prisma.departments.findMany({
+      where: companyID ? { companyID } : undefined,
       select: {
         id: true,
         departmentName: true,
@@ -84,6 +85,7 @@ export class DepartmentsService {
       where: {
         isDeleted: false,
         departmentNameID: { not: null },
+        ...(companyID ? { companyID } : {}),
       },
       _count: { id: true },
     });

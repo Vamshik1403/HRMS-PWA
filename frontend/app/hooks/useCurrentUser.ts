@@ -9,7 +9,8 @@ export interface CurrentUser {
   firstName?: string
   lastName?: string
   email?: string
-  role: "SUPERADMIN" | "SERVICE_PROVIDER" | "COMPANY_ADMIN" | "ADMIN" | "BRANCH_ADMIN" | "EMPLOYEE"
+  contactNo?: string
+  role: "SUPERADMIN" | "SERVICE_PROVIDER" | "COMPANY_ADMIN" | "MULTI_COMPANY_ADMIN" | "ADMIN" | "BRANCH_ADMIN" | "EMPLOYEE"
 
   serviceProviderID?: number
   companyID?: number

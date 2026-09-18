@@ -1,7 +1,7 @@
 "use client";
 import { TableBodySkeleton } from "../components/ui/TableBodySkeleton";
 
-import { hasCompanyAccessFlag, hasModuleWriteAccess, isCompanyOwnerFlag } from "@/lib/companyAccess";
+import { hasCompanyAccessFlag, hasModuleWriteAccess, isCompanyOwnerFlag, isCompanyAdminLikeRole } from "@/lib/companyAccess";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
 import { Button } from "../components/ui/button";
@@ -136,7 +136,7 @@ export function DesignationManagement() {
 
   const user = useCurrentUser();
   useEffect(() => {
-    if (!user || (user.role !== "SERVICE_PROVIDER" && user.role !== "COMPANY_ADMIN" && user.role !== "ADMIN")) return;
+    if (!user || (user.role !== "SERVICE_PROVIDER" && !isCompanyAdminLikeRole(user.role) && user.role !== "ADMIN")) return;
 
     const loadMapping = async () => {
       try {
@@ -154,7 +154,7 @@ export function DesignationManagement() {
     loadMapping();
   }, [user]);
 
-  const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN" || user?.role === "ADMIN" || user?.role === "BRANCH_ADMIN" || hasModuleWriteAccess("DESIGNATIONS");
+  const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || isCompanyAdminLikeRole(user?.role) || user?.role === "ADMIN" || user?.role === "BRANCH_ADMIN" || hasModuleWriteAccess("DESIGNATIONS");
   const isEmployee = user?.role === "EMPLOYEE";
   // Company owners authenticate as EMPLOYEE but still need Branch/Department fields.
   const showOrgFields =
@@ -500,7 +500,7 @@ setRows(filteredRows);
       spAutocomplete = ctx.serviceProviderName ?? "";
       coAutocomplete = ctx.companyName ?? "";
     } else if (
-      (user?.role === "COMPANY_ADMIN" || user?.role === "ADMIN") &&
+      (isCompanyAdminLikeRole(user?.role) || user?.role === "ADMIN") &&
       currentUserMapping
     ) {
       serviceProviderID = currentUserMapping.serviceProviderID ?? null;
@@ -1265,7 +1265,7 @@ const filtered = useMemo(() => {
               )}
 
               {/* New Fields Section - hidden for ADMIN and COMPANY_ADMIN */}
-              {!(user?.role === "ADMIN" || user?.role === "COMPANY_ADMIN") && <div className="border-t border-gray-200 pt-4 mt-4">
+              {!(user?.role === "ADMIN" || isCompanyAdminLikeRole(user?.role)) && <div className="border-t border-gray-200 pt-4 mt-4">
                 <h3 className="text-lg font-medium mb-4">Additional Details</h3>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   {/* OT Applicable */}

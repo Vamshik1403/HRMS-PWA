@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { hasModuleWriteAccess } from "@/lib/companyAccess";
+import { hasModuleWriteAccess, isCompanyAdminLikeRole } from "@/lib/companyAccess";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
@@ -123,11 +123,11 @@ export function DeviceManagement() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const user = useCurrentUser();
-  const canManage = user?.role === "SUPERADMIN" || user?.role === "COMPANY_ADMIN" || user?.role === "ADMIN" || user?.role === "SERVICE_PROVIDER" || canDesktopManagerManage(user) || hasModuleWriteAccess("DEVICES");
-  const canAdd = user?.role === "SUPERADMIN" || user?.role === "COMPANY_ADMIN" || user?.role === "ADMIN" || canDesktopManagerManage(user) || hasModuleWriteAccess("DEVICES");
+  const canManage = user?.role === "SUPERADMIN" || isCompanyAdminLikeRole(user?.role) || user?.role === "ADMIN" || user?.role === "SERVICE_PROVIDER" || canDesktopManagerManage(user) || hasModuleWriteAccess("DEVICES");
+  const canAdd = user?.role === "SUPERADMIN" || isCompanyAdminLikeRole(user?.role) || user?.role === "ADMIN" || canDesktopManagerManage(user) || hasModuleWriteAccess("DEVICES");
 const canDelete =
   user?.role === "SUPERADMIN" ||
-  user?.role === "COMPANY_ADMIN" ||
+  isCompanyAdminLikeRole(user?.role) ||
   user?.role === "ADMIN" ||
   canDesktopManagerManage(user);
   // UI
@@ -249,7 +249,7 @@ setDevices(filteredDevices);
             (b) => Number(b.serviceProviderID) === Number(mapping.serviceProviderID)
           );
         }
-      } else if (user?.role === "COMPANY_ADMIN" || user?.role === "ADMIN") {
+      } else if (isCompanyAdminLikeRole(user?.role) || user?.role === "ADMIN") {
         const companyID = ctx?.companyID ?? mapping?.companyID ?? user?.companyID;
         if (companyID) {
           filtered = filtered.filter((b) => Number(b.companyID) === Number(companyID));

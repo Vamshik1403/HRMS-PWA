@@ -25,6 +25,7 @@ import { TASK_MANAGEMENT_ENABLED } from "@/app/config/featureFlags";
 import {
   canViewModule,
   hasCompanyAccessFlag,
+  isCompanyAdminLikeRole,
   moduleKeyForPath,
 } from "@/lib/companyAccess";
 
@@ -60,7 +61,7 @@ export function buildNavContext(user: any, desktopManager: boolean): NavContext 
   const isSuperAdmin = role === "SUPERADMIN";
   const isServiceProvider = role === "SERVICE_PROVIDER";
   const isCompanyOperator =
-    role === "COMPANY_ADMIN" ||
+    isCompanyAdminLikeRole(role) ||
     (role === "EMPLOYEE" && hasCompanyAccessFlag());
   const isCompanyAdmin = isCompanyOperator;
   const isAdmin = role === "ADMIN";
@@ -102,13 +103,13 @@ export const HRMS_NAVIGATION: NavGroup[] = [
         label: "Dashboard",
         href: "/dashboard",
         icon: LayoutDashboard,
-        show: (c) => !c.isSuperAdmin && c.role !== "COMPANY_ADMIN",
+        show: (c) => !c.isSuperAdmin && !isCompanyAdminLikeRole(c.role),
       },
     ],
   },
   {
     label: "My Company",
-    show: (c) => c.role === "COMPANY_ADMIN",
+    show: (c) => isCompanyAdminLikeRole(c.role),
     items: [
       { label: "My Company", href: "/my-company", icon: Building2, show: always },
     ],
@@ -124,7 +125,7 @@ export const HRMS_NAVIGATION: NavGroup[] = [
 
   {
     label: "Company Setup",
-    show: (c) => c.canSeeCompanySetupSections && c.role !== "COMPANY_ADMIN",
+    show: (c) => c.canSeeCompanySetupSections && !isCompanyAdminLikeRole(c.role),
     items: [
       { label: "Tenants", href: "/company", icon: Building2, show: (c) => !c.isCompanyAdmin },
       { label: "Branches", href: "/branches", icon: GitBranch, show: always },
@@ -135,7 +136,7 @@ export const HRMS_NAVIGATION: NavGroup[] = [
   },
   {
     label: "Workforce",
-    show: (c) => c.canSeeCompanySetupSections && c.role !== "COMPANY_ADMIN",
+    show: (c) => c.canSeeCompanySetupSections && !isCompanyAdminLikeRole(c.role),
     items: [
       { label: "Employees", href: "/manage-employees", icon: Users, show: always },
       { label: "Off Boarding", href: "/termination", icon: UserCog, show: always },
@@ -143,7 +144,7 @@ export const HRMS_NAVIGATION: NavGroup[] = [
   },
   {
     label: "Contractor",
-    show: (c) => c.canAccessFullHrSections && c.role !== "COMPANY_ADMIN",
+    show: (c) => c.canAccessFullHrSections && !isCompanyAdminLikeRole(c.role),
     items: [
       { label: "Contractors", href: "/contractors", icon: Briefcase, show: always },
       { label: "Contractor Rates", href: "/contractor-rates", icon: Wallet, show: always },
@@ -152,7 +153,7 @@ export const HRMS_NAVIGATION: NavGroup[] = [
   {
     label: "Task Management",
     show: (c) =>
-      TASK_MANAGEMENT_ENABLED && (c.isCompanyAdmin || c.isDesktopManager) && c.role !== "COMPANY_ADMIN",
+      TASK_MANAGEMENT_ENABLED && (c.isCompanyAdmin || c.isDesktopManager) && !isCompanyAdminLikeRole(c.role),
     items: [
       { label: "Customers", href: "/task-customers", icon: ClipboardList, show: always },
       { label: "Sites / Branches", href: "/task-customer-sites", icon: GitBranch, show: always },
@@ -164,7 +165,7 @@ export const HRMS_NAVIGATION: NavGroup[] = [
     show: (c) =>
       (c.isCompanyAdmin || c.isBranchAdmin || c.isDesktopManager) &&
       !c.isAdmin &&
-      c.role !== "COMPANY_ADMIN",
+      !isCompanyAdminLikeRole(c.role),
     items: [
       { label: "Work Shifts", href: "/work-shifts", icon: CalendarCheck2, show: always },
       { label: "Attendance Policy", href: "/attendance-policy", icon: Calendar, show: always },
@@ -174,7 +175,7 @@ export const HRMS_NAVIGATION: NavGroup[] = [
   },
   {
     label: "Leave Policy",
-    show: (c) => c.canAccessFullHrSections && c.role !== "COMPANY_ADMIN",
+    show: (c) => c.canAccessFullHrSections && !isCompanyAdminLikeRole(c.role),
     items: [
       { label: "Manage Holidays", href: "/manage-holidays", icon: Calendar, show: always },
       { label: "Public Holiday", href: "/public-holiday", icon: Calendar, show: always },
@@ -183,7 +184,7 @@ export const HRMS_NAVIGATION: NavGroup[] = [
   },
   {
     label: "Payroll Policy",
-    show: (c) => c.canAccessFullHrSections && c.role !== "COMPANY_ADMIN",
+    show: (c) => c.canAccessFullHrSections && !isCompanyAdminLikeRole(c.role),
     items: [
       { label: "Salary Cycle", href: "/monthly-salary-cycle", icon: Wallet, show: always },
       { label: "Allowances", href: "/salary-allowances", icon: Wallet, show: always },
@@ -194,7 +195,7 @@ export const HRMS_NAVIGATION: NavGroup[] = [
   },
   {
     label: "Payroll",
-    show: (c) => c.canAccessFullHrSections && c.role !== "COMPANY_ADMIN",
+    show: (c) => c.canAccessFullHrSections && !isCompanyAdminLikeRole(c.role),
     items: [
       { label: "Bonus Allocations", href: "/bonus-allocations", icon: Wallet, show: always },
       { label: "Salary Advances", href: "/salary-advance", icon: Wallet, show: always },
@@ -205,7 +206,7 @@ export const HRMS_NAVIGATION: NavGroup[] = [
   },
   {
     label: "Leave Management",
-    show: (c) => c.canAccessFullHrSections && c.role !== "COMPANY_ADMIN",
+    show: (c) => c.canAccessFullHrSections && !isCompanyAdminLikeRole(c.role),
     items: [
       { label: "Leave Applications", href: "/leave-applications", icon: Calendar, show: always },
       { label: "Privileged Leave", href: "/privileged-leave", icon: Calendar, show: always },
@@ -213,21 +214,21 @@ export const HRMS_NAVIGATION: NavGroup[] = [
   },
   {
     label: "Messaging",
-    show: (c) => c.canSeeCompanySetupSections && c.role !== "COMPANY_ADMIN",
+    show: (c) => c.canSeeCompanySetupSections && !isCompanyAdminLikeRole(c.role),
     items: [
       { label: "Internal Messaging", href: "/employee-memo", icon: MessageSquare, show: always },
     ],
   },
   {
     label: "Reports",
-    show: (c) => c.canSeeCompanySetupSections && c.role !== "COMPANY_ADMIN",
+    show: (c) => c.canSeeCompanySetupSections && !isCompanyAdminLikeRole(c.role),
     items: [
       { label: "Attendance Reports", href: "/attendance-reports", icon: FileClock, show: always },
     ],
   },
   {
     label: "Settings",
-    show: (c) => c.canSeeCompanySetupSections && c.role !== "COMPANY_ADMIN",
+    show: (c) => c.canSeeCompanySetupSections && !isCompanyAdminLikeRole(c.role),
     items: [
       { label: "Import Attendance", href: "/import-attendance", icon: Settings2, show: (c) => !c.isAdmin },
       { label: "HRMS Integrations", href: "/hrms-integrations", icon: Settings2, show: (c) => c.isAdmin },

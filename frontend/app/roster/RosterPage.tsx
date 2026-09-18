@@ -25,7 +25,7 @@ import { format } from "date-fns"
 import { Calendar as CalendarIcon } from "lucide-react"
 import { FixedCalendar as CalendarComponent } from "@/app/components/ui/color-calendar"
 import { getSidebarContext } from "../utils/sidebarContext"
-import { hasCompanyAccessFlag } from "@/lib/companyAccess"
+import { hasCompanyAccessFlag, isCompanyAdminLikeRole } from "@/lib/companyAccess"
 // ==================== TYPES ====================
 type ID = number
 type RosterLeaveType = "CASUAL" | "SICK" | "LOP" | "PL" | "COMP_OFF"
@@ -237,7 +237,7 @@ export function RosterManagement() {
 
   // Get user from localStorage
   const [user, setUser] = useState<any>(null)
-  const [userRole, setUserRole] = useState<"SUPERADMIN" | "SERVICE_PROVIDER" | "COMPANY_ADMIN" | "EMPLOYEE" | null>(null)
+  const [userRole, setUserRole] = useState<"SUPERADMIN" | "SERVICE_PROVIDER" | "COMPANY_ADMIN" | "MULTI_COMPANY_ADMIN" | "EMPLOYEE" | null>(null)
   const uid = () => Math.random().toString(36).slice(2)
 
 const getStoredActiveCompanyID = (): number | null => {
@@ -290,7 +290,7 @@ const getUserAssignedCompanyIDs = (user: any): number[] => {
 
   useEffect(() => {
     const isCompanyOperator =
-      userRole === "COMPANY_ADMIN" ||
+      isCompanyAdminLikeRole(userRole) ||
       userRole === "SERVICE_PROVIDER" ||
       (userRole === "EMPLOYEE" && hasCompanyAccessFlag())
     if (!isCompanyOperator || !user) return
@@ -358,7 +358,7 @@ const getUserAssignedCompanyIDs = (user: any): number[] => {
 
           // For COMPANY_ADMIN only: auto-set the single mapped company and branch
                    // COMPANY_ADMIN: company is controlled by active top dropdown
-          if (userRole === "COMPANY_ADMIN") {
+          if (isCompanyAdminLikeRole(userRole)) {
             const assignedCompanyIDs = getUserAssignedCompanyIDs(me)
             const storedActiveCompanyID = getStoredActiveCompanyID()
             const ctx = getSidebarContext()
@@ -423,7 +423,7 @@ const getUserAssignedCompanyIDs = (user: any): number[] => {
   const isSuperAdmin = userRole === "SUPERADMIN"
   const isServiceProviderRole = userRole === "SERVICE_PROVIDER"
   const isServiceProvider =
-    userRole === "COMPANY_ADMIN" ||
+    isCompanyAdminLikeRole(userRole) ||
     (userRole === "EMPLOYEE" && hasCompanyAccessFlag())
 
   const getActiveRosterCompanyID = () => {
@@ -436,7 +436,7 @@ const getUserAssignedCompanyIDs = (user: any): number[] => {
       return ctx?.companyID ? Number(ctx.companyID) : companyID ? Number(companyID) : null
     }
 
-    if (userRole === "COMPANY_ADMIN" || (userRole === "EMPLOYEE" && hasCompanyAccessFlag())) {
+    if (isCompanyAdminLikeRole(userRole) || (userRole === "EMPLOYEE" && hasCompanyAccessFlag())) {
       if (
         assignedCompanyIDs.length > 1 &&
         storedActiveCompanyID &&
@@ -482,7 +482,7 @@ const getUserAssignedCompanyIDs = (user: any): number[] => {
 
   useEffect(() => {
     const isCompanyOperator =
-      userRole === "COMPANY_ADMIN" ||
+      isCompanyAdminLikeRole(userRole) ||
       (userRole === "EMPLOYEE" && hasCompanyAccessFlag())
     if (!isCompanyOperator || !user || !currentUserMapping) return
 

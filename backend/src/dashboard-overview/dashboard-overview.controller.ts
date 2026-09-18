@@ -4,51 +4,59 @@ import {
   DashboardOverviewService,
   type TodayOverviewQuery,
 } from './dashboard-overview.service';
+import { PrismaService } from '../prisma/prisma.service';
+import { resolveActiveCompanyForUser } from '../common/active-company.util';
 
 const PLATFORM_ROLES = new Set(['SUPERADMIN', 'SERVICE_PROVIDER']);
 
-type JwtUser = { role?: string; companyID?: number };
+type JwtUser = { sub?: number; id?: number; role?: string; companyID?: number };
 
 @Controller('dashboard-overview')
 export class DashboardOverviewController {
-  constructor(private readonly service: DashboardOverviewService) {}
+  constructor(
+    private readonly service: DashboardOverviewService,
+    private readonly prisma: PrismaService,
+  ) {}
 
-  private scopedOverviewQuery(
-    req: { user?: JwtUser },
+  private async scopedOverviewQuery(
+    req: { user?: JwtUser; headers?: Record<string, unknown> },
     raw: {
       companyID?: string;
       branchId?: string;
       departmentId?: string;
       serviceProviderID?: string;
     },
-  ): { empty: boolean; query: TodayOverviewQuery } {
+  ): Promise<{ empty: boolean; query: TodayOverviewQuery }> {
     const role = String(req.user?.role || '').toUpperCase();
-    const tokenCompanyID = Number(req.user?.companyID);
-    const hasTokenCompany =
-      Number.isFinite(tokenCompanyID) && tokenCompanyID > 0;
     const branchId = raw.branchId ? Number(raw.branchId) : undefined;
     const departmentId = raw.departmentId ? Number(raw.departmentId) : undefined;
+    const requestedCompanyID = raw.companyID ? Number(raw.companyID) : undefined;
 
-    if (!PLATFORM_ROLES.has(role)) {
-      if (!hasTokenCompany) {
-        return { empty: true, query: { branchId, departmentId } };
-      }
+    if (PLATFORM_ROLES.has(role)) {
       return {
         empty: false,
-        query: { companyID: tokenCompanyID, branchId, departmentId },
+        query: {
+          companyID: requestedCompanyID,
+          branchId,
+          departmentId,
+          serviceProviderID: raw.serviceProviderID
+            ? Number(raw.serviceProviderID)
+            : undefined,
+        },
       };
     }
 
+    const companyID = await resolveActiveCompanyForUser(
+      this.prisma,
+      req,
+      requestedCompanyID,
+    );
+    if (!companyID) {
+      return { empty: true, query: { branchId, departmentId } };
+    }
     return {
       empty: false,
-      query: {
-        companyID: raw.companyID ? Number(raw.companyID) : undefined,
-        branchId,
-        departmentId,
-        serviceProviderID: raw.serviceProviderID
-          ? Number(raw.serviceProviderID)
-          : undefined,
-      },
+      query: { companyID, branchId, departmentId },
     };
   }
 
@@ -82,13 +90,13 @@ export class DashboardOverviewController {
 
   @Get('new-joiners')
   @UseGuards(AuthGuard('jwt'))
-  getNewJoiners(
+  async getNewJoiners(
     @Req() req: { user?: JwtUser },
     @Query('companyID') companyID?: string,
     @Query('branchId') branchId?: string,
     @Query('serviceProviderID') serviceProviderID?: string,
   ) {
-    const scoped = this.scopedOverviewQuery(req, {
+    const scoped = await this.scopedOverviewQuery(req, {
       companyID,
       branchId,
       serviceProviderID,
@@ -99,14 +107,14 @@ export class DashboardOverviewController {
 
   @Get('today-overview')
   @UseGuards(AuthGuard('jwt'))
-  getTodayOverview(
+  async getTodayOverview(
     @Req() req: { user?: JwtUser },
     @Query('companyID') companyID?: string,
     @Query('branchId') branchId?: string,
     @Query('departmentId') departmentId?: string,
     @Query('serviceProviderID') serviceProviderID?: string,
   ) {
-    const scoped = this.scopedOverviewQuery(req, {
+    const scoped = await this.scopedOverviewQuery(req, {
       companyID,
       branchId,
       departmentId,

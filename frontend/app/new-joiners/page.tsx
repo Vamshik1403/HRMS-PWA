@@ -14,7 +14,7 @@ import {
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import { getActiveCompanyId, getSidebarContext } from "../utils/sidebarContext";
 import { resolveScopedCompanyId } from "../utils/scopeContext";
-import { hasCompanyAccessFlag, isCompanyOwnerFlag } from "@/lib/companyAccess";
+import { hasCompanyAccessFlag, isCompanyOwnerFlag, isCompanyAdminLikeRole } from "@/lib/companyAccess";
 import { isDesktopManagerFlagSet } from "@/lib/desktopManager";
 import { TableBodySkeleton } from "@/app/components/ui/TableBodySkeleton";
 import { authHeaders } from "@/lib/auth";
@@ -86,7 +86,7 @@ export default function NewJoinersPage() {
     }
     if (
       user.role === "SERVICE_PROVIDER" ||
-      user.role === "COMPANY_ADMIN" ||
+      isCompanyAdminLikeRole(user.role) ||
       user.role === "ADMIN"
     ) {
       fetch(`${BACKEND}/users`, { headers: authHeaders(), cache: "no-store" })
@@ -103,7 +103,7 @@ export default function NewJoinersPage() {
     if (!user) return;
     if (
       (user.role === "SERVICE_PROVIDER" ||
-        user.role === "COMPANY_ADMIN" ||
+        isCompanyAdminLikeRole(user.role) ||
         user.role === "ADMIN") &&
       !currentUserMapping
     ) {

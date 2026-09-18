@@ -12,7 +12,7 @@ import { EntityDetailHero, EntityDetailLayout } from "../components/app/entity-d
 import { MessageCircle, Plus, AlertTriangle, UserPlus, FileDown, ClipboardList, ChevronLeft, ChevronRight } from "lucide-react";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import { isDesktopManagerFlagSet } from "@/lib/desktopManager";
-import { hasModuleWriteAccess, canViewModule } from "@/lib/companyAccess";
+import { hasModuleWriteAccess, canViewModule, isCompanyAdminLikeRole } from "@/lib/companyAccess";
 import { toast } from "sonner";
 import { taskFetch } from "../utils/taskApi";
 import { toDatetimeLocalValue, toIsoFromDatetimeLocal } from "../utils/taskDueAt";
@@ -123,13 +123,13 @@ export default function TaskManagement() {
     user?.role === "EMPLOYEE" && isDesktopManagerFlagSet();
   const canManage =
     user?.role === "SUPERADMIN" ||
-    user?.role === "COMPANY_ADMIN" ||
+    isCompanyAdminLikeRole(user?.role) ||
     desktopManager ||
     hasModuleWriteAccess("TASKS");
   const canView =
     canManage ||
     user?.role === "SUPERADMIN" ||
-    user?.role === "COMPANY_ADMIN" ||
+    isCompanyAdminLikeRole(user?.role) ||
     canViewModule("TASKS");
   const table = useClientTable("taskCode");
   const [tasks, setTasks] = useState<Task[]>([]);

@@ -77,6 +77,11 @@ export function isCompanyOwnerFlag(): boolean {
   return !!readCompanyAccess()?.isCompanyOwner;
 }
 
+export function isCompanyAdminLikeRole(role?: string | null): boolean {
+  const r = String(role || "").toUpperCase();
+  return r === "COMPANY_ADMIN" || r === "MULTI_COMPANY_ADMIN";
+}
+
 export function canModuleAction(moduleKey: string, action: ModuleAction): boolean {
   const snap = readCompanyAccess();
   if (!snap?.hasAnyCompanyAccess) return false;

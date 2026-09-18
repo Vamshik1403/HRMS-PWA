@@ -60,6 +60,7 @@ import {
 import { formatDevicePunchForDisplay } from "../utils/devicePunchTime";
 import { useAppRefresh } from "../hooks/useAppRefresh";
 import { isDesktopManagerFlagSet } from "@/lib/desktopManager";
+import { isCompanyAdminLikeRole } from "@/lib/companyAccess";
 import { getSidebarContext } from "../utils/sidebarContext";
 import { useAdminPageHeader } from "@/app/components/layout/admin-page-header-context";
 import { useEmpPortalPageHeader } from "@/app/components/layout/emp-portal-page-context";
@@ -107,7 +108,7 @@ function canLoadScopedDashboard(
   ) {
     return true;
   }
-  if (user.role === "COMPANY_ADMIN" || user.role === "ADMIN") {
+  if (isCompanyAdminLikeRole(user.role) || user.role === "ADMIN") {
     return resolveDashboardCompanyId(user, currentUserMapping) != null;
   }
   if (user.role === "SERVICE_PROVIDER") {
@@ -365,7 +366,7 @@ export default function DashboardPage({ embeddedInEmpPortal = false }: { embedde
   const isDesktopManagerEmployee =
     desktopManager && user?.role === "EMPLOYEE";
   const isHrDesktopView =
-    user?.role === "COMPANY_ADMIN" ||
+    isCompanyAdminLikeRole(user?.role) ||
     user?.role === "ADMIN" ||
     isDesktopManagerEmployee;
 
@@ -377,7 +378,7 @@ export default function DashboardPage({ embeddedInEmpPortal = false }: { embedde
 
     const needsMapping =
       (user.role === "SERVICE_PROVIDER" ||
-        user.role === "COMPANY_ADMIN" ||
+        isCompanyAdminLikeRole(user.role) ||
         user.role === "ADMIN") &&
       !isDesktopManagerEmployee;
 
@@ -447,7 +448,7 @@ export default function DashboardPage({ embeddedInEmpPortal = false }: { embedde
         params.set("companyID", String(resolvedCompanyId));
       }
     } else if (
-      (user?.role === "COMPANY_ADMIN" || user?.role === "ADMIN") &&
+      (isCompanyAdminLikeRole(user?.role) || user?.role === "ADMIN") &&
       resolvedCompanyId != null
     ) {
       params.set("companyID", String(resolvedCompanyId));
@@ -684,7 +685,7 @@ export default function DashboardPage({ embeddedInEmpPortal = false }: { embedde
           (b) => b.serviceProviderID === resolvedServiceProviderId
         );
       } else if (
-        (user!.role === "COMPANY_ADMIN" || user!.role === "ADMIN") &&
+        (isCompanyAdminLikeRole(user!.role) || user!.role === "ADMIN") &&
         resolvedCompanyId != null
       ) {
         scopedEmployees = allEmployees.filter(
@@ -1111,7 +1112,7 @@ export default function DashboardPage({ embeddedInEmpPortal = false }: { embedde
     return null;
   }
 
-  if (user?.role === "COMPANY_ADMIN") {
+  if (isCompanyAdminLikeRole(user?.role)) {
     const newJoinersCount = hrWidgets?.newJoinersThisMonth ?? 0;
 
     return (

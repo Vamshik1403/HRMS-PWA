@@ -30,7 +30,31 @@ export function ensureFetchRefreshPatch(): void {
   const originalFetch = window.fetch.bind(window);
 
   window.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
-    const res = await originalFetch(input, init);
+    let nextInit = init;
+    try {
+      const url =
+        typeof input === "string"
+          ? input
+          : input instanceof URL
+            ? input.href
+            : input.url;
+      if (url.includes("/backend/")) {
+        const activeCompanyID = Number(sessionStorage.getItem("activeCompanyID") || 0);
+        if (Number.isFinite(activeCompanyID) && activeCompanyID > 0) {
+          const headers = new Headers(
+            init?.headers || (input instanceof Request ? input.headers : undefined),
+          );
+          if (!headers.has("X-Active-Company-ID")) {
+            headers.set("X-Active-Company-ID", String(activeCompanyID));
+          }
+          nextInit = { ...(init || {}), headers };
+        }
+      }
+    } catch {
+      /* ignore */
+    }
+
+    const res = await originalFetch(input, nextInit);
     try {
       const url =
         typeof input === "string"

@@ -50,6 +50,7 @@ import {
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import { getSidebarContext } from "../utils/sidebarContext";
 import { resolveScopeUserMapping } from "../utils/scopeContext";
+import { isCompanyAdminLikeRole } from "@/lib/companyAccess";
 
 type ID = number;
 
@@ -921,7 +922,7 @@ export default function ApprovalWorkflowsPage() {
   const canManage =
     user?.role === "SUPERADMIN" ||
     user?.role === "SERVICE_PROVIDER" ||
-    user?.role === "COMPANY_ADMIN" ||
+    isCompanyAdminLikeRole(user?.role) ||
     user?.role === "ADMIN" ||
     user?.role === "BRANCH_ADMIN";
 

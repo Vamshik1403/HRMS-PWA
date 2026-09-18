@@ -30,6 +30,7 @@ import { Badge } from "../components/ui/badge"
 import { Plus, Search, Edit, Trash2, CalendarDays } from "lucide-react"
 import { SearchSuggestInput } from "../components/SearchSuggestInput"
 import { getSidebarContext } from "../utils/sidebarContext"
+import { isCompanyAdminLikeRole } from "@/lib/companyAccess";
 
 interface PublicHoliday {
   id: string
@@ -101,7 +102,7 @@ export function EmpPublicHoliday() {
   const [holidayOptions, setHolidayOptions] = useState<any[]>([])
   const [financialYearOptions, setFinancialYearOptions] = useState<string[]>([])
   const user = useCurrentUser()
-  const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || user?.role === "COMPANY_ADMIN" || user?.role === "BRANCH_ADMIN"
+  const canManage = user?.role === "SUPERADMIN" || user?.role === "SERVICE_PROVIDER" || isCompanyAdminLikeRole(user?.role) || user?.role === "BRANCH_ADMIN"
 
   const [formData, setFormData] = useState({
     serviceProvider: "",

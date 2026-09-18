@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { hasModuleWriteAccess } from "@/lib/companyAccess";
+import { hasModuleWriteAccess, isCompanyAdminLikeRole } from "@/lib/companyAccess";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
@@ -40,7 +40,7 @@ const emptyForm = { customerID: "", siteCode: "", gstNo: "", branchName: "", add
 
 export default function SiteManagement() {
   const user = useCurrentUser();
-  const canManage = user?.role === "SUPERADMIN" || user?.role === "COMPANY_ADMIN" || hasModuleWriteAccess("TASKS");
+  const canManage = user?.role === "SUPERADMIN" || isCompanyAdminLikeRole(user?.role) || hasModuleWriteAccess("TASKS");
   const table = useClientTable("branchName");
   const [rows, setRows] = useState<Site[]>([]);
   const [customers, setCustomers] = useState<CustomerOpt[]>([]);

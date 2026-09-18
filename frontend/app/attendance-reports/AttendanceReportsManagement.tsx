@@ -11,7 +11,7 @@ import * as XLSX from "xlsx-js-style";
 import { formatDevicePunchForDisplay } from "../utils/devicePunchTime";
 import { formatWorkedDuration } from "../utils/attendanceDuration";
 import { getSidebarContext } from "@/app/utils/sidebarContext";
-import { canViewModule } from "@/lib/companyAccess";
+import { canViewModule, isCompanyAdminLikeRole } from "@/lib/companyAccess";
 import { PageHeader } from "../components/app/page-header";
 import { weekdayNameForDateKey } from "../utils/empWorkShiftWeekOff";
 
@@ -1060,9 +1060,9 @@ export function AttendanceReportsManagement({ mode = "actual" }: { mode?: Report
   const canGenerateReports = !user
     ? true
     : isFactualMode
-      ? ["SUPERADMIN", "COMPANY_ADMIN", "BRANCH_ADMIN", "ADMIN"].includes(user.role) ||
+      ? ["SUPERADMIN", "COMPANY_ADMIN", "MULTI_COMPANY_ADMIN", "BRANCH_ADMIN", "ADMIN"].includes(user.role) ||
         canViewModule("REPORTS")
-      : ["SUPERADMIN", "COMPANY_ADMIN", "BRANCH_ADMIN"].includes(user.role) ||
+      : ["SUPERADMIN", "COMPANY_ADMIN", "MULTI_COMPANY_ADMIN", "BRANCH_ADMIN"].includes(user.role) ||
         canViewModule("REPORTS");
 
   const getActiveReportContext = () => {
@@ -1072,7 +1072,7 @@ export function AttendanceReportsManagement({ mode = "actual" }: { mode?: Report
     const assignedCompanyIDs = getUserAssignedCompanyIDs(userAny);
 
     const isCompanyScopedUser =
-      user?.role === "COMPANY_ADMIN" ||
+      isCompanyAdminLikeRole(user?.role) ||
       user?.role === "ADMIN" ||
       user?.role === "BRANCH_ADMIN";
 
@@ -1189,7 +1189,7 @@ export function AttendanceReportsManagement({ mode = "actual" }: { mode?: Report
     if (!user) return;
     const loadUserData = async () => {
       try {
-        if (user.role === "SERVICE_PROVIDER" || user.role === "COMPANY_ADMIN" || user.role === "ADMIN" || user.role === "BRANCH_ADMIN") {
+        if (user.role === "SERVICE_PROVIDER" || isCompanyAdminLikeRole(user.role) || user.role === "ADMIN" || user.role === "BRANCH_ADMIN") {
           const usersRes = await fetch(`${BACKEND_URL}/users`);
           const users = await usersRes.json();
           const me = users.find((u: any) => u.username === user.username);
@@ -2000,9 +2000,9 @@ if (!hasPunchesEffective) return { type: "ABSENT", label: "Absent", hasPunches: 
       }
 
       // Load all master data in parallel
-      const shiftEndpoint = isFactualMode ? "factual-work-shift" : "work-shift";
-      const rosterEndpoint = isFactualMode ? "factual-rosters" : "rosters";
-      const policyEndpoint = isFactualMode ? "factual-attendance-policy" : "attendance-policy";
+      const shiftEndpoint = "work-shift";
+      const rosterEndpoint = "rosters";
+      const policyEndpoint = "attendance-policy";
 
       const [holidaysRes, shiftsRes, regRes, leavesRes, rostersRes, policyRes, empShiftRes, companiesRes, branchesRes, departmentsRes] = await Promise.all([
         fetch(`${BACKEND_URL}/public-holiday`),
@@ -2093,7 +2093,7 @@ if (!hasPunchesEffective) return { type: "ABSENT", label: "Absent", hasPunches: 
         );
       }
 
-      const shifts = extractEmpWorkShiftMappings(safeEmpData, isFactualMode, shiftById);
+      const shifts = extractEmpWorkShiftMappings(safeEmpData, false, shiftById);
 
       const filteredHolidays = safeHolidays.filter((h: PublicHoliday) => Number(h.companyID) === Number(selectedCompanyID) && (h.branchesID == null || Number(h.branchesID) === Number(selectedBranchID)));
       const filteredRegularizations = safeRegData.filter((r: AttendanceRegularize) => Number(r.companyID) === Number(selectedCompanyID) && Number(r.branchesID) === Number(selectedBranchID) && r.status === "Approved");
