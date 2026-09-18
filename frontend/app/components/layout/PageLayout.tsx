@@ -29,7 +29,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useCurrentUser } from "../../hooks/useCurrentUser";
 import { Input } from "../ui/input";
 import { cn } from "@/app/utils/cn";
-import { setSidebarContext, getSidebarContext } from "@/app/utils/sidebarContext";
+import { setSidebarContext, getSidebarContext, clearActiveCompanySession } from "@/app/utils/sidebarContext";
 import { getPageCache, setPageCache } from "@/app/utils/pageCache";
 import { isDesktopManagerFlagSet } from "@/lib/desktopManager";
 import { authHeaders } from "@/lib/auth";
@@ -1087,6 +1087,7 @@ const canShowCompanySwitcher =
     localStorage.removeItem("accessToken");
     localStorage.removeItem("token");
     localStorage.removeItem("user");
+    clearActiveCompanySession();
     document.cookie = "accessToken=; path=/; max-age=0; expires=Thu, 01 Jan 1970 00:00:00 UTC; samesite=lax";
     router.push("/login");
   };

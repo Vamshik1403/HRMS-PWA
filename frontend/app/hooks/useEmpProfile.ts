@@ -11,6 +11,7 @@ import {
 } from "../utils/pageCache";
 import { clearLegacyEmpPhoto, getEmpPhoto, setEmpPhoto } from "../utils/empPhotoCache";
 import { applyEmpTheme, readStoredEmpTheme } from "../utils/empTheme";
+import { clearActiveCompanySession } from "../utils/sidebarContext";
 
 const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL || "/backend";
 
@@ -227,6 +228,7 @@ export function useEmpProfile() {
     localStorage.removeItem("token");
     localStorage.removeItem("accessToken");
     localStorage.removeItem("user");
+    clearActiveCompanySession();
     router.replace("/login");
   };
 

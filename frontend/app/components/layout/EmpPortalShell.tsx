@@ -25,7 +25,7 @@ import { useEmpManagerScope } from "@/app/hooks/useEmpManagerScope";
 import { isDesktopBrowser } from "@/lib/desktopManager";
 import { resolveEmpPhoto } from "@/app/utils/empPhotoCache";
 import { getPageCache } from "@/app/utils/pageCache";
-import { setSidebarContext, getSidebarContext } from "@/app/utils/sidebarContext";
+import { setSidebarContext, getSidebarContext, clearActiveCompanySession } from "@/app/utils/sidebarContext";
 import { hasCompanyAccessFlag } from "@/lib/companyAccess";
 import { preloadHeroImages } from "@/app/components/emp/desktop/HeroBackground";
 import {
@@ -200,19 +200,23 @@ export default function EmpPortalShell({ children, hideBottomNav = false }: EmpP
         }
         setEmpUser(u);
 
-        // Fill missing sidebar context only. Never overwrite a switched company
-        // with the user's home companyID — that snaps the switcher back.
         const ctx = getSidebarContext();
+        const userCompanyID = Number(u?.companyID || 0);
         const sessionCompanyID = Number(sessionStorage.getItem("activeCompanyID") || 0);
-        const preferredCompanyID =
-          (sessionCompanyID > 0 ? sessionCompanyID : 0) ||
-          Number(ctx?.companyID || 0) ||
-          Number(u?.activeCompanyID || u?.companyID || 0);
         const serviceProviderID = Number(u?.serviceProviderID || 0);
+        const shouldOverwriteStaleCtx =
+          userCompanyID > 0 &&
+          !!ctx &&
+          Number(ctx.companyID) !== userCompanyID;
+        const preferredCompanyID = shouldOverwriteStaleCtx
+          ? userCompanyID
+          : (sessionCompanyID > 0 ? sessionCompanyID : 0) ||
+            Number(ctx?.companyID || 0) ||
+            Number(u?.activeCompanyID || u?.companyID || 0);
         if (
           (hasCompanyAccessFlag() || u?.isCompanyOwner) &&
           preferredCompanyID > 0 &&
-          !ctx
+          (!ctx || shouldOverwriteStaleCtx)
         ) {
           const companyName =
             (typeof u?.company === "string" ? u.company : u?.company?.companyName) ||
@@ -225,7 +229,7 @@ export default function EmpPortalShell({ children, hideBottomNav = false }: EmpP
             preferredCompanyID,
             companyName,
           );
-          if (sessionCompanyID <= 0) {
+          if (sessionCompanyID <= 0 || shouldOverwriteStaleCtx) {
             sessionStorage.setItem("activeCompanyID", String(preferredCompanyID));
           }
         }
@@ -416,6 +420,7 @@ export default function EmpPortalShell({ children, hideBottomNav = false }: EmpP
             } catch {
               /* ignore */
             }
+            clearActiveCompanySession();
             document.cookie = "accessToken=; path=/; max-age=0";
             window.location.href = "/login";
           }}

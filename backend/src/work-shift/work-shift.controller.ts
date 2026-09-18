@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, Query } from '@nestjs/common';
 import { WorkShiftService } from './work-shift.service';
 import { CreateWorkShiftDto } from './dto/create-work-shift.dto';
 import { UpdateWorkShiftDto } from './dto/update-work-shift.dto';
@@ -13,8 +13,11 @@ export class WorkShiftController {
   }
 
   @Get()
-  findAll() {
-    return this.workShiftService.findAll();
+  findAll(@Query('companyID') companyID?: string) {
+    const parsed = Number(companyID);
+    const scopedId =
+      Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
+    return this.workShiftService.findAll(scopedId);
   }
 
   @Get(':id')

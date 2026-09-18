@@ -17,6 +17,31 @@ import {
   isCompanyAdminLikeRole,
 } from '@/lib/companyAccess'
 import { preloadHeroImages } from '@/app/components/emp/desktop/HeroBackground'
+import { clearActiveCompanySession, setSidebarContext } from '@/app/utils/sidebarContext'
+
+function applyLoginCompanyContext(user: any) {
+  clearActiveCompanySession()
+  const companyID = Number(
+    user?.activeCompanyID ||
+      user?.companyID ||
+      user?.companyIDs?.[0] ||
+      user?.employee?.companyID ||
+      0,
+  )
+  if (!Number.isFinite(companyID) || companyID <= 0) return
+  try {
+    sessionStorage.setItem('activeCompanyID', String(companyID))
+  } catch {
+    /* ignore */
+  }
+  const companyName =
+    (typeof user?.company === 'string' ? user.company : user?.company?.companyName) ||
+    user?.employee?.company ||
+    ''
+  const spId = Number(user?.serviceProviderID || 0)
+  const spName = user?.serviceProvider?.companyName || ''
+  setSidebarContext(spId || 0, spName, companyID, companyName)
+}
 
 const LOGIN_OTP_TTL_MS = 5 * 60 * 1000
 
@@ -156,6 +181,7 @@ export default function LoginPage() {
     if (basicUser.type === 'employee' || basicUser.role === 'EMPLOYEE') {
       localStorage.setItem('user', JSON.stringify(basicUser))
       await resolveDesktopManagerAfterLogin(accessToken)
+      let sessionUser = basicUser
       try {
         const accessRes = await axios.get('/backend/employee-permissions/me', {
           headers: { Authorization: `Bearer ${accessToken}` },
@@ -175,9 +201,11 @@ export default function LoginPage() {
         }
         localStorage.setItem('user', JSON.stringify(enriched))
         persistCompanyAccessFromUser(enriched)
+        sessionUser = enriched
       } catch {
         persistCompanyAccessFromUser(basicUser)
       }
+      applyLoginCompanyContext(sessionUser)
       preloadHeroImages(true)
       router.push('/empdashboard')
       return
@@ -202,13 +230,8 @@ export default function LoginPage() {
             : basicUser.companyIDs,
       }
       localStorage.setItem('user', JSON.stringify(completeUser))
+      applyLoginCompanyContext(completeUser)
       const role = String(completeUser.role || '').toUpperCase()
-      const activeCompanyID = Number(
-        completeUser.activeCompanyID || completeUser.companyID || completeUser.companyIDs?.[0] || 0,
-      )
-      if (Number.isFinite(activeCompanyID) && activeCompanyID > 0) {
-        sessionStorage.setItem('activeCompanyID', String(activeCompanyID))
-      }
       if (role === 'SUPERADMIN') {
         router.push('/superdashboard')
       } else if (isCompanyAdminLikeRole(role)) {
@@ -221,13 +244,8 @@ export default function LoginPage() {
       }
     } catch {
       localStorage.setItem('user', JSON.stringify(basicUser))
+      applyLoginCompanyContext(basicUser)
       const role = String(basicUser.role || '').toUpperCase()
-      const activeCompanyID = Number(
-        basicUser.activeCompanyID || basicUser.companyID || basicUser.companyIDs?.[0] || 0,
-      )
-      if (Number.isFinite(activeCompanyID) && activeCompanyID > 0) {
-        sessionStorage.setItem('activeCompanyID', String(activeCompanyID))
-      }
       if (role === 'SUPERADMIN') {
         router.push('/superdashboard')
       } else if (isCompanyAdminLikeRole(role)) {

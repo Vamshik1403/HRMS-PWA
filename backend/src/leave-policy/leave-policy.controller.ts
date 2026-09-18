@@ -7,6 +7,7 @@ import {
   Param,
   Delete,
   ParseIntPipe,
+  Query,
 } from '@nestjs/common';
 import { LeavePolicyService } from './leave-policy.service';
 import { CreateLeavePolicyDto } from './dto/create-leave-policy.dto';
@@ -22,8 +23,11 @@ export class LeavePolicyController {
   }
 
   @Get()
-  findAll() {
-    return this.leavePolicyService.findAll();
+  findAll(@Query('companyID') companyID?: string) {
+    const parsed = Number(companyID);
+    const scopedId =
+      Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
+    return this.leavePolicyService.findAll(scopedId);
   }
 
   @Get(':id')

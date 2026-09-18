@@ -238,6 +238,10 @@ export default function EmpLayout({ children }: EmpLayoutProps) {
                       onClick={() => {
                         localStorage.removeItem("accessToken");
                         localStorage.removeItem("user");
+                        try {
+                          sessionStorage.removeItem("activeCompanyID");
+                          localStorage.removeItem("sidebarContext");
+                        } catch { /* ignore */ }
                         document.cookie = "accessToken=; path=/; max-age=0; expires=Thu, 01 Jan 1970 00:00:00 UTC; samesite=lax";
                         window.location.href = "/login";
                       }}

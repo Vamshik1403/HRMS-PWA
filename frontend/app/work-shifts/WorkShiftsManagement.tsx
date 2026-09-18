@@ -24,6 +24,7 @@ import {
   canDesktopManagerManage,
   filterCompanyScopedRecords,
   resolveScopeUserMapping,
+  resolveScopedCompanyId,
 } from "../utils/scopeContext";
 
 interface ShiftRow {
@@ -222,10 +223,8 @@ export function WorkShiftsManagement() {
 
  const fetchBranches = async (query: string) => {
   try {
-    const ctx = getSidebarContext();
-
     const activeCompanyID =
-      ctx?.companyID ??
+      resolveScopedCompanyId(user) ??
       formData.companyID ??
       currentUserMapping?.companyID ??
       user?.companyID ??
@@ -317,10 +316,8 @@ const handler = () => {
     const mapping = await resolveScopeUserMapping(user!);
     if (mapping) setCurrentUserMapping(mapping);
 
-    const ctx = getSidebarContext();
-
     const activeCompanyID =
-      ctx?.companyID ??
+      resolveScopedCompanyId(user) ??
       mapping?.companyID ??
       user?.companyID ??
       null;
@@ -354,7 +351,9 @@ const handler = () => {
   const loadWorkShifts = async () => {
     setListLoading(true);
     try {
-      const res = await fetch(`${BACKEND_URL}/work-shift`, { cache: "no-store" });
+      const scopedId = resolveScopedCompanyId(user);
+      const q = scopedId ? `?companyID=${scopedId}` : "";
+      const res = await fetch(`${BACKEND_URL}/work-shift${q}`, { cache: "no-store" });
       const data = await res.json();
       const all = Array.isArray(data) ? data : [];
 
@@ -411,21 +410,7 @@ const handler = () => {
  const mapping = await resolveScopeUserMapping(user!);
 if (mapping) setCurrentUserMapping(mapping);
 
-const ctx = getSidebarContext();
-
-const activeCompanyID =
-  ctx?.companyID ??
-  mapping?.companyID ??
-  user?.companyID ??
-  null;
-
-let filtered = mapped;
-
-if (activeCompanyID) {
-  filtered = filtered.filter(
-    (w: any) => Number(w.companyID) === Number(activeCompanyID)
-  );
-}
+let filtered = await filterCompanyScopedRecords(mapped, user);
 
 if (user?.role === "BRANCH_ADMIN") {
   const branchID = mapping?.branchesID ?? user?.branchesID;
@@ -608,7 +593,7 @@ const finalServiceProviderID =
   null;
 
 const finalCompanyID =
-  ctx?.companyID ??
+  resolveScopedCompanyId(user) ??
   formData.companyID ??
   currentUserMapping?.companyID ??
   user?.companyID ??
@@ -670,7 +655,7 @@ await loadBranchFilterList();
       isRotating: false,
       workShiftType: "",
       serviceProviderID: ctx?.serviceProviderID ?? undefined,
-      companyID: ctx?.companyID ?? undefined,
+      companyID: resolveScopedCompanyId(user) ?? ctx?.companyID ?? undefined,
       branchesID: undefined,
       weeklySchedule: DAYS_OF_WEEK.map((day) => ({
         day,
@@ -882,7 +867,7 @@ await loadBranchFilterList();
                fetchData={fetchBranches}
                     displayField="branchName"
                     valueField="id"
-                    companyID={formData.companyID ?? currentUserMapping?.companyID ?? user?.companyID}
+                    companyID={formData.companyID ?? resolveScopedCompanyId(user) ?? currentUserMapping?.companyID ?? user?.companyID}
                     required
                   />
                 )}

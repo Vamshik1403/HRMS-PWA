@@ -63,8 +63,9 @@ export class WorkShiftService {
     });
   }
 
-  findAll() {
+  findAll(companyID?: number) {
     return this.prisma.workShift.findMany({
+      where: companyID ? { companyID } : undefined,
       include: {
         branches: true,
         company: true,

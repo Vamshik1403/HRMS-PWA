@@ -26,6 +26,7 @@ import { Calendar as CalendarIcon } from "lucide-react"
 import { FixedCalendar as CalendarComponent } from "@/app/components/ui/color-calendar"
 import { getSidebarContext } from "../utils/sidebarContext"
 import { hasCompanyAccessFlag, isCompanyAdminLikeRole } from "@/lib/companyAccess"
+import { resolveScopedCompanyId } from "../utils/scopeContext"
 // ==================== TYPES ====================
 type ID = number
 type RosterLeaveType = "CASUAL" | "SICK" | "LOP" | "PL" | "COMP_OFF"
@@ -240,22 +241,6 @@ export function RosterManagement() {
   const [userRole, setUserRole] = useState<"SUPERADMIN" | "SERVICE_PROVIDER" | "COMPANY_ADMIN" | "MULTI_COMPANY_ADMIN" | "EMPLOYEE" | null>(null)
   const uid = () => Math.random().toString(36).slice(2)
 
-const getStoredActiveCompanyID = (): number | null => {
-  if (typeof window === "undefined") return null
-
-  try {
-    const sessionId = Number(sessionStorage.getItem("activeCompanyID") || 0)
-    if (sessionId) return sessionId
-
-    const userData = JSON.parse(localStorage.getItem("user") || "{}")
-    const localId = Number(userData?.activeCompanyID || userData?.companyID || 0)
-
-    return localId || null
-  } catch {
-    return null
-  }
-}
-
 const getUserAssignedCompanyIDs = (user: any): number[] => {
   const ids = new Set<number>()
 
@@ -360,15 +345,14 @@ const getUserAssignedCompanyIDs = (user: any): number[] => {
                    // COMPANY_ADMIN: company is controlled by active top dropdown
           if (isCompanyAdminLikeRole(userRole)) {
             const assignedCompanyIDs = getUserAssignedCompanyIDs(me)
-            const storedActiveCompanyID = getStoredActiveCompanyID()
-            const ctx = getSidebarContext()
-
-            let activeCompanyID =
-              assignedCompanyIDs.length > 1 && storedActiveCompanyID && assignedCompanyIDs.includes(Number(storedActiveCompanyID))
-                ? storedActiveCompanyID
-                : assignedCompanyIDs.length > 1 && ctx?.companyID && assignedCompanyIDs.includes(Number(ctx.companyID))
-                  ? Number(ctx.companyID)
-                  : me.companyID
+            let activeCompanyID = resolveScopedCompanyId(user) ?? me.companyID
+            if (
+              assignedCompanyIDs.length > 0 &&
+              activeCompanyID &&
+              !assignedCompanyIDs.includes(Number(activeCompanyID))
+            ) {
+              activeCompanyID = me.companyID
+            }
 
             const allCompanies = await safeFetch<Company[]>(API.company)
             const activeCompany =
@@ -428,40 +412,14 @@ const getUserAssignedCompanyIDs = (user: any): number[] => {
 
   const getActiveRosterCompanyID = () => {
     const ctx = getSidebarContext()
-    const userAny = user as any
-    const assignedCompanyIDs = getUserAssignedCompanyIDs(currentUserMapping || userAny)
-    const storedActiveCompanyID = getStoredActiveCompanyID()
-
-    if (isSuperAdmin) {
-      return ctx?.companyID ? Number(ctx.companyID) : companyID ? Number(companyID) : null
+    if (isSuperAdmin || isServiceProviderRole) {
+      return (
+        resolveScopedCompanyId(user) ??
+        (ctx?.companyID ? Number(ctx.companyID) : null) ??
+        (companyID ? Number(companyID) : null)
+      )
     }
-
-    if (isCompanyAdminLikeRole(userRole) || (userRole === "EMPLOYEE" && hasCompanyAccessFlag())) {
-      if (
-        assignedCompanyIDs.length > 1 &&
-        storedActiveCompanyID &&
-        assignedCompanyIDs.includes(Number(storedActiveCompanyID))
-      ) {
-        return Number(storedActiveCompanyID)
-      }
-
-      if (
-        assignedCompanyIDs.length > 1 &&
-        ctx?.companyID &&
-        assignedCompanyIDs.includes(Number(ctx.companyID))
-      ) {
-        return Number(ctx.companyID)
-      }
-
-      return Number(
-        currentUserMapping?.companyID ||
-        userAny?.companyID ||
-        assignedCompanyIDs[0] ||
-        0
-      ) || null
-    }
-
-    return Number(companyID || ctx?.companyID || userAny?.companyID || 0) || null
+    return resolveScopedCompanyId(user) ?? (companyID ? Number(companyID) : null)
   }
 
   // ✅ EFFECTIVE SCOPE
@@ -488,15 +446,14 @@ const getUserAssignedCompanyIDs = (user: any): number[] => {
 
     const syncActiveCompany = async () => {
       const assignedCompanyIDs = getUserAssignedCompanyIDs(currentUserMapping)
-      const storedActiveCompanyID = getStoredActiveCompanyID()
-      const ctx = getSidebarContext()
-
-      const activeCompanyID =
-        assignedCompanyIDs.length > 1 && storedActiveCompanyID && assignedCompanyIDs.includes(Number(storedActiveCompanyID))
-          ? storedActiveCompanyID
-          : assignedCompanyIDs.length > 1 && ctx?.companyID && assignedCompanyIDs.includes(Number(ctx.companyID))
-            ? Number(ctx.companyID)
-            : currentUserMapping.companyID
+      let activeCompanyID = resolveScopedCompanyId(user) ?? currentUserMapping.companyID
+      if (
+        assignedCompanyIDs.length > 0 &&
+        activeCompanyID &&
+        !assignedCompanyIDs.includes(Number(activeCompanyID))
+      ) {
+        activeCompanyID = currentUserMapping.companyID
+      }
 
       if (!activeCompanyID) return
 

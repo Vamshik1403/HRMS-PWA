@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { Eye, EyeOff } from "lucide-react";
 import { useCurrentUser } from "@/app/hooks/useCurrentUser";
 import { authHeaders } from "@/lib/auth";
-import { setSidebarContext, getSidebarContext } from "@/app/utils/sidebarContext";
+import { setSidebarContext, getSidebarContext, clearActiveCompanySession } from "@/app/utils/sidebarContext";
 import { getPageCache, setPageCache } from "@/app/utils/pageCache";
 import { isDesktopManagerFlagSet } from "@/lib/desktopManager";
 import { hasCompanyAccessFlag, isCompanyAdminLikeRole } from "@/lib/companyAccess";
@@ -266,6 +266,7 @@ export function HrmsAppShell({ children }: { children: React.ReactNode }) {
     } catch {
       /* ignore */
     }
+    clearActiveCompanySession();
     document.cookie = "accessToken=; path=/; max-age=0; expires=Thu, 01 Jan 1970 00:00:00 UTC; samesite=lax";
     router.push("/login");
   };

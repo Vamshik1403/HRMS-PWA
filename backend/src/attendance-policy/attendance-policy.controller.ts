@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, Query } from '@nestjs/common';
 import { AttendancePolicyService } from './attendance-policy.service';
 import { CreateAttendancePolicyDto } from './dto/create-attendance-policy.dto';
 import { UpdateAttendancePolicyDto } from './dto/update-attendance-policy.dto';
@@ -13,8 +13,11 @@ export class AttendancePolicyController {
   }
 
   @Get()
-  findAll() {
-    return this.attendancePolicyService.findAll();
+  findAll(@Query('companyID') companyID?: string) {
+    const parsed = Number(companyID);
+    const scopedId =
+      Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
+    return this.attendancePolicyService.findAll(scopedId);
   }
 
   @Get(':id')

@@ -56,3 +56,12 @@ export function clearSidebarContext() {
     localStorage.removeItem(STORAGE_KEY);
   } catch { /* ignore */ }
 }
+
+export function clearActiveCompanySession() {
+  clearSidebarContext();
+  try {
+    sessionStorage.removeItem("activeCompanyID");
+  } catch {
+    /* ignore */
+  }
+}

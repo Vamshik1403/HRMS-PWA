@@ -24,6 +24,7 @@ import {
   canDesktopManagerManage,
   filterCompanyScopedRecords,
   resolveScopeUserMapping,
+  resolveScopedCompanyId,
 } from "../utils/scopeContext";
 
 interface Holiday {
@@ -152,7 +153,7 @@ const resolvedServiceProviderID =
   null;
 
 const resolvedCompanyID =
-  sidebarCtx?.companyID ??
+  resolveScopedCompanyId(user) ??
   formData.companyID ??
   currentUserMapping?.companyID ??
   user?.companyID ??
@@ -354,10 +355,8 @@ const loadBranchFilterList = async () => {
     const mapping = user ? await resolveScopeUserMapping(user) : null;
     if (mapping) setCurrentUserMapping(mapping);
 
-    const ctx = getSidebarContext();
-
     const activeCompanyID =
-      ctx?.companyID ??
+      resolveScopedCompanyId(user) ??
       mapping?.companyID ??
       user?.companyID ??
       null;
@@ -393,10 +392,8 @@ const loadBranchFilterList = async () => {
 
 const fetchBranches = async (query: string) => {
   try {
-    const ctx = getSidebarContext();
-
     const activeCompanyID =
-      ctx?.companyID ??
+      resolveScopedCompanyId(user) ??
       formData.companyID ??
       currentUserMapping?.companyID ??
       user?.companyID ??
@@ -494,8 +491,10 @@ useEffect(() => {
   const loadLeavePolicies = async () => {
     try {
       setListLoading(true)
+      const scopedId = resolveScopedCompanyId(user);
+      const q = scopedId ? `?companyID=${scopedId}` : "";
       const [response, branchesRes] = await Promise.all([
-        fetch(`${BACKEND_URL}/leave-policy`),
+        fetch(`${BACKEND_URL}/leave-policy${q}`),
         fetch(`${BACKEND_URL}/branches`),
       ]);
       const data = await response.json();
@@ -535,21 +534,7 @@ useEffect(() => {
 const mapping = await resolveScopeUserMapping(user!);
 if (mapping) setCurrentUserMapping(mapping);
 
-const ctx = getSidebarContext();
-
-const activeCompanyID =
-  ctx?.companyID ??
-  mapping?.companyID ??
-  user?.companyID ??
-  null;
-
-let filteredPolicies = mapped;
-
-if (activeCompanyID) {
-  filteredPolicies = filteredPolicies.filter(
-    (p: any) => Number(p.companyID) === Number(activeCompanyID)
-  );
-}
+let filteredPolicies = await filterCompanyScopedRecords(mapped, user);
 
 if (user?.role === "BRANCH_ADMIN") {
   const branchID = mapping?.branchesID ?? user?.branchesID;
@@ -706,7 +691,7 @@ const payload = {
     null,
 
   companyID:
-    ctx?.companyID ??
+    resolveScopedCompanyId(user) ??
     formData.companyID ??
     currentUserMapping?.companyID ??
     user?.companyID ??
@@ -775,7 +760,7 @@ const payload = {
     const ctx = getSidebarContext();
     setFormData({
       serviceProviderID: ctx?.serviceProviderID ?? 0,
-      companyID: ctx?.companyID ?? 0,
+      companyID: resolveScopedCompanyId(user) ?? ctx?.companyID ?? 0,
       branchesID: 0,
       serviceProvider: ctx?.serviceProviderName ?? "",
       companyName: ctx?.companyName ?? "",

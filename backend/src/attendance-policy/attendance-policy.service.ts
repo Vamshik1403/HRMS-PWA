@@ -69,8 +69,9 @@ export class AttendancePolicyService {
     });
   }
 
-  findAll() {
+  findAll(companyID?: number) {
     return this.prisma.attendancePolicy.findMany({
+      where: companyID ? { companyID } : undefined,
       include: {
         branches: true,
         company: true,

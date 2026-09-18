@@ -13,6 +13,8 @@ export type ScopedUser = {
   activeCompanyID?: number;
   branchesID?: number;
   serviceProviderID?: number;
+  companyIDs?: number[];
+  userCompanies?: { companyID?: number; company?: { id?: number } }[];
 } | null;
 
 export type ScopeRecord = {
@@ -51,9 +53,8 @@ const toPositiveId = (value: unknown): number | undefined => {
 
 /**
  * Resolve the active company for forms/lists.
- * Admins with multiple companies follow the sidebar switcher (session + context).
- * Employee operators prefer credentials/user.companyID over stale sidebarContext
- * left behind by a previous admin session.
+ * MULTI_COMPANY_ADMIN follows the sidebar switcher when that company is assigned.
+ * Single-company tenant roles stay on user.companyID so leftover 3s Infocom context cannot leak.
  */
 export function resolveScopedCompanyId(
   user?: ScopedUser,
@@ -61,21 +62,43 @@ export function resolveScopedCompanyId(
 ): number | undefined {
   if (!user) return undefined;
 
+  const role = String(user.role || "").toUpperCase();
   const userCompanyId = toPositiveId(user.companyID);
   const switchedId =
     getActiveCompanyId() ?? toPositiveId(ctx?.companyID) ?? toPositiveId(user.activeCompanyID);
   const ctxCompanyId = toPositiveId(ctx?.companyID);
 
-  if (user.role === "EMPLOYEE" && (isCompanyModuleOperator(user) || userCompanyId)) {
-    if (userCompanyId) {
-      if (ctxCompanyId && ctxCompanyId === userCompanyId) return ctxCompanyId;
-      return userCompanyId;
+  const assignedIds = new Set<number>();
+  if (Array.isArray(user.companyIDs)) {
+    for (const id of user.companyIDs) {
+      const n = toPositiveId(id);
+      if (n) assignedIds.add(n);
+    }
+  }
+  if (Array.isArray(user.userCompanies)) {
+    for (const row of user.userCompanies) {
+      const n = toPositiveId(row?.companyID ?? row?.company?.id);
+      if (n) assignedIds.add(n);
     }
   }
 
-  if (switchedId) return switchedId;
-  if (ctxCompanyId) return ctxCompanyId;
-  return userCompanyId;
+  if (role === "SUPERADMIN" || role === "SERVICE_PROVIDER") {
+    return switchedId ?? ctxCompanyId ?? userCompanyId;
+  }
+
+  if (role === "MULTI_COMPANY_ADMIN") {
+    if (switchedId && (assignedIds.size === 0 || assignedIds.has(switchedId))) {
+      return switchedId;
+    }
+    return userCompanyId ?? [...assignedIds][0];
+  }
+
+  if (userCompanyId) {
+    if (switchedId && switchedId === userCompanyId) return userCompanyId;
+    return userCompanyId;
+  }
+
+  return switchedId ?? ctxCompanyId;
 }
 
 export function resolveScopedServiceProviderId(

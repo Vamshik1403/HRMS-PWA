@@ -22,6 +22,7 @@ import {
   canDesktopManagerManage,
   filterCompanyScopedRecords,
   resolveScopeUserMapping,
+  resolveScopedCompanyId,
 } from "../utils/scopeContext";
 
 
@@ -142,7 +143,7 @@ export function AttendancePolicyManagement() {
   const resolvedCompanyID =
     user?.role === "SERVICE_PROVIDER"
       ? currentUserMapping?.companyID
-      : formData.companyID;
+      : resolveScopedCompanyId(user) ?? formData.companyID ?? user?.companyID;
 
   // Load mapping for MANAGER / BRANCH_ADMIN
   useEffect(() => {
@@ -295,10 +296,8 @@ useEffect(() => {
     const res = await fetch(`${BACKEND_URL}/branches`, { cache: "no-store" });
     const data = await res.json();
 
-    const ctx = getSidebarContext();
-
     const activeCompanyID =
-      ctx?.companyID ??
+      resolveScopedCompanyId(user) ??
       user?.companyID ??
       currentUserMapping?.companyID ??
       formData.companyID ??
@@ -333,7 +332,9 @@ useEffect(() => {
   const loadAttendancePolicies = async () => {
     setListLoading(true);
     try {
-      const res = await fetch(`${BACKEND_URL}/attendance-policy`, { cache: "no-store" });
+      const scopedId = resolveScopedCompanyId(user);
+      const q = scopedId ? `?companyID=${scopedId}` : "";
+      const res = await fetch(`${BACKEND_URL}/attendance-policy${q}`, { cache: "no-store" });
       const data = await res.json();
       const all = Array.isArray(data) ? data : [];
 
@@ -465,9 +466,8 @@ useEffect(() => {
     if (!formData.attendancePolicyName?.trim()) validationErrors.push("Attendance Policy Name is required");
 
     // Check unique policy name per company
-    const ctx = getSidebarContext();
     const targetCompanyID =
-      ctx?.companyID ??
+      resolveScopedCompanyId(user) ??
       formData.companyID ??
       currentUserMapping?.companyID ??
       user?.companyID;
@@ -491,7 +491,7 @@ useEffect(() => {
     try {
       const ctx = getSidebarContext();
       const companyID =
-        ctx?.companyID ??
+        resolveScopedCompanyId(user) ??
         formData.companyID ??
         currentUserMapping?.companyID ??
         user?.companyID ??
@@ -572,7 +572,7 @@ useEffect(() => {
       branchName: "",
       attendancePolicyName: "",
       serviceProviderID: ctx?.serviceProviderID ?? undefined,
-      companyID: ctx?.companyID ?? undefined,
+      companyID: resolveScopedCompanyId(user) ?? ctx?.companyID ?? undefined,
       branchesID: undefined,
       workingHoursType: "Fixed",
       checkin_begin_before_min: 0,

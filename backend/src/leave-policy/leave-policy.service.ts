@@ -69,8 +69,9 @@ export class LeavePolicyService {
     });
   }
 
-  async findAll() {
+  async findAll(companyID?: number) {
     return this.prisma.leavePolicy.findMany({
+      where: companyID ? { companyID } : undefined,
       include: {
         serviceProvider: true,
         company: true,
