@@ -380,8 +380,16 @@ export default function SiteManagement() {
           </div>
           <LocationFields values={form} onChange={(patch) => setForm((p) => ({ ...p, ...patch }))} showCurrency={false} disabled={sameAsCustomer} pincodeLabel="PIN Code" />
           <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2"><Label>Latitude</Label><Input value={form.latitude} onChange={(e) => setForm((p) => ({ ...p, latitude: e.target.value }))} /></div>
-            <div className="space-y-2"><Label>Longitude</Label><Input value={form.longitude} onChange={(e) => setForm((p) => ({ ...p, longitude: e.target.value }))} /></div>
+            <div className="space-y-2">
+              <Label>Latitude</Label>
+              <Input value={form.latitude} readOnly placeholder="Filled from address" />
+              <p className="text-xs text-muted-foreground">Filled automatically from the site address</p>
+            </div>
+            <div className="space-y-2">
+              <Label>Longitude</Label>
+              <Input value={form.longitude} readOnly placeholder="Filled from address" />
+              <p className="text-xs text-muted-foreground">Filled automatically from the site address</p>
+            </div>
           </div>
           <TaskContactsRepeater title="Site Contacts" contacts={contacts} onChange={setContacts} />
           <div className="space-y-2">

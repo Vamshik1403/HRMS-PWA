@@ -1514,18 +1514,24 @@ setIsViewing(false);
                   <Input
                     type="text"
                     value={formData.latitude}
-                    onChange={(e) => setFormData((p) => ({ ...p, latitude: e.target.value }))}
-                    placeholder="Enter latitude"
+                    readOnly
+                    placeholder="Filled from address"
                   />
+                  <p className="text-xs text-muted-foreground">
+                    Filled automatically from the branch address
+                  </p>
                 </div>
                 <div className="space-y-2">
                   <Label>Longitude</Label>
                   <Input
                     type="text"
                     value={formData.longitude}
-                    onChange={(e) => setFormData((p) => ({ ...p, longitude: e.target.value }))}
-                    placeholder="Enter longitude"
+                    readOnly
+                    placeholder="Filled from address"
                   />
+                  <p className="text-xs text-muted-foreground">
+                    Filled automatically from the branch address
+                  </p>
                 </div>
                 <div className="space-y-2">
                   <Label>Geofence Radius (meters)</Label>

@@ -1,13 +1,38 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { EnplSyncService } from '../enpl-sync/enpl-sync.service';
 import { CreateTaskCustomerSiteDto } from './dto/create-task-customer-site.dto';
 import { UpdateTaskCustomerSiteDto } from './dto/update-task-customer-site.dto';
 import { assertCanManageTaskModule, parseViewer, TaskViewerContext } from './task-context';
+import { composeAddressQuery, geocodeAddressParts } from '../common/reverse-geocode';
 
 @Injectable()
 export class TaskCustomerSitesService {
   constructor(private prisma: PrismaService, private enplSync: EnplSyncService) {}
+
+  private async geocodeFromAddress(parts: {
+    address?: string | null;
+    city?: string | null;
+    state?: string | null;
+    pincode?: string | null;
+    country?: string | null;
+  }): Promise<{ latitude: string; longitude: string } | null> {
+    const query = composeAddressQuery(
+      parts.address,
+      parts.city,
+      parts.state,
+      parts.pincode,
+      parts.country,
+    );
+    if (!query) return null;
+    const point = await geocodeAddressParts(parts);
+    if (!point) {
+      throw new BadRequestException(
+        'Could not find coordinates for this site address. Please check the address.',
+      );
+    }
+    return { latitude: String(point.lat), longitude: String(point.lng) };
+  }
 
   private async assertCustomerAccess(customerID: number, viewer: TaskViewerContext) {
     const customer = await this.prisma.taskCustomer.findFirst({
@@ -82,6 +107,13 @@ export class TaskCustomerSitesService {
     const viewer = parseViewer(query);
     assertCanManageTaskModule(viewer);
     const customer = await this.assertCustomerAccess(dto.customerID, viewer);
+    const coords = await this.geocodeFromAddress({
+      address: dto.address,
+      city: dto.city,
+      state: dto.state,
+      pincode: dto.pincode,
+      country: dto.country,
+    });
     const created = await this.prisma.taskCustomerSite.create({
       data: {
         customerID: dto.customerID,
@@ -94,8 +126,8 @@ export class TaskCustomerSitesService {
         pincode: dto.pincode,
         country: dto.country,
         gstNo: dto.gstNo,
-        latitude: dto.latitude,
-        longitude: dto.longitude,
+        latitude: coords?.latitude,
+        longitude: coords?.longitude,
         contacts: dto.contacts?.length
           ? {
               create: dto.contacts
@@ -133,6 +165,13 @@ export class TaskCustomerSitesService {
     if (dto.customerID && dto.customerID !== existing.customerID) {
       await this.assertCustomerAccess(dto.customerID, viewer);
     }
+    const coords = await this.geocodeFromAddress({
+      address: dto.address !== undefined ? dto.address : existing.address,
+      city: dto.city !== undefined ? dto.city : existing.city,
+      state: dto.state !== undefined ? dto.state : existing.state,
+      pincode: dto.pincode !== undefined ? dto.pincode : existing.pincode,
+      country: dto.country !== undefined ? dto.country : existing.country,
+    });
     const updated = await this.prisma.taskCustomerSite.update({
       where: { id },
       data: {
@@ -146,8 +185,7 @@ export class TaskCustomerSitesService {
         pincode: dto.pincode,
         country: dto.country,
         gstNo: dto.gstNo,
-        latitude: dto.latitude,
-        longitude: dto.longitude,
+        ...(coords ?? {}),
       },
     });
     if (dto.contacts) {

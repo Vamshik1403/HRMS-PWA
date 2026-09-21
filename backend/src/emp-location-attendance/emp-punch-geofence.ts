@@ -1,6 +1,6 @@
 import { BadRequestException } from '@nestjs/common';
 import { haversineMeters, parseCoord, parseRadiusMeters } from '../common/geo-distance';
-import { forwardGeocode } from '../common/reverse-geocode';
+import { composeAddressQuery, forwardGeocode } from '../common/reverse-geocode';
 
 export type FenceKind = 'OFFICE' | 'SITE' | 'HOME';
 
@@ -45,10 +45,7 @@ export function isClosedTaskStatus(status?: string | null): boolean {
 export function composeAddressParts(
   ...parts: Array<string | null | undefined>
 ): string {
-  return parts
-    .map((p) => String(p || '').trim())
-    .filter(Boolean)
-    .join(', ');
+  return composeAddressQuery(...parts);
 }
 
 export function taskActiveOnDate(opts: {

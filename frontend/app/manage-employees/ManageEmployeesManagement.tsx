@@ -1261,6 +1261,8 @@ const [filterLoading, setFilterLoading] = useState(false);
     photoPunchEnabled: false,
     wfhAllowed: false,
     wfhHomeAddress: "",
+    wfhHomeLatitude: null as number | null,
+    wfhHomeLongitude: null as number | null,
 
     typeOfEmployee: "employee",
 
@@ -2412,6 +2414,8 @@ const addCombinedDevMap = () => {
       photoPunchEnabled: false,
       wfhAllowed: false,
       wfhHomeAddress: "",
+    wfhHomeLatitude: null as number | null,
+    wfhHomeLongitude: null as number | null,
 
       typeOfEmployee: "employee",
 
@@ -3558,6 +3562,8 @@ const addCombinedDevMap = () => {
       photoPunchEnabled: freshData.photoPunchEnabled ?? false,
       wfhAllowed: freshData.wfhAllowed ?? false,
       wfhHomeAddress: freshData.wfhHomeAddress ?? "",
+      wfhHomeLatitude: freshData.wfhHomeLatitude ?? null,
+      wfhHomeLongitude: freshData.wfhHomeLongitude ?? null,
       typeOfEmployee: freshData.typeOfEmployee ?? "",
       workShiftID: effectiveWorkShiftID,
       attendancePolicyID: effectiveAttendancePolicyID,
@@ -5898,8 +5904,20 @@ const handleCancel = () => {
                       className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
                     />
                     <p className="text-xs text-gray-500">
-                      Used as an allowed punch location (along with the office) when no task is assigned that day.
+                      Used as an allowed punch location (along with the office) when no task is assigned that day. Coordinates are filled automatically from this address.
                     </p>
+                    {(formData.wfhHomeLatitude != null && formData.wfhHomeLongitude != null) ? (
+                      <div className="grid grid-cols-2 gap-3 pt-1">
+                        <div className="space-y-1">
+                          <Label>Latitude</Label>
+                          <Input value={String(formData.wfhHomeLatitude)} readOnly />
+                        </div>
+                        <div className="space-y-1">
+                          <Label>Longitude</Label>
+                          <Input value={String(formData.wfhHomeLongitude)} readOnly />
+                        </div>
+                      </div>
+                    ) : null}
                   </div>
                 ) : null}
                 <label className="flex items-center gap-2 cursor-pointer">

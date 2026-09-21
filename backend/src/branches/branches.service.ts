@@ -6,6 +6,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateBranchesDto } from './dto/create-branch.dto';
 import { UpdateBranchesDto } from './dto/update-branch.dto';
+import { composeAddressQuery, geocodeAddressParts } from '../common/reverse-geocode';
 
 @Injectable()
 export class BranchesService {
@@ -52,13 +53,46 @@ export class BranchesService {
     return { companyID: company.id, serviceProviderID: resolvedSpID };
   }
 
+  private async geocodeFromAddress(parts: {
+    address?: string | null;
+    city?: string | null;
+    state?: string | null;
+    pincode?: string | null;
+    country?: string | null;
+  }): Promise<{ latitude: string; longitude: string } | null> {
+    const query = composeAddressQuery(
+      parts.address,
+      parts.city,
+      parts.state,
+      parts.pincode,
+      parts.country,
+    );
+    if (!query) return null;
+    const point = await geocodeAddressParts(parts);
+    if (!point) {
+      throw new BadRequestException(
+        'Could not find coordinates for this branch address. Please check the address.',
+      );
+    }
+    return { latitude: String(point.lat), longitude: String(point.lng) };
+  }
+
   async create(dto: CreateBranchesDto) {
-    const { bankDetails = [], serviceProviderID, companyID, ...branch } = dto;
+    const {
+      bankDetails = [],
+      serviceProviderID,
+      companyID,
+      latitude: _lat,
+      longitude: _lng,
+      ...branch
+    } = dto;
     const resolved = await this.resolveCompanyAndSp(companyID, serviceProviderID);
+    const coords = await this.geocodeFromAddress(branch);
 
     return this.prisma.branches.create({
       data: {
         ...branch,
+        ...(coords ?? {}),
         ...(resolved.serviceProviderID != null
           ? { serviceProvider: { connect: { id: resolved.serviceProviderID } } }
           : {}),
@@ -90,8 +124,27 @@ export class BranchesService {
   }
 
   async update(id: number, dto: UpdateBranchesDto) {
-    const { bankDetails, idsToDelete, serviceProviderID, companyID, ...branch } =
-      dto;
+    const {
+      bankDetails,
+      idsToDelete,
+      serviceProviderID,
+      companyID,
+      latitude: _lat,
+      longitude: _lng,
+      ...branch
+    } = dto;
+
+    const existing = await this.prisma.branches.findUnique({ where: { id } });
+    if (!existing) {
+      throw new NotFoundException(`Branch with ID ${id} was not found.`);
+    }
+    const coords = await this.geocodeFromAddress({
+      address: dto.address !== undefined ? dto.address : existing.address,
+      city: dto.city !== undefined ? dto.city : existing.city,
+      state: dto.state !== undefined ? dto.state : existing.state,
+      pincode: dto.pincode !== undefined ? dto.pincode : existing.pincode,
+      country: dto.country !== undefined ? dto.country : existing.country,
+    });
 
     return this.prisma.$transaction(async (tx) => {
       let companyConnect: { connect: { id: number } } | { disconnect: true } | undefined;
@@ -139,6 +192,7 @@ export class BranchesService {
         where: { id },
         data: {
           ...branch,
+          ...(coords ?? {}),
           ...(spConnect ? { serviceProvider: spConnect } : {}),
           ...(companyConnect ? { company: companyConnect } : {}),
         },

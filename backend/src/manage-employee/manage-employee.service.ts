@@ -9,7 +9,7 @@ import { JoiningFormService } from './joining-form.service';
 import * as bcrypt from 'bcrypt';
 import { ApprovalEngineService } from '../approval-workflow/approval-engine.service';
 import { assertPasswordMeetsPolicy } from '../auth/password-policy';
-import { forwardGeocode } from '../common/reverse-geocode';
+import { geocodeAddressParts } from '../common/reverse-geocode';
 
 @Injectable()
 export class ManageEmployeeService {
@@ -37,14 +37,20 @@ export class ManageEmployeeService {
       scalars.wfhHomeLongitude = null;
       return;
     }
-    const point = await forwardGeocode(address);
+    const wfhOn = scalars.wfhAllowed !== false;
+    const point = await geocodeAddressParts({ address });
     if (point) {
       scalars.wfhHomeLatitude = point.lat;
       scalars.wfhHomeLongitude = point.lng;
-    } else {
-      delete scalars.wfhHomeLatitude;
-      delete scalars.wfhHomeLongitude;
+      return;
     }
+    if (wfhOn) {
+      throw new BadRequestException(
+        'Could not find coordinates for this home address. Please check the address.',
+      );
+    }
+    delete scalars.wfhHomeLatitude;
+    delete scalars.wfhHomeLongitude;
   }
 
   private employeeDisplayName(emp: {
