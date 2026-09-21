@@ -1258,6 +1258,9 @@ const [filterLoading, setFilterLoading] = useState(false);
     pwaShowLoanAdvances: true,
     mobileAttendanceEnabled: false,
     mobileBreakEnabled: true,
+    photoPunchEnabled: false,
+    wfhAllowed: false,
+    wfhHomeAddress: "",
 
     typeOfEmployee: "employee",
 
@@ -2406,6 +2409,9 @@ const addCombinedDevMap = () => {
       pwaShowLoanAdvances: true,
       mobileAttendanceEnabled: false,
     mobileBreakEnabled: true,
+      photoPunchEnabled: false,
+      wfhAllowed: false,
+      wfhHomeAddress: "",
 
       typeOfEmployee: "employee",
 
@@ -3132,6 +3138,9 @@ const addCombinedDevMap = () => {
         pwaShowLoanAdvances: formData.pwaShowLoanAdvances,
         mobileAttendanceEnabled: formData.mobileAttendanceEnabled,
         mobileBreakEnabled: formData.mobileBreakEnabled,
+        photoPunchEnabled: formData.mobileAttendanceEnabled && !!formData.photoPunchEnabled,
+        wfhAllowed: formData.mobileAttendanceEnabled && !!formData.wfhAllowed,
+        wfhHomeAddress: formData.wfhAllowed ? (formData.wfhHomeAddress || "") : "",
 
         typeOfEmployee: formData.typeOfEmployee || undefined,
 
@@ -3546,6 +3555,9 @@ const addCombinedDevMap = () => {
       pwaShowLoanAdvances: freshData.pwaShowLoanAdvances ?? true,
       mobileAttendanceEnabled: freshData.mobileAttendanceEnabled ?? false,
       mobileBreakEnabled: freshData.mobileBreakEnabled !== false,
+      photoPunchEnabled: freshData.photoPunchEnabled ?? false,
+      wfhAllowed: freshData.wfhAllowed ?? false,
+      wfhHomeAddress: freshData.wfhHomeAddress ?? "",
       typeOfEmployee: freshData.typeOfEmployee ?? "",
       workShiftID: effectiveWorkShiftID,
       attendancePolicyID: effectiveAttendancePolicyID,
@@ -5852,6 +5864,44 @@ const handleCancel = () => {
                 <p className="text-xs text-gray-500 -mt-1 ml-6">
                   When enabled, this employee punches in/out only via the mobile app and their device punches are ignored. When disabled, they punch in/out only via the assigned attendance device.
                 </p>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={!!formData.photoPunchEnabled}
+                    disabled={!formData.mobileAttendanceEnabled}
+                    onChange={(e) => setFormData((p) => ({ ...p, photoPunchEnabled: e.target.checked }))}
+                    className="rounded border-gray-300"
+                  />
+                  <span className="text-sm text-gray-700">Enable photo mark IN/OUT with location radius</span>
+                </label>
+                <p className="text-xs text-gray-500 -mt-1 ml-6">
+                  When enabled, Mark IN/OUT on the mobile app requires a selfie and GPS must be within the branch geofence radius (task site if assigned, otherwise office; home if work from home is allowed).
+                </p>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={!!formData.wfhAllowed}
+                    disabled={!formData.mobileAttendanceEnabled}
+                    onChange={(e) => setFormData((p) => ({ ...p, wfhAllowed: e.target.checked }))}
+                    className="rounded border-gray-300"
+                  />
+                  <span className="text-sm text-gray-700">Work from home allowed</span>
+                </label>
+                {formData.wfhAllowed ? (
+                  <div className="ml-6 space-y-1">
+                    <Label>Home address</Label>
+                    <textarea
+                      value={formData.wfhHomeAddress || ""}
+                      onChange={(e) => setFormData((p) => ({ ...p, wfhHomeAddress: e.target.value }))}
+                      rows={2}
+                      placeholder="Enter the employee home address"
+                      className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+                    />
+                    <p className="text-xs text-gray-500">
+                      Used as an allowed punch location (along with the office) when no task is assigned that day.
+                    </p>
+                  </div>
+                ) : null}
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input
                     type="checkbox"

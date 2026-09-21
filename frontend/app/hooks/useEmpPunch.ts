@@ -18,6 +18,7 @@ export interface TodayStatus {
   mobileBreakEnabled?: boolean;
   canMarkAbsent?: boolean;
   mobileAttendanceEnabled?: boolean;
+  photoPunchEnabled?: boolean;
   checkIn: any;
   checkOut: any;
   allToday?: any[];
@@ -28,6 +29,8 @@ export interface TodayStatus {
   sessionCount?: number;
   absentDeclaration?: { leaveType?: string; reason?: string };
 }
+
+export type PunchCheckType = "CHECK_IN" | "CHECK_OUT" | "BREAK_IN" | "BREAK_OUT";
 
 function parseUA(ua: string) {
   let browser = "Unknown", os = "Unknown";
@@ -46,6 +49,35 @@ function getToken() {
   return typeof window !== "undefined"
     ? localStorage.getItem("token") || localStorage.getItem("accessToken") || ""
     : "";
+}
+
+function apiErrorMessage(body: any, fallback: string) {
+  const m = body?.message;
+  if (Array.isArray(m) && m.length) return m.map(String).join(" ");
+  if (typeof m === "string" && m.trim()) return m;
+  return fallback;
+}
+
+async function uploadPunchPhoto(file: File): Promise<string> {
+  if (!file.type.startsWith("image/") && file.type !== "") {
+    throw new Error("Please capture a photo (JPEG or PNG).");
+  }
+  if (file.size > 8 * 1024 * 1024) {
+    throw new Error("Photo must be under 8MB.");
+  }
+  const formData = new FormData();
+  formData.append("file", file);
+  const token = getToken();
+  const res = await fetch(`${BACKEND}/files/upload`, {
+    method: "POST",
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    body: formData,
+  });
+  if (!res.ok) throw new Error("Failed to upload photo");
+  const data = await res.json();
+  const url = typeof data?.url === "string" ? data.url : "";
+  if (!url) throw new Error("Failed to upload photo");
+  return url;
 }
 
 export function useEmpPunch(onStatusChange?: (s: TodayStatus) => void) {
@@ -73,13 +105,20 @@ export function useEmpPunch(onStatusChange?: (s: TodayStatus) => void) {
   }, [onStatusChange]);
 
   const punch = useCallback(
-    async (checkType: "CHECK_IN" | "CHECK_OUT" | "BREAK_IN" | "BREAK_OUT") => {
+    async (
+      checkType: PunchCheckType,
+      extras?: { photoFile?: File; location?: LocationCoords },
+    ) => {
       setPunchError(null);
       setPunchSuccess(null);
       setPunchLoading(true);
       setLocationLoading(true);
       try {
-        const location: LocationCoords = await fetchGPSOnUserGesture();
+        const location: LocationCoords = extras?.location ?? (await fetchGPSOnUserGesture());
+        let photoUrl: string | undefined;
+        if (extras?.photoFile) {
+          photoUrl = await uploadPunchPhoto(extras.photoFile);
+        }
         const ua = navigator.userAgent;
         const { browser, os, deviceType } = parseUA(ua);
         const token = getToken();
@@ -95,11 +134,12 @@ export function useEmpPunch(onStatusChange?: (s: TodayStatus) => void) {
             operatingSystem: os,
             deviceType,
             userAgent: ua.slice(0, 500),
+            photoUrl,
           }),
         });
         if (!res.ok) {
           const body = await res.json().catch(() => null);
-          throw new Error(body?.message || "Failed to record attendance");
+          throw new Error(apiErrorMessage(body, "Failed to record attendance"));
         }
         const labels: Record<string, string> = {
           CHECK_IN: "Checked in successfully!",
@@ -109,8 +149,10 @@ export function useEmpPunch(onStatusChange?: (s: TodayStatus) => void) {
         };
         setPunchSuccess(labels[checkType]);
         await loadStatus();
+        return true;
       } catch (e: any) {
         setPunchError(e.message);
+        return false;
       } finally {
         setPunchLoading(false);
         setLocationLoading(false);
@@ -133,7 +175,7 @@ export function useEmpPunch(onStatusChange?: (s: TodayStatus) => void) {
         });
         if (!res.ok) {
           const body = await res.json().catch(() => null);
-          throw new Error(body?.message || "Failed to mark absent");
+          throw new Error(apiErrorMessage(body, "Failed to mark absent"));
         }
         setPunchSuccess("Absent marked. Leave request sent to your manager.");
         await loadStatus();

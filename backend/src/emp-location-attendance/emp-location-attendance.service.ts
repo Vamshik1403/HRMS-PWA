@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
+import { Injectable, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { wallClockInZoneToStorageDate } from '../common/device-punch-time';
 import { reverseGeocode } from '../common/reverse-geocode';
 import { PrismaService } from '../prisma/prisma.service';
@@ -8,6 +8,19 @@ import {
   computePwaDayDurations,
   getEffectiveDisplayPunches,
 } from './pwa-punch-metrics.util';
+import {
+  assertWithinFence,
+  composeAddressParts,
+  isClosedTaskStatus,
+  normalizePhotoUrl,
+  requireRadius,
+  resolveCoords,
+  taskActiveOnDate,
+  wallDateKey,
+  type FenceKind,
+  type FencePoint,
+  type SessionFence,
+} from './emp-punch-geofence';
 
 const VALID_TYPES = ['CHECK_IN', 'CHECK_OUT', 'BREAK_IN', 'BREAK_OUT'] as const;
 type PunchType = (typeof VALID_TYPES)[number];
@@ -129,42 +142,411 @@ export class EmpLocationAttendanceService {
     return times.length % 2 === 1 ? 'IN' : 'OUT';
   }
 
+  private lastOpenCheckIn<
+    T extends { checkType: string; fenceType?: string | null; fenceSiteId?: number | null },
+  >(records: T[]): T | null {
+    let lastIn: T | null = null;
+    for (const row of records) {
+      if (row.checkType === 'CHECK_IN') lastIn = row;
+      if (row.checkType === 'CHECK_OUT') lastIn = null;
+    }
+    return lastIn;
+  }
+
+  private async persistEmptyCoords(
+    kind: 'branch' | 'site' | 'employee',
+    id: number,
+    lat: number,
+    lng: number,
+  ) {
+    try {
+      if (kind === 'branch') {
+        await this.prisma.branches.update({
+          where: { id },
+          data: { latitude: String(lat), longitude: String(lng) },
+        });
+      } else if (kind === 'site') {
+        await this.prisma.taskCustomerSite.update({
+          where: { id },
+          data: { latitude: String(lat), longitude: String(lng) },
+        });
+      } else {
+        await this.prisma.manageEmployee.update({
+          where: { id },
+          data: { wfhHomeLatitude: lat, wfhHomeLongitude: lng },
+        });
+      }
+    } catch {
+      // Non-critical — punch can proceed with in-memory coords.
+    }
+  }
+
+  private async officeFencePoint(branch: {
+    id: number;
+    latitude?: string | null;
+    longitude?: string | null;
+    address?: string | null;
+    city?: string | null;
+    state?: string | null;
+    pincode?: string | null;
+    country?: string | null;
+  } | null): Promise<FencePoint> {
+    if (!branch) {
+      throw new BadRequestException(
+        'Office location is not set. Ask admin to set the branch address or coordinates.',
+      );
+    }
+    const resolved = await resolveCoords({
+      latitude: branch.latitude,
+      longitude: branch.longitude,
+      address: composeAddressParts(
+        branch.address,
+        branch.city,
+        branch.state,
+        branch.pincode,
+        branch.country,
+      ),
+    });
+    if (!resolved) {
+      throw new BadRequestException(
+        'Office location is not set. Ask admin to set the branch address or coordinates.',
+      );
+    }
+    if (resolved.fromGeocode) {
+      await this.persistEmptyCoords('branch', branch.id, resolved.lat, resolved.lng);
+    }
+    return { lat: resolved.lat, lng: resolved.lng, type: 'OFFICE' };
+  }
+
+  private async homeFencePoint(
+    employee: {
+      id: number;
+      wfhAllowed?: boolean | null;
+      wfhHomeAddress?: string | null;
+      wfhHomeLatitude?: number | null;
+      wfhHomeLongitude?: number | null;
+    },
+    required: boolean,
+  ): Promise<FencePoint | null> {
+    if (!employee.wfhAllowed) {
+      if (required) {
+        throw new BadRequestException(
+          'Home address is not set. Ask admin to set the work-from-home address.',
+        );
+      }
+      return null;
+    }
+    const resolved = await resolveCoords({
+      latitude: employee.wfhHomeLatitude,
+      longitude: employee.wfhHomeLongitude,
+      address: employee.wfhHomeAddress,
+    });
+    if (!resolved) {
+      if (required) {
+        throw new BadRequestException(
+          'Home address is not set. Ask admin to set the work-from-home address.',
+        );
+      }
+      return null;
+    }
+    if (resolved.fromGeocode) {
+      await this.persistEmptyCoords('employee', employee.id, resolved.lat, resolved.lng);
+    }
+    return { lat: resolved.lat, lng: resolved.lng, type: 'HOME' };
+  }
+
+  private async siteFencePoints(employeeId: number, todayKey: string): Promise<FencePoint[]> {
+    const tasks = await this.prisma.taskProject.findMany({
+      where: {
+        isDeleted: false,
+        OR: [
+          { assignments: { some: { manageEmployeeID: employeeId } } },
+          { engineerAssignments: { some: { manageEmployeeID: employeeId } } },
+        ],
+      },
+      select: {
+        status: true,
+        scheduleDateTime: true,
+        dueDateTime: true,
+        site: {
+          select: {
+            id: true,
+            latitude: true,
+            longitude: true,
+            address: true,
+            city: true,
+            state: true,
+            pincode: true,
+            country: true,
+          },
+        },
+        assignments: {
+          where: { manageEmployeeID: employeeId },
+          select: { assignedAt: true },
+        },
+        engineerAssignments: {
+          where: { manageEmployeeID: employeeId },
+          select: { assignedDate: true, createdAt: true },
+        },
+      },
+    });
+
+    const points: FencePoint[] = [];
+    const seen = new Set<number>();
+    let assignedOpenTask = false;
+    for (const task of tasks) {
+      if (isClosedTaskStatus(task.status)) continue;
+      const assignedDates = [
+        ...task.assignments.map((a) => a.assignedAt),
+        ...task.engineerAssignments.map((a) => a.assignedDate ?? a.createdAt),
+      ];
+      if (
+        !taskActiveOnDate({
+          todayKey,
+          scheduleDateTime: task.scheduleDateTime,
+          dueDateTime: task.dueDateTime,
+          assignedDates,
+        })
+      ) {
+        continue;
+      }
+      assignedOpenTask = true;
+      const site = task.site;
+      if (!site || seen.has(site.id)) continue;
+      seen.add(site.id);
+      const resolved = await resolveCoords({
+        latitude: site.latitude,
+        longitude: site.longitude,
+        address: composeAddressParts(
+          site.address,
+          site.city,
+          site.state,
+          site.pincode,
+          site.country,
+        ),
+      });
+      if (!resolved) continue;
+      if (resolved.fromGeocode) {
+        await this.persistEmptyCoords('site', site.id, resolved.lat, resolved.lng);
+      }
+      points.push({
+        lat: resolved.lat,
+        lng: resolved.lng,
+        type: 'SITE',
+        siteId: site.id,
+      });
+    }
+    if (assignedOpenTask && points.length === 0) {
+      throw new BadRequestException(
+        'Site location is not available. Ask admin to set the site address or coordinates.',
+      );
+    }
+    return points;
+  }
+
+  private async resolvePunchFence(opts: {
+    employeeId: number;
+    checkType: PunchType;
+    todayKey: string;
+    todayRecords: Array<{ checkType: string; fenceType?: string | null; fenceSiteId?: number | null }>;
+    branch: {
+      id: number;
+      geofenchradius?: string | null;
+      latitude?: string | null;
+      longitude?: string | null;
+      address?: string | null;
+      city?: string | null;
+      state?: string | null;
+      pincode?: string | null;
+      country?: string | null;
+    } | null;
+    wfhAllowed?: boolean | null;
+    wfhHomeAddress?: string | null;
+    wfhHomeLatitude?: number | null;
+    wfhHomeLongitude?: number | null;
+  }): Promise<{ radiusMeters: number; points: FencePoint[]; session: SessionFence }> {
+    const radiusMeters = requireRadius(opts.branch?.geofenchradius);
+    const homeEmployee = {
+      id: opts.employeeId,
+      wfhAllowed: opts.wfhAllowed,
+      wfhHomeAddress: opts.wfhHomeAddress,
+      wfhHomeLatitude: opts.wfhHomeLatitude,
+      wfhHomeLongitude: opts.wfhHomeLongitude,
+    };
+
+    if (opts.checkType === 'CHECK_OUT') {
+      const lastIn = this.lastOpenCheckIn(opts.todayRecords);
+      const fenceType = String(lastIn?.fenceType || '').toUpperCase();
+      if (fenceType === 'OFFICE') {
+        const point = await this.officeFencePoint(opts.branch);
+        return { radiusMeters, points: [point], session: { type: 'OFFICE' } };
+      }
+      if (fenceType === 'HOME') {
+        const home = await this.homeFencePoint(homeEmployee, true);
+        return {
+          radiusMeters,
+          points: home ? [home] : [],
+          session: { type: 'HOME' },
+        };
+      }
+      if (fenceType === 'SITE' && lastIn?.fenceSiteId) {
+        const site = await this.prisma.taskCustomerSite.findUnique({
+          where: { id: lastIn.fenceSiteId },
+          select: {
+            id: true,
+            latitude: true,
+            longitude: true,
+            address: true,
+            city: true,
+            state: true,
+            pincode: true,
+            country: true,
+          },
+        });
+        if (site) {
+          const resolved = await resolveCoords({
+            latitude: site.latitude,
+            longitude: site.longitude,
+            address: composeAddressParts(
+              site.address,
+              site.city,
+              site.state,
+              site.pincode,
+              site.country,
+            ),
+          });
+          if (resolved) {
+            if (resolved.fromGeocode) {
+              await this.persistEmptyCoords('site', site.id, resolved.lat, resolved.lng);
+            }
+            const point: FencePoint = {
+              lat: resolved.lat,
+              lng: resolved.lng,
+              type: 'SITE',
+              siteId: site.id,
+            };
+            return {
+              radiusMeters,
+              points: [point],
+              session: { type: 'SITE', siteId: site.id },
+            };
+          }
+        }
+      }
+    }
+
+    const sitePoints = await this.siteFencePoints(opts.employeeId, opts.todayKey);
+    if (sitePoints.length > 0) {
+      return { radiusMeters, points: sitePoints, session: { type: 'SITE' } };
+    }
+    const office = await this.officeFencePoint(opts.branch);
+    const points: FencePoint[] = [office];
+    const home = await this.homeFencePoint(homeEmployee, false);
+    if (home) points.push(home);
+    return { radiusMeters, points, session: { type: 'OFFICE' } };
+  }
+
   async checkIn(employeeId: number, dto: CreateAttendanceLocationDto, ipAddress: string) {
     if (!VALID_TYPES.includes(dto.checkType as PunchType)) {
       throw new BadRequestException('checkType must be CHECK_IN, CHECK_OUT, BREAK_IN, or BREAK_OUT');
     }
 
-    // PWA / location-app punches: enable mobile attendance on first use so portal
-    // employees are not blocked by the default (false) flag in admin setup.
-    const eligibility = await this.prisma.manageEmployee.findUnique({
-      where: { id: employeeId },
-      select: { mobileAttendanceEnabled: true },
-    });
-    if (!eligibility?.mobileAttendanceEnabled) {
-      await this.prisma.manageEmployee.update({
-        where: { id: employeeId },
-        data: { mobileAttendanceEnabled: true },
-      });
-    }
-
-    const now = wallClockInZoneToStorageDate();
-    const { startOfDay, endOfDay } = this.dayWindow(now);
-
+    const checkType = dto.checkType as PunchType;
     const employee = await this.prisma.manageEmployee.findUnique({
       where: { id: employeeId },
       select: {
         employeeID: true,
         employeeFirstName: true,
         employeeLastName: true,
+        mobileAttendanceEnabled: true,
+        photoPunchEnabled: true,
+        wfhAllowed: true,
+        wfhHomeAddress: true,
+        wfhHomeLatitude: true,
+        wfhHomeLongitude: true,
         company: { select: { companyName: true } },
-        branches: { select: { branchName: true } },
         departments: { select: { departmentName: true } },
+        branches: {
+          select: {
+            id: true,
+            branchName: true,
+            geofenchradius: true,
+            latitude: true,
+            longitude: true,
+            address: true,
+            city: true,
+            state: true,
+            pincode: true,
+            country: true,
+          },
+        },
       },
     });
+    if (!employee?.mobileAttendanceEnabled) {
+      throw new ForbiddenException(
+        'Mobile app attendance is not enabled. Please mark IN/OUT on your attendance device.',
+      );
+    }
 
-    // Resolve a human-readable address from the GPS coordinates. Cached and
-    // time-boxed so it never blocks the punch; falls back to null on failure.
+    const photoPunchEnabled = employee.photoPunchEnabled === true;
+    const photoUrl =
+      photoPunchEnabled && (checkType === 'CHECK_IN' || checkType === 'CHECK_OUT')
+        ? normalizePhotoUrl(dto.photoUrl)
+        : null;
+    if (photoPunchEnabled && (checkType === 'CHECK_IN' || checkType === 'CHECK_OUT') && !photoUrl) {
+      throw new BadRequestException('A photo is required to mark IN or OUT.');
+    }
+
+    const now = wallClockInZoneToStorageDate();
+    const { startOfDay, endOfDay } = this.dayWindow(now);
+    const todayKey = wallDateKey(now);
+
+    const todayPreview = await this.prisma.attendanceLocation.findMany({
+      where: {
+        employeeId,
+        checkinTime: { gte: startOfDay, lte: endOfDay },
+      },
+      orderBy: { checkinTime: 'asc' },
+    });
+
+    let sessionFence: SessionFence | null = null;
+    if (photoPunchEnabled && (checkType === 'CHECK_IN' || checkType === 'CHECK_OUT')) {
+      const fence = await this.resolvePunchFence({
+        employeeId,
+        checkType,
+        todayKey,
+        todayRecords: todayPreview,
+        branch: employee.branches,
+        wfhAllowed: employee.wfhAllowed,
+        wfhHomeAddress: employee.wfhHomeAddress,
+        wfhHomeLatitude: employee.wfhHomeLatitude,
+        wfhHomeLongitude: employee.wfhHomeLongitude,
+      });
+      const matched = assertWithinFence(
+        dto.latitude,
+        dto.longitude,
+        fence.points,
+        fence.radiusMeters,
+      );
+      sessionFence = {
+        type: matched.type,
+        siteId: matched.siteId ?? fence.session.siteId ?? null,
+      };
+    }
+
     const address = await reverseGeocode(dto.latitude, dto.longitude);
+    const rawBody = JSON.stringify({
+      source: 'location_attendance',
+      checkType,
+      latitude: dto.latitude,
+      longitude: dto.longitude,
+      accuracy: dto.accuracy ?? null,
+      address,
+      ipAddress,
+      photoUrl,
+      fenceType: sessionFence?.type ?? null,
+      fenceSiteId: sessionFence?.siteId ?? null,
+    });
 
     const record = await this.prisma.$transaction(async (tx) => {
       const todayRecords = await tx.attendanceLocation.findMany({
@@ -196,12 +578,12 @@ export class EmpLocationAttendanceService {
         effectiveLastType = this.getLastPunch(todayRecords)?.checkType ?? null;
       }
 
-      this.validatePunch(effectiveLastType, dto.checkType as PunchType, todayRecords);
+      this.validatePunch(effectiveLastType, checkType, todayRecords);
 
       const created = await tx.attendanceLocation.create({
         data: {
           employeeId,
-          checkType: dto.checkType,
+          checkType,
           latitude: dto.latitude,
           longitude: dto.longitude,
           accuracy: dto.accuracy ?? null,
@@ -211,6 +593,9 @@ export class EmpLocationAttendanceService {
           browser: dto.browser ?? null,
           operatingSystem: dto.operatingSystem ?? null,
           userAgent: dto.userAgent ?? null,
+          photoUrl,
+          fenceType: sessionFence?.type ?? null,
+          fenceSiteId: sessionFence?.siteId ?? null,
           checkinTime: now,
         },
       });
@@ -219,31 +604,29 @@ export class EmpLocationAttendanceService {
         const fullName = [employee?.employeeFirstName, employee?.employeeLastName]
           .filter(Boolean)
           .join(' ') || String(employeeId);
-
-        const checkType = dto.checkType as PunchType;
         const shouldWrite = checkType !== 'BREAK_IN' && checkType !== 'BREAK_OUT';
 
         if (shouldWrite) {
           if (checkType === 'CHECK_OUT') {
             await tx.process_att_logs.create({
-            data: {
-              device_sn: 'LOCATION_APP',
-              user_id: employee?.employeeID ?? String(employeeId),
-              username: fullName,
-              punch_time: created.checkinTime,
-              company_name: employee?.company?.companyName ?? null,
-              branch_name: employee?.branches?.branchName ?? null,
-              department_name: employee?.departments?.departmentName ?? null,
-              device_emp_code: employee?.employeeID ?? null,
-              manage_employee_id: employeeId,
-              device_id: null,
-              raw_body: JSON.stringify({ source: 'location_attendance', checkType, latitude: dto.latitude, longitude: dto.longitude, accuracy: dto.accuracy ?? null, address, ipAddress }),
-              status: '0',
-              device_name: 'Location Attendance App',
-              device_type: dto.deviceType ?? null,
-              auth_type: 'GPS',
-            },
-          });
+              data: {
+                device_sn: 'LOCATION_APP',
+                user_id: employee?.employeeID ?? String(employeeId),
+                username: fullName,
+                punch_time: created.checkinTime,
+                company_name: employee?.company?.companyName ?? null,
+                branch_name: employee?.branches?.branchName ?? null,
+                department_name: employee?.departments?.departmentName ?? null,
+                device_emp_code: employee?.employeeID ?? null,
+                manage_employee_id: employeeId,
+                device_id: null,
+                raw_body: rawBody,
+                status: '0',
+                device_name: 'Location Attendance App',
+                device_type: dto.deviceType ?? null,
+                auth_type: 'GPS',
+              },
+            });
           } else if (checkType === 'CHECK_IN') {
             const alreadyCheckedInToday = todayRecords.some((r) => r.checkType === 'CHECK_IN');
             const existingInMirror = await tx.process_att_logs.count({
@@ -256,24 +639,24 @@ export class EmpLocationAttendanceService {
 
             if (!alreadyCheckedInToday && existingInMirror === 0) {
               await tx.process_att_logs.create({
-              data: {
-                device_sn: 'LOCATION_APP',
-                user_id: employee?.employeeID ?? String(employeeId),
-                username: fullName,
-                punch_time: created.checkinTime,
-                company_name: employee?.company?.companyName ?? null,
-                branch_name: employee?.branches?.branchName ?? null,
-                department_name: employee?.departments?.departmentName ?? null,
-                device_emp_code: employee?.employeeID ?? null,
-                manage_employee_id: employeeId,
-                device_id: null,
-                raw_body: JSON.stringify({ source: 'location_attendance', checkType, latitude: dto.latitude, longitude: dto.longitude, accuracy: dto.accuracy ?? null, address, ipAddress }),
-                status: '0',
-                device_name: 'Location Attendance App',
-                device_type: dto.deviceType ?? null,
-                auth_type: 'GPS',
-              },
-            });
+                data: {
+                  device_sn: 'LOCATION_APP',
+                  user_id: employee?.employeeID ?? String(employeeId),
+                  username: fullName,
+                  punch_time: created.checkinTime,
+                  company_name: employee?.company?.companyName ?? null,
+                  branch_name: employee?.branches?.branchName ?? null,
+                  department_name: employee?.departments?.departmentName ?? null,
+                  device_emp_code: employee?.employeeID ?? null,
+                  manage_employee_id: employeeId,
+                  device_id: null,
+                  raw_body: rawBody,
+                  status: '0',
+                  device_name: 'Location Attendance App',
+                  device_type: dto.deviceType ?? null,
+                  auth_type: 'GPS',
+                },
+              });
             }
           }
         }
@@ -594,10 +977,11 @@ export class EmpLocationAttendanceService {
   async getTodayStatus(employeeId: number) {
     const empFlags = await this.prisma.manageEmployee.findUnique({
       where: { id: employeeId },
-      select: { mobileBreakEnabled: true, mobileAttendanceEnabled: true },
+      select: { mobileBreakEnabled: true, mobileAttendanceEnabled: true, photoPunchEnabled: true },
     });
     const breakEnabled = empFlags?.mobileBreakEnabled !== false;
     const mobileAttendanceEnabled = empFlags?.mobileAttendanceEnabled === true;
+    const photoPunchEnabled = empFlags?.photoPunchEnabled === true;
 
     const now = wallClockInZoneToStorageDate();
     const { startOfDay, endOfDay } = this.dayWindow(now);
@@ -653,12 +1037,13 @@ export class EmpLocationAttendanceService {
       isAbsentToday,
       absentDeclaration,
       punchState,
-      canCheckIn: punchState === 'OUT' && !isAbsentToday,
-      canCheckOut: punchState === 'IN',
+      canCheckIn: mobileAttendanceEnabled && punchState === 'OUT' && !isAbsentToday,
+      canCheckOut: mobileAttendanceEnabled && punchState === 'IN',
       mobileAttendanceEnabled,
+      photoPunchEnabled,
       mobileBreakEnabled: breakEnabled,
-      canBreakIn: breakEnabled && punchState === 'IN',
-      canBreakOut: breakEnabled && punchState === 'ON_BREAK',
+      canBreakIn: mobileAttendanceEnabled && breakEnabled && punchState === 'IN',
+      canBreakOut: mobileAttendanceEnabled && breakEnabled && punchState === 'ON_BREAK',
       canMarkAbsent: !hasPunches && !isAbsentToday && punchState === 'OUT',
       checkIn,
       checkOut,
@@ -725,5 +1110,40 @@ export class EmpLocationAttendanceService {
     });
 
     return { declaration, leaveApplication: leaveApp };
+  }
+
+  async getPhotoReport(opts: {
+    dateFrom: Date;
+    dateTo: Date;
+    companyID?: number;
+    branchesID?: number;
+  }) {
+    return this.prisma.attendanceLocation.findMany({
+      where: {
+        checkType: { in: ['CHECK_IN', 'CHECK_OUT'] },
+        photoUrl: { not: null },
+        checkinTime: { gte: opts.dateFrom, lte: opts.dateTo },
+        employee: {
+          ...(opts.companyID ? { companyID: opts.companyID } : {}),
+          ...(opts.branchesID ? { branchesID: opts.branchesID } : {}),
+        },
+      },
+      select: {
+        employeeId: true,
+        checkType: true,
+        checkinTime: true,
+        photoUrl: true,
+        address: true,
+        employee: {
+          select: {
+            id: true,
+            employeeID: true,
+            employeeFirstName: true,
+            employeeLastName: true,
+          },
+        },
+      },
+      orderBy: { checkinTime: 'asc' },
+    });
   }
 }

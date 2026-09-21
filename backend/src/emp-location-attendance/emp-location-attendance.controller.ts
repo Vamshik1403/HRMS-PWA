@@ -7,6 +7,8 @@ import {
   Req,
   UseGuards,
   UnauthorizedException,
+  BadRequestException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { EmpLocationAttendanceService } from './emp-location-attendance.service';
 import { EmpMarkoutReminderService } from './emp-markout-reminder.service';
@@ -94,6 +96,49 @@ export class EmpLocationAttendanceController {
   @Get('markout-reminder')
   getMarkoutReminder(@Req() req: any) {
     return this.markoutReminder.evaluateMarkoutReminder(this.getEmployeeId(req));
+  }
+
+  @Get('photos')
+  getPhotos(
+    @Req() req: any,
+    @Query('dateFrom') dateFrom?: string,
+    @Query('dateTo') dateTo?: string,
+    @Query('companyID') companyID?: string,
+    @Query('branchesID') branchesID?: string,
+  ) {
+    const parseDay = (v: string | undefined, end: boolean) => {
+      if (!v?.trim()) return undefined;
+      const d = new Date(v);
+      if (Number.isNaN(d.getTime())) return undefined;
+      return new Date(
+        Date.UTC(
+          d.getUTCFullYear(),
+          d.getUTCMonth(),
+          d.getUTCDate(),
+          end ? 23 : 0,
+          end ? 59 : 0,
+          end ? 59 : 0,
+          end ? 999 : 0,
+        ),
+      );
+    };
+    const from = parseDay(dateFrom, false);
+    const to = parseDay(dateTo, true);
+    if (!from || !to) {
+      throw new BadRequestException('dateFrom and dateTo are required');
+    }
+    const payload = req.user || {};
+    if (String(payload.role || '').toUpperCase() === 'EMPLOYEE') {
+      throw new ForbiddenException('Photo report is not available for employee logins.');
+    }
+    const parsedCompany = companyID ? Number(companyID) : Number(payload.companyID || payload.activeCompanyID || 0);
+    const parsedBranch = branchesID ? Number(branchesID) : Number(payload.branchesID || 0);
+    return this.svc.getPhotoReport({
+      dateFrom: from,
+      dateTo: to,
+      companyID: Number.isFinite(parsedCompany) && parsedCompany > 0 ? parsedCompany : undefined,
+      branchesID: Number.isFinite(parsedBranch) && parsedBranch > 0 ? parsedBranch : undefined,
+    });
   }
 
   @Post('mark-absent')

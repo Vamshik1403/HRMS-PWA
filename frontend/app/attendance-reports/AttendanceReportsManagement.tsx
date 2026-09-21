@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef, useMemo, useCallback, Fragment } from "react";
+import { useEffect, useState, useRef, useMemo, useCallback, Fragment, type ReactNode } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
@@ -12,6 +12,8 @@ import { formatDevicePunchForDisplay } from "../utils/devicePunchTime";
 import { formatWorkedDuration } from "../utils/attendanceDuration";
 import { getSidebarContext } from "@/app/utils/sidebarContext";
 import { canViewModule, isCompanyAdminLikeRole } from "@/lib/companyAccess";
+import { authHeaders } from "@/lib/auth";
+import { resolveUploadUrl } from "../utils/uploadUrl";
 import { PageHeader } from "../components/app/page-header";
 import { weekdayNameForDateKey } from "../utils/empWorkShiftWeekOff";
 
@@ -533,7 +535,14 @@ const formatSummaryExcelCell = (punches: string[], status: AttendanceStatus): st
 };
 
 const isPunchLogReport = (reportType?: string) =>
-  reportType === "All Punches Logs" || reportType === "FILO Punches Logs";
+  reportType === "All Punches Logs" ||
+  reportType === "FILO Punches Logs" ||
+  reportType === "Photo Report";
+
+type PunchPhoto = { time: string; url: string; checkType: string };
+type DayPhotos = { ins: PunchPhoto[]; outs: PunchPhoto[] };
+
+const photoDayKey = (employeeId: number, date: string) => `${employeeId}|${date}`;
 
 /** Even punches are IN, odd punches are OUT. FILO uses first IN / last OUT only. */
 const splitInOutPunches = (punches: string[], reportType?: string): { ins: string[]; outs: string[] } => {
@@ -570,10 +579,19 @@ const punchDayStatusLabel = (status: any | null | undefined): { label: string; c
   return { label: "Absent", className: "bg-red-100 text-red-800" };
 };
 
-function PunchTimesColumn({ times, kind }: { times: string[]; kind: "in" | "out" }) {
+function PunchTimesColumn({
+  times,
+  kind,
+  extra,
+}: {
+  times: string[];
+  kind: "in" | "out";
+  extra?: ReactNode;
+}) {
   return (
     <td className="px-1.5 py-1 border-b border-l min-w-[70px] text-center align-top">
       <div className="flex flex-col gap-1 items-center">
+        {extra}
         {times.map((time, idx) => (
           <span
             key={`${kind}-${idx}`}
@@ -593,16 +611,34 @@ function PunchLogDayCells({
   punches,
   reportType,
   status,
+  photos,
+  onOpenPhotos,
 }: {
   punches: string[];
   reportType: string;
   status?: any | null;
+  photos?: DayPhotos | null;
+  onOpenPhotos?: (photos: DayPhotos) => void;
 }) {
-  if (punches.length > 0) {
-    const { ins, outs } = splitInOutPunches(punches, reportType);
+  const splitType = reportType === "Photo Report" ? "All Punches Logs" : reportType;
+  const photoLink =
+    reportType === "Photo Report" &&
+    photos &&
+    (photos.ins.length > 0 || photos.outs.length > 0) &&
+    onOpenPhotos ? (
+      <button
+        type="button"
+        onClick={() => onOpenPhotos(photos)}
+        className="text-[9px] font-semibold text-indigo-700 underline underline-offset-2"
+      >
+        Photos
+      </button>
+    ) : null;
+  if (punches.length > 0 || photoLink) {
+    const { ins, outs } = splitInOutPunches(punches, splitType);
     return (
       <>
-        <PunchTimesColumn times={ins} kind="in" />
+        <PunchTimesColumn times={ins} kind="in" extra={photoLink} />
         <PunchTimesColumn times={outs} kind="out" />
       </>
     );
@@ -755,16 +791,15 @@ const MultiSelect = ({ options, selectedValues, onChange, placeholder, disabled 
 
 // ==================== DATE CELL COMPONENT ====================
 
-const DateCell = ({ punches, date, employeeID, formData, reportData, selectedCompanyID, selectedBranchID, getComprehensiveStatus }: any) => {
+const DateCell = ({ punches, date, employeeID, formData, reportData, selectedCompanyID, selectedBranchID, getComprehensiveStatus, photos, onOpenPhotos }: any) => {
   const punchesKey = punches.join(',');
   const cacheKey = buildStatusCacheKey(date, employeeID, punches);
   const cached = globalStatusCache.get(cacheKey);
   const [status, setStatus] = useState<any>(cached ?? null);
 
-  const isPunchOnlyReport =
-    formData.reportType === "All Punches Logs" ||
-    formData.reportType === "FILO Punches Logs";
-  const canPaintPunchesImmediately = isPunchOnlyReport && punches.length > 0;
+  const isPunchOnlyReport = isPunchLogReport(formData.reportType);
+  const hasPhotos = !!(photos?.ins?.length || photos?.outs?.length);
+  const canPaintPunchesImmediately = isPunchOnlyReport && (punches.length > 0 || hasPhotos);
 
   useEffect(() => {
     if (canPaintPunchesImmediately) return;
@@ -785,11 +820,11 @@ const DateCell = ({ punches, date, employeeID, formData, reportData, selectedCom
 
   // Fast path: punch times are already in props — paint immediately (no "...").
   if (canPaintPunchesImmediately) {
-    return <PunchLogDayCells punches={punches} reportType={formData.reportType} />;
+    return <PunchLogDayCells punches={punches} reportType={formData.reportType} photos={photos} onOpenPhotos={onOpenPhotos} />;
   }
 
   if (isPunchOnlyReport && !status) {
-    return <PunchLogDayCells punches={punches} reportType={formData.reportType} status={null} />;
+    return <PunchLogDayCells punches={punches} reportType={formData.reportType} status={null} photos={photos} onOpenPhotos={onOpenPhotos} />;
   }
 
   if (!status) {
@@ -798,7 +833,7 @@ const DateCell = ({ punches, date, employeeID, formData, reportData, selectedCom
 
   // ALL PUNCHES / FILO — separate IN and OUT columns
   if (isPunchOnlyReport) {
-    return <PunchLogDayCells punches={punches} reportType={formData.reportType} status={status} />;
+    return <PunchLogDayCells punches={punches} reportType={formData.reportType} status={status} photos={photos} onOpenPhotos={onOpenPhotos} />;
   }
 
   // ATTENDANCE MARKING LOGS
@@ -1026,6 +1061,13 @@ export function AttendanceReportsManagement({ mode = "actual" }: { mode?: Report
 
   const [managerData, setManagerData] = useState<any>(null);
   const [empCreds, setEmpCreds] = useState<any>(null);
+  const [photoByDay, setPhotoByDay] = useState<Map<string, DayPhotos>>(new Map());
+  const [photoViewer, setPhotoViewer] = useState<{
+    name: string;
+    date: string;
+    ins: PunchPhoto[];
+    outs: PunchPhoto[];
+  } | null>(null);
 
   const [formData, setFormData] = useState({
     companyID: null as number | null,
@@ -2125,6 +2167,38 @@ if (!hasPunchesEffective) return { type: "ABSENT", label: "Absent", hasPunches: 
       
       const result = await logsResponse.json();
       const allLogs = result.data || result;
+
+      const nextPhotoByDay = new Map<string, DayPhotos>();
+      if (formData.reportType === "Photo Report") {
+        const photoParams = new URLSearchParams({
+          dateFrom: formData.dateFrom,
+          dateTo: formData.dateTo,
+          companyID: String(selectedCompanyID),
+          branchesID: String(selectedBranchID),
+        });
+        const photosRes = await fetch(
+          `${BACKEND_URL}/emp-location-attendance/photos?${photoParams}`,
+          { credentials: "include", headers: authHeaders() },
+        );
+        if (photosRes.ok) {
+          const photoRows = await photosRes.json();
+          for (const row of Array.isArray(photoRows) ? photoRows : []) {
+            const parsed = parsePunchTime(row.checkinTime);
+            if (!parsed || !row.photoUrl) continue;
+            const key = photoDayKey(Number(row.employeeId), parsed.dateKey);
+            const current = nextPhotoByDay.get(key) || { ins: [], outs: [] };
+            const item: PunchPhoto = {
+              time: parsed.timeStr,
+              url: String(row.photoUrl),
+              checkType: String(row.checkType || ""),
+            };
+            if (String(row.checkType) === "CHECK_OUT") current.outs.push(item);
+            else current.ins.push(item);
+            nextPhotoByDay.set(key, current);
+          }
+        }
+      }
+      setPhotoByDay(nextPhotoByDay);
       
       const logsData = allLogs.filter((log: ProcessAttLog) => {
         const parsed = parsePunchTime(log.punch_time);
@@ -2265,6 +2339,7 @@ if (!hasPunchesEffective) return { type: "ABSENT", label: "Absent", hasPunches: 
       console.error("Error generating report:", err);
       alert("Error generating report.");
       setReportData([]);
+      setPhotoByDay(new Map());
       setFactualWeekoffOverrides(new Map());
       setSandwichOverrides(new Map());
       masterDataRef.current = null;
@@ -2371,9 +2446,21 @@ if (!hasPunchesEffective) return { type: "ABSENT", label: "Absent", hasPunches: 
         const status = globalStatusCache.get(cacheKey) as AttendanceStatus | undefined;
         if (punchSplit) {
           if (punches.length > 0) {
-            const { ins, outs } = splitInOutPunches(punches, reportType);
-            dataRow.push(ins.join("\n"), outs.join("\n"));
-            maxPunches = Math.max(maxPunches, ins.length, outs.length, 1);
+            const splitType = reportType === "Photo Report" ? "All Punches Logs" : reportType;
+            const { ins, outs } = splitInOutPunches(punches, splitType);
+            const photos = photoByDay.get(photoDayKey(Number(row.employee.id), date));
+            const inLines = [...ins];
+            const outLines = [...outs];
+            if (reportType === "Photo Report") {
+              for (const photo of photos?.ins || []) {
+                inLines.push(`${photo.time} ${resolveUploadUrl(photo.url)}`);
+              }
+              for (const photo of photos?.outs || []) {
+                outLines.push(`${photo.time} ${resolveUploadUrl(photo.url)}`);
+              }
+            }
+            dataRow.push(inLines.join("\n"), outLines.join("\n"));
+            maxPunches = Math.max(maxPunches, inLines.length, outLines.length, 1);
           } else {
             dataRow.push(dayStatusExcelValue(punches, status), "");
             const excelRow = index + 2;
@@ -2607,8 +2694,28 @@ if (!hasPunchesEffective) return { type: "ABSENT", label: "Absent", hasPunches: 
     );
 
     const displayPunches = isFactualMode && factualWeekoffOverrides.get(employeeID)?.has(date) ? [] : punches;
-    return <DateCell punches={displayPunches} date={date} employeeID={employeeID} formData={formData} reportData={reportData} selectedCompanyID={selectedCompanyID} selectedBranchID={selectedBranch?.id || 0} getComprehensiveStatus={getComprehensiveStatus} />;
-  }, [formData, user, managerData, branches, reportData, isFactualMode, factualWeekoffOverrides]);
+    const photos = photoByDay.get(photoDayKey(employeeID, date));
+    const employeeRow = reportData.find((row: ReportData) => Number(row.employee.id) === Number(employeeID));
+    const employeeName = employeeRow
+      ? `${employeeRow.employee.employeeFirstName || ""} ${employeeRow.employee.employeeLastName || ""}`.trim()
+      : "";
+    return (
+      <DateCell
+        punches={displayPunches}
+        date={date}
+        employeeID={employeeID}
+        formData={formData}
+        reportData={reportData}
+        selectedCompanyID={selectedCompanyID}
+        selectedBranchID={selectedBranch?.id || 0}
+        getComprehensiveStatus={getComprehensiveStatus}
+        photos={photos}
+        onOpenPhotos={(day: DayPhotos) =>
+          setPhotoViewer({ name: employeeName, date, ins: day.ins, outs: day.outs })
+        }
+      />
+    );
+  }, [formData, user, managerData, branches, reportData, isFactualMode, factualWeekoffOverrides, photoByDay]);
 
   const renderDateHeaders = () => dateColumns.map(date => {
     const { dayName, dateStr } = formatHeaderDate(date);
@@ -2637,6 +2744,8 @@ if (!hasPunchesEffective) return { type: "ABSENT", label: "Absent", hasPunches: 
     setReportData([]); setSearchTerm(""); setSelectedDepartments([]); setSelectedDesignations([]); setSelectedEmployees([]);
     setSandwichOverrides(new Map());
     setFactualWeekoffOverrides(new Map());
+    setPhotoByDay(new Map());
+    setPhotoViewer(null);
     masterDataRef.current = null;
     globalStatusCache.clear();
   };
@@ -2712,6 +2821,7 @@ if (!hasPunchesEffective) return { type: "ABSENT", label: "Absent", hasPunches: 
                 <option value="All Punches Logs">All Punches Logs</option><option value="FILO Punches Logs">FILO Punches Logs</option>
                 <option value="Attendance Marking Logs">Attendance Marking Logs</option>
                 <option value="Attendance Summary Logs">Attendance Summary Logs</option>
+                <option value="Photo Report">Photo Report</option>
               </select>
             </div>
           </div>
@@ -2858,6 +2968,54 @@ if (!hasPunchesEffective) return { type: "ABSENT", label: "Absent", hasPunches: 
           </CardContent>
         </Card>
       )}
+
+      {photoViewer ? (
+        <>
+          <div className="fixed inset-0 z-50 bg-black/50" onClick={() => setPhotoViewer(null)} />
+          <div className="fixed inset-x-4 top-[8%] z-[51] mx-auto max-w-3xl rounded-2xl bg-white p-5 shadow-xl max-h-[84vh] overflow-y-auto">
+            <div className="flex items-start justify-between gap-3 mb-3">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">Punch photos</h3>
+                <p className="text-sm text-gray-500">
+                  {photoViewer.name} · {photoViewer.date}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPhotoViewer(null)}
+                className="h-8 w-8 rounded-full text-gray-500 hover:bg-gray-100"
+                aria-label="Close"
+              >
+                <X className="w-4 h-4 mx-auto" />
+              </button>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              {([
+                { label: "IN", items: photoViewer.ins, tone: "text-green-700" },
+                { label: "OUT", items: photoViewer.outs, tone: "text-red-700" },
+              ] as const).map((group) => (
+                <div key={group.label} className="space-y-2">
+                  <p className={`text-xs font-bold uppercase ${group.tone}`}>{group.label}</p>
+                  {group.items.length === 0 ? (
+                    <p className="text-sm text-gray-400">No {group.label.toLowerCase()} photo</p>
+                  ) : (
+                    group.items.map((photo, idx) => (
+                      <div key={`${group.label}-${idx}`} className="rounded-xl border border-gray-100 overflow-hidden">
+                        <img
+                          src={resolveUploadUrl(photo.url)}
+                          alt={`${group.label} photo ${photo.time}`}
+                          className="w-full max-h-80 object-cover bg-gray-50"
+                        />
+                        <p className="px-3 py-2 text-sm text-gray-700">{photo.time}</p>
+                      </div>
+                    ))
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        </>
+      ) : null}
     </div>
   );
 }

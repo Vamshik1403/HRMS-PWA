@@ -1535,6 +1535,9 @@ setIsViewing(false);
                     onChange={(e) => setFormData((p) => ({ ...p, geofenchradius: e.target.value }))}
                     placeholder="Enter geofence radius"
                   />
+                  <p className="text-xs text-muted-foreground">
+                    Required for PWA Mark IN/OUT. Employees can punch only within this radius of the office (branch lat/lng or address) or of an assigned task site.
+                  </p>
                 </div>
               </div>
 

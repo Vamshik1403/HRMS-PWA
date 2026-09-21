@@ -872,6 +872,11 @@ model ManageEmployee {
   pwaShowLoanAdvances                Boolean                             @default(true)
   mobileAttendanceEnabled            Boolean                             @default(false)
   mobileBreakEnabled                 Boolean                             @default(true)
+  photoPunchEnabled                  Boolean                             @default(false)
+  wfhAllowed                         Boolean                             @default(false)
+  wfhHomeAddress                     String?                             @db.Text
+  wfhHomeLatitude                    Float?
+  wfhHomeLongitude                   Float?
   amc                                Boolean                             @default(false)
   bonusAllocation                    BonusAllocation[]
   empAttendanceRegularise            EmpAttendanceRegularise[]
@@ -2275,6 +2280,9 @@ model AttendanceLocation {
   browser           String?        @db.VarChar(128)
   operatingSystem   String?        @db.VarChar(128)
   userAgent         String?        @db.Text
+  photoUrl          String?        @db.VarChar(512)
+  fenceType         String?        @db.VarChar(16)
+  fenceSiteId       Int?
   companyID         Int?
   branchesID        Int?
   serviceProviderID Int?

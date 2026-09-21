@@ -138,7 +138,7 @@ export function EmpTeamWeeklyAttendancePanel() {
         <div className="h-[160px] animate-pulse rounded-xl bg-muted/50" />
       ) : members.length === 0 ? (
         <p className="text-sm text-muted-foreground py-6 text-center">
-          No team members in your department yet.
+          No team members who report to your reportees yet.
         </p>
       ) : (
         <SoftBarChart

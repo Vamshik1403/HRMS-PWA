@@ -12,13 +12,50 @@ export class EmpManagerScopeService {
       where: { linkedEmployeeId: managerEmployeeId },
       select: { employeeId: true },
     });
-    return links.map((l) => l.employeeId);
+    return [...new Set(links.map((l) => l.employeeId))];
   }
 
-  /** Self plus direct reportees (for leave/reimbursement/task data scope). */
+  /**
+   * All reportees under this manager, including skip-level (reportees of reportees).
+   * Cycle-safe: never revisits an id and never includes the manager themselves.
+   */
+  async getDescendantReporteeIds(managerEmployeeId: number): Promise<number[]> {
+    const descendants: number[] = [];
+    const visited = new Set<number>([managerEmployeeId]);
+    let frontier = [managerEmployeeId];
+
+    while (frontier.length > 0) {
+      const links = await this.prisma.employeeLink.findMany({
+        where: { linkedEmployeeId: { in: frontier } },
+        select: { employeeId: true },
+      });
+      frontier = [];
+      for (const link of links) {
+        const id = Number(link.employeeId);
+        if (!Number.isFinite(id) || visited.has(id)) continue;
+        visited.add(id);
+        descendants.push(id);
+        frontier.push(id);
+      }
+    }
+
+    return descendants;
+  }
+
+  /** Self plus the full reporting tree (direct and skip-level). */
   async getReporteeIds(managerEmployeeId: number): Promise<number[]> {
-    const direct = await this.getDirectReporteeIds(managerEmployeeId);
-    return [managerEmployeeId, ...direct];
+    const descendants = await this.getDescendantReporteeIds(managerEmployeeId);
+    return [managerEmployeeId, ...descendants];
+  }
+
+  /** Skip-level only: reportees of reportees, excluding people linked directly to this manager. */
+  async getNestedReporteeIds(managerEmployeeId: number): Promise<number[]> {
+    const [direct, descendants] = await Promise.all([
+      this.getDirectReporteeIds(managerEmployeeId),
+      this.getDescendantReporteeIds(managerEmployeeId),
+    ]);
+    const directSet = new Set(direct);
+    return descendants.filter((id) => !directSet.has(id));
   }
 
   async hasReportees(managerEmployeeId: number): Promise<boolean> {
@@ -46,11 +83,11 @@ export class EmpManagerScopeService {
     return name || e?.employeeID || `Employee #${employeeId}`;
   }
 
-  /** Manager may view direct reportees, colleagues in the same department, or same-company directory peers. */
+  /** Manager may view the reporting tree, colleagues in the same department, or same-company directory peers. */
   async canViewEmployee(managerEmployeeId: number, targetEmployeeId: number): Promise<boolean> {
     if (managerEmployeeId === targetEmployeeId) return true;
-    const direct = await this.getDirectReporteeIds(managerEmployeeId);
-    if (direct.includes(targetEmployeeId)) return true;
+    const descendants = await this.getDescendantReporteeIds(managerEmployeeId);
+    if (descendants.includes(targetEmployeeId)) return true;
 
     const [manager, target] = await Promise.all([
       this.prisma.manageEmployee.findUnique({

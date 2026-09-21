@@ -26,9 +26,10 @@ export class EmpManagerScopeController {
   async reportees(@Req() req: { user?: { employeeId?: number; sub?: number } }) {
     const employeeId = this.getEmployeeId(req);
     const directReporteeIds = await this.scope.getDirectReporteeIds(employeeId);
-    const reporteeIds = await this.scope.getReporteeIds(employeeId);
+    const descendantIds = await this.scope.getDescendantReporteeIds(employeeId);
+    const reporteeIds = [employeeId, ...descendantIds];
     const hasReportees = directReporteeIds.length > 0;
-    const reportees = hasReportees
+    const reportees = directReporteeIds.length
       ? await this.prisma.manageEmployee.findMany({
           where: { id: { in: directReporteeIds } },
           select: {
@@ -152,22 +153,16 @@ export class EmpManagerScopeController {
       return { members, scope: mode };
     }
 
-    const me = await this.prisma.manageEmployee.findUnique({
-      where: { id: employeeId },
-      select: { departmentNameID: true, companyID: true },
-    });
-
-    if (!me?.departmentNameID) {
+    const nestedIds = await this.scope.getNestedReporteeIds(employeeId);
+    if (nestedIds.length === 0) {
       return { members: [], scope: mode };
     }
 
     const employees = await this.prisma.manageEmployee.findMany({
       where: {
-        departmentNameID: me.departmentNameID,
-        companyID: me.companyID ?? undefined,
+        id: { in: nestedIds },
         isDeleted: false,
         lifecycleStatus: 'ACTIVE',
-        id: { not: employeeId },
       },
       select: this.employeeSelect,
       orderBy: [{ employeeFirstName: 'asc' }, { employeeLastName: 'asc' }],

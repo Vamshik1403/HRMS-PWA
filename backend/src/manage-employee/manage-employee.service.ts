@@ -9,6 +9,7 @@ import { JoiningFormService } from './joining-form.service';
 import * as bcrypt from 'bcrypt';
 import { ApprovalEngineService } from '../approval-workflow/approval-engine.service';
 import { assertPasswordMeetsPolicy } from '../auth/password-policy';
+import { forwardGeocode } from '../common/reverse-geocode';
 
 @Injectable()
 export class ManageEmployeeService {
@@ -20,6 +21,31 @@ export class ManageEmployeeService {
     private readonly auditLog: AuditLogService,
     private readonly approvalEngine: ApprovalEngineService,
   ) { }
+
+  private async applyWfhHomeGeocode(scalars: Record<string, any>) {
+    if (scalars.photoPunchEnabled !== undefined) {
+      scalars.photoPunchEnabled = !!scalars.photoPunchEnabled;
+    }
+    if (scalars.wfhAllowed !== undefined) {
+      scalars.wfhAllowed = !!scalars.wfhAllowed;
+    }
+    if (scalars.wfhHomeAddress === undefined) return;
+    const address = String(scalars.wfhHomeAddress || '').trim();
+    scalars.wfhHomeAddress = address || null;
+    if (!address) {
+      scalars.wfhHomeLatitude = null;
+      scalars.wfhHomeLongitude = null;
+      return;
+    }
+    const point = await forwardGeocode(address);
+    if (point) {
+      scalars.wfhHomeLatitude = point.lat;
+      scalars.wfhHomeLongitude = point.lng;
+    } else {
+      delete scalars.wfhHomeLatitude;
+      delete scalars.wfhHomeLongitude;
+    }
+  }
 
   private employeeDisplayName(emp: {
     employeeFirstName?: string | null;
@@ -539,6 +565,8 @@ export class ManageEmployeeService {
       ...scalars
     } = dto;
 
+    await this.applyWfhHomeGeocode(scalars as Record<string, any>);
+
     const forcedCompanyID = await this.tenantForcedCompanyID(req);
     const companyID = forcedCompanyID ?? incomingCompanyID;
     if (forcedCompanyID && !this.toPositiveId(companyID)) {
@@ -582,7 +610,7 @@ export class ManageEmployeeService {
       // Check for duplicate employeeID within the same company
       if (scalars.employeeID && companyID) {
         const existing = await tx.manageEmployee.findFirst({
-          where: { employeeID: scalars.employeeID, companyID },
+          where: { employeeID: scalars.employeeID, companyID, isDeleted: false },
         });
         if (existing) {
           throw new Error(`Employee ID "${scalars.employeeID}" already exists in this company`);
@@ -630,6 +658,12 @@ export class ManageEmployeeService {
             : {}),
           ...(scalars.pwaShowLoanAdvances !== undefined
             ? { pwaShowLoanAdvances: !!scalars.pwaShowLoanAdvances }
+            : {}),
+          ...(scalars.photoPunchEnabled !== undefined
+            ? { photoPunchEnabled: !!scalars.photoPunchEnabled }
+            : {}),
+          ...(scalars.wfhAllowed !== undefined
+            ? { wfhAllowed: !!scalars.wfhAllowed }
             : {}),
 
           // Foreign key fields
@@ -1663,7 +1697,7 @@ export class ManageEmployeeService {
   }
 
   async findAllForList(status?: string) {
-    const whereCondition: any = {};
+    const whereCondition: any = { isDeleted: false };
 
     if (!status || status === 'ACTIVE') {
       whereCondition.lifecycleStatus = 'ACTIVE';
@@ -1778,7 +1812,7 @@ export class ManageEmployeeService {
   }
 
   async findAll(status?: string) {
-    const whereCondition: any = {};
+    const whereCondition: any = { isDeleted: false };
 
     // Default → ACTIVE only
     if (!status || status === 'ACTIVE') {
@@ -2036,6 +2070,7 @@ export class ManageEmployeeService {
     } = dto;
     // Employee ID is auto-generated on create and locked from edits.
     void _lockedEmployeeID;
+    await this.applyWfhHomeGeocode(scalars as Record<string, any>);
 
     const beforeUpdate =
       await this.prisma.manageEmployee.findUnique({
@@ -2202,6 +2237,12 @@ export class ManageEmployeeService {
               : {}),
             ...(scalars.pwaShowLoanAdvances !== undefined
               ? { pwaShowLoanAdvances: !!scalars.pwaShowLoanAdvances }
+              : {}),
+            ...(scalars.photoPunchEnabled !== undefined
+              ? { photoPunchEnabled: !!scalars.photoPunchEnabled }
+              : {}),
+            ...(scalars.wfhAllowed !== undefined
+              ? { wfhAllowed: !!scalars.wfhAllowed }
               : {}),
 
             // Foreign key fields

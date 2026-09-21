@@ -455,6 +455,8 @@ export class CompanyService {
     if (!email) throw new BadRequestException('Email is required');
     if (!mobile) throw new BadRequestException('Mobile is required');
 
+    await this.releaseStaleLoginUniques();
+
     const username = this.normalizeUsername(dto.username) || email;
     await this.assertEmailAvailable(email);
     await this.assertMobileAvailable(mobile);

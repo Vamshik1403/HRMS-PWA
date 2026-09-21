@@ -153,8 +153,8 @@ export function EmpDesktopTeamReportees() {
           </CardTitle>
           <CardDescription className="mt-1">
             {scope === "team"
-              ? "My team — today's attendance"
-              : "Direct reportees — today's attendance"}
+              ? "People who report to your reportees — today's attendance"
+              : "My reportees — today's attendance"}
           </CardDescription>
         </div>
 

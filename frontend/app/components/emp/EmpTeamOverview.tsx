@@ -193,7 +193,7 @@ export function EmpTeamOverview() {
             stat={{
               label: "My team members",
               value: teamMembers.length,
-              unit: `${teamMembers.length} in your department`,
+              unit: `${teamMembers.length} who report to your reportees`,
               icon: Users,
               href: "/empTeam/my-team?scope=team",
               visualization: { type: "stacked", segments: teamStatusSegments },

@@ -7,4 +7,5 @@ export class CreateAttendanceLocationDto {
   browser?: string;
   operatingSystem?: string;
   userAgent?: string;
+  photoUrl?: string;
 }

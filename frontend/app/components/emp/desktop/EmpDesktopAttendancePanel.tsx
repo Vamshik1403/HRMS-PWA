@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Icon } from "@iconify/react";
 import {
   Clock,
@@ -29,6 +29,7 @@ import { Label } from "../../ui/label";
 import { Textarea } from "../../ui/textarea";
 import { DashboardSection } from "../../../dashboard/components/dashboard-ui";
 import { cn } from "@/app/utils/cn";
+import { EmpPhotoPunchCapture, type EmpPhotoPunchCaptureHandle } from "../EmpPhotoPunchCapture";
 
 function fmt(iso: string) {
   const d = new Date(iso);
@@ -100,6 +101,7 @@ export function EmpDesktopAttendancePanel({
   const [time, setTime] = useState(() => new Date());
   const [absentOpen, setAbsentOpen] = useState(false);
   const [absentReason, setAbsentReason] = useState("");
+  const photoCaptureRef = useRef<EmpPhotoPunchCaptureHandle>(null);
 
   const {
     punch,
@@ -119,11 +121,13 @@ export function EmpDesktopAttendancePanel({
   }, []);
 
   const punchState = todayStatus?.punchState ?? (todayStatus?.isCheckedIn ? "IN" : "OUT");
-  const canCheckIn = todayStatus?.canCheckIn ?? punchState === "OUT";
-  const canCheckOut = todayStatus?.canCheckOut ?? punchState === "IN";
+  const mobileEnabled = todayStatus?.mobileAttendanceEnabled === true;
+  const photoPunchEnabled = todayStatus?.photoPunchEnabled === true;
+  const canCheckIn = mobileEnabled && (todayStatus?.canCheckIn ?? punchState === "OUT");
+  const canCheckOut = mobileEnabled && (todayStatus?.canCheckOut ?? punchState === "IN");
   const breakEnabled = todayStatus?.mobileBreakEnabled !== false;
-  const canBreakIn = breakEnabled && (todayStatus?.canBreakIn ?? punchState === "IN");
-  const canBreakOut = breakEnabled && (todayStatus?.canBreakOut ?? punchState === "ON_BREAK");
+  const canBreakIn = mobileEnabled && breakEnabled && (todayStatus?.canBreakIn ?? punchState === "IN");
+  const canBreakOut = mobileEnabled && breakEnabled && (todayStatus?.canBreakOut ?? punchState === "ON_BREAK");
   const isOnBreak = punchState === "ON_BREAK";
   const isAbsent = todayStatus?.isAbsentToday;
   const canMarkAbsent = todayStatus?.canMarkAbsent ?? false;
@@ -150,14 +154,31 @@ export function EmpDesktopAttendancePanel({
     setAbsentReason("");
   };
 
+  const startMark = (checkType: "CHECK_IN" | "CHECK_OUT") => {
+    if (photoPunchEnabled) {
+      photoCaptureRef.current?.startFromGesture(checkType);
+      return;
+    }
+    void punch(checkType);
+  };
+
   const workHours = formatWorkHoursDecimal(todayStatus?.workSeconds ?? 0);
 
   const actionButtons =
     showActions && !loading && !isAbsent ? (
       <>
+        {!mobileEnabled ? (
+          <p className="text-sm text-muted-foreground">
+            Mark IN/OUT is available on your attendance device.
+          </p>
+        ) : null}
         {canCheckIn ? (
           <>
-            <Button size={compact ? "sm" : "default"} onClick={() => punch("CHECK_IN")} disabled={punchLoading}>
+            <Button
+              size={compact ? "sm" : "default"}
+              onClick={() => startMark("CHECK_IN")}
+              disabled={punchLoading}
+            >
               <LogIn className="size-4" />
               {punchLoading ? "Please wait…" : "Check-in"}
             </Button>
@@ -178,7 +199,7 @@ export function EmpDesktopAttendancePanel({
           <Button
             size={compact ? "sm" : "default"}
             variant="outline"
-            onClick={() => punch("CHECK_OUT")}
+            onClick={() => startMark("CHECK_OUT")}
             disabled={punchLoading}
           >
             <LogOut className="size-4" />
@@ -329,6 +350,12 @@ export function EmpDesktopAttendancePanel({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+    <EmpPhotoPunchCapture
+      ref={photoCaptureRef}
+      submitting={punchLoading}
+      onError={(message) => setPunchError(message)}
+      onSubmit={(checkType, photoFile, location) => punch(checkType, { photoFile, location })}
+    />
   </>
   );
 

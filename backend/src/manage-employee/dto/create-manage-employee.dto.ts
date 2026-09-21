@@ -333,10 +333,23 @@ export class CreateManageEmployeeDto {
   pwaShowLoanAdvances?: boolean;
 
   @IsOptional() @IsBoolean()
+  @Type(() => Boolean)
   mobileAttendanceEnabled?: boolean;
 
   @IsOptional() @IsBoolean()
+  @Type(() => Boolean)
   mobileBreakEnabled?: boolean;
+
+  @IsOptional() @IsBoolean()
+  @Type(() => Boolean)
+  photoPunchEnabled?: boolean;
+
+  @IsOptional() @IsBoolean()
+  @Type(() => Boolean)
+  wfhAllowed?: boolean;
+
+  @IsOptional() @IsString()
+  wfhHomeAddress?: string;
 
   // Nested arrays
   @IsOptional() @IsArray()

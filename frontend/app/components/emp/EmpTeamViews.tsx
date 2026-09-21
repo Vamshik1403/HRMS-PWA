@@ -177,7 +177,7 @@ export function EmpTeamMyTeam() {
   if (!isManagerView) {
     return (
       <div className="rounded-xl border border-[#e5eeff] bg-white p-8 text-center">
-        <p className="text-muted-foreground">You do not have any direct reportees.</p>
+        <p className="text-muted-foreground">You do not have any reportees.</p>
       </div>
     );
   }
@@ -270,7 +270,7 @@ export function EmpTeamMyTeam() {
         <div className={cn(listCardClass, "p-8 text-center text-muted-foreground")}>
           {scope === "reportees"
             ? "No reportees linked yet. Assign team members from the employee form in admin."
-            : "No other employees found in your department."}
+            : "No team members who report to your reportees yet."}
         </div>
       ) : filteredMembers.length === 0 ? (
         <div className={cn(listCardClass, "p-8 text-center text-muted-foreground")}>

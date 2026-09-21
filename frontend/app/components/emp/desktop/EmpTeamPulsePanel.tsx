@@ -58,7 +58,7 @@ export function EmpTeamPulsePanel() {
         <div>
           <h3 className="font-display text-base font-semibold text-foreground">Today&apos;s team pulse</h3>
           <p className="text-sm text-muted-foreground mt-0.5">
-            Live attendance snapshot for your department
+            Live attendance snapshot for people who report to your reportees
           </p>
         </div>
         <Link href="/empTeam/my-team" className="text-xs font-medium text-primary hover:underline shrink-0">
@@ -69,7 +69,7 @@ export function EmpTeamPulsePanel() {
       {loading ? (
         <p className="text-sm text-muted-foreground">Loading team pulse…</p>
       ) : members.length === 0 ? (
-        <p className="text-sm text-muted-foreground">No team members in your department yet.</p>
+        <p className="text-sm text-muted-foreground">No team members who report to your reportees yet.</p>
       ) : (
         <>
           <div className="grid grid-cols-3 gap-3">

@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Icon } from "@iconify/react";
 import type { TodayStatus } from "../../hooks/useEmpPunch";
 import { useEmpPunch } from "../../hooks/useEmpPunch";
 import { extractDayPunchTimes, formatLocationLines } from "../../utils/empAttendanceHistory";
+import { EmpPhotoPunchCapture, type EmpPhotoPunchCaptureHandle } from "./EmpPhotoPunchCapture";
 
 /** Punch times stored as wall-clock IST in UTC — use UTC getters for display. */
 function fmt(iso: string) {
@@ -26,6 +27,7 @@ export function EmpTodayStatusCard({ todayStatus, loading, onStatusUpdate }: Emp
   const [time, setTime] = useState(new Date());
   const [absentOpen, setAbsentOpen] = useState(false);
   const [absentReason, setAbsentReason] = useState("");
+  const photoCaptureRef = useRef<EmpPhotoPunchCaptureHandle>(null);
 
   const {
     punch,
@@ -55,11 +57,13 @@ export function EmpTodayStatusCard({ todayStatus, loading, onStatusUpdate }: Emp
   });
 
   const punchState = todayStatus?.punchState ?? (todayStatus?.isCheckedIn ? "IN" : "OUT");
-  const canCheckIn = todayStatus?.canCheckIn ?? punchState === "OUT";
-  const canCheckOut = todayStatus?.canCheckOut ?? punchState === "IN";
+  const mobileEnabled = todayStatus?.mobileAttendanceEnabled === true;
+  const photoPunchEnabled = todayStatus?.photoPunchEnabled === true;
+  const canCheckIn = mobileEnabled && (todayStatus?.canCheckIn ?? punchState === "OUT");
+  const canCheckOut = mobileEnabled && (todayStatus?.canCheckOut ?? punchState === "IN");
   const breakEnabled = todayStatus?.mobileBreakEnabled !== false;
-  const canBreakIn = breakEnabled && (todayStatus?.canBreakIn ?? punchState === "IN");
-  const canBreakOut = breakEnabled && (todayStatus?.canBreakOut ?? punchState === "ON_BREAK");
+  const canBreakIn = mobileEnabled && breakEnabled && (todayStatus?.canBreakIn ?? punchState === "IN");
+  const canBreakOut = mobileEnabled && breakEnabled && (todayStatus?.canBreakOut ?? punchState === "ON_BREAK");
   const isOnBreak = punchState === "ON_BREAK";
   const isAbsent = todayStatus?.isAbsentToday;
   const canMarkAbsent = todayStatus?.canMarkAbsent ?? false;
@@ -77,7 +81,16 @@ export function EmpTodayStatusCard({ todayStatus, loading, onStatusUpdate }: Emp
     setAbsentReason("");
   };
 
+  const startMark = (checkType: "CHECK_IN" | "CHECK_OUT") => {
+    if (photoPunchEnabled) {
+      photoCaptureRef.current?.startFromGesture(checkType);
+      return;
+    }
+    void punch(checkType);
+  };
+
   return (
+    <>
     <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mb-4">
       <div className="px-4 pt-4 pb-2 flex items-center justify-between">
         <p className="text-[11px] font-bold tracking-widest text-gray-400 uppercase">Today&apos;s Status</p>
@@ -165,13 +178,21 @@ export function EmpTodayStatusCard({ todayStatus, loading, onStatusUpdate }: Emp
         </div>
       )}
 
+      {!loading && !isAbsent && !mobileEnabled && (
+        <div className="px-4 pb-4">
+          <p className="text-[13px] text-gray-600 text-center py-2 rounded-xl bg-gray-50 border border-gray-100">
+            Mark IN/OUT is available on your attendance device.
+          </p>
+        </div>
+      )}
+
       {!loading && !isAbsent && (
         <div className="px-4 pb-4 space-y-2">
           {canCheckIn && (
             <>
               <button
                 type="button"
-                onClick={() => punch("CHECK_IN")}
+                onClick={() => startMark("CHECK_IN")}
                 disabled={punchLoading}
                 className="w-full py-3 rounded-xl bg-[#4f46e5] text-white font-bold text-sm flex items-center justify-center gap-2 shadow-md shadow-indigo-200 active:scale-[0.98] disabled:opacity-60"
               >
@@ -195,7 +216,7 @@ export function EmpTodayStatusCard({ todayStatus, loading, onStatusUpdate }: Emp
               {canCheckOut && (
                 <button
                   type="button"
-                  onClick={() => punch("CHECK_OUT")}
+                  onClick={() => startMark("CHECK_OUT")}
                   disabled={punchLoading}
                   className="py-3 rounded-xl bg-[#4f46e5] text-white font-bold text-sm flex flex-col items-center gap-1 active:scale-[0.98] disabled:opacity-60"
                 >
@@ -275,6 +296,13 @@ export function EmpTodayStatusCard({ todayStatus, loading, onStatusUpdate }: Emp
         </>
       )}
     </div>
+    <EmpPhotoPunchCapture
+      ref={photoCaptureRef}
+      submitting={punchLoading}
+      onError={(message) => setPunchError(message)}
+      onSubmit={(checkType, photoFile, location) => punch(checkType, { photoFile, location })}
+    />
+    </>
   );
 }
 
