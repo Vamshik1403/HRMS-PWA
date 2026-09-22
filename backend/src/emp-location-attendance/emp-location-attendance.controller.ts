@@ -108,19 +108,15 @@ export class EmpLocationAttendanceController {
   ) {
     const parseDay = (v: string | undefined, end: boolean) => {
       if (!v?.trim()) return undefined;
+      const dayMatch = v.trim().match(/^(\d{4}-\d{2}-\d{2})/);
+      const day = dayMatch?.[1];
+      if (day) {
+        return new Date(end ? `${day}T23:59:59.999Z` : `${day}T00:00:00.000Z`);
+      }
       const d = new Date(v);
       if (Number.isNaN(d.getTime())) return undefined;
-      return new Date(
-        Date.UTC(
-          d.getUTCFullYear(),
-          d.getUTCMonth(),
-          d.getUTCDate(),
-          end ? 23 : 0,
-          end ? 59 : 0,
-          end ? 59 : 0,
-          end ? 999 : 0,
-        ),
-      );
+      const iso = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
+      return new Date(end ? `${iso}T23:59:59.999Z` : `${iso}T00:00:00.000Z`);
     };
     const from = parseDay(dateFrom, false);
     const to = parseDay(dateTo, true);
@@ -132,12 +128,11 @@ export class EmpLocationAttendanceController {
       throw new ForbiddenException('Photo report is not available for employee logins.');
     }
     const parsedCompany = companyID ? Number(companyID) : Number(payload.companyID || payload.activeCompanyID || 0);
-    const parsedBranch = branchesID ? Number(branchesID) : Number(payload.branchesID || 0);
+    void branchesID;
     return this.svc.getPhotoReport({
       dateFrom: from,
       dateTo: to,
       companyID: Number.isFinite(parsedCompany) && parsedCompany > 0 ? parsedCompany : undefined,
-      branchesID: Number.isFinite(parsedBranch) && parsedBranch > 0 ? parsedBranch : undefined,
     });
   }
 

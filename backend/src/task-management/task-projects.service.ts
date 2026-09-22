@@ -667,9 +667,10 @@ export class TaskProjectsService {
       .filter(Boolean)
       .join(', ');
 
-    await this.employeeMemoService.createSystemCompanyBroadcast({
+    await this.employeeMemoService.createSystemStaffBroadcast({
       companyID: task.companyID,
       serviceProviderID: task.serviceProviderID,
+      subjectEmployeeIDs: manageEmployeeIDs,
       description: names
         ? `Task assigned: ${taskLabel} → ${names}`
         : `Task assigned: ${taskLabel}`,

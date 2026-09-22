@@ -14,6 +14,13 @@ import {
   memoPushTitle,
   senderLabelFromRole,
 } from '../common/notification-sender.util';
+import { EmpManagerScopeService } from '../common/emp-manager-scope.service';
+import {
+  COMPANY_BROADCAST_PREFIX,
+  isCompanyBroadcastSubject,
+  isPersonalHrBroadcastDescription,
+  personalHrDescriptionNamesViewer,
+} from './system-broadcast.util';
 
 @Injectable()
 export class EmployeeMemoService {
@@ -23,6 +30,7 @@ export class EmployeeMemoService {
     private prisma: PrismaService,
     private pushService: PushNotificationsService,
     private mailService: MailService,
+    private managerScope: EmpManagerScopeService,
   ) {}
 
   async findAll(employeeID?: number) {
@@ -50,7 +58,11 @@ export class EmployeeMemoService {
       orderBy: { createdAt: 'desc' },
     });
 
-    return this.attachRecipients(rows);
+    const visible =
+      identityIds != null
+        ? await this.filterSystemBroadcastsForViewer(identityIds[0], rows)
+        : rows;
+    return this.attachRecipients(visible);
   }
 
   /**
@@ -191,19 +203,13 @@ export class EmployeeMemoService {
     return { ...memo, replies };
   }
 
-  private static readonly COMPANY_BROADCAST_PREFIX = 'IM_COMPANY::';
-
   private isCompanyBroadcastSubject(subject?: string | null): boolean {
-    const s = subject?.trim() ?? '';
-    return (
-      s.startsWith(EmployeeMemoService.COMPANY_BROADCAST_PREFIX) ||
-      s.startsWith(`Re: ${EmployeeMemoService.COMPANY_BROADCAST_PREFIX}`)
-    );
+    return isCompanyBroadcastSubject(subject);
   }
 
   /**
-   * System-only company notifications channel post (holidays, tasks, payroll, leave).
-   * Skips push/email — callers already notify via those channels.
+   * Holidays and other company-wide notices. Personal HR events must use
+   * createSystemStaffBroadcast so they are not posted to every employee.
    */
   async createSystemCompanyBroadcast(opts: {
     companyID: number;
@@ -213,9 +219,125 @@ export class EmployeeMemoService {
   }): Promise<void> {
     const companyID = Number(opts.companyID);
     if (!Number.isFinite(companyID) || companyID <= 0) return;
+    const employees = await this.prisma.manageEmployee.findMany({
+      where: {
+        companyID,
+        isDeleted: false,
+        lifecycleStatus: 'ACTIVE',
+      },
+      select: { id: true },
+    });
+    await this.persistSystemBroadcast({
+      companyID,
+      description: opts.description,
+      branchesID: opts.branchesID,
+      serviceProviderID: opts.serviceProviderID,
+      employeeIDs: employees.map((e) => e.id),
+    });
+  }
 
+  /** Leave, payroll, and named task assignment — subject + managers + owners. */
+  async createSystemStaffBroadcast(opts: {
+    companyID: number;
+    description: string;
+    subjectEmployeeIDs: number[];
+    branchesID?: number | null;
+    serviceProviderID?: number | null;
+  }): Promise<void> {
+    const companyID = Number(opts.companyID);
+    if (!Number.isFinite(companyID) || companyID <= 0) return;
+
+    const subjectIds = [
+      ...new Set(
+        (opts.subjectEmployeeIDs || [])
+          .map((id) => Number(id))
+          .filter((id) => Number.isFinite(id) && id > 0),
+      ),
+    ];
+    const recipientIds = new Set<number>(subjectIds);
+    for (const id of subjectIds) {
+      const managers = await this.managerScope.getManagerIdsForEmployee(id);
+      for (const managerId of managers) {
+        if (Number.isFinite(managerId) && managerId > 0) recipientIds.add(managerId);
+      }
+    }
+    const owners = await this.prisma.manageEmployee.findMany({
+      where: {
+        companyID,
+        isCompanyOwner: true,
+        isDeleted: false,
+        lifecycleStatus: 'ACTIVE',
+      },
+      select: { id: true },
+    });
+    for (const owner of owners) recipientIds.add(owner.id);
+
+    await this.persistSystemBroadcast({
+      companyID,
+      description: opts.description,
+      branchesID: opts.branchesID,
+      serviceProviderID: opts.serviceProviderID,
+      employeeIDs: [...recipientIds],
+    });
+  }
+
+  async filterSystemBroadcastsForViewer<
+    T extends { subject?: string | null; description?: string | null },
+  >(viewerEmployeeId: number, memos: T[]): Promise<T[]> {
+    const personal = memos.filter(
+      (m) =>
+        isCompanyBroadcastSubject(m.subject) &&
+        isPersonalHrBroadcastDescription(m.description),
+    );
+    if (personal.length === 0) return memos;
+
+    const viewer = await this.prisma.manageEmployee.findUnique({
+      where: { id: viewerEmployeeId },
+      select: {
+        id: true,
+        isCompanyOwner: true,
+        employeeFirstName: true,
+        employeeLastName: true,
+        employeeID: true,
+      },
+    });
+    if (viewer?.isCompanyOwner) return memos;
+
+    const reporteeIds = await this.managerScope.getDirectReporteeIds(viewerEmployeeId);
+    const reportees =
+      reporteeIds.length > 0
+        ? await this.prisma.manageEmployee.findMany({
+            where: { id: { in: reporteeIds } },
+            select: {
+              employeeFirstName: true,
+              employeeLastName: true,
+              employeeID: true,
+            },
+          })
+        : [];
+
+    return memos.filter((memo) => {
+      if (!isCompanyBroadcastSubject(memo.subject)) return true;
+      if (!isPersonalHrBroadcastDescription(memo.description)) return true;
+      if (viewer && personalHrDescriptionNamesViewer(memo.description, viewer)) {
+        return true;
+      }
+      return reportees.some((r) => personalHrDescriptionNamesViewer(memo.description, r));
+    });
+  }
+
+  private async persistSystemBroadcast(opts: {
+    companyID: number;
+    description?: string | null;
+    branchesID?: number | null;
+    serviceProviderID?: number | null;
+    employeeIDs: number[];
+  }): Promise<void> {
+    const companyID = opts.companyID;
     const description = opts.description?.trim();
     if (!description) return;
+    const employeeIDs = [...new Set(opts.employeeIDs.filter((id) => Number.isFinite(id) && id > 0))];
+    if (employeeIDs.length === 0) return;
 
     try {
       const company = await this.prisma.company.findUnique({
@@ -223,17 +345,6 @@ export class EmployeeMemoService {
         select: { companyName: true },
       });
       const companyName = company?.companyName?.trim() || 'Company';
-
-      const employees = await this.prisma.manageEmployee.findMany({
-        where: {
-          companyID,
-          isDeleted: false,
-          lifecycleStatus: 'ACTIVE',
-        },
-        select: { id: true },
-      });
-      const employeeIDs = employees.map((e) => e.id);
-      if (employeeIDs.length === 0) return;
 
       await this.prisma.employeeMemo.create({
         data: {
@@ -243,7 +354,7 @@ export class EmployeeMemoService {
           employeeID: employeeIDs[0],
           employeeIDs,
           memoType: 'General',
-          subject: `${EmployeeMemoService.COMPANY_BROADCAST_PREFIX}${companyID}::${companyName}`,
+          subject: `${COMPANY_BROADCAST_PREFIX}${companyID}::${companyName}`,
           description,
           issuedDate: new Date(),
           issuedBy: 'System',

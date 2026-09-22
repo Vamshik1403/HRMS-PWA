@@ -44,6 +44,7 @@ export class LeaveApplicationService {
     companyID?: number | null;
     branchesID?: number | null;
     serviceProviderID?: number | null;
+    subjectEmployeeID?: number | null;
     employeeName: string;
     leaveType?: string | null;
     fromDate?: unknown;
@@ -55,10 +56,11 @@ export class LeaveApplicationService {
     const type = opts.leaveType?.trim() ? ` (${opts.leaveType.trim()})` : '';
     const datePart = dates ? ` for ${dates}` : '';
     void this.employeeMemoService
-      .createSystemCompanyBroadcast({
+      .createSystemStaffBroadcast({
         companyID: opts.companyID,
         branchesID: opts.branchesID,
         serviceProviderID: opts.serviceProviderID,
+        subjectEmployeeIDs: opts.subjectEmployeeID ? [opts.subjectEmployeeID] : [],
         description: `Leave ${opts.status}: ${opts.employeeName}${type}${datePart}`,
       })
       .catch(() => null);
@@ -100,6 +102,7 @@ export class LeaveApplicationService {
         companyID: created.companyID,
         branchesID: created.branchesID,
         serviceProviderID: created.serviceProviderID,
+        subjectEmployeeID: created.manageEmployeeID,
         employeeName: this.employeeDisplayName(created.manageEmployee),
         leaveType: created.appliedLeaveType,
         fromDate: created.fromDate,
@@ -450,6 +453,7 @@ export class LeaveApplicationService {
           companyID: updated.companyID,
           branchesID: updated.branchesID,
           serviceProviderID: updated.serviceProviderID,
+          subjectEmployeeID: updated.manageEmployeeID,
           employeeName: this.employeeDisplayName(updated.manageEmployee),
           leaveType: updated.appliedLeaveType,
           fromDate: updated.fromDate,

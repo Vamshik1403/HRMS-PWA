@@ -544,6 +544,44 @@ type DayPhotos = { ins: PunchPhoto[]; outs: PunchPhoto[] };
 
 const photoDayKey = (employeeId: number, date: string) => `${employeeId}|${date}`;
 
+function photoFromLocationLog(log: ProcessAttLog): { url: string; checkType: string } | null {
+  if (String(log.device_sn || "") !== "LOCATION_APP") return null;
+  const raw = String(log.raw_body || "").trim();
+  if (!raw.startsWith("{")) return null;
+  try {
+    const parsed = JSON.parse(raw) as { photoUrl?: unknown; checkType?: unknown };
+    const url = typeof parsed?.photoUrl === "string" ? parsed.photoUrl.trim() : "";
+    if (!url) return null;
+    return { url, checkType: String(parsed.checkType || "") };
+  } catch {
+    return null;
+  }
+}
+
+function addPhotoToDay(
+  map: Map<string, DayPhotos>,
+  id: number,
+  dateKey: string,
+  item: PunchPhoto,
+  checkType: string,
+) {
+  if (!Number.isFinite(id) || id <= 0) return;
+  const key = photoDayKey(id, dateKey);
+  const current = map.get(key) || { ins: [], outs: [] };
+  const bucket = checkType === "CHECK_OUT" ? current.outs : current.ins;
+  if (bucket.some((p) => p.url === item.url && p.time === item.time)) return;
+  bucket.push(item);
+  map.set(key, current);
+}
+
+function photoRowsFromPayload(payload: unknown): any[] {
+  if (Array.isArray(payload)) return payload;
+  if (payload && typeof payload === "object" && Array.isArray((payload as { data?: unknown }).data)) {
+    return (payload as { data: any[] }).data;
+  }
+  return [];
+}
+
 /** Even punches are IN, odd punches are OUT. FILO uses first IN / last OUT only. */
 const splitInOutPunches = (punches: string[], reportType?: string): { ins: string[]; outs: string[] } => {
   if (!punches.length) return { ins: [], outs: [] };
@@ -621,11 +659,11 @@ function PunchLogDayCells({
   onOpenPhotos?: (photos: DayPhotos) => void;
 }) {
   const splitType = reportType === "Photo Report" ? "All Punches Logs" : reportType;
-  const photoLink =
+  const photoButton = (kind: "in" | "out") =>
     reportType === "Photo Report" &&
     photos &&
-    (photos.ins.length > 0 || photos.outs.length > 0) &&
-    onOpenPhotos ? (
+    onOpenPhotos &&
+    (kind === "in" ? photos.ins.length > 0 : photos.outs.length > 0) ? (
       <button
         type="button"
         onClick={() => onOpenPhotos(photos)}
@@ -634,12 +672,14 @@ function PunchLogDayCells({
         Photos
       </button>
     ) : null;
-  if (punches.length > 0 || photoLink) {
+  const inLink = photoButton("in");
+  const outLink = photoButton("out");
+  if (punches.length > 0 || inLink || outLink) {
     const { ins, outs } = splitInOutPunches(punches, splitType);
     return (
       <>
-        <PunchTimesColumn times={ins} kind="in" extra={photoLink} />
-        <PunchTimesColumn times={outs} kind="out" />
+        <PunchTimesColumn times={ins} kind="in" extra={inLink} />
+        <PunchTimesColumn times={outs} kind="out" extra={outLink} />
       </>
     );
   }
@@ -2170,35 +2210,38 @@ if (!hasPunchesEffective) return { type: "ABSENT", label: "Absent", hasPunches: 
 
       const nextPhotoByDay = new Map<string, DayPhotos>();
       if (formData.reportType === "Photo Report") {
-        const photoParams = new URLSearchParams({
-          dateFrom: formData.dateFrom,
-          dateTo: formData.dateTo,
-          companyID: String(selectedCompanyID),
-          branchesID: String(selectedBranchID),
-        });
-        const photosRes = await fetch(
-          `${BACKEND_URL}/emp-location-attendance/photos?${photoParams}`,
-          { credentials: "include", headers: authHeaders() },
-        );
-        if (photosRes.ok) {
-          const photoRows = await photosRes.json();
-          for (const row of Array.isArray(photoRows) ? photoRows : []) {
+        try {
+          const photoParams = new URLSearchParams({
+            dateFrom: formData.dateFrom,
+            dateTo: formData.dateTo,
+            companyID: String(selectedCompanyID),
+          });
+          const photosRes = await fetch(
+            `${BACKEND_URL}/emp-location-attendance/photos?${photoParams}`,
+            { credentials: "include", headers: authHeaders() },
+          );
+          const photoPayload = await photosRes.json().catch(() => null);
+          const photoRows = photoRowsFromPayload(photoPayload);
+          for (const row of photoRows) {
             const parsed = parsePunchTime(row.checkinTime);
             if (!parsed || !row.photoUrl) continue;
-            const key = photoDayKey(Number(row.employeeId), parsed.dateKey);
-            const current = nextPhotoByDay.get(key) || { ins: [], outs: [] };
             const item: PunchPhoto = {
               time: parsed.timeStr,
               url: String(row.photoUrl),
               checkType: String(row.checkType || ""),
             };
-            if (String(row.checkType) === "CHECK_OUT") current.outs.push(item);
-            else current.ins.push(item);
-            nextPhotoByDay.set(key, current);
+            const checkType = String(row.checkType || "");
+            const empId = Number(row.employee?.id ?? row.employeeId);
+            const empCode = Number(row.employee?.employeeID);
+            addPhotoToDay(nextPhotoByDay, empId, parsed.dateKey, item, checkType);
+            if (Number.isFinite(empCode) && empCode > 0 && empCode !== empId) {
+              addPhotoToDay(nextPhotoByDay, empCode, parsed.dateKey, item, checkType);
+            }
           }
+        } catch {
+          /* Logs below still supply LOCATION_APP photos. */
         }
       }
-      setPhotoByDay(nextPhotoByDay);
       
       const logsData = allLogs.filter((log: ProcessAttLog) => {
         const parsed = parsePunchTime(log.punch_time);
@@ -2271,6 +2314,18 @@ if (!hasPunchesEffective) return { type: "ABSENT", label: "Absent", hasPunches: 
           if (parsed) {
             if (!punchesByDate[parsed.dateKey]) punchesByDate[parsed.dateKey] = [];
             punchesByDate[parsed.dateKey].push(parsed.timeStr);
+            if (formData.reportType === "Photo Report") {
+              const selfie = photoFromLocationLog(log);
+              if (selfie) {
+                addPhotoToDay(
+                  nextPhotoByDay,
+                  Number(emp.id),
+                  parsed.dateKey,
+                  { time: parsed.timeStr, url: selfie.url, checkType: selfie.checkType },
+                  selfie.checkType,
+                );
+              }
+            }
           }
         });
 
@@ -2332,6 +2387,7 @@ if (!hasPunchesEffective) return { type: "ABSENT", label: "Absent", hasPunches: 
         newFactualWeekoffOverrides,
       );
 
+      setPhotoByDay(nextPhotoByDay);
       setReportData(rows);
       setFactualWeekoffOverrides(newFactualWeekoffOverrides);
       setSandwichOverrides(new Map());

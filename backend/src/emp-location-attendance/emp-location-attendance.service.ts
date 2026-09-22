@@ -11,19 +11,43 @@ import {
 import {
   assertWithinFence,
   composeAddressParts,
+  fenceRadiusWithAccuracy,
   isClosedTaskStatus,
   normalizePhotoUrl,
-  requireRadius,
+  parseRadiusMeters,
   resolveCoords,
   taskActiveOnDate,
   wallDateKey,
-  type FenceKind,
   type FencePoint,
   type SessionFence,
 } from './emp-punch-geofence';
 
 const VALID_TYPES = ['CHECK_IN', 'CHECK_OUT', 'BREAK_IN', 'BREAK_OUT'] as const;
 type PunchType = (typeof VALID_TYPES)[number];
+
+const BRANCH_FENCE_SELECT = {
+  id: true,
+  geofenchradius: true,
+  latitude: true,
+  longitude: true,
+  address: true,
+  city: true,
+  state: true,
+  pincode: true,
+  country: true,
+} as const;
+
+type BranchFenceRow = {
+  id: number;
+  geofenchradius?: string | null;
+  latitude?: string | null;
+  longitude?: string | null;
+  address?: string | null;
+  city?: string | null;
+  state?: string | null;
+  pincode?: string | null;
+  country?: string | null;
+};
 
 @Injectable()
 export class EmpLocationAttendanceService {
@@ -142,17 +166,6 @@ export class EmpLocationAttendanceService {
     return times.length % 2 === 1 ? 'IN' : 'OUT';
   }
 
-  private lastOpenCheckIn<
-    T extends { checkType: string; fenceType?: string | null; fenceSiteId?: number | null },
-  >(records: T[]): T | null {
-    let lastIn: T | null = null;
-    for (const row of records) {
-      if (row.checkType === 'CHECK_IN') lastIn = row;
-      if (row.checkType === 'CHECK_OUT') lastIn = null;
-    }
-    return lastIn;
-  }
-
   private async persistEmptyCoords(
     kind: 'branch' | 'site' | 'employee',
     id: number,
@@ -181,21 +194,8 @@ export class EmpLocationAttendanceService {
     }
   }
 
-  private async officeFencePoint(branch: {
-    id: number;
-    latitude?: string | null;
-    longitude?: string | null;
-    address?: string | null;
-    city?: string | null;
-    state?: string | null;
-    pincode?: string | null;
-    country?: string | null;
-  } | null): Promise<FencePoint> {
-    if (!branch) {
-      throw new BadRequestException(
-        'Office location is not set. Ask admin to set the branch address or coordinates.',
-      );
-    }
+  private async tryOfficeFencePoint(branch: BranchFenceRow | null): Promise<FencePoint | null> {
+    if (!branch) return null;
     const resolved = await resolveCoords({
       latitude: branch.latitude,
       longitude: branch.longitude,
@@ -207,15 +207,60 @@ export class EmpLocationAttendanceService {
         branch.country,
       ),
     });
-    if (!resolved) {
-      throw new BadRequestException(
-        'Office location is not set. Ask admin to set the branch address or coordinates.',
-      );
-    }
+    if (!resolved) return null;
     if (resolved.fromGeocode) {
       await this.persistEmptyCoords('branch', branch.id, resolved.lat, resolved.lng);
     }
     return { lat: resolved.lat, lng: resolved.lng, type: 'OFFICE' };
+  }
+
+  private pickFenceRadius(
+    branches: Array<BranchFenceRow | null | undefined>,
+    accuracy?: number | null,
+  ): number {
+    let base: number | null = null;
+    for (const branch of branches) {
+      const radius = parseRadiusMeters(branch?.geofenchradius);
+      if (radius != null) {
+        base = radius;
+        break;
+      }
+    }
+    if (base == null) {
+      throw new BadRequestException(
+        'Geofence radius is not set for your branch. Ask admin to set Geofence Radius (meters) in My Company → Branches.',
+      );
+    }
+    return fenceRadiusWithAccuracy(base, accuracy);
+  }
+
+  private async companyOfficeFencePoints(opts: {
+    companyID?: number | null;
+    assignedBranch: BranchFenceRow | null;
+    empBranch: BranchFenceRow | null;
+  }): Promise<{ points: FencePoint[]; branches: BranchFenceRow[] }> {
+    const byId = new Map<number, BranchFenceRow>();
+    if (opts.assignedBranch) byId.set(opts.assignedBranch.id, opts.assignedBranch);
+    if (opts.empBranch) byId.set(opts.empBranch.id, opts.empBranch);
+    if (opts.companyID) {
+      const companyBranches = await this.prisma.branches.findMany({
+        where: { companyID: opts.companyID },
+        select: BRANCH_FENCE_SELECT,
+      });
+      for (const branch of companyBranches) byId.set(branch.id, branch);
+    }
+    const branches = [...byId.values()];
+    const points: FencePoint[] = [];
+    const seen = new Set<string>();
+    for (const branch of branches) {
+      const point = await this.tryOfficeFencePoint(branch);
+      if (!point) continue;
+      const key = `${point.lat.toFixed(6)},${point.lng.toFixed(6)}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      points.push(point);
+    }
+    return { points, branches };
   }
 
   private async homeFencePoint(
@@ -293,7 +338,6 @@ export class EmpLocationAttendanceService {
 
     const points: FencePoint[] = [];
     const seen = new Set<number>();
-    let assignedOpenTask = false;
     for (const task of tasks) {
       if (isClosedTaskStatus(task.status)) continue;
       const assignedDates = [
@@ -310,7 +354,6 @@ export class EmpLocationAttendanceService {
       ) {
         continue;
       }
-      assignedOpenTask = true;
       const site = task.site;
       if (!site || seen.has(site.id)) continue;
       seen.add(site.id);
@@ -336,114 +379,59 @@ export class EmpLocationAttendanceService {
         siteId: site.id,
       });
     }
-    if (assignedOpenTask && points.length === 0) {
-      throw new BadRequestException(
-        'Site location is not available. Ask admin to set the site address or coordinates.',
-      );
-    }
     return points;
   }
 
   private async resolvePunchFence(opts: {
     employeeId: number;
-    checkType: PunchType;
     todayKey: string;
-    todayRecords: Array<{ checkType: string; fenceType?: string | null; fenceSiteId?: number | null }>;
-    branch: {
-      id: number;
-      geofenchradius?: string | null;
-      latitude?: string | null;
-      longitude?: string | null;
-      address?: string | null;
-      city?: string | null;
-      state?: string | null;
-      pincode?: string | null;
-      country?: string | null;
-    } | null;
+    companyID?: number | null;
+    accuracy?: number | null;
+    branch: BranchFenceRow | null;
+    empBranch: BranchFenceRow | null;
     wfhAllowed?: boolean | null;
     wfhHomeAddress?: string | null;
     wfhHomeLatitude?: number | null;
     wfhHomeLongitude?: number | null;
   }): Promise<{ radiusMeters: number; points: FencePoint[]; session: SessionFence }> {
-    const radiusMeters = requireRadius(opts.branch?.geofenchradius);
-    const homeEmployee = {
-      id: opts.employeeId,
-      wfhAllowed: opts.wfhAllowed,
-      wfhHomeAddress: opts.wfhHomeAddress,
-      wfhHomeLatitude: opts.wfhHomeLatitude,
-      wfhHomeLongitude: opts.wfhHomeLongitude,
-    };
+    const offices = await this.companyOfficeFencePoints({
+      companyID: opts.companyID,
+      assignedBranch: opts.branch,
+      empBranch: opts.empBranch,
+    });
+    const radiusMeters = this.pickFenceRadius(
+      [opts.branch, opts.empBranch, ...offices.branches],
+      opts.accuracy,
+    );
 
-    if (opts.checkType === 'CHECK_OUT') {
-      const lastIn = this.lastOpenCheckIn(opts.todayRecords);
-      const fenceType = String(lastIn?.fenceType || '').toUpperCase();
-      if (fenceType === 'OFFICE') {
-        const point = await this.officeFencePoint(opts.branch);
-        return { radiusMeters, points: [point], session: { type: 'OFFICE' } };
-      }
-      if (fenceType === 'HOME') {
-        const home = await this.homeFencePoint(homeEmployee, true);
-        return {
-          radiusMeters,
-          points: home ? [home] : [],
-          session: { type: 'HOME' },
-        };
-      }
-      if (fenceType === 'SITE' && lastIn?.fenceSiteId) {
-        const site = await this.prisma.taskCustomerSite.findUnique({
-          where: { id: lastIn.fenceSiteId },
-          select: {
-            id: true,
-            latitude: true,
-            longitude: true,
-            address: true,
-            city: true,
-            state: true,
-            pincode: true,
-            country: true,
-          },
-        });
-        if (site) {
-          const resolved = await resolveCoords({
-            latitude: site.latitude,
-            longitude: site.longitude,
-            address: composeAddressParts(
-              site.address,
-              site.city,
-              site.state,
-              site.pincode,
-              site.country,
-            ),
-          });
-          if (resolved) {
-            if (resolved.fromGeocode) {
-              await this.persistEmptyCoords('site', site.id, resolved.lat, resolved.lng);
-            }
-            const point: FencePoint = {
-              lat: resolved.lat,
-              lng: resolved.lng,
-              type: 'SITE',
-              siteId: site.id,
-            };
-            return {
-              radiusMeters,
-              points: [point],
-              session: { type: 'SITE', siteId: site.id },
-            };
-          }
-        }
-      }
-    }
+    const points: FencePoint[] = [...offices.points];
+    const home = await this.homeFencePoint(
+      {
+        id: opts.employeeId,
+        wfhAllowed: opts.wfhAllowed,
+        wfhHomeAddress: opts.wfhHomeAddress,
+        wfhHomeLatitude: opts.wfhHomeLatitude,
+        wfhHomeLongitude: opts.wfhHomeLongitude,
+      },
+      false,
+    );
+    if (home) points.push(home);
 
     const sitePoints = await this.siteFencePoints(opts.employeeId, opts.todayKey);
-    if (sitePoints.length > 0) {
-      return { radiusMeters, points: sitePoints, session: { type: 'SITE' } };
+    points.push(...sitePoints);
+
+    if (!points.length) {
+      throw new BadRequestException(
+        'No allowed punch location is configured. Ask admin to set office, home, or site coordinates.',
+      );
     }
-    const office = await this.officeFencePoint(opts.branch);
-    const points: FencePoint[] = [office];
-    const home = await this.homeFencePoint(homeEmployee, false);
-    if (home) points.push(home);
-    return { radiusMeters, points, session: { type: 'OFFICE' } };
+
+    const session: SessionFence = offices.points.length
+      ? { type: 'OFFICE' }
+      : home
+        ? { type: 'HOME' }
+        : { type: 'SITE', siteId: sitePoints[0]?.siteId };
+    return { radiusMeters, points, session };
   }
 
   async checkIn(employeeId: number, dto: CreateAttendanceLocationDto, ipAddress: string) {
@@ -464,20 +452,21 @@ export class EmpLocationAttendanceService {
         wfhHomeAddress: true,
         wfhHomeLatitude: true,
         wfhHomeLongitude: true,
+        companyID: true,
         company: { select: { companyName: true } },
         departments: { select: { departmentName: true } },
         branches: {
           select: {
-            id: true,
+            ...BRANCH_FENCE_SELECT,
             branchName: true,
-            geofenchradius: true,
-            latitude: true,
-            longitude: true,
-            address: true,
-            city: true,
-            state: true,
-            pincode: true,
-            country: true,
+          },
+        },
+        empBranch: {
+          orderBy: { id: 'desc' },
+          take: 1,
+          select: {
+            branchesID: true,
+            branch: { select: BRANCH_FENCE_SELECT },
           },
         },
       },
@@ -513,10 +502,11 @@ export class EmpLocationAttendanceService {
     if (photoPunchEnabled && (checkType === 'CHECK_IN' || checkType === 'CHECK_OUT')) {
       const fence = await this.resolvePunchFence({
         employeeId,
-        checkType,
         todayKey,
-        todayRecords: todayPreview,
+        companyID: employee.companyID,
+        accuracy: dto.accuracy,
         branch: employee.branches,
+        empBranch: employee.empBranch[0]?.branch ?? null,
         wfhAllowed: employee.wfhAllowed,
         wfhHomeAddress: employee.wfhHomeAddress,
         wfhHomeLatitude: employee.wfhHomeLatitude,
@@ -1116,7 +1106,6 @@ export class EmpLocationAttendanceService {
     dateFrom: Date;
     dateTo: Date;
     companyID?: number;
-    branchesID?: number;
   }) {
     return this.prisma.attendanceLocation.findMany({
       where: {
@@ -1125,7 +1114,6 @@ export class EmpLocationAttendanceService {
         checkinTime: { gte: opts.dateFrom, lte: opts.dateTo },
         employee: {
           ...(opts.companyID ? { companyID: opts.companyID } : {}),
-          ...(opts.branchesID ? { branchesID: opts.branchesID } : {}),
         },
       },
       select: {

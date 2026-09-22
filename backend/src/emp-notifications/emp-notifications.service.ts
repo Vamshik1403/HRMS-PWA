@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { empPayoutHrefForPeriod } from '../common/payslip-period.util';
 import { EmpManagerScopeService } from '../common/emp-manager-scope.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { EmployeeMemoService } from '../employee-memo/employee-memo.service';
 
 export type EmpHolidayListItem = {
   id: number;
@@ -38,6 +39,7 @@ export class EmpNotificationsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly managerScope: EmpManagerScopeService,
+    private readonly employeeMemoService: EmployeeMemoService,
   ) {}
 
   /** Public holidays for the employee's company/branch and leave policy. */
@@ -687,12 +689,16 @@ export class EmpNotificationsService {
         createdAt: { gte: since },
       },
       orderBy: { createdAt: 'desc' },
-      take: 30,
+      take: 80,
     });
+    const visible = await this.employeeMemoService.filterSystemBroadcastsForViewer(
+      employeeId,
+      memos,
+    );
 
     const who = forReportee ? await this.reporteeName(employeeId) : null;
 
-    return memos.flatMap((m) => {
+    return visible.flatMap((m) => {
       const at = m.createdAt ?? now;
       const type = m.memoType || 'General';
       const typeLc = type.toLowerCase();

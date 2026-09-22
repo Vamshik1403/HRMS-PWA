@@ -21,7 +21,23 @@ export function normalizePhotoUrl(raw?: string | null): string | null {
   if (!v) return null;
   const match = v.match(/\/uploads\/[^?#\s]+/);
   if (match) return match[0];
+  if (/^https?:\/\//i.test(v)) return v;
   return null;
+}
+
+export function isUsableLatLng(
+  lat: number | null,
+  lng: number | null,
+): lat is number {
+  if (lat == null || lng == null) return false;
+  if (lat === 0 && lng === 0) return false;
+  return Math.abs(lat) <= 90 && Math.abs(lng) <= 180;
+}
+
+export function fenceRadiusWithAccuracy(baseMeters: number, accuracy?: unknown): number {
+  const acc = parseCoord(accuracy);
+  const extra = acc != null && acc > 0 ? Math.min(acc, 150) : 0;
+  return baseMeters + extra;
 }
 
 export function wallDateKey(d: Date): string {
@@ -75,20 +91,30 @@ export async function resolveCoords(opts: {
 }): Promise<{ lat: number; lng: number; fromGeocode: boolean } | null> {
   const lat = parseCoord(opts.latitude);
   const lng = parseCoord(opts.longitude);
-  if (lat != null && lng != null) return { lat, lng, fromGeocode: false };
+  if (lat != null && lng != null && isUsableLatLng(lat, lng)) {
+    return { lat, lng, fromGeocode: false };
+  }
   const point = await forwardGeocode(opts.address);
-  if (!point) return null;
+  if (!point || !isUsableLatLng(point.lat, point.lng)) return null;
   return { lat: point.lat, lng: point.lng, fromGeocode: true };
 }
 
 export function fenceMissMessage(points: FencePoint[]): string {
   const kinds = new Set(points.map((p) => p.type));
-  if (kinds.has('SITE')) return 'You are not on the site location';
-  if (kinds.has('HOME') && kinds.has('OFFICE')) {
-    return 'You are not at the office or home location';
+  const parts: string[] = [];
+  if (kinds.has('OFFICE')) parts.push('office');
+  if (kinds.has('HOME')) parts.push('home');
+  if (kinds.has('SITE')) parts.push('site');
+  if (parts.length === 0) return 'You are not at the office location';
+  if (parts.length === 1) {
+    return parts[0] === 'site'
+      ? 'You are not on the site location'
+      : `You are not at the ${parts[0]} location`;
   }
-  if (kinds.has('HOME')) return 'You are not at the home location';
-  return 'You are not at the office location';
+  if (parts.length === 2) {
+    return `You are not at the ${parts[0]} or ${parts[1]} location`;
+  }
+  return `You are not at the ${parts.slice(0, -1).join(', ')}, or ${parts[parts.length - 1]} location`;
 }
 
 export function assertWithinFence(

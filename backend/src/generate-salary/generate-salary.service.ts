@@ -31,6 +31,7 @@ export class GenerateSalaryService {
     companyID?: number | null;
     branchesID?: number | null;
     serviceProviderID?: number | null;
+    employeeID?: number | null;
     monthPeriod: string;
     manageEmployee?: {
       employeeFirstName?: string | null;
@@ -46,10 +47,11 @@ export class GenerateSalaryService {
         ? `Salary paid: ${name} — ${record.monthPeriod}`
         : `Payroll generated: ${name} — ${record.monthPeriod}`;
     void this.employeeMemoService
-      .createSystemCompanyBroadcast({
+      .createSystemStaffBroadcast({
         companyID: record.companyID,
         branchesID: record.branchesID,
         serviceProviderID: record.serviceProviderID,
+        subjectEmployeeIDs: record.employeeID ? [record.employeeID] : [],
         description,
       })
       .catch(() => null);
