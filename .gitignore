@@ -1,0 +1,41 @@
+# Dependencies and build output
+node_modules/
+.next/
+out/
+dist/
+build/
+coverage/
+*.tsbuildinfo
+
+# Environment files. Templates stay tracked.
+.env
+.env.*
+!.env.example
+
+# Logs and OS/editor files
+*.log
+npm-debug.log*
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# User uploads stay on the server. Only the placeholder is tracked.
+backend/uploads/*
+!backend/uploads/.gitkeep
+
+# Backup dumps stay on the server.
+backup/*
+!backup/.gitignore
+!backup/.gitkeep
+
+# Runtime push subscriptions
+backend/data/push-subscriptions.json
+
+# Import dumps and employee identity files. Keep import.defaults.json.
+scripts/8_logs.sql
+scripts/import/employees_import.json
+scripts/import/attendance-import-report.json
+scripts/import/excel-attendance-jan-aug-report.json
+scripts/import/import-report.json
+scripts/import/vamshik-attendance-import-report.json

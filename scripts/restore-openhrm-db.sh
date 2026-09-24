@@ -6,8 +6,13 @@ BACKUP_DATE="${1:-2026-06-23}"
 BACKUP_FILE="/var/www/openhrm/backup/${BACKUP_DATE}/full-database.sql"
 PG_PORT=5439
 PG_USER=openhrmadmin
-PG_PASS='Enpl@253029'
+PG_PASS="${PGPASSWORD:-}"
 DB_NAME=openhrm
+
+if [[ -z "$PG_PASS" ]]; then
+  echo "Set PGPASSWORD to the database password before running this script." >&2
+  exit 1
+fi
 
 if [[ ! -f "$BACKUP_FILE" ]]; then
   echo "Backup not found: $BACKUP_FILE" >&2
