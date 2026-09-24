@@ -47,6 +47,7 @@ const FEATURE_LABELS: Record<string, string> = {
   branch: "Branch",
   site: "Task/Site",
   wfh: "WFH/Home",
+  "ENPL Site": "ENPL Site",
 };
 
 function rows(map?: Record<string, number>, labels?: Record<string, string>) {

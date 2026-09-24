@@ -14,7 +14,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { GoogleFeature, GoogleMapsService } from './google-maps.service';
 
 const FEATURES = new Set<GoogleFeature>(['branch', 'wfh', 'site']);
-const FEATURE_MODULE: Record<GoogleFeature, 'BRANCHES' | 'EMPLOYEES' | 'TASKS'> = {
+const FEATURE_MODULE: Record<'branch' | 'wfh' | 'site', 'BRANCHES' | 'EMPLOYEES' | 'TASKS'> = {
   branch: 'BRANCHES',
   wfh: 'EMPLOYEES',
   site: 'TASKS',

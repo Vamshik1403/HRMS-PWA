@@ -1,7 +1,7 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 
-export type GoogleFeature = 'branch' | 'wfh' | 'site';
+export type GoogleFeature = 'branch' | 'wfh' | 'site' | 'ENPL Site';
 export type GoogleApiName = 'places_autocomplete' | 'place_details' | 'geocode' | 'reverse_geocode';
 
 const SOURCES = new Set(['google_place', 'google_geocode', 'manual', 'device']);
@@ -26,6 +26,27 @@ function usablePair(lat: unknown, lng: unknown): { lat: number; lng: number } | 
 
 function normAddress(value?: string | null): string {
   return String(value || '').replace(/\s+/g, ' ').trim().toLowerCase();
+}
+
+function componentText(row: any): string {
+  return String(row?.longText || row?.long_name || row?.shortText || row?.short_name || '').trim();
+}
+
+function addressParts(components: any[] | undefined) {
+  const list = Array.isArray(components) ? components : [];
+  const pick = (...types: string[]) => {
+    for (const type of types) {
+      const hit = list.find((row) => Array.isArray(row?.types) && row.types.includes(type));
+      const text = componentText(hit);
+      if (text) return text;
+    }
+    return '';
+  };
+  return {
+    city: pick('locality', 'postal_town', 'administrative_area_level_3', 'administrative_area_level_2', 'sublocality'),
+    state: pick('administrative_area_level_1'),
+    pinCode: pick('postal_code'),
+  };
 }
 
 @Injectable()
@@ -117,6 +138,46 @@ export class GoogleMapsService {
     };
   }
 
+  async enplPlaceDetails(placeId: string, sessionToken: string) {
+    const feature: GoogleFeature = 'ENPL Site';
+    const id = placeId.trim();
+    if (!id) throw new BadRequestException('Place is required.');
+    if (!this.apiKey()) {
+      throw new BadRequestException(
+        'Could not find coordinates for this address. Please check the address.',
+      );
+    }
+    const data = await this.callGoogle(
+      'place_details',
+      feature,
+      `https://places.googleapis.com/v1/places/${encodeURIComponent(id)}?sessionToken=${encodeURIComponent(sessionToken)}`,
+      {
+        headers: {
+          'X-Goog-Api-Key': this.apiKey(),
+          'X-Goog-FieldMask': 'id,formattedAddress,location,addressComponents',
+        },
+      },
+      sessionToken,
+    );
+    const lat = Number(data?.location?.latitude);
+    const lng = Number(data?.location?.longitude);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+      throw new BadRequestException(
+        'Could not find coordinates for this address. Please check the address.',
+      );
+    }
+    const parts = addressParts(data?.addressComponents);
+    return {
+      formattedAddress: String(data?.formattedAddress || '').trim(),
+      latitude: lat,
+      longitude: lng,
+      placeId: String(data?.id || id),
+      city: parts.city,
+      state: parts.state,
+      pinCode: parts.pinCode,
+    };
+  }
+
   async geocode(query: string, feature: GoogleFeature) {
     const q = query.replace(/\s+/g, ' ').trim();
     if (q.length < 3 || !this.apiKey()) return null;
@@ -158,6 +219,34 @@ export class GoogleMapsService {
       longitude: String(point.lng),
       locationSource: 'google_geocode',
       locationVerified: true,
+    };
+  }
+
+  async enplReverseGeocode(lat: unknown, lng: unknown) {
+    const feature: GoogleFeature = 'ENPL Site';
+    const point = usablePair(lat, lng);
+    if (!point) throw new BadRequestException('Enter a valid latitude and longitude.');
+    if (!this.apiKey()) {
+      throw new BadRequestException('Could not find an address for these coordinates.');
+    }
+    const url =
+      `https://maps.googleapis.com/maps/api/geocode/json?latlng=${encodeURIComponent(`${point.lat},${point.lng}`)}` +
+      `&key=${encodeURIComponent(this.apiKey())}`;
+    const data = await this.callGoogle('reverse_geocode', feature, url, {});
+    const hit = data?.results?.[0];
+    const formattedAddress = String(hit?.formatted_address || '').trim();
+    if (!formattedAddress) {
+      throw new BadRequestException('Could not find an address for these coordinates.');
+    }
+    const parts = addressParts(hit?.address_components);
+    return {
+      formattedAddress,
+      latitude: point.lat,
+      longitude: point.lng,
+      placeId: hit?.place_id ? String(hit.place_id) : '',
+      city: parts.city,
+      state: parts.state,
+      pinCode: parts.pinCode,
     };
   }
 

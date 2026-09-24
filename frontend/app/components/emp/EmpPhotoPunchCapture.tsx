@@ -75,10 +75,11 @@ export const EmpPhotoPunchCapture = forwardRef<
       const location = gpsRef.current
         ? await gpsRef.current
         : await fetchGPSOnUserGesture();
-      const ok = await onSubmit(checkType, file, location);
-      if (ok) reset();
+      await onSubmit(checkType, file, location);
+      reset();
     } catch (err: any) {
       onError?.(err?.message || "Could not get location.");
+      reset();
     }
   };
 

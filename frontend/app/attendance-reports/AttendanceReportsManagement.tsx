@@ -849,9 +849,9 @@ const DateCell = ({ punches, date, employeeID, formData, reportData, selectedCom
         if (!cancelled) setStatus(globalStatusCache.get(cacheKey));
         return;
       }
-      const statusesMap = new Map<string, string>();
-      const result = await getComprehensiveStatus(date, employeeID, punches, selectedCompanyID, selectedBranchID, statusesMap);
-      globalStatusCache.set(cacheKey, result);
+        const statusesMap = new Map<string, string>();
+        const result = await getComprehensiveStatus(date, employeeID, punches, selectedCompanyID, selectedBranchID, statusesMap);
+        globalStatusCache.set(cacheKey, result);
       if (!cancelled) setStatus(result);
     };
     fetchStatus();
@@ -1289,7 +1289,7 @@ export function AttendanceReportsManagement({ mode = "actual" }: { mode?: Report
 
   // ==================== BRANCH FILTERING ====================
 
-    useEffect(() => {
+  useEffect(() => {
     if (!user) return;
 
     const ctx = getActiveReportContext();
@@ -1386,7 +1386,7 @@ const employeeOptions = filteredEmployees
   .map((e: Employee) => ({
     value: String(e.id),
     label: `${e.employeeFirstName || ""} ${e.employeeLastName || ""} (${e.employeeID || e.id})`.trim(),
-  }));
+}));
 
   // ==================== CALCULATION FUNCTIONS ====================
 
@@ -1828,8 +1828,8 @@ if (approvedLeave) {
 }
 
 // PRIORITY 5: Calculate based on punches
-// Use effectivePunchesForDate (includes next-day punches for night shifts) for presence check.
-if (!hasPunchesEffective) return { type: "ABSENT", label: "Absent", hasPunches: false };
+    // Use effectivePunchesForDate (includes next-day punches for night shifts) for presence check.
+    if (!hasPunchesEffective) return { type: "ABSENT", label: "Absent", hasPunches: false };
     
     let policy = sourceAttendancePolicy;
     // Policy is loaded once in generateReport — never N+1 fetch per cell.
@@ -1970,12 +1970,12 @@ if (!hasPunchesEffective) return { type: "ABSENT", label: "Absent", hasPunches: 
           workedMinutes,
         };
       }
-
+      
       const earlyCheckoutWindow = policy.earlyCheckoutBeforeEndMin || 0;
       if (effectivePunches.length >= 2 && lastPunch < shiftEndMin - earlyCheckoutWindow) {
         return { type: "HALF_DAY", label: "Half Day", hasPunches: true, workedMinutes, rosterShiftName };
       }
-
+      
       if (isLate) {
         const monthKey = `${employeeID}-${date.substring(0, 7)}`;
         const currentTracker = lateMarkTracker.current;
@@ -1997,7 +1997,7 @@ if (!hasPunchesEffective) return { type: "ABSENT", label: "Absent", hasPunches: 
       if (otMinutes > 0) {
         return { type: "OT", label: "OT", hasPunches: true, workedMinutes, otMinutes, totalShiftMinutes, rosterShiftName };
       }
-      return { type: "PRESENT", label: "P", hasPunches: true, workedMinutes, rosterShiftName };
+        return { type: "PRESENT", label: "P", hasPunches: true, workedMinutes, rosterShiftName };
     }
 
     return { type: "PRESENT", label: "P", hasPunches: true };
@@ -2298,12 +2298,12 @@ if (!hasPunchesEffective) return { type: "ABSENT", label: "Absent", hasPunches: 
       const logsByEmployee = new Map<number, ProcessAttLog[]>();
       const employeeIdSet = new Set(finalFilteredEmployees.map((e: Employee) => Number(e.id)));
       logsData.forEach((log: ProcessAttLog) => {
-        const employeeId = Number(log.manage_employee_id);
+          const employeeId = Number(log.manage_employee_id);
         if (employeeId && employeeIdSet.has(employeeId)) {
-          if (!logsByEmployee.has(employeeId)) logsByEmployee.set(employeeId, []);
-          logsByEmployee.get(employeeId)!.push(log);
-        }
-      });
+            if (!logsByEmployee.has(employeeId)) logsByEmployee.set(employeeId, []);
+            logsByEmployee.get(employeeId)!.push(log);
+          }
+        });
 
       const rows = finalFilteredEmployees.map((emp: Employee) => {
         const empLogs = logsByEmployee.get(Number(emp.id)) || [];
@@ -2416,7 +2416,7 @@ if (!hasPunchesEffective) return { type: "ABSENT", label: "Absent", hasPunches: 
     const reportType = formData.reportType;
     const getDisplayPunches = (employeeID: number, date: string, punches: string[]) =>
       isFactualMode && factualWeekoffOverrides.get(employeeID)?.has(date) ? [] : punches;
-
+    
     const metaLabels = ["S.NO", "Employee ID", "Employee Name", "Company", "Branch", "Department"];
     const metaCount = metaLabels.length;
 
@@ -2517,7 +2517,7 @@ if (!hasPunchesEffective) return { type: "ABSENT", label: "Absent", hasPunches: 
             }
             dataRow.push(inLines.join("\n"), outLines.join("\n"));
             maxPunches = Math.max(maxPunches, inLines.length, outLines.length, 1);
-          } else {
+        } else {
             dataRow.push(dayStatusExcelValue(punches, status), "");
             const excelRow = index + 2;
             const col = metaCount + d * 2;
@@ -2565,7 +2565,7 @@ if (!hasPunchesEffective) return { type: "ABSENT", label: "Absent", hasPunches: 
     const PRESENT_FILL = "E2EFDA";
     const HEADER_FILL = "F2F2F2";
     const TEXT_BLACK = "000000";
-
+    
     for (let R = range.s.r; R <= range.e.r; R++) {
       for (let C = range.s.c; C <= range.e.c; C++) {
         const cellRef = XLSX.utils.encode_cell({ c: C, r: R });
@@ -2608,7 +2608,7 @@ if (!hasPunchesEffective) return { type: "ABSENT", label: "Absent", hasPunches: 
 
         if (!isDateCol) continue;
 
-        const cv = ws[cellRef].v?.toString() || "";
+            const cv = ws[cellRef].v?.toString() || "";
         if (!cv) continue;
 
         if (punchSplit && looksLikePunchTimes(cv)) {
@@ -2683,7 +2683,7 @@ if (!hasPunchesEffective) return { type: "ABSENT", label: "Absent", hasPunches: 
       ...rowPunchCounts.map((count) => ({ hpt: Math.max(22, count * 14) })),
     ];
     ws["!freeze"] = { x: metaCount, y: 2 };
-
+    
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Attendance Report");
     XLSX.writeFile(
@@ -2776,7 +2776,7 @@ if (!hasPunchesEffective) return { type: "ABSENT", label: "Absent", hasPunches: 
   const renderDateHeaders = () => dateColumns.map(date => {
     const { dayName, dateStr } = formatHeaderDate(date);
     if (punchSplit) {
-      return (
+    return (
         <th
           key={date}
           colSpan={2}
