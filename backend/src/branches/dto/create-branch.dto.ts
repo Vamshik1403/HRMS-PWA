@@ -1,4 +1,4 @@
-import { IsOptional, IsString, IsEmail, IsInt, IsArray, ValidateNested } from 'class-validator';
+import { IsOptional, IsString, IsEmail, IsInt, IsArray, IsBoolean, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class BankDetailCreateDto {
@@ -39,6 +39,10 @@ export class CreateBranchesDto {
   @IsOptional() @IsString() latitude?: string;
   @IsOptional() @IsString() longitude?: string;
   @IsOptional() @IsString() geofenchradius?: string;
+  @IsOptional() @IsString() placeId?: string;
+  @IsOptional() @IsString() locationSource?: string;
+  @IsOptional() @IsBoolean() locationVerified?: boolean;
+  @IsOptional() @IsBoolean() refetchLocation?: boolean;
 
   @IsOptional()
   @IsArray()

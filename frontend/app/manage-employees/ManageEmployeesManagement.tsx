@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
+import { VerifiedLocationFields } from "../components/location/VerifiedLocationFields";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
 import { Button } from "../components/ui/button";
@@ -1263,6 +1264,9 @@ const [filterLoading, setFilterLoading] = useState(false);
     wfhHomeAddress: "",
     wfhHomeLatitude: null as number | null,
     wfhHomeLongitude: null as number | null,
+    wfhPlaceId: "",
+    wfhLocationSource: "",
+    wfhLocationVerified: false,
 
     typeOfEmployee: "employee",
 
@@ -2416,6 +2420,9 @@ const addCombinedDevMap = () => {
       wfhHomeAddress: "",
     wfhHomeLatitude: null as number | null,
     wfhHomeLongitude: null as number | null,
+    wfhPlaceId: "",
+    wfhLocationSource: "",
+    wfhLocationVerified: false,
 
       typeOfEmployee: "employee",
 
@@ -3145,6 +3152,11 @@ const addCombinedDevMap = () => {
         photoPunchEnabled: formData.mobileAttendanceEnabled && !!formData.photoPunchEnabled,
         wfhAllowed: formData.mobileAttendanceEnabled && !!formData.wfhAllowed,
         wfhHomeAddress: formData.wfhAllowed ? (formData.wfhHomeAddress || "") : "",
+        wfhHomeLatitude: formData.wfhAllowed ? formData.wfhHomeLatitude : null,
+        wfhHomeLongitude: formData.wfhAllowed ? formData.wfhHomeLongitude : null,
+        placeId: formData.wfhAllowed ? (formData.wfhPlaceId || null) : null,
+        locationSource: formData.wfhAllowed ? (formData.wfhLocationSource || null) : null,
+        locationVerified: formData.wfhAllowed ? !!formData.wfhLocationVerified : false,
 
         typeOfEmployee: formData.typeOfEmployee || undefined,
 
@@ -3564,6 +3576,9 @@ const addCombinedDevMap = () => {
       wfhHomeAddress: freshData.wfhHomeAddress ?? "",
       wfhHomeLatitude: freshData.wfhHomeLatitude ?? null,
       wfhHomeLongitude: freshData.wfhHomeLongitude ?? null,
+      wfhPlaceId: freshData.placeId ?? "",
+      wfhLocationSource: freshData.locationSource ?? "",
+      wfhLocationVerified: !!freshData.locationVerified,
       typeOfEmployee: freshData.typeOfEmployee ?? "",
       workShiftID: effectiveWorkShiftID,
       attendancePolicyID: effectiveAttendancePolicyID,
@@ -5894,30 +5909,39 @@ const handleCancel = () => {
                   <span className="text-sm text-gray-700">Work from home allowed</span>
                 </label>
                 {formData.wfhAllowed ? (
-                  <div className="ml-6 space-y-1">
-                    <Label>Home address</Label>
-                    <textarea
-                      value={formData.wfhHomeAddress || ""}
-                      onChange={(e) => setFormData((p) => ({ ...p, wfhHomeAddress: e.target.value }))}
-                      rows={2}
-                      placeholder="Enter the employee home address"
-                      className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+                  <div className="ml-6">
+                    <VerifiedLocationFields
+                      feature="wfh"
+                      label="Home address"
+                      address={formData.wfhHomeAddress || ""}
+                      latitude={formData.wfhHomeLatitude != null ? String(formData.wfhHomeLatitude) : ""}
+                      longitude={formData.wfhHomeLongitude != null ? String(formData.wfhHomeLongitude) : ""}
+                      placeId={formData.wfhPlaceId}
+                      onChange={(patch) =>
+                        setFormData((p) => ({
+                          ...p,
+                          wfhHomeAddress: patch.address ?? p.wfhHomeAddress,
+                          wfhHomeLatitude:
+                            patch.latitude === undefined
+                              ? p.wfhHomeLatitude
+                              : patch.latitude
+                                ? Number(patch.latitude)
+                                : null,
+                          wfhHomeLongitude:
+                            patch.longitude === undefined
+                              ? p.wfhHomeLongitude
+                              : patch.longitude
+                                ? Number(patch.longitude)
+                                : null,
+                          wfhPlaceId: patch.placeId ?? p.wfhPlaceId,
+                          wfhLocationSource: patch.locationSource ?? p.wfhLocationSource,
+                          wfhLocationVerified: patch.locationVerified ?? p.wfhLocationVerified,
+                        }))
+                      }
                     />
-                    <p className="text-xs text-gray-500">
-                      Used as an allowed punch location (along with the office) when no task is assigned that day. Coordinates are filled automatically from this address.
+                    <p className="text-xs text-gray-500 mt-1">
+                      Used as an allowed punch location along with the office when photo punch and work from home are on.
                     </p>
-                    {(formData.wfhHomeLatitude != null && formData.wfhHomeLongitude != null) ? (
-                      <div className="grid grid-cols-2 gap-3 pt-1">
-                        <div className="space-y-1">
-                          <Label>Latitude</Label>
-                          <Input value={String(formData.wfhHomeLatitude)} readOnly />
-                        </div>
-                        <div className="space-y-1">
-                          <Label>Longitude</Label>
-                          <Input value={String(formData.wfhHomeLongitude)} readOnly />
-                        </div>
-                      </div>
-                    ) : null}
                   </div>
                 ) : null}
                 <label className="flex items-center gap-2 cursor-pointer">

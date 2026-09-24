@@ -10,6 +10,7 @@ import {
   Building2,
   CreditCard,
   Database,
+  Plug,
   Server,
   Shield,
   ShieldCheck,
@@ -45,6 +46,7 @@ const API = {
   companies: "/backend/company",
   users: "/backend/users",
   subscriptions: "/backend/subscription",
+  externalApis: "/backend/external-apis",
 };
 
 function uptime(seconds?: number) {
@@ -164,7 +166,21 @@ export default function SuperDashboard() {
   const [metrics, setMetrics] = useState<SystemMetrics | null>(null);
   const [counts, setCounts] = useState({ tenants: 0, users: 0, subscriptions: 0 });
   const [loading, setLoading] = useState(true);
+  const [apiCount, setApiCount] = useState<number | null>(null);
   const metricsFingerprintRef = useRef("");
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch(API.externalApis, { headers: authHeaders(), cache: "no-store" })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((body) => {
+        if (!cancelled && Number.isFinite(body?.activeCount)) setApiCount(body.activeCount);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const { spark, trend, chartSeries } = useMetricsHistory(metrics);
 
@@ -368,7 +384,7 @@ export default function SuperDashboard() {
     return (
       <div className="space-y-6 animate-pulse">
         <div className="h-20 rounded-2xl bg-muted/40" />
-        <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-4">
+        <div className="grid gap-4 md:grid-cols-3 xl:grid-cols-5">
           {Array.from({ length: 4 }).map((_, i) => (
             <div key={i} className="h-44 rounded-2xl bg-muted/30" />
           ))}
@@ -401,7 +417,7 @@ export default function SuperDashboard() {
       </div>
 
       {/* Row 1 — Summary cards */}
-      <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-3 xl:grid-cols-5">
         <SummaryMetricCard
           label="System Health"
           value={systemHealth}
@@ -437,6 +453,15 @@ export default function SuperDashboard() {
           trend={3.2}
           spark={spark("disk")}
           href="/subscription"
+        />
+        <SummaryMetricCard
+          label="APIs"
+          value={apiCount ?? 0}
+          displayValue={apiCount == null ? "—" : `${apiCount} Active`}
+          icon={Plug}
+          color={SAAS.blue}
+          spark={spark("rxSec")}
+          href="/system-apis"
         />
       </div>
 

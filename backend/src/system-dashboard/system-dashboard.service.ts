@@ -24,15 +24,28 @@ export class SystemDashboardService {
     return out || 'inactive';
   }
 
-  private async pm2App(name: string) {
+  private async resolvePm2Name(names: string[]) {
+    try {
+      const apps = JSON.parse((await this.runCmd('pm2 jlist')) || '[]');
+      return names.find((name) => apps.some((app: any) => app.name === name)) || names[0];
+    } catch {
+      return names[0];
+    }
+  }
+
+  private async pm2App(name: string | string[]) {
+    const names = Array.isArray(name) ? name : [name];
     try {
       const stdout = await this.runCmd('pm2 jlist');
       const apps = JSON.parse(stdout || '[]');
-      const app = apps.find((a: any) => a.name === name);
+      const app =
+        names.map((candidate) => apps.find((row: any) => row.name === candidate)).find(Boolean) ||
+        null;
+      const label = app?.name || names[0];
 
       if (!app) {
         return {
-          name,
+          name: label,
           status: 'offline',
           cpu: 0,
           memory: 0,
@@ -43,7 +56,7 @@ export class SystemDashboardService {
       }
 
       return {
-        name,
+        name: label,
         status: app?.pm2_env?.status ?? 'offline',
         cpu: Number(app?.monit?.cpu ?? 0),
         memory: Number(app?.monit?.memory ?? 0),
@@ -55,7 +68,7 @@ export class SystemDashboardService {
       };
     } catch {
       return {
-        name,
+        name: names[0],
         status: 'offline',
         cpu: 0,
         memory: 0,
@@ -183,8 +196,9 @@ export class SystemDashboardService {
   }
 
   private async getLogMetrics() {
+    const backendName = await this.resolvePm2Name(['openhrm-backend', 'hrms-backend']);
     const backendErrors = await this.runCmd(
-      `pm2 logs hrms-backend --nostream --lines 500 2>/dev/null | grep -iE "error|exception|failed" | wc -l`,
+      `pm2 logs ${backendName} --nostream --lines 500 2>/dev/null | grep -iE "error|exception|failed" | wc -l`,
     );
 
     const nginxErrors = await this.runCmd(
@@ -217,8 +231,8 @@ export class SystemDashboardService {
 
     const [backend, frontend, database, security, nginx, logs] =
       await Promise.all([
-        this.pm2App('hrms-backend'),
-        this.pm2App('hrms-frontend'),
+        this.pm2App(['openhrm-backend', 'hrms-backend']),
+        this.pm2App(['openhrm-frontend', 'hrms-frontend']),
         this.getDatabaseMetrics(),
         this.getSecurityMetrics(),
         this.getNginxMetrics(),

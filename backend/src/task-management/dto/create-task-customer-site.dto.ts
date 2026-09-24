@@ -1,5 +1,5 @@
 import { Type } from 'class-transformer';
-import { IsArray, IsInt, IsOptional, IsString, ValidateNested } from 'class-validator';
+import { IsArray, IsBoolean, IsInt, IsOptional, IsString, ValidateNested } from 'class-validator';
 import { TaskContactDto } from './task-contact.dto';
 
 export class TaskSiteNoteDto {
@@ -21,6 +21,10 @@ export class CreateTaskCustomerSiteDto {
   @IsOptional() @IsString() gstNo?: string;
   @IsOptional() @IsString() latitude?: string;
   @IsOptional() @IsString() longitude?: string;
+  @IsOptional() @IsString() placeId?: string;
+  @IsOptional() @IsString() locationSource?: string;
+  @IsOptional() @IsBoolean() locationVerified?: boolean;
+  @IsOptional() @IsBoolean() refetchLocation?: boolean;
   @IsOptional()
   @IsArray()
   @ValidateNested({ each: true })

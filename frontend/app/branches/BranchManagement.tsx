@@ -1,5 +1,5 @@
 "use client";
-import { TableBodySkeleton } from "../components/ui/TableBodySkeleton";
+import { VerifiedLocationFields } from "../components/location/VerifiedLocationFields";
 
 import { hasCompanyAccessFlag, hasModuleWriteAccess, isCompanyAdminLikeRole } from "@/lib/companyAccess";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -275,8 +275,11 @@ export function BranchManagement() {
     branchName: "",
     branchType: "",
     latitude  :"",    
-longitude     :"",
-geofenchradius:"",
+    longitude     :"",
+    placeId: "",
+    locationSource: "",
+    locationVerified: false,
+    geofenchradius:"",
     address: "",
     country: "",
     state: "",
@@ -637,8 +640,11 @@ geofenchradius:"",
       branchName: "",
       branchType: "",
       latitude:"",      
-longitude     :"",
-geofenchradius:"",
+      longitude     :"",
+      placeId: "",
+      locationSource: "",
+      locationVerified: false,
+      geofenchradius:"",
       address: "",
       country: "",
       state: "",
@@ -783,8 +789,11 @@ geofenchradius:"",
       branchName: formData.branchName || undefined,
       branchType: formData.branchType || undefined,
       latitude: formData.latitude || undefined,      
-longitude     : formData.longitude || undefined,
-geofenchradius: formData.geofenchradius || undefined,
+      longitude     : formData.longitude || undefined,
+      placeId: formData.placeId || undefined,
+      locationSource: formData.locationSource || undefined,
+      locationVerified: formData.locationVerified,
+      geofenchradius: formData.geofenchradius || undefined,
       address: formData.address || undefined,
       country: formData.country || undefined,
       state: formData.state || undefined,
@@ -927,6 +936,9 @@ geofenchradius: formData.geofenchradius || undefined,
       branchType: b.branchType ?? "",
       latitude: b.latitude ?? "",
       longitude: b.longitude ?? "",
+      placeId: (b as any).placeId ?? "",
+      locationSource: (b as any).locationSource ?? "",
+      locationVerified: !!(b as any).locationVerified,
       geofenchradius: b.geofenchradius ?? "",
       address: b.address ?? "",
       country: b.country ?? "",
@@ -1486,14 +1498,25 @@ setIsViewing(false);
                   />
                 </FormField>
 
-                <FormField label="Branch Address">
-                  <Textarea
-                    value={formData.address}
-                    onChange={(e) => setFormData((p) => ({ ...p, address: e.target.value }))}
-                    placeholder="Street, area, landmark…"
-                    rows={3}
-                  />
-                </FormField>
+                <VerifiedLocationFields
+                  feature="branch"
+                  label="Branch Address"
+                  address={formData.address}
+                  latitude={formData.latitude}
+                  longitude={formData.longitude}
+                  placeId={formData.placeId}
+                  onChange={(patch) =>
+                    setFormData((p) => ({
+                      ...p,
+                      address: patch.address ?? p.address,
+                      latitude: patch.latitude ?? p.latitude,
+                      longitude: patch.longitude ?? p.longitude,
+                      placeId: patch.placeId ?? p.placeId,
+                      locationSource: patch.locationSource ?? p.locationSource,
+                      locationVerified: patch.locationVerified ?? p.locationVerified,
+                    }))
+                  }
+                />
               </FormSection>
 
               <LocationFields
@@ -1509,40 +1532,16 @@ setIsViewing(false);
               />
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div className="space-y-2">
-                  <Label>Latitude</Label>
-                  <Input
-                    type="text"
-                    value={formData.latitude}
-                    readOnly
-                    placeholder="Filled from address"
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Filled automatically from the branch address
-                  </p>
-                </div>
-                <div className="space-y-2">
-                  <Label>Longitude</Label>
-                  <Input
-                    type="text"
-                    value={formData.longitude}
-                    readOnly
-                    placeholder="Filled from address"
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Filled automatically from the branch address
-                  </p>
-                </div>
-                <div className="space-y-2">
+                <div className="space-y-2 sm:col-span-1">
                   <Label>Geofence Radius (meters)</Label>
                   <Input
                     type="number"
                     value={ formData.geofenchradius}
                     onChange={(e) => setFormData((p) => ({ ...p, geofenchradius: e.target.value }))}
-                    placeholder="Enter geofence radius"
+                    placeholder="50–100 after the pin is verified"
                   />
                   <p className="text-xs text-muted-foreground">
-                    Required for PWA Mark IN/OUT. Employees can punch only within this radius of the office (branch lat/lng or address) or of an assigned task site.
+                    Employees can punch only within this radius of the saved office pin. After the pin is on the building, 50–100 m is usually enough.
                   </p>
                 </div>
               </div>

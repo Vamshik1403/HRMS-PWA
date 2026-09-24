@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { VerifiedLocationFields } from "../components/location/VerifiedLocationFields";
 import { hasModuleWriteAccess, isCompanyAdminLikeRole } from "@/lib/companyAccess";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
@@ -32,11 +33,12 @@ interface Site {
   siteCode?: string | null; gstNo?: string | null;
   address?: string | null; city?: string | null; state?: string | null; pincode?: string | null; country?: string | null;
   latitude?: string | null; longitude?: string | null;
+  placeId?: string | null; locationSource?: string | null; locationVerified?: boolean | null;
   customer?: CustomerOpt; contacts?: Contact[];
   notes?: { id?: number; title: string; description?: string | null; createdBy?: string | null }[];
 }
 
-const emptyForm = { customerID: "", siteCode: "", gstNo: "", branchName: "", address: "", city: "", state: "", pincode: "", country: "", latitude: "", longitude: "" };
+const emptyForm = { customerID: "", siteCode: "", gstNo: "", branchName: "", address: "", city: "", state: "", pincode: "", country: "", latitude: "", longitude: "", placeId: "", locationSource: "", locationVerified: false };
 
 export default function SiteManagement() {
   const user = useCurrentUser();
@@ -139,7 +141,7 @@ export default function SiteManagement() {
       const full = await taskFetch<Site>(`/task-customer-sites/${r.id}`, user);
       setEditing(full);
       setForm({ customerID: String(full.customerID), siteCode: full.siteCode || "", gstNo: full.gstNo || "", branchName: full.branchName, address: full.address || "", city: full.city || "",
-        state: full.state || "", pincode: full.pincode || "", country: full.country || "", latitude: full.latitude || "", longitude: full.longitude || "" });
+        state: full.state || "", pincode: full.pincode || "", country: full.country || "", latitude: full.latitude || "", longitude: full.longitude || "", placeId: full.placeId || "", locationSource: full.locationSource || "", locationVerified: !!full.locationVerified });
       setSelectedCustomer(full.customer || null);
       setCustomerLabel(full.customer ? `${full.customer.customerCode} — ${full.customer.customerName}` : "");
       setSameAsCustomer(false);
@@ -374,23 +376,26 @@ export default function SiteManagement() {
             <Label>Site Name *</Label>
             <Input value={form.branchName} onChange={(e) => setForm((p) => ({ ...p, branchName: e.target.value }))} required />
           </div>
-          <div className="space-y-2">
-            <Label>Site Address *</Label>
-            <Textarea value={form.address} onChange={(e) => setForm((p) => ({ ...p, address: e.target.value }))} rows={2} disabled={sameAsCustomer} required />
-          </div>
+          <VerifiedLocationFields
+            feature="site"
+            label="Site Address"
+            required
+            disabled={sameAsCustomer}
+            address={form.address}
+            latitude={form.latitude}
+            longitude={form.longitude}
+            placeId={form.placeId}
+            onChange={(patch) => setForm((p) => ({
+              ...p,
+              address: patch.address ?? p.address,
+              latitude: patch.latitude ?? p.latitude,
+              longitude: patch.longitude ?? p.longitude,
+              placeId: patch.placeId ?? p.placeId,
+              locationSource: patch.locationSource ?? p.locationSource,
+              locationVerified: patch.locationVerified ?? p.locationVerified,
+            }))}
+          />
           <LocationFields values={form} onChange={(patch) => setForm((p) => ({ ...p, ...patch }))} showCurrency={false} disabled={sameAsCustomer} pincodeLabel="PIN Code" />
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label>Latitude</Label>
-              <Input value={form.latitude} readOnly placeholder="Filled from address" />
-              <p className="text-xs text-muted-foreground">Filled automatically from the site address</p>
-            </div>
-            <div className="space-y-2">
-              <Label>Longitude</Label>
-              <Input value={form.longitude} readOnly placeholder="Filled from address" />
-              <p className="text-xs text-muted-foreground">Filled automatically from the site address</p>
-            </div>
-          </div>
           <TaskContactsRepeater title="Site Contacts" contacts={contacts} onChange={setContacts} />
           <div className="space-y-2">
             <div className="flex items-center justify-between">

@@ -9,7 +9,7 @@ import { JoiningFormService } from './joining-form.service';
 import * as bcrypt from 'bcrypt';
 import { ApprovalEngineService } from '../approval-workflow/approval-engine.service';
 import { assertPasswordMeetsPolicy } from '../auth/password-policy';
-import { geocodeAddressParts } from '../common/reverse-geocode';
+import { GoogleMapsService } from '../google-maps/google-maps.service';
 
 @Injectable()
 export class ManageEmployeeService {
@@ -20,37 +20,87 @@ export class ManageEmployeeService {
     private readonly joiningFormService: JoiningFormService,
     private readonly auditLog: AuditLogService,
     private readonly approvalEngine: ApprovalEngineService,
+    private readonly googleMaps: GoogleMapsService,
   ) { }
 
-  private async applyWfhHomeGeocode(scalars: Record<string, any>) {
+  private async applyWfhHomeGeocode(
+    scalars: Record<string, any>,
+    existing?: {
+      wfhHomeAddress?: string | null;
+      wfhHomeLatitude?: number | null;
+      wfhHomeLongitude?: number | null;
+      placeId?: string | null;
+      locationSource?: string | null;
+      locationVerified?: boolean | null;
+    } | null,
+  ) {
     if (scalars.photoPunchEnabled !== undefined) {
       scalars.photoPunchEnabled = !!scalars.photoPunchEnabled;
     }
     if (scalars.wfhAllowed !== undefined) {
       scalars.wfhAllowed = !!scalars.wfhAllowed;
     }
-    if (scalars.wfhHomeAddress === undefined) return;
-    const address = String(scalars.wfhHomeAddress || '').trim();
-    scalars.wfhHomeAddress = address || null;
+    const refetch = scalars.refetchLocation === true;
+    delete scalars.refetchLocation;
+    if (
+      scalars.wfhHomeAddress === undefined &&
+      scalars.wfhHomeLatitude === undefined &&
+      !refetch
+    ) {
+      return;
+    }
+    const address =
+      scalars.wfhHomeAddress !== undefined
+        ? String(scalars.wfhHomeAddress || '').trim()
+        : String(existing?.wfhHomeAddress || '').trim();
+    if (scalars.wfhHomeAddress !== undefined) {
+      scalars.wfhHomeAddress = address || null;
+    }
     if (!address) {
       scalars.wfhHomeLatitude = null;
       scalars.wfhHomeLongitude = null;
+      scalars.placeId = null;
+      scalars.locationSource = null;
+      scalars.locationVerified = false;
       return;
     }
     const wfhOn = scalars.wfhAllowed !== false;
-    const point = await geocodeAddressParts({ address });
-    if (point) {
-      scalars.wfhHomeLatitude = point.lat;
-      scalars.wfhHomeLongitude = point.lng;
-      return;
+    try {
+      const pin = await this.googleMaps.resolvePin({
+        feature: 'wfh',
+        addressQuery: address,
+        incomingLat: scalars.wfhHomeLatitude,
+        incomingLng: scalars.wfhHomeLongitude,
+        incomingPlaceId: scalars.placeId,
+        incomingSource: scalars.locationSource,
+        refetch,
+        existing: existing
+          ? {
+              address: existing.wfhHomeAddress,
+              latitude: existing.wfhHomeLatitude,
+              longitude: existing.wfhHomeLongitude,
+              placeId: existing.placeId,
+              locationSource: existing.locationSource,
+              locationVerified: existing.locationVerified,
+            }
+          : null,
+        missingMessage:
+          'Could not find coordinates for this home address. Please check the address.',
+      });
+      if (!pin) return;
+      scalars.wfhHomeLatitude = Number(pin.latitude);
+      scalars.wfhHomeLongitude = Number(pin.longitude);
+      scalars.placeId = pin.placeId;
+      scalars.locationSource = pin.locationSource;
+      scalars.locationVerified = pin.locationVerified;
+    } catch (err) {
+      if (wfhOn) throw err;
+      delete scalars.wfhHomeLatitude;
+      delete scalars.wfhHomeLongitude;
+      delete scalars.placeId;
+      delete scalars.locationSource;
+      delete scalars.locationVerified;
     }
-    if (wfhOn) {
-      throw new BadRequestException(
-        'Could not find coordinates for this home address. Please check the address.',
-      );
-    }
-    delete scalars.wfhHomeLatitude;
-    delete scalars.wfhHomeLongitude;
   }
 
   private employeeDisplayName(emp: {
@@ -2076,7 +2126,6 @@ export class ManageEmployeeService {
     } = dto;
     // Employee ID is auto-generated on create and locked from edits.
     void _lockedEmployeeID;
-    await this.applyWfhHomeGeocode(scalars as Record<string, any>);
 
     const beforeUpdate =
       await this.prisma.manageEmployee.findUnique({
@@ -2090,6 +2139,7 @@ export class ManageEmployeeService {
         `Employee ${id} not found`,
       );
     }
+    await this.applyWfhHomeGeocode(scalars as Record<string, any>, beforeUpdate);
 
     const forcedCompanyID = await this.tenantForcedCompanyID(req);
     if (

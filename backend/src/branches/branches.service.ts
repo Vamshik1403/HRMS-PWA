@@ -6,11 +6,15 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateBranchesDto } from './dto/create-branch.dto';
 import { UpdateBranchesDto } from './dto/update-branch.dto';
-import { composeAddressQuery, geocodeAddressParts } from '../common/reverse-geocode';
+import { composeAddressQuery } from '../common/reverse-geocode';
+import { GoogleMapsService } from '../google-maps/google-maps.service';
 
 @Injectable()
 export class BranchesService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private googleMaps: GoogleMapsService,
+  ) {}
 
   private toPositiveId(value: unknown): number | null {
     const n = Number(value);
@@ -53,28 +57,68 @@ export class BranchesService {
     return { companyID: company.id, serviceProviderID: resolvedSpID };
   }
 
-  private async geocodeFromAddress(parts: {
+  private async resolveBranchPin(opts: {
     address?: string | null;
     city?: string | null;
     state?: string | null;
     pincode?: string | null;
     country?: string | null;
-  }): Promise<{ latitude: string; longitude: string } | null> {
-    const query = composeAddressQuery(
-      parts.address,
-      parts.city,
-      parts.state,
-      parts.pincode,
-      parts.country,
+    latitude?: unknown;
+    longitude?: unknown;
+    placeId?: string | null;
+    locationSource?: string | null;
+    refetchLocation?: boolean;
+    existing?: {
+      address?: string | null;
+      city?: string | null;
+      state?: string | null;
+      pincode?: string | null;
+      country?: string | null;
+      latitude?: string | null;
+      longitude?: string | null;
+      placeId?: string | null;
+      locationSource?: string | null;
+      locationVerified?: boolean | null;
+    } | null;
+  }) {
+    const addressQuery = composeAddressQuery(
+      opts.address,
+      opts.city,
+      opts.state,
+      opts.pincode,
+      opts.country,
     );
-    if (!query) return null;
-    const point = await geocodeAddressParts(parts);
-    if (!point) {
-      throw new BadRequestException(
+    const existingQuery = opts.existing
+      ? composeAddressQuery(
+          opts.existing.address,
+          opts.existing.city,
+          opts.existing.state,
+          opts.existing.pincode,
+          opts.existing.country,
+        )
+      : '';
+    const pin = await this.googleMaps.resolvePin({
+      feature: 'branch',
+      addressQuery,
+      incomingLat: opts.latitude,
+      incomingLng: opts.longitude,
+      incomingPlaceId: opts.placeId,
+      incomingSource: opts.locationSource,
+      refetch: opts.refetchLocation === true,
+      existing: opts.existing
+        ? { ...opts.existing, address: existingQuery }
+        : null,
+      missingMessage:
         'Could not find coordinates for this branch address. Please check the address.',
-      );
-    }
-    return { latitude: String(point.lat), longitude: String(point.lng) };
+    });
+    if (!pin) return {};
+    return {
+      latitude: pin.latitude,
+      longitude: pin.longitude,
+      placeId: pin.placeId,
+      locationSource: pin.locationSource,
+      locationVerified: pin.locationVerified,
+    };
   }
 
   async create(dto: CreateBranchesDto) {
@@ -84,10 +128,21 @@ export class BranchesService {
       companyID,
       latitude: _lat,
       longitude: _lng,
+      placeId,
+      locationSource,
+      locationVerified: _verified,
+      refetchLocation,
       ...branch
     } = dto;
     const resolved = await this.resolveCompanyAndSp(companyID, serviceProviderID);
-    const coords = await this.geocodeFromAddress(branch);
+    const coords = await this.resolveBranchPin({
+      ...branch,
+      latitude: _lat,
+      longitude: _lng,
+      placeId,
+      locationSource,
+      refetchLocation,
+    });
 
     return this.prisma.branches.create({
       data: {
@@ -131,6 +186,10 @@ export class BranchesService {
       companyID,
       latitude: _lat,
       longitude: _lng,
+      placeId,
+      locationSource,
+      locationVerified: _verified,
+      refetchLocation,
       ...branch
     } = dto;
 
@@ -138,12 +197,18 @@ export class BranchesService {
     if (!existing) {
       throw new NotFoundException(`Branch with ID ${id} was not found.`);
     }
-    const coords = await this.geocodeFromAddress({
+    const coords = await this.resolveBranchPin({
       address: dto.address !== undefined ? dto.address : existing.address,
       city: dto.city !== undefined ? dto.city : existing.city,
       state: dto.state !== undefined ? dto.state : existing.state,
       pincode: dto.pincode !== undefined ? dto.pincode : existing.pincode,
       country: dto.country !== undefined ? dto.country : existing.country,
+      latitude: _lat,
+      longitude: _lng,
+      placeId,
+      locationSource,
+      refetchLocation,
+      existing,
     });
 
     return this.prisma.$transaction(async (tx) => {

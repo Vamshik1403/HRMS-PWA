@@ -130,6 +130,9 @@ model Branches {
   latitude       String? @db.VarChar
   longitude      String? @db.VarChar
   geofenchradius String? @db.VarChar
+  placeId            String?  @db.VarChar(256)
+  locationSource     String?  @db.VarChar(32)
+  locationVerified   Boolean  @default(false)
 
   attendancePolicy           AttendancePolicy[]
   bankDetails                BankDetails[]
@@ -877,6 +880,9 @@ model ManageEmployee {
   wfhHomeAddress                     String?                             @db.Text
   wfhHomeLatitude                    Float?
   wfhHomeLongitude                   Float?
+  placeId                            String?                             @db.VarChar(256)
+  locationSource                     String?                             @db.VarChar(32)
+  locationVerified                   Boolean                             @default(false)
   amc                                Boolean                             @default(false)
   bonusAllocation                    BonusAllocation[]
   empAttendanceRegularise            EmpAttendanceRegularise[]
@@ -2374,6 +2380,9 @@ model TaskCustomerSite {
   gstNo      String?                   @db.VarChar(32)
   latitude   String?                   @db.VarChar(64)
   longitude  String?                   @db.VarChar(64)
+  placeId          String?               @db.VarChar(256)
+  locationSource   String?               @db.VarChar(32)
+  locationVerified Boolean               @default(false)
   isDeleted  Boolean                   @default(false)
   createdAt  DateTime                  @default(now())
   updatedAt  DateTime                  @updatedAt
@@ -3330,4 +3339,16 @@ model CompanyPolicy {
   updatedAt     DateTime          @updatedAt
 
   @@index([type, effectiveFrom])
+}
+
+model GoogleApiUsage {
+  id           Int      @id @default(autoincrement())
+  api          String   @db.VarChar(32)
+  feature      String   @db.VarChar(16)
+  httpStatus   Int
+  sessionToken String?  @db.VarChar(36)
+  createdAt    DateTime @default(now())
+
+  @@index([createdAt])
+  @@map("google_api_usage")
 }

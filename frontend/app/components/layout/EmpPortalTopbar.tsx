@@ -19,7 +19,8 @@ import { EmpPortalExpandableSearch } from "./EmpPortalExpandableSearch";
 import { EmpPortalNotificationsDropdown } from "./EmpPortalNotificationsDropdown";
 import { useEmpPortalPageContext } from "./emp-portal-page-context";
 import { cn } from "@/app/utils/cn";
-import { useState } from "react";
+import { hasCompanyAccessFlag } from "@/lib/companyAccess";
+import { useEffect, useState } from "react";
 
 export function EmpPortalTopbar({
   theme,
@@ -40,6 +41,10 @@ export function EmpPortalTopbar({
 }) {
   const { header } = useEmpPortalPageContext();
   const [searchOpen, setSearchOpen] = useState(false);
+  const [portalLabel, setPortalLabel] = useState("Employee Portal");
+  useEffect(() => {
+    setPortalLabel(hasCompanyAccessFlag() ? "Admin Portal" : "Employee Portal");
+  }, []);
   const [localSearch, setLocalSearch] = useState("");
   const searchValue = header?.navbarSearch?.value ?? localSearch;
   const searchPlaceholder = header?.navbarSearch?.placeholder ?? "Search modules…";
@@ -100,7 +105,7 @@ export function EmpPortalTopbar({
             >
               <div className="border-b border-border px-3 py-2">
                 <p className="truncate text-sm font-semibold text-foreground">{empDisplayName}</p>
-                <p className="text-[11px] text-muted-foreground">Employee Portal</p>
+                <p className="text-[11px] text-muted-foreground">{portalLabel}</p>
               </div>
               <DropdownMenuItem asChild>
                 <Link href="/empProfile" className="cursor-pointer">

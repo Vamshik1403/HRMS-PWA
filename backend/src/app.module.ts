@@ -71,6 +71,8 @@ import { MailModule } from './mail/mail.module';
 import { EmailTemplateModule } from './email-template/email-template.module';
 import { EmpManagerScopeModule } from './common/emp-manager-scope.module';
 import { BackupModule } from './backup/backup.module';
+import { GoogleMapsModule } from './google-maps/google-maps.module';
+import { ExternalApisModule } from './external-apis/external-apis.module';
 import { AuditLogModule } from './audit-log/audit-log.module';
 import { SubscriptionModule } from './subscription/subscription.module';
 import { SystemDashboardModule } from './system-dashboard/system-dashboard.module';
@@ -157,6 +159,8 @@ import { CompanyPolicyModule } from './company-policy/company-policy.module';
     DashboardOverviewModule,
     EmailTemplateModule,
     BackupModule,
+    GoogleMapsModule,
+    ExternalApisModule,
     AuditLogModule,
     SubscriptionModule,
     SystemDashboardModule,

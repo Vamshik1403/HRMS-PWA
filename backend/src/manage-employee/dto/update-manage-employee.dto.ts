@@ -5,6 +5,7 @@ import {
   IsInt,
   IsOptional,
   IsString,
+  IsNumber,
   ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
@@ -223,6 +224,32 @@ export class UpdateManageEmployeeDto {
   @IsOptional()
   @IsString()
   wfhHomeAddress?: string;
+
+  @IsOptional()
+  @IsNumber()
+  wfhHomeLatitude?: number;
+
+  @IsOptional()
+  @IsNumber()
+  wfhHomeLongitude?: number;
+
+  @IsOptional()
+  @IsString()
+  placeId?: string;
+
+  @IsOptional()
+  @IsString()
+  locationSource?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  @Type(() => Boolean)
+  locationVerified?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  @Type(() => Boolean)
+  refetchLocation?: boolean;
 
   // Nested arrays (upsert)
   @IsOptional() @IsArray()

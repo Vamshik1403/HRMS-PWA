@@ -7,7 +7,8 @@ import {
   IsArray,
   ValidateNested,
   Length,
-  IsBoolean
+  IsBoolean,
+  IsNumber
 } from "class-validator";
 
 // ---------- Promotion DTO ----------
@@ -350,6 +351,26 @@ export class CreateManageEmployeeDto {
 
   @IsOptional() @IsString()
   wfhHomeAddress?: string;
+
+  @IsOptional() @IsNumber()
+  wfhHomeLatitude?: number;
+
+  @IsOptional() @IsNumber()
+  wfhHomeLongitude?: number;
+
+  @IsOptional() @IsString()
+  placeId?: string;
+
+  @IsOptional() @IsString()
+  locationSource?: string;
+
+  @IsOptional() @IsBoolean()
+  @Type(() => Boolean)
+  locationVerified?: boolean;
+
+  @IsOptional() @IsBoolean()
+  @Type(() => Boolean)
+  refetchLocation?: boolean;
 
   // Nested arrays
   @IsOptional() @IsArray()

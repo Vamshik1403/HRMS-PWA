@@ -4,34 +4,83 @@ import { EnplSyncService } from '../enpl-sync/enpl-sync.service';
 import { CreateTaskCustomerSiteDto } from './dto/create-task-customer-site.dto';
 import { UpdateTaskCustomerSiteDto } from './dto/update-task-customer-site.dto';
 import { assertCanManageTaskModule, parseViewer, TaskViewerContext } from './task-context';
-import { composeAddressQuery, geocodeAddressParts } from '../common/reverse-geocode';
+import { composeAddressQuery } from '../common/reverse-geocode';
+import { GoogleMapsService } from '../google-maps/google-maps.service';
 
 @Injectable()
 export class TaskCustomerSitesService {
-  constructor(private prisma: PrismaService, private enplSync: EnplSyncService) {}
+  constructor(
+    private prisma: PrismaService,
+    private enplSync: EnplSyncService,
+    private googleMaps: GoogleMapsService,
+  ) {}
 
-  private async geocodeFromAddress(parts: {
+  private async resolveSitePin(opts: {
     address?: string | null;
     city?: string | null;
     state?: string | null;
     pincode?: string | null;
     country?: string | null;
-  }): Promise<{ latitude: string; longitude: string } | null> {
-    const query = composeAddressQuery(
-      parts.address,
-      parts.city,
-      parts.state,
-      parts.pincode,
-      parts.country,
+    latitude?: unknown;
+    longitude?: unknown;
+    placeId?: string | null;
+    locationSource?: string | null;
+    refetchLocation?: boolean;
+    existing?: {
+      address?: string | null;
+      city?: string | null;
+      state?: string | null;
+      pincode?: string | null;
+      country?: string | null;
+      latitude?: string | null;
+      longitude?: string | null;
+      placeId?: string | null;
+      locationSource?: string | null;
+      locationVerified?: boolean | null;
+    } | null;
+  }): Promise<{
+    latitude?: string;
+    longitude?: string;
+    placeId?: string | null;
+    locationSource?: string;
+    locationVerified?: boolean;
+  }> {
+    const addressQuery = composeAddressQuery(
+      opts.address,
+      opts.city,
+      opts.state,
+      opts.pincode,
+      opts.country,
     );
-    if (!query) return null;
-    const point = await geocodeAddressParts(parts);
-    if (!point) {
-      throw new BadRequestException(
+    const existingQuery = opts.existing
+      ? composeAddressQuery(
+          opts.existing.address,
+          opts.existing.city,
+          opts.existing.state,
+          opts.existing.pincode,
+          opts.existing.country,
+        )
+      : '';
+    const pin = await this.googleMaps.resolvePin({
+      feature: 'site',
+      addressQuery,
+      incomingLat: opts.latitude,
+      incomingLng: opts.longitude,
+      incomingPlaceId: opts.placeId,
+      incomingSource: opts.locationSource,
+      refetch: opts.refetchLocation === true,
+      existing: opts.existing ? { ...opts.existing, address: existingQuery } : null,
+      missingMessage:
         'Could not find coordinates for this site address. Please check the address.',
-      );
-    }
-    return { latitude: String(point.lat), longitude: String(point.lng) };
+    });
+    if (!pin) return {};
+    return {
+      latitude: pin.latitude,
+      longitude: pin.longitude,
+      placeId: pin.placeId,
+      locationSource: pin.locationSource,
+      locationVerified: pin.locationVerified,
+    };
   }
 
   private async assertCustomerAccess(customerID: number, viewer: TaskViewerContext) {
@@ -107,12 +156,17 @@ export class TaskCustomerSitesService {
     const viewer = parseViewer(query);
     assertCanManageTaskModule(viewer);
     const customer = await this.assertCustomerAccess(dto.customerID, viewer);
-    const coords = await this.geocodeFromAddress({
+    const coords = await this.resolveSitePin({
       address: dto.address,
       city: dto.city,
       state: dto.state,
       pincode: dto.pincode,
       country: dto.country,
+      latitude: dto.latitude,
+      longitude: dto.longitude,
+      placeId: dto.placeId,
+      locationSource: dto.locationSource,
+      refetchLocation: dto.refetchLocation,
     });
     const created = await this.prisma.taskCustomerSite.create({
       data: {
@@ -126,8 +180,11 @@ export class TaskCustomerSitesService {
         pincode: dto.pincode,
         country: dto.country,
         gstNo: dto.gstNo,
-        latitude: coords?.latitude,
-        longitude: coords?.longitude,
+        latitude: coords.latitude,
+        longitude: coords.longitude,
+        placeId: coords.placeId,
+        locationSource: coords.locationSource,
+        locationVerified: coords.locationVerified,
         contacts: dto.contacts?.length
           ? {
               create: dto.contacts
@@ -165,12 +222,18 @@ export class TaskCustomerSitesService {
     if (dto.customerID && dto.customerID !== existing.customerID) {
       await this.assertCustomerAccess(dto.customerID, viewer);
     }
-    const coords = await this.geocodeFromAddress({
+    const coords = await this.resolveSitePin({
       address: dto.address !== undefined ? dto.address : existing.address,
       city: dto.city !== undefined ? dto.city : existing.city,
       state: dto.state !== undefined ? dto.state : existing.state,
       pincode: dto.pincode !== undefined ? dto.pincode : existing.pincode,
       country: dto.country !== undefined ? dto.country : existing.country,
+      latitude: dto.latitude,
+      longitude: dto.longitude,
+      placeId: dto.placeId,
+      locationSource: dto.locationSource,
+      refetchLocation: dto.refetchLocation,
+      existing,
     });
     const updated = await this.prisma.taskCustomerSite.update({
       where: { id },

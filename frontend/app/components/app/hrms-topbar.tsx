@@ -37,7 +37,7 @@ export function HrmsTopbar({ user, onProfileOpen, onLogout }: HrmsTopbarProps) {
         {pageHeader?.title ? <GlobalNavSearch /> : null}
         <div className="flex items-center gap-1 ml-auto shrink-0">
           <ThemeToggle />
-          <HrmsNotificationsDropdown />
+          <HrmsNotificationsDropdown user={user} />
           <HrmsUserMenu user={user} onProfileOpen={onProfileOpen} onLogout={onLogout} />
         </div>
       </div>
