@@ -32,6 +32,7 @@ export interface MobileTaskListItem {
   siteCity?: string | null;
   siteVisits?: import("../../../utils/taskSiteVisit").EnplSiteVisit[] | null;
   siteVisitSummary?: import("../../../utils/taskSiteVisit").EnplSiteVisitSummary | null;
+  daySignOutSelfieRequired?: boolean | null;
   hasPendingAssignment?: boolean | null;
   pendingAssignmentHrmsEmployeeIds?: Array<string | number> | null;
   customer?: { customerName?: string };
@@ -42,21 +43,7 @@ export interface MobileTaskListItem {
     manageEmployeeID?: number;
     manageEmployee?: { employeeFirstName?: string; employeeLastName?: string; employeeID?: string };
   }[];
-  engineerAssignments?: {
-    manageEmployeeID?: number | null;
-    hrmsEmployeeId?: number | string | null;
-    engineerEmail?: string | null;
-    email?: string | null;
-    status?: string | null;
-    assignmentStatus?: string | null;
-    requiresAccept?: boolean | null;
-    showInRequests?: boolean | null;
-    assignedDate?: string | Date | null;
-    rescheduleReason?: string | null;
-    managerReason?: string | null;
-    stale?: boolean | null;
-    staleAssignment?: boolean | null;
-  }[];
+  engineerAssignments?: import("../../../utils/taskAssignmentRequest").EngineerAssignmentRow[];
 }
 
 function fmtSchedule(iso?: string | null) {

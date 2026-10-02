@@ -5,6 +5,7 @@ import {
   CreateTaskProjectDto,
   CreateTaskChatDto,
   CreateTaskRemarkDto,
+  FieldAttendanceDto,
   TaskAssignmentActionDto,
   TaskPriorityChangeDto,
   TaskSiteVisitDto,
@@ -34,6 +35,19 @@ export class TaskProjectsController {
   @HttpCode(200)
   syncFromEnpl(@Query() query: Record<string, string>) {
     return this.service.syncFromEnpl(query);
+  }
+
+  @Get('my-day')
+  @UseGuards(AuthGuard('jwt'))
+  myDay(@Query() query: Record<string, string>) {
+    return this.service.myDayVisits(query);
+  }
+
+  @Post('field-attendance')
+  @UseGuards(AuthGuard('jwt'))
+  @HttpCode(200)
+  fieldAttendance(@Body() dto: FieldAttendanceDto, @Query() query: Record<string, string>) {
+    return this.service.recordFieldAttendance(dto, query);
   }
 
   @Get(':id/report')

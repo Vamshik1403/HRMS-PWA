@@ -7,6 +7,8 @@ import {
   CreateTaskProjectDto,
   CreateTaskChatDto,
   CreateTaskRemarkDto,
+  FieldAttendanceDto,
+  FIELD_ATTENDANCE_REASONS,
   TaskAssignmentActionDto,
   TaskPriorityChangeDto,
   TaskSiteVisitDto,
@@ -21,6 +23,8 @@ import { loadEmployeePermissions } from '../common/employee-permission.util';
 import { hasModuleAction } from '../common/company-module-permissions';
 import { getMutuallyLinkedCompanyIds } from '../company/federal-domain.util';
 import { reverseGeocode } from '../common/reverse-geocode';
+import { wallClockInZoneToStorageDate } from '../common/device-punch-time';
+import { istCalendarKey } from '../enpl-sync/enpl-sync.util';
 import {
   assignmentRequestKindFromRow,
   assignmentRowMatchesEmployee,
@@ -954,7 +958,7 @@ export class TaskProjectsService {
     if (action === 'reschedule' && !reason) {
       throw new BadRequestException('A reason is required to request reschedule');
     }
-    await this.enplSync.postTaskAssignmentAction({
+    const enpl = await this.enplSync.postTaskAssignmentAction({
       action,
       hrmsEmployeeId: viewer.employeeId,
       email: email || mine.engineerEmail,
@@ -962,6 +966,18 @@ export class TaskProjectsService {
       hrmsTaskId: task.id,
       reason: action === 'reschedule' ? reason : undefined,
     });
+    if (!enpl.ok || this.enplSync.isAlreadyCompleted(enpl)) {
+      if (this.enplSync.isAlreadyCompleted(enpl)) {
+        return {
+          alreadyCompleted: true,
+          message: enpl.data?.message && typeof enpl.data.message === 'string'
+            ? enpl.data.message
+            : 'Task already completed',
+          task: await this.findOne(id, query),
+        };
+      }
+      throw this.enplSync.enplFailure(enpl, 'assignment action');
+    }
     await this.enplSync.runInbound('enpl', async () => {
       await this.prisma.taskEngineerAssignment.update({
         where: { id: mine.id },
@@ -1003,14 +1019,29 @@ export class TaskProjectsService {
           : 'Accept the task before site check-in or check-out',
       );
     }
-    const kind = dto.kind === 'checkout' ? 'checkout' : dto.kind === 'checkin' ? 'checkin' : null;
+    const kind =
+      dto.kind === 'checkout' ? 'checkout' : dto.kind === 'checkin' ? 'checkin' : dto.kind === 'day_signout' ? 'day_signout' : null;
     if (!kind) {
-      throw new BadRequestException('kind must be checkin or checkout');
+      throw new BadRequestException('kind must be checkin, checkout, or day_signout');
+    }
+    if (kind === 'day_signout' && mine.signOutForTheDay !== true) {
+      throw new BadRequestException('Sign Out for the Day is only available on the last visit');
     }
     const latitude = Number(dto.latitude);
     const longitude = Number(dto.longitude);
     if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
       throw new BadRequestException('latitude and longitude are required');
+    }
+    const selfieUrl = (dto.selfieUrl || '').trim();
+    if (kind === 'checkin' && mine.visitSequence === 1 && !selfieUrl) {
+      throw new BadRequestException('A selfie is required for the first visit check-in');
+    }
+    if (kind === 'day_signout' && task.daySignOutSelfieRequired && !selfieUrl) {
+      throw new BadRequestException('A selfie is required to sign out for the day');
+    }
+    const reason = (dto.reason || '').trim();
+    if (dto.exceptionRequested && !reason) {
+      throw new BadRequestException('A reason is required to request an exception');
     }
     if (!task.erpTaskId) {
       throw new BadRequestException('This task is not linked to ENPL for GPS site visits');
@@ -1020,7 +1051,7 @@ export class TaskProjectsService {
     if (!addressText) {
       addressText = await reverseGeocode(latitude, longitude);
     }
-    await this.enplSync.postTaskSiteVisit({
+    const enpl = await this.enplSync.postTaskSiteVisit({
       kind,
       hrmsEmployeeId: viewer.employeeId,
       email: email || mine.engineerEmail,
@@ -1031,8 +1062,38 @@ export class TaskProjectsService {
       accuracyMeters: dto.accuracyMeters != null ? Number(dto.accuracyMeters) : null,
       addressText,
       at,
+      selfieUrl: selfieUrl || null,
+      deviceInfo: dto.deviceInfo && typeof dto.deviceInfo === 'object' ? dto.deviceInfo : null,
+      exceptionRequested: dto.exceptionRequested === true,
+      reason: reason || null,
     });
+    if (this.enplSync.isOutsideGeofence(enpl)) {
+      throw new BadRequestException({
+        message: 'You are outside the visit location',
+        code: 'OUTSIDE_GEOFENCE',
+      });
+    }
+    if (!enpl.ok) {
+      throw this.enplSync.enplFailure(enpl, 'site visit');
+    }
+    const storeAttendance =
+      !dto.exceptionRequested &&
+      ((kind === 'checkin' && mine.visitSequence === 1) || kind === 'day_signout');
+    if (storeAttendance) {
+      await this.storeExportPunch({
+        employeeId: viewer.employeeId,
+        checkType: kind === 'day_signout' ? 'CHECK_OUT' : 'CHECK_IN',
+        latitude,
+        longitude,
+        accuracy: dto.accuracyMeters != null ? Number(dto.accuracyMeters) : null,
+        address: addressText,
+        photoUrl: selfieUrl || null,
+        deviceInfo: dto.deviceInfo,
+        siteId: task.siteID,
+      });
+    }
     const label = kind === 'checkin' ? 'Site Mark IN' : 'Site Mark OUT';
+    const signOutLine = kind === 'day_signout' ? '\nSign Out for the Day' : '';
     const locationLine = addressText
       ? `Location: ${addressText}\nCoordinates: ${latitude}, ${longitude}`
       : `Coordinates: ${latitude}, ${longitude}`;
@@ -1040,13 +1101,158 @@ export class TaskProjectsService {
       await this.prisma.taskChat.create({
         data: {
           taskID: id,
-          message: `${label} at ${new Date(at).toLocaleString('en-IN')}\n${locationLine}`,
+          message: `${label} at ${new Date(at).toLocaleString('en-IN')}${signOutLine}\n${locationLine}`,
           employeeID: viewer.employeeId,
           senderName: (query.actorName as string) || name,
         },
       });
     });
     return this.findOne(id, query);
+  }
+
+  async myDayVisits(query: Record<string, string | undefined>) {
+    const viewer = await this.resolveViewer(query);
+    if (!viewer.employeeId) {
+      return { hasVisitToday: false, visits: [] };
+    }
+    const todayKey = istCalendarKey(new Date());
+    const windowStart = new Date(Date.now() - 36 * 60 * 60 * 1000);
+    const windowEnd = new Date(Date.now() + 36 * 60 * 60 * 1000);
+    const tasks = await this.prisma.taskProject.findMany({
+      where: {
+        isDeleted: false,
+        engineerAssignments: {
+          some: {
+            manageEmployeeID: viewer.employeeId,
+            OR: [
+              { visitDate: { gte: windowStart, lte: windowEnd } },
+              { scheduledArrival: { gte: windowStart, lte: windowEnd } },
+            ],
+          },
+        },
+      },
+      include: {
+        customer: { select: { customerName: true } },
+        site: { select: { branchName: true, city: true, address: true } },
+        engineerAssignments: true,
+        chats: {
+          where: {
+            employeeID: viewer.employeeId,
+            OR: [
+              { message: { contains: 'Site Mark IN', mode: 'insensitive' } },
+              { message: { contains: 'Site Mark OUT', mode: 'insensitive' } },
+            ],
+          },
+          orderBy: { createdAt: 'asc' },
+          select: { message: true, createdAt: true },
+        },
+      },
+    });
+    const visits = tasks
+      .map((task) => {
+        const mine = task.engineerAssignments.find((row) => row.manageEmployeeID === viewer.employeeId);
+        if (!mine) return null;
+        const visitKey = istCalendarKey(mine.visitDate) || istCalendarKey(mine.scheduledArrival);
+        if (visitKey !== todayKey) return null;
+        const checkIn = task.chats.find((row) => /site mark in/i.test(row.message || ''));
+        const checkOut = [...task.chats].reverse().find((row) => /site mark out/i.test(row.message || ''));
+        return {
+          taskId: task.id,
+          taskName: task.taskName,
+          taskCode: task.taskCode,
+          enplTaskId: task.erpTaskId,
+          visitSequence: mine.visitSequence,
+          scheduledArrival: mine.scheduledArrival,
+          visitDate: mine.visitDate,
+          complianceStatus: mine.complianceStatus,
+          exceptionStatus: mine.exceptionStatus,
+          signOutForTheDay: mine.signOutForTheDay === true,
+          daySignOutSelfieRequired: task.daySignOutSelfieRequired === true,
+          customerName: task.customer?.customerName || null,
+          siteName: task.site?.branchName || null,
+          siteAddress: task.site?.address || null,
+          checkInAt: checkIn?.createdAt || null,
+          checkOutAt: checkOut?.createdAt || null,
+        };
+      })
+      .filter((row): row is NonNullable<typeof row> => !!row)
+      .sort((a, b) => {
+        const seq = (a.visitSequence ?? 999) - (b.visitSequence ?? 999);
+        if (seq !== 0) return seq;
+        const aTime = a.scheduledArrival ? new Date(a.scheduledArrival).getTime() : 0;
+        const bTime = b.scheduledArrival ? new Date(b.scheduledArrival).getTime() : 0;
+        return aTime - bTime;
+      });
+    return { hasVisitToday: visits.length > 0, visits };
+  }
+
+  async recordFieldAttendance(dto: FieldAttendanceDto, query: Record<string, string | undefined>) {
+    const viewer = await this.resolveViewer(query);
+    if (!viewer.employeeId) {
+      throw new ForbiddenException('Only an employee can check in');
+    }
+    const day = await this.myDayVisits(query);
+    if (day.hasVisitToday) {
+      throw new BadRequestException('Attendance check-in is hidden because a visit is assigned today');
+    }
+    const reason = (dto.reason || '').trim();
+    if (!FIELD_ATTENDANCE_REASONS.includes(reason as (typeof FIELD_ATTENDANCE_REASONS)[number])) {
+      throw new BadRequestException('Choose a reason for attendance check-in');
+    }
+    const latitude = Number(dto.latitude);
+    const longitude = Number(dto.longitude);
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+      throw new BadRequestException('latitude and longitude are required');
+    }
+    const selfieUrl = (dto.selfieUrl || '').trim();
+    if (!selfieUrl) {
+      throw new BadRequestException('A selfie is required');
+    }
+    const { email } = await this.employeeContact(viewer.employeeId);
+    const enpl = await this.enplSync.postFieldAttendance({
+      hrmsEmployeeId: viewer.employeeId,
+      email,
+      latitude,
+      longitude,
+      accuracyMeters: dto.accuracyMeters != null ? Number(dto.accuracyMeters) : null,
+      selfieUrl,
+      deviceInfo: dto.deviceInfo && typeof dto.deviceInfo === 'object' ? dto.deviceInfo : null,
+      reason,
+      at: (dto.at || '').trim() || new Date().toISOString(),
+    });
+    if (!enpl.ok) {
+      throw this.enplSync.enplFailure(enpl, 'field attendance');
+    }
+    return { status: 'Pending Approval', reason };
+  }
+
+  private async storeExportPunch(input: {
+    employeeId: number;
+    checkType: 'CHECK_IN' | 'CHECK_OUT';
+    latitude: number;
+    longitude: number;
+    accuracy: number | null;
+    address: string | null;
+    photoUrl: string | null;
+    deviceInfo?: Record<string, unknown> | null;
+    siteId: number | null;
+  }) {
+    const userAgent = typeof input.deviceInfo?.userAgent === 'string' ? input.deviceInfo.userAgent : null;
+    await this.prisma.attendanceLocation.create({
+      data: {
+        employeeId: input.employeeId,
+        checkType: input.checkType,
+        latitude: input.latitude,
+        longitude: input.longitude,
+        accuracy: input.accuracy != null && Number.isFinite(input.accuracy) ? input.accuracy : null,
+        address: input.address,
+        photoUrl: input.photoUrl,
+        userAgent,
+        fenceType: input.siteId ? 'SITE' : null,
+        fenceSiteId: input.siteId,
+        checkinTime: wallClockInZoneToStorageDate(),
+      },
+    });
   }
 
   async create(dto: CreateTaskProjectDto, query: Record<string, string | undefined>) {

@@ -2484,6 +2484,9 @@ model TaskProject {
   expectedDurationMinutes Int?
   siteVisits              Json?
   siteVisitSummary        Json?
+  siteLatitude            String?                  @db.VarChar(64)
+  siteLongitude           String?                  @db.VarChar(64)
+  daySignOutSelfieRequired Boolean                 @default(false)
   status                  String                   @default("Open") @db.VarChar(64)
   createdByName       String?                  @db.VarChar(255)
   createdByUserID     Int?
@@ -2544,6 +2547,18 @@ model TaskEngineerAssignment {
   assignedDate     DateTime?
   rescheduleReason String?
   managerReason    String?
+  enplAssignmentId Int?
+  visitSequence    Int?
+  scheduledArrival DateTime?
+  visitDate        DateTime?
+  allowedRadiusMeters Int?
+  graceMinutes     Int?
+  visitDurationMinutes Int?
+  visitLatitude    String?         @db.VarChar(64)
+  visitLongitude   String?         @db.VarChar(64)
+  complianceStatus String?         @db.VarChar(32)
+  exceptionStatus  String?         @db.VarChar(64)
+  signOutForTheDay Boolean?
   createdAt        DateTime        @default(now())
   updatedAt        DateTime        @updatedAt
   task             TaskProject     @relation(fields: [taskID], references: [id], onDelete: Cascade)

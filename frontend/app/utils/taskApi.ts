@@ -84,7 +84,11 @@ export async function taskFetch<T>(path: string, user: CurrentUserLike | null | 
     const text = await res.text();
     try {
       const json = JSON.parse(text);
-      throw new Error(json.message || text);
+      const message = typeof json.message === "string" ? json.message : text;
+      const err = new Error(message || text);
+      if (json.code) (err as Error & { code?: string }).code = String(json.code);
+      if (json.alreadyCompleted) (err as Error & { alreadyCompleted?: boolean }).alreadyCompleted = true;
+      throw err;
     } catch (e) {
       if (e instanceof Error && e.message !== text) throw e;
       throw new Error(text || "Request failed");

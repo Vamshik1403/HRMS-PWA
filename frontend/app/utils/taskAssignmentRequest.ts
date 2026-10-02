@@ -17,6 +17,18 @@ export type EngineerAssignmentRow = {
   managerReason?: string | null;
   stale?: boolean | null;
   staleAssignment?: boolean | null;
+  enplAssignmentId?: number | null;
+  visitSequence?: number | null;
+  scheduledArrival?: string | Date | null;
+  visitDate?: string | Date | null;
+  allowedRadiusMeters?: number | null;
+  graceMinutes?: number | null;
+  visitDurationMinutes?: number | null;
+  visitLatitude?: string | null;
+  visitLongitude?: string | null;
+  complianceStatus?: string | null;
+  exceptionStatus?: string | null;
+  signOutForTheDay?: boolean | null;
 };
 
 export type AssignmentTask = {

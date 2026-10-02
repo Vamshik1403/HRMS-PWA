@@ -38,6 +38,11 @@ export class EnplSyncController {
     return this.service.listEmployeesForEnpl();
   }
 
+  @Get('shifts')
+  shifts() {
+    return this.service.listShiftsForEnpl();
+  }
+
   @Post('bulk-import')
   @HttpCode(200)
   bulkImport() {

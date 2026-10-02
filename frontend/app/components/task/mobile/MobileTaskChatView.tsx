@@ -15,7 +15,8 @@ import {
   sitePunchMenuLabel,
   sitePunchesFromTask,
 } from "../../../utils/taskSitePunch";
-import { isEnplLinkedTask, type TaskWithSiteVisits } from "../../../utils/taskSiteVisit";
+import { isEnplLinkedTask, visitComplianceCopy, type TaskWithSiteVisits } from "../../../utils/taskSiteVisit";
+import { myEngineerAssignment } from "../../../utils/taskAssignmentRequest";
 import { TaskSiteVisitSummary } from "./TaskSiteVisitPanel";
 
 export interface MobileChatMessage {
@@ -50,6 +51,8 @@ export interface MobileTaskChatDetail {
   department?: { departmentName?: string };
   chats?: MobileChatMessage[];
   sitePunches?: SitePunchEvent[];
+  daySignOutSelfieRequired?: boolean | null;
+  engineerAssignments?: import("../../../utils/taskAssignmentRequest").EngineerAssignmentRow[];
   assignments?: { manageEmployee?: { employeeFirstName?: string; employeeLastName?: string; employeeID?: string } }[];
 }
 
@@ -107,11 +110,30 @@ export function MobileTaskChatView({
   onAdvanceStatus?: () => void | Promise<void>;
   onSitePunch?: () => void | Promise<void>;
   sitePunchNextKind?: SitePunchKind;
-  onEnplSiteVisit?: (kind: "checkin" | "checkout") => void | Promise<void>;
+  onEnplSiteVisit?: (kind: "checkin" | "checkout" | "day_signout") => void | Promise<void>;
   onDownloadReport?: () => void | Promise<void>;
   /** When true, fill the parent instead of the full viewport (desktop portal). */
   embedded?: boolean;
 }) {
+  const mine = myEngineerAssignment(task, currentEmployeeId);
+  const plannedVisit =
+    mine?.visitSequence != null || !!mine?.visitDate || !!mine?.scheduledArrival || mine?.signOutForTheDay != null;
+  const signOutDay = mine?.signOutForTheDay === true;
+  const checkInLabel = plannedVisit ? "Check-in" : "Site check in";
+  const checkOutLabel = signOutDay ? "Sign Out for the Day" : plannedVisit ? "Check-out" : "Site check out";
+  const outKind = signOutDay ? "day_signout" : "checkout";
+  const compliance = visitComplianceCopy(mine?.complianceStatus);
+  const visitHeading = mine?.visitSequence != null ? `Visit ${mine.visitSequence}` : null;
+  const scheduledText = mine?.scheduledArrival
+    ? new Date(mine.scheduledArrival).toLocaleString("en-IN", {
+        timeZone: "Asia/Kolkata",
+        day: "2-digit",
+        month: "short",
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: true,
+      })
+    : null;
   const [menuOpen, setMenuOpen] = useState(false);
   const [infoOpen, setInfoOpen] = useState(false);
   const [justSent, setJustSent] = useState(false);
@@ -210,14 +232,14 @@ export function MobileTaskChatView({
                         className="w-full text-left px-4 py-2.5 text-[13px] text-[#2563eb] active:bg-gray-50"
                         onClick={() => { setMenuOpen(false); void onEnplSiteVisit("checkin"); }}
                       >
-                        Site check in
+                        {checkInLabel}
                       </button>
                       <button
                         type="button"
                         className="w-full text-left px-4 py-2.5 text-[13px] text-[#2563eb] active:bg-gray-50"
-                        onClick={() => { setMenuOpen(false); void onEnplSiteVisit("checkout"); }}
+                        onClick={() => { setMenuOpen(false); void onEnplSiteVisit(outKind); }}
                       >
-                        Site check out
+                        {checkOutLabel}
                       </button>
                     </>
                   ) : isSitePunchTaskType(task.taskType) && onSitePunch ? (
@@ -252,8 +274,14 @@ export function MobileTaskChatView({
               task={task}
               allowActions={!!onEnplSiteVisit}
               sending={sending}
+              visitHeading={visitHeading}
+              scheduledText={scheduledText}
+              complianceLabel={compliance?.label}
+              complianceNote={compliance?.note}
+              checkInLabel={checkInLabel}
+              checkOutLabel={checkOutLabel}
               onCheckIn={onEnplSiteVisit ? () => void onEnplSiteVisit("checkin") : undefined}
-              onCheckOut={onEnplSiteVisit ? () => void onEnplSiteVisit("checkout") : undefined}
+              onCheckOut={onEnplSiteVisit ? () => void onEnplSiteVisit(outKind) : undefined}
             />
           </div>
         ) : null}

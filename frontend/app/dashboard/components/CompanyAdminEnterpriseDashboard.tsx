@@ -56,7 +56,7 @@ const ROW_CARD =
   "flex h-full min-h-[300px] max-h-[300px] flex-col overflow-hidden";
 /** Calendar spans KPI row + middle row — taller from the top */
 const CALENDAR_SPAN_CARD =
-  "flex h-full min-h-[300px] xl:min-h-[520px] flex-col overflow-hidden";
+  "flex min-h-0 flex-col overflow-hidden";
 
 export type EnterpriseUpcomingEvent = {
   id: string;
@@ -246,7 +246,7 @@ function DashboardCalendarCard({
   };
 
   return (
-    <div className="flex h-full min-h-0 flex-col overflow-hidden">
+    <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden">
       <div className="mb-1 flex shrink-0 items-center justify-between gap-2">
         <h3 className="text-[13px] font-semibold tracking-tight text-foreground">{monthLabel}</h3>
         <div className="flex items-center gap-1">
@@ -372,11 +372,11 @@ function DashboardCalendarCard({
         </button>
       </div>
 
-      <div className="mt-1 min-h-0 flex-1 space-y-1 overflow-y-auto pr-0.5">
+      <div className="mt-1 max-h-64 min-h-0 flex-1 space-y-1 overflow-y-auto pr-0.5 xl:max-h-none">
         {monthSchedules.length === 0 ? (
           <p className="py-2 text-center text-[11px] text-muted-foreground">No upcoming schedules</p>
         ) : (
-          monthSchedules.slice(0, 10).map((item) => (
+          monthSchedules.map((item) => (
             <div
               key={item.id}
               className="rounded-lg border border-border bg-background px-2 py-1.5"
@@ -1049,7 +1049,7 @@ export function CompanyAdminEnterpriseDashboard({
 
       {/* KPIs (4) + Attendance / Trend + tall Calendar */}
       <section
-        className="ca-fade mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-12 xl:gap-5"
+        className="ca-fade mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-12 xl:grid-rows-[auto_300px] xl:gap-5"
         style={{ animationDelay: "40ms" }}
       >
         <div className="xl:col-span-2">

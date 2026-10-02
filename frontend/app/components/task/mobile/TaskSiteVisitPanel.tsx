@@ -67,6 +67,12 @@ export function TaskSiteVisitSummary({
   onCheckOut,
   sending,
   allowActions,
+  visitHeading,
+  scheduledText,
+  complianceLabel,
+  complianceNote,
+  checkInLabel = "Site check in",
+  checkOutLabel = "Site check out",
 }: {
   task: TaskWithSiteVisits;
   compact?: boolean;
@@ -74,6 +80,12 @@ export function TaskSiteVisitSummary({
   onCheckOut?: () => void;
   sending?: boolean;
   allowActions?: boolean;
+  visitHeading?: string | null;
+  scheduledText?: string | null;
+  complianceLabel?: string | null;
+  complianceNote?: string | null;
+  checkInLabel?: string;
+  checkOutLabel?: string;
 }) {
   const due = task.dueAt || task.dueDateTime;
   const firstIn = firstCheckInVisit(task);
@@ -96,6 +108,18 @@ export function TaskSiteVisitSummary({
       {siteLabel ? (
         <p>
           <span className="text-gray-400">Site address:</span> {siteLabel}
+        </p>
+      ) : null}
+      {visitHeading ? <p className="font-semibold text-gray-900">{visitHeading}</p> : null}
+      {scheduledText ? (
+        <p>
+          <span className="text-gray-400">Scheduled:</span> {scheduledText}
+        </p>
+      ) : null}
+      {complianceLabel ? (
+        <p>
+          <span className="text-gray-400">Status:</span> {complianceLabel}
+          {complianceNote ? <span className="font-semibold text-amber-700"> · {complianceNote}</span> : null}
         </p>
       ) : null}
       <GpsLine
@@ -126,7 +150,7 @@ export function TaskSiteVisitSummary({
               onClick={onCheckIn}
               className="flex-1 rounded-xl bg-[#2563eb] text-white font-semibold text-sm py-2.5 disabled:opacity-60"
             >
-              Site check in
+              {checkInLabel}
             </button>
           ) : null}
           {onCheckOut ? (
@@ -136,7 +160,7 @@ export function TaskSiteVisitSummary({
               onClick={onCheckOut}
               className="flex-1 rounded-xl border border-gray-200 bg-white text-gray-800 font-semibold text-sm py-2.5 disabled:opacity-60"
             >
-              Site check out
+              {checkOutLabel}
             </button>
           ) : null}
         </div>

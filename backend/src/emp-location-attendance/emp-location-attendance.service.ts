@@ -1019,6 +1019,7 @@ export class EmpLocationAttendanceService {
     });
 
     const hasPunches = records.length > 0 || deviceCheckedIn;
+    // A missed later field visit does not mark the day Absent. Only an absence declaration does.
     const isAbsentToday = !!absentDeclaration;
 
     return {

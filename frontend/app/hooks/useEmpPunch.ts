@@ -58,7 +58,7 @@ function apiErrorMessage(body: any, fallback: string) {
   return fallback;
 }
 
-async function uploadPunchPhoto(file: File): Promise<string> {
+export async function uploadPunchPhoto(file: File): Promise<string> {
   if (!file.type.startsWith("image/") && file.type !== "") {
     throw new Error("Please capture a photo (JPEG or PNG).");
   }

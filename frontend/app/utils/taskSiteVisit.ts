@@ -27,6 +27,8 @@ export type TaskWithSiteVisits = {
   site?: { branchName?: string | null; city?: string | null; address?: string | null } | null;
   siteVisits?: EnplSiteVisit[] | null;
   siteVisitSummary?: EnplSiteVisitSummary | null;
+  daySignOutSelfieRequired?: boolean | null;
+  engineerAssignments?: import("./taskAssignmentRequest").EngineerAssignmentRow[] | null;
 };
 
 export function formatExpectedDurationMinutes(minutes?: number | null): string {
@@ -40,6 +42,15 @@ export function formatExpectedDurationMinutes(minutes?: number | null): string {
   if (hours) parts.push(`${hours} hour${hours === 1 ? "" : "s"}`);
   if (mins || !parts.length) parts.push(`${mins} min`);
   return parts.join(" ");
+}
+
+export function visitComplianceCopy(status?: string | null): { label: string; note: string | null } | null {
+  const raw = String(status || "").trim();
+  if (!raw) return null;
+  const key = raw.replace(/[\s_-]+/g, "").toLowerCase();
+  if (key === "missed" || key === "delayed") return { label: raw, note: "Reschedule Required" };
+  if (key === "overdue") return { label: raw, note: "Check-in Overdue" };
+  return { label: raw, note: null };
 }
 
 export function googleMapsLink(lat?: number | null, lng?: number | null): string | null {

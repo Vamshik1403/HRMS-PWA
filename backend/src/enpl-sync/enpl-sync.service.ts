@@ -2,6 +2,7 @@ import { AsyncLocalStorage } from 'async_hooks';
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { wallClockInZoneToStorageDate } from '../common/device-punch-time';
 import { getMutuallyLinkedCompanyIds } from '../company/federal-domain.util';
 import {
   asEngineerAssignmentRows,
@@ -13,15 +14,24 @@ import { ENPL_COMPANY_NAMES, ENPL_ENTITY, ENPL_ERP_BASE_DEFAULT, EnplEntityType 
 import {
   asDate,
   asInt,
+  absolutePublicUrl,
   blank,
+  enplAlreadyCompleted,
+  enplOutsideGeofence,
+  enplResultMessage,
+  enplVisitPlanFields,
   inboundDeletedFlag,
   isInactiveSyncStatus,
+  kolkataWeekdayIndex,
   liveTaskStatus,
   mapEnplContacts,
   normalizeEnplPriority,
   normalizeEnplSiteVisits,
   normalizeEnplTaskStatus,
   toEnplContacts,
+  toShiftHm,
+  weekdayIndex,
+  type EnplOpenResult,
 } from './enpl-sync.util';
 
 type SyncStore = { skipOutbound: boolean };
@@ -64,6 +74,7 @@ export class EnplSyncService {
         sites: '/api/integrations/enpl/sites',
         tasks: '/api/integrations/enpl/tasks',
         employees: '/api/integrations/enpl/employees',
+        shifts: '/api/integrations/enpl/shifts',
       },
     };
   }
@@ -149,6 +160,7 @@ export class EnplSyncService {
       },
       orderBy: [{ employeeFirstName: 'asc' }, { employeeLastName: 'asc' }],
     });
+    const punches = await this.todayPunchesByEmployee(rows.map((row) => row.id));
     return rows.map((row) => {
       const credUser = row.employeeCredentials?.username || '';
       const email =
@@ -171,8 +183,125 @@ export class EnplSyncService {
         departmentName: department,
         companyName: row.company?.companyName || null,
         amc: !!row.amc,
+        todayAttendance: punches.get(row.id) || { checkIn: null, checkOut: null },
       };
     });
+  }
+
+  async listShiftsForEnpl() {
+    const company = await this.resolveCompany();
+    const linked = await getMutuallyLinkedCompanyIds(this.prisma, company.id);
+    const companyIds = [...new Set([company.id, ...linked])];
+    const today = kolkataWeekdayIndex();
+    const rows = await this.prisma.manageEmployee.findMany({
+      where: {
+        companyID: { in: companyIds },
+        isDeleted: false,
+        lifecycleStatus: 'ACTIVE',
+      },
+      select: {
+        id: true,
+        businessEmail: true,
+        personalEmail: true,
+        employeeCredentials: { select: { username: true } },
+        workShift: {
+          select: {
+            workShiftDay: {
+              select: { weekDay: true, startTime: true, endTime: true },
+            },
+          },
+        },
+      },
+      orderBy: { id: 'asc' },
+    });
+    const shifts: Array<{
+      hrmsEmployeeId: string;
+      email: string | null;
+      shiftStart: string;
+      shiftEnd: string;
+      timezone: 'Asia/Kolkata';
+    }> = [];
+    for (const row of rows) {
+      const day = (row.workShift?.workShiftDay || []).find(
+        (item) => weekdayIndex(item.weekDay) === today,
+      );
+      const shiftStart = toShiftHm(day?.startTime);
+      const shiftEnd = toShiftHm(day?.endTime);
+      if (!shiftStart || !shiftEnd) continue;
+      const credUser = row.employeeCredentials?.username || '';
+      const email =
+        row.businessEmail ||
+        row.personalEmail ||
+        (credUser.includes('@') ? credUser : null) ||
+        null;
+      shifts.push({
+        hrmsEmployeeId: String(row.id),
+        email,
+        shiftStart,
+        shiftEnd,
+        timezone: 'Asia/Kolkata',
+      });
+    }
+    return { shifts };
+  }
+
+  private async todayPunchesByEmployee(employeeIds: number[]) {
+    const grouped = new Map<
+      number,
+      {
+        checkIn: ReturnType<EnplSyncService['punchExport']> | null;
+        checkOut: ReturnType<EnplSyncService['punchExport']> | null;
+      }
+    >();
+    if (!employeeIds.length) return grouped;
+    const now = wallClockInZoneToStorageDate();
+    const startOfDay = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0, 0));
+    const endOfDay = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 23, 59, 59, 999));
+    const rows = await this.prisma.attendanceLocation.findMany({
+      where: {
+        employeeId: { in: employeeIds },
+        checkType: { in: ['CHECK_IN', 'CHECK_OUT'] },
+        checkinTime: { gte: startOfDay, lte: endOfDay },
+      },
+      orderBy: { checkinTime: 'asc' },
+      select: {
+        employeeId: true,
+        checkType: true,
+        checkinTime: true,
+        latitude: true,
+        longitude: true,
+        photoUrl: true,
+      },
+    });
+    for (const row of rows) {
+      const slot = grouped.get(row.employeeId) || { checkIn: null, checkOut: null };
+      const punch = this.punchExport(row);
+      if (row.checkType === 'CHECK_IN' && !slot.checkIn) slot.checkIn = punch;
+      if (row.checkType === 'CHECK_OUT') slot.checkOut = punch;
+      grouped.set(row.employeeId, slot);
+    }
+    return grouped;
+  }
+
+  private punchExport(row: {
+    checkinTime: Date;
+    latitude: number;
+    longitude: number;
+    photoUrl: string | null;
+  }) {
+    const y = row.checkinTime.getUTCFullYear();
+    const m = String(row.checkinTime.getUTCMonth() + 1).padStart(2, '0');
+    const d = String(row.checkinTime.getUTCDate()).padStart(2, '0');
+    const hh = String(row.checkinTime.getUTCHours()).padStart(2, '0');
+    const mm = String(row.checkinTime.getUTCMinutes()).padStart(2, '0');
+    const ss = String(row.checkinTime.getUTCSeconds()).padStart(2, '0');
+    return {
+      time: `${hh}:${mm}`,
+      at: `${y}-${m}-${d}T${hh}:${mm}:${ss}+05:30`,
+      latitude: row.latitude,
+      longitude: row.longitude,
+      selfieUrl: absolutePublicUrl(row.photoUrl),
+    };
   }
 
   async recomputeStatusesFromRemarks(): Promise<{ scanned: number; updated: number }> {
@@ -207,21 +336,51 @@ export class EnplSyncService {
     return { scanned: tasks.length, updated };
   }
 
-  /** ENPL assignment-action and site-visit are open JSON routes. Do not send HRMS_SYNC_TOKEN. */
-  private async postEnplOpenJson(path: string, payload: Record<string, unknown>, label: string) {
-    const base = (process.env.ENPL_ERP_BASE_URL || ENPL_ERP_BASE_DEFAULT).replace(/\/$/, '');
-    const res = await fetch(`${base}/${path.replace(/^\//, '')}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
+  absoluteSelfieUrl(path: string | null | undefined) {
+    return absolutePublicUrl(path);
+  }
+
+  isAlreadyCompleted(result: EnplOpenResult) {
+    return enplAlreadyCompleted(result);
+  }
+
+  isOutsideGeofence(result: EnplOpenResult) {
+    return enplOutsideGeofence(result);
+  }
+
+  enplFailure(result: EnplOpenResult, label: string) {
+    const message = enplResultMessage(result);
+    return new BadRequestException({
+      message: message || `ENPL ${label} failed HTTP ${result.status}`,
+      code: result.data?.code ?? null,
+      alreadyCompleted: enplAlreadyCompleted(result),
     });
-    const text = await res.text();
-    if (!res.ok) {
-      throw new BadRequestException(
-        `ENPL ${label} failed HTTP ${res.status}${text ? `: ${text.slice(0, 400)}` : ''}`,
-      );
+  }
+
+  /** ENPL assignment-action, site-visit, and field-attendance are open JSON routes. Do not send HRMS_SYNC_TOKEN. */
+  private async postEnplOpenJson(path: string, payload: Record<string, unknown>, label: string): Promise<EnplOpenResult> {
+    const base = (process.env.ENPL_ERP_BASE_URL || ENPL_ERP_BASE_DEFAULT).replace(/\/$/, '');
+    let res: Response;
+    try {
+      res = await fetch(`${base}/${path.replace(/^\//, '')}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+    } catch {
+      throw new BadRequestException(`ENPL ${label} could not be reached`);
     }
-    return text;
+    const text = await res.text();
+    let data: Record<string, unknown> | null = null;
+    if (text) {
+      try {
+        const parsed = JSON.parse(text);
+        data = parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : { message: text };
+      } catch {
+        data = { message: text };
+      }
+    }
+    return { ok: res.ok, status: res.status, data, text };
   }
 
   async postTaskAssignmentAction(body: {
@@ -244,7 +403,7 @@ export class EnplSyncService {
   }
 
   async postTaskSiteVisit(body: {
-    kind: 'checkin' | 'checkout';
+    kind: 'checkin' | 'checkout' | 'day_signout';
     hrmsEmployeeId: number;
     email?: string | null;
     enplTaskId?: number | null;
@@ -254,6 +413,10 @@ export class EnplSyncService {
     accuracyMeters?: number | null;
     addressText?: string | null;
     at?: string | null;
+    selfieUrl?: string | null;
+    deviceInfo?: Record<string, unknown> | null;
+    exceptionRequested?: boolean;
+    reason?: string | null;
   }) {
     const payload: Record<string, unknown> = {
       kind: body.kind,
@@ -269,7 +432,40 @@ export class EnplSyncService {
     }
     if (body.addressText) payload.addressText = body.addressText;
     if (body.at) payload.at = body.at;
+    const selfieUrl = absolutePublicUrl(body.selfieUrl);
+    if (selfieUrl) payload.selfieUrl = selfieUrl;
+    if (body.deviceInfo && typeof body.deviceInfo === 'object') payload.deviceInfo = body.deviceInfo;
+    if (body.exceptionRequested) payload.exceptionRequested = true;
+    if (body.reason) payload.reason = body.reason;
     return this.postEnplOpenJson('hrms-sync/task-site-visit', payload, 'site visit');
+  }
+
+  async postFieldAttendance(body: {
+    hrmsEmployeeId: number;
+    email?: string | null;
+    latitude: number;
+    longitude: number;
+    accuracyMeters?: number | null;
+    selfieUrl?: string | null;
+    deviceInfo?: Record<string, unknown> | null;
+    reason: string;
+    at?: string | null;
+  }) {
+    const payload: Record<string, unknown> = {
+      hrmsEmployeeId: String(body.hrmsEmployeeId),
+      lat: body.latitude,
+      lng: body.longitude,
+      reason: body.reason,
+    };
+    if (body.email) payload.email = body.email;
+    if (body.accuracyMeters != null && Number.isFinite(body.accuracyMeters)) {
+      payload.accuracyMeters = body.accuracyMeters;
+    }
+    const selfieUrl = absolutePublicUrl(body.selfieUrl);
+    if (selfieUrl) payload.selfieUrl = selfieUrl;
+    if (body.deviceInfo && typeof body.deviceInfo === 'object') payload.deviceInfo = body.deviceInfo;
+    if (body.at) payload.at = body.at;
+    return this.postEnplOpenJson('hrms-sync/field-attendance', payload, 'field attendance');
   }
 
   async upsertCustomerFromEnpl(body: any): Promise<{ hrmsId: number }> {
@@ -518,6 +714,20 @@ export class EnplSyncService {
         body.siteVisitSummary !== undefined
           ? (body.siteVisitSummary as Prisma.InputJsonValue)
           : ((existing as any)?.siteVisitSummary as Prisma.InputJsonValue | undefined),
+      siteLatitude:
+        body.siteLatitude !== undefined
+          ? blank(body.siteLatitude)
+          : ((existing as any)?.siteLatitude ?? null),
+      siteLongitude:
+        body.siteLongitude !== undefined
+          ? blank(body.siteLongitude)
+          : ((existing as any)?.siteLongitude ?? null),
+      daySignOutSelfieRequired:
+        body.daySignOutSelfieRequired === undefined
+          ? Boolean((existing as any)?.daySignOutSelfieRequired)
+          : body.daySignOutSelfieRequired === true ||
+            body.daySignOutSelfieRequired === 'true' ||
+            body.daySignOutSelfieRequired === 1,
       priority: normalizeEnplPriority(firstSchedule?.priority || body.priority),
       status: status,
       createdByName: blank(body.createdBy || body.createdByName),
@@ -578,7 +788,10 @@ export class EnplSyncService {
     await this.syncTaskWorkscopeFromEnpl(saved.id, company.id, body);
     await this.syncTaskInventoryFromEnpl(saved.id, company.id, body);
     await this.syncTaskPurchaseFromEnpl(saved.id, body);
-    await this.syncTaskEngineersFromEnpl(saved.id, body, status);
+    await this.syncTaskEngineersFromEnpl(saved.id, body, status, {
+      siteLatitude: blank(data.siteLatitude) || blank(site?.latitude),
+      siteLongitude: blank(data.siteLongitude) || blank(site?.longitude),
+    });
 
     await this.saveMapping(company.id, 'task', saved.id, data.erpTaskId ?? null, taskCode);
     return { hrmsId: saved.id };
@@ -1244,7 +1457,12 @@ export class EnplSyncService {
     });
   }
 
-  private async syncTaskEngineersFromEnpl(taskID: number, body: any, taskStatus?: string | null) {
+  private async syncTaskEngineersFromEnpl(
+    taskID: number,
+    body: any,
+    taskStatus?: string | null,
+    siteCoords?: { siteLatitude: string | null; siteLongitude: string | null },
+  ) {
     const engineerRows = asEngineerAssignmentRows(body);
     if (!engineerRows) return;
     const previous = await this.prisma.taskEngineerAssignment.findMany({
@@ -1276,6 +1494,18 @@ export class EnplSyncService {
       assignedDate: Date | null;
       rescheduleReason: string | null;
       managerReason: string | null;
+      enplAssignmentId: number | null;
+      visitSequence: number | null;
+      scheduledArrival: Date | null;
+      visitDate: Date | null;
+      allowedRadiusMeters: number | null;
+      graceMinutes: number | null;
+      visitDurationMinutes: number | null;
+      visitLatitude: string | null;
+      visitLongitude: string | null;
+      complianceStatus: string | null;
+      exceptionStatus: string | null;
+      signOutForTheDay: boolean | null;
     }> = [];
     for (const row of engineerRows) {
       const manageEmployeeID = await this.findEmployeeForEngineer(row);
@@ -1304,6 +1534,7 @@ export class EnplSyncService {
         assignedDate: asDate(row.assignedDate),
         rescheduleReason: blank(row.rescheduleReason),
         managerReason: blank(row.managerReason),
+        ...enplVisitPlanFields(row, siteCoords?.siteLatitude ?? null, siteCoords?.siteLongitude ?? null),
       });
     }
     if (data.length) {

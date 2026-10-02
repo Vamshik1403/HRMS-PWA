@@ -14,6 +14,9 @@ import {
 } from "../components/task/mobile/MobileTaskCreateSheet";
 import { toast } from "sonner";
 import { fetchGPSOnUserGesture } from "../utils/empGeolocation";
+import { uploadPunchPhoto } from "../hooks/useEmpPunch";
+import { EmpPhotoPunchCapture, type EmpPhotoPunchCaptureHandle } from "../components/emp/EmpPhotoPunchCapture";
+import { FieldVisitDayPanel } from "../components/task/mobile/FieldVisitDayPanel";
 import {
   getNextSitePunchKindForTask,
   sitePunchLabel,
@@ -40,7 +43,9 @@ import {
   isAssignmentRequestTask,
   matchesEmpTaskTab,
   myAssignmentRequestKind,
+  myEngineerAssignment,
 } from "../utils/taskAssignmentRequest";
+import { visitComplianceCopy } from "../utils/taskSiteVisit";
 import { TaskAssignmentRequestPanel } from "../components/task/mobile/TaskAssignmentRequestPanel";
 
 const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL || "/backend";
@@ -70,6 +75,18 @@ export default function EmpMyTasksPage() {
   const [infoTask, setInfoTask] = useState<Task | null>(null);
   const [chatMsg, setChatMsg] = useState("");
   const [sending, setSending] = useState(false);
+  const photoRef = useRef<EmpPhotoPunchCaptureHandle>(null);
+  const pendingVisitRef = useRef<{ task: Task; kind: "checkin" | "checkout" | "day_signout" } | null>(null);
+  const [exception, setException] = useState<{
+    task: Task;
+    kind: "checkin" | "checkout" | "day_signout";
+    latitude: number;
+    longitude: number;
+    accuracyMeters?: number;
+    addressText?: string;
+    selfieUrl: string;
+  } | null>(null);
+  const [exceptionReason, setExceptionReason] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
   const [canCreateTask, setCanCreateTask] = useState(false);
   const [creatorEmp, setCreatorEmp] = useState<CreatorEmp | null>(null);
@@ -203,14 +220,41 @@ export default function EmpMyTasksPage() {
   };
 
   const postEnplSiteVisit = async (
-    taskId: number,
-    kind: "checkin" | "checkout",
+    task: Task,
+    kind: "checkin" | "checkout" | "day_signout",
+    extra?: {
+      latitude: number;
+      longitude: number;
+      accuracyMeters?: number;
+      addressText?: string;
+      selfieUrl?: string;
+      exceptionRequested?: boolean;
+      reason?: string;
+    },
   ) => {
     if (!user) return;
+    const mine = myEngineerAssignment(task, employeeId, employeeEmail);
+    const needsSelfie =
+      (kind === "checkin" && mine?.visitSequence === 1) ||
+      (kind === "day_signout" && task.daySignOutSelfieRequired === true);
+    if (needsSelfie && !extra?.selfieUrl) {
+      pendingVisitRef.current = { task, kind };
+      photoRef.current?.startFromGesture(kind === "day_signout" ? "CHECK_OUT" : "CHECK_IN");
+      return;
+    }
     setSending(true);
     try {
-      const coordsAndAddr = await resolveGpsWithAddress();
-      await taskFetch(`/task-projects/${taskId}/site-visit`, user, {
+      const coordsAndAddr = extra
+        ? {
+            coords: {
+              latitude: extra.latitude,
+              longitude: extra.longitude,
+              accuracy: extra.accuracyMeters,
+            },
+            address: extra.addressText || "",
+          }
+        : await resolveGpsWithAddress();
+      await taskFetch(`/task-projects/${task.id}/site-visit`, user, {
         method: "POST",
         body: JSON.stringify({
           kind,
@@ -218,17 +262,59 @@ export default function EmpMyTasksPage() {
           longitude: coordsAndAddr.coords.longitude,
           accuracyMeters: coordsAndAddr.coords.accuracy,
           addressText: coordsAndAddr.address || undefined,
+          selfieUrl: extra?.selfieUrl || undefined,
+          deviceInfo: typeof navigator !== "undefined" ? { userAgent: navigator.userAgent } : undefined,
+          exceptionRequested: extra?.exceptionRequested || undefined,
+          reason: extra?.reason || undefined,
           at: new Date().toISOString(),
         }),
       });
-      toast.success(kind === "checkin" ? "Site check in recorded" : "Site check out recorded");
-      if (detail?.id === taskId) await refreshDetail();
+      if (extra?.exceptionRequested) toast.success("Pending Approval");
+      else if (kind === "day_signout") toast.success("Signed out for the day");
+      else toast.success(kind === "checkin" ? "Check-in recorded" : "Check-out recorded");
+      setException(null);
+      setExceptionReason("");
+      if (detail?.id === task.id) await refreshDetail();
       load();
     } catch (e: any) {
-      toast.error(e.message || "GPS is required for site check-in and check-out");
+      if (e?.code === "OUTSIDE_GEOFENCE" && extra?.selfieUrl && kind === "checkin") {
+        setException({
+          task,
+          kind,
+          latitude: extra.latitude,
+          longitude: extra.longitude,
+          accuracyMeters: extra.accuracyMeters,
+          addressText: extra.addressText,
+          selfieUrl: extra.selfieUrl,
+        });
+      } else {
+        toast.error(e.message || "GPS is required for site check-in and check-out");
+      }
     } finally {
       setSending(false);
     }
+  };
+
+  const onVisitPhoto = async (
+    _checkType: "CHECK_IN" | "CHECK_OUT",
+    file: File,
+    location: { latitude: number; longitude: number; accuracy: number },
+  ) => {
+    const pending = pendingVisitRef.current;
+    pendingVisitRef.current = null;
+    if (!pending) return true;
+    try {
+      const selfieUrl = await uploadPunchPhoto(file);
+      await postEnplSiteVisit(pending.task, pending.kind, {
+        latitude: location.latitude,
+        longitude: location.longitude,
+        accuracyMeters: location.accuracy,
+        selfieUrl,
+      });
+    } catch (e: any) {
+      toast.error(e?.message || "Could not record the visit");
+    }
+    return true;
   };
 
   const postSitePunch = async (
@@ -246,7 +332,7 @@ export default function EmpMyTasksPage() {
     const punchSource = Array.isArray(taskOrChats) ? { chats: taskOrChats } : taskOrChats || {};
     if (!Array.isArray(taskOrChats) && isEnplLinkedTask(punchSource)) {
       const next = explicitKind || (getNextSitePunchKindForTask(punchSource) === "out" ? "checkout" : "checkin");
-      await postEnplSiteVisit(taskId, next);
+      await postEnplSiteVisit(punchSource as Task, next);
       return;
     }
     const kind = getNextSitePunchKindForTask(punchSource);
@@ -300,10 +386,20 @@ export default function EmpMyTasksPage() {
       if (!user || !taskId) return;
       setSending(true);
       try {
-        await taskFetch<Task>(`/task-projects/${taskId}/assignment-action`, user, {
-          method: "POST",
-          body: JSON.stringify({ action, reason }),
-        });
+        const result = await taskFetch<Task & { alreadyCompleted?: boolean; message?: string; task?: Task }>(
+          `/task-projects/${taskId}/assignment-action`,
+          user,
+          {
+            method: "POST",
+            body: JSON.stringify({ action, reason }),
+          },
+        );
+        if (result?.alreadyCompleted) {
+          toast.error(result.message || "Task already completed");
+          if (result.task) setDetail((prev) => (prev?.id === taskId ? result.task! : prev));
+          await load();
+          return;
+        }
         if (action === "accept") {
           toast.success("Task accepted");
           setDetail((prev) => (prev?.id === taskId ? null : prev));
@@ -313,7 +409,11 @@ export default function EmpMyTasksPage() {
         setRescheduleTaskId(null);
         await load();
       } catch (e: any) {
-        toast.error(e.message || "Could not update assignment");
+        if (e?.alreadyCompleted || /already completed/i.test(e?.message || "")) {
+          toast.error(e.message || "Task already completed");
+        } else {
+          toast.error(e.message || "Could not update assignment");
+        }
       } finally {
         setSending(false);
       }
@@ -415,7 +515,7 @@ export default function EmpMyTasksPage() {
       sitePunchNextKind={getNextSitePunchKindForTask(detail)}
       onEnplSiteVisit={
         isEnplLinkedTask(detail)
-          ? (kind) => postEnplSiteVisit(detail.id, kind)
+          ? (kind) => postEnplSiteVisit(detail, kind)
           : undefined
       }
       embedded={isDesktop}
@@ -430,14 +530,68 @@ export default function EmpMyTasksPage() {
     />
   ) : null;
 
+  const submitException = async () => {
+    if (!exception) return;
+    const text = exceptionReason.trim();
+    if (!text) {
+      toast.error("A reason is required");
+      return;
+    }
+    await postEnplSiteVisit(exception.task, exception.kind, {
+      latitude: exception.latitude,
+      longitude: exception.longitude,
+      accuracyMeters: exception.accuracyMeters,
+      addressText: exception.addressText,
+      selfieUrl: exception.selfieUrl,
+      exceptionRequested: true,
+      reason: text,
+    });
+  };
+
+  const visitOverlays = (
+    <>
+      {exception ? (
+        <>
+          <div className="fixed inset-0 z-50 bg-black/40" onClick={() => setException(null)} />
+          <div className="fixed inset-x-4 top-[18%] z-50 bg-white rounded-2xl shadow-xl p-5">
+            <h3 className="text-[17px] font-bold text-gray-900 mb-1">Request Exception</h3>
+            <p className="text-[12px] text-gray-500 mb-3">You are outside the visit location. Add a reason to send the same location and selfie for approval.</p>
+            <textarea
+              value={exceptionReason}
+              onChange={(e) => setExceptionReason(e.target.value)}
+              rows={3}
+              placeholder="Reason"
+              className="w-full rounded-xl border border-gray-200 px-3 py-2 text-[14px] mb-3 resize-none"
+            />
+            <button
+              type="button"
+              disabled={sending || !exceptionReason.trim()}
+              onClick={() => void submitException()}
+              className="w-full h-11 rounded-xl bg-[#2563eb] text-white font-semibold disabled:opacity-50"
+            >
+              Request Exception
+            </button>
+          </div>
+        </>
+      ) : null}
+      <EmpPhotoPunchCapture
+        ref={photoRef}
+        submitting={sending}
+        onSubmit={onVisitPhoto}
+        onError={(message) => toast.error(message)}
+      />
+    </>
+  );
+
   if (detail && !isDesktop) {
-    return <EmpMobileLayout hideBottomNav>{requestView || chatView}</EmpMobileLayout>;
+    return <EmpMobileLayout hideBottomNav>{requestView || chatView}{visitOverlays}</EmpMobileLayout>;
   }
 
   if (detail && isDesktop) {
     return (
       <EmpDesktopPage title="Task" description={detail.taskName} icon={ListTodo}>
         {requestView || chatView}
+        {visitOverlays}
       </EmpDesktopPage>
     );
   }
@@ -529,12 +683,15 @@ export default function EmpMyTasksPage() {
             }
           />
         ) : null}
+        {!isManagerView ? <FieldVisitDayPanel user={user} /> : null}
+        {visitOverlays}
       </EmpDesktopPage>
     );
   }
 
   return (
     <EmpMobileLayout hideBottomNav={createOpen}>
+      {!isManagerView ? <FieldVisitDayPanel user={user} /> : null}
       <MobileTaskListView
         tasks={tasks}
         loading={loading}
@@ -574,7 +731,17 @@ export default function EmpMyTasksPage() {
               {isEnplLinkedTask(infoTask) ? (
                 <div className="pt-2">
                   <p className="text-gray-500 font-semibold mb-2">Site visit</p>
-                  <TaskSiteVisitSummary task={infoTask} compact />
+                  <TaskSiteVisitSummary
+                    task={infoTask}
+                    compact
+                    visitHeading={
+                      myEngineerAssignment(infoTask, employeeId, employeeEmail)?.visitSequence != null
+                        ? `Visit ${myEngineerAssignment(infoTask, employeeId, employeeEmail)?.visitSequence}`
+                        : null
+                    }
+                    complianceLabel={visitComplianceCopy(myEngineerAssignment(infoTask, employeeId, employeeEmail)?.complianceStatus)?.label}
+                    complianceNote={visitComplianceCopy(myEngineerAssignment(infoTask, employeeId, employeeEmail)?.complianceStatus)?.note}
+                  />
                 </div>
               ) : isSitePunchTaskType(infoTask.taskType) ? (
                 <div className="pt-2 space-y-1">
@@ -599,6 +766,7 @@ export default function EmpMyTasksPage() {
         </>
       )}
       {createSheet}
+      {visitOverlays}
     </EmpMobileLayout>
   );
 }

@@ -251,10 +251,19 @@ export class TaskAssignmentActionDto {
   @IsOptional() @IsString() reason?: string;
 }
 
+export const FIELD_ATTENDANCE_REASONS = [
+  'Office Work',
+  'Remote Work',
+  'Manager Did Not Assign Visit',
+  'Emergency Work',
+  'Training',
+  'Other',
+] as const;
+
 export class TaskSiteVisitDto {
   @IsString()
-  @IsIn(['checkin', 'checkout'])
-  kind!: 'checkin' | 'checkout';
+  @IsIn(['checkin', 'checkout', 'day_signout'])
+  kind!: 'checkin' | 'checkout' | 'day_signout';
   @Type(() => Number)
   @IsNumber()
   latitude!: number;
@@ -264,6 +273,26 @@ export class TaskSiteVisitDto {
   @IsOptional() @Type(() => Number) @IsNumber() accuracyMeters?: number;
   @IsOptional() @IsString() addressText?: string;
   @IsOptional() @IsString() at?: string;
+  @IsOptional() @IsString() selfieUrl?: string;
+  @IsOptional() deviceInfo?: Record<string, unknown>;
+  @IsOptional() @IsBoolean() exceptionRequested?: boolean;
+  @IsOptional() @IsString() reason?: string;
+}
+
+export class FieldAttendanceDto {
+  @Type(() => Number)
+  @IsNumber()
+  latitude!: number;
+  @Type(() => Number)
+  @IsNumber()
+  longitude!: number;
+  @IsOptional() @Type(() => Number) @IsNumber() accuracyMeters?: number;
+  @IsString() selfieUrl!: string;
+  @IsString()
+  @IsIn([...FIELD_ATTENDANCE_REASONS])
+  reason!: (typeof FIELD_ATTENDANCE_REASONS)[number];
+  @IsOptional() @IsString() at?: string;
+  @IsOptional() deviceInfo?: Record<string, unknown>;
 }
 
 export class CreateTaskRemarkDto {
