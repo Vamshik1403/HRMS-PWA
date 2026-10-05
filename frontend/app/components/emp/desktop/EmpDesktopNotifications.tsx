@@ -78,10 +78,10 @@ function collectMemoIds(items: FeedNotification[]): Set<number> {
   return ids;
 }
 
-function isWithinLastDays(iso: string, days: number) {
-  const t = new Date(iso).getTime();
-  if (Number.isNaN(t)) return false;
-  return t >= Date.now() - days * 86400000;
+function isToday(iso: string) {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return false;
+  return localDay(d).getTime() === localDay(new Date()).getTime();
 }
 
 function mergeFeeds(
@@ -176,7 +176,7 @@ export function EmpDesktopNotifications() {
   }, [recent, older, stored, isManagerView]);
 
   const panelList = useMemo(
-    () => fullList.filter((n) => isWithinLastDays(n.at, 7)).slice(0, 8),
+    () => fullList.filter((n) => isToday(n.at)).slice(0, 8),
     [fullList],
   );
 
@@ -217,7 +217,7 @@ export function EmpDesktopNotifications() {
               <Bell className="size-5 text-primary" />
               {isManagerView ? "Team notifications" : "Notifications"}
             </CardTitle>
-            <CardDescription>Last 7 days</CardDescription>
+            <CardDescription>Today</CardDescription>
           </div>
           {fullList.length > panelList.length ? (
             <Button variant="outline" size="sm" onClick={() => setHistoryOpen(true)}>
@@ -233,7 +233,7 @@ export function EmpDesktopNotifications() {
             rowKey={(n) => n.id}
             emptyIcon={Bell}
             emptyTitle="No notifications"
-            emptyDescription="You're all caught up for the last 7 days."
+            emptyDescription="You're all caught up for today."
             fitContainer
           />
           {error ? <p className="text-sm text-destructive mt-3">{error}</p> : null}

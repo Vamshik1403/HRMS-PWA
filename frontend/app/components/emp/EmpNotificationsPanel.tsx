@@ -99,11 +99,10 @@ function collectMemoIds(items: FeedNotification[]): Set<number> {
   return ids;
 }
 
-function isWithinLastDays(iso: string, days: number): boolean {
-  const t = new Date(iso).getTime();
-  if (Number.isNaN(t)) return false;
-  const cutoff = Date.now() - days * 86400000;
-  return t >= cutoff;
+function isToday(iso: string): boolean {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return false;
+  return localDay(d).getTime() === localDay(new Date()).getTime();
 }
 
 function mergeFeeds(
@@ -211,21 +210,15 @@ export function EmpNotificationsPanel() {
     );
   }, [recent, older, stored, isManagerView]);
 
-  const panelList = useMemo(() => {
-    const merged = mergeFeeds(recent, [], stored);
-    return filterNotificationsForViewer(merged, isManagerView)
-      .filter((n) => isWithinLastDays(n.at, 7))
-      .sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime())
-      .slice(0, EMP_MOBILE_PREVIEW_LIMIT);
-  }, [recent, stored, isManagerView]);
+  const panelList = useMemo(
+    () => fullList.filter((n) => isToday(n.at)).slice(0, EMP_MOBILE_PREVIEW_LIMIT),
+    [fullList],
+  );
 
-  const olderCount = useMemo(() => {
-    const merged = mergeFeeds(recent, [], stored);
-    const within7 = filterNotificationsForViewer(merged, isManagerView).filter((n) =>
-      isWithinLastDays(n.at, 7),
-    );
-    return Math.max(0, within7.length - EMP_MOBILE_PREVIEW_LIMIT);
-  }, [recent, stored, isManagerView]);
+  const olderCount = useMemo(
+    () => Math.max(0, fullList.length - panelList.length),
+    [fullList, panelList],
+  );
 
   return (
     <div className="mb-2">
@@ -233,7 +226,7 @@ export function EmpNotificationsPanel() {
         <h2 className="text-[15px] font-bold text-gray-900">
           {isManagerView ? "Team notifications" : "Notifications"}
         </h2>
-        <span className="text-[11px] text-gray-400">Last 7 days</span>
+        <span className="text-[11px] text-gray-400">Today</span>
       </div>
 
       {loading ? (
@@ -249,7 +242,7 @@ export function EmpNotificationsPanel() {
           <span className="text-2xl" aria-hidden>
             🔔
           </span>
-          <p className="text-[12px] text-gray-400">No notifications in the last 7 days</p>
+          <p className="text-[12px] text-gray-400">No notifications today</p>
         </div>
       ) : (
         <div className="space-y-2">
