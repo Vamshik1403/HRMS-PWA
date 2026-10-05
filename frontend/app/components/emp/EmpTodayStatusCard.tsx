@@ -60,10 +60,7 @@ export function EmpTodayStatusCard({ todayStatus, loading, onStatusUpdate }: Emp
   const mobileEnabled = todayStatus?.mobileAttendanceEnabled === true;
   const photoPunchEnabled = todayStatus?.photoPunchEnabled === true;
   const canCheckIn = mobileEnabled && (todayStatus?.canCheckIn ?? punchState === "OUT");
-  const canCheckOut = mobileEnabled && (todayStatus?.canCheckOut ?? punchState === "IN");
-  const breakEnabled = todayStatus?.mobileBreakEnabled !== false;
-  const canBreakIn = mobileEnabled && breakEnabled && (todayStatus?.canBreakIn ?? punchState === "IN");
-  const canBreakOut = mobileEnabled && breakEnabled && (todayStatus?.canBreakOut ?? punchState === "ON_BREAK");
+  const canCheckOut = mobileEnabled && (todayStatus?.canCheckOut ?? (punchState === "IN" || punchState === "ON_BREAK"));
   const isOnBreak = punchState === "ON_BREAK";
   const isAbsent = todayStatus?.isAbsentToday;
   const canMarkAbsent = todayStatus?.canMarkAbsent ?? false;
@@ -211,42 +208,16 @@ export function EmpTodayStatusCard({ todayStatus, loading, onStatusUpdate }: Emp
               )}
             </>
           )}
-          {(canCheckOut || canBreakIn || canBreakOut) && (
-            <div className={`grid gap-2 ${canCheckOut && (canBreakIn || canBreakOut) ? "grid-cols-2" : "grid-cols-1"}`}>
-              {canCheckOut && (
-                <button
-                  type="button"
-                  onClick={() => startMark("CHECK_OUT")}
-                  disabled={punchLoading}
-                  className="py-3 rounded-xl bg-[#4f46e5] text-white font-bold text-sm flex flex-col items-center gap-1 active:scale-[0.98] disabled:opacity-60"
-                >
-                  <Icon icon="solar:logout-bold-duotone" className="w-6 h-6" />
-                  Mark OUT
-                </button>
-              )}
-              {canBreakIn && (
-                <button
-                  type="button"
-                  onClick={() => punch("BREAK_IN")}
-                  disabled={punchLoading}
-                  className="py-3 rounded-xl bg-amber-500 text-white font-bold text-sm flex flex-col items-center gap-1 active:scale-[0.98] disabled:opacity-60"
-                >
-                  <Icon icon="solar:cup-hot-bold-duotone" className="w-6 h-6" />
-                  Break IN
-                </button>
-              )}
-              {canBreakOut && (
-                <button
-                  type="button"
-                  onClick={() => punch("BREAK_OUT")}
-                  disabled={punchLoading}
-                  className="py-3 rounded-xl bg-emerald-600 text-white font-bold text-sm flex flex-col items-center gap-1 col-span-full active:scale-[0.98] disabled:opacity-60"
-                >
-                  <Icon icon="solar:play-bold-duotone" className="w-6 h-6" />
-                  Break OUT
-                </button>
-              )}
-            </div>
+          {canCheckOut && (
+            <button
+              type="button"
+              onClick={() => startMark("CHECK_OUT")}
+              disabled={punchLoading}
+              className="w-full py-3 rounded-xl bg-[#4f46e5] text-white font-bold text-sm flex flex-col items-center gap-1 active:scale-[0.98] disabled:opacity-60"
+            >
+              <Icon icon="solar:logout-bold-duotone" className="w-6 h-6" />
+              Mark OUT
+            </button>
           )}
         </div>
       )}

@@ -4,7 +4,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Icon } from "@iconify/react";
 import {
   Clock,
-  Coffee,
   LogIn,
   LogOut,
   MapPin,
@@ -124,10 +123,7 @@ export function EmpDesktopAttendancePanel({
   const mobileEnabled = todayStatus?.mobileAttendanceEnabled === true;
   const photoPunchEnabled = todayStatus?.photoPunchEnabled === true;
   const canCheckIn = mobileEnabled && (todayStatus?.canCheckIn ?? punchState === "OUT");
-  const canCheckOut = mobileEnabled && (todayStatus?.canCheckOut ?? punchState === "IN");
-  const breakEnabled = todayStatus?.mobileBreakEnabled !== false;
-  const canBreakIn = mobileEnabled && breakEnabled && (todayStatus?.canBreakIn ?? punchState === "IN");
-  const canBreakOut = mobileEnabled && breakEnabled && (todayStatus?.canBreakOut ?? punchState === "ON_BREAK");
+  const canCheckOut = mobileEnabled && (todayStatus?.canCheckOut ?? (punchState === "IN" || punchState === "ON_BREAK"));
   const isOnBreak = punchState === "ON_BREAK";
   const isAbsent = todayStatus?.isAbsentToday;
   const canMarkAbsent = todayStatus?.canMarkAbsent ?? false;
@@ -204,28 +200,6 @@ export function EmpDesktopAttendancePanel({
           >
             <LogOut className="size-4" />
             Check-out
-          </Button>
-        ) : null}
-        {canBreakIn ? (
-          <Button
-            size={compact ? "sm" : "default"}
-            variant="secondary"
-            onClick={() => punch("BREAK_IN")}
-            disabled={punchLoading}
-          >
-            <Coffee className="size-4" />
-            Break in
-          </Button>
-        ) : null}
-        {canBreakOut ? (
-          <Button
-            size={compact ? "sm" : "default"}
-            variant="secondary"
-            onClick={() => punch("BREAK_OUT")}
-            disabled={punchLoading}
-          >
-            <Coffee className="size-4" />
-            Break out
           </Button>
         ) : null}
       </>

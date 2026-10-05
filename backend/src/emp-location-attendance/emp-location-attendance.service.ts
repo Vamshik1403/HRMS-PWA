@@ -112,17 +112,11 @@ export class EmpLocationAttendanceService {
       if (state === 'OUT') {
         throw new BadRequestException('You must check in before checking out.');
       }
-      if (state === 'ON_BREAK') {
-        throw new BadRequestException('Please end your break before checking out.');
-      }
       return;
     }
 
     if (checkType === 'BREAK_IN') {
-      if (state !== 'IN') {
-        throw new BadRequestException('You must be checked in to start a break.');
-      }
-      return;
+      throw new BadRequestException('Break is not available.');
     }
 
     if (checkType === 'BREAK_OUT') {
@@ -967,9 +961,8 @@ export class EmpLocationAttendanceService {
   async getTodayStatus(employeeId: number) {
     const empFlags = await this.prisma.manageEmployee.findUnique({
       where: { id: employeeId },
-      select: { mobileBreakEnabled: true, mobileAttendanceEnabled: true, photoPunchEnabled: true },
+      select: { mobileAttendanceEnabled: true, photoPunchEnabled: true },
     });
-    const breakEnabled = empFlags?.mobileBreakEnabled !== false;
     const mobileAttendanceEnabled = empFlags?.mobileAttendanceEnabled === true;
     const photoPunchEnabled = empFlags?.photoPunchEnabled === true;
 
@@ -1029,12 +1022,12 @@ export class EmpLocationAttendanceService {
       absentDeclaration,
       punchState,
       canCheckIn: mobileAttendanceEnabled && punchState === 'OUT' && !isAbsentToday,
-      canCheckOut: mobileAttendanceEnabled && punchState === 'IN',
+      canCheckOut: mobileAttendanceEnabled && (punchState === 'IN' || punchState === 'ON_BREAK'),
       mobileAttendanceEnabled,
       photoPunchEnabled,
-      mobileBreakEnabled: breakEnabled,
-      canBreakIn: mobileAttendanceEnabled && breakEnabled && punchState === 'IN',
-      canBreakOut: mobileAttendanceEnabled && breakEnabled && punchState === 'ON_BREAK',
+      mobileBreakEnabled: false,
+      canBreakIn: false,
+      canBreakOut: false,
       canMarkAbsent: !hasPunches && !isAbsentToday && punchState === 'OUT',
       checkIn,
       checkOut,
